@@ -9073,6 +9073,64 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
+  public addModifier(): boolean {
+    try {
+      this.canonicalProject.addHelperVolume('parameter-modifier');
+      this.setStatus(t('workspace.orcaWorkspace.addedModifierVolume', 'Added modifier volume.'));
+      this.syncTransformProxy();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(`${t('workspace.orcaWorkspace.addModifierFailed', 'Add Modifier failed')}: ${message}`);
+      return false;
+    }
+  }
+
+  public addSupportEnforcer(): boolean {
+    try {
+      this.canonicalProject.addHelperVolume('support-enforcer');
+      this.setStatus(t('workspace.orcaWorkspace.addedSupportEnforcerVolume', 'Added support enforcer volume.'));
+      this.syncTransformProxy();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(
+        `${t('workspace.orcaWorkspace.addSupportEnforcerFailed', 'Add Support Enforcer failed')}: ${message}`,
+      );
+      return false;
+    }
+  }
+
+  public addSupportBlocker(): boolean {
+    try {
+      this.canonicalProject.addHelperVolume('support-blocker');
+      this.setStatus(t('workspace.orcaWorkspace.addedSupportBlockerVolume', 'Added support blocker volume.'));
+      this.syncTransformProxy();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(
+        `${t('workspace.orcaWorkspace.addSupportBlockerFailed', 'Add Support Blocker failed')}: ${message}`,
+      );
+      return false;
+    }
+  }
+
+  public setNegativePart(): boolean {
+    try {
+      this.canonicalProject.addHelperVolume('negative-volume');
+      this.setStatus(t('workspace.orcaWorkspace.addedNegativeVolume', 'Added negative volume.'));
+      this.syncTransformProxy();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(
+        `${t('workspace.orcaWorkspace.setNegativePartFailed', 'Set as Negative Part failed')}: ${message}`,
+      );
+      return false;
+    }
+  }
+
   public cutSelectedByPlane() {
     this.setStatus(
       t(

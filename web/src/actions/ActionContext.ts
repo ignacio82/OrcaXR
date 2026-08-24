@@ -359,6 +359,18 @@ export class ActionContext {
   async splitToParts(): Promise<void> {
     await this.workspace.splitSelectedToParts();
   }
+  addModifier(): void {
+    this.workspace.addModifier();
+  }
+  addSupportEnforcer(): void {
+    this.workspace.addSupportEnforcer();
+  }
+  addSupportBlocker(): void {
+    this.workspace.addSupportBlocker();
+  }
+  setNegativePart(): void {
+    this.workspace.setNegativePart();
+  }
   cutPlane(): void {
     this.workspace.cutSelectedByPlane();
   }

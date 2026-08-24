@@ -15,7 +15,6 @@ import type { ActionDefinition as Action } from '../ActionRegistry';
 const UNAVAILABLE_TOOL_IDS = new Set([
   'tool_face_detector',
   'tool_hollow',
-  'add_modifier',
   'add_support_enforcer',
   'add_support_blocker',
   'add_height_range',
@@ -39,6 +38,7 @@ function tool(
     disclosure,
     menuSection: disclosure === 'menu' ? 'tools' : undefined,
     hint,
+    isEnabled: (s) => s.hasInstanceSelection,
     ...(UNAVAILABLE_TOOL_IDS.has(id) ? {} : { run: (ctx: any) => ctx[runProp]() }),
   };
 }

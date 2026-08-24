@@ -1,9 +1,11 @@
+import type { AssetPayload } from '../assets';
 import { canonicalStringify, cloneJson, cloneProjectState } from '../domain/canonical';
 import { facetAnnotationsHaveAssignments } from '../domain/facetRefinement';
 import type { ObjectId, VolumeId } from '../domain/ids';
 import type { ProjectState, ProjectVolume, VolumeRole } from '../domain/model';
-import { findVolume } from '../domain/selectors';
+import { findObject, findVolume } from '../domain/selectors';
 import type { CommandContext, ProjectCommand } from '../history/command';
+import type { SelectionSnapshot } from '../selection';
 
 /** Snapmaker Orca v2.3.4 `ModelVolumeType` ordinal order. */
 export const ORCA_VOLUME_ROLE_ORDER: readonly VolumeRole[] = [
@@ -143,6 +145,82 @@ export class ConvertVolumeRoleCommand implements ProjectCommand {
 
   estimateBytes(): number {
     return this.previousVolumes ? canonicalStringify(this.previousVolumes).length : 1;
+  }
+}
+
+/** Add a new volume (part, modifier, negative volume, support enforcer/blocker) to an existing object. */
+export class AddVolumeCommand implements ProjectCommand {
+  readonly type = 'add-volume';
+  readonly label: string;
+  readonly dirtyCategories = ['projectData'] as const;
+  private readonly volume: ProjectVolume;
+  private readonly asset: AssetPayload;
+  private insertionIndex = -1;
+  private addedAsset = false;
+  private previousSelection?: SelectionSnapshot;
+
+  constructor(
+    private readonly objectId: ObjectId,
+    volume: ProjectVolume,
+    asset: AssetPayload,
+  ) {
+    this.volume = cloneJson(volume);
+    this.asset = {
+      descriptor: cloneJson(asset.descriptor),
+      bytes: new Uint8Array(asset.bytes),
+    };
+    this.label = `Add ${roleLabel(volume.role)} to object`;
+  }
+
+  apply(context: CommandContext): void {
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const found = findObject(state, this.objectId);
+    if (!found) throw new Error(`Unknown object ${this.objectId}`);
+    if (findVolume(state, this.volume.id)) {
+      throw new Error(`Volume ${this.volume.id} already exists`);
+    }
+    this.previousSelection = context.selection.getSnapshot();
+    this.insertionIndex = found.object.volumes.length;
+    found.object.volumes.push(cloneJson(this.volume));
+    found.object.volumes.sort(compareVolumeRoles);
+
+    const assetExists = state.sourceAssets.some((a) => a.id === this.asset.descriptor.id);
+    if (!assetExists) {
+      state.sourceAssets.push(cloneJson(this.asset.descriptor));
+      context.assets.put(this.asset.descriptor, this.asset.bytes);
+      this.addedAsset = true;
+    }
+
+    context.project.replaceState(state, { reason: this.type, dirtyCategories: this.dirtyCategories });
+    context.selection.set([{ kind: 'volume', id: this.volume.id }]);
+  }
+
+  revert(context: CommandContext): void {
+    if (this.insertionIndex < 0) throw new Error('AddVolumeCommand has not been applied');
+    const state = cloneProjectState(context.project.getSnapshot().state);
+    const found = findObject(state, this.objectId);
+    if (!found) throw new Error(`Unknown object ${this.objectId}`);
+    const index = found.object.volumes.findIndex((v) => v.id === this.volume.id);
+    if (index === -1) throw new Error(`Volume ${this.volume.id} is missing during undo`);
+    found.object.volumes.splice(index, 1);
+
+    if (this.addedAsset) {
+      const assetIdx = state.sourceAssets.findIndex((a) => a.id === this.asset.descriptor.id);
+      if (assetIdx !== -1) state.sourceAssets.splice(assetIdx, 1);
+      context.assets.remove(this.asset.descriptor.id);
+    }
+
+    context.project.replaceState(state, {
+      reason: `revert:${this.type}`,
+      dirtyCategories: this.dirtyCategories,
+    });
+    if (this.previousSelection) {
+      context.selection.restore(this.previousSelection);
+    }
+  }
+
+  estimateBytes(): number {
+    return canonicalStringify(this.volume).length + this.asset.bytes.byteLength;
   }
 }
 

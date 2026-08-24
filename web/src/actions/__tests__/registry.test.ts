@@ -194,6 +194,16 @@ test('Download, canonical delete, and guarded Split to Objects use prerequisites
     ActionRegistry.enabled(reg.get('mesh_boolean_intersection')!, { ...baseState, modelCount: 2 }),
     true,
   );
+  assert.strictEqual(ActionRegistry.enabled(reg.get('add_modifier')!, { ...baseState, modelCount: 1 }), false);
+  assert.strictEqual(
+    ActionRegistry.enabled(reg.get('add_modifier')!, {
+      ...baseState,
+      modelCount: 1,
+      hasSelection: true,
+      hasInstanceSelection: true,
+    }),
+    true,
+  );
   assert.strictEqual(ActionRegistry.enabled(reg.get('tool_cut')!, { ...baseState, modelCount: 2 }), false);
   assert.match(ActionRegistry.disabledReason(reg.get('repair_model')!, baseState) ?? '', /select/i);
 });

@@ -73,6 +73,7 @@ import {
   type PhysicalFilament,
   type ProjectObject,
   type ProjectState,
+  type ProjectVolume,
   type Transform,
   type VolumeRole,
   type WipeTowerState,
@@ -208,6 +209,7 @@ import {
 } from '../project/objects/layerRangeCommands';
 import { projectObjectsTree } from '../project/objects/projection';
 import {
+  AddVolumeCommand,
   ConvertVolumeRoleCommand,
   inspectVolumeRoleConversion,
   ORCA_VOLUME_ROLE_ORDER,
@@ -2777,6 +2779,68 @@ export class CanonicalWorkspaceController {
     };
   }
 
+  /**
+   * Add a primitive helper volume (parameter-modifier, support-enforcer, support-blocker, negative-volume)
+   * to the selected object.
+   */
+  addHelperVolume(role: VolumeRole, sizeMm = 10): { volumeId: VolumeId; objectId: ObjectId; role: VolumeRole } {
+    this.assertActive();
+    const project = this.session.project.getSnapshot();
+    const selection = this.session.selection.getSnapshot();
+    const primary = selection.primary;
+    if (!primary) {
+      throw new Error('Adding a volume requires a selected object or instance');
+    }
+    let targetObject: ProjectObject | undefined;
+    if (primary.kind === 'instance') {
+      const found = findInstance(project.state, primary.id);
+      if (found) targetObject = found.object;
+    } else if (primary.kind === 'object') {
+      const found = findObject(project.state, primary.id);
+      if (found) targetObject = found.object;
+    } else if (primary.kind === 'volume') {
+      const found = findVolume(project.state, primary.id);
+      if (found) targetObject = found.object;
+    }
+    if (!targetObject) {
+      throw new Error('Target object not found for adding volume');
+    }
+
+    const cube = createPrimitiveCubeGeometry(sizeMm);
+    const assetId = this.options.idSource.next('asset');
+    const volumeId = this.options.idSource.next('volume');
+    const roleNames: Record<VolumeRole, string> = {
+      'parameter-modifier': 'Modifier',
+      'support-enforcer': 'Support Enforcer',
+      'support-blocker': 'Support Blocker',
+      'negative-volume': 'Negative Volume',
+      model: 'Part',
+    };
+    const roleName = roleNames[role] ?? 'Volume';
+    const volumeCount = targetObject.volumes.filter((v) => v.role === role).length + 1;
+    const asset = encodeIndexedMeshAsset({
+      id: assetId,
+      positions: cube.positions,
+      indices: cube.indices,
+    });
+    const volume: ProjectVolume = {
+      id: volumeId,
+      name: `${roleName} ${volumeCount}`,
+      role,
+      source: {
+        assetId,
+        topologyRevision: 0,
+        triangleCount: cube.indices.length / 3,
+      },
+      transform: identityTransform(),
+      config: {},
+      annotations: emptyFacetAnnotations(0),
+    };
+
+    this.session.execute(new AddVolumeCommand(targetObject.id, volume, asset), { coalesce: false });
+    return { volumeId, objectId: targetObject.id, role };
+  }
+
   private allocateSeparatedObjectIdentities(
     volumeIds: readonly VolumeId[],
     instanceCount: number,
@@ -4303,4 +4367,93 @@ function safelyNotify(subscriber: CanonicalWorkspaceSubscriber, change: Canonica
   } catch {
     // Read-only UI observers cannot veto canonical state or poison peers.
   }
+}
+
+function createPrimitiveCubeGeometry(size = 10): { positions: number[]; indices: number[] } {
+  const h = size / 2;
+  const positions = [
+    // Front face
+    -h,
+    -h,
+    h,
+    h,
+    -h,
+    h,
+    h,
+    h,
+    h,
+    -h,
+    h,
+    h,
+    // Back face
+    -h,
+    -h,
+    -h,
+    -h,
+    h,
+    -h,
+    h,
+    h,
+    -h,
+    h,
+    -h,
+    -h,
+    // Top face
+    -h,
+    h,
+    -h,
+    -h,
+    h,
+    h,
+    h,
+    h,
+    h,
+    h,
+    h,
+    -h,
+    // Bottom face
+    -h,
+    -h,
+    -h,
+    h,
+    -h,
+    -h,
+    h,
+    -h,
+    h,
+    -h,
+    -h,
+    h,
+    // Right face
+    h,
+    -h,
+    -h,
+    h,
+    h,
+    -h,
+    h,
+    h,
+    h,
+    h,
+    -h,
+    h,
+    // Left face
+    -h,
+    -h,
+    -h,
+    -h,
+    -h,
+    h,
+    -h,
+    h,
+    h,
+    -h,
+    h,
+    -h,
+  ];
+  const indices = [
+    0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16, 17, 18, 16, 18, 19, 20, 21, 22,
+    20, 22, 23,
+  ];
+  return { positions, indices };
 }
