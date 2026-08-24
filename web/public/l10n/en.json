@@ -181,7 +181,7 @@
   "action.edit_copy.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P2.2.",
   "action.edit_cut.hint": "Cut the selected model to the clipboard",
   "action.edit_cut.label": "Cut",
-  "action.edit_cut.reason": "Cut is disabled because the legacy clipboard drops canonical object metadata and cannot delete through the same atomic command.",
+  "action.edit_cut.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P2.2.",
   "action.edit_delete_all.hint": "Remove every model on the active plate",
   "action.edit_delete_all.label": "Delete All",
   "action.edit_delete_all.reason": "Local behavior exists, but Snapmaker v2.3.4 parity has not passed its full acceptance and evidence gate. Tracked by P2.2.",

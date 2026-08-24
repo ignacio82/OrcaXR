@@ -1551,6 +1551,26 @@ await test('copies selected object and retains clipboard contents', () => {
   controller.dispose();
 });
 
+await test('cuts selected object to clipboard and supports undo/redo', () => {
+  const controller = createController();
+  const geometry = new THREE.BoxGeometry(20, 20, 20);
+  controller.importBufferGeometry(geometry, { name: 'Cut Object' });
+  assert.equal(controller.getSummary().objectCount, 1);
+
+  const cut = controller.cutSelectedObject();
+  assert.ok(cut);
+  assert.equal(controller.getSummary().objectCount, 0);
+  assert.equal(controller.hasClipboard(), true);
+
+  assert.equal(controller.undo(), true);
+  assert.equal(controller.getSummary().objectCount, 1);
+
+  assert.equal(controller.redo(), true);
+  assert.equal(controller.getSummary().objectCount, 0);
+
+  controller.dispose();
+});
+
 function semanticGuard(snapshot: CanonicalSemanticObjectEditorSnapshot) {
   return {
     expectedRevision: snapshot.sourceRevision,
