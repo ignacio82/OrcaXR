@@ -13,7 +13,6 @@
 import type { ActionDefinition as Action } from '../ActionRegistry';
 
 const UNAVAILABLE_TOOL_IDS = new Set([
-  'split_to_parts',
   'tool_face_detector',
   'tool_hollow',
   'add_modifier',
@@ -96,13 +95,18 @@ export const gizmoActions: Action[] = [
     isEnabled: (s) => s.hasInstanceSelection,
     run: (ctx) => ctx.splitToObjects(),
   },
-  tool(
-    'split_to_parts',
-    'Split to Parts',
-    'split_parts',
-    'Split the selected object into editable parts',
-    'splitToParts',
-  ),
+  {
+    id: 'split_to_parts',
+    context: ['object'],
+    label: 'Split to Parts',
+    icon: 'split_parts',
+    group: 'scene',
+    disclosure: 'menu',
+    menuSection: 'tools',
+    hint: 'Split the selected object into editable parts',
+    isEnabled: (s) => s.hasInstanceSelection,
+    run: (ctx) => ctx.splitToParts(),
+  },
 
   // ---- Gizmo tool rail (Orca left bar) ----
   {

@@ -356,6 +356,9 @@ export class ActionContext {
   async splitToObjects(): Promise<void> {
     await this.workspace.splitSelectedToObjects();
   }
+  async splitToParts(): Promise<void> {
+    await this.workspace.splitSelectedToParts();
+  }
   cutPlane(): void {
     this.workspace.cutSelectedByPlane();
   }

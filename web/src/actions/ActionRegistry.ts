@@ -493,7 +493,6 @@ const UNAVAILABLE_REASONS: Readonly<Record<string, string>> = {
   view_auto_perspective:
     "Auto-switching needs an orthographic mode, which the XR runtime's camera does not offer. See ADAPT-14.",
   view_show_gcode_window: 'The G-code text inspector is not implemented yet.',
-  split_to_parts: 'Splitting an object into editable parts is not implemented yet.',
   tool_face_detector: 'Face detection and selection is not implemented yet.',
   tool_hollow: 'Model hollowing is not implemented yet.',
   add_modifier: 'Parameter-modifier volumes are not implemented yet.',

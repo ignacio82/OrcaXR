@@ -9060,6 +9060,19 @@ export class OrcaWorkspace extends xb.Script {
     return true;
   }
 
+  public async splitSelectedToParts(): Promise<boolean> {
+    try {
+      this.canonicalProject.splitSelectedToParts();
+      this.setStatus(t('workspace.orcaWorkspace.splitToPartsSuccess', 'Split object into parts in one undoable edit.'));
+      this.syncTransformProxy();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(`${t('workspace.orcaWorkspace.splitToPartsFailed', 'Split to Parts failed')}: ${message}`);
+      return false;
+    }
+  }
+
   public cutSelectedByPlane() {
     this.setStatus(
       t(

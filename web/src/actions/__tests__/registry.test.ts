@@ -174,6 +174,16 @@ test('Download, canonical delete, and guarded Split to Objects use prerequisites
     }),
     true,
   );
+  assert.strictEqual(ActionRegistry.enabled(reg.get('split_to_parts')!, { ...baseState, modelCount: 1 }), false);
+  assert.strictEqual(
+    ActionRegistry.enabled(reg.get('split_to_parts')!, {
+      ...baseState,
+      modelCount: 1,
+      hasSelection: true,
+      hasInstanceSelection: true,
+    }),
+    true,
+  );
   assert.strictEqual(ActionRegistry.enabled(reg.get('mesh_boolean_union')!, { ...baseState, modelCount: 1 }), false);
   assert.strictEqual(ActionRegistry.enabled(reg.get('mesh_boolean_subtract')!, { ...baseState, modelCount: 1 }), false);
   assert.strictEqual(
@@ -188,16 +198,24 @@ test('Download, canonical delete, and guarded Split to Objects use prerequisites
   assert.match(ActionRegistry.disabledReason(reg.get('repair_model')!, baseState) ?? '', /select/i);
 });
 
-test('Split to Objects routes only through the shared asynchronous action context', () => {
-  let calls = 0;
+test('Split to Objects and Split to Parts route only through the shared asynchronous action context', () => {
+  let objectCalls = 0;
+  let partCalls = 0;
   const ctx = {
     async splitToObjects() {
-      calls += 1;
+      objectCalls += 1;
+    },
+    async splitToParts() {
+      partCalls += 1;
     },
   } as unknown as ActionContext;
-  const result = buildRegistry().get('split_to_objects')!.run!(ctx, {});
-  assert.equal(calls, 1);
-  assert.ok(result instanceof Promise);
+  const reg = buildRegistry();
+  const result1 = reg.get('split_to_objects')!.run!(ctx, {});
+  const result2 = reg.get('split_to_parts')!.run!(ctx, {});
+  assert.equal(objectCalls, 1);
+  assert.equal(partCalls, 1);
+  assert.ok(result1 instanceof Promise);
+  assert.ok(result2 instanceof Promise);
 });
 
 test('typed Objects selection does not enable instance-only legacy actions', () => {

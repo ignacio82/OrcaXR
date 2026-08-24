@@ -213,7 +213,11 @@ import {
   ORCA_VOLUME_ROLE_ORDER,
   type VolumeRoleConversionDecision,
 } from '../project/objects/semanticVolumeCommands';
-import { captureVolumeSplitGuard, type PreparedVolumeSplitPart } from '../project/objects/splitCommands';
+import {
+  captureVolumeSplitGuard,
+  SplitVolumeToPartsCommand,
+  type PreparedVolumeSplitPart,
+} from '../project/objects/splitCommands';
 import { prepareVolumeSplitParts } from '../project/objects/splitPreparation';
 import {
   captureObjectVolumeSeparationGuard,
@@ -2693,6 +2697,84 @@ export class CanonicalWorkspaceController {
     );
     commitPreparedVolumeSplitToObjects(this.session.commands, volumeGuard, parts, identities);
     return splitToObjectsResult(sourceObject.id, 'connected-components', identities, parts);
+  }
+
+  /**
+   * Split the selected instance's source volume into individual parts (volumes)
+   * within the same object.
+   */
+  splitSelectedToParts(): { partCount: number; objectName: string } {
+    this.assertActive();
+    const project = this.session.project.getSnapshot();
+    const selection = this.session.selection.getSnapshot();
+    const primary = selection.primary;
+    if (primary?.kind !== 'instance') {
+      throw new Error('Split to Parts requires an instance selection');
+    }
+    const found = findInstance(project.state, primary.id);
+    if (!found) {
+      throw new Error(`Selected instance ${primary.id} not found`);
+    }
+    const sourceObject = found.object;
+    assertSplitToObjectsSource(sourceObject, this.splitToObjectsSynchronousTriangleLimit);
+
+    if (sourceObject.volumes.length !== 1) {
+      throw new Error(`Object "${sourceObject.name}" already has ${sourceObject.volumes.length} parts`);
+    }
+
+    const sourceVolume = sourceObject.volumes[0];
+    const sourceDescriptors = project.state.sourceAssets.filter(
+      (descriptor) => descriptor.id === sourceVolume.source.assetId,
+    );
+    if (sourceDescriptors.length !== 1) {
+      throw new Error(`Split source asset ${sourceVolume.source.assetId} is not declared exactly once`);
+    }
+    const sourceAsset = this.assets.get(sourceVolume.source.assetId);
+    if (!sourceAsset) throw new Error(`Split source asset ${sourceVolume.source.assetId} is missing`);
+    if (canonicalStringify(sourceAsset.descriptor) !== canonicalStringify(sourceDescriptors[0])) {
+      throw new Error(`Split source asset ${sourceVolume.source.assetId} differs from its canonical descriptor`);
+    }
+
+    const volumeGuard = captureVolumeSplitGuard(project.state, sourceVolume.id);
+    const generatedAssetIds = new Map<string, AssetId>();
+    const stagedParts = prepareVolumeSplitParts({
+      sourceAsset,
+      sourceTransform: sourceVolume.transform,
+      idsForPart: ({ geometryDigest }) => {
+        let assetId = generatedAssetIds.get(geometryDigest);
+        if (!assetId) {
+          assetId = this.options.idSource.next('asset');
+          generatedAssetIds.set(geometryDigest, assetId);
+        }
+        return {
+          volumeId: this.options.idSource.next('volume'),
+          assetId,
+        };
+      },
+    });
+
+    if (stagedParts.length < 2) {
+      throw new Error(`Mesh "${sourceObject.name}" contains only 1 connected component and cannot be split into parts`);
+    }
+
+    const reusableAssets = new Map<string, AssetPayload>();
+    for (const descriptor of project.state.sourceAssets) {
+      if (descriptor.id === sourceVolume.source.assetId || reusableAssets.has(descriptor.digest)) continue;
+      const payload = this.assets.get(descriptor.id);
+      if (payload && canonicalStringify(payload.descriptor) === canonicalStringify(descriptor)) {
+        reusableAssets.set(descriptor.digest, payload);
+      }
+    }
+    const parts = stagedParts.map((part) => {
+      const reusable = reusableAssets.get(part.asset.descriptor.digest);
+      return reusable ? { ...part, asset: reusable } : part;
+    });
+
+    this.session.execute(new SplitVolumeToPartsCommand(volumeGuard, parts), { coalesce: false });
+    return {
+      partCount: parts.length,
+      objectName: sourceObject.name,
+    };
   }
 
   private allocateSeparatedObjectIdentities(

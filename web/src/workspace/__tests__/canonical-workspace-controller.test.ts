@@ -1299,6 +1299,49 @@ await test('applies intersect boolean mesh result and supports undo/redo', () =>
   controller.dispose();
 });
 
+await test('splits multi-body mesh into parts within the same object and supports undo/redo', () => {
+  const controller = createController();
+  const positions = [0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 2, 10, 0, 0, 12, 0, 0, 10, 2, 0, 10, 0, 2];
+  const tetrahedron = (offset: number): number[] => [
+    offset,
+    offset + 1,
+    offset + 2,
+    offset,
+    offset + 3,
+    offset + 1,
+    offset + 1,
+    offset + 3,
+    offset + 2,
+    offset + 2,
+    offset + 3,
+    offset,
+  ];
+  const indices = [...tetrahedron(0), ...tetrahedron(4)];
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+
+  controller.importBufferGeometry(geometry, { name: 'Compound Object' });
+  assert.equal(controller.getSummary().objectCount, 1);
+
+  const splitResult = controller.splitSelectedToParts();
+  assert.equal(splitResult.partCount, 2);
+  assert.equal(splitResult.objectName, 'Compound Object');
+
+  const obj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
+  assert.equal(obj.volumes.length, 2);
+
+  assert.equal(controller.undo(), true);
+  const revertedObj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
+  assert.equal(revertedObj.volumes.length, 1);
+
+  assert.equal(controller.redo(), true);
+  const redoneObj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
+  assert.equal(redoneObj.volumes.length, 2);
+
+  controller.dispose();
+});
+
 function semanticGuard(snapshot: CanonicalSemanticObjectEditorSnapshot) {
   return {
     expectedRevision: snapshot.sourceRevision,
