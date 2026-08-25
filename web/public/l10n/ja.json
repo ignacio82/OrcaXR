@@ -66,5 +66,18 @@
   "ui.workspaceViews.prepare": "準備",
   "ui.workspaceViews.preview": "プレビュー",
   "ui.workspaceViews.project": "プロジェクト",
+  "ui.xrKeypad.apply": "適用",
+  "ui.xrKeypad.cancel": "取消し",
+  "ui.xrKeypad.space": "スペース",
+  "ui.xrMenuBar.mode.device": "デバイス",
+  "ui.xrMenuBar.mode.prepare": "準備",
+  "ui.xrMenuBar.mode.preview": "プレビュー",
+  "ui.xrMenuBar.mode.project": "プロジェクト",
+  "ui.xrMenuBar.noPrinter": "プリンタ無し",
+  "ui.xrPanels.objects": "OBJ",
+  "ui.xrPanels.settings": "設定",
+  "ui.xrToolRail.group.more": "詳細",
+  "ui.xrToolRail.group.paint": "ペイント",
+  "ui.xrToolRail.group.plate": "プレート",
   "workspace.orcaWorkspace.defaultFilament": "デフォルト"
 }

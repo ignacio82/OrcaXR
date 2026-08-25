@@ -13,7 +13,7 @@ import {
 } from '../CapabilityEvidence';
 import { buildRegistry } from '../catalog';
 import { hasIcon } from '../../ui/icons';
-import { xrToolRailActions } from '../../ui/xr/XrShell';
+import { xrRailLayout } from '../../ui/xr/XrToolRail';
 
 let passed = 0;
 function test(name: string, fn: () => void) {
@@ -339,14 +339,13 @@ test('DOM-only printer confirmation is never advertised as an immersive mutation
   }
 });
 
-test('all XR toolbar actions are reachable by finite rail or Tools overflow', () => {
+test('every XR toolbar action is on the rail, and the rail is only toolbar actions', () => {
   const toolbar = registry.forSurface('xr-toolbar');
-  const rail = xrToolRailActions(toolbar);
-  const overflow = toolbar.filter((action) => !rail.includes(action));
+  const rail = xrRailLayout(registry).flatMap((group) => group.actions);
   // Smart Paint, Smart Paint (Image), Assembly, Brim Ears, and the SVG part
-  // tool are deliberately absent: each declares an XR exclusion for a reason a
-  // headset cannot yet satisfy — typed consent, a per-region list, an indexed
-  // list, a file picker.
+  // tool are deliberately absent from the toolbar itself: each declares an XR
+  // exclusion for a reason a headset cannot yet satisfy — typed consent, a
+  // per-region list, an indexed list, a file picker.
   //
   // Measure is *not* in that list any more. Its exclusion said the readout was
   // DOM-only, and the measurement is drawn on the model now; picking a feature
@@ -354,8 +353,6 @@ test('all XR toolbar actions are reachable by finite rail or Tools overflow', ()
   // already do in a headset. A reason that has stopped being true is worse
   // than no reason, because it reads as a considered limit.
   assert.strictEqual(toolbar.length, 14);
-  assert.strictEqual(rail.length, 7);
-  assert.strictEqual(overflow.length, 7);
   for (const excluded of [
     'tool_smart_paint',
     'tool_smart_paint_image',
@@ -369,7 +366,12 @@ test('all XR toolbar actions are reachable by finite rail or Tools overflow', ()
       `${excluded} must stay out of the XR toolbar`,
     );
   }
-  assert.deepStrictEqual(new Set([...rail, ...overflow]), new Set(toolbar));
+  // The rail is the toolbar, whole. It used to be seven allowed ids with
+  // everything else pushed into a menu, which put three of the four paint
+  // channels two presses further away than the fourth for no reason the
+  // operator could see.
+  assert.deepStrictEqual(new Set(rail), new Set(toolbar));
+  assert.strictEqual(rail.length, toolbar.length, 'the rail must not draw an action twice');
 });
 
 test('registry guard explains unavailable actions without invoking a handler', () => {
@@ -553,11 +555,13 @@ test('the inspector catalog is reachable through one XR menu section', () => {
     inspector.filter((action) => action.disclosure !== 'inspector').map((action) => action.id),
     [],
   );
-  const workspaceSource = readFileSync(
-    fileURLToPath(new URL('../../workspace/OrcaWorkspace.ts', import.meta.url)),
-    'utf8',
-  );
-  assert.match(workspaceSource, /forSurface\('xr-inspector'\)/, 'the XR shell renders the surface it declares');
+  // The immersive shell derives its panel list from the surface rather than
+  // from a hand-written table, which is what makes "every inspector action is
+  // reachable in a headset" structural instead of a promise.
+  const panelsSource = readFileSync(fileURLToPath(new URL('../../ui/xr/XrPanels.ts', import.meta.url)), 'utf8');
+  assert.match(panelsSource, /forSurface\('xr-inspector'\)/, 'the XR shell renders the surface it declares');
+  const shellSource = readFileSync(fileURLToPath(new URL('../../ui/xr/XrImmersiveShell.ts', import.meta.url)), 'utf8');
+  assert.match(shellSource, /forSurface\('xr-inspector'\)/, 'and draws its rows from the same surface');
 });
 
 test('required Snapmaker outcomes remain represented without implying completion', () => {

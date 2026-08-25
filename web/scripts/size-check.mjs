@@ -50,6 +50,9 @@ const cssTotal = css.reduce((sum, file) => sum + file.bytes, 0);
 // work can move. The total is a ceiling on that floor, not the regression signal;
 // the main-chunk budget above is what actually catches a feature growing the app.
 // Raised from 10,000,000 on 2026-08-16 when P6.4 landed with 18 KB of headroom left.
-assert.ok(jsTotal <= 10_500_000, `JavaScript total is ${jsTotal} bytes (budget 10,500,000).`);
+// Raised again from 10,500,000 on 2026-08-25 for the immersive shell redesign,
+// which added ~29 KB of spatial UI and moved ~66 KB of it out of the main chunk
+// into its own on-demand `immersive` chunk — the main chunk fell 37 KB.
+assert.ok(jsTotal <= 10_600_000, `JavaScript total is ${jsTotal} bytes (budget 10,600,000).`);
 assert.ok(cssTotal <= 200_000, `CSS total is ${cssTotal} bytes (budget 200,000).`);
 console.log(`Bundle budgets passed: main=${main.bytes}, JS total=${jsTotal}, CSS total=${cssTotal}.`);

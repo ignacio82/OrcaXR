@@ -219,6 +219,33 @@ engine (`libslic3r` via WASM) as the computational core.
   `OrcaWorkspace.setPlateAppearance` — the plate is a grabbable object with
   rings and a bar in the headset, and a plain light bed with a quiet grid in the
   window.
+- **The immersive shell is the flat shell, in the same words.** `ui/xr/` draws
+  the same menu bar (the seven `MENU_SECTIONS` plus `XR_PANELS_SECTION_ID`,
+  which finally has a home), the same four workspace tabs with their live
+  sub-lines, the same tool rail, and the same panels — nothing is renamed for
+  the headset and nothing is left behind. `XrLayout` is the arrangement, as
+  angles from the head; `XrImmersiveShell` owns *what is on* every surface and
+  talks to the workspace through one `XrShellHost`, so the whole shell is built,
+  pressed and asserted in `__tests__/` with no headset, no canvas and no WebXR
+  session. `OrcaWorkspace` keeps only cards, poses and the scene. Four rules
+  are load-bearing:
+  **`XR_PIXEL_SIZE` is exactly one millimetre**, so a card's metres and its
+  layout pixels are the same number — the 58 px hit target *is* the 58 mm
+  hand-tracking floor, and the 880 px menu bar *is* 0.88 m of headset.
+  **A surface declares `layer` (behaviour) and `presence`/`modes`
+  (coexistence) separately**: the geometry tests read the second to decide which
+  pairs may not crowd, so a sheet the operator opened may cover the inspector it
+  came from while the always-up cockpit may not. **A withheld action states its
+  reason in the row**, never behind a hover a headset cannot perform.
+  **A recentre moves everything except what the operator pinned** (`XR_PINNABLE`);
+  that is the whole contract that makes a grabbable panel safe, and it is why a
+  grabbable card is placed as it *arrives* rather than on every redraw — the
+  scrubber used to snap out of the operator's hands mid-scrub.
+  The shell is reached through exactly one dynamic `import('../ui/xr/immersive')`,
+  taken when a session starts (or `?xrui=1`): a phone that never enters XR should
+  not fetch and parse a spatial UI, and that one seam is what keeps ~66 KB out of
+  the main chunk. Add a runtime XR dependency to `immersive.ts`, never to
+  `OrcaWorkspace`'s static imports, or the chunk collapses back into the entry.
 - Generated settings schema v2 treats the exact pinned `Tab.cpp` inventory as
   layout authority: 21 tabs, 93 groups, and 424 literal placements are fixed
   counts, and every placement retains its full definition-owner binding set.
@@ -1117,14 +1144,21 @@ floors, not ceilings.
 
 - **Adopting a printer's filaments must move the bound preset, not just canonical state.** On a catalog-driven profile the *filament preset* bound to each head is what declares the material preflight checks a slice against (`ProfilePreflightConstraints` reads `filament_type` from `target.filamentProfiles[toolId]`), and `applyLiveSlicingConfiguration` rebuilds canonical filaments from the live palette plus those presets. A sync that wrote only canonical `material`/`config.filament_type` therefore produced two contradictory answers — the machine's own PLA came back as "PLA is not supported on tool 1" — and the next profile touch reverted the sync outright. `adoptPrinterFilamentPresets` re-points each reported tool at a compatible preset that declares that material and adopts the reported colour into the palette; a material with no compatible preset for the active printer/process is named in the status rather than silently left mismatched. An imported project is exempt: its embedded filament configuration is its own preflight authority. **Which preset it moves to is decided by vendor, type, and grade together** (`src/slicer/filamentPresetMatch.ts`). The machine reports three separate facts — `filament_vendor`, `filament_type`, `filament_sub_type` — and only the type is a slicer material; matching on the type alone took whichever preset the corpus listed first, which is how four heads of Snapmaker PLA Matte came back as four rows of Generic PLA. The grade is **not** a config key anywhere upstream: it lives only in the preset name, so it is parsed back out of the name *word-wise* — a prefix test reads `Snapmaker PLA-CF`'s grade as `-CF` and would offer carbon fibre as though it were plain PLA. Ranking is vendor, then exact grade (an unreported grade prefers the plain preset over any grade), then shortest name, so corpus order never decides. A preset that contradicts nothing the machine reported is kept: an unreported grade must not drag a deliberate Silk choice back to the plain preset. `filament_vendor` is deliberately **not** in `SAFE_KEYS` — it reaches the matcher as `SlicerProfile.filamentVendor`, so what a slice consumes is unchanged. Adoption stays operator-triggered (Sync Filaments From Printer): connecting must not silently rewrite a deliberately different spool choice, least of all mid-send.
 
-- **XR tool rail must stay finite.** The left XR card is a compact spatial
-  surface, not a scrollable mirror of the desktop toolbar: render only the
-  modal tools plus Drop to bed and Delete (64 px tiles); the complete
-  action catalogue stays in the progressive top menu. A previous all-toolbar
-  rail overflowed to the floor and made the compositor spend frame time laying
-  out off-screen buttons. Hidden cards are not automatically free; avoid
-  rebuilding them and use the measured single-owner lifecycle in the XRBlocks
-  contract above rather than a manual `UICard.update` loop.
+- **The XR tool rail is the toolbar, whole, and every button is labelled.** It
+  draws every `xr-toolbar` action in `XR_RAIL_GROUPS` order — three columns of
+  58 mm targets in a 0.21 m rail — and anything no group claims is appended
+  under "More", so a new toolbar action reaches the rail without an edit and the
+  failure mode is an untidy rail rather than a missing tool. Two earlier rails
+  were wrong in opposite directions: one mirrored the desktop toolbar and
+  overflowed to the floor at 64 px per tile, the other allowed seven ids and
+  pushed three of the four `PAINT_TOOL_CHANNELS` two presses further away than
+  the fourth. **Icon-only is not an option**: at 0.9 m an unlabelled glyph is
+  ~1.5° of arc and "seam paint" and "fuzzy skin" are indistinguishable. The
+  active tool's own bounded numbers and the filament palette are drawn on the
+  rail beside it, not in a panel three presses away. Hidden cards are not
+  automatically free; avoid rebuilding them and use the measured single-owner
+  lifecycle in the XRBlocks contract above rather than a manual `UICard.update`
+  loop.
 
 - **A layer's height comes from its extrusions, not from the maximum Z in the layer.** `GcodeInspectionModel.buildLayerIndex` used to take the max Z over every record, so a retraction Z-hop on a travel overstated the layer by the hop (a 3.45 mm layer reported 3.85 mm) and anything authored against it landed at a height the printer never prints at. Related: an event marker (`;PAUSE_PRINT`, `;CUSTOM_GCODE`) is emitted *before* the Z move that follows a layer change, so the record's own Z belongs to the previous layer — locate events by `tick.layer` and read that layer's Z, never `tick.zMm`.
 - **Layer events must be projected into `Metadata/custom_gcode_per_layer.xml` or they never reach the slicer.** `state.customGcode` entries with a `layerEvent` are written by `bbsCore.ts` with the engine's own numeric `type` codes (`ColorChange`=0, `PausePrint`=1, `ToolChange`=2, `Template`=3, `Custom`=4) plus the legacy `gcode` attribute pre-2.3 readers key off, and read back on import. Store the event's `top_z`, never a layer index — the engine resolves the height against the layers it produced, and a layer-height change would otherwise silently move the event. Verified behaviour on the U1 profile: pause emits `;PAUSE_PRINT` + `machine_pause_gcode`, custom emits its own body, colour change needs `color_change_gcode` (absent ⇒ an empty `;CUSTOM_GCODE` marker, so the UI only offers kinds whose body the profile declares), and a `ToolChange` event is a MultiAsSingle-mode concept that a multi-extruder project ignores.
@@ -1141,8 +1175,8 @@ floors, not ceilings.
 - **`SelectionFilamentBar` is a second surface for `objects_assign_filament`, never a second assignment path.** The
   viewport bar and the inspector's `FilamentAssignmentSelector` read the same revision-guarded snapshot and invoke the
   same registry action; the bar simply drops the confirming press, because "make this one blue" is not a deliberation.
-  The XR half lives on the Profiles card (`refreshXrSelectionFilaments`) and goes through the same action on
-  `xr-inspector`. If a third surface is ever needed, give it the snapshot and the action — do not add a command.
+  The XR half lives on the Device page's profile rows (`refreshXrSelectionFilaments`) and goes through the same
+  action on `xr-inspector`. If a third surface is ever needed, give it the snapshot and the action — do not add a command.
 - **Multi-extruder filament selectors:** When the selected printer profile has multiple extruders (e.g., Snapmaker U1), the UI generates individual filament dropdowns for each extruder head (H-1, H-2, etc.). The global `sel-filament` dropdown MUST be hidden in this state (`display: 'none'`) to avoid redundancy and user confusion. Do not reintroduce a visible global filament dropdown alongside the per-head dropdowns.
 - **The web profile corpus is a verified pinned overlay, not an editable copy.** `npm --prefix web run profiles:verify` requires `third_party/SnapmakerOrca` HEAD `9fd12ffb2b1b80c9fb4c14564754d2ec1573a626`, proves every same-path Snapmaker/Elegoo profile byte-identical to that Git tree, checks the imported inheritance closure, SHA-256-locks OrcaXR-only target adaptations in `web/scripts/profile-overlays.lock.json`, and verifies deterministic `catalog.json` ordering. Use `profiles:sync` deliberately after reviewing source/profile changes; never hand-edit a mirrored leaf or describe the local Elegoo adaptations as upstream-pinned. The calibration catalog is likewise generated from exact pinned Git blobs: use `calibration:verify` in normal gates and `calibration:sync` only after reviewing upstream source/resource or local-binding changes; never hand-edit its generated JSON. **What ships is the vendor bundle's registered set, not the whole upstream directory:** `resources/profiles/<Vendor>.json`'s `machine_list` / `process_list` / `filament_list` is the authority on which leaves the official slicer actually shows — the tree also holds unregistered ` copy`/`_old`/experiment leaves that must stay out. Every Snapmaker U1 and Elegoo CC leaf that bundle registers is now vendored, so the picker matches the official slicer per nozzle. Preset compatibility is **nozzle-scoped by exact `compatible_printers` lists**: a filament preset named `@U1 0.6 nozzle` reaches only the 0.6 mm machine, so adding a process preset for a nozzle whose filament family is missing leaves that variant listed-but-unsliceable and raises `no-compatible-filament` errors in `ProfileCatalog.diagnostics`. Add the whole nozzle family or none of it; `profile-loader.test.ts` holds the corpus to zero error diagnostics.
 21. **`normalize_fdm()` crashes with a null-deref when traversing the component graph if no options are set.** Patch `0076-normalize-fdm-null-deref.patch` fixes this for the server backend.

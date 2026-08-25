@@ -82,6 +82,21 @@
   "ui.workspaceViews.prepare": "準備",
   "ui.workspaceViews.preview": "預覽",
   "ui.workspaceViews.project": "專案項目",
+  "ui.xrKeypad.apply": "套用",
+  "ui.xrKeypad.cancel": "取消",
+  "ui.xrKeypad.space": "空格鍵",
+  "ui.xrMenuBar.mode.device": "設備",
+  "ui.xrMenuBar.mode.prepare": "準備",
+  "ui.xrMenuBar.mode.preview": "預覽",
+  "ui.xrMenuBar.mode.project": "專案項目",
+  "ui.xrMenuBar.noPrinter": "無列印設備",
+  "ui.xrObjectsPanel.selection": "所選項目",
+  "ui.xrPanels.objects": "物件",
+  "ui.xrPanels.settings": "設定",
+  "ui.xrToolRail.group.more": "詳情",
+  "ui.xrToolRail.group.paint": "繪製",
+  "ui.xrToolRail.group.plate": "列印板",
   "workspace.orcaWorkspace.defaultFilament": "預設",
-  "workspace.orcaWorkspace.selectedScopes": "已選取"
+  "workspace.orcaWorkspace.selectedScopes": "已選取",
+  "workspace.orcaWorkspace.selection": "所選項目"
 }

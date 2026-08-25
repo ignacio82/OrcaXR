@@ -80,6 +80,21 @@
   "ui.workspaceViews.prepare": "준비 하기",
   "ui.workspaceViews.preview": "미리 보기",
   "ui.workspaceViews.project": "프로젝트",
+  "ui.xrKeypad.apply": "적용",
+  "ui.xrKeypad.cancel": "취소",
+  "ui.xrKeypad.space": "스페이스",
+  "ui.xrMenuBar.mode.device": "장치",
+  "ui.xrMenuBar.mode.prepare": "준비 하기",
+  "ui.xrMenuBar.mode.preview": "미리 보기",
+  "ui.xrMenuBar.mode.project": "프로젝트",
+  "ui.xrMenuBar.noPrinter": "프린터 없음",
+  "ui.xrObjectsPanel.selection": "선택",
+  "ui.xrPanels.objects": "객체",
+  "ui.xrPanels.settings": "설정",
+  "ui.xrToolRail.group.more": "더보기",
+  "ui.xrToolRail.group.paint": "칠하기",
+  "ui.xrToolRail.group.plate": "플레이트",
   "workspace.orcaWorkspace.defaultFilament": "기본값",
-  "workspace.orcaWorkspace.selectedScopes": "선택됨"
+  "workspace.orcaWorkspace.selectedScopes": "선택됨",
+  "workspace.orcaWorkspace.selection": "선택"
 }

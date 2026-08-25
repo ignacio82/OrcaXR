@@ -1,30 +1,45 @@
 /**
- * XrPreviewScrubber — spatial G-code layer scrubber and move simulation deck in XR.
+ * XrPreviewScrubber — reading a toolpath in the headset.
  *
- * Placed in front of the build plate during G-code inspection preview mode.
- * Provides interactive layer slider with fine single-layer steppers, Z height
- * readout, single-layer view toggle, line type legend pills, feature color
- * mode selector, move simulation, and layer event authoring triggers.
+ * Docked at the plate's near edge during Preview, which is where a machine puts
+ * its own controls and where the operator is already looking. It is a second
+ * view of the exact `GcodePreviewPanelAdapter` state the flat shell's panel and
+ * scrubber render, and it draws nothing the projection did not supply — a
+ * toolpath is never coloured or filtered here.
+ *
+ * Three things the old spatial scrubber left behind are restored, and each was
+ * a real loss:
+ *
+ *  - **The whole legend.** It drew the first six roles, so `bridge`,
+ *    `overhang`, `wipe tower` and `travel` were simply absent from a headset —
+ *    and a legend that silently truncates teaches an operator that the colours
+ *    they cannot find do not exist.
+ *  - **The move filters.** `moveVisibility` is part of the view the projection
+ *    exposes, and there was no way to reach it.
+ *  - **A view mode you can see.** One cycling button whose label was the mode
+ *    it was *currently* in gives no idea what the next press will do; the modes
+ *    are listed.
  */
 import type { GcodePreviewMode } from '../../slicer/GcodePreviewModel';
 import type { GcodePreviewViewPatch } from '../../slicer/GcodePreviewSession';
 import type { GcodePreviewPanelState } from '../dom/GcodePreviewPanel';
-import { createXrButton, createXrChip } from './XrComponents';
-import type { XrUiAdapter } from './XrUiAdapter';
+import { t } from '../../l10n/t';
 import { tokens } from '../tokens';
+import { XR_TYPE, createXrGrabBar, createXrRow, createXrSurfaceBody, createXrTextButton } from './XrChrome';
+import type { XrUiAdapter } from './XrUiAdapter';
 
 const C = tokens.color;
 
 export interface XrPreviewScrubberHandlers {
   onUpdateView(patch: GcodePreviewViewPatch): void;
   onAuthorEvent?(type: 'pause' | 'custom', topZMm: number): void;
+  onTogglePin?(): void;
 }
 
 export interface XrPreviewScrubberRender<PanelNode, TextNode> {
   readonly root: PanelNode;
   readonly layerText: TextNode;
   readonly zText: TextNode;
-  readonly legendContainer: PanelNode;
   refresh(state: GcodePreviewPanelState): void;
   dispose(): void;
 }
@@ -34,224 +49,218 @@ export function renderXrPreviewScrubber<PanelNode, ImageNode, TextNode>(
   root: PanelNode,
   state: GcodePreviewPanelState,
   handlers: XrPreviewScrubberHandlers,
+  options: { readonly pinned?: boolean } = {},
 ): XrPreviewScrubberRender<PanelNode, TextNode> {
-  // Clear any existing children
-  const bounds = state.layerBounds ?? [1, 1];
-  const currentLayer = state.view?.layerRange[1] ?? bounds[1];
-  const maxLayer = bounds[1];
-  const topZ = typeof state.layerTopZMm === 'number' ? `Z ${state.layerTopZMm.toFixed(2)} mm` : 'Z —';
+  const body = createXrSurfaceBody(ui, { padding: tokens.space.sm, gap: 6 });
+  ui.appendChild(root, body);
 
-  const container = ui.createPanel({
-    width: '100%',
-    flexDirection: 'column',
-    gap: 8,
-    paddingLeft: 14,
-    paddingRight: 14,
-    paddingTop: 10,
-    paddingBottom: 10,
-    fillColor: '#0d141cF2',
-    cornerRadius: tokens.radius.md,
-    strokeWidth: 1,
-    strokeColor: '#ffffff1a',
-  });
-  ui.appendChild(root, container);
+  let current = state;
+  const bounds = (s: GcodePreviewPanelState): readonly [number, number] => s.layerBounds ?? [1, 1];
+  const layerOf = (s: GcodePreviewPanelState): number => s.view?.layerRange[1] ?? bounds(s)[1];
 
-  // Top Row: Layer Readout, Z height, and View Mode selector
-  const headerRow = ui.createPanel({
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  });
-  ui.appendChild(container, headerRow);
+  if (handlers.onTogglePin) {
+    const grab = createXrGrabBar(ui, {
+      title: t('ui.xrPreviewScrubber.title', 'Toolpath'),
+      hint: t('ui.xrPreviewScrubber.hint', 'Drag to place, pin to keep it there'),
+      pinned: options.pinned === true,
+      onPin: handlers.onTogglePin,
+    });
+    ui.appendChild(body, grab.root);
+  }
 
-  const layerText = ui.createText(`Layer ${currentLayer} / ${maxLayer}`, {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  });
-  ui.appendChild(headerRow, layerText);
+  // ---- Where we are ------------------------------------------------------
+  const header = createXrRow(ui, { gap: tokens.space.sm, flexShrink: 0 });
+  const layerText = ui.createText('', { fontSize: XR_TYPE.heading, fontWeight: 'bold', color: C.text, flexShrink: 0 });
+  const zText = ui.createText('', { fontSize: XR_TYPE.body, color: C.accentSoft, flexShrink: 0 });
+  ui.appendChild(header, layerText);
+  ui.appendChild(header, zText);
+  ui.appendChild(header, ui.createPanel({ flexGrow: 1, flexShrink: 1 }));
 
-  const zText = ui.createText(topZ, {
-    fontSize: 14,
-    fontWeight: 'medium',
-    color: C.accentSoft,
-  });
-  ui.appendChild(headerRow, zText);
+  // Every mode the projection offers, named. The one in use is selected.
+  const modeRow = createXrRow(ui, { width: 'auto', gap: 4, flexShrink: 0 });
+  const modeButtons = new Map<
+    GcodePreviewMode,
+    ReturnType<typeof createXrTextButton<PanelNode, ImageNode, TextNode>>
+  >();
+  for (const mode of state.modes) {
+    const button = createXrTextButton(ui, {
+      label: mode.label,
+      fontSize: XR_TYPE.caption,
+      height: 30,
+      paddingX: 8,
+      onClick: () => handlers.onUpdateView({ mode: mode.id }),
+    });
+    modeButtons.set(mode.id, button);
+    ui.appendChild(modeRow, button.root);
+  }
+  ui.appendChild(header, modeRow);
 
-  // Mode cycle button
-  const currentMode = state.view?.mode ?? 'feature';
-  const modeLabel = state.modes.find((m) => m.id === currentMode)?.label ?? 'Feature';
-  const modeBtn = createXrButton(ui, {
-    label: `Mode: ${modeLabel}`,
-    fontSize: 12,
-    paddingLeft: 8,
-    paddingRight: 8,
-    paddingTop: 4,
-    paddingBottom: 4,
+  const singleLayer = createXrTextButton(ui, {
+    label: t('ui.xrPreviewScrubber.singleLayer', 'Single layer'),
+    fontSize: XR_TYPE.caption,
+    height: 30,
+    paddingX: 8,
     onClick: () => {
-      const modeList = state.modes.map((m) => m.id);
-      if (modeList.length === 0) return;
-      const idx = (modeList as readonly string[]).indexOf(currentMode);
-      const nextMode = modeList[(idx + 1) % modeList.length];
-      handlers.onUpdateView({ mode: nextMode as GcodePreviewMode });
+      const next = !(current.view?.singleLayer ?? false);
+      const layer = layerOf(current);
+      handlers.onUpdateView({ singleLayer: next, layerRange: [next ? layer : bounds(current)[0], layer] });
     },
   });
-  ui.appendChild(headerRow, modeBtn.root);
+  ui.appendChild(header, singleLayer.root);
+  ui.appendChild(body, header);
 
-  // Middle Row: Scrubber Stepper Controls (-10, -1, slider representation, +1, +10)
-  const scrubberRow = ui.createPanel({
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  });
-  ui.appendChild(container, scrubberRow);
-
-  const stepLayer = (delta: number) => {
-    const next = Math.max(bounds[0], Math.min(bounds[1], currentLayer + delta));
-    const low = state.view?.singleLayer ? next : (state.view?.layerRange[0] ?? bounds[0]);
-    handlers.onUpdateView({ layerRange: [low, next] });
+  // ---- The scrub ---------------------------------------------------------
+  const step = (delta: number): void => {
+    const [low, high] = bounds(current);
+    const next = Math.max(low, Math.min(high, layerOf(current) + delta));
+    const from = current.view?.singleLayer ? next : (current.view?.layerRange[0] ?? low);
+    handlers.onUpdateView({ layerRange: [from, next] });
   };
 
-  const jumpDown10 = createXrButton(ui, {
-    label: '−10',
-    fontSize: 12,
-    paddingLeft: 8,
-    paddingRight: 8,
-    paddingTop: 6,
-    paddingBottom: 6,
-    onClick: () => stepLayer(-10),
-  });
-  ui.appendChild(scrubberRow, jumpDown10.root);
-
-  const stepDown = createXrButton(ui, {
-    label: '−1',
-    fontSize: 13,
-    paddingLeft: 10,
-    paddingRight: 10,
-    paddingTop: 6,
-    paddingBottom: 6,
-    onClick: () => stepLayer(-1),
-  });
-  ui.appendChild(scrubberRow, stepDown.root);
-
-  // Layer track visual bar
-  const progressRatio = maxLayer > bounds[0] ? (currentLayer - bounds[0]) / (maxLayer - bounds[0]) : 1;
+  const scrub = createXrRow(ui, { gap: 5, flexShrink: 0 });
+  for (const delta of [-10, -1]) {
+    ui.appendChild(
+      scrub,
+      createXrTextButton(ui, {
+        label: String(delta),
+        fontSize: XR_TYPE.caption,
+        height: 36,
+        paddingX: 8,
+        onClick: () => step(delta),
+      }).root,
+    );
+  }
   const track = ui.createPanel({
     flexGrow: 1,
-    height: 10,
-    cornerRadius: 5,
-    fillColor: '#ffffff1a',
+    flexShrink: 1,
+    height: 14,
+    cornerRadius: 7,
+    fillColor: C.stroke,
     flexDirection: 'row',
     alignItems: 'center',
   });
-  const fill = ui.createPanel({
-    width: `${Math.round(progressRatio * 100)}%` as any,
-    height: '100%',
-    cornerRadius: 5,
-    fillColor: C.accent,
-  });
+  const fill = ui.createPanel({ width: '0%', height: 14, cornerRadius: 7, fillColor: C.accent });
   ui.appendChild(track, fill);
-  ui.appendChild(scrubberRow, track);
-
-  const stepUp = createXrButton(ui, {
-    label: '+1',
-    fontSize: 13,
-    paddingLeft: 10,
-    paddingRight: 10,
-    paddingTop: 6,
-    paddingBottom: 6,
-    onClick: () => stepLayer(1),
-  });
-  ui.appendChild(scrubberRow, stepUp.root);
-
-  const jumpUp10 = createXrButton(ui, {
-    label: '+10',
-    fontSize: 12,
-    paddingLeft: 8,
-    paddingRight: 8,
-    paddingTop: 6,
-    paddingBottom: 6,
-    onClick: () => stepLayer(10),
-  });
-  ui.appendChild(scrubberRow, jumpUp10.root);
-
-  // Single layer toggle button
-  const isSingleLayer = state.view?.singleLayer ?? false;
-  const singleLayerBtn = createXrButton(ui, {
-    label: isSingleLayer ? 'Single Layer: ON' : 'Single Layer: OFF',
-    fontSize: 11,
-    selected: isSingleLayer,
-    paddingLeft: 8,
-    paddingRight: 8,
-    paddingTop: 4,
-    paddingBottom: 4,
-    onClick: () => {
-      const nextSingle = !isSingleLayer;
-      const low = nextSingle ? currentLayer : bounds[0];
-      handlers.onUpdateView({ singleLayer: nextSingle, layerRange: [low, currentLayer] });
-    },
-  });
-  ui.appendChild(scrubberRow, singleLayerBtn.root);
-
-  // Bottom Row: Line Type Legend Chips & Layer Event Authoring
-  const bottomRow = ui.createPanel({
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    flexWrap: 'wrap',
-  });
-  ui.appendChild(container, bottomRow);
-
-  const legendContainer = ui.createPanel({
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-    flexGrow: 1,
-  });
-  ui.appendChild(bottomRow, legendContainer);
-
-  for (const item of state.legend.slice(0, 6)) {
-    const chip = createXrChip(ui, `${item.code} ${item.label}`, item.color);
-    ui.appendChild(legendContainer, chip);
+  ui.appendChild(scrub, track);
+  for (const delta of [1, 10]) {
+    ui.appendChild(
+      scrub,
+      createXrTextButton(ui, {
+        label: `+${delta}`,
+        fontSize: XR_TYPE.caption,
+        height: 36,
+        paddingX: 8,
+        onClick: () => step(delta),
+      }).root,
+    );
   }
+  ui.appendChild(body, scrub);
 
-  // Quick Layer Event trigger at this layer
-  if (handlers.onAuthorEvent && typeof state.layerTopZMm === 'number') {
-    const topZVal = state.layerTopZMm;
-    const pauseBtn = createXrButton(ui, {
-      label: `+ Pause at L${currentLayer}`,
-      fontSize: 11,
-      paddingLeft: 8,
-      paddingRight: 8,
-      paddingTop: 4,
-      paddingBottom: 4,
+  // ---- What is drawn -----------------------------------------------------
+  const filters = createXrRow(ui, { gap: 4, flexWrap: 'wrap', flexShrink: 0 });
+  const filterButtons = new Map<string, ReturnType<typeof createXrTextButton<PanelNode, ImageNode, TextNode>>>();
+  for (const filter of state.moveFilters) {
+    const button = createXrTextButton(ui, {
+      label: filter.label,
+      fontSize: XR_TYPE.micro,
+      height: 28,
+      paddingX: 8,
       onClick: () => {
-        handlers.onAuthorEvent?.('pause', topZVal);
+        const visibility = current.view?.moveVisibility;
+        if (!visibility) return;
+        handlers.onUpdateView({ moveVisibility: { [filter.id]: !visibility[filter.id] } });
       },
     });
-    ui.appendChild(bottomRow, pauseBtn.root);
+    filterButtons.set(filter.id, button);
+    ui.appendChild(filters, button.root);
   }
+  ui.appendChild(body, filters);
 
-  return {
-    root: container,
-    layerText,
-    zText,
-    legendContainer,
-    refresh(nextState: GcodePreviewPanelState) {
-      const nextBounds = nextState.layerBounds ?? [1, 1];
-      const cur = nextState.view?.layerRange[1] ?? nextBounds[1];
-      ui.setText(layerText, `Layer ${cur} / ${nextBounds[1]}`);
-      const nextZ = typeof nextState.layerTopZMm === 'number' ? `Z ${nextState.layerTopZMm.toFixed(2)} mm` : 'Z —';
-      ui.setText(zText, nextZ);
-      const ratio = nextBounds[1] > nextBounds[0] ? (cur - nextBounds[0]) / (nextBounds[1] - nextBounds[0]) : 1;
-      ui.setPanelOpacity(fill, ratio);
-    },
-    dispose() {},
+  // ---- The legend, whole -------------------------------------------------
+  const legendRow = createXrRow(ui, { gap: 4, flexWrap: 'wrap', flexShrink: 0 });
+  ui.appendChild(body, legendRow);
+
+  const eventRow = createXrRow(ui, { gap: 5, flexShrink: 0 });
+  ui.appendChild(body, eventRow);
+
+  const drawLegend = (next: GcodePreviewPanelState): void => {
+    ui.clearChildren(legendRow);
+    for (const item of next.legend) {
+      const chip = createXrRow(ui, {
+        width: 'auto',
+        flexShrink: 0,
+        gap: 5,
+        paddingLeft: 7,
+        paddingRight: 7,
+        paddingTop: 4,
+        paddingBottom: 4,
+        cornerRadius: 6,
+        fillColor: C.surface,
+      });
+      ui.appendChild(chip, ui.createPanel({ width: 8, height: 8, cornerRadius: 4, fillColor: item.color }));
+      ui.appendChild(chip, ui.createText(item.label, { fontSize: XR_TYPE.micro, color: C.text }));
+      ui.appendChild(legendRow, chip);
+    }
   };
+
+  const drawEvents = (next: GcodePreviewPanelState): void => {
+    ui.clearChildren(eventRow);
+    // The projection may report that it cannot supply something. That is a
+    // fact worth printing rather than an empty row worth explaining away.
+    if (next.unsupportedReason) {
+      ui.appendChild(
+        eventRow,
+        ui.createText(next.unsupportedReason, { fontSize: XR_TYPE.micro, color: C.warn, flexShrink: 1 }),
+      );
+      return;
+    }
+    const topZ = next.layerTopZMm;
+    if (handlers.onAuthorEvent && typeof topZ === 'number') {
+      ui.appendChild(
+        eventRow,
+        createXrTextButton(ui, {
+          label: t('ui.xrPreviewScrubber.addPause', 'Pause at this layer'),
+          fontSize: XR_TYPE.micro,
+          height: 28,
+          paddingX: 8,
+          onClick: () => handlers.onAuthorEvent?.('pause', topZ),
+        }).root,
+      );
+    }
+    for (const tick of next.ticks.slice(0, 4)) {
+      ui.appendChild(
+        eventRow,
+        ui.createText(`${tick.label} L${tick.layer}`, {
+          fontSize: XR_TYPE.micro,
+          color: C.textMuted,
+          flexShrink: 0,
+        }),
+      );
+    }
+  };
+
+  const apply = (next: GcodePreviewPanelState): void => {
+    current = next;
+    const [low, high] = bounds(next);
+    const layer = layerOf(next);
+    ui.setText(
+      layerText,
+      t('ui.xrPreviewScrubber.layer', 'Layer {current} / {total}')
+        .replace('{current}', String(layer))
+        .replace('{total}', String(high)),
+    );
+    ui.setText(zText, typeof next.layerTopZMm === 'number' ? `Z ${next.layerTopZMm.toFixed(2)} mm` : 'Z —');
+    const ratio = high > low ? (layer - low) / (high - low) : 1;
+    ui.setPanelProperties(fill, { width: `${Math.round(ratio * 100)}%` });
+    singleLayer.setSelected(next.view?.singleLayer === true);
+    for (const [id, button] of modeButtons) button.setSelected(next.view?.mode === id);
+    for (const [id, button] of filterButtons) {
+      button.setSelected(next.view?.moveVisibility?.[id as never] === true);
+    }
+    drawLegend(next);
+    drawEvents(next);
+  };
+  apply(state);
+
+  return { root: body, layerText, zText, refresh: apply, dispose: () => {} };
 }

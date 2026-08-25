@@ -67,7 +67,17 @@ export interface UiStateShape {
   printerJobState: PrinterJobUiState;
 }
 
-const INITIAL: UiStateShape = {
+/**
+ * The store's starting snapshot, and the answer to "what does the registry see
+ * before a shell has one?".
+ *
+ * Exported because a surface can be drawn before the composition root injects
+ * an `ActionContext` — the immersive shell builds its cards on session start,
+ * which can beat that injection — and asking `availability()` about a
+ * half-empty object gets an answer nobody wrote. Every prerequisite is false
+ * here, so an action reads as disabled with its own declared reason.
+ */
+export const INITIAL_UI_STATE: Readonly<UiStateShape> = Object.freeze({
   mode: 'prepare',
   // A selected model is directly draggable by default. Keep the detailed
   // transform controls quiet until the maker explicitly chooses Move/Rotate/
@@ -92,12 +102,12 @@ const INITIAL: UiStateShape = {
   progress: null,
   preflightBlocked: false,
   printerJobState: 'disconnected',
-};
+});
 
 export type UiStateListener = (s: Readonly<UiStateShape>) => void;
 
 export class UiState {
-  private state: UiStateShape = { ...INITIAL };
+  private state: UiStateShape = { ...INITIAL_UI_STATE };
   private listeners = new Set<UiStateListener>();
 
   /** Read the current snapshot (do not mutate). */

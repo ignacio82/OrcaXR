@@ -1,11 +1,17 @@
 /**
- * Tests for XrPreviewScrubber spatial layer scrubber in XR.
+ * Reading a toolpath in the headset.
+ *
+ * The scrubber is a second view of the exact `GcodePreviewPanelAdapter` state
+ * the flat shell renders, so what is asserted here is that it draws *all* of
+ * it — the redesign's complaint was a legend truncated at six roles and a set
+ * of move filters with no control at all — and that it never invents anything
+ * the projection did not supply.
  */
 import assert from 'node:assert/strict';
-import { renderXrPreviewScrubber } from '../XrPreviewScrubber';
-import type { GcodePreviewViewPatch } from '../../../slicer/GcodePreviewSession';
 import type { GcodePreviewPanelState } from '../../dom/GcodePreviewPanel';
-import type { XrImageProperties, XrPanelProperties, XrTextProperties, XrUiAdapter } from '../XrUiAdapter';
+import type { GcodePreviewViewPatch } from '../../../slicer/GcodePreviewSession';
+import { renderXrPreviewScrubber } from '../XrPreviewScrubber';
+import { createFakeXrUi, FakePanel } from './fakeXrUi';
 
 let passed = 0;
 function test(name: string, run: () => void): void {
@@ -14,129 +20,146 @@ function test(name: string, run: () => void): void {
   console.log(`  ✓ ${name}`);
 }
 
-class FakePanel {
-  fillColor: string;
-  opacity: number;
-  readonly children: (FakePanel | FakeText | FakeImage)[] = [];
-  constructor(readonly opts: XrPanelProperties) {
-    this.fillColor = String(opts.fillColor ?? '');
-    this.opacity = typeof opts.opacity === 'number' ? opts.opacity : 1;
-  }
-  click(): void {
-    this.opts.onClick?.();
-  }
-  texts(): FakeText[] {
-    return this.children.flatMap((c) => (c instanceof FakeText ? [c] : c instanceof FakePanel ? c.texts() : []));
-  }
-  buttons(): FakePanel[] {
-    return this.children.flatMap((c) =>
-      c instanceof FakePanel ? [...(c.opts.onClick ? [c] : []), ...c.buttons()] : [],
-    );
-  }
-}
+const ui = createFakeXrUi();
+const host = () => new FakePanel({});
 
-class FakeText {
-  constructor(
-    public text: string,
-    readonly opts: XrTextProperties,
-  ) {}
-}
+const LEGEND = [
+  'Outer wall',
+  'Inner wall',
+  'Sparse infill',
+  'Solid infill',
+  'Top surface',
+  'Bridge',
+  'Support',
+  'Travel',
+];
 
-class FakeImage {
-  constructor(
-    public src: string,
-    readonly opts: XrImageProperties,
-  ) {}
-}
-
-const adapter: XrUiAdapter<FakePanel, FakeImage, FakeText> = {
-  createPanel: (opts) => new FakePanel(opts),
-  createImage: (src, opts) => new FakeImage(src, opts),
-  createText: (text, opts) => new FakeText(text, opts),
-  appendImage: (panel, image) => panel.children.push(image),
-  appendChild: (panel, child) => panel.children.push(child as any),
-  setPanelFill: (panel, fill) => {
-    panel.fillColor = String(fill);
-  },
-  setPanelOpacity: (panel, opacity) => {
-    panel.opacity = opacity;
-  },
-  setImageColor: () => {},
-  setText: (text, value) => {
-    text.text = value;
-  },
-};
-
-function sampleState(): GcodePreviewPanelState {
+function state(overrides: Partial<GcodePreviewPanelState> = {}): GcodePreviewPanelState {
   return {
     active: true,
-    layerBounds: [1, 100],
     view: {
-      mode: 'FeatureType',
-      layerRange: [1, 50],
+      mode: 'feature',
+      layerRange: [1, 148],
       singleLayer: false,
-      moveVisibility: {
-        extrude: true,
-        travel: true,
-        wipe: true,
-        retract: true,
-        unretract: true,
-      },
+      moveVisibility: { extrude: true, travel: false } as never,
     },
-    layerTopZMm: 10.0,
+    layerBounds: [1, 302],
+    layerTopZMm: 29.6,
     modes: [
-      { id: 'FeatureType', label: 'Feature', unit: null },
-      { id: 'Tool', label: 'Filament', unit: null },
-      { id: 'Feedrate', label: 'Speed', unit: 'mm/s' },
+      { id: 'feature', label: 'Feature type', unit: null },
+      { id: 'speed', label: 'Speed', unit: 'mm/s' },
     ],
-    moveFilters: [],
-    legend: [
-      { id: 'outer_wall', label: 'Outer Wall', code: 'OW', accessibleLabel: 'Outer wall', color: '#ff0000' },
-      { id: 'inner_wall', label: 'Inner Wall', code: 'IW', accessibleLabel: 'Inner wall', color: '#00ff00' },
+    moveFilters: [
+      { id: 'extrude' as never, label: 'Extrusions' },
+      { id: 'travel' as never, label: 'Travel' },
     ],
-    ticks: [],
+    legend: LEGEND.map((label, index) => ({ code: String(index), label, color: '#ffffff' })) as never,
     limitations: [],
-  };
+    ticks: [],
+    ...overrides,
+  } as GcodePreviewPanelState;
 }
 
-test('renders layer and Z height readouts', () => {
-  const root = new FakePanel({});
-  const render = renderXrPreviewScrubber(adapter, root, sampleState(), {
+test('the layer readout and the Z height come from the projection', () => {
+  const root = host();
+  const render = renderXrPreviewScrubber(ui, root, state(), { onUpdateView: () => {} });
+  assert.equal((render.layerText as { text: string }).text, 'Layer 148 / 302');
+  assert.equal((render.zText as { text: string }).text, 'Z 29.60 mm');
+});
+
+test('the whole legend is drawn, not the first six roles', () => {
+  const root = host();
+  renderXrPreviewScrubber(ui, root, state(), { onUpdateView: () => {} });
+  const labels = root.labels();
+  for (const role of LEGEND) assert.ok(labels.includes(role), `${role} is missing from the legend`);
+});
+
+test('every view mode is named, so a press is not a guess', () => {
+  const patches: GcodePreviewViewPatch[] = [];
+  const root = host();
+  renderXrPreviewScrubber(ui, root, state(), { onUpdateView: (patch) => patches.push(patch) });
+  const labels = root.labels();
+  assert.ok(labels.includes('Feature type'));
+  assert.ok(labels.includes('Speed'));
+  root
+    .buttons()
+    .find((button) => button.labels().includes('Speed'))
+    ?.click();
+  assert.deepEqual(patches, [{ mode: 'speed' }]);
+});
+
+test('the move filters are reachable and toggle the value the projection holds', () => {
+  const patches: GcodePreviewViewPatch[] = [];
+  const root = host();
+  renderXrPreviewScrubber(ui, root, state(), { onUpdateView: (patch) => patches.push(patch) });
+  root
+    .buttons()
+    .find((button) => button.labels().includes('Travel'))
+    ?.click();
+  assert.deepEqual(patches, [{ moveVisibility: { travel: true } }]);
+});
+
+test('stepping stays inside the layer bounds', () => {
+  const patches: GcodePreviewViewPatch[] = [];
+  const root = host();
+  renderXrPreviewScrubber(ui, root, state({ view: { ...state().view!, layerRange: [1, 300] } }), {
+    onUpdateView: (patch) => patches.push(patch),
+  });
+  root
+    .buttons()
+    .find((button) => button.labels().includes('+10'))
+    ?.click();
+  assert.deepEqual(patches, [{ layerRange: [1, 302] }], 'a jump past the top clamps to the top');
+});
+
+test('single layer scrubs one layer rather than a window', () => {
+  const patches: GcodePreviewViewPatch[] = [];
+  const root = host();
+  const render = renderXrPreviewScrubber(ui, root, state(), { onUpdateView: (patch) => patches.push(patch) });
+  root
+    .buttons()
+    .find((button) => button.labels().includes('Single layer'))
+    ?.click();
+  assert.deepEqual(patches, [{ singleLayer: true, layerRange: [148, 148] }]);
+  render.refresh(state({ view: { ...state().view!, singleLayer: true, layerRange: [148, 148] } }));
+  root
+    .buttons()
+    .find((button) => button.labels().includes('-1'))
+    ?.click();
+  assert.deepEqual(patches.at(-1), { layerRange: [147, 147] });
+});
+
+test('an unsupported projection says so instead of drawing an empty row', () => {
+  const root = host();
+  renderXrPreviewScrubber(ui, root, state({ unsupportedReason: 'This artifact carries no per-layer durations.' }), {
     onUpdateView: () => {},
+    onAuthorEvent: () => {},
   });
-  assert.equal(render.layerText.text, 'Layer 50 / 100');
-  assert.equal(render.zText.text, 'Z 10.00 mm');
+  assert.ok(root.labels().includes('This artifact carries no per-layer durations.'));
+  assert.ok(!root.labels().includes('Pause at this layer'), 'an event cannot be authored onto what is not there');
 });
 
-test('stepping layer calls onUpdateView with new layerRange', () => {
-  const patches: GcodePreviewViewPatch[] = [];
-  const root = new FakePanel({});
-  renderXrPreviewScrubber(adapter, root, sampleState(), {
-    onUpdateView: (patch) => patches.push(patch),
+test('a layer event is authored at the Z the projection reported', () => {
+  const authored: [string, number][] = [];
+  const root = host();
+  renderXrPreviewScrubber(ui, root, state(), {
+    onUpdateView: () => {},
+    onAuthorEvent: (type, z) => authored.push([type, z]),
   });
-
-  const buttons = root.buttons();
-  // Find step up button (+1)
-  const plusOne = buttons.find((b) => b.texts().some((t) => t.text === '+1'));
-  assert.ok(plusOne);
-  plusOne.click();
-
-  assert.deepEqual(patches, [{ layerRange: [1, 51] }]);
+  root
+    .buttons()
+    .find((button) => button.labels().includes('Pause at this layer'))
+    ?.click();
+  assert.deepEqual(authored, [['pause', 29.6]]);
 });
 
-test('single layer mode toggle updates view patch', () => {
-  const patches: GcodePreviewViewPatch[] = [];
-  const root = new FakePanel({});
-  renderXrPreviewScrubber(adapter, root, sampleState(), {
-    onUpdateView: (patch) => patches.push(patch),
-  });
-
-  const buttons = root.buttons();
-  const toggleBtn = buttons.find((b) => b.texts().some((t) => t.text.includes('Single Layer')));
-  assert.ok(toggleBtn);
-  toggleBtn.click();
-
-  assert.deepEqual(patches, [{ singleLayer: true, layerRange: [50, 50] }]);
+test('a grab bar appears only where the surface can actually be pinned', () => {
+  const withPin = host();
+  renderXrPreviewScrubber(ui, withPin, state(), { onUpdateView: () => {}, onTogglePin: () => {} }, { pinned: true });
+  assert.ok(withPin.labels().includes('Toolpath'));
+  const withoutPin = host();
+  renderXrPreviewScrubber(ui, withoutPin, state(), { onUpdateView: () => {} });
+  assert.ok(!withoutPin.labels().includes('Toolpath'));
 });
 
-console.log(`\nXrPreviewScrubber: ${passed} tests passed.`);
+console.log(`\nXR preview scrubber: ${passed} tests passed.`);

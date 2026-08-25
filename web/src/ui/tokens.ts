@@ -26,6 +26,15 @@
 export interface ColorTable {
   bg: string;
   bgCard: string;
+  /**
+   * A spatial surface seen against passthrough.
+   *
+   * The XR shell's chrome floats over whatever room the operator is standing
+   * in, so it needs more body than a card stacked on the app's own background:
+   * at the 65% of `bgCard` a passthrough wall shows through the text. The flat
+   * shell has no passthrough and maps it to the card fill it already uses.
+   */
+  bgChrome: string;
   bgElevated: string;
   bgSunken: string;
   surface: string;
@@ -70,6 +79,7 @@ const ROLE_COLORS = {
 const XR_COLORS: ColorTable = {
   bg: '#05070a',
   bgCard: '#0d141cA6',
+  bgChrome: '#0d141cE6',
   // Dense overlays (mega menu, command palette, dialogs) sit over a busy 3D
   // scene, so they need a near-opaque fill; the 65% card fill is only legible
   // over the calmer chrome.
@@ -102,6 +112,7 @@ const XR_COLORS: ColorTable = {
 const DOM_LIGHT: ColorTable = {
   bg: '#e9ebec',
   bgCard: '#ffffff',
+  bgChrome: '#ffffff',
   bgElevated: '#ffffff',
   bgSunken: '#f4f5f6',
   surface: '#f4f5f6',
@@ -134,6 +145,7 @@ const DOM_LIGHT: ColorTable = {
 const DOM_DARK: ColorTable = {
   bg: '#191c1e',
   bgCard: '#24282b',
+  bgChrome: '#24282b',
   bgElevated: '#2b3033',
   bgSunken: '#1d2123',
   surface: '#31373a',

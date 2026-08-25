@@ -30,8 +30,15 @@ import { EngineOptionCatalog } from '../generated/loader';
 import type { SettingScope } from '../generated/settingScopes';
 import type { EngineGuiSurface } from '../generated/types';
 import { SettingsDraftEditor } from './SettingsDraftEditor';
+import { enumChoicesFor } from './codec';
 import { STEP_REFUSAL_REASON, stepSettingValue } from './stepper';
-import type { SettingsDraftCommit, SettingsEditorMode, SettingsTechnology, SettingsValueMap } from './types';
+import type {
+  SettingsDraftCommit,
+  SettingsEditorMode,
+  SettingsEnumChoice,
+  SettingsTechnology,
+  SettingsValueMap,
+} from './types';
 
 /**
  * Which upstream tab supplies the controls for a scope.
@@ -80,6 +87,17 @@ export interface ScopedStepperAdapter {
   }): ScopedStepperSnapshot | Promise<ScopedStepperSnapshot>;
 }
 
+/**
+ * What kind of control a row needs.
+ *
+ * A stepper is not the only editor a headset can draw, and pretending it was is
+ * what limited the immersive settings surface to a handful of rows. A boolean
+ * wants a switch, an enumeration wants a list, and a number wants a keypad as
+ * well as a pair of arrows — the shell needs to be told which, and the engine
+ * option's own definition already knows.
+ */
+export type ScopedStepperRowKind = 'numeric' | 'bool' | 'enum' | 'text' | 'read-only';
+
 export interface ScopedStepperRow {
   readonly fieldId: string;
   readonly key: string;
@@ -93,6 +111,23 @@ export interface ScopedStepperRow {
   readonly steppable: boolean;
   /** Present when `steppable` is false: why this surface will not offer it. */
   readonly reason?: string;
+  readonly kind: ScopedStepperRowKind;
+  /** Every value an enumeration offers, in the order upstream declares them. */
+  readonly choices: readonly SettingsEnumChoice[];
+  /** Declared bounds, when the definition has them; a keypad enforces these. */
+  readonly minimum?: number;
+  readonly maximum?: number;
+  readonly integer: boolean;
+  /**
+   * Whether an arbitrary value may be written to this row.
+   *
+   * `steppable` and `typeable` are different questions with different answers.
+   * An unbounded float cannot be stepped — the increment would be a guess — but
+   * it can perfectly well be typed, and refusing to let a headset type it is
+   * exactly the gap the keypad was built to close. A read-only option is
+   * neither.
+   */
+  readonly typeable: boolean;
 }
 
 export interface ScopedStepperView {
@@ -118,6 +153,15 @@ export interface ScopedStepperSurface {
   cycleTarget(direction: 1 | -1): void;
   selectTarget(targetId: string): void;
   step(fieldId: string, direction: 1 | -1): void;
+  /**
+   * Write one exact value, as the keypad and the enum list produce.
+   *
+   * It takes the same path a step takes — `setDraft` then `commit` then the
+   * shared adapter — so a value entered in a headset is validated by precisely
+   * the code that validates a typed character on a screen, and is refused the
+   * same way. Nothing here decides what is legal.
+   */
+  setValue(fieldId: string, raw: string): void;
 }
 
 export interface ScopedStepperOptions {
@@ -227,6 +271,11 @@ export class ScopedSettingsStepper implements ScopedStepperSurface {
     this.enqueue(() => this.runStep(fieldId, direction));
   }
 
+  /** One exact value, from a keypad, a switch, or a list of choices. */
+  setValue(fieldId: string, raw: string): void {
+    this.enqueue(() => this.runSetValue(fieldId, raw));
+  }
+
   dispose(): void {
     this.disposed = true;
     this.unsubscribe?.();
@@ -235,6 +284,38 @@ export class ScopedSettingsStepper implements ScopedStepperSurface {
 
   private enqueue(task: () => Promise<void>): void {
     this.queue = this.queue.then(task).catch((error) => this.fail(error));
+  }
+
+  private async runSetValue(fieldId: string, raw: string): Promise<void> {
+    if (this.disposed) return;
+    const editor = this.editor;
+    const snapshot = this.snapshot;
+    const adapter = this.adapter;
+    if (!editor || !snapshot || !adapter) return;
+    const state = editor.getFieldState(fieldId);
+    if (state.field.definition.presentation.readonly.value) {
+      this.publish({ ...this.view, message: STEP_REFUSAL_REASON['read-only'] });
+      return;
+    }
+    editor.setDraft(fieldId, raw);
+    // The editor validates the draft; an invalid one is reported in place
+    // rather than sent to the adapter, which is what the DOM panel does with a
+    // badly typed character.
+    const issues = editor.getFieldState(fieldId).issues;
+    if (issues.length > 0) {
+      editor.setDraft(fieldId, state.serializedValue ?? '');
+      this.publish({ ...this.view, message: issues[0].message });
+      return;
+    }
+    const commit = editor.commit();
+    const next = await adapter.apply({
+      expectedRevision: snapshot.revision,
+      sourceHash: snapshot.sourceHash,
+      mode: this.mode,
+      technology: this.technology,
+      commit,
+    });
+    this.adopt(next);
   }
 
   private async runStep(fieldId: string, direction: 1 | -1): Promise<void> {
@@ -354,6 +435,21 @@ export class ScopedSettingsStepper implements ScopedStepperSurface {
       // so one rule decides what a press may reach on every surface.
       const outcome = stepSettingValue(field.definition, value, 1);
       const reason = outcome.value === null ? STEP_REFUSAL_REASON[outcome.refusal ?? 'not-numeric'] : undefined;
+      const definition = field.definition;
+      const readOnly = definition.presentation.readonly.value;
+      const choices = enumChoicesFor(definition);
+      const numeric = ['coFloat', 'coInt', 'coPercent', 'coFloatOrPercent'].includes(definition.storage.optionType);
+      const kind: ScopedStepperRowKind = readOnly
+        ? 'read-only'
+        : choices.length > 0
+          ? 'enum'
+          : definition.storage.optionType === 'coBool'
+            ? 'bool'
+            : numeric && definition.storage.shape === 'scalar'
+              ? 'numeric'
+              : 'text';
+      const minimum = definition.constraints.min.value;
+      const maximum = definition.constraints.max.value;
       rows.push({
         fieldId: field.id,
         key: field.key,
@@ -364,6 +460,12 @@ export class ScopedSettingsStepper implements ScopedStepperSurface {
         overridden: state.hasLocalOverride,
         steppable: reason === undefined,
         ...(reason ? { reason } : {}),
+        kind,
+        choices,
+        ...(minimum === null ? {} : { minimum }),
+        ...(maximum === null ? {} : { maximum }),
+        integer: definition.storage.optionType === 'coInt',
+        typeable: !readOnly,
       });
     }
     const target = targets[index];

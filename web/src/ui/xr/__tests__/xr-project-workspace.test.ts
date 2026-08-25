@@ -63,6 +63,14 @@ const adapter: XrUiAdapter<FakePanel, FakeImage, FakeText> = {
   setText: (text, value) => {
     text.text = value;
   },
+  setPanelProperties: (panel, properties) => {
+    Object.assign(panel, properties.fillColor === undefined ? {} : { fillColor: String(properties.fillColor) });
+    if (typeof properties.opacity === 'number') panel.opacity = properties.opacity;
+  },
+  setTextProperties: () => {},
+  clearChildren: (panel) => {
+    panel.children.length = 0;
+  },
 };
 
 function sampleProjectContext(overrides: Partial<XrProjectContext> = {}): XrProjectContext {

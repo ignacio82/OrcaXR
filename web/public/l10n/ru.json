@@ -81,6 +81,21 @@
   "ui.workspaceViews.prepare": "Подготовка",
   "ui.workspaceViews.preview": "Предпросмотр нарезки",
   "ui.workspaceViews.project": "Проект",
+  "ui.xrKeypad.apply": "Применить",
+  "ui.xrKeypad.cancel": "Отмена",
+  "ui.xrKeypad.space": "Пробел",
+  "ui.xrMenuBar.mode.device": "Принтер",
+  "ui.xrMenuBar.mode.prepare": "Подготовка",
+  "ui.xrMenuBar.mode.preview": "Предпросмотр нарезки",
+  "ui.xrMenuBar.mode.project": "Проект",
+  "ui.xrMenuBar.noPrinter": "Принтер не выбран",
+  "ui.xrObjectsPanel.selection": "Выделение",
+  "ui.xrPanels.objects": "Модели",
+  "ui.xrPanels.settings": "Настройки",
+  "ui.xrToolRail.group.more": "Подробнее",
+  "ui.xrToolRail.group.paint": "Рисовать",
+  "ui.xrToolRail.group.plate": "Стол",
   "workspace.orcaWorkspace.defaultFilament": "По умолчанию",
-  "workspace.orcaWorkspace.selectedScopes": "выбрано"
+  "workspace.orcaWorkspace.selectedScopes": "выбрано",
+  "workspace.orcaWorkspace.selection": "Выделение"
 }

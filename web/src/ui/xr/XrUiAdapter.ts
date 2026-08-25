@@ -37,6 +37,20 @@ export interface XrUiAdapter<PanelNode, ImageNode, TextNode = unknown> {
   setPanelOpacity(panel: PanelNode, opacity: number): void;
   setImageColor(image: ImageNode, color: XrImageColor): void;
   setText(text: TextNode, value: string): void;
+  /**
+   * Any other reactive panel property — stroke, corner radius, `display`.
+   *
+   * The redesign's surfaces restyle far more than a fill: a menu row turns its
+   * stroke amber when it is the open section, a pinned panel changes its grab
+   * bar, and a row that does not match a search is taken out of the layout with
+   * `display: 'none'` rather than merely hidden, because a hidden uikit node
+   * still occupies its box. One typed method covers all of it instead of a new
+   * adapter member per property.
+   */
+  setPanelProperties(panel: PanelNode, properties: XrPanelProperties): void;
+  setTextProperties(text: TextNode, properties: XrTextProperties): void;
+  /** Detach every child, for a list that is rebuilt rather than retyped. */
+  clearChildren(panel: PanelNode): void;
 }
 
 /** Production adapter. Every mutation goes through a pinned signal-aware API. */
@@ -61,5 +75,20 @@ export const xrBlocksUiAdapter: XrUiAdapter<UIPanel, UIImage, UIText> = Object.f
   },
   setText: (text: UIText, value: string) => {
     text.setText(value);
+  },
+  setPanelProperties: (panel: UIPanel, properties: XrPanelProperties) => {
+    panel.setProperties(properties);
+  },
+  setTextProperties: (text: UIText, properties: XrTextProperties) => {
+    text.setProperties(properties);
+  },
+  clearChildren: (panel: UIPanel) => {
+    for (const child of [...panel.children]) {
+      try {
+        panel.remove(child);
+      } catch {
+        /* already detached by a parent teardown */
+      }
+    }
   },
 });

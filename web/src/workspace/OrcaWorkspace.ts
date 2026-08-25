@@ -65,7 +65,12 @@ import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
 import type { PresetLibraryOperation } from '../settings/presets/PresetLibrary';
 import type { CalibrationHistoryOperation } from '../project/calibration/history';
-import { HoldToConfirm, type GuardedPrinterAction, type PrinterStatusSummary } from '../printer/PrinterStatusSummary';
+import {
+  HoldToConfirm,
+  type GuardedPrinterAction,
+  type PrinterStatusSummary,
+  type PrinterStatusTone,
+} from '../printer/PrinterStatusSummary';
 import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
 import { serializePrintConfigArray } from '../settings/configSerialization';
 import type { ArrangeRegion } from '../project/objects/arrange';
@@ -142,10 +147,9 @@ import { PaintOverlayRegistry } from './PaintOverlayRegistry';
 
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
-import type { Action, ActionRegistry, ActionSurface } from '../actions/ActionRegistry';
-import { GROUPS, MENU_SECTIONS, XR_PANELS_SECTION_ID, type ContextTarget } from '../actions/ActionRegistry';
+import type { ActionRegistry } from '../actions/ActionRegistry';
+import { type ContextTarget } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/ActionContext';
-import { renderXrActionButton, xrToolRailActions, type XrActionHandle } from '../ui/xr/XrShell';
 import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
 import { SceneGestureGuard, type SceneGestureSnapshot } from '../ui/xr/SceneGestureGuard';
 import { DEFAULT_BRIM_EAR_DETECTION, detectBrimEars } from '../project/objects/brimEarDetection';
@@ -157,7 +161,6 @@ import { extractMachineEnvelope, wrapInMachineEnvelope } from '../project/calibr
 import { loadCalibrationResource } from '../project/calibration/resources';
 import type { CalibrationFormField, CalibrationFormPreview } from '../project/calibration/form';
 import type { ScopedStepperSurface, ScopedStepperView } from '../settings/editor/scopedStepper';
-import { renderXrScopedSettings, xrScopedSettingsSignature } from '../ui/xr/XrScopedSettings';
 import { primitiveFileName, primitiveGeometry, type PrimitiveKind } from '../project/objects/primitives';
 import {
   BRIM_EAR_COLORS,
@@ -203,13 +206,84 @@ import {
 } from '../slicer/filamentPresetMatch';
 import { exportConfigJson, parseConfigJson } from '../features/ConfigIO';
 import { virtualFilamentsFromConfig, type VirtualFilament } from '../features/MixedFilamentPreview';
-import { renderXrPreviewScrubber, type XrPreviewScrubberRender } from '../ui/xr/XrPreviewScrubber';
-import { renderXrDeviceWorkspace } from '../ui/xr/XrDeviceWorkspace';
-import { renderXrProjectWorkspace } from '../ui/xr/XrProjectWorkspace';
-import { renderXrPrintSubmissionDialog } from '../ui/xr/XrPrintSubmissionDialog';
 import { xrIcon } from '../ui/icons';
-import { surfaceTransform, xrSurface, type XrSurfaceId } from '../ui/xr/XrLayout';
+import { tokens } from '../ui/tokens';
+import {
+  XR_PINNABLE,
+  XR_PIXEL_SIZE,
+  XR_SURFACES,
+  anchoredTransform,
+  droppedTransform,
+  surfaceTransform,
+  xrSurface,
+  type XrSurfaceId,
+  type XrSurfaceSpec,
+  type XrWorkspaceMode,
+} from '../ui/xr/XrLayout';
+import type { XrImmersiveShell, XrCardHandle, XrShellHost } from '../ui/xr/XrImmersiveShell';
+
+/**
+ * The immersive shell's module, fetched on demand.
+ *
+ * Types are erased, so naming it here costs nothing; the runtime import is the
+ * single `import('../ui/xr/immersive')` in {@link OrcaWorkspace.loadImmersiveShell}.
+ */
+type XrUiModule = typeof import('../ui/xr/immersive');
+import type { XrDeskPlate } from '../ui/xr/XrDesk';
+import type { XrRailStepper, XrRailSwatch } from '../ui/xr/XrToolRail';
+import type { XrPrinterStatusSummary } from '../ui/xr/XrMenuBar';
+import type { GcodePreviewPanelState } from '../ui/dom/GcodePreviewPanel';
 import { t } from '../l10n/t';
+
+/**
+ * A card that failed to build.
+ *
+ * One malformed surface must not take the immersive shell down with it, and the
+ * shell must not have to null-check every card it draws into — so a failure
+ * becomes a detached panel that quietly accepts everything and is never shown.
+ */
+function nullXrCard(): XrCardHandle<UIPanel> {
+  const content = new UIPanel({ width: '100%', height: '100%', flexDirection: 'column' });
+  return { content, show: () => {}, hide: () => {}, reset: () => {}, place: () => {} };
+}
+
+/**
+ * The dot beside the printer's name in the menu bar.
+ *
+ * Colour is never the only carrier: the chip prints the headline and the detail
+ * beside it, so an operator who cannot separate amber from green reads the same
+ * state from the words.
+ */
+const XR_PRINTER_TONE_COLORS: Readonly<Record<PrinterStatusTone, string>> = {
+  idle: tokens.color.textMuted,
+  active: tokens.color.ok,
+  attention: tokens.color.warn,
+  danger: tokens.color.danger,
+  unknown: tokens.color.textMuted,
+};
+
+/** The world point an opaque anchor names, if it names one. */
+function anchorPoint(anchor: unknown): THREE.Vector3 | null {
+  if (anchor instanceof THREE.Vector3) return anchor;
+  if (anchor instanceof THREE.Object3D) return anchor.getWorldPosition(new THREE.Vector3());
+  return null;
+}
+
+/**
+ * Text the XR font atlas can actually draw.
+ *
+ * Troika's atlas does not carry a few typographic symbols that profile display
+ * names and status lines use (notably ·, ×, —, –), and a missing glyph renders
+ * as a blank box in the middle of a sentence.
+ */
+function xrSafeText(text: string): string {
+  return text
+    .replaceAll('·', '-')
+    .replaceAll('×', 'x')
+    .replaceAll('…', '...')
+    .replaceAll('—', '-')
+    .replaceAll('–', '-');
+}
 
 export type WorkspacePresetId = NonNullable<SlicerProfile['machinePresetId']>;
 
@@ -265,54 +339,16 @@ const LAYER_EVENT_LABELS: Readonly<Record<LayerEventType, string>> = Object.free
   custom: 'custom G-code',
 });
 
+/**
+ * How long a pinch is held before it means "show me this thing's menu".
+ *
+ * Half a second is the same threshold the DOM shell uses for a touch long-press
+ * (`LONG_PRESS_DELAY_MS` in `ObjectsPanel`), so the gesture is learned once.
+ */
+const XR_LONG_PRESS_MS = 500;
+
 const PLATE_MM = 200;
 const MM = 0.001;
-
-/**
- * Metres per layout pixel for every immersive card.
- *
- * At 0.0014 a 17 px menu row is 24 mm tall, which subtends about 1.4° at the
- * radius the panels sit at — comfortably above the ~1° where text starts to
- * cost effort in a headset. It is one constant because a card whose pixel
- * scale differs from its neighbour's renders the same font at a different
- * physical size, which reads as sloppiness rather than hierarchy.
- */
-const XR_PIXEL_SIZE = 0.0014;
-
-/** The sheet's front page: the list of menu sections rather than one section. */
-const XR_MENU_ROOT = 'xr-menu-root';
-
-/**
- * The flat shell's sidebar cards, in the flat shell's order and under the flat
- * shell's names.
- *
- * A maker who has used OrcaXR on a screen already knows where filament lives
- * and what the Process card is called; the headset should not make them learn
- * a second vocabulary for the same catalogue. Each card claims the action
- * groups the corresponding DOM card renders, so the two shells stay a single
- * application seen two ways rather than two applications.
- */
-/** The icon each sheet section shows, matching the flat shell's own menus. */
-const XR_SECTION_ICONS: Readonly<Record<string, string>> = {
-  file: 'file',
-  edit: 'edit',
-  view: 'view',
-  add: 'library',
-  tools: 'advanced',
-  calibration: 'calibration',
-  help: 'help',
-  [XR_PANELS_SECTION_ID]: 'system',
-};
-
-const XR_CARD_PREFIX = 'xr-card-';
-const XR_CARDS: readonly { id: string; label: string; icon: string; groups: readonly string[] }[] = [
-  { id: `${XR_CARD_PREFIX}printer`, label: 'Printer', icon: 'output', groups: ['output', 'system'] },
-  { id: `${XR_CARD_PREFIX}filament`, label: 'Filament', icon: 'filament', groups: ['filament'] },
-  { id: `${XR_CARD_PREFIX}process`, label: 'Process', icon: 'slice_group', groups: ['slice', 'advanced'] },
-  { id: `${XR_CARD_PREFIX}objects`, label: 'Objects', icon: 'scene', groups: ['scene', 'edit'] },
-  { id: `${XR_CARD_PREFIX}tools`, label: 'Object tools', icon: 'paint', groups: ['paint', 'view'] },
-  { id: `${XR_CARD_PREFIX}project`, label: 'Project', icon: 'plate', groups: ['calibration'] },
-];
 
 /**
  * The workspaces the flat shell's tab strip offers, in its order.
@@ -322,7 +358,7 @@ const XR_CARDS: readonly { id: string; label: string; icon: string; groups: read
  * fourth workspace here taught the two shells different ideas of what painting
  * is.
  */
-type XrWorkspace = 'prepare' | 'preview' | 'device' | 'project';
+type XrWorkspace = XrWorkspaceMode;
 
 /**
  * Whether this page was opened to inspect the immersive shell on a desktop.
@@ -871,11 +907,8 @@ export class OrcaWorkspace extends xb.Script {
   /** Canonical revision/history/health snapshot for both UI shells. */
   public onCanonicalStateChanged: ((summary: CanonicalWorkspaceSummary) => void) | null = null;
   public onSliceStateChanged: ((isSlicing: boolean) => void) | null = null;
-  private statusText: UIText | null = null;
-  private sliceModalCard: UICard | null = null;
-  private sliceModalText: UIText | null = null;
-  private sliceModalBar: UIPanel | null = null;
-  private sliceModalProgressContainer: UIPanel | null = null;
+  /** Slice/status progress as a percentage, or undefined when nothing runs. */
+  private lastStatusPercent: number | undefined;
   private publishedGcode: { readonly gcode: string; readonly guard: CanonicalProjectSliceGuard } | null = null;
   /** Per-plate artifacts from the last all-plate slice, guarded as one set. */
   private publishedPlateGcode: {
@@ -955,7 +988,7 @@ export class OrcaWorkspace extends xb.Script {
     this.palette.onChanged = () => {
       this.synchronizeHeadSlotLengths();
       this.applyLiveSlicingConfiguration();
-      this.rebuildPaintSwatches();
+      this.xrShell?.draw();
       this.onPaletteChanged?.();
       this.recomputePreflight();
     };
@@ -1258,14 +1291,6 @@ export class OrcaWorkspace extends xb.Script {
     // ancestors. Sizes are multiplied by WORKSPACE_SCALE directly.
     this.add(this.workspace);
     this.addBuildPlate();
-    // A bad uikit prop in a panel must not kill everything after it in this
-    // init (profile catalog, slicer warm-up) — the July 2026 "menus stuck in
-    // Loading profiles" prod outage was exactly that, via an invalid margin.
-    try {
-      this.addControlPanel();
-    } catch (e) {
-      console.error('[orcaxr] XR control panel failed to build', e);
-    }
 
     // Do not fetch the large local WASM slicer during first paint. Most first
     // visits are spent choosing a printer or inspecting the workspace; the
@@ -1338,8 +1363,6 @@ export class OrcaWorkspace extends xb.Script {
 
     this.actionContext = undefined;
     this.actionStateRefreshers.clear();
-    for (const handle of this.toolButtons) handle.dispose();
-    this.toolButtons = [];
     this.sceneGestureGuard.dispose();
     this.drag = null;
     this.cancelPaintStroke();
@@ -3790,6 +3813,7 @@ export class OrcaWorkspace extends xb.Script {
     }
 
     if (this.drag?.controller === event.target) this.drag = null;
+    this.beginXrLongPress(event.target, ints[0]);
     // A select that lands on UI owns the complete gesture. Remember that
     // decision so later `selecting` frames cannot paint/manipulate through the
     // card after doing their own model-only raycast.
@@ -3853,7 +3877,11 @@ export class OrcaWorkspace extends xb.Script {
           Math.max(0, d.startTransform.translationMm[2] + printerDelta.z),
         ],
       };
-      this.showValues(`x ${next.translationMm[0].toFixed(1)}  y ${next.translationMm[1].toFixed(1)} mm`);
+      this.setStatus(
+        t('workspace.orcaWorkspace.dragPosition', 'x {x}  y {y} mm')
+          .replace('{x}', next.translationMm[0].toFixed(1))
+          .replace('{y}', next.translationMm[1].toFixed(1)),
+      );
     } else if (this.tool === 'rotate') {
       // Horizontal hand sweep = yaw: 25 cm of travel = a full turn.
       const angle = (delta.x / 0.25) * Math.PI * 2;
@@ -3865,13 +3893,20 @@ export class OrcaWorkspace extends xb.Script {
         ...d.startTransform,
         rotation: [rotation.x, rotation.y, rotation.z, rotation.w],
       };
-      this.showValues(`rotZ ${THREE.MathUtils.radToDeg(angle).toFixed(0)}°`);
+      this.setStatus(
+        t('workspace.orcaWorkspace.dragRotation', 'rotate {deg}°').replace(
+          '{deg}',
+          THREE.MathUtils.radToDeg(angle).toFixed(0),
+        ),
+      );
     } else if (this.tool === 'scale') {
       // Vertical hand travel = scale: +25 cm doubles, −25 cm halves.
       const f = Math.pow(2, delta.y / 0.25);
       const sNew = THREE.MathUtils.clamp(d.startTransform.scale[0] * f, 0.05, 20);
       next = { ...d.startTransform, scale: [sNew, sNew, sNew] };
-      this.showValues(`scale ${(sNew * 100).toFixed(0)}%`);
+      this.setStatus(
+        t('workspace.orcaWorkspace.dragScale', 'scale {percent}%').replace('{percent}', (sNew * 100).toFixed(0)),
+      );
     }
     if (next) this.canonicalProject.setInstanceTransform(entry.instanceId, next, d.gestureId);
   }
@@ -3884,9 +3919,54 @@ export class OrcaWorkspace extends xb.Script {
     if (event) this.sceneGestureGuard.end(event.target);
     else this.sceneGestureGuard.clear();
     const endedDrag = this.drag;
+    this.endXrLongPress(event?.target, endedDrag);
     if (!endedDrag || (event && event.target !== endedDrag.controller)) return;
     this.drag = null;
     this.recomputePreflight();
+  }
+
+  /**
+   * The long-pinch that opens the spatial context menu (P11.2).
+   *
+   * A headset has no right button, and `xr-context` is a surface the registry
+   * has always declared while nothing drew it. Holding a pinch on a model or on
+   * the bed is the gesture that answers "what can I do with *this*", and it has
+   * to be told apart from the two things that share the same button: a tap,
+   * which selects, and a drag, which transforms. So a press is only a long
+   * pinch if it was held past {@link XR_LONG_PRESS_MS}, moved the model by
+   * nothing, and did not land on a panel.
+   */
+  private xrLongPress: { controller: unknown; startedAt: number; point: THREE.Vector3 | null } | null = null;
+
+  private beginXrLongPress(controller: unknown, hit: THREE.Intersection | undefined): void {
+    // A press that landed on a card belongs to the card. `sceneGestureGuard`
+    // has already decided that by the time this runs.
+    this.xrLongPress = this.controllerHitsUi(controller)
+      ? null
+      : { controller, startedAt: performance.now(), point: hit ? hit.point.clone() : null };
+  }
+
+  private endXrLongPress(controller: unknown, drag: OrcaWorkspace['drag']): void {
+    const press = this.xrLongPress;
+    this.xrLongPress = null;
+    if (!press || (controller !== undefined && controller !== press.controller)) return;
+    if (performance.now() - press.startedAt < XR_LONG_PRESS_MS) return;
+    // A hold that moved the model is a slow drag, not a request for a menu.
+    if (drag && this.movedDuringDrag(drag)) return;
+    this.openXrContextMenu(press.point ?? undefined);
+  }
+
+  /** Whether a drag actually changed the transform it started from. */
+  private movedDuringDrag(drag: NonNullable<OrcaWorkspace['drag']>): boolean {
+    const instance = this.canonicalProject.getInstance(drag.entry.instanceId);
+    if (!instance) return false;
+    const from = drag.startTransform;
+    const to = instance.transform;
+    return (
+      from.translationMm.some((value, index) => Math.abs(value - to.translationMm[index]) > 1e-6) ||
+      from.rotation.some((value, index) => Math.abs(value - to.rotation[index]) > 1e-6) ||
+      from.scale.some((value, index) => Math.abs(value - to.scale[index]) > 1e-6)
+    );
   }
 
   /** Complete printers in deterministic catalog order, keyed by canonical graph ID. */
@@ -4488,7 +4568,7 @@ export class OrcaWorkspace extends xb.Script {
       });
     }
 
-    this.showXrSurfaces();
+    void this.showXrSurfaces();
   }
 
   onXRSessionEnded() {
@@ -4509,12 +4589,8 @@ export class OrcaWorkspace extends xb.Script {
       this.selectModel(this.models[this.models.length - 1]);
     }
 
-    if (this.topStripCard) this.topStripCard.hide();
-    if (this.leftToolbarCard) this.leftToolbarCard.hide();
-    if (this.rightSidebarCard) this.rightSidebarCard.hide();
-    if (this.profileCard) this.profileCard.hide();
-    if (this.bottomBarCard) this.bottomBarCard.hide();
-    if (this.previewScrubberCard) this.previewScrubberCard.hide();
+    this.xrShell?.hide();
+    this.openSheetPage = null;
   }
 
   onSimulatorStarted() {
@@ -4524,22 +4600,22 @@ export class OrcaWorkspace extends xb.Script {
     // cards here put the headset's action desk and tool rail on top of the
     // desktop UI. `?xrui=1` is for looking at the spatial layout without a
     // headset; everything else gets the flat shell it asked for.
-    if (xrUiReviewRequested()) this.showXrSurfaces();
+    if (xrUiReviewRequested()) void this.showXrSurfaces();
   }
 
-  /** Reveal the cards a session starts with. Opt-in surfaces stay closed. */
-  private showXrSurfaces() {
-    if (this.topStripCard) this.topStripCard.show();
-    if (this.leftToolbarCard) this.leftToolbarCard.show();
-    if (this.bottomBarCard) this.bottomBarCard.show();
-    // Menu and profile are opened deliberately; showing them on entry buries
-    // the plate under panels nobody asked for.
-    if (this.rightSidebarCard) this.rightSidebarCard.hide();
-    if (this.profileCard) this.profileCard.hide();
-    if (this.previewScrubberCard) {
-      if (this.previewOn) this.previewScrubberCard.show();
-      else this.previewScrubberCard.hide();
-    }
+  /**
+   * Reveal the cockpit a session starts with.
+   *
+   * Menus, the palette and the sheet are opened deliberately; showing them on
+   * entry buries the plate under panels nobody asked for.
+   */
+  private async showXrSurfaces(): Promise<void> {
+    await this.loadImmersiveShell();
+    this.xrShell?.show();
+    // The session's own recentre very likely ran while the chunk was still in
+    // flight, and it can only place cards that exist. Ask for another one now
+    // that they do, or the whole cockpit sits at its construction pose.
+    this.needsRecenter = true;
   }
 
   update(_time: number, _frame: XRFrame) {
@@ -4580,15 +4656,17 @@ export class OrcaWorkspace extends xb.Script {
     // plate, and turns each surface to face the operator. Placing them here by
     // hand is what produced a row of parallel panels read at a glancing angle,
     // overlapping each other while the rest of the room stayed empty.
+    //
+    // A recentre moves everything except what the operator has pinned. That is
+    // the whole contract that makes a grabbable panel safe: the way home is
+    // always one gesture, and the operator chooses which panels ignore it.
     const head = { position: cam.getWorldPosition(new THREE.Vector3()), forward: fwd };
-    this.placeXrSurface(this.topStripCard, 'menu', head);
-    this.placeXrSurface(this.leftToolbarCard, 'tools', head);
-    this.placeXrSurface(this.profileCard, 'inspector', head);
-    this.placeXrSurface(this.rightSidebarCard, 'sheet', head);
-    this.placeXrSurface(this.printerStatusCard, 'status', head);
-    this.placeXrSurface(this.bottomBarCard, 'actions', head);
-    this.placeXrSurface(this.sliceModalCard, 'progress', head);
-    this.placeXrSurface(this.previewScrubberCard, 'scrubber', head);
+    const pinned = new Set(this.xrShell ? XR_PINNABLE.filter((id) => this.xrShell?.state.isPinned(id)) : []);
+    for (const spec of XR_SURFACES) {
+      if (pinned.has(spec.id)) continue;
+      const card = this.xrCardObjects.get(spec.id);
+      if (card) this.placeXrSurface(card, spec.id, head);
+    }
   }
 
   /** Move one card onto its layout surface around `head`. */
@@ -4602,22 +4680,6 @@ export class OrcaWorkspace extends xb.Script {
     card.position.copy(position);
     card.quaternion.copy(quaternion);
     card.updateMatrixWorld(true);
-  }
-
-  /**
-   * Card geometry for a layout surface, with metres and layout pixels in
-   * agreement. They were not: a 1.0 m strip declared 1000 px at 0.0012 m/px,
-   * so uikit laid out 1.2 m of content inside a 1.0 m card and everything in
-   * it came out crushed.
-   */
-  private xrCardGeometry(id: XrSurfaceId): { sizeX: number; sizeY: number; pixelSize: number; width: number } {
-    const surface = xrSurface(id);
-    return {
-      sizeX: surface.sizeX,
-      sizeY: surface.sizeY,
-      pixelSize: XR_PIXEL_SIZE,
-      width: Math.round(surface.sizeX / XR_PIXEL_SIZE),
-    };
   }
 
   private addLights() {
@@ -6555,42 +6617,6 @@ export class OrcaWorkspace extends xb.Script {
   /** Fires when the paint tool, colour, or mode changes (DOM/XR surfaces). */
   public onPaintStateChanged: (() => void) | null = null;
 
-  /** Rebuild the XR paint swatch row from the current filament palette. */
-  private rebuildPaintSwatches() {
-    const panel = this.paintOptionsPanel;
-    if (!panel) return;
-    // Clear existing children.
-    for (const { btn } of this.paintSwatches) {
-      try {
-        panel.remove(btn);
-      } catch {
-        /* ignore */
-      }
-    }
-    this.paintSwatches = [];
-    // XR swatches project the same canonical palette as the DOM panel, so a
-    // spatial pinch assigns the identical stable filament identity.
-    for (const entry of this.getPaintPalette().entries) {
-      if (!entry.filamentId || !entry.selectable) continue;
-      const filamentId = entry.filamentId;
-      const swatch = new UIPanel({
-        width: 35,
-        height: 35,
-        cornerRadius: 4,
-        fillColor: entry.displayColor,
-        strokeWidth: 2,
-        strokeColor: this.paintFilamentId === filamentId ? '#ffffff' : '#444444',
-        onClick: () => {
-          this.setPaintFilament(filamentId);
-          this.actionContext?.setTool('paint');
-          return true;
-        },
-      });
-      this.paintSwatches.push({ filamentId, btn: swatch });
-      panel.add(swatch);
-    }
-  }
-
   /**
    * The headset's half of one-press filament assignment.
    *
@@ -6720,26 +6746,17 @@ export class OrcaWorkspace extends xb.Script {
     this.actionStateRefreshers.add(refresh);
     if (this.actionContext) refresh();
   }
-  private toolButtons: XrActionHandle<UIPanel, XRImage>[] = [];
-  // Top-bar dropdown menu state (progressive disclosure of the full menu surface).
-  private menuBarButtons: { id: string; btn: UIPanel; label: UIText }[] = [];
-  private openMenuSection: string | null = null;
-  private menuPanelRoot: UIPanel | null = null;
-  private menuPanelTitle: UIText | null = null;
-  private paintOptionsPanel?: UIPanel;
-  private paintSwatches: { filamentId: FilamentId; btn: UIPanel }[] = [];
-  private valueText: UIText | null = null;
-  private progressBar: UIPanel | null = null;
-  private progressContainer: UIPanel | null = null;
-  private loadButtonNode: THREE.Object3D | null = null;
-  private leftToolbarCard: UICard | null = null;
-  private rightSidebarCard: UICard | null = null;
-  private profileCard: UICard | null = null;
-  /** Live profile values shown in the XR profile picker. Icons alone made it
+  /** Every immersive surface, and the shell that draws on them. */
+  private xrCards: Record<XrSurfaceId, XrCardHandle<UIPanel>> | null = null;
+  private readonly xrCardObjects = new Map<XrSurfaceId, UICard>();
+  private xrShell: XrImmersiveShell<UIPanel, XRImage, UIText> | null = null;
+  /** The sheet's content, refilled per page. */
+  private sheetRoot: UIPanel | null = null;
+  private openSheetPage: string | null = null;
+  /** Live profile values shown in the XR profile rows. Icons alone made it
    * impossible to know what a click would change without looking back at 2D. */
   private xrProfileValueLabels: { part: 'machine' | 'process' | 'filament'; value: UIText }[] = [];
-  /** The spatial printer status card (P9.7) and everything it repaints. */
-  private printerStatusCard: ReturnType<UICore['createCard']> | null = null;
+  /** The spatial printer controls (P9.7) and everything they repaint. */
   private printerStatusHeadline: UIText | null = null;
   private printerStatusDetail: UIText | null = null;
   private printerStatusRecovery: UIText | null = null;
@@ -6752,592 +6769,387 @@ export class OrcaWorkspace extends xb.Script {
   private printerHoldTarget: GuardedPrinterAction | null = null;
   private printerHoldController: unknown = null;
   private readonly printerHold = new HoldToConfirm();
-  // Design's top HUD strip (wordmark + mode switch) and bottom action bar.
-  private topStripCard: UICard | null = null;
-  private bottomBarCard: UICard | null = null;
-  private previewScrubberCard: UICard | null = null;
-  private previewScrubberRender: XrPreviewScrubberRender<any, any> | null = null;
   private xrMode: XrWorkspace = 'prepare';
-  private xrModeButtons: { mode: XrWorkspace; btn: UIPanel; label: UIText }[] = [];
 
-  private addControlPanel() {
-    // Card zones mirror the imported "OrcaXR Slicer" XR design, deliberately
-    // kept SPARSE so the Galaxy XR compositor isn't flooded with panels:
-    //   top-centre    → wordmark + dropdown menu bar + mode switch + Exit
-    //   left          → clean tool rail (one icon+label per row)
-    //   right         → ONE contextual panel (profile / settings)
-    //   bottom-centre → primary action bar + live status line
-    // The full Snapmaker-Orca menu surface is reached through the top-bar
-    // dropdown (addActionPanel → menu panel), shown one section at a time —
-    // never as an always-open, floor-length list. recenterInFrontOfUser()
-    // anchors each card in its zone.
-    // A malformed optional card must never make immersive editing unusable.
-    // Keep cards independent and identify the failing surface in the console;
-    // this is especially important because uikit validates some props lazily.
-    const build = (name: string, fn: () => void) => {
+  /**
+   * Build every spatial surface and hand them to {@link XrImmersiveShell}.
+   *
+   * The workspace owns cards, poses and the scene; the shell owns what is drawn
+   * on them. Splitting it that way is what makes the immersive UI testable at
+   * all: before it, panel construction was interleaved with scene code, and the
+   * only way to find out whether a control was wired to the thing it claimed to
+   * change was to put a headset on.
+   *
+   * A malformed optional card must never make immersive editing unusable, so
+   * each card is built independently and a failure names its own surface.
+   */
+  private buildXrSurfaces(xrUi: XrUiModule) {
+    const cards = {} as Record<XrSurfaceId, XrCardHandle<UIPanel>>;
+    for (const spec of XR_SURFACES) {
       try {
-        fn();
+        cards[spec.id] = this.createXrCard(spec.id);
       } catch (e) {
-        console.error(`[orcaxr] XR ${name} panel failed to build`, e);
+        console.error(`[orcaxr] XR ${spec.id} surface failed to build`, e);
+        cards[spec.id] = nullXrCard();
       }
-    };
-    build('top strip', () => this.addTopStrip());
-    build('tool rail', () => this.addLeftToolbar());
-    build('menu', () => this.addActionPanel()); // hidden dropdown, populated per section
-    build('profile', () => this.addProfilePanel());
-    build('printer status', () => this.addPrinterStatusPanel());
-    build('bottom bar', () => this.addBottomBar());
-    build('slice progress', () => this.addSliceModal());
-    build('preview scrubber', () => this.addPreviewScrubber());
-    this.refreshToolButtons();
+    }
+    this.xrCards = cards;
+    // The sheet carries the page-sized surfaces the inspector cannot hold:
+    // the Device and Project workspaces, the print-submission dialog.
+    this.sheetRoot = new UIPanel({
+      width: '100%',
+      height: '100%',
+      flexDirection: 'column',
+      gap: 8,
+      overflow: 'scroll',
+    });
+    if (cards.sheet.content) this.uiAppend(cards.sheet.content, this.sheetRoot);
+
+    this.xrShell = new xrUi.XrImmersiveShell<UIPanel, XRImage, UIText>(
+      xrBlocksUiAdapter,
+      cards,
+      this.createXrShellHost(),
+      (content, state, pinned, handlers) =>
+        xrUi.renderXrPreviewScrubber(xrBlocksUiAdapter, content, state, handlers, { pinned }),
+    );
+    this.registerActionStateRefresher(() => this.xrShell?.refreshState());
+    this.xrShell.draw();
   }
 
-  /** Top-centre HUD strip: wordmark + dropdown menu bar + Prepare/Paint/Preview
-   *  mode switch + Exit. Mirrors the imported design's "MENU STRIP" zone: the
-   *  menus open a single dropdown panel (addActionPanel) one section at a time,
-   *  instead of the old always-open, floor-length action list. */
-  private addTopStrip() {
+  private uiAppend(parent: UIPanel, child: UIPanel): void {
+    parent.add(child);
+  }
+
+  /** The immersive shell's module and the load that is fetching it. */
+  private xrUi: XrUiModule | null = null;
+  private xrUiLoad: Promise<XrUiModule | null> | null = null;
+
+  /**
+   * Fetch the immersive shell and build its surfaces, once.
+   *
+   * Taken when a session starts rather than during first paint: a phone or a
+   * laptop that never enters XR should not fetch, parse and lay out a spatial
+   * UI it will not show. The chunk is precached by the service worker, so this
+   * is a local read even offline.
+   *
+   * A bad uikit prop in a panel must not kill everything around it — the July
+   * 2026 "menus stuck in Loading profiles" outage was exactly that, via an
+   * invalid margin — so a failure is reported and the flat shell continues.
+   */
+  public async loadImmersiveShell(): Promise<XrUiModule | null> {
+    if (this.xrUi) return this.xrUi;
+    this.xrUiLoad ??= import('../ui/xr/immersive')
+      .then((module) => {
+        this.xrUi = module;
+        this.buildXrSurfaces(module);
+        return module;
+      })
+      .catch((error) => {
+        console.error('[orcaxr] the immersive shell failed to load', error);
+        return null;
+      });
+    return this.xrUiLoad;
+  }
+
+  /** One spatial card, sized and posed from its own {@link XrSurfaceSpec}. */
+  private createXrCard(id: XrSurfaceId): XrCardHandle<UIPanel> {
+    const spec = xrSurface(id);
     const card = this.uiCore.createCard({
-      name: 'TopStrip',
-      ...this.xrCardGeometry('menu'),
-      position: new THREE.Vector3(0, PLATE_Y + 0.65, PLATE_Z - 0.1),
+      name: `Xr-${id}`,
+      sizeX: spec.sizeX,
+      sizeY: spec.sizeY,
+      pixelSize: XR_PIXEL_SIZE,
+      width: Math.round(spec.sizeX / XR_PIXEL_SIZE),
+      position: new THREE.Vector3(0, PLATE_Y + 0.4, PLATE_Z),
       alignItems: 'center',
-      behaviors: [
-        new ManipulationBehavior({
-          draggable: true,
-          faceCamera: true,
-          manipulationMargin: 12,
-          manipulationCornerRadius: 16,
-        }),
-      ],
+      behaviors:
+        // Only a grabbable surface gets a manipulator. An anchored one is where
+        // the operator looks when they are lost, so it may not be picked up by
+        // accident; a transient one is gone before it could be moved.
+        spec.layer === 'grabbable'
+          ? [
+              new ManipulationBehavior({
+                draggable: true,
+                faceCamera: true,
+                manipulationMargin: 12,
+                manipulationCornerRadius: 16,
+              }),
+            ]
+          : [],
     });
     card.visible = false;
-    this.topStripCard = card;
-
-    // Two rows, because the flat shell has two: a menu strip over a tab strip.
-    // One row could not hold a launcher, four workspaces, Slice, Print and the
-    // session controls without shrinking every one of them to a target that has
-    // to be aimed at.
-    const shell = new UIPanel({
+    const content = new UIPanel({
       width: '100%',
+      height: '100%',
       flexDirection: 'column',
-      alignItems: 'stretch',
-      fillColor: '#0d141cE6',
-      cornerRadius: 14,
-      paddingLeft: 12,
-      paddingRight: 12,
-      paddingTop: 8,
-      paddingBottom: 8,
-      gap: 6,
-      strokeWidth: 1,
-      strokeColor: '#FF6D0066',
+      fillColor: '#00000000',
     });
-    card.add(shell);
-    const root = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8 });
-    shell.add(root);
-    const tabRow = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8 });
-    shell.add(tabRow);
-
-    // One launcher, not eight text targets in a ribbon. Seven menu sections
-    // rendered as 15 px labels across a strip made every one of them a ~1°
-    // target that had to be aimed at, and left no room for anything else on
-    // the only surface above the plate. The sections now open as full-width
-    // rows in the sheet, where they are read and pressed comfortably.
-    this.menuBarButtons = [];
-    const menuBtn = new UIPanel({
-      paddingLeft: 16,
-      paddingRight: 16,
-      paddingTop: 10,
-      paddingBottom: 10,
-      cornerRadius: 10,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      fillColor: '#ffffff14',
-      strokeWidth: 1,
-      strokeColor: '#ffffff1a',
-      justifyContent: 'center',
-      onClick: () => {
-        this.toggleMenu(XR_MENU_ROOT);
-        return true;
+    card.add(content);
+    this.xrCardObjects.set(id, card);
+    return {
+      content,
+      show: () => card.show(),
+      hide: () => card.hide(),
+      reset: () => {
+        for (const child of [...content.children]) {
+          try {
+            content.remove(child);
+          } catch {
+            /* already detached */
+          }
+        }
       },
-      onHoverEnter: () => {
-        menuBtn.setFillColor('#ffffff26');
-      },
-      onHoverExit: () => {
-        menuBtn.setFillColor('#ffffff14');
-      },
-    });
-    menuBtn.add(new XRImage(xrIcon('slice_group'), { color: '#ffffff', width: 20, height: 20, flexShrink: 0 }));
-    const menuLabel = new UIText('Menu', { fontSize: 17, fontWeight: 'bold', color: '#ffffff' });
-    menuBtn.add(menuLabel);
-    root.add(menuBtn);
-    this.menuBarButtons.push({ id: XR_MENU_ROOT, btn: menuBtn, label: menuLabel });
+      place: (anchor: unknown) => this.placeXrCard(card, spec, anchor),
+    };
+  }
 
-    root.add(new UIPanel({ flexGrow: 1 })); // spacer pushes mode switch + exit right
+  /**
+   * Put one card where its surface says, or beside whatever opened it.
+   *
+   * A transient surface is drawn at its trigger — a menu under its own title, a
+   * context menu at the fingertip — because "which menu is this?" has no other
+   * answer in a headset. Everything else takes its place in the layout.
+   */
+  private placeXrCard(
+    card: { position: THREE.Vector3; quaternion: THREE.Quaternion; updateMatrixWorld(force?: boolean): void },
+    spec: XrSurfaceSpec,
+    anchor: unknown,
+  ): void {
+    const head = this.headPose();
+    const point = anchorPoint(anchor);
+    const transform = !point
+      ? surfaceTransform(spec, head)
+      : // A menu drops out of its own title: it takes the azimuth from the
+        // control that opened it and keeps its own height, so it hangs below
+        // the bar. Everything else spawned at a point belongs *at* that point.
+        spec.id === 'menu'
+        ? droppedTransform(spec, point, head)
+        : anchoredTransform(spec, point, head);
+    card.position.copy(transform.position);
+    card.quaternion.copy(transform.quaternion);
+    card.updateMatrixWorld(true);
+  }
 
-    const track = new UIPanel({
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      fillColor: '#0000004d',
-      cornerRadius: 10,
-      padding: 4,
-    });
-    const modes: { mode: XrWorkspace; label: string }[] = [
-      { mode: 'prepare', label: 'Prepare' },
-      { mode: 'preview', label: 'Preview' },
-      { mode: 'device', label: 'Device' },
-      { mode: 'project', label: 'Project' },
-    ];
-    this.xrModeButtons = [];
-    for (const m of modes) {
-      const btn = new UIPanel({
-        paddingLeft: 11,
-        paddingRight: 11,
-        paddingTop: 7,
-        paddingBottom: 7,
-        cornerRadius: 8,
-        fillColor: '#00000000',
-        justifyContent: 'center',
-        alignItems: 'center',
-        onClick: () => {
-          this.setXrMode(m.mode);
-          return true;
-        },
-      });
-      const label = new UIText(m.label, { fontSize: 14, fontWeight: 'bold', color: '#ffffff' });
-      btn.add(label);
-      track.add(btn);
-      this.xrModeButtons.push({ mode: m.mode, btn, label });
+  private headPose(): { position: THREE.Vector3; forward: THREE.Vector3 } {
+    const cam = xb.core.camera;
+    const forward = new THREE.Vector3();
+    cam.getWorldDirection(forward);
+    return { position: cam.getWorldPosition(new THREE.Vector3()), forward };
+  }
+
+  /**
+   * The narrow face the immersive shell sees of this workspace.
+   *
+   * Everything it can ask for is here, which is also the list of what a headset
+   * needs that a screen does not already have: the same registry, the same
+   * canonical projections, and a handful of callbacks.
+   */
+  private createXrShellHost(): XrShellHost {
+    return {
+      registry: this.actionRegistry,
+      actionState: () => this.actionContext?.ui.get() ?? null,
+      invoke: (action, surface) => {
+        if (!this.actionContext) return;
+        void this.actionRegistry.invoke(action, surface, this.actionContext, this.actionContext.ui.get());
+      },
+      workspaceMode: () => this.xrMode,
+      setWorkspaceMode: (mode) => this.setXrMode(mode),
+      modeDetail: () => this.xrModeDetail(),
+      printerStatus: () => this.xrPrinterSummary(),
+      recenter: () => {
+        this.needsRecenter = true;
+        this.setStatus(t('workspace.orcaWorkspace.recenteringWorkspace', 'Recentering workspace…'));
+      },
+      exitSession: () => {
+        void xb.core.renderer.xr.getSession()?.end();
+      },
+      plates: () => this.xrPlates(),
+      selectPlate: (plateId) => this.setActivePlate(plateId as PlateId),
+      statusLine: () => xrSafeText(this.lastStatusText),
+      progress: () => (this.lastStatusPercent === undefined ? null : this.lastStatusPercent / 100),
+      objects: () => {
+        try {
+          const snapshot = this.getObjectsTreeSnapshot();
+          return {
+            projection: snapshot.projection,
+            selection: snapshot.selection,
+            defaultExpandedKeys: snapshot.projection.defaultExpandedKeys,
+          };
+        } catch {
+          // Reading the tree needs a canonical project, and a shell that opened
+          // a frame early must say "no project" rather than take the app down.
+          return null;
+        }
+      },
+      selectObject: (entity) => {
+        this.setObjectsTreeSelection([entity], entity);
+      },
+      selectionActions: () => this.xrSelectionActions(),
+      settingsView: () => this.scopedSettingsPort?.getView() ?? null,
+      cycleSettingsTarget: (direction) => this.scopedSettingsPort?.cycleTarget(direction),
+      stepSetting: (fieldId, direction) => this.scopedSettingsPort?.step(fieldId, direction),
+      setSettingValue: (fieldId, raw) => this.scopedSettingsPort?.setValue(fieldId, raw),
+      contextTarget: () => (this.canonicalProject.getSummary().selectedInstanceIds.length > 0 ? 'object' : 'plate'),
+      contextLabel: () => this.xrContextLabel(),
+      previewState: () => this.getPreviewState() as unknown as GcodePreviewPanelState,
+      updatePreview: (patch) => {
+        this.updatePreviewView(patch);
+        this.refreshXrPreviewScrubber();
+      },
+      authorLayerEvent: (type, topZMm) => {
+        const summary = this.canonicalProject.getSummary();
+        this.mutateLayerEvent({
+          expectedRevision: summary.revision,
+          sourceHash: summary.projectHash,
+          operation: 'add',
+          type,
+          topZMm,
+        });
+      },
+      activeTool: () => this.tool || null,
+      paintSwatches: () => this.xrPaintSwatches(),
+      selectPaintSwatch: (id) => {
+        // Choosing a colour is not choosing a channel: the rail's swatches are
+        // only up while a paint tool already owns it, so the active tool stays
+        // exactly as it was.
+        this.setPaintFilament(id as FilamentId);
+        this.xrShell?.draw();
+      },
+      toolSteppers: () => this.xrToolSteppers(),
+      stepToolSetting: (id, direction) => this.stepXrToolSetting(id, direction),
+      pinchAnchor: () => this.xrPinchAnchor,
+    };
+  }
+
+  /** The live second line under each workspace tab. */
+  private xrModeDetail(): Readonly<Record<XrWorkspace, string>> {
+    const state = this.actionContext?.ui.get();
+    const preview = this.getPreviewState();
+    const printer = this.onReadPrinterStatus?.()?.summary;
+    return {
+      prepare: `${state?.modelCount ?? 0} models, ${state?.plateCount ?? 1} plates`,
+      preview: preview?.active ? xrSafeText(preview.layerLabel ?? 'sliced') : 'not sliced',
+      device: printer?.present ? xrSafeText(printer.headline) : 'not connected',
+      project: state?.dirty ? 'unsaved changes' : 'saved',
+    };
+  }
+
+  /** What the menu bar's status chip says. */
+  private xrPrinterSummary(): XrPrinterStatusSummary | null {
+    const summary = this.onReadPrinterStatus?.()?.summary;
+    if (!summary || !summary.present) return null;
+    return {
+      label: xrSafeText(summary.headline),
+      detail: xrSafeText(summary.detail ?? ''),
+      color: XR_PRINTER_TONE_COLORS[summary.tone],
+    };
+  }
+
+  private xrPlates(): readonly XrDeskPlate[] {
+    try {
+      const summary = this.canonicalProject.getSummary();
+      return summary.plates.map((plate) => ({
+        id: String(plate.id),
+        label: plate.name,
+        modelCount: plate.instanceCount,
+        active: plate.id === summary.activePlateId,
+      }));
+    } catch {
+      return [];
     }
-    tabRow.add(track);
+  }
 
-    tabRow.add(new UIPanel({ flexGrow: 1 }));
-    // `Slice` and `Print` sit at the end of the tab strip, which is where the
-    // flat shell puts them. They are the same registry actions the action desk
-    // below runs — a second place to reach them, not a second path.
-    for (const id of ['slice_active_plate', 'send_to_printer'] as const) {
+  /** What the Objects panel offers for the current selection. */
+  private xrSelectionActions(): readonly { id: string; label: string; enabled: boolean }[] {
+    const state = this.actionContext?.ui.get();
+    if (!state) return [];
+    const ids = [
+      'edit_duplicate',
+      'add_modifier',
+      'add_height_range',
+      'add_negative_part',
+      'split_to_parts',
+      'objects_assign_filament',
+      'delete_models',
+    ];
+    const out: { id: string; label: string; enabled: boolean }[] = [];
+    for (const id of ids) {
       const action = this.actionRegistry.get(id);
       if (!action) continue;
-      const primary = id === 'slice_active_plate';
-      const btn = new UIPanel({
-        paddingLeft: 12,
-        paddingRight: 12,
-        paddingTop: 7,
-        paddingBottom: 7,
-        cornerRadius: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        fillColor: primary ? '#ffb74d' : '#ffffff14',
-        strokeWidth: primary ? 0 : 1,
-        strokeColor: '#ffffff1a',
-        justifyContent: 'center',
-        onClick: () => {
-          if (this.actionContext) {
-            void this.actionRegistry.invoke(
-              action,
-              primary ? 'xr-primary' : 'xr-menu',
-              this.actionContext,
-              this.actionContext.ui.get(),
-            );
-          }
-          return true;
-        },
-      });
-      btn.add(
-        new XRImage(xrIcon(action.icon), {
-          color: primary ? '#000000' : '#ffffff',
-          width: 16,
-          height: 16,
-          flexShrink: 0,
-        }),
-      );
-      btn.add(
-        new UIText(primary ? 'Slice' : 'Print', {
-          fontSize: 14,
-          fontWeight: 'bold',
-          color: primary ? '#000000' : '#ffffff',
-          flexShrink: 0,
-        }),
-      );
-      tabRow.add(btn);
+      const availability = this.actionRegistry.availability(action, 'xr-inspector', state);
+      if (availability.state === 'hidden') continue;
+      out.push({ id, label: action.label, enabled: availability.state === 'enabled' });
     }
-
-    // Keep secondary panels progressive: the plate stays readable until the
-    // maker explicitly opens profile controls. Recenter is deliberately always
-    // one pinch away because room-scale users regularly change where they are
-    // standing relative to the workspace.
-    const utility = (icon: string, hint: string, onClick: () => void) => {
-      const btn = new UIPanel({
-        width: 38,
-        height: 38,
-        cornerRadius: 9,
-        fillColor: '#ffffff14',
-        strokeWidth: 1,
-        strokeColor: '#ffffff1a',
-        justifyContent: 'center',
-        alignItems: 'center',
-        onClick: () => {
-          onClick();
-          return true;
-        },
-        onHoverEnter: () => {
-          btn.setFillColor('#ffffff26');
-        },
-        onHoverExit: () => {
-          btn.setFillColor('#ffffff14');
-        },
-      });
-      (btn as any).userData = { hint };
-      btn.add(new XRImage(xrIcon(icon), { color: '#dfe4ea', width: 20, height: 20 }));
-      root.add(btn);
-    };
-    utility('tune', 'Profile settings', () => this.toggleProfilePanel());
-    utility('view_default', 'Recenter workspace', () => {
-      this.needsRecenter = true;
-      this.setStatus(t('workspace.orcaWorkspace.recenteringWorkspace', 'Recentering workspace…'));
-    });
-
-    const exitBtn = new UIPanel({
-      paddingLeft: 13,
-      paddingRight: 13,
-      paddingTop: 8,
-      paddingBottom: 8,
-      cornerRadius: 8,
-      fillColor: '#e5393526',
-      strokeWidth: 1,
-      strokeColor: '#e5393559',
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      justifyContent: 'center',
-      onClick: () => {
-        void xb.core.renderer.xr.getSession()?.end();
-        return true;
-      },
-      onHoverEnter: () => {
-        exitBtn.setFillColor('#e5393559');
-      },
-      onHoverExit: () => {
-        exitBtn.setFillColor('#e5393526');
-      },
-    });
-    exitBtn.add(new XRImage(xrIcon('logout'), { color: '#ff8a80', width: 18, height: 18, flexShrink: 0 }));
-    exitBtn.add(new UIText('Exit', { fontSize: 15, fontWeight: 'bold', color: '#ff8a80', flexShrink: 0 }));
-    root.add(exitBtn);
-
-    this.refreshXrMode();
-    this.refreshMenuBar();
+    return out;
   }
 
-  /** Open the dropdown for `id` (or close it if already open). Only one section
-   *  is ever visible — the panel is short and anchored just under the menu bar. */
-  private toggleMenu(id: string) {
-    if (this.openMenuSection === id) {
-      this.closeMenu();
-      return;
-    }
-    this.openMenuSection = id;
-    this.populateMenuPanel(id);
-    const c = this.rightSidebarCard;
-    if (c) {
-      // The sheet has its own place in the layout — centred, at reading
-      // distance, in front of the work it is about to act on. Hanging it off
-      // the strip's transform put it wherever the strip happened to be.
-      const cam = xb.core.camera;
-      const forward = new THREE.Vector3();
-      cam.getWorldDirection(forward);
-      this.placeXrSurface(c, 'sheet', { position: cam.getWorldPosition(new THREE.Vector3()), forward });
-      c.show();
-    }
-    this.refreshMenuBar();
+  private xrContextLabel(): string {
+    const summary = this.canonicalProject.getSummary();
+    if (summary.selectedInstanceIds.length === 0) return t('workspace.orcaWorkspace.thisPlate', 'This plate');
+    return t('workspace.orcaWorkspace.selection', 'Selection');
   }
 
-  private closeMenu() {
-    this.openMenuSection = null;
-    if (this.rightSidebarCard) this.rightSidebarCard.hide();
-    this.refreshMenuBar();
+  /** Where a long-pinch happened, so a transient surface opens beside it. */
+  private xrPinchAnchor: THREE.Vector3 | null = null;
+
+  /** Open the spatial context menu at `point` (P11.2). */
+  public openXrContextMenu(point?: THREE.Vector3): void {
+    this.xrPinchAnchor = point ? point.clone() : null;
+    this.xrShell?.openContextMenu();
   }
 
-  private refreshMenuBar() {
-    for (const m of this.menuBarButtons) {
-      // The strip carries one launcher, so it reads as active whenever any
-      // section of the sheet is open — not only its own.
-      const active = m.id === this.openMenuSection || (m.id === XR_MENU_ROOT && this.openMenuSection !== null);
-      m.btn.setFillColor(active ? '#ff6d0033' : '#00000000');
-      m.label.setColor(active ? '#FFB74D' : '#ffffff');
-    }
-  }
-
-  /** Fill the shared dropdown panel with a single menu section's rows. */
-  private populateMenuPanel(id: string) {
-    const root = this.menuPanelRoot;
-    if (!root) return;
-    for (const c of [...root.children]) {
-      try {
-        root.remove(c);
-      } catch {
-        /* detached */
-      }
-    }
-    if (id === 'xr-device-workspace' || id === `${XR_CARD_PREFIX}printer`) {
-      if (this.menuPanelTitle) this.menuPanelTitle.setText('Printer & Device');
-      this.populateXrDeviceWorkspace(root);
-      return;
-    }
-    if (id === 'xr-project-workspace' || id === `${XR_CARD_PREFIX}project`) {
-      if (this.menuPanelTitle) this.menuPanelTitle.setText('Project & Calibration');
-      this.populateXrProjectWorkspace(root);
-      return;
-    }
-    if (id === 'xr-print-submission') {
-      if (this.menuPanelTitle) this.menuPanelTitle.setText('Print Submission');
-      this.populateXrPrintSubmission(root);
-      return;
-    }
-    const sec = MENU_SECTIONS.find((s) => String(s.id) === id);
-    if (this.menuPanelTitle) {
-      this.menuPanelTitle.setText(id === XR_PANELS_SECTION_ID ? 'Panels' : sec ? sec.label : 'Menu');
-    }
-    const reg = this.actionRegistry;
-    if (id === XR_MENU_ROOT) {
-      this.populateMenuSections(root);
-      return;
-    }
-    const card = XR_CARDS.find((entry) => entry.id === id);
-    if (card) {
-      if (this.menuPanelTitle) this.menuPanelTitle.setText(card.label);
-      this.populateXrCard(root, card);
-      return;
-    }
-    if (id === XR_PANELS_SECTION_ID) {
-      this.populateXrPanelsSection(root);
-      return;
-    }
-    const entries: { action: Action; surface: ActionSurface }[] = reg
-      .forSurface('xr-menu')
-      .filter((action) => action.menuSection === id)
-      .map((action) => ({ action, surface: 'xr-menu' as const }));
-    if (id === 'tools') {
-      for (const action of reg.forSurface('xr-toolbar')) {
-        if (xrToolRailActions([action]).length === 0) {
-          entries.push({ action, surface: 'xr-toolbar' });
+  private setXrMode(mode: XrWorkspace) {
+    this.xrMode = mode;
+    if (this.actionContext) {
+      if (mode === 'device' || mode === 'project') {
+        // Device and Project are pages on a screen and sheets in a headset —
+        // the same content, reached from the same tab, without disturbing what
+        // the plate is showing. That is exactly what the flat shell does: its
+        // pages leave the mode alone.
+        this.openXrSheet(mode === 'device' ? 'xr-device-workspace' : 'xr-project-workspace');
+      } else {
+        this.closeXrSheet();
+        if (mode === 'preview') {
+          this.actionContext.setMode('preview');
+          if (!this.previewOn) this.actionContext.togglePreview();
+        } else {
+          if (this.previewOn) this.actionContext.togglePreview();
+          this.actionContext.setMode('prepare');
         }
       }
     }
-    for (const { action: a, surface } of entries) root.add(this.buildXrMenuRow(a, surface));
+    this.xrShell?.draw();
   }
 
-  /**
-   * The sheet's front page: one row per menu section, sized to be read and
-   * pressed rather than aimed at. Sections with nothing in them are left out,
-   * so the list never offers a dead end.
-   */
-  private populateMenuSections(root: UIPanel): void {
-    const reg = this.actionRegistry;
-    const inspector = reg.forSurface('xr-inspector');
-    // The sidebar's cards first, then the menu bar's sections — the same two
-    // groups of things the flat shell offers, in the same order it offers them.
-    const cards = XR_CARDS.filter((card) => inspector.some((action) => card.groups.includes(action.group)));
-    const sections: { id: string; label: string }[] = [
-      ...cards,
-      ...MENU_SECTIONS,
-      ...(inspector.length > 0 ? [{ id: XR_PANELS_SECTION_ID, label: 'All panels' }] : []),
-    ];
-    for (const sec of sections) {
-      const hasMenuItems =
-        sec.id === XR_PANELS_SECTION_ID ||
-        sec.id.startsWith(XR_CARD_PREFIX) ||
-        reg.forSurface('xr-menu').some((x) => String(x.menuSection) === sec.id);
-      const hasToolOverflow =
-        sec.id === 'tools' && reg.forSurface('xr-toolbar').some((action) => !xrToolRailActions([action]).length);
-      if (!hasMenuItems && !hasToolOverflow) continue;
-      root.add(
-        this.buildXrSheetRow(
-          XR_SECTION_ICONS[sec.id] ?? XR_CARDS.find((c) => c.id === sec.id)?.icon ?? 'chevron_right',
-          sec.label,
-          () => {
-            this.openMenuSection = sec.id;
-            this.populateMenuPanel(sec.id);
-            this.refreshMenuBar();
-          },
-        ),
-      );
+  /** Show one page-sized surface. Only ever one at a time. */
+  public openXrSheet(id: string): void {
+    const card = this.xrCards?.sheet;
+    const root = this.sheetRoot;
+    if (!card || !root) return;
+    this.openSheetPage = id;
+    for (const child of [...root.children]) {
+      try {
+        root.remove(child);
+      } catch {
+        /* already detached */
+      }
     }
+    if (id === 'xr-device-workspace') this.populateXrDeviceWorkspace(root);
+    else if (id === 'xr-project-workspace') this.populateXrProjectWorkspace(root);
+    else if (id === 'xr-print-submission') this.populateXrPrintSubmission(root);
+    card.place(null);
+    card.show();
   }
 
-  /**
-   * One sidebar card's contents: every inspector action whose group the card
-   * claims, gated exactly as the DOM gates it. The rows are the same rows the
-   * menu uses, so an action looks and behaves the same wherever it is reached.
-   */
-  private populateXrCard(root: UIPanel, card: { label: string; groups: readonly string[] }): void {
-    const actions = this.actionRegistry.forSurface('xr-inspector').filter((a) => card.groups.includes(a.group));
-    if (actions.length === 0) {
-      root.add(
-        new UIText(t('workspace.orcaWorkspace.nothingHereYet', 'Nothing here yet.'), {
-          fontSize: 15,
-          color: '#8a94a0',
-        }),
-      );
-      return;
-    }
-    for (const action of actions) root.add(this.buildXrMenuRow(action, 'xr-inspector'));
+  public closeXrSheet(): void {
+    this.openSheetPage = null;
+    this.xrCards?.sheet.hide();
   }
 
-  /**
-   * One row of the sheet: icon, label, and a press.
-   *
-   * Every list in the sheet is built through here. A second hand-written row —
-   * same properties, near enough — laid out to 35,000 px tall and painted as a
-   * featureless slab, so "near enough" is not a thing that can be eyeballed
-   * against a flexbox engine.
-   */
-  private buildXrSheetRow(icon: string, label: string, onPress: () => void): UIPanel {
-    const rest = '#ffffff12';
-    const btn = new UIPanel({
-      width: '100%',
-      paddingLeft: 12,
-      paddingRight: 12,
-      paddingTop: 11,
-      paddingBottom: 11,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      cornerRadius: 9,
-      fillColor: rest,
-      strokeWidth: 1,
-      strokeColor: '#ffffff12',
-      onClick: () => {
-        onPress();
-        return true;
-      },
-      onHoverEnter: () => {
-        btn.setFillColor('#ffffff24');
-      },
-      onHoverExit: () => {
-        btn.setFillColor(rest);
-      },
-    });
-    btn.add(new XRImage(xrIcon(icon), { color: '#dfe4ea', width: 20, height: 20, flexShrink: 0 }));
-    btn.add(new UIText(label, { fontSize: 17, color: '#eef2f6', flexGrow: 1, flexShrink: 1 }));
-    return btn;
+  /** Repaint the open page after an outside change. */
+  private refreshXrSheet(): void {
+    if (this.openSheetPage) this.openXrSheet(this.openSheetPage);
   }
-
-  /** One menu row, gated exactly as the DOM gates the same action. */
-  private buildXrMenuRow(a: Action, surface: ActionSurface): UIPanel {
-    const reg = this.actionRegistry;
-    {
-      const availability = this.actionContext
-        ? reg.availability(a, surface, this.actionContext.ui.get())
-        : { state: 'disabled' as const, reason: 'Workspace is still initializing.' };
-      const enabled = availability.state === 'enabled';
-      const unavailable = a.capability.status === 'unavailable' || a.capability.status === 'blocked';
-      const restFill = enabled ? '#ffffff12' : '#ffffff08';
-      const btn = new UIPanel({
-        width: '100%',
-        paddingLeft: 12,
-        paddingRight: 12,
-        paddingTop: 11,
-        paddingBottom: 11,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        cornerRadius: 9,
-        fillColor: restFill,
-        opacity: enabled ? 1 : 0.5,
-        strokeWidth: 1,
-        strokeColor: '#ffffff12',
-        onClick: () => {
-          if (enabled) this.closeMenu();
-          if (this.actionContext) {
-            void reg.invoke(a, surface, this.actionContext, this.actionContext.ui.get());
-          }
-          return true;
-        },
-        onHoverEnter: () => {
-          if (enabled) btn.setFillColor('#ffffff24');
-        },
-        onHoverExit: () => {
-          btn.setFillColor(restFill);
-        },
-      });
-      btn.userData.hint = availability.state === 'disabled' ? availability.reason : a.hint;
-      btn.add(
-        new XRImage(xrIcon(a.icon), { color: enabled ? '#dfe4ea' : '#8a94a0', width: 20, height: 20, flexShrink: 0 }),
-      );
-      btn.add(
-        new UIText(a.label, { fontSize: 17, color: enabled ? '#eef2f6' : '#8a94a0', flexGrow: 1, flexShrink: 1 }),
-      );
-      if (unavailable)
-        btn.add(new UIText('UNAVAILABLE', { fontSize: 10, fontWeight: 'bold', color: '#ffb74d', flexShrink: 0 }));
-      return btn;
-    }
-  }
-
-  /**
-   * Everything the DOM shell keeps in its inspector, grouped so a long list
-   * stays navigable in a headset. Rows are gated by the same capability and
-   * selection state the DOM uses, so an action disabled on a screen is
-   * disabled here for the same stated reason.
-   */
-  private populateXrPanelsSection(root: UIPanel): void {
-    const reg = this.actionRegistry;
-    this.addXrContextSection(root);
-    const byGroup = new Map<string, Action[]>();
-    for (const action of reg.forSurface('xr-inspector')) {
-      const bucket = byGroup.get(action.group) ?? [];
-      bucket.push(action);
-      byGroup.set(action.group, bucket);
-    }
-    for (const group of GROUPS) {
-      const actions = byGroup.get(group.id);
-      if (!actions || actions.length === 0) continue;
-      root.add(
-        new UIText(group.label.toUpperCase(), {
-          fontSize: 11,
-          fontWeight: 'bold',
-          color: '#8a94a0',
-          paddingTop: 8,
-        }),
-      );
-      for (const action of actions) root.add(this.buildXrMenuRow(action, 'xr-inspector'));
-      // The calibration group is the one whose actions are not enough on their
-      // own: `calib_configure` needs a *value*, and a menu row cannot supply
-      // one. The steppers below are that missing half.
-      if (group.id === 'calibration') this.addXrCalibrationParameters(root);
-      if (group.id === 'scene') this.addXrSceneSteppers(root);
-      if (group.id === 'advanced') this.addXrScopedSettings(root);
-    }
-  }
-
-  /**
-   * The right-click menu, for a shell with no right button (P11.2).
-   *
-   * The catalog's context targets are a placement, not a second list, so the
-   * headset offers exactly what the scene's right-click offers for the same
-   * kind of node — chosen by what is selected rather than by what a pointer is
-   * over, because that is the addressing a headset actually has here. It leads
-   * the Panels section for the same reason a context menu leads a right-click:
-   * it is the answer to "what can I do with *this*".
-   */
-  private addXrContextSection(root: UIPanel): void {
-    const target: ContextTarget =
-      this.canonicalProject.getSummary().selectedInstanceIds.length > 0 ? 'object' : 'plate';
-    const actions = this.actionRegistry.forContext(target, 'xr-context');
-    if (actions.length === 0) return;
-    root.add(
-      new UIText(target === 'object' ? 'SELECTED MODEL' : 'THIS PLATE', {
-        fontSize: 11,
-        fontWeight: 'bold',
-        color: '#8a94a0',
-      }),
-    );
-    for (const action of actions) root.add(this.buildXrMenuRow(action, 'xr-context'));
-  }
-
   /**
    * Calibration parameters as steppers, which is how a headset does numbers.
    *
@@ -7381,73 +7193,72 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /**
-   * The numeric settings a scene tool needs, as steppers.
+   * The active tool's own numbers, drawn on the rail beside the tool.
    *
-   * Same reasoning as the calibration parameters: these were withheld from XR
-   * because they are typed into a DOM field, and a bounded number does not have
-   * to be typed. Only settings whose limits are known are offered — a stepper
-   * with no bounds is a text field with extra steps, and would let a headset
-   * reach a value the DOM would have refused.
+   * These were withheld from XR because they are typed into a DOM field, and a
+   * bounded number does not have to be typed. Only settings whose limits are
+   * known are offered — a stepper with no bounds is a text field with extra
+   * presses, and would let a headset reach a value the DOM would have refused.
    *
    * The emboss recipe is deliberately absent: its blocker is *text*, not a
-   * number, and no stepper solves that.
+   * number, and the keyboard rather than a stepper is what answers it.
    */
-  private addXrSceneSteppers(root: UIPanel): void {
+  private xrToolSteppers(): readonly XrRailStepper[] {
+    const rows: XrRailStepper[] = [];
     const ears = this.getBrimEarSnapshot();
     if (ears.objectId) {
-      root.add(
-        this.xrStepperRow('Brim ear radius', `${ears.radiusMm}`, 'mm', (direction) => {
-          const next = Math.min(
-            BRIM_EAR_MAX_RADIUS_MM,
-            Math.max(BRIM_EAR_MIN_RADIUS_MM, Number((ears.radiusMm + direction * 0.5).toFixed(1))),
-          );
-          this.setBrimEarRadius(next);
-        }),
-      );
+      rows.push({ id: 'brim-ear-radius', label: 'Brim ear radius', value: `${ears.radiusMm}`, unit: 'mm' });
     }
     const svg = this.getSvgPartSnapshot();
     if (svg.active) {
-      root.add(
-        this.xrStepperRow('SVG depth', `${svg.depthMm}`, 'mm', (direction) => {
-          // Depth is what makes the drawing solid, so it may not reach zero:
-          // a zero-depth part is geometry the slicer will silently discard.
-          const next = Math.min(50, Math.max(0.2, Number((svg.depthMm + direction * 0.2).toFixed(1))));
-          this.setSvgPartSize({ depthMm: next });
-        }),
-      );
+      rows.push({ id: 'svg-depth', label: 'SVG depth', value: `${svg.depthMm}`, unit: 'mm' });
       if (svg.widthMm !== undefined) {
-        root.add(
-          this.xrStepperRow('SVG width', `${svg.widthMm}`, 'mm', (direction) => {
-            const next = Math.min(300, Math.max(1, Number((svg.widthMm! + direction * 1).toFixed(1))));
-            this.setSvgPartSize({ widthMm: next });
-          }),
-        );
+        rows.push({ id: 'svg-width', label: 'SVG width', value: `${svg.widthMm}`, unit: 'mm' });
       }
+    }
+    return rows;
+  }
+
+  /** One press on a rail stepper. Bounds come from the command, never here. */
+  private stepXrToolSetting(id: string, direction: 1 | -1): void {
+    if (id === 'brim-ear-radius') {
+      const ears = this.getBrimEarSnapshot();
+      this.setBrimEarRadius(
+        Math.min(
+          BRIM_EAR_MAX_RADIUS_MM,
+          Math.max(BRIM_EAR_MIN_RADIUS_MM, Number((ears.radiusMm + direction * 0.5).toFixed(1))),
+        ),
+      );
+      return;
+    }
+    const svg = this.getSvgPartSnapshot();
+    if (id === 'svg-depth') {
+      // Depth is what makes the drawing solid, so it may not reach zero: a
+      // zero-depth part is geometry the slicer will silently discard.
+      this.setSvgPartSize({ depthMm: Math.min(50, Math.max(0.2, Number((svg.depthMm + direction * 0.2).toFixed(1)))) });
+      return;
+    }
+    if (id === 'svg-width' && svg.widthMm !== undefined) {
+      this.setSvgPartSize({ widthMm: Math.min(300, Math.max(1, Number((svg.widthMm + direction).toFixed(1)))) });
     }
   }
 
-  /**
-   * Scoped overrides in the headset (P6.5).
-   *
-   * P6.5 asks for one draft and one validation across desktop, touch and XR,
-   * and XR was the surface that had nothing: every route into a setting ended
-   * at a text field. `settings_apply_scoped` already appears in this panel as a
-   * row, and — exactly like `calib_configure` — a row cannot supply a *value*.
-   * These steppers are that missing half.
-   *
-   * Nothing about which settings exist is decided here, and nothing about how
-   * they are drawn either. The controller runs the same query the DOM panel
-   * runs and applies through the same adapter; the renderer draws through the
-   * mockable UI adapter, so both halves are asserted without a headset.
-   */
-  private addXrScopedSettings(root: UIPanel): void {
-    const port = this.scopedSettingsPort;
-    const render = renderXrScopedSettings(xrBlocksUiAdapter, root, port ? port.getView() : null, {
-      onCycleTarget: (direction) => port?.cycleTarget(direction),
-      onStep: (fieldId, direction) => port?.step(fieldId, direction),
-    });
-    this.xrScopedValueTexts = render.values;
-    this.xrScopedSignature = render.signature;
+  /** The canonical palette, as the rail's paint strip draws it. */
+  private xrPaintSwatches(): readonly XrRailSwatch[] {
+    if (!(this.tool in PAINT_TOOL_CHANNELS)) return [];
+    const swatches: XrRailSwatch[] = [];
+    let index = 0;
+    for (const entry of this.getPaintPalette().entries) {
+      index += 1;
+      if (!entry.filamentId || !entry.selectable) continue;
+      swatches.push({
+        id: String(entry.filamentId),
+        label: String(index),
+        color: entry.displayColor,
+        selected: entry.filamentId === this.paintFilamentId,
+      });
+    }
+    return swatches;
   }
 
   /** The scoped-settings engine; installed by the shell that owns the catalog. */
@@ -7484,47 +7295,7 @@ export class OrcaWorkspace extends xb.Script {
    * changed: a different node, a different row set, a message that appeared.
    */
   public refreshXrScopedSettings(): void {
-    if (this.openMenuSection !== XR_PANELS_SECTION_ID) return;
-    const view = this.scopedSettingsPort?.getView() ?? null;
-    if (xrScopedSettingsSignature(view) !== this.xrScopedSignature) {
-      this.populateMenuPanel(XR_PANELS_SECTION_ID);
-      return;
-    }
-    for (const row of view?.rows ?? []) {
-      const bound = this.xrScopedValueTexts.get(row.fieldId);
-      if (bound) bound.node.setText(`${row.value}${bound.unit}`);
-    }
-  }
-
-  /** One labelled value between a decrement and an increment. */
-  private xrStepperRow(label: string, value: string, unit: string, onStep: (direction: 1 | -1) => void): UIPanel {
-    const row = new UIPanel({
-      width: '100%',
-      paddingLeft: 12,
-      paddingRight: 12,
-      paddingTop: 8,
-      paddingBottom: 8,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      cornerRadius: 9,
-      fillColor: '#ffffff08',
-    });
-    row.add(new UIText(label, { fontSize: 15, color: '#c7ced6', flexGrow: 1, flexShrink: 1 }));
-    row.add(
-      this.xrStepButton('−', () => {
-        onStep(-1);
-        if (this.openMenuSection !== null) this.populateMenuPanel(this.openMenuSection);
-      }),
-    );
-    row.add(new UIText(`${value} ${unit}`, { fontSize: 15, color: '#eef2f6', flexShrink: 0 }));
-    row.add(
-      this.xrStepButton('+', () => {
-        onStep(1);
-        if (this.openMenuSection !== null) this.populateMenuPanel(this.openMenuSection);
-      }),
-    );
-    return row;
+    this.xrShell?.draw();
   }
 
   private xrStepButton(label: string, onPress: () => void): UIPanel {
@@ -7561,10 +7332,18 @@ export class OrcaWorkspace extends xb.Script {
     // Re-render the open section so the value beside the stepper is the value
     // that was just set. Without this the number lags a press behind, which
     // reads as the control not working.
-    if (this.openMenuSection !== null) this.populateMenuPanel(this.openMenuSection);
+    this.xrShell?.draw();
   }
 
   private populateXrDeviceWorkspace(root: UIPanel): void {
+    const xrUi = this.xrUi;
+    if (!xrUi) return;
+    // The printer's guarded lifecycle controls and the machine's active
+    // profiles lead the page: both are about the machine, and both used to
+    // float as cards of their own competing with the inspector for the same
+    // arc of the operator's field of view.
+    this.buildXrPrinterStatusPanel(root);
+    this.buildXrProfilePanel(root);
     const statusData = this.onReadPrinterStatus?.();
     const summary = statusData?.summary;
     const telemetry = {
@@ -7583,7 +7362,7 @@ export class OrcaWorkspace extends xb.Script {
       progressPercent: typeof summary?.progress === 'number' ? Math.round(summary.progress * 100) : undefined,
     };
 
-    renderXrDeviceWorkspace(xrBlocksUiAdapter, root, {
+    xrUi.renderXrDeviceWorkspace(xrBlocksUiAdapter, root, {
       printerName: this.profile?.displayName ?? 'Snapmaker U1',
       telemetry,
       onPausePrint: () => {
@@ -7599,12 +7378,18 @@ export class OrcaWorkspace extends xb.Script {
         void this.controlPrintJob('emergency-stop');
       },
       onClose: () => {
-        if (this.openMenuSection !== null) this.toggleMenu(this.openMenuSection);
+        this.refreshXrSheet();
       },
     });
   }
 
   private populateXrProjectWorkspace(root: UIPanel): void {
+    const xrUi = this.xrUi;
+    if (!xrUi) return;
+    // `calib_configure` needs a *value*, and a menu row cannot supply one; the
+    // steppers are that missing half, and they belong beside the workflow grid
+    // that runs them.
+    this.addXrCalibrationParameters(root);
     const summary = this.canonicalProject.getSummary();
     const recents = recentProjectsStore.list().map((r) => ({
       name: r.name,
@@ -7612,7 +7397,7 @@ export class OrcaWorkspace extends xb.Script {
       modifiedDate: r.openedAt ? new Date(r.openedAt).toLocaleDateString() : 'Recent',
     }));
 
-    renderXrProjectWorkspace(xrBlocksUiAdapter, root, {
+    xrUi.renderXrProjectWorkspace(xrBlocksUiAdapter, root, {
       projectName: summary.projectName,
       plateCount: summary.plates.length,
       modelCount: summary.objectCount,
@@ -7644,12 +7429,12 @@ export class OrcaWorkspace extends xb.Script {
           const action = this.actionRegistry.get(workflowId);
           if (action) {
             void this.actionRegistry.invoke(action, 'xr-menu', this.actionContext, this.actionContext.ui.get());
-            if (this.openMenuSection !== null) this.toggleMenu(this.openMenuSection);
+            this.refreshXrSheet();
           }
         }
       },
       onClose: () => {
-        if (this.openMenuSection !== null) this.toggleMenu(this.openMenuSection);
+        this.refreshXrSheet();
       },
     });
   }
@@ -7658,17 +7443,22 @@ export class OrcaWorkspace extends xb.Script {
     ((decision: { choice: 'upload-and-print' | 'upload-only' | 'cancel'; overwrite: boolean }) => void) | null = null;
   private pendingPrintInput: any = null;
 
-  public askXrPrintSubmission(
+  public async askXrPrintSubmission(
     input: any,
   ): Promise<{ choice: 'upload-and-print' | 'upload-only' | 'cancel'; overwrite: boolean }> {
     this.pendingPrintInput = input;
+    // The dialog lives in the immersive chunk, so a submission asked for before
+    // a session has ever started waits for it rather than opening an empty page.
+    await this.loadImmersiveShell();
     return new Promise((resolve) => {
       this.printSubmissionResolve = resolve;
-      this.toggleMenu('xr-print-submission');
+      this.openXrSheet('xr-print-submission');
     });
   }
 
   private populateXrPrintSubmission(root: UIPanel): void {
+    const xrUi = this.xrUi;
+    if (!xrUi) return;
     const input = this.pendingPrintInput;
     if (!input) return;
 
@@ -7684,7 +7474,7 @@ export class OrcaWorkspace extends xb.Script {
         ]
       : [];
 
-    renderXrPrintSubmissionDialog(xrBlocksUiAdapter, root, {
+    xrUi.renderXrPrintSubmissionDialog(xrBlocksUiAdapter, root, {
       printerName: input.endpointLabel || 'Snapmaker U1',
       availablePrinters: [input.endpointLabel || 'Snapmaker U1'],
       plateName: input.plateName || 'Plate 1',
@@ -7700,494 +7490,40 @@ export class OrcaWorkspace extends xb.Script {
         this.printSubmissionResolve?.({ choice: 'upload-and-print', overwrite: true });
         this.printSubmissionResolve = null;
         this.pendingPrintInput = null;
-        if (this.openMenuSection !== null) this.toggleMenu(this.openMenuSection);
+        this.refreshXrSheet();
       },
       onSendOnly: () => {
         this.printSubmissionResolve?.({ choice: 'upload-only', overwrite: true });
         this.printSubmissionResolve = null;
         this.pendingPrintInput = null;
-        if (this.openMenuSection !== null) this.toggleMenu(this.openMenuSection);
+        this.refreshXrSheet();
       },
       onCancel: () => {
         this.printSubmissionResolve?.({ choice: 'cancel', overwrite: false });
         this.printSubmissionResolve = null;
         this.pendingPrintInput = null;
-        if (this.openMenuSection !== null) this.toggleMenu(this.openMenuSection);
+        this.refreshXrSheet();
       },
     });
   }
 
-  private addPreviewScrubber() {
-    const card = this.uiCore.createCard({
-      name: 'PreviewScrubber',
-      ...this.xrCardGeometry('scrubber'),
-      position: new THREE.Vector3(0, PLATE_Y - 0.1, PLATE_Z + 0.2),
-      alignItems: 'center',
-      behaviors: [
-        new ManipulationBehavior({
-          draggable: true,
-          faceCamera: true,
-          manipulationMargin: 12,
-          manipulationCornerRadius: 16,
-        }),
-      ],
-    });
-    card.visible = false;
-    this.previewScrubberCard = card;
-
-    const root = new UIPanel({
-      width: '100%',
-      height: '100%',
-      flexDirection: 'column',
-      fillColor: '#00000000',
-    });
-    card.add(root);
-
-    const state = this.getPreviewState();
-    this.previewScrubberRender = renderXrPreviewScrubber(xrBlocksUiAdapter, root, state as any, {
-      onUpdateView: (patch) => {
-        this.updatePreviewView(patch);
-        this.refreshXrPreviewScrubber();
-      },
-      onAuthorEvent: (type, topZMm) => {
-        const summary = this.canonicalProject.getSummary();
-        this.mutateLayerEvent({
-          expectedRevision: summary.revision,
-          sourceHash: summary.projectHash,
-          operation: 'add',
-          type,
-          topZMm,
-        });
-      },
-    });
-  }
-
+  /** Repaint the toolpath scrubber after a preview change. */
   public refreshXrPreviewScrubber() {
-    if (!this.previewScrubberCard || !this.previewScrubberRender) return;
-    const state = this.getPreviewState();
-    if (this.previewOn && state.active) {
-      this.previewScrubberCard.show();
-      this.previewScrubberRender.refresh(state as any);
-    } else {
-      this.previewScrubberCard.hide();
-    }
+    this.xrShell?.refreshPreview();
   }
 
-  private setXrMode(mode: XrWorkspace) {
-    this.xrMode = mode;
-    if (this.actionContext) {
-      if (mode === 'device' || mode === 'project') {
-        // Device and Project are pages on a screen and sheets in a headset —
-        // the same content, reached from the same tab, without disturbing what
-        // the plate is showing. That is exactly what the flat shell does: its
-        // pages leave the mode alone.
-        this.toggleMenu(mode === 'device' ? 'xr-device-workspace' : 'xr-project-workspace');
-      } else if (mode === 'preview') {
-        this.actionContext.setMode('preview');
-        if (!this.previewOn) this.actionContext.togglePreview();
-        this.refreshXrPreviewScrubber();
-      } else {
-        if (this.previewOn) this.actionContext.togglePreview();
-        this.actionContext.setMode('prepare');
-        this.refreshXrPreviewScrubber();
-      }
-    }
-    this.refreshXrMode();
-  }
-  private refreshXrMode() {
-    for (const m of this.xrModeButtons) {
-      const active = m.mode === this.xrMode;
-      m.btn.setFillColor(active ? '#FF6D00' : '#00000000');
-      m.label.setColor(active ? '#000000' : '#ffffff');
-    }
-  }
-
-  /** Bottom-centre action bar: the primary Load / Slice / Preview / Download
-   *  actions, pulled prominent like the design's "BOTTOM ACTION BAR". */
-  private addBottomBar() {
-    const card = this.uiCore.createCard({
-      name: 'BottomBar',
-      ...this.xrCardGeometry('actions'),
-      position: new THREE.Vector3(0, PLATE_Y - 0.25, PLATE_Z + 0.15),
-      alignItems: 'center',
-      behaviors: [
-        new ManipulationBehavior({
-          draggable: true,
-          faceCamera: true,
-          manipulationMargin: 12,
-          manipulationCornerRadius: 16,
-        }),
-      ],
-    });
-    card.visible = false;
-    this.bottomBarCard = card;
-
-    const root = new UIPanel({
-      width: '100%',
-      flexDirection: 'column',
-      alignItems: 'stretch',
-      gap: 8,
-      fillColor: '#0d141cE6',
-      cornerRadius: 18,
-      padding: 12,
-      strokeWidth: 1,
-      strokeColor: '#ffffff14',
-    });
-    card.add(root);
-
-    const btnRow = new UIPanel({
-      width: '100%',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 10,
-    });
-    root.add(btnRow);
-
-    const reg = this.actionRegistry;
-    const runReg = (a: Action) => {
-      if (this.actionContext) {
-        void reg.invoke(a, 'xr-primary', this.actionContext, this.actionContext.ui.get());
-      }
-    };
-    const primaryHandles: { action: Action; btn: UIPanel; icon: XRImage; primary: boolean; restFill: string }[] = [];
-    for (const a of reg.forSurface('xr-primary')) {
-      const primary = a.id === 'slice_active_plate';
-      const restFill = '#ffffff14';
-      const btn = new UIPanel({
-        // Sized to the desk it sits on: five verbs share 400 layout px, so the
-        // padding is what gives and the label stays on one line.
-        flexGrow: 1,
-        flexShrink: 1,
-        paddingLeft: 8,
-        paddingRight: 8,
-        paddingTop: 11,
-        paddingBottom: 11,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        cornerRadius: 10,
-        fillColor: primary ? '#ffb74d' : restFill,
-        strokeWidth: primary ? 0 : 1,
-        strokeColor: primary ? '#ffb74d' : '#ffffff1a',
-        onClick: () => {
-          runReg(a);
-          return true;
-        },
-        onHoverEnter: () => {
-          if (
-            this.actionContext &&
-            reg.availability(a, 'xr-primary', this.actionContext.ui.get()).state === 'enabled'
-          ) {
-            btn.setFillColor(primary ? '#ff6d00' : '#ffffff26');
-          }
-        },
-        onHoverExit: () => {
-          /* active-aware color restored by refresh below */
-        },
-      });
-      const icon = new XRImage(xrIcon(a.icon), {
-        color: primary ? '#000000' : '#ffffff',
-        width: 18,
-        height: 18,
-        flexShrink: 0,
-      });
-      btn.add(icon);
-      btn.add(
-        new UIText(a.label, {
-          fontSize: 14,
-          fontWeight: 'bold',
-          color: primary ? '#000000' : '#ffffff',
-          flexShrink: 0,
-        }),
-      );
-      primaryHandles.push({ action: a, btn, icon, primary, restFill });
-      // Load must end the immersive session before the file picker (browsers
-      // suppress dialogs in XR); the per-frame ray probe watches this node.
-      if (a.id === 'load_model_from_path') this.loadButtonNode = btn as unknown as THREE.Object3D;
-      btnRow.add(btn);
-    }
-    // The immersive bar shares the DOM shell's readiness rules. A bright Slice
-    // button on an empty plate is a false affordance, particularly in-headset
-    // where the status line is farther from the user's focal point.
-    const refreshPrimary = () => {
-      if (!this.actionContext) return;
-      const state = this.actionContext.ui.get();
-      for (const h of primaryHandles) {
-        const enabled = reg.availability(h.action, 'xr-primary', state).state === 'enabled';
-        h.btn.setProperties({ opacity: enabled ? 1 : 0.38 });
-        h.btn.setFillColor(enabled ? (h.primary ? '#ffb74d' : h.restFill) : '#ffffff08');
-        h.icon.setColor(enabled ? (h.primary ? '#000000' : '#ffffff') : '#8a94a0');
-      }
-    };
-    this.registerActionStateRefresher(refreshPrimary);
-
-    // Live status line + slice progress (relocated here from the old action
-    // panel so it's always visible, matching the design's bottom status text).
-    const statusRow = new UIPanel({ width: '100%', flexDirection: 'column', gap: 6, paddingLeft: 6, paddingRight: 6 });
-    this.statusText = new UIText('Ready. Load a model to begin.', { fontSize: 14, color: '#a0aab5' });
-    statusRow.add(this.statusText);
-    this.progressBar = new UIPanel({ width: '0%', height: 4, fillColor: '#ffb74d', cornerRadius: 2 });
-    this.progressContainer = new UIPanel({ width: '100%', height: 4, fillColor: '#ffffff1a', cornerRadius: 2 });
-    this.progressContainer.add(this.progressBar);
-    this.progressContainer.visible = false;
-    statusRow.add(this.progressContainer);
-    root.add(statusRow);
-  }
-
-  private addSliceModal() {
-    const card = this.uiCore.createCard({
-      name: 'SliceModal',
-      ...this.xrCardGeometry('progress'),
-      position: new THREE.Vector3(0, PLATE_Y + 0.35, PLATE_Z + 0.3),
-      alignItems: 'center',
-      justifyContent: 'center',
-      behaviors: [new ManipulationBehavior({ draggable: true, faceCamera: true })],
-    });
-    // `createCard` already registers the card with UICore. There is no
-    // separate uiGroup in the web workspace; attempting to add it again used
-    // to throw here and left the XR slice feedback surface half-constructed.
-    const root = new UIPanel({
-      width: '100%',
-      height: '100%',
-      padding: 24,
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
-      fillColor: '#1e1e1eed', // dark glassmorphism
-      cornerRadius: 16,
-      strokeWidth: 1,
-      strokeColor: '#ffffff1a',
-      gap: 16,
-    });
-    card.add(root);
-
-    root.add(new UIText('Slicing in Progress', { fontSize: 24, fontWeight: 'bold', color: '#ffffff' }));
-
-    this.sliceModalText = new UIText('Initializing...', { fontSize: 16, color: '#a0aab5', textAlign: 'center' });
-    root.add(this.sliceModalText);
-
-    this.sliceModalProgressContainer = new UIPanel({
-      width: '100%',
-      height: 8,
-      fillColor: '#ffffff1a',
-      cornerRadius: 4,
-      marginTop: 12,
-    });
-    this.sliceModalBar = new UIPanel({ width: '0%', height: 8, fillColor: '#ffb74d', cornerRadius: 4 });
-    this.sliceModalProgressContainer.add(this.sliceModalBar);
-    this.sliceModalProgressContainer.visible = false;
-    root.add(this.sliceModalProgressContainer);
-
-    this.sliceModalCard = card;
-    card.hide();
-  }
-
-  private addLeftToolbar() {
-    const card = this.uiCore.createCard({
-      name: 'LeftToolbar',
-      ...this.xrCardGeometry('tools'),
-      position: new THREE.Vector3(-0.85, PLATE_Y + 0.15, PLATE_Z + 0.1),
-      alignItems: 'center',
-      behaviors: [
-        new ManipulationBehavior({
-          draggable: true,
-          faceCamera: true,
-          manipulationMargin: 10,
-          manipulationCornerRadius: 12,
-        }),
-      ],
-    });
-    card.visible = false;
-    this.leftToolbarCard = card;
-
-    const root = new UIPanel({
-      width: '100%',
-      height: '100%',
-      flexDirection: 'column',
-      fillColor: '#0d141cE6',
-      cornerRadius: 18,
-      padding: 10,
-      gap: 6,
-      strokeWidth: 1,
-      strokeColor: '#ffffff14',
-      // This rail is intentionally finite: the full action catalogue lives in
-      // the top menu panel. A scrolling column of large spatial buttons is
-      // unusable in-headset and wastes layout work every frame.
-      overflow: 'hidden',
-    });
-    card.add(root);
-
-    const divider = () => new UIPanel({ width: '100%', height: 1, fillColor: '#ffffff1a' });
-    const heading = (t: string) => new UIText(t, { fontSize: 11, fontWeight: 'bold', color: '#8a94a0' });
-
-    // Tool rail rendered from the shared ActionRegistry — the same catalogue the
-    // DOM shell renders — so the two shells can't drift. Clicks run through the
-    // injected ActionContext (read at click time; set by main.ts after build).
-    const runAction = (a: Action) => {
-      if (this.actionContext) {
-        void this.actionRegistry.invoke(a, 'xr-toolbar', this.actionContext, this.actionContext.ui.get());
-      }
-    };
-    const toolbar = xrToolRailActions(this.actionRegistry.forSurface('xr-toolbar'));
-
-    // Modal tool gizmos (move/rotate/scale/lay-flat/paint) — the `.tool` actions.
-    root.add(heading('TOOLS'));
-    for (const a of toolbar) {
-      if (!a.tool) continue;
-      const h = renderXrActionButton(a, runAction, xrBlocksUiAdapter, {
-        size: 54,
-        iconSize: 28,
-        enabled: this.actionContext
-          ? this.actionRegistry.availability(a, 'xr-toolbar', this.actionContext.ui.get()).state === 'enabled'
-          : false,
-        onHoverExit: () => this.refreshToolButtons(),
-      });
-      root.add(h.btn);
-      this.toolButtons.push(h);
-    }
-
-    // Keep only the two high-frequency object actions beside the modal tools.
-    // The rest of the toolbar catalogue remains reachable via the top menu,
-    // avoiding a floor-length, overflowing rail in XR.
-    root.add(divider());
-    for (const a of toolbar) {
-      if (a.tool || !['drop_to_bed', 'delete_models'].includes(a.id)) continue;
-      const h = renderXrActionButton(a, runAction, xrBlocksUiAdapter, {
-        size: 54,
-        iconSize: 28,
-        danger: a.id === 'delete_models',
-        enabled: this.actionContext
-          ? this.actionRegistry.availability(a, 'xr-toolbar', this.actionContext.ui.get()).state === 'enabled'
-          : false,
-      });
-      root.add(h.btn);
-      this.toolButtons.push(h);
-    }
-
-    // Paint colours — the filament slots doubling as the paint palette. Fixed
-    // swatch sizes wrap cleanly at this rail width. It is only visible when
-    // Paint is active, preserving a compact neutral rail.
-    root.add(divider());
-    root.add(heading('COLORS'));
-    this.paintOptionsPanel = new UIPanel({
-      width: '100%',
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-    });
-    this.paintOptionsPanel.visible = false;
-    root.add(this.paintOptionsPanel);
-    this.rebuildPaintSwatches();
-    this.registerActionStateRefresher(() => this.refreshToolButtons());
-  }
-
-  /** The dropdown panel the top-bar menu triggers populate one section at a
-   *  time. Built hidden; `toggleMenu` anchors it under the strip and shows it.
-   *  This replaces the old always-open, full-height action list. */
-  private addActionPanel() {
-    const card = this.uiCore.createCard({
-      name: 'MenuPanel',
-      ...this.xrCardGeometry('sheet'),
-      position: new THREE.Vector3(0, PLATE_Y + 0.25, PLATE_Z + 0.1),
-      alignItems: 'center',
-      behaviors: [
-        new ManipulationBehavior({
-          draggable: true,
-          faceCamera: true,
-          manipulationMargin: 16,
-          manipulationCornerRadius: 16,
-        }),
-      ],
-    });
-    card.visible = false;
-    this.rightSidebarCard = card; // reused as the toggled dropdown panel
-
-    const root = new UIPanel({
-      width: '100%',
-      flexDirection: 'column',
-      fillColor: '#0d141cF2',
-      cornerRadius: 18,
-      padding: 16,
-      gap: 6,
-      strokeWidth: 1,
-      strokeColor: '#ffffff14',
-      overflow: 'scroll',
-      height: '100%',
-    });
-    card.add(root);
-
-    const header = new UIPanel({
-      width: '100%',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingBottom: 4,
-    });
-    this.menuPanelTitle = new UIText('Menu', { fontSize: 22, fontWeight: 'bold', color: '#ffffff' });
-    header.add(this.menuPanelTitle);
-    const closeBtn = new UIPanel({
-      width: 34,
-      height: 34,
-      justifyContent: 'center',
-      alignItems: 'center',
-      cornerRadius: 8,
-      fillColor: '#ffffff14',
-      onClick: () => {
-        this.closeMenu();
-        return true;
-      },
-      onHoverEnter: () => {
-        closeBtn.setFillColor('#ffffff26');
-      },
-      onHoverExit: () => {
-        closeBtn.setFillColor('#ffffff14');
-      },
-    });
-    closeBtn.add(new XRImage(xrIcon('close'), { color: '#ffffff', width: 18, height: 18 }));
-    header.add(closeBtn);
-    root.add(header);
-
-    // Rows are (re)built per section by populateMenuPanel().
-    this.menuPanelRoot = new UIPanel({ width: '100%', flexDirection: 'column', gap: 6 });
-    root.add(this.menuPanelRoot);
-  }
-
-  private addProfilePanel() {
-    const card = this.uiCore.createCard({
-      name: 'ProfilePanel',
-      ...this.xrCardGeometry('inspector'),
-      position: new THREE.Vector3(0.95, PLATE_Y + 0.15, PLATE_Z + 0.1),
-      alignItems: 'center',
-      behaviors: [
-        new ManipulationBehavior({
-          draggable: true,
-          faceCamera: true,
-          manipulationMargin: 16,
-          manipulationCornerRadius: 16,
-        }),
-      ],
-    });
-    card.visible = false;
-    this.profileCard = card;
-
-    const root = new UIPanel({
-      width: '100%',
-      flexDirection: 'column',
-      fillColor: '#0d141cE6',
-      cornerRadius: 18,
-      padding: 24,
-      gap: 20,
-      strokeWidth: 1,
-      strokeColor: '#ffffff14',
-      overflow: 'scroll',
-      height: '100%',
-    });
-    card.add(root);
-
+  /**
+   * The active machine / process / filament, and the heads they imply.
+   *
+   * A page rather than a floating card: profiles belong to the machine, so they
+   * are read where the machine is — on the Device sheet, above its telemetry —
+   * instead of on a fourth panel competing with the inspector for the same arc
+   * of the operator's field of view.
+   */
+  private buildXrProfilePanel(root: UIPanel) {
+    this.xrProfileValueLabels = [];
     const header = new UIPanel({ width: '100%', flexDirection: 'row', alignItems: 'center' });
-    header.add(new UIText('Profiles', { fontSize: 32, fontWeight: 'bold', color: '#ffffff' }));
+    header.add(new UIText('Profiles', { fontSize: 22, fontWeight: 'bold', color: '#ffffff' }));
     root.add(header);
 
     const intro = new UIText('Pinch a row to cycle its active profile.', { fontSize: 14, color: '#a0aab5' });
@@ -8242,45 +7578,21 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /**
-   * The spatial printer status card (P9.7).
+   * The guarded printer controls (P9.7).
    *
-   * It renders exactly what the phone bar renders — the same summary, the same
+   * They render exactly what the phone bar renders — the same summary, the same
    * guarded actions — because both come from `PrinterStatusSummary`. What
    * differs is only the gesture: a controller ray hovers a control and the
    * trigger is *held*, which is why the hold lives in a shared state machine
    * rather than in either shell.
+   *
+   * The redesign collapses the printer's *summary* into the menu bar, where it
+   * cannot end up over the operator's shoulder. Its *controls* stay a page:
+   * pausing a running print is not something to put one pinch away from the
+   * tool rail, and the Device tab is where an operator goes to do it.
    */
-  private addPrinterStatusPanel() {
-    const card = this.uiCore.createCard({
-      name: 'PrinterStatusPanel',
-      ...this.xrCardGeometry('status'),
-      position: new THREE.Vector3(-0.95, PLATE_Y + 0.3, PLATE_Z + 0.1),
-      alignItems: 'center',
-      behaviors: [
-        new ManipulationBehavior({
-          draggable: true,
-          faceCamera: true,
-          manipulationMargin: 16,
-          manipulationCornerRadius: 16,
-        }),
-      ],
-    });
-    card.visible = false;
-    this.printerStatusCard = card;
-
-    const root = new UIPanel({
-      width: '100%',
-      height: '100%',
-      flexDirection: 'column',
-      fillColor: '#0d141cF2',
-      cornerRadius: 18,
-      padding: 18,
-      gap: 8,
-      strokeWidth: 1,
-      strokeColor: '#ffffff14',
-    });
-    card.add(root);
-
+  private buildXrPrinterStatusPanel(root: UIPanel) {
+    this.printerStatusHoldFills.clear();
     this.printerStatusHeadline = new UIText('Printer', { fontSize: 22, fontWeight: 'bold', color: '#ffffff' });
     root.add(this.printerStatusHeadline);
     this.printerStatusDetail = new UIText('', { fontSize: 14, color: '#a0aab5' });
@@ -8308,20 +7620,15 @@ export class OrcaWorkspace extends xb.Script {
     this.refreshPrinterStatusCard();
   }
 
-  /** Repaint the spatial card from the shell's live status (P9.7). */
+  /** Repaint the guarded controls from the shell's live status (P9.7). */
   public refreshPrinterStatusCard(): void {
-    const card = this.printerStatusCard;
-    if (!card) return;
+    // The menu bar's status chip is repainted by the shell; these are the
+    // controls, and they only exist while the Device page is open.
+    this.xrShell?.refreshState();
+    if (!this.printerStatusHeadline) return;
     const live = this.onReadPrinterStatus?.();
-    if (!live) {
-      card.visible = false;
-      return;
-    }
+    if (!live) return;
     const { summary, actions } = live;
-    // Same rule as the phone bar: present itself when something is happening,
-    // and get out of the way of the plate when nothing is.
-    if (summary.present) card.show();
-    else card.hide();
     if (!summary.present) {
       this.printerHold.cancel();
       this.printerHoldTarget = null;
@@ -8434,14 +7741,6 @@ export class OrcaWorkspace extends xb.Script {
     for (const [key, fill] of this.printerStatusHoldFills) {
       fill.setProperties({ width: key === command ? `${Math.round(progress * 100)}%` : '0%' });
     }
-  }
-
-  private toggleProfilePanel() {
-    if (!this.profileCard) return;
-    const visible = !!this.profileCard.visible;
-    if (visible) this.profileCard.hide();
-    else this.profileCard.show();
-    this.closeMenu();
   }
 
   private refreshXrProfileValues() {
@@ -8710,7 +8009,8 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
   private checkLoadButtonAndTrigger() {
-    if (!this.loadButtonNode || !this.onRequestLoadStl) return;
+    const loadButton = this.xrShell?.loadButton as unknown as THREE.Object3D | null | undefined;
+    if (!loadButton || !this.onRequestLoadStl) return;
     const invokeLoadAction = () => {
       const ctx = this.actionContext;
       if (!ctx) return;
@@ -8725,7 +8025,7 @@ export class OrcaWorkspace extends xb.Script {
       const hitLoad = ints.some((i) => {
         let o: THREE.Object3D | null = i.object;
         while (o) {
-          if (o === this.loadButtonNode) return true;
+          if (o === loadButton) return true;
           o = o.parent;
         }
         return false;
@@ -8749,31 +8049,9 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
+  /** The rail restyles from registry availability and the active tool. */
   private refreshToolButtons() {
-    const state = this.actionContext?.ui.get();
-    for (const handle of this.toolButtons) {
-      const { action } = handle;
-      const enabled = state ? this.actionRegistry.availability(action, 'xr-toolbar', state).state === 'enabled' : false;
-      const active = enabled && Boolean(action.tool) && this.tool === action.tool;
-      handle.setEnabled(enabled);
-      handle.setSelected(active);
-    }
-    if (this.paintOptionsPanel) {
-      this.paintOptionsPanel.visible = this.tool === 'paint';
-      this.refreshPaintSwatches();
-    }
-  }
-
-  private refreshPaintSwatches() {
-    for (const { filamentId, btn } of this.paintSwatches) {
-      btn.setStrokeColor(filamentId === this.paintFilamentId ? '#ffffff' : '#444444');
-    }
-  }
-
-  private showValues(text: string) {
-    if (this.valueText && this.rightSidebarCard && !this.rightSidebarCard.visible) {
-      this.valueText.setText(text);
-    }
+    this.xrShell?.draw();
   }
 
   private lastStatusText = '';
@@ -8786,37 +8064,12 @@ export class OrcaWorkspace extends xb.Script {
   // status lines — e.g. coming-soon parity placeholders and feature stubs.
   public setStatus(text: string, percent?: number) {
     this.lastStatusText = text;
-    // Troika's XR font atlas does not include a few typographic symbols used
-    // by profile display names (notably ·, ×, —, –). Keep DOM status text intact
-    // but feed the immersive card a supported, equally legible equivalent.
-    const xrText = text
-      .replaceAll('·', '-')
-      .replaceAll('×', 'x')
-      .replaceAll('…', '...')
-      .replaceAll('—', '-')
-      .replaceAll('–', '-');
-    if (this.statusText) {
-      this.statusText.setText(xrText);
-    }
-    if (this.progressContainer && this.progressBar) {
-      if (percent !== undefined && percent >= 0 && percent <= 100) {
-        this.progressContainer.visible = true;
-        this.progressBar.setProperties({ width: `${percent}%` });
-      } else {
-        this.progressContainer.visible = false;
-      }
-    }
-    if (this.sliceModalText) {
-      this.sliceModalText.setText(xrText);
-    }
-    if (this.sliceModalProgressContainer && this.sliceModalBar) {
-      if (percent !== undefined && percent >= 0 && percent <= 100) {
-        this.sliceModalProgressContainer.visible = true;
-        this.sliceModalBar.setProperties({ width: `${percent}%` });
-      } else {
-        this.sliceModalProgressContainer.visible = false;
-      }
-    }
+    this.lastStatusPercent = percent;
+    // Slice progress lives on the desk rather than on a modal panel in the
+    // middle of the view: a slice takes tens of seconds and the interesting
+    // part is the toolpath appearing, so covering the plate to report on the
+    // plate is the wrong trade.
+    this.xrShell?.refreshState();
     if (this.onStatusChanged) {
       this.onStatusChanged(text, percent);
     }
@@ -9984,7 +9237,6 @@ export class OrcaWorkspace extends xb.Script {
     try {
       this.markPublishedGcodeStale();
       this.onSliceStateChanged?.(true);
-      this.sliceModalCard?.show();
       const result = await slicer.startCurrentPlate().completion;
       const plate = result.plates[0];
       if (!plate) throw new Error('The canonical slicer returned no active-plate output.');
@@ -10022,7 +9274,6 @@ export class OrcaWorkspace extends xb.Script {
       slicer.dispose();
       if (this.activeCanonicalSlicer === slicer) this.activeCanonicalSlicer = null;
       this.onSliceStateChanged?.(false);
-      this.sliceModalCard?.hide();
     }
   }
 
@@ -10055,7 +9306,6 @@ export class OrcaWorkspace extends xb.Script {
     try {
       this.markPublishedGcodeStale();
       this.onSliceStateChanged?.(true);
-      this.sliceModalCard?.show();
       const result = await slicer.startAllPlates().completion;
       if (result.plates.length === 0) throw new Error('The canonical slicer returned no plate output.');
       const guard = {
@@ -10098,7 +9348,6 @@ export class OrcaWorkspace extends xb.Script {
       slicer.dispose();
       if (this.activeCanonicalSlicer === slicer) this.activeCanonicalSlicer = null;
       this.onSliceStateChanged?.(false);
-      this.sliceModalCard?.hide();
     }
   }
 

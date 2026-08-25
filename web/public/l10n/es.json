@@ -79,6 +79,21 @@
   "ui.workspaceViews.prepare": "Preparar",
   "ui.workspaceViews.preview": "Previsualización",
   "ui.workspaceViews.project": "Proyecto",
+  "ui.xrKeypad.apply": "Aplicar",
+  "ui.xrKeypad.cancel": "Cancelar",
+  "ui.xrKeypad.space": "Espacio",
+  "ui.xrMenuBar.mode.device": "Dispositivo",
+  "ui.xrMenuBar.mode.prepare": "Preparar",
+  "ui.xrMenuBar.mode.preview": "Previsualización",
+  "ui.xrMenuBar.mode.project": "Proyecto",
+  "ui.xrMenuBar.noPrinter": "Sin impresora",
+  "ui.xrObjectsPanel.selection": "Selección",
+  "ui.xrPanels.objects": "Objetos",
+  "ui.xrPanels.settings": "Ajustes",
+  "ui.xrToolRail.group.more": "Más",
+  "ui.xrToolRail.group.paint": "Pintar",
+  "ui.xrToolRail.group.plate": "Bandeja",
   "workspace.orcaWorkspace.defaultFilament": "Por defecto",
-  "workspace.orcaWorkspace.selectedScopes": "seleccionado"
+  "workspace.orcaWorkspace.selectedScopes": "seleccionado",
+  "workspace.orcaWorkspace.selection": "Selección"
 }

@@ -80,6 +80,21 @@
   "ui.workspaceViews.prepare": "Paruošimas",
   "ui.workspaceViews.preview": "Peržiūra",
   "ui.workspaceViews.project": "Projektas",
+  "ui.xrKeypad.apply": "Taikyti",
+  "ui.xrKeypad.cancel": "Atšaukti",
+  "ui.xrKeypad.space": "Tarpas",
+  "ui.xrMenuBar.mode.device": "Įrenginys",
+  "ui.xrMenuBar.mode.prepare": "Paruošimas",
+  "ui.xrMenuBar.mode.preview": "Peržiūra",
+  "ui.xrMenuBar.mode.project": "Projektas",
+  "ui.xrMenuBar.noPrinter": "Nepasirinktas spausdintuvas",
+  "ui.xrObjectsPanel.selection": "Pasirinkimas",
+  "ui.xrPanels.objects": "Objektai",
+  "ui.xrPanels.settings": "Nustatymai",
+  "ui.xrToolRail.group.more": "Daugiau",
+  "ui.xrToolRail.group.paint": "Piešti",
+  "ui.xrToolRail.group.plate": "Plokštė",
   "workspace.orcaWorkspace.defaultFilament": "Numatytas",
-  "workspace.orcaWorkspace.selectedScopes": "pasirinkta"
+  "workspace.orcaWorkspace.selectedScopes": "pasirinkta",
+  "workspace.orcaWorkspace.selection": "Pasirinkimas"
 }

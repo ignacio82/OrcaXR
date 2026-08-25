@@ -82,6 +82,21 @@
   "ui.workspaceViews.prepare": "准备",
   "ui.workspaceViews.preview": "预览",
   "ui.workspaceViews.project": "项目",
+  "ui.xrKeypad.apply": "应用",
+  "ui.xrKeypad.cancel": "取消",
+  "ui.xrKeypad.space": "间隔",
+  "ui.xrMenuBar.mode.device": "设备",
+  "ui.xrMenuBar.mode.prepare": "准备",
+  "ui.xrMenuBar.mode.preview": "预览",
+  "ui.xrMenuBar.mode.project": "项目",
+  "ui.xrMenuBar.noPrinter": "无打印机",
+  "ui.xrObjectsPanel.selection": "选中",
+  "ui.xrPanels.objects": "对象",
+  "ui.xrPanels.settings": "设置",
+  "ui.xrToolRail.group.more": "详情",
+  "ui.xrToolRail.group.paint": "绘制",
+  "ui.xrToolRail.group.plate": "盘",
   "workspace.orcaWorkspace.defaultFilament": "缺省",
-  "workspace.orcaWorkspace.selectedScopes": "已选中"
+  "workspace.orcaWorkspace.selectedScopes": "已选中",
+  "workspace.orcaWorkspace.selection": "选中"
 }

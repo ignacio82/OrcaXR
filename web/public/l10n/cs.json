@@ -72,6 +72,21 @@
   "ui.workspaceViews.prepare": "Připravit",
   "ui.workspaceViews.preview": "Náhled",
   "ui.workspaceViews.project": "Projekt",
+  "ui.xrKeypad.apply": "Použít",
+  "ui.xrKeypad.cancel": "Zrušit",
+  "ui.xrKeypad.space": "Mezerník",
+  "ui.xrMenuBar.mode.device": "Zařízení",
+  "ui.xrMenuBar.mode.prepare": "Připravit",
+  "ui.xrMenuBar.mode.preview": "Náhled",
+  "ui.xrMenuBar.mode.project": "Projekt",
+  "ui.xrMenuBar.noPrinter": "Žádná tiskárna",
+  "ui.xrObjectsPanel.selection": "Výběr",
+  "ui.xrPanels.objects": "Objekty",
+  "ui.xrPanels.settings": "Nastavení",
+  "ui.xrToolRail.group.more": "Více",
+  "ui.xrToolRail.group.paint": "Malovat",
+  "ui.xrToolRail.group.plate": "Podložka",
   "workspace.orcaWorkspace.defaultFilament": "Výchozí",
-  "workspace.orcaWorkspace.selectedScopes": "vybráno"
+  "workspace.orcaWorkspace.selectedScopes": "vybráno",
+  "workspace.orcaWorkspace.selection": "Výběr"
 }

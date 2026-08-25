@@ -82,6 +82,21 @@
   "ui.workspaceViews.prepare": "Hazırlık",
   "ui.workspaceViews.preview": "Ön İzleme",
   "ui.workspaceViews.project": "Proje",
+  "ui.xrKeypad.apply": "Uygula",
+  "ui.xrKeypad.cancel": "İptal",
+  "ui.xrKeypad.space": "Boşluk",
+  "ui.xrMenuBar.mode.device": "Cihaz",
+  "ui.xrMenuBar.mode.prepare": "Hazırlık",
+  "ui.xrMenuBar.mode.preview": "Ön İzleme",
+  "ui.xrMenuBar.mode.project": "Proje",
+  "ui.xrMenuBar.noPrinter": "Yazıcı yok",
+  "ui.xrObjectsPanel.selection": "Seçim",
+  "ui.xrPanels.objects": "Nesneler",
+  "ui.xrPanels.settings": "Ayarlar",
+  "ui.xrToolRail.group.more": "Daha",
+  "ui.xrToolRail.group.paint": "Boyama",
+  "ui.xrToolRail.group.plate": "Plaka",
   "workspace.orcaWorkspace.defaultFilament": "Varsayılan",
-  "workspace.orcaWorkspace.selectedScopes": "Seçili"
+  "workspace.orcaWorkspace.selectedScopes": "Seçili",
+  "workspace.orcaWorkspace.selection": "Seçim"
 }

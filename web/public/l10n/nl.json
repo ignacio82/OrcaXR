@@ -71,6 +71,21 @@
   "ui.workspaceViews.prepare": "Voorbereiden",
   "ui.workspaceViews.preview": "Voorvertoning",
   "ui.workspaceViews.project": "Project",
+  "ui.xrKeypad.apply": "Toepassen",
+  "ui.xrKeypad.cancel": "Annuleren",
+  "ui.xrKeypad.space": "Ruimte",
+  "ui.xrMenuBar.mode.device": "Apparaat",
+  "ui.xrMenuBar.mode.prepare": "Voorbereiden",
+  "ui.xrMenuBar.mode.preview": "Voorvertoning",
+  "ui.xrMenuBar.mode.project": "Project",
+  "ui.xrMenuBar.noPrinter": "Geen printer",
+  "ui.xrObjectsPanel.selection": "Selectie",
+  "ui.xrPanels.objects": "Objecten",
+  "ui.xrPanels.settings": "Instellingen",
+  "ui.xrToolRail.group.more": "Meer",
+  "ui.xrToolRail.group.paint": "Tekenen",
+  "ui.xrToolRail.group.plate": "Printbed",
   "workspace.orcaWorkspace.defaultFilament": "Standaard",
-  "workspace.orcaWorkspace.selectedScopes": "geselecteerd"
+  "workspace.orcaWorkspace.selectedScopes": "geselecteerd",
+  "workspace.orcaWorkspace.selection": "Selectie"
 }

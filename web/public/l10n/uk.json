@@ -79,6 +79,21 @@
   "ui.workspaceViews.prepare": "Підготовка",
   "ui.workspaceViews.preview": "Попередній перегляд",
   "ui.workspaceViews.project": "Проєкт",
+  "ui.xrKeypad.apply": "Застосувати",
+  "ui.xrKeypad.cancel": "Скасувати",
+  "ui.xrKeypad.space": "Пробіл",
+  "ui.xrMenuBar.mode.device": "Пристрій",
+  "ui.xrMenuBar.mode.prepare": "Підготовка",
+  "ui.xrMenuBar.mode.preview": "Попередній перегляд",
+  "ui.xrMenuBar.mode.project": "Проєкт",
+  "ui.xrMenuBar.noPrinter": "Принтер не вибраний",
+  "ui.xrObjectsPanel.selection": "Вибір",
+  "ui.xrPanels.objects": "Об'єкти",
+  "ui.xrPanels.settings": "Налаштування",
+  "ui.xrToolRail.group.more": "Більше",
+  "ui.xrToolRail.group.paint": "Малювання",
+  "ui.xrToolRail.group.plate": "Пластина",
   "workspace.orcaWorkspace.defaultFilament": "За замовчуванням",
-  "workspace.orcaWorkspace.selectedScopes": "вибрані"
+  "workspace.orcaWorkspace.selectedScopes": "вибрані",
+  "workspace.orcaWorkspace.selection": "Вибір"
 }
