@@ -6,7 +6,22 @@ services:
     container_name: orcaxr
     init: true
     ports:
-      - "127.0.0.1:3000:3000"
+      # Published to the whole LAN, deliberately, and it must stay consistent
+      # with the two settings below it: `HOST=0.0.0.0` plus
+      # `ORCAXR_ACCEPT_LAN_EXPOSURE=yes-i-understand` is the server's own
+      # acknowledgement that `same-origin` trust is being used off loopback,
+      # which means **any machine on this network can slice without a token**
+      # (server.js logs that warning on every boot). Publishing on 127.0.0.1
+      # while the environment says otherwise was the worst of both: the
+      # acknowledgement was on record and the port was still unreachable from
+      # the headset or a phone.
+      #
+      # For a deployment that should NOT be open to the LAN, revert this to
+      # "127.0.0.1:3000:3000" *and* drop ORCAXR_ACCEPT_LAN_EXPOSURE, then reach
+      # it over Tailscale Serve (see docs/all-in-one-container-plan.md), or
+      # switch to ORCAXR_TRUST=token with ORCAXR_SERVER_TOKEN and an explicit
+      # ORCAXR_ALLOWED_ORIGINS.
+      - "0.0.0.0:3000:3000"
     environment:
       - HOST=0.0.0.0
       - PORT=3000
