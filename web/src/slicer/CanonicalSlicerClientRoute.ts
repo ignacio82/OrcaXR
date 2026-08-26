@@ -9,6 +9,7 @@ import {
   type SliceRouteRequest,
   type SliceRouteResponse,
 } from '../project/slicing/types';
+import { encodeThumbnailBlock, injectGcodeThumbnails, type GcodeThumbnailRequest } from './GcodeThumbnails';
 import {
   SlicerClient,
   SlicerClientCancellationError,
@@ -39,8 +40,26 @@ export interface CanonicalProjectSlicerClientPort {
   ): Promise<string>;
 }
 
+/**
+ * The engine's missing `thumbnail_cb`, supplied by whoever owns the scene.
+ *
+ * `libslic3r` only writes a thumbnail when the host hands it one, and the WASM
+ * build has no GUI to render it — so the picture a printer's display shows has
+ * to be produced in the browser and put into the file here. Attaching it at the
+ * route means the thumbnail is inside the artifact the coordinator hashes, so
+ * downloading, previewing and sending all carry the same bytes.
+ */
+export interface SliceThumbnailPort {
+  /** The sizes and formats the active printer's `thumbnails` value asks for. */
+  requests(): readonly GcodeThumbnailRequest[];
+  /** `null` when there is nothing on the plate worth a picture. */
+  render(request: GcodeThumbnailRequest): Promise<Uint8Array | null>;
+}
+
 export interface CanonicalSlicerClientRouteOptions {
   readonly client: CanonicalProjectSlicerClientPort;
+  /** Omitted in headless hosts and tests; the G-code then carries no thumbnail. */
+  readonly thumbnails?: SliceThumbnailPort;
   /** Defaults to the preference-backed route captured at construction. */
   readonly route?: SlicerClientProjectRoute;
   /** External servers must supply an independently obtained engine attestation. */
@@ -80,6 +99,30 @@ export class CanonicalSlicerClientRoute implements SliceRouteAdapterPort {
       protocolVersion: SLICE_PROTOCOL_VERSION,
       engine: Object.freeze({ ...engine }),
     });
+  }
+
+  /**
+   * Put the plate's picture in the file, if this host can draw one.
+   *
+   * Deliberately best-effort: a thumbnail is what a display shows, not what a
+   * printer prints, and losing a WebGL context or a canvas must not turn a
+   * finished slice into a failed one. A failure leaves the G-code exactly as
+   * the engine wrote it, which is the behaviour every build had until now.
+   */
+  private async withThumbnails(gcodeText: string): Promise<string> {
+    const port = this.options.thumbnails;
+    if (!port) return gcodeText;
+    try {
+      const blocks: string[] = [];
+      for (const request of port.requests()) {
+        const image = await port.render(request);
+        if (image && image.byteLength > 0) blocks.push(encodeThumbnailBlock(request, image));
+      }
+      return injectGcodeThumbnails(gcodeText, blocks);
+    } catch (error) {
+      console.warn('[orcaxr] could not render a G-code thumbnail; the file will carry none', error);
+      return gcodeText;
+    }
   }
 
   async execute(
@@ -126,7 +169,7 @@ export class CanonicalSlicerClientRoute implements SliceRouteAdapterPort {
         const reason = signalReason(signal);
         throw new SliceRouteCancellationError('Canonical slice route cancelled after engine completion', false, reason);
       }
-      const gcode = encoder.encode(gcodeText);
+      const gcode = encoder.encode(await this.withThumbnails(gcodeText));
       return {
         protocolVersion: SLICE_PROTOCOL_VERSION,
         jobId: request.jobId,

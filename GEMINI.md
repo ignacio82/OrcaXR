@@ -105,6 +105,29 @@ engine (`libslic3r` via WASM) as the computational core.
   gate that should have refused the print stayed silent. All three — planner, ghost,
   preflight — read `wipeTowerFootprintMarginMm`, so a placement one accepts is a
   placement the others accept. Mixed recipes use stable physical-head IDs, never virtual rows; live Match uses a bounded worker, while auto-pair generation defaults off and requires count-bound confirmation above four physical filaments. Refined facet selection uses the version-2 subdivided-facet and child-path encoding: source vertices precede float32 shared midpoints, commit applies leaf targets before recursively collapsing homogeneous children, and malformed/deep/shared/duplicate/unordered trees fail closed. Live UI and slicing share exact catalog-backed canonical preflight; ambiguous profile/build/nozzle mappings block, and Three/display defaults are never safety inputs. Preview projections consume rich typed columns and must return explicit unsupported metadata for missing exact filament colors or authoritative layer durations rather than inventing palette/time values. Split-to-objects must capture the exact revision/hash/selection/object scope before confirmation, revalidate it at commit, and leave canonical state untouched on cancel, stale input, unsupported metadata, or topology failure. Calibration requests bind exact definition version/fingerprint plus printer/nozzle/filament/process/firmware prerequisites; vendor automatic execution and any unsafe/stale/unbounded plan fail closed before canonical mutation. G-code inspection derives layer, move, tick, tool, source-window, and focus state from unrenumbered rich record IDs, retains only bounded source text, exposes incomplete prefixes, and never treats headless projection as proof of live controls. Official statistics require a same-export engine sidecar plus an opaque rich-source handle created by streaming SHA-256 over the exact UTF-8 G-code; source/source-asset identities use canonical FNV-1a64, project/config/output/artifact identities use SHA-256, and job/plate/revision/engine bindings also match. Sidecars are exact-key JSON with canonical dense capped arrays and finite bounded arithmetic; `plannerBlockCount` bounds float32 partitions and move subsets, `volumeSampleCount` bounds double material reconciliation, nonempty ordered custom segments cover planner total while a synthetic tail remains conditional, and sparse role-by-tool volumes equal model + support + wipe tower with flush excluded. Rich columns remain observations, missing assumptions propagate unavailable, detected conflicts are non-exhaustive/partial, and all-plate sums group by tool plus profile, expose partial silent coverage, retain a sole known cost unit while affected totals stay unavailable, and never reuse first-plate metadata.
+- **The G-code carries a picture of what it prints, and the browser is the only
+  thing that can draw it.** `GCode.cpp` writes a thumbnail only when it is handed a
+  `ThumbnailsGeneratorCallback`, and that callback is the *GUI* rendering the plate
+  offscreen — `libslic3r` has geometry, not a view. The WASM build has no GUI, so the
+  callback was null, the branch never ran, and every file reached the machine wearing
+  the firmware's stock image. `slicer/GcodeThumbnails.ts` is the engine's own writer
+  ported exactly (`THUMBNAIL_BLOCK_START`, `; thumbnail begin WxH <base64 length>`,
+  78-character rows, `thumbnail`/`thumbnail_JPG` tags, and the position after
+  `HEADER_BLOCK_END`), because a printer parses this by pattern and a near-miss shows
+  nothing at all — which is indistinguishable from the bug. `workspace/PlateThumbnailRenderer.ts`
+  is the other half: it clones the display meshes into a throwaway scene rather than
+  toggling `visible`/`layers` on live ones, so a throw cannot leave the workspace in a
+  wrong state, and it turns `renderer.xr.enabled` off around the render because
+  `WebGLRenderer.render` otherwise substitutes the XR camera for the one it was given.
+  The blocks are attached at `CanonicalSlicerClientRoute`, *before* the coordinator
+  hashes the artifact, so download, preview and send all carry the same bytes. Sizes
+  come from the printer's own `thumbnails` value (U1 `48x48/PNG, 300x300/PNG`, Centauri
+  `144x144`) — never a fixed size, and a format a canvas cannot produce is reported
+  rather than emitted under another format's tag. Thumbnailing is best-effort by
+  design: a lost WebGL context must not turn a finished slice into a failed one.
+  Note the bed is deliberately *not* drawn, unlike upstream's `show_bed: true` — this
+  app has two beds, and a thumbnail that depends on which shell you sliced from cannot
+  be compared with itself.
 - The live G-code viewer renders the bounded rich model plus the preview
   projection: `GcodePreviewSession` (UI-free) owns mode, layer window, and
   move-class filters, and `ui/preview/GcodePreviewSurface` draws exactly the

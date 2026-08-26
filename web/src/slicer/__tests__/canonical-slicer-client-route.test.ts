@@ -65,6 +65,63 @@ class RecordingClient implements CanonicalProjectSlicerClientPort {
   }
 }
 
+await test('the sliced file carries the plate’s picture, in the printer’s own sizes', async () => {
+  // The engine writes a thumbnail only when the host renders one for it, and
+  // the WASM build has no GUI — so without this the file reaches the machine
+  // with no picture and the display falls back to its stock image.
+  const client = new RecordingClient();
+  const rendered: string[] = [];
+  const adapter = new CanonicalSlicerClientRoute({
+    client,
+    route: { kind: 'browser-wasm' },
+    thumbnails: {
+      requests: () => [
+        { width: 48, height: 48, format: 'PNG' },
+        { width: 300, height: 300, format: 'PNG' },
+      ],
+      render: async (request) => {
+        rendered.push(`${request.width}x${request.height}`);
+        return new Uint8Array([request.width & 0xff, 0x42]);
+      },
+    },
+  });
+  const response = await adapter.execute(requestFor(adapter.metadata.engine), new AbortController().signal);
+  const gcode = new TextDecoder().decode(response.gcode);
+  assert.deepEqual(rendered, ['48x48', '300x300'], 'every size the printer asked for is drawn once');
+  assert.match(gcode, /; thumbnail begin 48x48 /);
+  assert.match(gcode, /; thumbnail begin 300x300 /);
+  assert.ok(gcode.includes('G1 X1 Y2 E3'), 'the program the engine produced is untouched');
+  // It is inside the artifact the coordinator hashes, so download, preview and
+  // send all carry the same bytes.
+  assert.equal(response.statistics.gcodeBytes, response.gcode.byteLength);
+});
+
+await test('an empty plate and a broken renderer both leave the slice intact', async () => {
+  const client = new RecordingClient();
+  const empty = new CanonicalSlicerClientRoute({
+    client,
+    route: { kind: 'browser-wasm' },
+    thumbnails: { requests: () => [{ width: 48, height: 48, format: 'PNG' }], render: async () => null },
+  });
+  const withoutImage = await empty.execute(requestFor(empty.metadata.engine), new AbortController().signal);
+  assert.doesNotMatch(new TextDecoder().decode(withoutImage.gcode), /THUMBNAIL_BLOCK_START/);
+
+  // A thumbnail is what a display shows, not what a printer prints: losing a
+  // WebGL context must not turn a finished slice into a failed one.
+  const broken = new CanonicalSlicerClientRoute({
+    client,
+    route: { kind: 'browser-wasm' },
+    thumbnails: {
+      requests: () => [{ width: 48, height: 48, format: 'PNG' }],
+      render: async () => {
+        throw new Error('context lost');
+      },
+    },
+  });
+  const survived = await broken.execute(requestFor(broken.metadata.engine), new AbortController().signal);
+  assert.ok(new TextDecoder().decode(survived.gcode).includes('G1 X1 Y2 E3'));
+});
+
 await test('browser adapter submits copied canonical bytes with tracked engine provenance and contextual progress', async () => {
   const client = new RecordingClient();
   const progress: CanonicalSlicerRouteProgress[] = [];

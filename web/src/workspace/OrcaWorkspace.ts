@@ -79,6 +79,9 @@ import {
   wipeTowerFootprintMarginMm,
   type WipeTowerPick,
 } from '../project/objects/wipeTowerPlacement';
+import { parseThumbnailList } from '../slicer/GcodeThumbnails';
+import type { SliceThumbnailPort } from '../slicer/CanonicalSlicerClientRoute';
+import { PlateThumbnailRenderer } from './PlateThumbnailRenderer';
 import { rotateVector } from '../project/objects/transformOperations';
 import { summarizeGcodeArtifact, type GcodeArtifactSummary } from '../slicer/GcodeArtifactSummary';
 import { GCODE_PREVIEW_MODES } from '../slicer/GcodePreviewModel';
@@ -9250,6 +9253,7 @@ export class OrcaWorkspace extends xb.Script {
     const slicer = new CanonicalWorkspaceSlicer({
       workspace: this.canonicalProject,
       client: this.slicer,
+      thumbnails: this.thumbnailPort(),
       route: { kind: 'browser-wasm' },
       maxThreads: 4,
       preflight,
@@ -9319,6 +9323,7 @@ export class OrcaWorkspace extends xb.Script {
     const slicer = new CanonicalWorkspaceSlicer({
       workspace: this.canonicalProject,
       client: this.slicer,
+      thumbnails: this.thumbnailPort(),
       route,
       maxThreads: 4,
       preflight: this.createLiveProfilePreflight(),
@@ -9494,6 +9499,34 @@ export class OrcaWorkspace extends xb.Script {
    * Auto-position the wipe tower on the active plate using Chebyshev clearance scoring.
    * Commits the updated position through canonical plate commands.
    */
+  /**
+   * The plate's picture, for the G-code's thumbnail block.
+   *
+   * Sizes come from the printer's own `thumbnails` value — the U1 asks for
+   * `48x48/PNG, 300x300/PNG`, the Centauri for `144x144` — because that is what
+   * the machine's display was built to read. A value the browser cannot honour
+   * is reported once rather than silently dropped: an unread thumbnail looks
+   * exactly like no thumbnail, and the operator would have no way to tell which
+   * they were looking at.
+   */
+  private thumbnailPort(): SliceThumbnailPort {
+    const renderer = new PlateThumbnailRenderer({
+      renderer: xb.core.renderer,
+      meshes: () => this.models.map((entry) => entry.display),
+    });
+    return {
+      requests: () => {
+        const config = this.canonicalProject.getSlicingConfiguration().config;
+        const { requests, problems } = parseThumbnailList(config.thumbnails ?? this.profile?.config?.thumbnails);
+        for (const problem of problems) {
+          console.warn(`[orcaxr] thumbnails: "${problem.entry}" is ${problem.reason}; it will not be written`);
+        }
+        return requests;
+      },
+      render: (request) => renderer.render(request),
+    };
+  }
+
   public autoPlaceWipeTower(plateId: PlateId = this.activePlateId): WipeTowerPick | undefined {
     try {
       const pick = this.canonicalProject.autoPlaceWipeTower(plateId, {

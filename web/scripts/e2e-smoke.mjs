@@ -1568,6 +1568,23 @@ async function sliceAndSendActivePlate(page, printer) {
       types: /^; filament_type = (.+)$/m.exec(gcode)?.[1].split(';') ?? [],
       pauses: (gcode.match(/^;PAUSE_PRINT$/gm) ?? []).length,
       pauseBody: /^;PAUSE_PRINT\n(.+)$/m.exec(gcode)?.[1] ?? '',
+      // The picture the printer's display shows. `libslic3r` cannot draw one —
+      // it has geometry, not a view — so this only exists if the browser
+      // rendered the plate and the route wrote the block the firmware reads.
+      thumbnails: [...gcode.matchAll(/^; thumbnail begin (\d+)x(\d+) (\d+)$/gm)].map((match) => ({
+        width: Number(match[1]),
+        height: Number(match[2]),
+        base64Length: Number(match[3]),
+      })),
+      thumbnailPayload: (() => {
+        const block = /^; thumbnail begin \d+x\d+ \d+\n([\s\S]*?)^; thumbnail end$/m.exec(gcode);
+        if (!block) return '';
+        return block[1]
+          .split('\n')
+          .filter((line) => line.startsWith('; '))
+          .map((line) => line.slice(2))
+          .join('');
+      })(),
     };
   });
   await readTheProgramInABrowser(page, artifact);
@@ -1575,6 +1592,30 @@ async function sliceAndSendActivePlate(page, printer) {
   assert.ok(artifact.colours.length >= 2 && artifact.types.length >= 2, 'the artifact declares its filaments');
   assert.equal(artifact.pauses, 1, 'the authored pause reaches the engine and appears once in the G-code');
   assert.equal(artifact.pauseBody, 'M600', 'the pause emits the body this printer profile declares');
+
+  // The sliced file carries a picture of what it prints, in the sizes this
+  // printer's own `thumbnails` value asks for. Without it the machine shows its
+  // stock image and every print on the shelf looks like every other print.
+  assert.ok(artifact.thumbnails.length > 0, 'the G-code must carry a thumbnail of the plate');
+  for (const thumbnail of artifact.thumbnails) {
+    assert.ok(thumbnail.width > 0 && thumbnail.height > 0, 'a thumbnail declares its own size');
+    assert.equal(thumbnail.base64Length > 0, true, 'and the length a parser reads to accumulate it');
+  }
+  assert.equal(
+    artifact.thumbnailPayload.length,
+    artifact.thumbnails[0].base64Length,
+    'the declared length is the payload that follows it, or a printer stops reading mid-image',
+  );
+  // A real PNG, not a blank canvas: base64 of the 8-byte PNG signature.
+  assert.ok(
+    artifact.thumbnailPayload.startsWith('iVBORw0KGgo'),
+    'the payload must decode as a PNG, which is what the block claims it is',
+  );
+  console.log(
+    `[e2e] the sliced file carries the plate's own picture (${artifact.thumbnails
+      .map((thumbnail) => `${thumbnail.width}x${thumbnail.height}`)
+      .join(', ')}), which is what the printer's display reads`,
+  );
 
   await showInspectorTab(page, 'printer');
   await page.$eval('#printer-panel', (panel) => panel.closest('details')?.setAttribute('open', ''));

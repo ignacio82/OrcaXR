@@ -14,6 +14,7 @@ import { CanonicalStateProfileResolver } from '../project/slicing/profileResolve
 import {
   CanonicalSlicerClientRoute,
   type CanonicalProjectSlicerClientPort,
+  type SliceThumbnailPort,
 } from '../slicer/CanonicalSlicerClientRoute';
 import type { SlicerClientProjectRoute } from '../slicer/SlicerClient';
 import type { SliceEngineMetadata } from '../project/slicing/types';
@@ -23,6 +24,8 @@ import type { CanonicalWorkspaceController } from './CanonicalWorkspaceControlle
 export interface CanonicalWorkspaceSlicerOptions {
   readonly workspace: CanonicalWorkspaceController;
   readonly client: CanonicalProjectSlicerClientPort;
+  /** Draws the plate for the G-code's thumbnail block; omitted when headless. */
+  readonly thumbnails?: SliceThumbnailPort;
   readonly route?: SlicerClientProjectRoute;
   readonly externalEngine?: SliceEngineMetadata;
   readonly maxThreads?: number;
@@ -49,6 +52,7 @@ export class CanonicalWorkspaceSlicer {
   constructor(options: CanonicalWorkspaceSlicerOptions) {
     const route = new CanonicalSlicerClientRoute({
       client: options.client,
+      thumbnails: options.thumbnails,
       route: options.route,
       externalEngine: options.externalEngine,
       maxThreads: options.maxThreads,
