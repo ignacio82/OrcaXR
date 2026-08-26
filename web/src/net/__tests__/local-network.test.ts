@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  blockedAsMixedContent,
   browserClassifiesAddressSpace,
   createLocalNetworkRequest,
+  diagnoseLocalNetwork,
   localNetworkTargetForRequest,
   normalizeHttpEndpoint,
 } from '../LocalNetworkAccess.ts';
@@ -59,6 +61,86 @@ try {
   assert.equal(capturedInit.signal, controller.signal);
 } finally {
   if (nativeRequest) Object.defineProperty(globalThis, 'Request', nativeRequest);
+}
+
+// ---- Why a LAN address could not be reached --------------------------------
+//
+// Reported against https://orcaxr.martinez.fyi/slicer/, which could reach
+// neither http://192.168.1.228 (Moonraker) nor http://192.168.1.90:3000 (the
+// slicer server) while both answered fine in a browser tab. The page is HTTPS
+// and both endpoints are plain HTTP, so the browser refused them before a
+// request was sent — and the app reported "No response: Failed to fetch",
+// which is what it also says for a printer that is switched off.
+{
+  const secure = Object.getOwnPropertyDescriptor(globalThis, 'isSecureContext');
+  const setSecure = (value: boolean) =>
+    Object.defineProperty(globalThis, 'isSecureContext', { configurable: true, value });
+  try {
+    setSecure(true);
+    assert.equal(blockedAsMixedContent('http://192.168.1.228'), true);
+    assert.equal(blockedAsMixedContent('http://192.168.1.90:3000'), true);
+    assert.equal(blockedAsMixedContent('https://printer.example'), false);
+    setSecure(false);
+    assert.equal(blockedAsMixedContent('http://192.168.1.228'), false, 'an HTTP page may reach an HTTP printer');
+
+    // Blocked: the message must name the cause and the ways out, and must not
+    // suggest retrying something that cannot succeed.
+    setSecure(true);
+    const blocked = await diagnoseLocalNetwork(
+      'http://192.168.1.228',
+      'printer',
+      "Moonraker's cors_domains",
+      new TypeError('Failed to fetch'),
+    );
+    assert.match(blocked.summary, /http:\/\/192\.168\.1\.228/);
+    assert.doesNotMatch(blocked.summary, /Failed to fetch/, 'the browser’s opaque wording explains nothing');
+    assert.match(blocked.detail, /HTTPS page load anything over plain HTTP|HTTPS page load|plain HTTP/);
+    assert.match(blocked.detail, /Tailscale Serve/, 'the HTTPS route out is named');
+    assert.match(blocked.detail, /over HTTP/, 'so is the same-origin route out');
+    assert.match(blocked.detail, /cors_domains/, 'and the setting that bites next');
+    // No Local Network Access permission in Node, so no retry can succeed.
+    assert.equal(blocked.blocked, true);
+
+    // The operator already runs an OrcaXR server, and it publishes this app.
+    // Naming it turns a workaround into the move that removes the problem.
+    const withServer = await diagnoseLocalNetwork(
+      'http://192.168.1.228',
+      'printer',
+      "Moonraker's cors_domains",
+      new TypeError('Failed to fetch'),
+      { appOrigin: 'http://192.168.1.90:3000' },
+    );
+    assert.match(withServer.summary, /open OrcaXR at http:\/\/192\.168\.1\.90:3000/);
+    assert.match(withServer.detail, /publishes this app beside the slicer/);
+    assert.equal(withServer.openAppAt, 'http://192.168.1.90:3000', 'somewhere to go, not an address to retype');
+    // An HTTPS server is not the plain-HTTP case this is about, so it is not
+    // offered as the way out of a plain-HTTP problem.
+    const httpsServer = await diagnoseLocalNetwork(
+      'http://192.168.1.228',
+      'printer',
+      "Moonraker's cors_domains",
+      new TypeError('Failed to fetch'),
+      { appOrigin: 'https://slicer.example' },
+    );
+    assert.doesNotMatch(httpsServer.summary, /slicer\.example/);
+    assert.equal(httpsServer.openAppAt, undefined);
+
+    // Not blocked: an ordinary unreachable address keeps an ordinary message,
+    // and a real error from the network is worth repeating.
+    setSecure(false);
+    const offline = await diagnoseLocalNetwork(
+      'http://192.168.1.228',
+      'printer',
+      "Moonraker's cors_domains",
+      new Error('connect ECONNREFUSED'),
+    );
+    assert.equal(offline.blocked, false);
+    assert.match(offline.summary, /connect ECONNREFUSED/);
+    assert.doesNotMatch(offline.detail, /plain HTTP/);
+  } finally {
+    if (secure) Object.defineProperty(globalThis, 'isSecureContext', secure);
+    else Reflect.deleteProperty(globalThis, 'isSecureContext');
+  }
 }
 
 const serviceWorker = readFileSync(new URL('../../../public/coi-serviceworker.js', import.meta.url), 'utf8');

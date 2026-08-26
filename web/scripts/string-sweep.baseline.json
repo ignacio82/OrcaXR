@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "policy": "Every file below still holds text an operator reads that no translator can reach. A count may fall and must never rise; P10.4.3 closes when this object is empty. This is not a permitted-exceptions list.",
-  "total": 179,
+  "total": 178,
   "files": {
     "src/actions/ActionContext.ts": 2,
     "src/import/ProjectImportPreviewDialog.ts": 1,
-    "src/main.ts": 60,
+    "src/main.ts": 59,
     "src/ui/dom/CalibrationParametersPanel.ts": 2,
     "src/ui/dom/CalibrationSessionBar.ts": 1,
     "src/ui/dom/FilamentAssignmentSelector.ts": 4,

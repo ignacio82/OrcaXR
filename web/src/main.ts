@@ -160,6 +160,7 @@ import { applySettingsCommitToConfig, decodeSettingsConfig } from './settings/ed
 import type { ProjectSettingsOverrideSnapshot } from './project/settingsOverrides';
 import type { ScopedOverrideSnapshot, ScopedOverrideTargetOption } from './project/scopedOverrides';
 import { t } from './l10n/t';
+import { diagnoseLocalNetwork, normalizeHttpEndpoint } from './net/LocalNetworkAccess';
 
 declare global {
   interface Window {
@@ -562,6 +563,54 @@ function setupDomUI(
     return { transport, handshake };
   };
 
+  /**
+   * The endpoint in this message came out of a text field, and the modal takes
+   * HTML. Escape it rather than trusting what was typed into a settings box.
+   */
+  const escapeHtml = (value: string): string =>
+    value.replace(
+      /[&<>"']/g,
+      (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] as string,
+    );
+
+  /**
+   * Report a LAN endpoint that could not be reached, in terms that can be acted on.
+   *
+   * The status line gets the one-line version and, when the browser refused the
+   * request outright, a modal gets the whole explanation — an operator whose
+   * HTTPS page cannot see their printer needs to be told which of three moves
+   * to make, and that does not fit on one line.
+   */
+  const reportLocalNetworkFailure = async (
+    endpoint: string,
+    service: string,
+    corsSetting: string,
+    cause: unknown,
+    appOrigin?: string,
+  ): Promise<void> => {
+    const diagnosis = await diagnoseLocalNetwork(endpoint, service, corsSetting, cause, {
+      // The all-in-one server publishes this app beside the slicer, so a
+      // configured one is the shortest way out of a mixed-content block.
+      ...(appOrigin ? { appOrigin } : {}),
+    });
+    workspace.setStatus(diagnosis.summary);
+    if (!endpoint || !diagnosis.blocked) return;
+    const paragraphs = diagnosis.detail
+      .split('\n\n')
+      .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+      .join('');
+    // Somewhere to go, not an address to retype.
+    const link = diagnosis.openAppAt
+      ? `<p><a href="${escapeHtml(diagnosis.openAppAt)}" rel="noreferrer">${escapeHtml(
+          t('app.main.openOrcaXrThere', 'Open OrcaXR there'),
+        )}</a></p>`
+      : '';
+    workspace.showModal(
+      t('app.main.cannotReachLocalNetwork', 'This page cannot reach your local network'),
+      paragraphs + link,
+    );
+  };
+
   workspace.onRequestPrinterConnectionTest = async () => {
     if (!printerCfg.host.trim()) {
       workspace.setStatus(
@@ -581,7 +630,16 @@ function setupDomUI(
         `Connected — ${handshake.printer.hostname || 'printer'} ${handshake.printer.state}; Moonraker ${handshake.server.moonrakerVersion}${capabilities.length ? ` (${capabilities.join(', ')})` : ''}.`,
       );
     } catch (error) {
-      workspace.setStatus(`No response: ${(error as Error).message}`);
+      // "No response: Failed to fetch" is what a browser says when it refused
+      // to send the request at all, and it reads as a printer that is switched
+      // off. Say which of the two it is.
+      await reportLocalNetworkFailure(
+        normalizeHttpEndpoint(printerCfg.host),
+        'printer',
+        "Moonraker's cors_domains",
+        error,
+        SlicerClient.getExternalSlicerUrl(),
+      );
     }
   };
 
@@ -4548,7 +4606,7 @@ function setupDomUI(
         'app.main.externalSlicerConnectedExternalSlicing',
         'External slicer connected — external slicing is on.',
       );
-    } catch {
+    } catch (error) {
       // A failed candidate never replaces the last verified URL and the
       // previous route stays disabled. Restore what can actually be enabled.
       externalSlicerUrl.value = SlicerClient.getExternalSlicerUrl();
@@ -4556,6 +4614,13 @@ function setupDomUI(
       statusText.textContent = t(
         'app.main.externalSlicerConnectionFailedSlicing',
         'External slicer connection failed — slicing locally.',
+      );
+      await reportLocalNetworkFailure(
+        normalizeHttpEndpoint(candidate),
+        'slicer server',
+        "the server's ORCAXR_ALLOWED_ORIGINS",
+        error,
+        normalizeHttpEndpoint(candidate),
       );
     } finally {
       btnExternalSlicerConnect.disabled = false;

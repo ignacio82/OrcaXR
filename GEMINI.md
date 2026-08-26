@@ -128,6 +128,23 @@ engine (`libslic3r` via WASM) as the computational core.
   Note the bed is deliberately *not* drawn, unlike upstream's `show_bed: true` — this
   app has two beds, and a thumbnail that depends on which shell you sliced from cannot
   be compared with itself.
+- **An HTTPS page cannot reach a plain-HTTP machine on the operator's LAN, and the app
+  must say so rather than report it as silence.** The published build is served over
+  HTTPS (`orcaxr.martinez.fyi`), so `http://192.168.1.228` and `http://192.168.1.90:3000`
+  are refused as mixed content *before a request leaves* — and the browser reports that
+  as `TypeError: Failed to fetch`, which is exactly what it reports for a printer that
+  is switched off. Chrome relaxes this for a LAN address once Local Network Access is
+  granted (the prompt is raised by the request; `navigator.permissions.query({name:
+  'local-network'})` only *reads* the state), and `targetAddressSpace` is needed only
+  for a named host whose address space the browser cannot know before resolving — an IP
+  literal is already classified, which is why `localNetworkTargetForRequest` returns
+  `null` for one. `net/LocalNetworkAccess.ts` owns the diagnosis and every LAN caller
+  reports through it: the status line gets one sentence and a modal gets the three moves
+  that actually work. **The best of those is to open the app from the operator's own
+  all-in-one server** — it publishes the web UI beside the slicer, so page, slicer and
+  printer are all plain HTTP with nothing cross-origin — so when a server is configured
+  the diagnosis names it and links to it. Never answer this failure with "check the
+  address": the address is fine, and a retry cannot succeed.
 - The live G-code viewer renders the bounded rich model plus the preview
   projection: `GcodePreviewSession` (UI-free) owns mode, layer window, and
   move-class filters, and `ui/preview/GcodePreviewSurface` draws exactly the
