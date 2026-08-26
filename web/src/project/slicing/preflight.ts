@@ -14,6 +14,7 @@ import { findPlate, resolveConfig, resolveFilament } from '../domain/selectors';
 import { validateProjectState } from '../domain/validation';
 import { inspectFullSpectrumCompatibility } from '../filaments/fullSpectrumCompatibility';
 import { computeCanonicalInstanceBounds, type CanonicalBounds3 } from '../objects/bounds';
+import { wipeTowerFootprintMarginMm } from '../objects/wipeTowerPlacement';
 import type { SelectionRef } from '../selection';
 import type { CanonicalProjectSliceSnapshot } from './types';
 
@@ -825,6 +826,32 @@ function checkTemperatures(
   }
 }
 
+/**
+ * What the prime tower actually occupies on the bed.
+ *
+ * `wipe_tower_x/y` is the body's left-front corner; the engine prints the brim
+ * — and, for a rib wall, the diagonals it unions across the body — outside it.
+ * The same bound the auto-placer reserves is what this checks, so a placement
+ * the planner accepts is one preflight accepts.
+ */
+function wipeTowerFootprint(
+  state: ProjectState,
+  plate: ProjectPlate,
+  positionMm: readonly [number, number] | readonly number[],
+): { xMin: number; yMin: number; xMax: number; yMax: number } {
+  const config = { ...state.config, ...plate.config };
+  const width = Number(config.prime_tower_width ?? config.wipe_tower_width) || 60;
+  const margin = wipeTowerFootprintMarginMm(config);
+  const x = positionMm[0] ?? 0;
+  const y = positionMm[1] ?? 0;
+  return {
+    xMin: x - margin,
+    yMin: y - margin,
+    xMax: x + width + margin,
+    yMax: y + width + margin,
+  };
+}
+
 function checkWipeTower(
   issues: SlicePreflightIssue[],
   state: ProjectState,
@@ -837,24 +864,35 @@ function checkWipeTower(
   const buildVolume = constraints?.buildVolume;
   const plateEntity: SelectionRef = { kind: 'plate', id: plate.id };
   checkWipeTowerFeasibility(issues, state, plate, plateEntity, constraints, usedPhysical);
-  if (
-    buildVolume &&
-    (tower.positionMm[0] < buildVolume.minXmm ||
-      tower.positionMm[0] > buildVolume.maxXmm ||
-      tower.positionMm[1] < buildVolume.minYmm ||
-      tower.positionMm[1] > buildVolume.maxYmm)
-  ) {
-    addIssue(issues, {
-      code: 'wipe-tower-outside-build-volume',
-      severity: 'error',
-      message: `Wipe-tower origin ${tower.positionMm.join(', ')} mm is outside the build volume.`,
-      help: PREFLIGHT_HELP,
-      entities: [plateEntity],
-      actions: [
-        { id: 'reveal', label: 'Reveal wipe tower', entity: plateEntity },
-        { id: 'disable-wipe-tower', label: 'Disable wipe tower', entity: plateEntity },
-      ],
-    });
+  if (buildVolume) {
+    // The tower is a box with a brim, not a point. Checking only its origin
+    // passed a 30 mm tower whose first layer printed 9 mm past the front-left
+    // corner of the bed, because the corner it is anchored by was on the bed
+    // and everything it drags with it was not.
+    const footprint = wipeTowerFootprint(state, plate, tower.positionMm);
+    if (
+      footprint.xMin < buildVolume.minXmm ||
+      footprint.xMax > buildVolume.maxXmm ||
+      footprint.yMin < buildVolume.minYmm ||
+      footprint.yMax > buildVolume.maxYmm
+    ) {
+      addIssue(issues, {
+        code: 'wipe-tower-outside-build-volume',
+        severity: 'error',
+        message:
+          `Wipe-tower footprint ${footprint.xMin.toFixed(1)}–${footprint.xMax.toFixed(1)} × ` +
+          `${footprint.yMin.toFixed(1)}–${footprint.yMax.toFixed(1)} mm (origin ${tower.positionMm.join(', ')} mm, ` +
+          `including its brim) leaves the build volume ` +
+          `${buildVolume.minXmm.toFixed(1)}–${buildVolume.maxXmm.toFixed(1)} × ` +
+          `${buildVolume.minYmm.toFixed(1)}–${buildVolume.maxYmm.toFixed(1)} mm.`,
+        help: PREFLIGHT_HELP,
+        entities: [plateEntity],
+        actions: [
+          { id: 'reveal', label: 'Reveal wipe tower', entity: plateEntity },
+          { id: 'disable-wipe-tower', label: 'Disable wipe tower', entity: plateEntity },
+        ],
+      });
+    }
   }
   if (tower.filamentId && !state.filaments.physical.some((filament) => filament.id === tower.filamentId)) {
     const filamentEntity: SelectionRef = { kind: 'filament', id: tower.filamentId };

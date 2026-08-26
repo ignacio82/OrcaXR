@@ -94,14 +94,14 @@ test('topcover: slot 2 set → warning listing T3', () => {
 
 // ---- WipeTowerPlacement ----------------------------------------------------
 test('wipe: empty parts → back-left with infinite clearance', () => {
-  const p = scoreWipeTower([], 256, 256);
+  const p = scoreWipeTower([], { xMin: 0, yMin: 0, xMax: 256, yMax: 256 });
   assert.equal(p.label, 'back-left');
   assert.equal(p.clearanceMm, Infinity);
 });
 test('wipe: part front-left pushes tower to back-right area', () => {
   // Big part occupying the front-left quadrant.
   const part = aabbOf(60, 60, 100, 100); // centered at (60,60)
-  const p = scoreWipeTower([part], 256, 256, { bias: 'largest_clearance' });
+  const p = scoreWipeTower([part], { xMin: 0, yMin: 0, xMax: 256, yMax: 256 }, { bias: 'largest_clearance' });
   // Winner must have positive clearance and be away from the part.
   assert.ok(p.clearanceMm > 0, `clearance=${p.clearanceMm}`);
   assert.ok(p.label.includes('back') || p.label.includes('right'), p.label);

@@ -266,6 +266,51 @@ test('requires explicit attestation only when requested and validates wipe-tower
   );
 });
 
+test('a wipe tower whose brim leaves the bed is refused, not only one whose origin does', () => {
+  // The aligator case: a 30 mm tower with a 5 mm brim and a rib wall, anchored
+  // at x = 1 on a bed that starts at x = 0. The origin is on the bed; the first
+  // layer printed 9 mm past its front-left corner, and preflight said nothing.
+  const { fixture, state, assets } = harness();
+  state.config.prime_tower_width = '30';
+  state.config.prime_tower_brim_width = '5';
+  state.config.wipe_tower_wall_type = 'rib';
+  state.config.wipe_tower_rib_width = '8';
+  state.config.wipe_tower_extra_rib_length = '8';
+  state.plates[0].wipeTower = {
+    enabled: true,
+    positionMm: [1, 100],
+    rotationDeg: 0,
+    filamentId: fixture.ids.physical0,
+  };
+  const overhanging = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+    constraints: { buildVolume },
+  });
+  const issue = overhanging.issues.find((entry) => entry.code === 'wipe-tower-outside-build-volume');
+  assert.ok(issue, 'a tower whose footprint leaves the bed must be refused');
+  assert.match(issue.message, /brim/, 'and must say what is off the bed, not just where the origin is');
+
+  // Moved inboard by the reserved margin, the same tower is accepted.
+  state.plates[0].wipeTower = {
+    enabled: true,
+    positionMm: [14, 100],
+    rotationDeg: 0,
+    filamentId: fixture.ids.physical0,
+  };
+  const seated = runCanonicalSlicePreflight({
+    state,
+    assets,
+    plateId: fixture.ids.plate,
+    constraints: { buildVolume },
+  });
+  assert.equal(
+    seated.issues.some((entry) => entry.code === 'wipe-tower-outside-build-volume'),
+    false,
+  );
+});
+
 test('rejects unsafe custom G-code and fails malformed canonical state closed', () => {
   const { fixture, state, assets } = harness();
   state.customGcode.push({

@@ -74,7 +74,11 @@ import {
 import { summarizeGcodeToolUsage } from '../printer/PrintToolMapping';
 import { serializePrintConfigArray } from '../settings/configSerialization';
 import type { ArrangeRegion } from '../project/objects/arrange';
-import type { WipeTowerPick } from '../project/objects/wipeTowerPlacement';
+import {
+  printableAreaRect,
+  wipeTowerFootprintMarginMm,
+  type WipeTowerPick,
+} from '../project/objects/wipeTowerPlacement';
 import { rotateVector } from '../project/objects/transformOperations';
 import { summarizeGcodeArtifact, type GcodeArtifactSummary } from '../slicer/GcodeArtifactSummary';
 import { GCODE_PREVIEW_MODES } from '../slicer/GcodePreviewModel';
@@ -4843,9 +4847,12 @@ export class OrcaWorkspace extends xb.Script {
     if (heightMm <= 0) heightMm = 30;
     const h = heightMm * vis;
 
-    // Clamp the corner so the ghost stays on the bed even for odd configs.
-    const xMm = Math.min(Math.max(pt.xMm, 0), Math.max(0, this.bedMm.x - pt.widthMm));
-    const yMm = Math.min(Math.max(pt.yMm, 0), Math.max(0, this.bedMm.y - pt.widthMm));
+    // Drawn exactly where the engine will print it. The ghost used to clamp
+    // itself onto the bed, so a tower whose brim hung off the edge still looked
+    // seated — the preview agreed with nothing and hid the defect until the
+    // first layer went down past the front left corner.
+    const xMm = pt.xMm;
+    const yMm = pt.yMm;
 
     const group = new THREE.Group();
     group.name = 'wipeTowerGhost';
@@ -4866,6 +4873,21 @@ export class OrcaWorkspace extends xb.Script {
     );
     edges.raycast = () => {};
     group.add(box, edges);
+
+    // The brim and the rib wall print outside the body, and the operator has no
+    // other way to see how much bed they claim. Outlined flat on the plate so
+    // an overhanging tower reads as overhanging.
+    const marginMm = wipeTowerFootprintMarginMm(this.canonicalProject.getSlicingConfiguration().config);
+    if (marginMm > 0) {
+      const footprint = new THREE.LineSegments(
+        new THREE.EdgesGeometry(new THREE.PlaneGeometry(w + 2 * marginMm * vis, w + 2 * marginMm * vis)),
+        new THREE.LineBasicMaterial({ color: 0xffb74d, transparent: true, opacity: 0.65 }),
+      );
+      footprint.rotation.x = -Math.PI / 2;
+      footprint.position.y = -h / 2 + 0.0005;
+      footprint.raycast = () => {};
+      group.add(footprint);
+    }
 
     // Bed corner-origin (xMm, yMm) → workspace: bed centre at origin,
     // printer +Y toward the back (world -Z). Position the box's CENTER.
@@ -9475,6 +9497,13 @@ export class OrcaWorkspace extends xb.Script {
   public autoPlaceWipeTower(plateId: PlateId = this.activePlateId): WipeTowerPick | undefined {
     try {
       const pick = this.canonicalProject.autoPlaceWipeTower(plateId, {
+        // `bedMm` is the printable area's far corner, not its size, and passing
+        // it as one is what placed the tower against an edge the bed does not
+        // have. The printable rectangle carries the origin as well, so hand
+        // that over and leave the legacy extent as a last-ditch fallback.
+        ...(printableAreaRect(this.profile?.config?.printable_area)
+          ? { bedRectMm: printableAreaRect(this.profile?.config?.printable_area)! }
+          : {}),
         bedSizeMm: [this.bedMm.x, this.bedMm.y],
       });
       this.rebuildWipeTowerGhost();
