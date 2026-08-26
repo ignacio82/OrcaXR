@@ -100,6 +100,29 @@ export class PrinterDirectoryError extends Error {
   }
 }
 
+/**
+ * A printer's stable identity, without requiring a secure context.
+ *
+ * `crypto.randomUUID` is secure-context-only, and the all-in-one server
+ * publishes the UI over plain HTTP on a LAN address — so on the deployment this
+ * app is built for it is simply `undefined`, and calling it throws while the
+ * printer directory is being loaded at startup. `getRandomValues` carries no
+ * such restriction and is what a v4 UUID actually needs; `randomUUID` is kept
+ * as the fast path where it exists.
+ */
+export function randomPrinterId(): string {
+  const source = globalThis.crypto;
+  if (typeof source?.randomUUID === 'function') return source.randomUUID();
+  const bytes = new Uint8Array(16);
+  if (typeof source?.getRandomValues === 'function') source.getRandomValues(bytes);
+  else for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+  // Version 4, variant 1, exactly as `randomUUID` produces.
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 /** Add a printer, refusing a duplicate address rather than silently shadowing one. */
 export function addPrinter(
   directory: PrinterDirectory,

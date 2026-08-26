@@ -127,6 +127,7 @@ import {
   defaultPrinter,
   findPrinter,
   loadPrinterDirectory,
+  randomPrinterId,
   removePrinter,
   savePrinterDirectory,
   setDefaultPrinter,
@@ -4284,7 +4285,7 @@ function setupDomUI(
   let printers = loadPrinterDirectory(printerStorage);
   // An install configured before printers had names keeps working: its single
   // endpoint becomes the first entry rather than being dropped.
-  printers = adoptLegacyEndpoint(printers, printerCfg.host.trim() ? printerCfg : undefined, () => crypto.randomUUID());
+  printers = adoptLegacyEndpoint(printers, printerCfg.host.trim() ? printerCfg : undefined, () => randomPrinterId());
   if (printers.printers.length > 0) savePrinterDirectory(printers, printerStorage);
 
   const keyForPrinter = (id: string): string =>
@@ -4347,7 +4348,7 @@ function setupDomUI(
     );
     if (name === null) return;
     try {
-      printers = addPrinter(printers, { name, host, port: printerCfg.port }, () => crypto.randomUUID());
+      printers = addPrinter(printers, { name, host, port: printerCfg.port }, () => randomPrinterId());
       savePrinterDirectory(printers, printerStorage);
       activatePrinter(printers.printers[printers.printers.length - 1].id);
       statusText.textContent = `Saved ${name.trim()}. Switch between printers with the list above.`;

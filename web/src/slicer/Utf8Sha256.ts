@@ -157,6 +157,22 @@ class IncrementalSha256 {
 }
 
 /**
+ * SHA-256 of raw bytes, without Web Crypto.
+ *
+ * `crypto.subtle` exists only in a secure context, and the deployment this app
+ * is built for — the all-in-one server on a LAN address like
+ * `http://192.168.1.90:3000` — is not one. (`localhost` is special-cased, which
+ * is why this never showed up in local use.) The identities these digests carry
+ * are content identities, not secrets, so computing them here is exactly as
+ * correct and produces byte-identical values.
+ */
+export function sha256Bytes(bytes: Uint8Array): string {
+  const hasher = new IncrementalSha256();
+  hasher.update(bytes);
+  return `sha256:${hasher.digestHex()}`;
+}
+
+/**
  * Hashes a JavaScript string with the same UTF-8 well-formedness semantics as
  * `TextEncoder.encode(value)`, without allocating one buffer for the full value.
  * The work is CPU-bound despite the Promise API; hash large exports in the slice worker.

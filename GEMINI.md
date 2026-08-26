@@ -128,6 +128,21 @@ engine (`libslic3r` via WASM) as the computational core.
   Note the bed is deliberately *not* drawn, unlike upstream's `show_bed: true` — this
   app has two beds, and a thumbnail that depends on which shell you sliced from cannot
   be compared with itself.
+- **The app's own deployment is not a secure context, and nothing may assume it is.**
+  The all-in-one server publishes the UI over plain HTTP on a LAN address
+  (`http://192.168.1.90:3000`); only `localhost` is special-cased into secure-context
+  treatment, so every machine *except* the host running the container gets an insecure
+  origin. Every secure-context-only web API is therefore absent there, and the two that
+  were reached for unguarded both failed on the first real LAN slice:
+  `crypto.subtle` (a hard "Web Crypto SHA-256 is unavailable" before the slice began)
+  and `crypto.randomUUID` (called while the printer directory loads at startup).
+  Both now degrade: `slicing/hash.ts` falls back to the repo's own `sha256Bytes` —
+  these are **content identities, not secrets**, and it returns byte-identical digests,
+  so an artifact keeps one identity across origins — and `randomPrinterId` builds a v4
+  UUID from `getRandomValues`, which carries no such restriction. Before adding any
+  `crypto.*`, `navigator.clipboard`, `navigator.serviceWorker`, `mediaDevices`, or
+  `SharedArrayBuffer`/`crossOriginIsolated` use, assume the page is **not** secure and
+  degrade explicitly; `localhost` testing will never show you the failure.
 - **An HTTPS page cannot reach a plain-HTTP machine on the operator's LAN, and the app
   must say so rather than report it as silence.** The published build is served over
   HTTPS (`orcaxr.martinez.fyi`), so `http://192.168.1.228` and `http://192.168.1.90:3000`

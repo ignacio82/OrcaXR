@@ -9,6 +9,7 @@ import {
   defaultPrinter,
   describeDiscovery,
   loadPrinterDirectory,
+  randomPrinterId,
   removePrinter,
   savePrinterDirectory,
   setDefaultPrinter,
@@ -173,3 +174,46 @@ test('discovery is reported as unavailable with real alternatives', () => {
 });
 
 console.log(`\nPrinter directory: ${passed} tests passed.`);
+
+// ---- Identity on an insecure origin ----------------------------------------
+//
+// `crypto.randomUUID` is secure-context-only, and the all-in-one server
+// publishes the UI over plain HTTP on a LAN address — so on the deployment this
+// app is built for it is simply absent, and it is called while the directory is
+// being loaded at startup.
+{
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  const setCrypto = (value: unknown) => Object.defineProperty(globalThis, 'crypto', { configurable: true, value });
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  try {
+    // What a browser exposes off a secure context: getRandomValues, no randomUUID.
+    setCrypto({
+      getRandomValues: (array: Uint8Array) => {
+        for (let index = 0; index < array.length; index += 1) array[index] = (index * 37 + 11) & 0xff;
+        return array;
+      },
+    });
+    const withoutRandomUuid = randomPrinterId();
+    assert.match(withoutRandomUuid, uuid, 'a v4 UUID is still produced without crypto.randomUUID');
+
+    // A directory adopted at startup on that origin gets a real id, not a throw.
+    const adopted = adoptLegacyEndpoint(
+      EMPTY_PRINTER_DIRECTORY,
+      { host: 'http://192.168.1.228', port: 7125 },
+      randomPrinterId,
+    );
+    assert.equal(adopted.printers.length, 1);
+    assert.match(adopted.printers[0].id, uuid);
+
+    // No crypto at all is still survivable.
+    setCrypto(undefined);
+    assert.match(randomPrinterId(), uuid);
+
+    // Distinct ids, so two printers never collide.
+    const ids = new Set(Array.from({ length: 200 }, () => randomPrinterId()));
+    assert.equal(ids.size, 200);
+  } finally {
+    if (original) Object.defineProperty(globalThis, 'crypto', original);
+    else Reflect.deleteProperty(globalThis, 'crypto');
+  }
+}
