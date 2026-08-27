@@ -158,4 +158,46 @@ test('cycle slot mapping invokes callback with tool number', () => {
   assert.equal(cycledTool, 1);
 });
 
+test('the headset offers the same pre-print options the flat dialog offers', () => {
+  const root = new FakePanel({});
+  const toggled: string[] = [];
+  renderXrPrintSubmissionDialog(
+    adapter,
+    root,
+    samplePrintContext({
+      startOptions: [
+        {
+          id: 'bed-leveling',
+          label: 'Calibrate the build plate first',
+          detail: 'Runs BED_MESH_CALIBRATE',
+          available: true,
+          enabled: false,
+        },
+        {
+          id: 'timelapse',
+          label: 'Record a timelapse',
+          detail: 'This Moonraker has no timelapse component installed.',
+          available: false,
+          enabled: false,
+        },
+      ],
+      onToggleStartOption: (id) => toggled.push(id),
+    }),
+  );
+
+  const texts = root.texts().map((entry) => entry.text);
+  assert.ok(texts.includes('Calibrate the build plate first'), 'an available option is offered');
+  assert.ok(
+    texts.some((text) => text.includes('no timelapse component')),
+    "an unavailable option stays on screen with the printer's own reason",
+  );
+
+  // Pressing an available row toggles it; the unavailable one is not pressable,
+  // so a machine can never be asked for something it said it cannot do.
+  const rows = root.buttons().filter((button) => button.texts().some((t) => /plate first|timelapse/.test(t.text)));
+  assert.equal(rows.length, 1, 'only the available option is pressable');
+  rows[0].click();
+  assert.deepEqual(toggled, ['bed-leveling']);
+});
+
 console.log(`\nXrPrintSubmissionDialog: ${passed} tests passed.`);

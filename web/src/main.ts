@@ -83,6 +83,7 @@ import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector'
 import { SelectionFilamentBar } from './ui/dom/SelectionFilamentBar';
 import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
 import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
+import { applyPrintStartOptions, queryPrintStartOptions, type PrintStartOptionId } from './printer/PrintStartOptions';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
 import { PrintJobPanel } from './ui/dom/PrintJobPanel';
 import { PrinterStatusBar } from './ui/dom/PrinterStatusBar';
@@ -730,6 +731,10 @@ function setupDomUI(
         // check then reports "unknown" instead of pretending it matched.
         slots = undefined;
       }
+      // What this particular machine can do around the print — level its plate,
+      // record a timelapse. Asked of the printer rather than assumed, so the
+      // confirmation offers exactly what is really there.
+      const startOptions = await queryPrintStartOptions(transport, controller.signal);
       const mapping = validateToolMapping(intent.usage, slots);
       const readinessBlockers = readiness.blockers.map((blocker) => blocker.message);
       const dialogInput = {
@@ -741,6 +746,7 @@ function setupDomUI(
         toolSummary: describeToolUsage(intent.usage.tools, slots),
         blockers: [...mapping.blockers.map((notice) => notice.message), ...(readiness.ready ? [] : readinessBlockers)],
         warnings: mapping.warnings.map((notice) => notice.message),
+        startOptions,
       };
       const decision = xb.core.renderer?.xr?.isPresenting
         ? await workspace.askXrPrintSubmission(dialogInput)
@@ -753,12 +759,38 @@ function setupDomUI(
       // with it. Re-establish before committing to an upload that may take
       // minutes, rather than discovering the session lapsed partway through.
       await connectConfiguredPrinter();
+      // The XR sheet answers with its own decision shape and does not offer
+      // these yet; reading defensively keeps the flat shell's choices exact
+      // without inventing ones the headset never showed.
+      // Both shells answer with the ids they showed; anything else is nothing.
+      // `applyPrintStartOptions` checks each one against what the printer
+      // actually offered, so an id that never appeared is refused rather than
+      // attempted.
+      const chosenStartOptions = (('startOptions' in decision ? decision.startOptions : []) ??
+        []) as readonly PrintStartOptionId[];
       const result = await submitPrintJob(transport, {
         filename: intent.filename,
         gcode: intent.gcode,
         startPrint: decision.choice === 'upload-and-print',
         overwrite: decision.overwrite,
         signal: controller.signal,
+        beforeStart: async () => {
+          await applyPrintStartOptions(transport, {
+            options: startOptions,
+            enabled: chosenStartOptions,
+            signal: controller.signal,
+            onPhase: (phase) => {
+              workspace.setStatus(
+                phase === 'leveling'
+                  ? t(
+                      'app.main.levellingTheBuildPlate',
+                      'Levelling the build plate; the print starts when it finishes…',
+                    )
+                  : t('app.main.armingTheTimelapse', 'Arming the timelapse…'),
+              );
+            },
+          });
+        },
         // An upload has no deadline, so the status line is what tells an
         // operator it is alive. `fetch` cannot report bytes sent, so this
         // counts time rather than inventing a percentage, and points at the

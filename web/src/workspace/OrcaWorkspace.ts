@@ -7465,13 +7465,25 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   private printSubmissionResolve:
-    ((decision: { choice: 'upload-and-print' | 'upload-only' | 'cancel'; overwrite: boolean }) => void) | null = null;
+    | ((decision: {
+        choice: 'upload-and-print' | 'upload-only' | 'cancel';
+        overwrite: boolean;
+        startOptions?: readonly string[];
+      }) => void)
+    | null = null;
+  /** Pre-print options ticked in the headset's send sheet, for this send only. */
+  private xrStartOptions = new Set<string>();
   private pendingPrintInput: any = null;
 
-  public async askXrPrintSubmission(
-    input: any,
-  ): Promise<{ choice: 'upload-and-print' | 'upload-only' | 'cancel'; overwrite: boolean }> {
+  public async askXrPrintSubmission(input: any): Promise<{
+    choice: 'upload-and-print' | 'upload-only' | 'cancel';
+    overwrite: boolean;
+    startOptions?: readonly string[];
+  }> {
     this.pendingPrintInput = input;
+    // Each submission starts from nothing ticked, like the flat dialog: a
+    // choice made for one print must not silently carry into the next.
+    this.xrStartOptions.clear();
     // The dialog lives in the immersive chunk, so a submission asked for before
     // a session has ever started waits for it rather than opening an empty page.
     await this.loadImmersiveShell();
@@ -7499,7 +7511,27 @@ export class OrcaWorkspace extends xb.Script {
         ]
       : [];
 
+    const startOptions = (input.startOptions ?? []) as readonly {
+      id: string;
+      label: string;
+      detail: string;
+      reason: string;
+      available: boolean;
+    }[];
     xrUi.renderXrPrintSubmissionDialog(xrBlocksUiAdapter, root, {
+      startOptions: startOptions.map((option) => ({
+        id: option.id,
+        label: option.label,
+        // Available: what it will do. Unavailable: the printer's own reason.
+        detail: option.available ? option.detail : option.reason,
+        available: option.available,
+        enabled: this.xrStartOptions.has(option.id),
+      })),
+      onToggleStartOption: (id: string) => {
+        if (this.xrStartOptions.has(id)) this.xrStartOptions.delete(id);
+        else this.xrStartOptions.add(id);
+        this.refreshXrSheet();
+      },
       printerName: input.endpointLabel || 'Snapmaker U1',
       availablePrinters: [input.endpointLabel || 'Snapmaker U1'],
       plateName: input.plateName || 'Plate 1',
@@ -7512,13 +7544,17 @@ export class OrcaWorkspace extends xb.Script {
       readyToPrint: (input.blockers?.length ?? 0) === 0,
       blockedReason: input.blockers?.[0],
       onSendAndPrint: () => {
-        this.printSubmissionResolve?.({ choice: 'upload-and-print', overwrite: true });
+        this.printSubmissionResolve?.({
+          choice: 'upload-and-print',
+          overwrite: true,
+          startOptions: [...this.xrStartOptions],
+        });
         this.printSubmissionResolve = null;
         this.pendingPrintInput = null;
         this.refreshXrSheet();
       },
       onSendOnly: () => {
-        this.printSubmissionResolve?.({ choice: 'upload-only', overwrite: true });
+        this.printSubmissionResolve?.({ choice: 'upload-only', overwrite: true, startOptions: [] });
         this.printSubmissionResolve = null;
         this.pendingPrintInput = null;
         this.refreshXrSheet();

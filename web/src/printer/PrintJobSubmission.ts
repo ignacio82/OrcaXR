@@ -51,6 +51,12 @@ export interface PrintReadiness {
 export type PrintSubmissionPhase = 'checking' | 'uploading' | 'verifying' | 'starting' | 'done';
 
 export interface PrintSubmissionRequest {
+  /**
+   * Work to complete on the printer between a verified upload and the start of
+   * the print — levelling the plate, arming a timelapse. It is awaited, and a
+   * failure stops the start rather than printing anyway.
+   */
+  beforeStart?(): Promise<void>;
   /** Suggested name; it is sanitized and, unless overwriting, made unique. */
   readonly filename: string;
   readonly gcode: string;
@@ -250,6 +256,23 @@ export async function submitPrintJob(
 
   let startedPrint = false;
   if (request.startPrint) {
+    // Anything the operator asked for around the print happens here: after the
+    // file is on the machine and verified, before it starts. Earlier would move
+    // the toolhead for a send that might still fail; later would be too late.
+    if (request.beforeStart) {
+      try {
+        await request.beforeStart();
+      } catch (error) {
+        if (isCancellation(error, request.signal))
+          throw new PrintSubmissionError('Print start cancelled.', 'cancelled');
+        throw new PrintSubmissionError(
+          `${path} uploaded, but the printer did not complete what was asked before starting ` +
+            `(${error instanceof Error ? error.message : String(error)}). ` +
+            'The file is on the printer and can be started from its file list.',
+          'start-failed',
+        );
+      }
+    }
     request.onPhase?.('starting');
     try {
       await transport.request<unknown>(`/printer/print/start?filename=${encodeURIComponent(path)}`, {

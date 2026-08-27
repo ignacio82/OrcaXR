@@ -1,4 +1,6 @@
 import { t } from '../../l10n/t';
+import type { PrintStartOption, PrintStartOptionId } from '../../printer/PrintStartOptions';
+
 export interface PrintSubmissionDialogInput {
   readonly filename: string;
   readonly plateName: string;
@@ -9,10 +11,22 @@ export interface PrintSubmissionDialogInput {
   /** Reasons the artifact must not be printed as-is; they disable starting. */
   readonly blockers: readonly string[];
   readonly warnings: readonly string[];
+  /**
+   * What this particular printer offers around the print — levelling its plate,
+   * recording a timelapse. Assessed from the machine's own answers, so an
+   * unavailable one is shown with the printer's reason rather than hidden.
+   */
+  readonly startOptions?: readonly PrintStartOption[];
 }
 
 export type PrintSubmissionDecision =
-  { readonly choice: 'cancel' } | { readonly choice: 'upload' | 'upload-and-print'; readonly overwrite: boolean };
+  | { readonly choice: 'cancel' }
+  | {
+      readonly choice: 'upload' | 'upload-and-print';
+      readonly overwrite: boolean;
+      /** Pre-print options the operator ticked; only ever available ones. */
+      readonly startOptions: readonly PrintStartOptionId[];
+    };
 
 /**
  * Confirm exactly what is about to be sent, and whether the printer should
@@ -74,6 +88,50 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
   for (const message of input.blockers) notices.append(notice(message, true));
   for (const message of input.warnings) notices.append(notice(message, false));
 
+  // What the machine can do around this print. Unavailable entries stay on
+  // screen, disabled, carrying the printer's own reason: "this printer has no
+  // timelapse component" is a useful thing to learn, and hiding it would leave
+  // an operator wondering where an option they know from the desktop went.
+  const optionInputs = new Map<PrintStartOptionId, HTMLInputElement>();
+  const optionsBox = document.createElement('fieldset');
+  optionsBox.dataset.printSubmissionOptions = 'true';
+  optionsBox.style.cssText =
+    'margin:0;padding:10px 12px;border:1px solid var(--oxr-stroke);border-radius:8px;' +
+    'display:flex;flex-direction:column;gap:8px;';
+  if ((input.startOptions?.length ?? 0) > 0) {
+    const legend = document.createElement('legend');
+    legend.textContent = t('ui.printSubmissionDialog.beforePrinting', 'Before printing');
+    legend.style.cssText = 'padding:0 4px;opacity:0.7;font-size:12px;';
+    optionsBox.append(legend);
+    for (const option of input.startOptions ?? []) {
+      const row = document.createElement('label');
+      row.dataset.printSubmissionOption = option.id;
+      row.style.cssText =
+        `display:flex;gap:8px;align-items:flex-start;cursor:${option.available ? 'pointer' : 'not-allowed'};` +
+        `opacity:${option.available ? '1' : '0.55'};`;
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = option.available && option.defaultEnabled;
+      box.disabled = !option.available;
+      box.dataset.printSubmissionOptionInput = option.id;
+      box.style.cssText = 'margin-top:3px;';
+      const text = document.createElement('span');
+      const label = document.createElement('span');
+      label.textContent = option.label;
+      const why = document.createElement('span');
+      // Available: what it will do. Unavailable: why it cannot.
+      why.textContent = option.available ? option.detail : option.reason;
+      why.style.cssText = 'display:block;opacity:0.7;font-size:12px;';
+      text.append(label, why);
+      row.append(box, text);
+      row.title = option.reason;
+      optionsBox.append(row);
+      optionInputs.set(option.id, box);
+    }
+  }
+  const chosenOptions = (): readonly PrintStartOptionId[] =>
+    [...optionInputs].filter(([, box]) => box.checked && !box.disabled).map(([id]) => id);
+
   const overwriteLabel = document.createElement('label');
   overwriteLabel.style.cssText = 'display:flex;gap:8px;align-items:center;cursor:pointer;';
   const overwrite = document.createElement('input');
@@ -106,7 +164,10 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
       'min-height:44px;padding:10px 14px;border-radius:8px;cursor:pointer;color:inherit;' +
       `border:1px solid ${primary ? 'var(--oxr-color-accent,var(--oxr-accent))' : 'var(--oxr-stroke)'};` +
       `background:${primary ? 'var(--oxr-surface-hover)' : 'var(--oxr-surface)'};`;
-    button.onclick = () => finish(choice === 'cancel' ? { choice } : { choice, overwrite: overwrite.checked });
+    button.onclick = () =>
+      finish(
+        choice === 'cancel' ? { choice } : { choice, overwrite: overwrite.checked, startOptions: chosenOptions() },
+      );
     buttons.push(button);
     return button;
   };
@@ -132,7 +193,9 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
     make('Cancel', 'cancel', false, 'Send nothing'),
   );
 
-  dialog.append(title, body, notices, overwriteLabel, actions);
+  dialog.append(title, body, notices);
+  if ((input.startOptions?.length ?? 0) > 0) dialog.append(optionsBox);
+  dialog.append(overwriteLabel, actions);
   overlay.append(dialog);
 
   let settle: (decision: PrintSubmissionDecision) => void = () => {};

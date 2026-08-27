@@ -1677,8 +1677,41 @@ async function sliceAndSendActivePlate(page, printer) {
   await showInspectorTab(page, 'printer');
   await page.click('#btn-printer-send');
   await page.waitForSelector('[data-print-submission-dialog="true"]', { timeout: 60_000 });
+
+  // The desktop slicer offers choices at the moment of sending — level the
+  // plate, record a timelapse — and this printer reports that it can do both,
+  // so the confirmation has to offer them. They are read off the machine, so
+  // what matters is that they are offered *and* that ticking one reaches it.
+  const offered = await page.$eval('[data-print-submission-options="true"]', (box) =>
+    [...box.querySelectorAll('[data-print-submission-option]')].map((row) => ({
+      id: row.dataset.printSubmissionOption,
+      disabled: row.querySelector('input').disabled,
+      checked: row.querySelector('input').checked,
+    })),
+  );
+  assert.deepEqual(
+    offered,
+    [
+      { id: 'bed-leveling', disabled: false, checked: false },
+      { id: 'timelapse', disabled: false, checked: false },
+    ],
+    'a printer reporting a bed_mesh and a timelapse component offers both, ticked by neither',
+  );
+  await page.click('[data-print-submission-option-input="bed-leveling"]');
+  await page.click('[data-print-submission-option-input="timelapse"]');
   await page.click('[data-print-submission-choice="upload-and-print"]');
   await page.waitForFunction(() => /^Printing /.test(globalThis.document.getElementById('status-text')?.textContent));
+  // Order is the assertion that matters: the plate is probed and the timelapse
+  // armed *before* the print starts, not alongside it.
+  const beforeStart = printer.commands.slice(0, printer.commands.lastIndexOf('start'));
+  assert.ok(
+    beforeStart.includes('timelapse:true'),
+    `the timelapse was never armed (${JSON.stringify(printer.commands)})`,
+  );
+  assert.ok(
+    beforeStart.includes('gcode:BED_MESH_CALIBRATE'),
+    `the plate was never levelled before the print (${JSON.stringify(printer.commands)})`,
+  );
   assert.equal(printer.stored.size, 2, 'the second send picked an unused name');
   assert.notEqual(printer.started, storedName);
   assert.equal(checksumOf(printer.stored.get(printer.started)), artifact.checksum);
@@ -1790,7 +1823,15 @@ async function controlRunningPrint(page, printer) {
     () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'printing',
     { timeout: 30_000 },
   );
-  assert.deepEqual(printer.commands, ['start', 'pause', 'resume']);
+  // The lifecycle exactly, and nothing extra in it. Pre-print work the operator
+  // asked for — levelling, arming a timelapse — is legitimately in the log too,
+  // so this filters to the commands that move the *job* rather than asserting
+  // the whole conversation.
+  const LIFECYCLE = new Set(['start', 'pause', 'resume', 'cancel']);
+  assert.deepEqual(
+    printer.commands.filter((command) => LIFECYCLE.has(command)),
+    ['start', 'pause', 'resume'],
+  );
 
   // A dismissed confirmation must leave the machine untouched.
   await clickCommand('emergency-stop');
@@ -1808,12 +1849,20 @@ async function controlRunningPrint(page, printer) {
   );
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !globalThis.document.querySelector('[data-print-job-confirm="true"]'));
-  assert.deepEqual(printer.commands, ['start', 'pause', 'resume'], 'a dismissed stop sends nothing');
+  assert.deepEqual(
+    printer.commands.filter((command) => LIFECYCLE.has(command)),
+    ['start', 'pause', 'resume'],
+    'a dismissed stop sends nothing',
+  );
 
   await clickCommand('cancel');
   await page.waitForSelector('[data-print-job-confirm="true"]', { timeout: 30_000 });
   await page.click('[data-print-job-confirm-choice="cancel"]');
-  assert.deepEqual(printer.commands, ['start', 'pause', 'resume'], 'a dismissed cancel sends nothing');
+  assert.deepEqual(
+    printer.commands.filter((command) => LIFECYCLE.has(command)),
+    ['start', 'pause', 'resume'],
+    'a dismissed cancel sends nothing',
+  );
 
   await clickCommand('cancel');
   await page.waitForSelector('[data-print-job-confirm="true"]', { timeout: 30_000 });
@@ -1822,7 +1871,10 @@ async function controlRunningPrint(page, printer) {
     () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'cancelled',
     { timeout: 30_000 },
   );
-  assert.deepEqual(printer.commands, ['start', 'pause', 'resume', 'cancel']);
+  assert.deepEqual(
+    printer.commands.filter((command) => LIFECYCLE.has(command)),
+    ['start', 'pause', 'resume', 'cancel'],
+  );
   assert.equal(
     await page.$eval('[data-print-job-command="cancel"]', (button) => button.disabled),
     true,

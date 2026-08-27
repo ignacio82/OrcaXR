@@ -24,6 +24,22 @@ export interface XrPrintToolSlotMap {
   readonly printerSlotType?: string;
 }
 
+/**
+ * One thing the printer can do around this print, as the headset shows it.
+ *
+ * The flat shell's send dialog offers exactly these, read from the same
+ * capability assessment; the two shells differ in how a row is pressed, never
+ * in what is on offer.
+ */
+export interface XrPrintStartOptionRow {
+  readonly id: string;
+  readonly label: string;
+  /** What it will do, or — when unavailable — the printer's reason it cannot. */
+  readonly detail: string;
+  readonly available: boolean;
+  readonly enabled: boolean;
+}
+
 export interface XrPrintSubmissionContext {
   readonly printerName: string;
   readonly availablePrinters: readonly string[];
@@ -36,6 +52,9 @@ export interface XrPrintSubmissionContext {
   readonly toolSlots: readonly XrPrintToolSlotMap[];
   readonly readyToPrint: boolean;
   readonly blockedReason?: string;
+  /** Pre-print options this machine reported; empty when it reported none. */
+  readonly startOptions?: readonly XrPrintStartOptionRow[];
+  onToggleStartOption?(id: string): void;
   onSelectPrinter?(printer: string): void;
   onCycleSlotMapping?(toolNumber: number): void;
   onSendAndPrint?(): void;
@@ -244,6 +263,58 @@ export function renderXrPrintSubmissionDialog<PanelNode, ImageNode, TextNode>(
       paddingTop: 4,
     });
     ui.appendChild(container, blockNotice);
+  }
+
+  // What the machine can do around the print. An unavailable row stays on
+  // screen carrying the printer's own reason, exactly as the flat dialog does:
+  // "this printer has no timelapse component" is worth knowing, and hiding it
+  // would leave an operator hunting for a control they know from the desktop.
+  if ((ctx.startOptions?.length ?? 0) > 0) {
+    const optionsCard = ui.createPanel({
+      width: '100%',
+      flexDirection: 'column',
+      gap: 6,
+      padding: 10,
+      cornerRadius: tokens.radius.md,
+      fillColor: '#ffffff0a',
+      strokeWidth: 1,
+      strokeColor: '#ffffff14',
+    });
+    ui.appendChild(container, optionsCard);
+    ui.appendChild(optionsCard, ui.createText('Before printing', { fontSize: 12, color: C.textMuted }));
+    for (const option of ctx.startOptions ?? []) {
+      const row = ui.createPanel({
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingLeft: 8,
+        paddingRight: 8,
+        paddingTop: 8,
+        paddingBottom: 8,
+        cornerRadius: tokens.radius.sm,
+        fillColor: option.available ? '#ffffff12' : '#ffffff08',
+        opacity: option.available ? 1 : 0.55,
+        ...(option.available && ctx.onToggleStartOption ? { onClick: () => ctx.onToggleStartOption?.(option.id) } : {}),
+      });
+      // The tick is a filled box rather than a glyph: at this size a checkmark
+      // is a smudge, and fill reads as state from across the room.
+      const box = ui.createPanel({
+        width: 22,
+        height: 22,
+        cornerRadius: tokens.radius.sm,
+        flexShrink: 0,
+        fillColor: option.enabled && option.available ? C.accent : '#00000000',
+        strokeWidth: 2,
+        strokeColor: option.available ? C.accent : C.textMuted,
+      });
+      ui.appendChild(row, box);
+      const text = ui.createPanel({ flexDirection: 'column', flexGrow: 1, flexShrink: 1, gap: 2 });
+      ui.appendChild(text, ui.createText(option.label, { fontSize: 14, color: C.text }));
+      ui.appendChild(text, ui.createText(option.detail, { fontSize: 11, color: C.textMuted }));
+      ui.appendChild(row, text);
+      ui.appendChild(optionsCard, row);
+    }
   }
 
   // Action Buttons: Send & Print (primary), Send Only, Cancel

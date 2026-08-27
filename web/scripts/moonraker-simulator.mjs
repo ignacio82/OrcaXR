@@ -161,11 +161,32 @@ export async function startMoonrakerSimulator(options = {}) {
       return json({
         api_version: [1, 0, 5],
         moonraker_version: 'v0.9.3-simulator',
-        components: ['authorization', 'file_manager', 'history', 'job_queue', 'klippy_apis'],
+        // `timelapse` is here because a real Moonraker with the plugin lists it,
+        // and the send flow offers the recording option only when it does.
+        components: ['authorization', 'file_manager', 'history', 'job_queue', 'klippy_apis', 'timelapse'],
         klippy_connected: state.klippy === 'ready',
         klippy_state: state.klippy,
         warnings: [],
       });
+    }
+    // What the machine is configured with, and what it will answer to. The
+    // send flow reads both to decide which pre-print options it may offer.
+    if (url.pathname === '/printer/objects/list') {
+      return json({ objects: ['webhooks', 'configfile', 'toolhead', 'extruder', 'bed_mesh', 'print_stats'] });
+    }
+    if (url.pathname === '/printer/gcode/help') {
+      return json({
+        G28: 'Home the axes',
+        BED_MESH_CALIBRATE: 'Probe the bed and build a mesh',
+        SET_PRESSURE_ADVANCE: 'Set pressure advance',
+      });
+    }
+    if (url.pathname === '/machine/timelapse/settings') {
+      if (request.method === 'POST') {
+        commands.push(`timelapse:${url.searchParams.get('enabled') ?? ''}`);
+        return json({ enabled: url.searchParams.get('enabled') === 'true' });
+      }
+      return json({ enabled: false, mode: 'layermacro' });
     }
     if (url.pathname === '/printer/info') {
       return json({ state: state.klippy, hostname: 'orcaxr-simulator', software_version: 'v0.12.0' });
