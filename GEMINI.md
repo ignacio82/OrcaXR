@@ -818,6 +818,26 @@ four-entry cache, supplies the offline navigation fallback, and restores COOP/
 COEP headers. Update its cache version and offline contract whenever deploy
 assets or worker/schema compatibility changes.
 
+A camera Moonraker reports is not necessarily served by Moonraker.
+`PrinterCamera.resolveCameraSource` classifies each reported URL against the
+endpoint the session is connected to: Moonraker's own origin is a **path**
+fetched through the credentialed transport; the same host on another port (the
+ordinary crowsnest arrangement — Moonraker on 7125, the camera on 8080) is an
+**origin** fetched directly with `fetchLocalNetwork` and deliberately *without*
+the API key, since that service never issued one; and any other host is
+**unsupported**, refused with both origins named, because a camera list is
+printer-host content and following it off-host would make the page a request
+forwarder. Do not restore the old "keep the path, drop the origin" reading — it
+silently re-pointed the second case at Moonraker's port, where it answers
+nothing, and that is what made the panel sit on "Waiting for the first frame…"
+forever. A cross-port camera still needs its own CORS allowance (LNA does not
+bypass CORS), so a frame that fails is reported with the URL and that cause
+named, under a bounded 8-second wait, rather than waited on indefinitely.
+Actions that reveal something on a workspace page must show the page first —
+`view_webcam` opens the Device workspace before the camera section — and
+`PrinterCameraPanel` stops polling when the tab, the workspace page, or the
+section is hidden, not just the first of those.
+
 LNA does **not** bypass CORS. Moonraker's `cors_domains` must include the
 page's exact origin (the hosted app uses `https://orcaxr.martinez.fyi`);
 API-key/custom-header requests preflight. The typed boundary requires one

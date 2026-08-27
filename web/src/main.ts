@@ -26,6 +26,7 @@ import {
   PrinterStorageError,
   assessGcodeCommand,
   buildMacroInvocation,
+  cameraCanShowFrames,
   deletePrinterFile,
   downloadPrinterFile,
   fetchCameraSnapshot,
@@ -106,7 +107,7 @@ import {
 import { GcodePreviewPanel, type GcodePreviewPanelAdapter } from './ui/dom/GcodePreviewPanel';
 import { PreviewScrubber } from './ui/dom/PreviewScrubber';
 import { ProjectSummaryPanel } from './ui/dom/ProjectSummaryPanel';
-import { WorkspaceViews } from './ui/dom/WorkspaceViews';
+import { WorkspaceViews, type WorkspaceViewId } from './ui/dom/WorkspaceViews';
 import { hydrateIcons } from './ui/icons';
 import { PaintPanel } from './ui/dom/PaintPanel';
 import {
@@ -380,6 +381,15 @@ function objectsSelectionForRequest(
 }
 
 /** 2D-page UI wiring for standard web slicer mode. */
+/**
+ * Show one of the four workspaces, once the tab strip exists.
+ *
+ * Set when the tabs are built, and read by anything that has to *show*
+ * something — the camera panel lives on the Device page, and opening it while
+ * Prepare is up changes nothing the operator can see.
+ */
+let showWorkspaceView: ((id: WorkspaceViewId) => void) | undefined;
+
 function setupDomUI(
   workspace: OrcaWorkspace,
   uiState: UiState,
@@ -1280,6 +1290,8 @@ function setupDomUI(
     frameUrl?: string;
     busy: boolean;
     message?: string;
+    /** The last frame fetch that failed, cleared by the next one that works. */
+    failure?: string;
   } = { cameras: [], busy: false };
   const cameraListeners = new Set<() => void>();
   const notifyCamera = () => {
@@ -1292,6 +1304,22 @@ function setupDomUI(
   const selectedCamera = () =>
     cameraState.cameras.find((camera) => camera.uid === cameraState.selected) ?? cameraState.cameras[0];
 
+  /**
+   * Bring the camera on screen: the Device workspace first, then the section.
+   *
+   * Opening the `<details>` on its own is what made "Tools ▸ View Webcam" look
+   * like it did nothing — the section it opened lives on the Device page, and
+   * that page is hidden while Prepare or Preview is up. An action that names a
+   * thing has to show the thing.
+   */
+  const revealPrinterCamera = () => {
+    showWorkspaceView?.('device');
+    const details = document.getElementById('printer-camera-details') as HTMLDetailsElement | null;
+    if (!details) return;
+    details.open = true;
+    details.scrollIntoView({ block: 'nearest' });
+  };
+
   workspace.onRequestPrinterCamera = async (uid) => {
     if (!printerCfg.host.trim()) {
       workspace.setStatus(
@@ -1299,24 +1327,31 @@ function setupDomUI(
       );
       return;
     }
+    // Shown first, then loaded: the operator asked to see the camera, and a
+    // window that changes only if the request succeeds looks like a dead menu
+    // item whenever the printer is slow or unreachable.
+    revealPrinterCamera();
     cameraState.busy = true;
     notifyCamera();
     try {
       const { transport } = await connectConfiguredPrinter();
-      cameraState.cameras = await listPrinterCameras(transport);
+      // The endpoint goes in because most Klipper boxes serve the camera from
+      // another port of the same machine, and without something to compare
+      // against, such a URL is indistinguishable from one on Moonraker itself.
+      cameraState.cameras = await listPrinterCameras(transport, undefined, transport.endpoint.directHttpUrl);
       // Prefer a camera that can actually be shown, so the first thing anyone
       // sees is a picture rather than an explanation.
       const requested = uid ?? cameraState.selected;
       cameraState.selected =
         cameraState.cameras.find((camera) => camera.uid === requested)?.uid ??
-        cameraState.cameras.find((camera) => camera.snapshotPath && camera.enabled)?.uid ??
+        cameraState.cameras.find((camera) => cameraCanShowFrames(camera) && camera.enabled)?.uid ??
         cameraState.cameras[0]?.uid;
       releaseFrame();
+      delete cameraState.failure;
       cameraState.message =
         cameraState.cameras.length === 0
           ? 'This printer reports no cameras.'
           : `${cameraState.cameras.length} camera${cameraState.cameras.length === 1 ? '' : 's'} found.`;
-      document.getElementById('printer-camera-details')?.setAttribute('open', '');
     } catch (error) {
       const message =
         error instanceof PrinterCameraError || error instanceof MoonrakerTransportError
@@ -1333,12 +1368,18 @@ function setupDomUI(
   const printerCameraHost = document.getElementById('printer-camera-host');
   if (printerCameraHost) {
     const cameraDetails = document.getElementById('printer-camera-details') as HTMLDetailsElement | null;
+    const devicePage = document.getElementById('page-device');
     const visibilityListeners = new Set<() => void>();
     const announceVisibility = () => {
       for (const listener of visibilityListeners) listener();
     };
     document.addEventListener('visibilitychange', announceVisibility);
     cameraDetails?.addEventListener('toggle', announceVisibility);
+    // The Device page is hidden by whoever switches workspaces, so the panel
+    // watches the attribute rather than the switch: polling a camera nobody can
+    // see is the same waste whether the tab moved or the tab bar did.
+    const pageVisibility = devicePage ? new MutationObserver(announceVisibility) : undefined;
+    if (devicePage) pageVisibility?.observe(devicePage, { attributes: true, attributeFilter: ['hidden'] });
     // Behind a closed <details>: loaded when it is opened, not at first paint.
     void (async () => {
       const { PrinterCameraPanel } = await import('./ui/dom/PrinterCameraPanel');
@@ -1351,6 +1392,7 @@ function setupDomUI(
           getStatus: () => ({
             busy: cameraState.busy,
             ...(cameraState.message ? { message: cameraState.message } : {}),
+            ...(cameraState.failure ? { failure: cameraState.failure } : {}),
           }),
           subscribe: (listener) => {
             cameraListeners.add(listener);
@@ -1366,22 +1408,30 @@ function setupDomUI(
           },
           captureFrame: async () => {
             const camera = selectedCamera();
-            if (!camera?.snapshotPath) return;
+            if (!camera || !cameraCanShowFrames(camera)) return;
             try {
               const { transport } = await connectConfiguredPrinter();
               const bytes = await fetchCameraSnapshot(transport, camera);
               releaseFrame();
               cameraState.frameUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/jpeg' }));
               delete cameraState.message;
+              delete cameraState.failure;
             } catch (error) {
-              cameraState.message = error instanceof PrinterCameraError ? error.message : (error as Error).message;
+              const message = error instanceof PrinterCameraError ? error.message : (error as Error).message;
+              cameraState.message = message;
+              // Shown where the picture would be: a panel that keeps saying
+              // "waiting for the first frame" while every fetch fails is asking
+              // the operator to wait for something that is not coming.
+              cameraState.failure = message;
             }
             notifyCamera();
           },
         },
         {
-          // Hidden tab or collapsed section both mean nobody is watching.
-          isVisible: () => document.visibilityState === 'visible' && cameraDetails?.open !== false,
+          // Hidden tab, another workspace, or a collapsed section: all three
+          // mean nobody is watching.
+          isVisible: () =>
+            document.visibilityState === 'visible' && cameraDetails?.open !== false && devicePage?.hidden !== true,
           subscribeVisibility: (listener) => {
             visibilityListeners.add(listener);
             return () => visibilityListeners.delete(listener);
@@ -1396,6 +1446,7 @@ function setupDomUI(
         () => {
           releaseFrame();
           cameraPanel.dispose();
+          pageVisibility?.disconnect();
           document.removeEventListener('visibilitychange', announceVisibility);
         },
         { once: true },
@@ -5153,6 +5204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     },
   );
   workspaceViews.mount();
+  showWorkspaceView = (id) => workspaceViews.activate(id);
   window.addEventListener('pagehide', () => workspaceViews.dispose(), { once: true });
 
   // ---- Shell chrome ------------------------------------------------------

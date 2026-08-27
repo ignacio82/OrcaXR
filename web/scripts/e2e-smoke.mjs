@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { strToU8, zipSync } from 'fflate';
+import { createServer } from 'node:http';
 import { startMoonrakerSimulator } from './moonraker-simulator.mjs';
 import { launchBrowser, openReadyPage, startPreview } from './preview-harness.mjs';
 
@@ -1725,7 +1726,7 @@ async function sliceAndSendActivePlate(page, printer) {
   await browsePrinterStorage(page, printer);
   await usePrinterConsole(page, printer);
   await readPrintHistory(page);
-  await watchPrinterCamera(page, printer);
+  await watchPrinterCamera(page, printer, cameraService);
   await inspectAndAuthorFromPreview(page);
 
   await clickMenuAction(page, 'edit_undo');
@@ -2508,17 +2509,78 @@ async function readPrintHistory(page) {
 }
 
 /**
+ * A camera service on its own port, which is how a stock Klipper box serves one.
+ *
+ * Moonraker answers on 7125 and crowsnest on 8080, so the snapshot URL the
+ * printer reports is on the same machine at a *different origin*. That is the
+ * arrangement that used to be silently rewritten to Moonraker's port, where it
+ * answers nothing and the panel says "waiting for the first frame" forever.
+ */
+async function startCameraService() {
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  let requests = 0;
+  const credentials = [];
+  const server = createServer((request, response) => {
+    requests += 1;
+    // Anything that looks like the printer's key arriving here is a leak: this
+    // service never issued one and must never be handed one.
+    for (const header of ['x-api-key', 'authorization']) {
+      if (request.headers[header]) credentials.push(`${header}: ${request.headers[header]}`);
+    }
+    if (/[?&](?:api[-_]?key|token)=/i.test(request.url ?? '')) credentials.push(`query: ${request.url}`);
+    response.writeHead(200, {
+      'content-type': 'image/png',
+      // A camera service that expects a browser on another origin says so; one
+      // that does not is reported as unreachable rather than waited on.
+      'access-control-allow-origin': '*',
+    });
+    response.end(png);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  return {
+    url: `http://127.0.0.1:${port}`,
+    get requests() {
+      return requests;
+    },
+    get credentials() {
+      return credentials;
+    },
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
+/**
  * The camera, and the polling policy that comes with it.
  *
  * Each frame is a separate authenticated request, so the assertion that matters
  * as much as the picture is that the requests stop when the section is closed.
  */
-async function watchPrinterCamera(page, printer) {
+async function watchPrinterCamera(page, printer, cameraService) {
+  // "Tools ▸ View Webcam" from the Prepare workspace has to *show* the camera.
+  // The panel lives on the Device page, so an action that only opened the
+  // section left an operator on Prepare looking at an unchanged window.
+  await page.$eval('[data-view-tab="prepare"]', (tab) => tab.click());
+  await page.waitForFunction(() => globalThis.document.getElementById('page-device')?.hidden === true, {
+    timeout: 30_000,
+  });
+  await clickMenuAction(page, 'view_webcam');
+  await page.waitForFunction(
+    () =>
+      globalThis.document.getElementById('page-device')?.hidden === false &&
+      globalThis.document.getElementById('printer-camera-details')?.open === true &&
+      globalThis.document.querySelector('[data-view-tab="device"]')?.getAttribute('aria-selected') === 'true',
+    { timeout: 30_000 },
+  );
+
   await showInspectorTab(page, 'printer');
   await page.$eval('#btn-printer-webcam', (button) => button.click());
   await page.waitForSelector('[data-printer-camera-panel="true"]', { timeout: 30_000 });
   await page.waitForFunction(
-    () => globalThis.document.querySelector('[data-printer-camera-select]')?.options.length === 2,
+    () => globalThis.document.querySelector('[data-printer-camera-select]')?.options.length === 3,
     { timeout: 30_000 },
   );
 
@@ -2539,6 +2601,24 @@ async function watchPrinterCamera(page, printer) {
   // The mount is reproduced rather than ignored.
   assert.equal(await page.$eval('[data-printer-camera-frame]', (image) => image.style.transform), 'rotate(180deg)');
   assert.ok(printer.snapshotRequests > 0, 'frames were fetched from the printer');
+
+  // A camera served by another port of the same machine is fetched *there*.
+  // This is the ordinary crowsnest arrangement, and the one that used to be
+  // rewritten to Moonraker's port and then waited on forever.
+  const beforeBay = cameraService.requests;
+  await page.$eval('[data-printer-camera-select]', (select) => {
+    select.value = 'cam-bay';
+    select.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
+  });
+  await page.waitForFunction(
+    () => {
+      const image = globalThis.document.querySelector('[data-printer-camera-frame]');
+      return image && !image.hidden && image.src.startsWith('blob:');
+    },
+    { timeout: 30_000 },
+  );
+  assert.ok(cameraService.requests > beforeBay, 'the camera on the other port was never asked for a frame');
+  assert.deepEqual(cameraService.credentials, [], 'the printer key must not follow a request to another service');
 
   // A stream-only camera is listed with its reason instead of being hidden.
   await page.$eval('[data-printer-camera-select]', (select) => {
@@ -2574,7 +2654,9 @@ async function watchPrinterCamera(page, printer) {
   const idle = printer.snapshotRequests;
   await new Promise((resolve) => setTimeout(resolve, 1200));
   assert.equal(printer.snapshotRequests, idle, 'a hidden camera fetches nothing');
-  console.log('[e2e] printer camera shown as authenticated snapshots, and stopped fetching once hidden');
+  console.log(
+    '[e2e] View Webcam opened the Device workspace, cameras shown from Moonraker and from another port of the same machine, and fetching stopped once hidden',
+  );
 }
 
 function checksumOf(buffer) {
@@ -2643,6 +2725,7 @@ const fixtureDirectory = await mkdtemp(join(tmpdir(), 'orcaxr-e2e-'));
 const fixturePath = await writeMultiPlateFixture(fixtureDirectory);
 const objFixturePath = await writeObjFixture(fixtureDirectory);
 const gcodeFixturePath = await writeGcodeFixture(fixtureDirectory);
+const cameraService = await startCameraService();
 const printer = await startMoonrakerSimulator({
   // Klipper reports its macros through `configfile.settings`; the console reads
   // parameters out of the bodies rather than inventing a schema Klipper lacks.
@@ -2666,7 +2749,8 @@ const printer = await startMoonrakerSimulator({
     exists: index !== 1,
     metadata: { estimated_time: 3000 },
   })),
-  // One camera that can be shown as snapshots, and one that only streams.
+  // Three cameras, one of each arrangement a real printer reports: served by
+  // Moonraker itself, served by another port of the same machine, and stream-only.
   webcams: [
     {
       uid: 'cam-nozzle',
@@ -2677,6 +2761,14 @@ const printer = await startMoonrakerSimulator({
       snapshot_url: '/webcam/snapshot',
       stream_url: '/webcam/?action=stream',
       rotation: 180,
+    },
+    {
+      uid: 'cam-bay',
+      name: 'Bay',
+      service: 'mjpegstreamer',
+      enabled: true,
+      target_fps: 4,
+      snapshot_url: `${cameraService.url}/?action=snapshot`,
     },
     { uid: 'cam-chamber', name: 'Chamber', service: 'webrtc-go2rtc', enabled: true, stream_url: '/webrtc' },
   ],
@@ -4474,5 +4566,6 @@ try {
   await browser.close();
   await server.close();
   await printer.close();
+  await cameraService.close();
   await rm(fixtureDirectory, { recursive: true, force: true });
 }

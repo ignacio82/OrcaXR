@@ -13,12 +13,14 @@ import { MoonrakerTransportError } from '../MoonrakerTypes';
 import {
   MAX_SNAPSHOT_FPS,
   PrinterCameraError,
+  cameraCanShowFrames,
   cameraPollIntervalMs,
   cameraTransform,
   describeCameraService,
   fetchCameraSnapshot,
   listPrinterCameras,
   normalizePath,
+  resolveCameraSource,
 } from '../PrinterCamera';
 
 let passed = 0;
@@ -151,6 +153,96 @@ await test('keeps a reported URL on the printer’s own host', () => {
   assert.equal(normalizePath('data:image/png;base64,AAAA'), undefined);
   assert.equal(normalizePath(''), undefined);
   assert.equal(normalizePath(undefined), undefined);
+});
+
+await test('a camera on another port of the same machine is fetched there, not at Moonraker', async () => {
+  // The stock Klipper arrangement: Moonraker on 7125, crowsnest on 8080. This
+  // is the case that used to be silently rewritten to Moonraker's own port,
+  // where it 404s on every poll and the panel waits forever.
+  const cameras = await listPrinterCameras(
+    new FakeTransport({
+      webcams: [
+        { name: 'Nozzle', service: 'mjpegstreamer', snapshot_url: 'http://printer.local:8080/?action=snapshot' },
+      ],
+    }),
+    undefined,
+    'http://printer.local:7125',
+  );
+  assert.equal(cameras[0].snapshotUrl, 'http://printer.local:8080/?action=snapshot');
+  assert.equal(cameras[0].snapshotPath, undefined, 'it must not be re-pointed at the Moonraker port');
+  assert.equal(cameras[0].unsupportedReason, undefined);
+  assert.equal(cameraCanShowFrames(cameras[0]), true);
+});
+
+await test('a camera on a different host is refused, and says where it was pointing', async () => {
+  const cameras = await listPrinterCameras(
+    new FakeTransport({ webcams: [{ name: 'Elsewhere', snapshot_url: 'http://evil.example/steal?x=1' }] }),
+    undefined,
+    'http://printer.local:7125',
+  );
+  assert.equal(cameras[0].snapshotPath, undefined);
+  assert.equal(cameras[0].snapshotUrl, undefined);
+  assert.equal(cameraCanShowFrames(cameras[0]), false);
+  assert.match(cameras[0].unsupportedReason ?? '', /evil\.example/);
+  assert.match(cameras[0].unsupportedReason ?? '', /printer\.local:7125/);
+});
+
+await test('the endpoint decides which of the three readings a URL gets', () => {
+  const endpoint = 'http://printer.local:7125';
+  assert.deepEqual(resolveCameraSource('/webcam/?action=snapshot', endpoint), {
+    kind: 'path',
+    path: '/webcam/?action=snapshot',
+  });
+  assert.deepEqual(resolveCameraSource('http://printer.local:7125/webcam/?action=snapshot', endpoint), {
+    kind: 'path',
+    path: '/webcam/?action=snapshot',
+  });
+  assert.deepEqual(resolveCameraSource('http://printer.local:8080/?action=snapshot', endpoint), {
+    kind: 'origin',
+    url: 'http://printer.local:8080/?action=snapshot',
+  });
+  assert.equal(resolveCameraSource('http://elsewhere.local:8080/x', endpoint)?.kind, 'unsupported');
+  assert.equal(resolveCameraSource('javascript:alert(1)', endpoint)?.kind, 'unsupported');
+  assert.equal(resolveCameraSource(undefined, endpoint), undefined);
+});
+
+await test('a same-host camera is fetched directly and without the printer key', async () => {
+  const seen: { url: string; init?: RequestInit }[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    seen.push({ url: request.url, ...(init ? { init } : {}) });
+    assert.equal(request.headers.get('x-api-key'), null, 'one service\u2019s key is not handed to another');
+    return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const transport = new FakeTransport(WEBCAMS);
+    const camera = {
+      uid: 'c',
+      name: 'Nozzle',
+      service: 'mjpegstreamer' as const,
+      enabled: true,
+      snapshotUrl: 'http://printer.local:8080/?action=snapshot',
+      targetFps: 2,
+      rotationDegrees: 0 as const,
+      flipHorizontal: false,
+      flipVertical: false,
+    };
+    assert.deepEqual([...(await fetchCameraSnapshot(transport, camera))], [1, 2, 3]);
+    assert.equal(seen[0]?.url, 'http://printer.local:8080/?action=snapshot');
+    assert.deepEqual(transport.calls, [], 'the Moonraker transport is not involved at all');
+
+    globalThis.fetch = (async () => new Response('nope', { status: 404 })) as typeof fetch;
+    await assert.rejects(
+      () => fetchCameraSnapshot(transport, camera),
+      (error: unknown) =>
+        error instanceof PrinterCameraError &&
+        error.code === 'snapshot-failed' &&
+        /answered 404 at http:\/\/printer\.local:8080/.test(error.message),
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
 });
 
 await test('reports a printer with no camera component instead of an empty list', async () => {

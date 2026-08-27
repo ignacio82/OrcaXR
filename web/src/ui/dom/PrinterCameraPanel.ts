@@ -14,7 +14,12 @@
  */
 
 import type { PrinterCamera } from '../../printer/PrinterCamera';
-import { cameraPollIntervalMs, cameraTransform, describeCameraService } from '../../printer/PrinterCamera';
+import {
+  cameraCanShowFrames,
+  cameraPollIntervalMs,
+  cameraTransform,
+  describeCameraService,
+} from '../../printer/PrinterCamera';
 import { t } from '../../l10n/t';
 
 export interface PrinterCameraPanelPort {
@@ -22,7 +27,17 @@ export interface PrinterCameraPanelPort {
   getSelected(): PrinterCamera | undefined;
   /** Object URL of the most recent frame, when one has been fetched. */
   getFrameUrl(): string | undefined;
-  getStatus(): { readonly busy: boolean; readonly message?: string };
+  getStatus(): {
+    readonly busy: boolean;
+    readonly message?: string;
+    /**
+     * The last frame fetch that failed, if the last one did. Kept apart from
+     * `message` because the panel shows it *in place of* the picture: a panel
+     * that says "waiting for the first frame" while every request is failing is
+     * telling the operator to keep waiting for something that will never come.
+     */
+    readonly failure?: string;
+  };
   subscribe(listener: () => void): () => void;
   select(uid: string): void;
   /** Discover the printer's cameras. */
@@ -160,7 +175,7 @@ export class PrinterCameraPanel {
   private applyPolling(): void {
     const camera = this.port.getSelected();
     const shouldPoll =
-      !this.disposed && this.live && this.host.isVisible() && camera !== undefined && camera.snapshotPath !== undefined;
+      !this.disposed && this.live && this.host.isVisible() && camera !== undefined && cameraCanShowFrames(camera);
     if (!shouldPoll) {
       if (this.timer !== undefined) {
         this.host.clearInterval(this.timer);
@@ -204,12 +219,12 @@ export class PrinterCameraPanel {
       const polling = this.timer !== undefined;
       this.liveToggle.textContent = this.live ? 'Pause' : 'Resume';
       this.liveToggle.dataset.printerCameraPolling = String(polling);
-      this.liveToggle.disabled = !selected || selected.snapshotPath === undefined;
+      this.liveToggle.disabled = !selected || !cameraCanShowFrames(selected);
     }
 
     const frameUrl = this.port.getFrameUrl();
     if (this.image && this.placeholder) {
-      if (frameUrl && selected?.snapshotPath) {
+      if (frameUrl && selected && cameraCanShowFrames(selected)) {
         this.image.src = frameUrl;
         this.image.hidden = false;
         this.image.style.transform = cameraTransform(selected);
@@ -221,7 +236,10 @@ export class PrinterCameraPanel {
           ? cameras.length === 0
             ? 'No cameras found on this printer yet.'
             : 'Select a camera.'
-          : (selected.unsupportedReason ?? 'Waiting for the first frame…');
+          : // Whatever actually went wrong outranks the optimistic caption: the
+            // camera cannot be shown, the fetch failed, or nothing has come back
+            // yet — in that order, because only the last one is worth waiting on.
+            (selected.unsupportedReason ?? state.failure ?? 'Waiting for the first frame…');
       }
     }
 
