@@ -200,4 +200,32 @@ test('the headset offers the same pre-print options the flat dialog offers', () 
   assert.deepEqual(toggled, ['bed-leveling']);
 });
 
+test('a fact the send never learned is reported as unknown, not invented', () => {
+  const root = new FakePanel({});
+  renderXrPrintSubmissionDialog(
+    adapter,
+    root,
+    // A context carrying only what a send confirmation actually knows.
+    {
+      printerName: 'Snapmaker U1',
+      availablePrinters: ['Snapmaker U1'],
+      plateName: 'Plate 1',
+      toolSlots: [],
+      toolSummaryText: '2 tools (T0, T1)',
+      readyToPrint: true,
+    },
+  );
+
+  const texts = root.texts().map((entry) => entry.text);
+  assert.ok(texts.includes('2 tools (T0, T1)'), 'the mapping the confirmation computed is shown, not a sketch of one');
+  assert.equal(texts.filter((text) => text === 'not reported').length, 2, 'an unknown duration and weight each say so');
+  for (const invented of ['1h 15m', '35.0 g', 'Extruder T1', 'Smooth PEI']) {
+    assert.ok(!texts.some((text) => text.includes(invented)), `${invented} must not be conjured`);
+  }
+  assert.ok(
+    !texts.some((text) => /Nozzle:|Bed:/.test(text)),
+    'a nozzle and bed nobody reported are left out of the header entirely',
+  );
+});
+
 console.log(`\nXrPrintSubmissionDialog: ${passed} tests passed.`);

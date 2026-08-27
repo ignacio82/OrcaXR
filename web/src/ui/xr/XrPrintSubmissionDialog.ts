@@ -44,12 +44,25 @@ export interface XrPrintSubmissionContext {
   readonly printerName: string;
   readonly availablePrinters: readonly string[];
   readonly plateName: string;
-  readonly nozzleMm: number;
-  readonly bedType: string;
-  readonly estimatedDurationFormatted: string;
-  readonly estimatedWeightGrams: number;
+  /**
+   * Facts about the job. Every one is optional because the send confirmation
+   * genuinely may not know it, and a headset is the worst place to invent one:
+   * an operator reading "1h 15m" over a plate has no way to tell a real
+   * estimate from a placeholder. Absent renders as "not reported", never as a
+   * plausible number.
+   */
+  readonly nozzleMm?: number;
+  readonly bedType?: string;
+  readonly estimatedDurationFormatted?: string;
+  readonly estimatedWeightGrams?: number;
   readonly estimatedCostFormatted?: string;
   readonly toolSlots: readonly XrPrintToolSlotMap[];
+  /**
+   * What the send confirmation says about filaments, in its own words — shown
+   * when there is no per-tool map to draw, so the sheet reports the mapping it
+   * has rather than sketching one it does not.
+   */
+  readonly toolSummaryText?: string;
   readonly readyToPrint: boolean;
   readonly blockedReason?: string;
   /** Pre-print options this machine reported; empty when it reported none. */
@@ -156,12 +169,19 @@ export function renderXrPrintSubmissionDialog<PanelNode, ImageNode, TextNode>(
   ui.appendChild(printerCard, pRow);
 
   const metaText = ui.createText(
-    `Plate: ${ctx.plateName} · Nozzle: ${ctx.nozzleMm.toFixed(2)} mm · Bed: ${ctx.bedType}`,
+    [
+      `Plate: ${ctx.plateName}`,
+      ...(ctx.nozzleMm !== undefined ? [`Nozzle: ${ctx.nozzleMm.toFixed(2)} mm`] : []),
+      ...(ctx.bedType ? [`Bed: ${ctx.bedType}`] : []),
+    ].join(' · '),
     { fontSize: 12, color: '#a0aab5' },
   );
   ui.appendChild(printerCard, metaText);
 
   // Section 2: Filament Slot Mapping
+  if (ctx.toolSlots.length === 0 && ctx.toolSummaryText) {
+    ui.appendChild(container, ui.createText(ctx.toolSummaryText, { fontSize: 12, color: C.textMuted, paddingTop: 2 }));
+  }
   if (ctx.toolSlots.length > 0) {
     const slotHeading = createXrSectionHeading(ui, 'Filament Slot Mapping (Tool → AMS Slot)');
     ui.appendChild(container, slotHeading);
@@ -230,7 +250,11 @@ export function renderXrPrintSubmissionDialog<PanelNode, ImageNode, TextNode>(
   ui.appendChild(durationCol, ui.createText('ESTIMATED TIME', { fontSize: 10, fontWeight: 'bold', color: '#8a94a0' }));
   ui.appendChild(
     durationCol,
-    ui.createText(ctx.estimatedDurationFormatted || '—', { fontSize: 15, fontWeight: 'bold', color: '#ffffff' }),
+    ui.createText(ctx.estimatedDurationFormatted || 'not reported', {
+      fontSize: 15,
+      fontWeight: 'bold',
+      color: ctx.estimatedDurationFormatted ? '#ffffff' : C.textMuted,
+    }),
   );
   ui.appendChild(summaryCard, durationCol);
 
@@ -238,11 +262,14 @@ export function renderXrPrintSubmissionDialog<PanelNode, ImageNode, TextNode>(
   ui.appendChild(weightCol, ui.createText('MATERIAL WEIGHT', { fontSize: 10, fontWeight: 'bold', color: '#8a94a0' }));
   ui.appendChild(
     weightCol,
-    ui.createText(`${ctx.estimatedWeightGrams.toFixed(1)} g`, {
-      fontSize: 15,
-      fontWeight: 'bold',
-      color: '#ffffff',
-    }),
+    ui.createText(
+      ctx.estimatedWeightGrams === undefined ? 'not reported' : `${ctx.estimatedWeightGrams.toFixed(1)} g`,
+      {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: '#ffffff',
+      },
+    ),
   );
   ui.appendChild(summaryCard, weightCol);
 

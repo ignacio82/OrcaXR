@@ -7499,17 +7499,12 @@ export class OrcaWorkspace extends xb.Script {
     const input = this.pendingPrintInput;
     if (!input) return;
 
-    const toolSlots = input.toolSummary
-      ? [
-          {
-            toolNumber: 1,
-            toolName: 'Extruder T1',
-            toolColor: '#ff6d00',
-            toolType: 'PLA',
-            mappedPrinterSlot: 1,
-          },
-        ]
-      : [];
+    // No fabricated slot map. This used to hand the sheet a single invented
+    // "Extruder T1 / PLA / #ff6d00" row whenever any tool summary existed,
+    // which drew a confident mapping for a machine nobody had asked. The
+    // summary the send confirmation actually computed is shown instead, and a
+    // real per-tool map can be passed the day the input carries one.
+    const toolSlots: never[] = [];
 
     const startOptions = (input.startOptions ?? []) as readonly {
       id: string;
@@ -7535,11 +7530,19 @@ export class OrcaWorkspace extends xb.Script {
       printerName: input.endpointLabel || 'Snapmaker U1',
       availablePrinters: [input.endpointLabel || 'Snapmaker U1'],
       plateName: input.plateName || 'Plate 1',
-      nozzleMm: Number(this.headNozzles[0] ?? '0.4'),
-      bedType: this.profile?.displayName ?? 'Smooth PEI',
-      estimatedDurationFormatted: input.estimatedDurationFormatted ?? '1h 15m',
-      estimatedWeightGrams: input.estimatedWeightGrams ?? 35,
-      estimatedCostFormatted: input.estimatedCostFormatted,
+      // Only what is actually known. A nozzle this workspace has never been
+      // told about, a bed type nobody reported, and an estimate the slicer did
+      // not produce are all left out rather than filled in with something
+      // plausible — `1h 15m` and `35 g` were literals, and a headset gives an
+      // operator no way to tell those from a real answer.
+      ...(this.headNozzles[0] !== undefined && Number.isFinite(Number(this.headNozzles[0]))
+        ? { nozzleMm: Number(this.headNozzles[0]) }
+        : {}),
+      ...(input.estimatedDurationFormatted ? { estimatedDurationFormatted: input.estimatedDurationFormatted } : {}),
+      ...(typeof input.estimatedWeightGrams === 'number' ? { estimatedWeightGrams: input.estimatedWeightGrams } : {}),
+      ...(input.estimatedCostFormatted ? { estimatedCostFormatted: input.estimatedCostFormatted } : {}),
+      /** The summary the send confirmation computed, verbatim. */
+      toolSummaryText: input.toolSummary,
       toolSlots,
       readyToPrint: (input.blockers?.length ?? 0) === 0,
       blockedReason: input.blockers?.[0],
