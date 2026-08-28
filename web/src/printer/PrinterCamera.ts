@@ -230,6 +230,9 @@ export async function fetchCameraSnapshot(
     const forward = () => deadline.abort();
     signal?.addEventListener('abort', forward, { once: true });
     try {
+      // No headers, deliberately. This has to stay a *simple* cross-origin GET:
+      // mjpg-streamer answers `OPTIONS` with 501, so anything that turns this
+      // into a preflighted request stops it working entirely.
       const response = await fetchLocalNetwork(camera.snapshotUrl, {
         signal: deadline.signal,
         cache: 'no-store',

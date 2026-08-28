@@ -844,6 +844,17 @@ cannot send `x-api-key`, and the key must never go in the URL. So on the hosted
 HTTPS app a plain-HTTP camera is only visible if the camera allows cross-origin
 reads, and the panel says exactly that instead of waiting.
 
+Two consequences reach outside the code. A camera route is **proven by a frame**
+and then kept: cameras drop frames, and retiring a working route over one walks
+the panel onto a broken route and then reports *its* failure as the camera's.
+And the hosted HTTPS app needs the camera itself to allow the read — `nginx`
+serving `/webcam/` sends no `access-control-*` by default — so `fix-webcam-cors.py`
+in the repo root adds that header over SSH, named to specific origins rather
+than `*` (a camera in somebody's house should not be readable by every site they
+visit), with a backup, an `nginx -t` gate, and a rollback. That fetch must stay
+header-free: mjpg-streamer answers `OPTIONS` with `501`, so anything that turns
+it into a preflighted request breaks it.
+
 Two panel invariants come out of this. `PrinterCameraPanel` must claim its timer
 *before* asking for the first frame: the image route completes synchronously and
 notifies, which re-enters `applyPolling`, and with the assignment last every

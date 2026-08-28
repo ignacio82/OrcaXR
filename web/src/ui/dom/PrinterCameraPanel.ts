@@ -51,6 +51,8 @@ export interface PrinterCameraPanelPort {
    * about it — try the next route, or say why there is not one.
    */
   reportFrameError?(url: string): void;
+  /** Report that a frame did appear, so a working route is not given up on. */
+  reportFrameShown?(): void;
   /** Which route the frames are actually arriving by, once one is chosen. */
   getRoute?(): CameraMechanism | undefined;
 }
@@ -145,6 +147,9 @@ export class PrinterCameraPanel {
       this.render();
     });
     image.addEventListener('load', () => {
+      // A picture is the only proof the browser's own route works; nothing on
+      // this side of an `<img>` can tell otherwise.
+      this.port.reportFrameShown?.();
       if (this.brokenFrame === undefined) return;
       this.brokenFrame = undefined;
       this.render();

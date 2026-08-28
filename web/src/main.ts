@@ -1301,7 +1301,7 @@ function setupDomUI(
      * streamer's own port, and rather than ask anyone which, each route is
      * tried in turn and the one that works is kept.
      */
-    routes: Map<string, { readonly tried: Set<CameraMechanism>; current?: CameraMechanism }>;
+    routes: Map<string, { readonly tried: Set<CameraMechanism>; current?: CameraMechanism; proven?: boolean }>;
   } = { cameras: [], busy: false, routes: new Map() };
 
   /**
@@ -1340,9 +1340,21 @@ function setupDomUI(
     return `${lastMessage} There is nothing else left to try for ${camera.name}.`;
   };
 
+  /**
+   * Record that a route produced a frame.
+   *
+   * A route that has worked is not given up on. Cameras drop frames — a busy
+   * Pi, a Wi-Fi blip — and retiring the route that has been feeding the panel
+   * over one of those would walk off a working arrangement onto a broken one,
+   * and then report the broken one's failure as the camera's.
+   */
+  const cameraRouteWorked = (camera: PrinterCamera) => {
+    const state = cameraState.routes.get(camera.uid);
+    if (state) state.proven = true;
+  };
   const cameraRouteFailed = (camera: PrinterCamera, mechanism: CameraMechanism) => {
     const state = cameraState.routes.get(camera.uid);
-    if (!state) return;
+    if (!state || state.proven) return;
     state.tried.add(mechanism);
     delete state.current;
   };
@@ -1493,6 +1505,7 @@ function setupDomUI(
               const bytes = await fetchCameraSnapshot(transport, camera, undefined, route);
               releaseFrame();
               cameraState.frameUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/jpeg' }));
+              cameraRouteWorked(camera);
               delete cameraState.message;
               delete cameraState.failure;
             } catch (error) {
@@ -1505,6 +1518,10 @@ function setupDomUI(
               cameraState.failure = cameraRoute(camera) ? message : describeExhaustedCamera(camera, message);
             }
             notifyCamera();
+          },
+          reportFrameShown: () => {
+            const camera = selectedCamera();
+            if (camera) cameraRouteWorked(camera);
           },
           reportFrameError: (url) => {
             const camera = selectedCamera();
