@@ -65,8 +65,11 @@ export async function startMoonrakerSimulator(options = {}) {
     webcams: options.webcams ?? [],
     /** Path the snapshot endpoint answers on. */
     snapshotPath: options.snapshotPath ?? '/webcam/snapshot',
+    /** Whether that path refuses a request with no API key, as a secured Moonraker does. */
+    requireSnapshotKey: options.requireSnapshotKey ?? false,
   };
   let snapshotRequests = 0;
+  let unauthenticatedSnapshots = 0;
   const commands = [];
   const stored = new Map();
   const requests = [];
@@ -323,6 +326,17 @@ export async function startMoonrakerSimulator(options = {}) {
     }
     if (url.pathname === state.snapshotPath) {
       snapshotRequests += 1;
+      // A secured Moonraker refuses an unauthenticated snapshot, which is
+      // exactly why a camera it serves cannot be shown with an `<img>`: an
+      // image tag has no way to send the key. Modelled here so the fallback
+      // from "let the browser load it" to "fetch it with the key in a header"
+      // is exercised for the reason it exists.
+      if (state.requireSnapshotKey && !request.headers['x-api-key']) {
+        unauthenticatedSnapshots += 1;
+        response.writeHead(401, { ...cors, 'content-type': 'application/json' });
+        response.end(JSON.stringify({ error: { code: 401, message: 'Unauthorized' } }));
+        return;
+      }
       response.writeHead(200, { ...cors, 'content-type': 'image/png' });
       response.end(SNAPSHOT_PNG);
       return;
@@ -451,6 +465,10 @@ export async function startMoonrakerSimulator(options = {}) {
     /** How many camera frames have been fetched, for polling assertions. */
     get snapshotRequests() {
       return snapshotRequests;
+    },
+    /** Snapshot requests that arrived with no key, which a browser image cannot send. */
+    get unauthenticatedSnapshots() {
+      return unauthenticatedSnapshots;
     },
     setSlots(slots) {
       state.slots = slots;

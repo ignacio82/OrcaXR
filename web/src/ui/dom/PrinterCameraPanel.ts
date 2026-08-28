@@ -13,7 +13,7 @@
  * says it shows snapshots and this one only streams".
  */
 
-import type { PrinterCamera } from '../../printer/PrinterCamera';
+import type { CameraMechanism, PrinterCamera } from '../../printer/PrinterCamera';
 import {
   cameraCanShowFrames,
   cameraPollIntervalMs,
@@ -44,6 +44,15 @@ export interface PrinterCameraPanelPort {
   refresh(): void | Promise<void>;
   /** Fetch exactly one frame; the panel owns the timer. */
   captureFrame(): void | Promise<void>;
+  /**
+   * Report that the browser refused the frame at `url`.
+   *
+   * Only an `<img>` knows whether it loaded, and only the port knows what to do
+   * about it — try the next route, or say why there is not one.
+   */
+  reportFrameError?(url: string): void;
+  /** Which route the frames are actually arriving by, once one is chosen. */
+  getRoute?(): CameraMechanism | undefined;
 }
 
 export interface PrinterCameraPanelHost {
@@ -65,6 +74,8 @@ export class PrinterCameraPanel {
   private status?: HTMLElement;
   private timer?: number;
   private live = true;
+  /** The frame URL the browser refused, so it is not drawn as a picture. */
+  private brokenFrame?: string;
   private unsubscribe?: () => void;
   private unsubscribeVisibility?: () => void;
   private disposed = false;
@@ -124,6 +135,20 @@ export class PrinterCameraPanel {
     image.alt = t('ui.printerCameraPanel.liveViewFromThePrinter', 'Live view from the printer camera');
     image.hidden = true;
     image.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;';
+    // A frame pointed straight at the camera can fail in ways only the browser
+    // sees — mixed content, a refused connection, a 404 behind an <img>. Left
+    // unhandled it is an invisible image under a caption claiming a live view.
+    image.addEventListener('error', () => {
+      if (!this.image?.src || this.image.hidden) return;
+      this.brokenFrame = this.image.src;
+      this.port.reportFrameError?.(this.image.src);
+      this.render();
+    });
+    image.addEventListener('load', () => {
+      if (this.brokenFrame === undefined) return;
+      this.brokenFrame = undefined;
+      this.render();
+    });
     frame.appendChild(image);
     const placeholder = doc.createElement('p');
     placeholder.dataset.printerCameraPlaceholder = 'true';
@@ -184,8 +209,12 @@ export class PrinterCameraPanel {
       return;
     }
     if (this.timer !== undefined) return;
-    void this.port.captureFrame();
+    // The timer is claimed *before* the first frame is asked for. A capture that
+    // needs no network — one the browser loads itself — finishes synchronously
+    // and notifies, which re-enters this method; with the assignment last, every
+    // re-entry saw no timer, started another one, and asked for another frame.
     this.timer = this.host.setInterval(() => void this.port.captureFrame(), cameraPollIntervalMs(camera));
+    void this.port.captureFrame();
   }
 
   private render(): void {
@@ -223,12 +252,16 @@ export class PrinterCameraPanel {
     }
 
     const frameUrl = this.port.getFrameUrl();
+    const broken = frameUrl !== undefined && this.brokenFrame === frameUrl;
     if (this.image && this.placeholder) {
-      if (frameUrl && selected && cameraCanShowFrames(selected)) {
+      if (frameUrl && !broken && selected && cameraCanShowFrames(selected)) {
         this.image.src = frameUrl;
         this.image.hidden = false;
         this.image.style.transform = cameraTransform(selected);
         this.placeholder.hidden = true;
+        // Kept current even while it is hidden: a placeholder that still holds
+        // the last failure is a lie the moment the picture goes away again.
+        this.placeholder.textContent = '';
       } else {
         this.image.hidden = true;
         this.placeholder.hidden = false;
@@ -245,7 +278,7 @@ export class PrinterCameraPanel {
 
     if (this.caption) {
       this.caption.textContent = selected
-        ? `${selected.name} — ${describeCameraService(selected)}${
+        ? `${selected.name} — ${describeCameraService(selected, this.port.getRoute?.())}${
             this.host.isVisible() ? '' : ' — paused while hidden'
           }`
         : '';

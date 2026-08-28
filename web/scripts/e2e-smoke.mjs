@@ -2577,6 +2577,9 @@ async function watchPrinterCamera(page, printer, cameraService) {
   );
 
   await showInspectorTab(page, 'printer');
+  // This printer wants its key, as a secured Moonraker does. That is the whole
+  // reason a camera it serves cannot simply be pointed at with an `<img>`.
+  await setDomInput(page, '#printer-api-key', 'e2e-camera-key');
   await page.$eval('#btn-printer-webcam', (button) => button.click());
   await page.waitForSelector('[data-printer-camera-panel="true"]', { timeout: 30_000 });
   await page.waitForFunction(
@@ -2584,8 +2587,10 @@ async function watchPrinterCamera(page, printer, cameraService) {
     { timeout: 30_000 },
   );
 
-  // The camera that can actually be shown is chosen first, and its frame is
-  // fetched as bytes: a blob URL, never a URL pointed at the printer.
+  // The camera that can actually be shown is chosen first. Its snapshot URL is
+  // relative, so the browser tries the printer's *web* origin first — nothing
+  // is there in this harness — and falls back to the credentialed transport,
+  // which answers with bytes: a blob URL, never a URL carrying a key.
   await page.waitForFunction(
     () => {
       const image = globalThis.document.querySelector('[data-printer-camera-frame]');
@@ -2594,6 +2599,10 @@ async function watchPrinterCamera(page, printer, cameraService) {
     { timeout: 30_000 },
   );
   assert.equal(await page.$eval('[data-printer-camera-select]', (select) => select.value), 'cam-nozzle');
+  // The browser was allowed to try first and was refused, because an image tag
+  // has no way to send the key; the frame then arrived through the transport,
+  // and the caption says which of the two is actually feeding it.
+  assert.ok(printer.unauthenticatedSnapshots > 0, 'the browser never tried to load the frame itself');
   assert.match(
     await page.$eval('[data-printer-camera-caption]', (node) => node.textContent),
     /Nozzle — mjpegstreamer-adaptive, shown as authenticated snapshots at up to 4 fps/,
@@ -2610,12 +2619,15 @@ async function watchPrinterCamera(page, printer, cameraService) {
     select.value = 'cam-bay';
     select.dispatchEvent(new globalThis.Event('change', { bubbles: true }));
   });
+  // It carries no credential, so the browser can simply display it — the one
+  // mechanism that needs no CORS, which is what a stock camera service offers.
   await page.waitForFunction(
-    () => {
+    (origin) => {
       const image = globalThis.document.querySelector('[data-printer-camera-frame]');
-      return image && !image.hidden && image.src.startsWith('blob:');
+      return image && !image.hidden && image.src.startsWith(`${origin}/?action=snapshot`);
     },
     { timeout: 30_000 },
+    cameraService.url,
   );
   assert.ok(cameraService.requests > beforeBay, 'the camera on the other port was never asked for a frame');
   assert.deepEqual(cameraService.credentials, [], 'the printer key must not follow a request to another service');
@@ -2654,6 +2666,7 @@ async function watchPrinterCamera(page, printer, cameraService) {
   const idle = printer.snapshotRequests;
   await new Promise((resolve) => setTimeout(resolve, 1200));
   assert.equal(printer.snapshotRequests, idle, 'a hidden camera fetches nothing');
+  await setDomInput(page, '#printer-api-key', '');
   console.log(
     '[e2e] View Webcam opened the Device workspace, cameras shown from Moonraker and from another port of the same machine, and fetching stopped once hidden',
   );
@@ -2749,8 +2762,26 @@ const printer = await startMoonrakerSimulator({
     exists: index !== 1,
     metadata: { estimated_time: 3000 },
   })),
-  // Three cameras, one of each arrangement a real printer reports: served by
-  // Moonraker itself, served by another port of the same machine, and stream-only.
+  // A secured machine: its own snapshot endpoint refuses a request with no key,
+  // which is what makes the credentialed route necessary rather than merely
+  // available. The camera list itself is filled in below, once the simulator
+  // has an address to name.
+  requireSnapshotKey: true,
+  historyTotals: {
+    total_jobs: 23,
+    total_time: 82_800,
+    total_print_time: 75_900,
+    total_filament_used: 96_600,
+    longest_print: 3322,
+  },
+});
+// Three cameras, one of each arrangement a real printer reports: served by
+// Moonraker itself on its own origin, served by another port of the same
+// machine, and stream-only. The relative form — the one that sent this app
+// looking on the wrong port — is pinned in the unit tests instead, because the
+// origin it resolves to is port 80 of the machine running this suite, which no
+// test can own.
+printer.setState({
   webcams: [
     {
       uid: 'cam-nozzle',
@@ -2758,7 +2789,7 @@ const printer = await startMoonrakerSimulator({
       service: 'mjpegstreamer-adaptive',
       enabled: true,
       target_fps: 10,
-      snapshot_url: '/webcam/snapshot',
+      snapshot_url: `${printer.url}/webcam/snapshot`,
       stream_url: '/webcam/?action=stream',
       rotation: 180,
     },
@@ -2772,14 +2803,8 @@ const printer = await startMoonrakerSimulator({
     },
     { uid: 'cam-chamber', name: 'Chamber', service: 'webrtc-go2rtc', enabled: true, stream_url: '/webrtc' },
   ],
-  historyTotals: {
-    total_jobs: 23,
-    total_time: 82_800,
-    total_print_time: 75_900,
-    total_filament_used: 96_600,
-    longest_print: 3322,
-  },
 });
+
 const { server, url } = await startPreview();
 const browser = await launchBrowser();
 try {

@@ -19,8 +19,11 @@ import {
   describeCameraService,
   fetchCameraSnapshot,
   listPrinterCameras,
+  cameraDirectFrameUrl,
+  cameraLoadsAsImage,
+  cameraMechanisms,
   normalizePath,
-  resolveCameraSource,
+  resolveCameraSources,
 } from '../PrinterCamera';
 
 let passed = 0;
@@ -187,23 +190,71 @@ await test('a camera on a different host is refused, and says where it was point
   assert.match(cameras[0].unsupportedReason ?? '', /printer\.local:7125/);
 });
 
-await test('the endpoint decides which of the three readings a URL gets', () => {
+await test('a relative path belongs to the printer\u2019s web origin, not its API port', () => {
+  // Measured on a real machine: Moonraker reports `/webcam/snapshot.jpg`, nginx
+  // serves it on port 80 (200 image/jpeg) and Moonraker's own 7125 answers 404.
+  // Both are offered, the likely one first, so neither arrangement needs
+  // anybody to configure which one they have.
+  const endpoint = 'http://192.168.1.228:7125';
+  assert.deepEqual(resolveCameraSources('/webcam/snapshot.jpg', endpoint), {
+    snapshotUrl: 'http://192.168.1.228/webcam/snapshot.jpg',
+    snapshotPath: '/webcam/snapshot.jpg',
+  });
+  // A bare relative path is rooted the same way.
+  assert.equal(
+    resolveCameraSources('webcam/?action=snapshot', endpoint).snapshotUrl,
+    'http://192.168.1.228/webcam/?action=snapshot',
+  );
+  // With no endpoint to resolve against, the only reading left is the historic
+  // one: a path on whatever the transport is pointed at.
+  assert.deepEqual(resolveCameraSources('/webcam/snapshot.jpg'), { snapshotPath: '/webcam/snapshot.jpg' });
+});
+
+await test('the endpoint decides which reading an absolute URL gets', () => {
   const endpoint = 'http://printer.local:7125';
-  assert.deepEqual(resolveCameraSource('/webcam/?action=snapshot', endpoint), {
-    kind: 'path',
-    path: '/webcam/?action=snapshot',
+  // On Moonraker's own origin, both routes exist: the browser can load it, and
+  // the transport can fetch it with the key if that fails.
+  assert.deepEqual(resolveCameraSources('http://printer.local:7125/webcam/?action=snapshot', endpoint), {
+    snapshotPath: '/webcam/?action=snapshot',
+    snapshotUrl: 'http://printer.local:7125/webcam/?action=snapshot',
   });
-  assert.deepEqual(resolveCameraSource('http://printer.local:7125/webcam/?action=snapshot', endpoint), {
-    kind: 'path',
-    path: '/webcam/?action=snapshot',
+  assert.deepEqual(resolveCameraSources('http://printer.local:8080/?action=snapshot', endpoint), {
+    snapshotUrl: 'http://printer.local:8080/?action=snapshot',
   });
-  assert.deepEqual(resolveCameraSource('http://printer.local:8080/?action=snapshot', endpoint), {
-    kind: 'origin',
-    url: 'http://printer.local:8080/?action=snapshot',
-  });
-  assert.equal(resolveCameraSource('http://elsewhere.local:8080/x', endpoint)?.kind, 'unsupported');
-  assert.equal(resolveCameraSource('javascript:alert(1)', endpoint)?.kind, 'unsupported');
-  assert.equal(resolveCameraSource(undefined, endpoint), undefined);
+  assert.match(resolveCameraSources('http://elsewhere.local:8080/x', endpoint).unsupportedReason ?? '', /elsewhere/);
+  assert.match(resolveCameraSources('javascript:alert(1)', endpoint).unsupportedReason ?? '', /not a URL/);
+  assert.deepEqual(resolveCameraSources(undefined, endpoint), {});
+});
+
+await test('an image is preferred, and a fetch is only tried where an image cannot go', () => {
+  const camera = {
+    uid: 'c',
+    name: 'case',
+    service: 'webrtc-camerastreamer' as const,
+    enabled: true,
+    snapshotUrl: 'http://192.168.1.228/webcam/snapshot.jpg',
+    snapshotPath: '/webcam/snapshot.jpg',
+    targetFps: 15,
+    rotationDegrees: 0 as const,
+    flipHorizontal: false,
+    flipVertical: false,
+  };
+  // On a plain-HTTP page the browser can display it, which needs no CORS — the
+  // only thing that works against a service sending no `access-control-*`.
+  assert.equal(cameraLoadsAsImage(camera, 'http:'), true);
+  assert.deepEqual([...cameraMechanisms(camera, 'http:')], ['image', 'transport']);
+  // On an HTTPS page it is mixed content, so the bytes are the only route and
+  // the camera has to allow the read itself.
+  assert.equal(cameraLoadsAsImage(camera, 'https:'), false);
+  assert.deepEqual([...cameraMechanisms(camera, 'https:')], ['direct', 'transport']);
+  // A camera with nowhere to fall back to offers exactly one route.
+  const { snapshotPath: _dropped, ...directOnly } = camera;
+  assert.deepEqual([...cameraMechanisms(directOnly, 'http:')], ['image']);
+
+  // The frame URL is made unique, or the browser shows the frame it already has.
+  const first = cameraDirectFrameUrl(camera, 1);
+  assert.match(first ?? '', /^http:\/\/192\.168\.1\.228\/webcam\/snapshot\.jpg\?orcaxr_frame=1$/);
+  assert.notEqual(first, cameraDirectFrameUrl(camera, 2));
 });
 
 await test('a same-host camera is fetched directly and without the printer key', async () => {
@@ -228,13 +279,13 @@ await test('a same-host camera is fetched directly and without the printer key',
       flipHorizontal: false,
       flipVertical: false,
     };
-    assert.deepEqual([...(await fetchCameraSnapshot(transport, camera))], [1, 2, 3]);
+    assert.deepEqual([...(await fetchCameraSnapshot(transport, camera, undefined, 'direct'))], [1, 2, 3]);
     assert.equal(seen[0]?.url, 'http://printer.local:8080/?action=snapshot');
     assert.deepEqual(transport.calls, [], 'the Moonraker transport is not involved at all');
 
     globalThis.fetch = (async () => new Response('nope', { status: 404 })) as typeof fetch;
     await assert.rejects(
-      () => fetchCameraSnapshot(transport, camera),
+      () => fetchCameraSnapshot(transport, camera, undefined, 'direct'),
       (error: unknown) =>
         error instanceof PrinterCameraError &&
         error.code === 'snapshot-failed' &&
@@ -243,6 +294,36 @@ await test('a same-host camera is fetched directly and without the printer key',
   } finally {
     globalThis.fetch = original;
   }
+});
+
+await test('the reported Snapmaker payload resolves to the port that actually serves it', async () => {
+  // Verbatim from `http://192.168.1.228:7125/server/webcams/list` on a Snapmaker
+  // running camera-streamer behind nginx: the snapshot is relative, port 80
+  // answers it with `200 image/jpeg`, and Moonraker's own 7125 answers 404.
+  const cameras = await listPrinterCameras(
+    new FakeTransport({
+      webcams: [
+        {
+          name: 'case',
+          enabled: true,
+          target_fps: 15,
+          service: 'webrtc-camerastreamer',
+          stream_url: '/webcam/webrtc',
+          snapshot_url: '/webcam/snapshot.jpg',
+          uid: 'b46ed60e-478f-52e1-aa7f-ef77195d7e5f',
+        },
+      ],
+    }),
+    undefined,
+    'http://192.168.1.228:7125',
+  );
+  const [camera] = cameras;
+  assert.equal(camera.snapshotUrl, 'http://192.168.1.228/webcam/snapshot.jpg');
+  assert.equal(camera.unsupportedReason, undefined, 'a camera with a snapshot is not stream-only');
+  assert.equal(cameraCanShowFrames(camera), true);
+  // On a plain-HTTP page it is simply displayed, which is what works against a
+  // service that sends no cross-origin headers.
+  assert.deepEqual([...cameraMechanisms(camera, 'http:')], ['image', 'transport']);
 });
 
 await test('reports a printer with no camera component instead of an empty list', async () => {

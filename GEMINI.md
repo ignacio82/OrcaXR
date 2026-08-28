@@ -818,25 +818,40 @@ four-entry cache, supplies the offline navigation fallback, and restores COOP/
 COEP headers. Update its cache version and offline contract whenever deploy
 assets or worker/schema compatibility changes.
 
-A camera Moonraker reports is not necessarily served by Moonraker.
-`PrinterCamera.resolveCameraSource` classifies each reported URL against the
-endpoint the session is connected to: Moonraker's own origin is a **path**
-fetched through the credentialed transport; the same host on another port (the
-ordinary crowsnest arrangement — Moonraker on 7125, the camera on 8080) is an
-**origin** fetched directly with `fetchLocalNetwork` and deliberately *without*
-the API key, since that service never issued one; and any other host is
-**unsupported**, refused with both origins named, because a camera list is
-printer-host content and following it off-host would make the page a request
-forwarder. Do not restore the old "keep the path, drop the origin" reading — it
-silently re-pointed the second case at Moonraker's port, where it answers
-nothing, and that is what made the panel sit on "Waiting for the first frame…"
-forever. A cross-port camera still needs its own CORS allowance (LNA does not
-bypass CORS), so a frame that fails is reported with the URL and that cause
-named, under a bounded 8-second wait, rather than waited on indefinitely.
-Actions that reveal something on a workspace page must show the page first —
-`view_webcam` opens the Device workspace before the camera section — and
-`PrinterCameraPanel` stops polling when the tab, the workspace page, or the
-section is hidden, not just the first of those.
+A camera Moonraker reports is almost never served by Moonraker.
+`PrinterCamera.resolveCameraSources` answers two questions, and both were once
+answered wrongly. **Where**: a snapshot URL is usually reported *relative*
+(`/webcam/snapshot.jpg`), and on a stock machine nginx serves that on port 80 —
+the origin the printer's own web UI loads from — while Moonraker answers the API
+on 7125. Verified on the Snapmaker at 192.168.1.228: port 80 returns
+`200 image/jpeg`, port 7125 returns 404. So a relative path resolves to the
+printer's **web origin**, keeping the API path as a second candidate for the
+arrangement where Moonraker does serve it; do not restore the old "keep the
+path, drop the origin" reading, which asked 7125 for a file only 80 has and left
+the panel on "Waiting for the first frame…" forever. A different *host* is still
+refused, naming both origins: a camera list is printer-host content, and
+following it off-host would make the page a request forwarder.
+
+**How**: `cameraMechanisms` orders the routes and callers walk them, keeping the
+first that works. `image` points an `<img>` at the camera — no credential, and
+**no CORS**, which is the only thing that works against a service that sends no
+`access-control-*` headers (the same Snapmaker's nginx sends none). `direct`
+fetches those bytes, worth trying only where an image cannot go — an HTTPS page
+cannot load an HTTP image, while LNA does let the fetch through — and it needs
+the camera to allow cross-origin reads. `transport` fetches the path through
+Moonraker with the key, for a camera Moonraker really does serve; an `<img>`
+cannot send `x-api-key`, and the key must never go in the URL. So on the hosted
+HTTPS app a plain-HTTP camera is only visible if the camera allows cross-origin
+reads, and the panel says exactly that instead of waiting.
+
+Two panel invariants come out of this. `PrinterCameraPanel` must claim its timer
+*before* asking for the first frame: the image route completes synchronously and
+notifies, which re-enters `applyPolling`, and with the assignment last every
+re-entry started another timer — a few hundred intervals and a blown stack
+within a second. And actions that reveal something on a workspace page must show
+the page first: `view_webcam` opens the Device workspace before the camera
+section, and polling stops when the tab, the workspace page, or the section is
+hidden, not just the first of those.
 
 LNA does **not** bypass CORS. Moonraker's `cors_domains` must include the
 page's exact origin (the hosted app uses `https://orcaxr.martinez.fyi`);

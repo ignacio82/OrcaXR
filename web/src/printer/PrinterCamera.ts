@@ -2,23 +2,43 @@
  * Watching the print (P9.6).
  *
  * Moonraker knows which cameras a printer has, where their streams live, and
- * how each one is mounted. Discovery is straightforward; how to *show* one is
- * the decision that matters here, and it is constrained by something the rest
- * of this boundary already settled: a credential never goes in a URL.
+ * how each one is mounted. Discovery is straightforward. *Where a reported URL
+ * points* and *how to load it* are the two decisions that matter, and both were
+ * originally answered wrongly for the ordinary Klipper box.
  *
- * That rules out the obvious implementation. An `<img src>` or a `<video src>`
- * pointed at the printer cannot carry the `x-api-key` header, so on any printer
- * that requires one the feed would simply be a broken image — and the only way
- * to make it load would be to put the key in the query string, which the
- * transport refuses on purpose.
+ * Where. A snapshot URL is usually reported relative — `/webcam/snapshot.jpg` —
+ * and on a stock machine that path is served by **nginx on port 80**, the same
+ * origin the printer's own web UI is loaded from, while Moonraker answers the
+ * API on 7125. Resolving it against the API endpoint asks 7125 for a file only
+ * 80 has, which answers 404 forever; that is what left this panel sitting on
+ * "Waiting for the first frame…". A relative path therefore resolves to the
+ * printer's *web* origin, and the API path is kept as a second candidate for
+ * the arrangement where Moonraker really does serve it.
  *
- * So every camera is rendered the one way that keeps the credential in a
- * header: authenticated snapshots, fetched through the transport and swapped
- * into an object URL on a timer the camera itself declares. Live MJPEG, WebRTC,
- * and HLS transports are reported as unsupported with that reason rather than
- * being half-offered — see the platform-adaptation register.
+ * How. Two mechanisms, chosen by whether a credential is involved.
  *
- * The timer is visibility-aware because it is a network fetch per frame: a
+ * A camera served by Moonraker itself is fetched through the transport as
+ * bytes, because an `<img src>` cannot carry `x-api-key` and the only way to
+ * make it load would be to put the key in the query string, which the transport
+ * refuses on purpose.
+ *
+ * A camera served by anything else — nginx, crowsnest, camera-streamer — is a
+ * separate service that never issued this app a credential, so nothing is sent
+ * to it and an `<img src>` can simply load it. That matters beyond tidiness:
+ * those services do not send CORS headers (verified on a Snapmaker running
+ * camera-streamer behind nginx: `200 image/jpeg`, no `access-control-*` at
+ * all), so reading their bytes cross-origin is blocked by the browser while
+ * *displaying* them is not. An image needs no CORS; a fetch does.
+ *
+ * Neither mechanism can cross the mixed-content line: an HTTPS page cannot load
+ * an HTTP image at all, and there the byte fetch — which Local Network Access
+ * does let through — is the only route, so the camera has to allow cross-origin
+ * reads. When that is the situation the panel says so instead of waiting.
+ *
+ * Live MJPEG, WebRTC, and HLS transports are reported as unsupported with that
+ * reason rather than half-offered — see the platform-adaptation register.
+ *
+ * The timer is visibility-aware because every frame is its own request: a
  * hidden tab polling a printer forever is somebody's bandwidth and somebody's
  * battery.
  */
@@ -158,27 +178,26 @@ function readCamera(entry: unknown, endpointHttpUrl?: string): PrinterCamera | u
   if (!name) return undefined;
   const rawService = (readString(entry.service) ?? '').toLowerCase();
   const service = (SERVICES.has(rawService) ? rawService : 'unknown') as CameraService;
-  const snapshot = resolveCameraSource(readString(entry.snapshot_url), endpointHttpUrl);
+  const snapshot = resolveCameraSources(readString(entry.snapshot_url), endpointHttpUrl);
   const streamPath = normalizePath(readString(entry.stream_url), endpointHttpUrl);
   const targetFps = readNumber(entry.target_fps);
   // Why this camera cannot be shown, in the most specific terms available:
   // where it is served from, if that is the problem, and otherwise that it
   // offers no snapshot at all.
   const unsupportedReason =
-    snapshot === undefined
+    snapshot.snapshotPath === undefined && snapshot.snapshotUrl === undefined
       ? // Without a snapshot endpoint there is no way to fetch a frame with the
         // API key in a header, and the alternative leaks it into a URL.
-        'This camera offers only a live stream, which cannot carry the printer API key; OrcaXR shows authenticated snapshots instead.'
-      : snapshot.kind === 'unsupported'
-        ? snapshot.reason
-        : undefined;
+        (snapshot.unsupportedReason ??
+        'This camera offers only a live stream, which cannot carry the printer API key; OrcaXR shows authenticated snapshots instead.')
+      : undefined;
   return Object.freeze({
     uid: readString(entry.uid) ?? name,
     name,
     service,
     enabled: entry.enabled !== false,
-    ...(snapshot?.kind === 'path' ? { snapshotPath: snapshot.path } : {}),
-    ...(snapshot?.kind === 'origin' ? { snapshotUrl: snapshot.url } : {}),
+    ...(snapshot.snapshotPath ? { snapshotPath: snapshot.snapshotPath } : {}),
+    ...(snapshot.snapshotUrl ? { snapshotUrl: snapshot.snapshotUrl } : {}),
     ...(streamPath ? { streamPath } : {}),
     targetFps: targetFps !== undefined && targetFps > 0 ? targetFps : DEFAULT_FPS,
     rotationDegrees: readRotation(entry.rotation),
@@ -198,11 +217,14 @@ export async function fetchCameraSnapshot(
   transport: PrinterCameraTransport,
   camera: PrinterCamera,
   signal?: AbortSignal,
+  /** Which route to take; defaults to the first fetchable one for this camera. */
+  mechanism?: CameraMechanism,
 ): Promise<Uint8Array> {
-  // A camera on another port of the same machine is a different service, so it
-  // is fetched directly and without the printer's API key. Handing one service's
+  const route = mechanism ?? (camera.snapshotUrl ? 'direct' : 'transport');
+  // A camera served by anything but Moonraker is a different service, so it is
+  // fetched directly and without the printer's API key. Handing one service's
   // credential to another is not something to do for a convenience.
-  if (camera.snapshotUrl) {
+  if (route === 'direct' && camera.snapshotUrl) {
     const deadline = new AbortController();
     const expiry = setTimeout(() => deadline.abort(), SNAPSHOT_TIMEOUT_MS);
     const forward = () => deadline.abort();
@@ -241,6 +263,9 @@ export async function fetchCameraSnapshot(
   }
   if (!camera.snapshotPath) {
     throw new PrinterCameraError(camera.unsupportedReason ?? 'This camera has no snapshot endpoint.', 'no-snapshot');
+  }
+  if (route === 'image') {
+    throw new PrinterCameraError('An image route is loaded by the browser, not fetched here.', 'no-snapshot');
   }
   try {
     return await transport.download(camera.snapshotPath, {
@@ -281,82 +306,153 @@ export function cameraCanShowFrames(camera: PrinterCamera): boolean {
   return camera.snapshotPath !== undefined || camera.snapshotUrl !== undefined;
 }
 
-export function describeCameraService(camera: PrinterCamera): string {
+export function describeCameraService(camera: PrinterCamera, route?: CameraMechanism): string {
   const service = camera.service === 'unknown' ? 'an unrecognised service' : camera.service;
   if (!cameraCanShowFrames(camera)) return service;
   const rate = `at up to ${Math.min(camera.targetFps, MAX_SNAPSHOT_FPS)} fps`;
-  return camera.snapshotPath
+  // Named by how the frames are actually being obtained, because
+  // "authenticated" is a claim about this app's own behaviour and only one of
+  // these routes carries a credential at all.
+  return (route ?? cameraMechanisms(camera)[0]) === 'transport'
     ? `${service}, shown as authenticated snapshots ${rate}`
-    : `${service}, shown as snapshots from ${camera.snapshotUrl} ${rate}`;
+    : `${service}, shown as snapshots ${rate}`;
 }
 
 /** Where a reported camera URL actually points, relative to the printer. */
-export type CameraSource =
-  /** Served by Moonraker itself: fetched through the transport, with its key. */
-  | { readonly kind: 'path'; readonly path: string }
-  /** The same machine on another port: fetched directly, without the key. */
-  | { readonly kind: 'origin'; readonly url: string }
-  /** Somewhere else entirely, or unreadable. */
-  | { readonly kind: 'unsupported'; readonly reason: string };
+export interface CameraSnapshotSources {
+  /**
+   * Path on the endpoint this session is connected to, fetched through the
+   * transport with the API key. Used when Moonraker itself serves the camera.
+   */
+  readonly snapshotPath?: string;
+  /**
+   * Absolute URL on the printer's machine but *not* on Moonraker's API origin —
+   * nginx on port 80, or crowsnest on 8080. Loaded directly and without the
+   * printer's API key, because that service never issued one.
+   */
+  readonly snapshotUrl?: string;
+  /** Why neither is possible, when neither is. */
+  readonly unsupportedReason?: string;
+}
 
 /**
  * Work out where a reported camera URL points.
  *
- * Moonraker reports these three ways, and the difference matters: relative
- * (`/webcam/?action=snapshot`), absolute against Moonraker's own origin, or —
- * the common one on a stock Klipper box — absolute against the *same host on a
- * different port*, because crowsnest and mjpg-streamer answer on 8080 while
- * Moonraker answers on 7125.
+ * Moonraker reports these three ways, and the difference decides everything:
+ * relative (`/webcam/snapshot.jpg`), absolute on Moonraker's own origin, or
+ * absolute on the same host at a different port, because crowsnest and
+ * mjpg-streamer answer on 8080 while Moonraker answers on 7125.
  *
- * The last case is why a camera could sit forever on "waiting for the first
- * frame". This function used to strip the origin off an absolute URL and hand
- * back the path, which quietly re-pointed `http://printer:8080/?action=snapshot`
- * at `http://printer:7125/?action=snapshot` — a URL that answers 404 on every
- * poll. Its own comment claimed such URLs were dropped; they were not.
+ * A relative path yields **both** candidates, most likely first. Moonraker
+ * reports it relative to the origin the printer's own web UI is served from —
+ * nginx on port 80 — not to the API port, so that is where it is looked for;
+ * the API path is kept behind it for a setup where Moonraker does serve it, and
+ * for the simulator, which does. Trying the second only after the first fails
+ * is what keeps both arrangements working without asking anyone to configure
+ * which one they have.
  *
- * A different *host* is still refused, for the reason that comment gave: a
- * camera list is printer-host content, and following it elsewhere would make
- * this page a request forwarder.
+ * A different *host* is refused: a camera list is printer-host content, and
+ * following it elsewhere would make this page a request forwarder.
  */
-export function resolveCameraSource(url: string | undefined, endpointHttpUrl?: string): CameraSource | undefined {
-  if (!url) return undefined;
+export function resolveCameraSources(url: string | undefined, endpointHttpUrl?: string): CameraSnapshotSources {
+  if (!url) return {};
   const trimmed = url.trim();
-  if (trimmed.startsWith('/')) return { kind: 'path', path: trimmed };
+  const endpoint = parseUrl(endpointHttpUrl);
+
   if (/^https?:\/\//i.test(trimmed)) {
-    let parsed: URL;
-    try {
-      parsed = new URL(trimmed);
-    } catch {
-      return { kind: 'unsupported', reason: `${trimmed} is not a URL this app can read.` };
-    }
-    let endpoint: URL | undefined;
-    try {
-      endpoint = endpointHttpUrl ? new URL(endpointHttpUrl) : undefined;
-    } catch {
-      endpoint = undefined;
-    }
-    // Without an endpoint to compare against, the safe reading is the historic
-    // one: treat it as a path on whatever the transport is pointed at.
-    if (!endpoint) return { kind: 'path', path: `${parsed.pathname}${parsed.search}` };
-    if (parsed.origin === endpoint.origin) return { kind: 'path', path: `${parsed.pathname}${parsed.search}` };
-    if (parsed.hostname === endpoint.hostname) return { kind: 'origin', url: parsed.toString() };
+    const parsed = parseUrl(trimmed);
+    if (!parsed) return { unsupportedReason: `${trimmed} is not a URL this app can read.` };
+    const path = `${parsed.pathname}${parsed.search}`;
+    // Without an endpoint to compare against, the only safe reading is that it
+    // is a path on whatever the transport is pointed at.
+    if (!endpoint) return { snapshotPath: path };
+    if (parsed.origin === endpoint.origin) return { snapshotPath: path, snapshotUrl: parsed.toString() };
+    if (parsed.hostname === endpoint.hostname) return { snapshotUrl: parsed.toString() };
     return {
-      kind: 'unsupported',
-      reason:
+      unsupportedReason:
         `This camera is served from ${parsed.origin}, which is not the printer at ${endpoint.origin}. ` +
         'OrcaXR only fetches from the printer it is connected to.',
     };
   }
-  // A bare relative path like `webcam/?action=snapshot`.
-  return /^[\w./?=&%-]+$/.test(trimmed)
-    ? { kind: 'path', path: `/${trimmed}` }
-    : { kind: 'unsupported', reason: `${trimmed} is not a URL this app can read.` };
+
+  // A path, either rooted or bare (`webcam/?action=snapshot`).
+  if (!/^[\w./?=&%-]+$/.test(trimmed.replace(/^\//, ''))) {
+    return { unsupportedReason: `${trimmed} is not a URL this app can read.` };
+  }
+  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  if (!endpoint) return { snapshotPath: path };
+  // The printer's web origin: same machine, default port for the scheme, which
+  // is where a stock install's nginx serves both the UI and `/webcam/`.
+  return { snapshotUrl: `${endpoint.protocol}//${endpoint.host.split(':')[0]}${path}`, snapshotPath: path };
 }
 
-/** Backwards-compatible reading for callers that only want a same-host path. */
+function parseUrl(value: string | undefined): URL | undefined {
+  if (!value) return undefined;
+  try {
+    return new URL(value);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether the browser can load this camera as an image from the current page.
+ *
+ * An HTTPS page cannot load an HTTP subresource, and Local Network Access does
+ * not change that for images — it is a `fetch` option. So on the hosted app a
+ * plain-HTTP camera has to go through the byte fetch, which is the path that
+ * needs the camera to allow cross-origin reads.
+ */
+export function cameraLoadsAsImage(camera: PrinterCamera, pageProtocol = globalThis.location?.protocol): boolean {
+  if (!camera.snapshotUrl) return false;
+  return !(pageProtocol === 'https:' && camera.snapshotUrl.startsWith('http:'));
+}
+
+/**
+ * How a frame can be obtained, in the order worth trying.
+ *
+ * - `image`: point an `<img>` at the camera's own URL. No credential, and no
+ *   CORS involved, which is the only thing that works against a service that
+ *   sends no `access-control-*` headers — the normal case.
+ * - `direct`: fetch that same URL as bytes. Only worth trying when the image
+ *   route is closed (an HTTPS page cannot load an HTTP image, while Local
+ *   Network Access does let the fetch through), and it needs the camera to
+ *   allow cross-origin reads.
+ * - `transport`: fetch the path through Moonraker, credentialed. For the
+ *   arrangement where Moonraker really does serve the camera.
+ *
+ * A caller walks this list, moving on when one fails, so a printer whose
+ * cameras sit somewhere unusual still ends up showing a picture without anyone
+ * being asked to configure which arrangement they have.
+ */
+export type CameraMechanism = 'image' | 'direct' | 'transport';
+
+export function cameraMechanisms(camera: PrinterCamera, pageProtocol?: string): readonly CameraMechanism[] {
+  const asImage = cameraLoadsAsImage(camera, pageProtocol);
+  return Object.freeze([
+    ...(asImage ? (['image'] as const) : []),
+    // Skipped when the image route is open: it is the same URL, so it would
+    // fail the same way and only spend a request saying so.
+    ...(camera.snapshotUrl && !asImage ? (['direct'] as const) : []),
+    ...(camera.snapshotPath ? (['transport'] as const) : []),
+  ]);
+}
+
+/**
+ * The URL to point an `<img>` at, made unique so the browser fetches a frame
+ * rather than showing the one it already has.
+ */
+export function cameraDirectFrameUrl(camera: PrinterCamera, nonce: number | string): string | undefined {
+  if (!camera.snapshotUrl) return undefined;
+  const url = parseUrl(camera.snapshotUrl);
+  if (!url) return undefined;
+  url.searchParams.set('orcaxr_frame', String(nonce));
+  return url.toString();
+}
+
+/** The path reading alone, for a stream URL that is recorded but never loaded. */
 export function normalizePath(url: string | undefined, endpointHttpUrl?: string): string | undefined {
-  const source = resolveCameraSource(url, endpointHttpUrl);
-  return source?.kind === 'path' ? source.path : undefined;
+  return resolveCameraSources(url, endpointHttpUrl).snapshotPath;
 }
 
 function readRotation(value: unknown): 0 | 90 | 180 | 270 {

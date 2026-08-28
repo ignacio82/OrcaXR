@@ -27,6 +27,8 @@ import {
   assessGcodeCommand,
   buildMacroInvocation,
   cameraCanShowFrames,
+  cameraDirectFrameUrl,
+  cameraMechanisms,
   deletePrinterFile,
   downloadPrinterFile,
   fetchCameraSnapshot,
@@ -56,6 +58,7 @@ import {
   type PrintJobSnapshot,
   type PrintHistoryPage,
   type PrintHistoryTotals,
+  type CameraMechanism,
   type PrinterCamera,
   type PrinterConsoleOperation,
   type PrinterDirectoryListing,
@@ -1292,7 +1295,57 @@ function setupDomUI(
     message?: string;
     /** The last frame fetch that failed, cleared by the next one that works. */
     failure?: string;
-  } = { cameras: [], busy: false };
+    /**
+     * How each camera's frames are being obtained, and what has already been
+     * ruled out. A printer's cameras can sit on Moonraker, on nginx, or on a
+     * streamer's own port, and rather than ask anyone which, each route is
+     * tried in turn and the one that works is kept.
+     */
+    routes: Map<string, { readonly tried: Set<CameraMechanism>; current?: CameraMechanism }>;
+  } = { cameras: [], busy: false, routes: new Map() };
+
+  /**
+   * The next route to try for this camera, or undefined when none is left.
+   *
+   * Every failure narrows the set, so a camera that ends up unreachable spends
+   * a handful of requests saying so rather than one per frame forever.
+   */
+  const cameraRoute = (camera: PrinterCamera): CameraMechanism | undefined => {
+    let state = cameraState.routes.get(camera.uid);
+    if (!state) {
+      state = { tried: new Set<CameraMechanism>() };
+      cameraState.routes.set(camera.uid, state);
+    }
+    if (state.current && !state.tried.has(state.current)) return state.current;
+    const next = cameraMechanisms(camera).find((mechanism) => !state.tried.has(mechanism));
+    state.current = next;
+    return next;
+  };
+  /**
+   * What to say once every route has failed.
+   *
+   * The common dead end is worth naming exactly, because it is not something
+   * the operator can fix in this app: a plain-HTTP camera cannot be displayed
+   * on an HTTPS page at all, so the only route left is reading its bytes, and
+   * most camera services send no cross-origin headers.
+   */
+  const describeExhaustedCamera = (camera: PrinterCamera, lastMessage: string): string => {
+    if (window.location.protocol === 'https:' && camera.snapshotUrl?.startsWith('http:')) {
+      return (
+        `${lastMessage} This page is HTTPS and ${camera.snapshotUrl} is plain HTTP, so the browser will not ` +
+        'display it directly and can only read its bytes — which the camera itself has to allow with a ' +
+        'cross-origin header. Reaching the printer over HTTPS, or allowing this origin on the camera, would show it.'
+      );
+    }
+    return `${lastMessage} There is nothing else left to try for ${camera.name}.`;
+  };
+
+  const cameraRouteFailed = (camera: PrinterCamera, mechanism: CameraMechanism) => {
+    const state = cameraState.routes.get(camera.uid);
+    if (!state) return;
+    state.tried.add(mechanism);
+    delete state.current;
+  };
   const cameraListeners = new Set<() => void>();
   const notifyCamera = () => {
     for (const listener of cameraListeners) listener();
@@ -1348,6 +1401,10 @@ function setupDomUI(
         cameraState.cameras[0]?.uid;
       releaseFrame();
       delete cameraState.failure;
+      // A fresh look at the printer is a fresh chance for every route: a camera
+      // that was unreachable a minute ago may be a camera that has been plugged
+      // back in.
+      cameraState.routes.clear();
       cameraState.message =
         cameraState.cameras.length === 0
           ? 'This printer reports no cameras.'
@@ -1389,6 +1446,10 @@ function setupDomUI(
           getCameras: () => cameraState.cameras,
           getSelected: () => selectedCamera(),
           getFrameUrl: () => cameraState.frameUrl,
+          getRoute: () => {
+            const camera = selectedCamera();
+            return camera ? cameraState.routes.get(camera.uid)?.current : undefined;
+          },
           getStatus: () => ({
             busy: cameraState.busy,
             ...(cameraState.message ? { message: cameraState.message } : {}),
@@ -1409,21 +1470,51 @@ function setupDomUI(
           captureFrame: async () => {
             const camera = selectedCamera();
             if (!camera || !cameraCanShowFrames(camera)) return;
+            const route = cameraRoute(camera);
+            if (!route) {
+              // Every route has been tried. Whatever the last one said stands;
+              // saying "waiting" on top of it would only invite more waiting.
+              notifyCamera();
+              return;
+            }
+            // The browser loads this one itself. It needs no credential, and an
+            // image needs no CORS — which is the only reason a stock camera
+            // service is visible at all.
+            if (route === 'image') {
+              releaseFrame();
+              cameraState.frameUrl = cameraDirectFrameUrl(camera, Date.now());
+              delete cameraState.message;
+              delete cameraState.failure;
+              notifyCamera();
+              return;
+            }
             try {
               const { transport } = await connectConfiguredPrinter();
-              const bytes = await fetchCameraSnapshot(transport, camera);
+              const bytes = await fetchCameraSnapshot(transport, camera, undefined, route);
               releaseFrame();
               cameraState.frameUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/jpeg' }));
               delete cameraState.message;
               delete cameraState.failure;
             } catch (error) {
               const message = error instanceof PrinterCameraError ? error.message : (error as Error).message;
+              cameraRouteFailed(camera, route);
               cameraState.message = message;
               // Shown where the picture would be: a panel that keeps saying
               // "waiting for the first frame" while every fetch fails is asking
               // the operator to wait for something that is not coming.
-              cameraState.failure = message;
+              cameraState.failure = cameraRoute(camera) ? message : describeExhaustedCamera(camera, message);
             }
+            notifyCamera();
+          },
+          reportFrameError: (url) => {
+            const camera = selectedCamera();
+            if (!camera) return;
+            cameraRouteFailed(camera, 'image');
+            releaseFrame();
+            const remaining = cameraRoute(camera);
+            const message = `The browser would not load a frame from ${url}.`;
+            cameraState.failure = remaining ? message : describeExhaustedCamera(camera, message);
+            cameraState.message = cameraState.failure;
             notifyCamera();
           },
         },
