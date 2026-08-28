@@ -66,10 +66,19 @@ export interface PrinterCameraPanelHost {
   clearInterval(handle: number): void;
 }
 
+/** How long one frame may be in flight before another may replace it. */
+const FRAME_LOAD_TIMEOUT_MS = 10_000;
+
 export class PrinterCameraPanel {
   private root?: HTMLElement;
   private select?: HTMLSelectElement;
-  private image?: HTMLImageElement;
+  /** Front and back frame buffers; `front` says which one is on screen. */
+  private buffers: HTMLImageElement[] = [];
+  private front = 0;
+  /** The frame being loaded into the back buffer, and the one on screen. */
+  private pendingUrl?: string;
+  private pendingSince = 0;
+  private shownUrl?: string;
   private placeholder?: HTMLElement;
   private caption?: HTMLElement;
   private liveToggle?: HTMLButtonElement;
@@ -132,29 +141,27 @@ export class PrinterCameraPanel {
     frame.style.cssText =
       'position:relative;width:100%;aspect-ratio:4/3;background:#0008;border-radius:8px;overflow:hidden;' +
       'display:flex;align-items:center;justify-content:center;';
-    const image = doc.createElement('img');
-    image.dataset.printerCameraFrame = 'true';
-    image.alt = t('ui.printerCameraPanel.liveViewFromThePrinter', 'Live view from the printer camera');
-    image.hidden = true;
-    image.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;';
-    // A frame pointed straight at the camera can fail in ways only the browser
-    // sees — mixed content, a refused connection, a 404 behind an <img>. Left
-    // unhandled it is an invisible image under a caption claiming a live view.
-    image.addEventListener('error', () => {
-      if (!this.image?.src || this.image.hidden) return;
-      this.brokenFrame = this.image.src;
-      this.port.reportFrameError?.(this.image.src);
-      this.render();
+    // Two images, one shown and one loading. A camera route points an `<img>`
+    // straight at the printer, and an `<img>` goes blank the moment its `src`
+    // changes — so a single element spends most of a 4 fps poll showing the
+    // backing colour rather than the last frame. Against the real machine that
+    // was a grey box with a caption claiming a live view. The back buffer takes
+    // the new frame and only becomes the front one once it has decoded.
+    const buffers = [0, 1].map(() => {
+      const element = doc.createElement('img');
+      element.alt = t('ui.printerCameraPanel.liveViewFromThePrinter', 'Live view from the printer camera');
+      element.hidden = true;
+      element.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;';
+      // A frame can fail in ways only the browser sees — mixed content, a
+      // refused connection, a 404 behind an `<img>`. Left unhandled it is an
+      // invisible image under a caption claiming a live view.
+      element.addEventListener('error', () => this.onFrameFailed(element));
+      element.addEventListener('load', () => this.onFrameLoaded(element));
+      frame.appendChild(element);
+      return element;
     });
-    image.addEventListener('load', () => {
-      // A picture is the only proof the browser's own route works; nothing on
-      // this side of an `<img>` can tell otherwise.
-      this.port.reportFrameShown?.();
-      if (this.brokenFrame === undefined) return;
-      this.brokenFrame = undefined;
-      this.render();
-    });
-    frame.appendChild(image);
+    buffers[0].dataset.printerCameraFrame = 'true';
+    this.buffers = buffers;
     const placeholder = doc.createElement('p');
     placeholder.dataset.printerCameraPlaceholder = 'true';
     placeholder.style.cssText = 'margin:0;padding:12px;font-size:12px;opacity:0.75;text-align:center;';
@@ -174,7 +181,6 @@ export class PrinterCameraPanel {
 
     this.root = root;
     this.select = select;
-    this.image = image;
     this.placeholder = placeholder;
     this.caption = caption;
     this.liveToggle = live;
@@ -258,17 +264,34 @@ export class PrinterCameraPanel {
 
     const frameUrl = this.port.getFrameUrl();
     const broken = frameUrl !== undefined && this.brokenFrame === frameUrl;
-    if (this.image && this.placeholder) {
-      if (frameUrl && !broken && selected && cameraCanShowFrames(selected)) {
-        this.image.src = frameUrl;
-        this.image.hidden = false;
-        this.image.style.transform = cameraTransform(selected);
+    if (this.buffers.length === 2 && this.placeholder) {
+      const showable = frameUrl !== undefined && !broken && selected !== undefined && cameraCanShowFrames(selected);
+      if (showable && selected) {
+        // The mount is reproduced on both, so a swap cannot lose it.
+        for (const buffer of this.buffers) buffer.style.transform = cameraTransform(selected);
+        // One load at a time. Assigning a new `src` cancels the load in flight,
+        // so polling faster than the camera can answer means no frame ever
+        // finishes: this printer needs longer than the 250 ms poll to produce a
+        // 195 KB frame, and every tick was aborting the previous one. Skipping
+        // while a load is outstanding lets the picture arrive at whatever rate
+        // the camera actually manages. A load that never resolves either way is
+        // given up on, so a stalled connection cannot wedge the panel.
+        const stalled = this.pendingUrl !== undefined && Date.now() - this.pendingSince > FRAME_LOAD_TIMEOUT_MS;
+        if (frameUrl !== this.shownUrl && (this.pendingUrl === undefined || stalled)) {
+          this.pendingUrl = frameUrl;
+          this.pendingSince = Date.now();
+          this.buffers[1 - this.front].src = frameUrl;
+        }
+      }
+      if (showable && this.shownUrl !== undefined) {
+        this.buffers[this.front].hidden = false;
         this.placeholder.hidden = true;
         // Kept current even while it is hidden: a placeholder that still holds
         // the last failure is a lie the moment the picture goes away again.
         this.placeholder.textContent = '';
       } else {
-        this.image.hidden = true;
+        for (const buffer of this.buffers) buffer.hidden = true;
+        if (!showable) this.shownUrl = undefined;
         this.placeholder.hidden = false;
         this.placeholder.textContent = !selected
           ? cameras.length === 0
@@ -289,6 +312,39 @@ export class PrinterCameraPanel {
         : '';
     }
     if (this.status) this.status.textContent = state.message ?? '';
+  }
+
+  /**
+   * A frame finished decoding: show it, and retire the one it replaces.
+   *
+   * Only the back buffer's load counts. The front one can fire too — a cached
+   * re-decode, say — and treating that as a new frame would swap the buffers
+   * out from under the one actually holding the picture.
+   */
+  private onFrameLoaded(element: HTMLImageElement): void {
+    if (this.disposed || element !== this.buffers[1 - this.front]) return;
+    const previous = this.buffers[this.front];
+    previous.hidden = true;
+    delete previous.dataset.printerCameraFrame;
+    element.hidden = false;
+    element.dataset.printerCameraFrame = 'true';
+    this.front = 1 - this.front;
+    this.shownUrl = this.pendingUrl;
+    this.pendingUrl = undefined;
+    this.brokenFrame = undefined;
+    // A picture is the only proof the browser's own route works; nothing on
+    // this side of an `<img>` can tell otherwise.
+    this.port.reportFrameShown?.();
+    this.render();
+  }
+
+  private onFrameFailed(element: HTMLImageElement): void {
+    if (this.disposed || element !== this.buffers[1 - this.front] || !this.pendingUrl) return;
+    const failed = this.pendingUrl;
+    this.pendingUrl = undefined;
+    this.brokenFrame = failed;
+    this.port.reportFrameError?.(failed);
+    this.render();
   }
 
   dispose(): void {

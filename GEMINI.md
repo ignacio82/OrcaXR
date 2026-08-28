@@ -855,7 +855,16 @@ visit), with a backup, an `nginx -t` gate, and a rollback. That fetch must stay
 header-free: mjpg-streamer answers `OPTIONS` with `501`, so anything that turns
 it into a preflighted request breaks it.
 
-Two panel invariants come out of this. `PrinterCameraPanel` must claim its timer
+`PrinterCameraPanel` draws frames into **two buffers**, loading into the back
+one and swapping only once it has decoded, and keeps **one load outstanding at a
+time** (10 s cap). Both matter only against a real camera: an `<img>` blanks when
+its `src` changes and cancels the load in flight when it changes again, so a
+single element pointed at a printer that needs longer than the poll interval
+shows a grey box forever — which is exactly what it did, while every assertion
+about frames arriving passed. Test fixtures serve a 1×1 PNG that decodes
+instantly, so neither reproduces in the suite; check a screenshot.
+
+Two more panel invariants come out of this. `PrinterCameraPanel` must claim its timer
 *before* asking for the first frame: the image route completes synchronously and
 notifies, which re-enters `applyPolling`, and with the assignment last every
 re-entry started another timer — a few hundred intervals and a blown stack
