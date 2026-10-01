@@ -99,6 +99,10 @@ screenshot*.png
 node_modules/
 .npm/
 
+# Python maintenance-tool caches
+__pycache__/
+*.pyc
+
 # Web and server scratch/build output
 server/wasm-dist/
 tmp_3mf/

@@ -1,11 +1,12 @@
-import pexpect
-import sys
+"""Check verified SSH access without changing the printer."""
+from maintenance_ssh import session_from_cli
 
-child = pexpect.spawn('ssh -v -o StrictHostKeyChecking=no root@192.168.1.228', encoding='utf-8')
-index = child.expect(['[P|p]assword:', pexpect.EOF, pexpect.TIMEOUT], timeout=10)
-if index == 0:
-    child.sendline('snapmaker')
-    child.expect(pexpect.EOF)
-    print(child.before)
-else:
-    print(child.before)
+
+def run():
+    ssh = session_from_cli(__doc__)
+    print('SSH connection succeeded:')
+    print(ssh.run('id'))
+
+
+if __name__ == '__main__':
+    run()

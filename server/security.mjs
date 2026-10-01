@@ -408,7 +408,12 @@ export function bearerTokenMatches(header, expected) {
 }
 
 export function parseOverridesJson(raw, maxBytes) {
-  const text = raw === undefined || raw === "" ? "{}" : String(raw);
+  // Multipart bracket fields can produce arrays or null-prototype objects.
+  // Do not coerce them: they are not the one JSON text field the API accepts.
+  if (raw !== undefined && typeof raw !== "string") {
+    throw new HttpError(400, "INVALID_OVERRIDES", "Overrides must be JSON text.");
+  }
+  const text = raw === undefined || raw === "" ? "{}" : raw;
   if (Buffer.byteLength(text, "utf8") > maxBytes) {
     throw new HttpError(
       413,

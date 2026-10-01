@@ -1901,7 +1901,7 @@ Local starting seams: [`engine-options.schema.json`](../web/src/settings/generat
     erases what it stored.
 
 - [~] **P6.7 — Correct config serialization at every boundary.** String vectors use semicolons;
-  numeric vectors use commas as required by this port. Preserve escaping, percent/absolute
+  numeric vectors use commas as required by this port. Preserve escape sequences, percent/absolute
   distinction, nullable values, enum tokens, and G-code text.
   - **Accept:** generated round-trip tests cover every schema type through browser worker,
     project 3MF, config import/export, and external server; delimiter mutation tests fail.

@@ -27,9 +27,10 @@ npm --prefix wasm run test:painted
 npm --prefix wasm run test:painted-prime-tower
 npm --prefix wasm run test:fullspectrum
 
-npm --prefix web audit --omit=dev --audit-level=high
-npm --prefix server audit --omit=dev --audit-level=high
-npm --prefix wasm audit --omit=dev --audit-level=high
+python3 -m unittest scripts/test_maintenance_security.py
+npm --prefix web audit --include=dev --audit-level=moderate
+npm --prefix server audit --include=dev --audit-level=moderate
+npm --prefix wasm audit --include=dev --audit-level=moderate
 
 if [[ "${ORCAXR_BUILD_CONTAINER:-0}" == "1" ]]; then
   ORCAXR_SERVER_TOKEN="${ORCAXR_SERVER_TOKEN:?set ORCAXR_SERVER_TOKEN for the container build}" \

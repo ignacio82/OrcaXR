@@ -478,8 +478,8 @@ For non-browser clients (MCP, `curl`, scripts) the token still matters even in
 `same-origin` mode. Rather than making the operator invent one:
 
 - If `ORCAXR_SERVER_TOKEN` is unset, generate 32 random bytes, persist to
-  `${HOME}/.orcaxr/server-token` at mode 0600, and log it once at startup with
-  the exact `Authorization: Bearer …` header to use.
+  `${HOME}/.orcaxr/server-token` at mode 0600. Log only the protected file's
+  location at startup, never the token or an authenticated request header.
 - Support `ORCAXR_SERVER_TOKEN_FILE` so Docker/Compose secrets work. Env-var
   secrets are readable via `docker inspect` and leak into shell history; the
   `_FILE` form is the documented pattern for both this and `TS_AUTHKEY`.

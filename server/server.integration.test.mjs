@@ -76,6 +76,33 @@ test.after(async () => {
   await Promise.allSettled([...services].map((instance) => instance.close()));
 });
 
+test("generated credentials are never printed in startup logs", async () => {
+  const logs = [];
+  const token = "generated-test-value-" + "x".repeat(48);
+  const tokenPath = "/protected-test-home/.orcaxr/server-token";
+  const instance = await fixture({
+    config: { token, tokenGenerated: true, generatedTokenPath: tokenPath },
+    logger: Object.fromEntries(
+      ["log", "warn", "error"].map((method) => [
+        method,
+        (...args) => logs.push(args.join(" ")),
+      ]),
+    ),
+  });
+  try {
+    // Use boolean assertions so a regression cannot echo the credential.
+    assert.equal(
+      logs.some((line) => line.includes(token)),
+      false,
+      "Startup exposed a credential",
+    );
+    assert.equal(logs.some((line) => line.includes(tokenPath)), true);
+    assert.equal(logs.some((line) => /Authorization:|Bearer /i.test(line)), false);
+  } finally {
+    await instance.close();
+  }
+});
+
 test("readiness, missing uploads, and unknown jobs use bounded public responses", async () => {
   const instance = await fixture();
   try {

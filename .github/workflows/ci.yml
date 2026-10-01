@@ -41,7 +41,7 @@ jobs:
         working-directory: web
       - run: npm run quality
         working-directory: web
-      - run: npm audit --omit=dev --audit-level=high
+      - run: npm audit --include=dev --audit-level=moderate
         working-directory: web
       - name: Upload browser diagnostics on failure
         if: failure()
@@ -90,7 +90,7 @@ jobs:
         working-directory: server
       - run: npm run test:integration
         working-directory: server
-      - run: npm audit --omit=dev --audit-level=high
+      - run: npm audit --include=dev --audit-level=moderate
         working-directory: server
       - name: Validate reproducible container definition
         run: docker compose -f server/docker-compose.yml config --quiet
@@ -127,7 +127,7 @@ jobs:
         working-directory: wasm
       - run: npm run test:fullspectrum
         working-directory: wasm
-      - run: npm audit --omit=dev --audit-level=high
+      - run: npm audit --include=dev --audit-level=moderate
         working-directory: wasm
 
   build-container:
@@ -154,6 +154,8 @@ jobs:
         with:
           fetch-depth: 0
           submodules: false
+      - name: Check maintenance authentication and secret-free failure output
+        run: python3 -m unittest scripts/test_maintenance_security.py
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

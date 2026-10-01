@@ -38,6 +38,32 @@ For the Snapmaker U1, the [extended firmware](https://github.com/paxx12-snapmake
 
 Enter the resulting address in OrcaXR, for example `https://lava.taild5c213.ts.net`.
 
+The Device page can remember printer API keys and slicer tokens in this browser's
+local storage. This is optional (enabled by default), is not encrypted by OrcaXR,
+and is readable by scripts on the same origin or anyone with access to the browser
+profile. Turning remembrance off or choosing **Forget Saved Credentials** erases
+saved copies. AI keys stay in tab memory only.
+
+Printer maintenance scripts require an explicit SSH host and account:
+
+```bash
+python3 fix-moonraker.py --host printer.local --username root
+```
+
+They use keys or your SSH agent and require an already verified `known_hosts`
+entry. Verify the printer's host-key fingerprint through a trusted channel before
+adding it with your normal SSH client. `--known-hosts` selects another verified
+file; `--identity` selects a private key. If the printer requires a password, add
+`--password` to use OpenSSH's hidden terminal prompt. The scripts never embed,
+store, or log authentication credentials. The Moonraker service and webcam scripts
+change configuration and restart/reload the relevant service when run.
+
+Credentials formerly embedded in maintenance scripts and server tokens formerly
+printed in startup logs must be rotated if still active. Source cleanup does not
+revoke those credentials or remove copies from Git history. History rewriting is
+a separate coordinated operation; rotation and hardware qualification remain
+pending until recorded evidence exists.
+
 ### Self-Hosting / All-in-One Container (Docker)
 
 OrcaXR can be self-hosted as an all-in-one container that packages the full Web UI, the native Snapmaker Orca CLI engine, the WASM engine, and optional Tailscale HTTPS support:
@@ -48,6 +74,11 @@ docker compose -f server/docker-compose.yml up -d
 
 - **Web UI & Slicing**: Navigate to `http://localhost:3000`. The browser UI automatically discovers the native CLI slicer on the container with zero configuration.
 - **Same-Origin Trust**: Slicing from the served UI is authorized automatically without requiring bearer tokens. Non-browser API clients use the persistent bearer token saved to `~/.orcaxr/server-token`.
+
+Generated server tokens are stored with owner-only permissions. Startup logs name
+the protected file only; they never print its value. Keep token files out of
+shared diagnostics and use `ORCAXR_SERVER_TOKEN_FILE` for managed deployments.
+
 - **Headset / WebXR Access via Tailscale**: For spatial slicing on standalone XR headsets (such as the Samsung Galaxy XR) which require a secure HTTPS context for WebXR, launch with your Tailscale auth key:
 
 ```bash
@@ -55,6 +86,10 @@ TS_AUTHKEY="tskey-auth-..." docker compose -f server/docker-compose.yml up -d
 ```
 
 Tailscale Serve will automatically provision HTTPS certificates at `https://orcaxr.<your-tailnet>.ts.net`, giving headsets immediate access to WebXR, full-power CLI slicing, and 3D spatial interaction.
+
+Generated server tokens are stored with owner-only permissions. Startup logs name
+the protected file only; they never print its value. Keep token files out of
+shared diagnostics and use `ORCAXR_SERVER_TOKEN_FILE` for managed deployments.
 
 ## Project Status
 

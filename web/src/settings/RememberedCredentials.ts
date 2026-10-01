@@ -1,8 +1,8 @@
 /**
  * Device-local credentials for the printer and the external slicer.
  *
- * Everything else in this app deliberately keeps secrets in session memory,
- * where a later script cannot read them back. These two are the exception, and
+ * AI integrations keep secrets in tab memory so they do not survive a reload.
+ * Printer keys and slicer tokens are the exception, and
  * it is a deliberate one: a printer API key and a slicer token are entered to
  * reach hardware on the operator's own network, and re-typing both on every
  * reload made the app unusable as a daily tool. The operator asked for them to
@@ -10,9 +10,8 @@
  * can turn off, with a one-click way to forget them.
  *
  * What that costs, stated rather than buried: anything that can run script on
- * this origin can read them. The app ships a CSP that forbids remote script and
- * inlines nothing, which is what makes the trade defensible; it is not a claim
- * that storage is private.
+ * this origin, or access this browser profile, can read them. OrcaXR does not
+ * encrypt browser storage. CSP reduces script exposure but is not a secret store.
  *
  * Diagnostics redaction is untouched — a remembered secret is still stripped
  * from every log and error path it could otherwise reach.

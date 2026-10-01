@@ -707,7 +707,7 @@ export function createSlicerService(options = {}) {
   app.use(express.json({ limit: config.maxOverridesBytes, strict: true }));
 
   const upload = multer({
-    dest: os.tmpdir(),
+    dest: options.uploadDirectory ?? os.tmpdir(),
     limits: {
       fileSize: config.maxUploadBytes,
       files: 1,
@@ -882,6 +882,13 @@ export function createSlicerService(options = {}) {
             "FILE_REQUIRED",
             "A model or project file is required.",
           );
+        if (Object.keys(req.body ?? {}).some((key) => key !== "overrides")) {
+          throw new HttpError(
+            400,
+            "INVALID_UPLOAD",
+            "The multipart upload contains an unknown field.",
+          );
+        }
         const overrides = parseOverridesJson(
           req.body.overrides,
           config.maxOverridesBytes,
@@ -1197,7 +1204,7 @@ export function createSlicerService(options = {}) {
       );
       if (config.tokenGenerated && config.token) {
         logger.log(
-          `[security] Generated server token persisted to ${config.generatedTokenPath}: Authorization: Bearer ${config.token}`,
+          `[security] Generated server token persisted to ${config.generatedTokenPath} (owner access only).`,
         );
       }
       if (config.acceptLanExposure && !isLoopbackHost(config.host)) {

@@ -18,12 +18,9 @@ backup back if that fails.
 """
 
 import base64
-import sys
+import shlex
 
-import pexpect
-
-HOST = 'root@192.168.1.228'
-PASSWORD = 'snapmaker'
+from maintenance_ssh import session_from_cli
 
 # Origins allowed to read a frame: the hosted app, and a local dev server.
 # An OrcaXR page served over plain HTTP needs nothing here — the browser can
@@ -90,32 +87,12 @@ REMOTE = REMOTE_TEMPLATE.replace('__ALLOWED__', repr(ALLOWED))
 
 
 def run() -> None:
-    child = pexpect.spawn(
-        f'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {HOST}',
-        encoding='utf-8',
-        timeout=30,
-    )
-    try:
-        child.expect(['[P|p]assword:'])
-        child.sendline(PASSWORD)
-        child.expect(['# ', r'\$ '])
-
-        # Sent base64-encoded: a heredoc over an interactive shell mangles
-        # quoting, and this script is mostly quoting.
-        payload = base64.b64encode(REMOTE.encode()).decode()
-        child.sendline(f'echo {payload} | base64 -d > /tmp/orcaxr-webcam-cors.py')
-        child.expect(['# ', r'\$ '])
-
-        child.sendline('python3 /tmp/orcaxr-webcam-cors.py; echo EXIT=$?')
-        child.expect(['# ', r'\$ '], timeout=60)
-        print(child.before.strip())
-
-        child.sendline('rm -f /tmp/orcaxr-webcam-cors.py')
-        child.expect(['# ', r'\$ '])
-        child.sendline('exit')
-    except Exception as error:  # noqa: BLE001 - report and fail, whatever went wrong
-        print(f'Error: {error}')
-        sys.exit(1)
+    ssh = session_from_cli(__doc__)
+    # No remote temporary script and no interactive shell quoting/echo.
+    payload = base64.b64encode(REMOTE.encode()).decode()
+    command = "import base64; exec(base64.b64decode(" + repr(payload) + "))"
+    print(ssh.run('python3 -c ' + shlex.quote(command)))
 
 
-run()
+if __name__ == '__main__':
+    run()

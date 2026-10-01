@@ -793,7 +793,7 @@ Each patch verified by incremental `cmake --build` (0 FAILED objects) + `./gradl
 
 ## Web → local services: Chrome Local Network Access + CORS
 
-`web/src/printer/` is the single Moonraker boundary: explicit endpoint normalization without scheme/port probing, typed HTTP/WebSocket handshake/state/capabilities, cancellation/timeouts, stale-event rejection, reconnect/heartbeat, and bounded redacted diagnostics. `main.ts` uses it through `ActionRegistry` for live connection tests and read-only filament-slot inspection; sparse physical slot IDs are preserved and never auto-applied to project mappings. Only endpoint/port persist, legacy stored API keys are purged, and credentials stay per-instance memory only. Legacy printer clients are retired. Printer mutation is now live behind an explicit two-button confirmation (`web/src/ui/dom/PrintSubmissionDialog.ts`): `PrintJobSubmission.ts` checks readiness, `PrintToolMapping.ts` compares the artifact's own tool changes with the printer's reported slots (a tool with no loaded filament blocks starting), the filename is sanitized and made unique unless replacement is opted into, and the stored size is verified before any start. Storing a file and starting a print are separate decisions: a busy or not-ready machine still accepts an upload but refuses a start. `PrintJobStatus.ts` then keeps a live snapshot (seeded by one query, updated by `notify_status_update` pushes) that drives the inspector's job panel, and `PrintJobControl.ts` derives pause/resume/cancel/emergency-stop availability from that snapshot — never from what this client last did — re-reads the machine before sending, and refuses when the printer has moved on to a different file. Queue reorder/remove, storage browsing, history, and hardware qualification remain. Web AI keys are likewise tab-memory only; `AiSessionSecrets` purges legacy `orca_gemini_key`/`orca_openai_key` plaintext storage instead of migrating it. External-slicer URLs may persist, but routing activates only after a successful probe backed by explicit opt-in; failed replacement, disable, or clear fail closed to local slicing.
+`web/src/printer/` is the single Moonraker boundary: explicit endpoint normalization without scheme/port probing, typed HTTP/WebSocket handshake/state/capabilities, cancellation/timeouts, stale-event rejection, reconnect/heartbeat, and bounded redacted diagnostics. `main.ts` uses it through `ActionRegistry` for live connection tests and read-only filament-slot inspection; sparse physical slot IDs are preserved and never auto-applied to project mappings. Printer API keys and slicer tokens are optionally remembered in device-local browser storage (enabled by default); disabling remembrance erases saved copies. That storage is not encrypted by OrcaXR and is accessible to same-origin scripts and browser-profile users. Transport credentials remain per-instance memory, and AI credentials remain tab-memory only. Legacy printer clients are retired. Printer mutation is live behind explicit confirmation, but filename-only checks do not yet bind a command to an authoritative job identity; `plan.md` requires session/job-bound controls and post-upload revalidation. Hardware qualification remains incomplete. `AiSessionSecrets` purges legacy plaintext AI keys rather than migrating them. External-slicer URLs may persist, but routing activates only after attestation and opt-in; failed replacement, disable, or clear fail closed to local slicing.
 
 The hosted app is HTTPS (`https://orcaxr.martinez.fyi/slicer/`), while
 Moonraker and the optional external slicer commonly expose HTTP on the LAN.
@@ -921,6 +921,17 @@ forbidden. Upload/JSON/ZIP/output/rate/queue/job/time limits are configurable,
 child process trees are cancelled and reaped, completed jobs expire, and logs
 record only bounded error class/code—not engine messages that may contain paths
 or secrets. Keep the abuse tests green when adding an endpoint or runner.
+
+Multer is pinned to 2.4.0 or newer: 2.2/2.3 can orphan disk writes when an
+upload aborts before the filename callback. Keep the delayed-storage regression
+and real HTTP disconnect tests. Multipart overrides accept one JSON string,
+never bracket-expanded fields. Full dependency audits include development
+packages and fail at moderate severity. Generated tokens are logged by protected
+file location only. Printer maintenance scripts use `maintenance_ssh.py`, require
+explicit host/account, verify known host keys, and default to keys/agent;
+`--password` enables OpenSSH's hidden terminal prompt without giving Python a
+credential. Removing source literals does not rotate exposed credentials or
+rewrite repository history; those operational steps need separate evidence.
 
 CLI invocation gotchas (all found empirically against Snapmaker Orca 2.3.4,
 logic verified against `src/OrcaSlicer.cpp` in the submodule):
