@@ -143,6 +143,15 @@ remains the cross-browser and remote-network fallback.
   Required profile fetches reject empty/invalid results before
   replacing a valid catalog. Startup failure details have bounded DOM/XR space;
   they must not hide printer recovery controls.
+- `SurfaceLifecycle` owns shell event listeners, callback bindings, panels,
+  observers and subscriptions, with child initialization linked to cancellation.
+  Register ownership before mount. Permanent departure disposes the application;
+  persisted `pagehide` retains it for back-forward cache restoration. Never add
+  per-panel pagehide handlers that destroy a cached document's controls.
+  Remounting the command palette replaces its global shortcut listener. DOM
+  shell, AI dialog, modal/file inputs, resize/mutation observers and XR viewport
+  listeners all release with the same owner. Console response subscriptions
+  follow the selected transport and unsubscribe when replaced or disposed.
 - Camera polling owns one cancellable frame at a time. Hiding the section,
   switching cameras or disposing the panel aborts pending acquisition, including
   work waiting for a printer connection; recheck identity/visibility after each

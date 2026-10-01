@@ -10,6 +10,7 @@ import type { ActionContext } from '../../actions/ActionContext';
 import type { UiState } from '../../actions/UiState';
 import { applyIcon } from '../icons';
 import { t } from '../../l10n/t';
+import { SurfaceLifecycle } from '../SurfaceLifecycle';
 
 export class CommandPalette {
   private overlay!: HTMLElement;
@@ -17,6 +18,7 @@ export class CommandPalette {
   private list!: HTMLElement;
   private matches: Action[] = [];
   private sel = 0;
+  private lifetime?: SurfaceLifecycle;
 
   constructor(
     private readonly registry: ActionRegistry,
@@ -25,14 +27,17 @@ export class CommandPalette {
   ) {}
 
   mount(overlay: HTMLElement, input: HTMLInputElement, list: HTMLElement, trigger?: HTMLElement): void {
+    this.dispose();
+    const lifetime = new SurfaceLifecycle();
+    this.lifetime = lifetime;
     this.overlay = overlay;
     this.input = input;
     this.list = list;
 
-    trigger?.addEventListener('click', () => this.open());
+    if (trigger) lifetime.listen(trigger, 'click', () => this.open());
 
     // Global Ctrl/⌘-K toggles the palette from anywhere.
-    window.addEventListener('keydown', (e) => {
+    lifetime.listen(window, 'keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         if (this.isOpen()) this.close();
@@ -43,19 +48,28 @@ export class CommandPalette {
     });
 
     // Clicking the dimmed backdrop (outside the box) closes.
-    overlay.addEventListener('click', (e) => {
+    lifetime.listen(overlay, 'click', (e) => {
       if (e.target === overlay) this.close();
     });
 
-    this.input.addEventListener('input', () => this.render());
-    this.input.addEventListener('keydown', (e) => this.onInputKey(e));
+    lifetime.listen(this.input, 'input', () => this.render());
+    lifetime.listen(this.input, 'keydown', (e) => this.onInputKey(e));
+  }
+
+  dispose(): void {
+    this.close();
+    this.lifetime?.dispose();
+    this.lifetime = undefined;
+    this.matches = [];
+    this.list?.replaceChildren();
   }
 
   isOpen(): boolean {
-    return this.overlay.classList.contains('open');
+    return this.overlay?.classList.contains('open') ?? false;
   }
 
   open(): void {
+    if (!this.lifetime || this.lifetime.signal.aborted) return;
     this.overlay.classList.add('open');
     this.input.value = '';
     this.sel = 0;
@@ -64,7 +78,7 @@ export class CommandPalette {
   }
 
   close(): void {
-    this.overlay.classList.remove('open');
+    this.overlay?.classList.remove('open');
   }
 
   private onInputKey(e: KeyboardEvent): void {

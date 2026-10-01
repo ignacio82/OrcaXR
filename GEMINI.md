@@ -160,6 +160,9 @@ out of scope unless the user explicitly changes the target.
 - Initialization scopes own resources before mounting, settle cancellation,
   reject late results, and dispose partial initialization. Retry is single-flight.
   A failed module load can require reload, which must use the unsaved-work guard.
+- Shell surface lifetimes own handlers, callback bindings, subscriptions, panels
+  and observers. Preserve cached documents on persisted pagehide; permanent
+  departure releases them. Lazy children must inherit shell cancellation.
 - Controllers expose typed intents/results and explicit disposal. Keep dependency
   construction in the composition root and UI-independent behavior in controllers.
 - The XR rail renders all `xr-toolbar` actions in declared group order with labels,

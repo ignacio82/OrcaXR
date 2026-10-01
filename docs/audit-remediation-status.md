@@ -15,7 +15,7 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 | D: process and artifact lifecycle | Implemented | Native exit/group termination, repeatable downloads, leases, TTL/release, capacity refusal, artifact validation and bounded browser cancellation pass server, container and full web gates. Fresh native image assembly, non-root process reaping and a real native HTTP slice pass; final changes still require image refresh. |
 | E: deployment and artifacts | Implemented; qualification in progress | Static/API separation, actual-peer proxy trust, userspace Tailscale configuration, strict adjacent-manifest checks and atomic version publication pass focused tests. Real Express HTTP/HTTPS browser tests pass. Full web quality passes. Refreshed native-container HTTP/HTTPS, process reaping and real CLI slicing pass; final changes still require image refresh. |
 | F: discovery and startup | Implemented; automated qualification passes | Discovery, atomic preferences, session-only fallback and actual external UI slicing pass full web and deployment tests. Core/optional startup health, owned initialization, shared DOM/XR recovery and guarded dirty reload pass the full web gate, including five production-browser fault scenarios. |
-| G: controllers and snapshots | In progress | Printer/session/submission ownership and feature initialization lifetimes are implemented. Opaque copy-on-write asset rollback and import history pass focused regressions and the full web gate. Persistence ownership is integrated; remaining surface cleanup is pending. |
+| G: controllers and snapshots | Implemented; automated qualification passes | Printer/session/submission ownership and feature initialization lifetimes are implemented. Opaque copy-on-write asset rollback and import history pass focused regressions and the full web gate. Persistence and DOM/XR surface lifetime ownership are integrated; surface regressions and the full web gate pass. |
 | H: persistence | Implemented; automated qualification passes | Live worker serialization, guarded manual checkpoints, atomic per-session IndexedDB retention, DOM/XR recovery/import decisions, Save/Discard/Cancel, beforeunload and coordinated PWA updates. Focused lifecycle/storage/browser tests and the complete web quality gate pass. Broader device qualification remains pending. |
 | I: large-project performance | Pending | Worker indexing before rich allocations, oversized-layer checkpoints, typed import traversal, measured baselines. |
 | Release qualification | Pending | Full supported-deployment checks, native container build, final report regeneration, supervised U1/CC/Galaxy XR procedures, independent review/security signoff. |
@@ -361,3 +361,27 @@ its own clearly marked historical archive; current WASM memory, config, indexing
 and provenance constraints remain in the active guidance. Relative documentation
 links were rebased and checked. The obsolete seven-action XR rail and pre-attestation
 external-routing statements were corrected to match the shipped behavior.
+
+## Surface lifetime verification (2026-10-01)
+
+- A production-browser regression reproduced dead workspace tabs after a persisted
+  pagehide/pageshow pair. A palette regression reproduced two Ctrl-K handlers
+  toggling twice after remount. Both pass with explicit surface ownership.
+- Unit checks cover permanent departure, callback restoration without clobbering a
+  newer owner, observer cleanup, partial mount failure, child cancellation and late
+  initialization rejection. Cached-document event handling is browser-tested; this
+  does not claim a particular device's actual back-forward-cache eligibility.
+- Shell callbacks/subscriptions, eager panels, optional feature children, generated
+  file inputs/modal controls, AI configuration, observers and XR viewport listeners
+  now have explicit disposal. A two-simulator browser regression also reproduced
+  console replies disappearing after printer replacement. The console now replaces
+  its notification subscription with the selected transport; both simulators' replies
+  arrive, and its last subscription is released on disposal.
+
+Full web quality passes: 249 unit test files, integration/project/settings/
+localization/XR suites, production browser/recovery/startup and real IndexedDB
+fault scenarios, offline workflows, 28 accessibility rules, 155 pseudo-localized
+controls and thirteen slicing test files. Unchanged bundle ceilings: main
+2,329,856 bytes; total JavaScript 10,477,051 bytes. Current-source Gitleaks passes
+with the pinned image and unchanged rules. Generated parity reporting retains
+the five outstanding human gates.

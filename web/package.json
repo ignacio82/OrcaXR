@@ -45,7 +45,7 @@
     "test:settings": "node scripts/run-tests.mjs src/settings/",
     "test:l10n": "node scripts/run-tests.mjs src/l10n/",
     "test:xr": "node scripts/run-tests.mjs src/ui/xr/",
-    "test:e2e": "npm run build && npm run offline:check && node scripts/e2e-smoke.mjs && node scripts/startup-smoke.mjs && node scripts/persistence-smoke.mjs && npm run test:recovery-storage && node scripts/offline-smoke.mjs",
+    "test:e2e": "npm run build && npm run offline:check && node scripts/e2e-smoke.mjs && node scripts/startup-smoke.mjs && node scripts/surface-lifecycle-smoke.mjs && node scripts/persistence-smoke.mjs && npm run test:recovery-storage && node scripts/offline-smoke.mjs",
     "test:a11y": "npm run build && node scripts/a11y-smoke.mjs",
     "size:check": "node scripts/size-check.mjs",
     "direction:check": "node scripts/direction-contract.mjs",

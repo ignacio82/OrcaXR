@@ -1,4 +1,5 @@
 import type { ApplicationInitialization } from './startup/ApplicationInitialization';
+import { SurfaceLifecycle, ownPageLifetime } from './ui/SurfaceLifecycle';
 /**
  * OrcaXR Web — entry point.
  *
@@ -381,13 +382,15 @@ function setupDomUI(
   registry: ActionRegistry,
   l10n: () => Localizer,
   initialization: ApplicationInitialization,
+  surfaces: SurfaceLifecycle,
 ) {
-  workspace.onRequestSplitToObjectsConfirmation = (confirmation) =>
+  surfaces.bind(workspace, 'onRequestSplitToObjectsConfirmation', (confirmation) =>
     window.confirm(
       `Split “${confirmation.objectName}” into separate objects?\n\n` +
         `${confirmation.strategy === 'existing-volumes' ? `${confirmation.volumeCount} existing volumes will be promoted` : `${confirmation.triangleCount.toLocaleString()} triangles will be separated by connected body`} across all ${confirmation.affectedInstanceIds.length} instance${confirmation.affectedInstanceIds.length === 1 ? '' : 's'}.\n\n` +
         'The original object will be replaced in one undoable edit.',
-    );
+    ),
+  );
   // On phones the parameter sidebar is a bottom sheet; its handle toggles it
   // so the 3D view isn't permanently half-covered. On desktop the same class
   // is what the toolbar's `‹›` control writes, so one state serves both.
@@ -401,7 +404,7 @@ function setupDomUI(
     sidebar.classList.add('collapsed');
     sidebarHandle.setAttribute('aria-expanded', 'false');
   }
-  sidebarHandle.addEventListener('click', () => {
+  surfaces.listen(sidebarHandle, 'click', () => {
     sidebar.classList.toggle('collapsed');
     sidebarHandle.setAttribute('aria-expanded', String(!sidebar.classList.contains('collapsed')));
   });
@@ -434,6 +437,7 @@ function setupDomUI(
     transport.setSessionCredentials({ apiKey: selection.apiKey });
     return transport;
   });
+  surfaces.own(printerSession);
   let printJobSnapshot: PrintJobSnapshot | null = null;
   let printerConnectionState: MoonrakerConnectionState | null = null;
   /**
@@ -442,15 +446,21 @@ function setupDomUI(
    */
   const profileChangeListeners = new Set<() => void>();
   const printJobListeners = new Set<() => void>();
-  printerSession.subscribe(() => {
-    printJobSnapshot = printerSession.snapshot;
-    printerConnectionState = printerSession.state;
-    uiState.update({
-      printerJobState:
-        printerConnectionState?.status === 'connected' ? (printJobSnapshot?.state ?? 'unknown') : 'disconnected',
-    });
-    for (const listener of printJobListeners) listener();
+  surfaces.defer(() => {
+    profileChangeListeners.clear();
+    printJobListeners.clear();
   });
+  surfaces.defer(
+    printerSession.subscribe(() => {
+      printJobSnapshot = printerSession.snapshot;
+      printerConnectionState = printerSession.state;
+      uiState.update({
+        printerJobState:
+          printerConnectionState?.status === 'connected' ? (printJobSnapshot?.state ?? 'unknown') : 'disconnected',
+      });
+      for (const listener of printJobListeners) listener();
+    }),
+  );
 
   /** True only while the printer itself can confirm what it just reported. */
   const printerReadingIsStale = (): boolean => printerConnectionState?.status !== 'connected';
@@ -556,7 +566,7 @@ function setupDomUI(
       // configured one is the shortest way out of a mixed-content block.
       ...(appOrigin ? { appOrigin } : {}),
     });
-    if (!isCurrent()) return;
+    if (surfaces.signal.aborted || !isCurrent()) return;
     workspace.setStatus(diagnosis.summary);
     if (!endpoint || !diagnosis.blocked) return;
     const paragraphs = diagnosis.detail
@@ -575,7 +585,7 @@ function setupDomUI(
     );
   };
 
-  workspace.onRequestPrinterConnectionTest = async () => {
+  surfaces.bind(workspace, 'onRequestPrinterConnectionTest', async () => {
     if (!printerCfg.host.trim()) {
       workspace.setStatus(
         t('app.main.enterAnExplicitMoonrakerEndpoint', 'Enter an explicit Moonraker endpoint first.'),
@@ -605,9 +615,9 @@ function setupDomUI(
         SlicerClient.getExternalSlicerUrl(),
       );
     }
-  };
+  });
 
-  workspace.onRequestPrinterFilamentInspection = async () => {
+  surfaces.bind(workspace, 'onRequestPrinterFilamentInspection', async () => {
     if (!printerCfg.host.trim()) {
       workspace.setStatus(
         t('app.main.enterAnExplicitMoonrakerEndpoint2', 'Enter an explicit Moonraker endpoint first.'),
@@ -636,9 +646,9 @@ function setupDomUI(
     } catch (error) {
       workspace.setStatus(`Filament inspection failed: ${(error as Error).message}`);
     }
-  };
+  });
 
-  workspace.onRequestPrinterFilamentQuery = async () => {
+  surfaces.bind(workspace, 'onRequestPrinterFilamentQuery', async () => {
     if (!printerCfg.host.trim()) return null;
     try {
       const { transport, handshake } = await connectConfiguredPrinter();
@@ -648,7 +658,7 @@ function setupDomUI(
     } catch {
       return null;
     }
-  };
+  });
 
   const printWorkflow = new PrintWorkflowController({
     captureSession: async (signal) => {
@@ -661,7 +671,8 @@ function setupDomUI(
         : (await import('./ui/dom/PrintSubmissionDialog')).askPrintSubmission(input, signal),
   });
 
-  workspace.onRequestPrintSubmission = async (intent) => {
+  surfaces.own(printWorkflow);
+  surfaces.bind(workspace, 'onRequestPrintSubmission', async (intent) => {
     if (printWorkflow.busy) {
       workspace.setStatus(
         t('app.main.aSendIsAlreadyIn', 'A send is already in progress; cancel it before starting another.'),
@@ -717,11 +728,11 @@ function setupDomUI(
     } finally {
       setPrinterSendBusy(false);
     }
-  };
+  });
 
   // Every surface passes the original press-time intent or captures one here
   // before opening a dialog. The controller alone refreshes and dispatches it.
-  workspace.onRequestPrintJobCommand = async (command, options) => {
+  surfaces.bind(workspace, 'onRequestPrintJobCommand', async (command, options) => {
     try {
       configuredPrinterTransport();
       const intent = options?.confirmation?.intent ?? printerSession.captureIntent(command);
@@ -750,7 +761,7 @@ function setupDomUI(
     } catch (error) {
       workspace.setStatus((error as Error).message);
     }
-  };
+  });
 
   // Printer storage: browsing, reprinting, renaming, downloading, and deleting
   // what is already on the machine. Every operation goes through the registry so
@@ -795,7 +806,7 @@ function setupDomUI(
     }
   };
 
-  workspace.onRequestPrinterStorage = async (operation) => {
+  surfaces.bind(workspace, 'onRequestPrinterStorage', async (operation) => {
     if (!printerCfg.host.trim()) {
       workspace.setStatus(
         t('app.main.enterAnExplicitMoonrakerEndpoint5', 'Enter an explicit Moonraker endpoint first.'),
@@ -877,12 +888,13 @@ function setupDomUI(
       storageState.busy = false;
       notifyStorage();
     }
-  };
+  });
 
   const printerStorageHost = document.getElementById('printer-storage-host');
   if (printerStorageHost) {
     // Behind a closed <details>: loaded when it is opened, not at first paint.
     void initialization.mount('printer-storage', 'Printer files', async (scope) => {
+      surfaces.attach(scope);
       const { PrinterStoragePanel } = await scope.import(import('./ui/dom/PrinterStoragePanel'));
       const storagePanel = new PrinterStoragePanel(printerStorageHost, {
         getListing: () => storageState.listing,
@@ -960,14 +972,22 @@ function setupDomUI(
     for (const listener of consoleListeners) listener();
   };
   let unsubscribeConsole: (() => void) | undefined;
+  let consoleTransport: MoonrakerTransport | undefined;
+  surfaces.defer(() => {
+    unsubscribeConsole?.();
+    unsubscribeConsole = undefined;
+    consoleTransport = undefined;
+  });
   const trackConsoleResponses = (transport: MoonrakerTransport) => {
-    if (unsubscribeConsole) return;
+    if (surfaces.signal.aborted || (consoleTransport === transport && unsubscribeConsole)) return;
+    unsubscribeConsole?.();
+    consoleTransport = transport;
     unsubscribeConsole = transport.subscribeNotifications((notification) => {
       if (consoleLog.appendNotification(notification.method, notification.params)) notifyConsole();
     });
   };
 
-  workspace.onRequestPrinterConsole = async (operation) => {
+  surfaces.bind(workspace, 'onRequestPrinterConsole', async (operation) => {
     if (!printerCfg.host.trim()) {
       workspace.setStatus(
         t('app.main.enterAnExplicitMoonrakerEndpoint6', 'Enter an explicit Moonraker endpoint first.'),
@@ -1017,12 +1037,13 @@ function setupDomUI(
       consoleState.busy = false;
       notifyConsole();
     }
-  };
+  });
 
   const printerConsoleHost = document.getElementById('printer-console-host');
   if (printerConsoleHost) {
     // Behind a closed <details>: loaded when it is opened, not at first paint.
     void initialization.mount('printer-console', 'Printer console', async (scope) => {
+      surfaces.attach(scope);
       const { PrinterConsolePanel } = await scope.import(import('./ui/dom/PrinterConsolePanel'));
       const consolePanel = new PrinterConsolePanel(printerConsoleHost, {
         getEntries: () => consoleLog.entries,
@@ -1075,7 +1096,7 @@ function setupDomUI(
     for (const listener of historyListeners) listener();
   };
 
-  workspace.onRequestPrintHistory = async (start) => {
+  surfaces.bind(workspace, 'onRequestPrintHistory', async (start) => {
     if (!printerCfg.host.trim()) {
       workspace.setStatus(
         t('app.main.enterAnExplicitMoonrakerEndpoint7', 'Enter an explicit Moonraker endpoint first.'),
@@ -1102,12 +1123,13 @@ function setupDomUI(
       historyState.busy = false;
       notifyHistory();
     }
-  };
+  });
 
   const printerHistoryHost = document.getElementById('printer-history-host');
   if (printerHistoryHost) {
     // Behind a closed <details>: loaded when it is opened, not at first paint.
     void initialization.mount('printer-history', 'Printer history', async (scope) => {
+      surfaces.attach(scope);
       const { PrintHistoryPanel } = await scope.import(import('./ui/dom/PrintHistoryPanel'));
       const historyPanel = new PrintHistoryPanel(printerHistoryHost, {
         getPage: () => historyState.page,
@@ -1233,7 +1255,7 @@ function setupDomUI(
     details.scrollIntoView({ block: 'nearest' });
   };
 
-  workspace.onRequestPrinterCamera = async (uid) => {
+  surfaces.bind(workspace, 'onRequestPrinterCamera', async (uid) => {
     if (!printerCfg.host.trim()) {
       workspace.setStatus(
         t('app.main.enterAnExplicitMoonrakerEndpoint8', 'Enter an explicit Moonraker endpoint first.'),
@@ -1280,7 +1302,7 @@ function setupDomUI(
       cameraState.busy = false;
       notifyCamera();
     }
-  };
+  });
 
   const printerCameraHost = document.getElementById('printer-camera-host');
   if (printerCameraHost) {
@@ -1290,15 +1312,16 @@ function setupDomUI(
     const announceVisibility = () => {
       for (const listener of visibilityListeners) listener();
     };
-    document.addEventListener('visibilitychange', announceVisibility);
-    cameraDetails?.addEventListener('toggle', announceVisibility);
+    surfaces.listen(document, 'visibilitychange', announceVisibility);
+    if (cameraDetails) surfaces.listen(cameraDetails, 'toggle', announceVisibility);
     // The Device page is hidden by whoever switches workspaces, so the panel
     // watches the attribute rather than the switch: polling a camera nobody can
     // see is the same waste whether the tab moved or the tab bar did.
-    const pageVisibility = devicePage ? new MutationObserver(announceVisibility) : undefined;
+    const pageVisibility = devicePage ? surfaces.observe(new MutationObserver(announceVisibility)) : undefined;
     if (devicePage) pageVisibility?.observe(devicePage, { attributes: true, attributeFilter: ['hidden'] });
     // Behind a closed <details>: loaded when it is opened, not at first paint.
     void initialization.mount('printer-camera-panel', 'Printer camera controls', async (scope) => {
+      surfaces.attach(scope);
       const { PrinterCameraPanel } = await scope.import(import('./ui/dom/PrinterCameraPanel'));
       const cameraPanel = new PrinterCameraPanel(
         printerCameraHost,
@@ -1408,12 +1431,7 @@ function setupDomUI(
       );
       scope.own(cameraPanel);
       cameraPanel.mount();
-      scope.defer(() => {
-        releaseFrame();
-        cameraPanel.dispose();
-        pageVisibility?.disconnect();
-        document.removeEventListener('visibilitychange', announceVisibility);
-      });
+      scope.defer(releaseFrame);
     });
   }
 
@@ -1437,8 +1455,8 @@ function setupDomUI(
         await registry.invoke(PRINT_JOB_ACTION_IDS[command], 'dom-inspector', actionCtx, uiState.get());
       },
     });
+    surfaces.own(panel);
     panel.mount();
-    window.addEventListener('pagehide', () => panel.dispose(), { once: true });
   }
 
   // The glanceable printer status (P9.7). It follows the live job on its own;
@@ -1504,6 +1522,7 @@ function setupDomUI(
         notifyStatusBar();
       },
     });
+    surfaces.own(statusBar);
     statusBar.mount();
 
     // A stale reading's age is the only thing on the surface that changes with
@@ -1515,15 +1534,15 @@ function setupDomUI(
 
     // The spatial card renders the same summary and the same guarded actions;
     // only the gesture differs, and that lives in the shared hold machine.
-    workspace.onReadPrinterStatus = () => {
+    surfaces.bind(workspace, 'onReadPrinterStatus', () => {
       const summary = livePrinterStatus();
       return {
         summary: statusOverride === undefined ? summary : { ...summary, present: statusOverride },
         actions: livePrinterActions(),
       };
-    };
-    workspace.onCapturePrinterCommandIntent = capturePrinterIntent;
-    workspace.onRunPrinterStatusCommand = async (intent) => {
+    });
+    surfaces.bind(workspace, 'onCapturePrinterCommandIntent', capturePrinterIntent);
+    surfaces.bind(workspace, 'onRunPrinterStatusCommand', async (intent) => {
       try {
         await registry.invoke(PRINT_JOB_ACTION_IDS[intent.command], 'xr-inspector', actionCtx, uiState.get(), {
           printJobConfirmation: printerSession.confirm(intent),
@@ -1531,31 +1550,26 @@ function setupDomUI(
       } catch (error) {
         workspace.setStatus((error as Error).message);
       }
-    };
-    workspace.onReconnectPrinter = async () => {
+    });
+    surfaces.bind(workspace, 'onReconnectPrinter', async () => {
       try {
         await connectConfiguredPrinter();
       } catch (error) {
         workspace.setStatus(`Reconnect failed: ${(error as Error).message}`);
       }
       notifyStatusBar();
-    };
+    });
     statusListeners.add(() => workspace.refreshPrinterStatusCard());
 
-    workspace.onTogglePrinterStatusBar = () => {
+    surfaces.bind(workspace, 'onTogglePrinterStatusBar', () => {
       statusOverride = !(statusOverride ?? livePrinterStatus().present);
       notifyStatusBar();
       workspace.setStatus(statusOverride ? 'Printer status pinned over the plate.' : 'Printer status hidden.');
-    };
+    });
 
-    window.addEventListener(
-      'pagehide',
-      () => {
-        window.clearInterval(ageTimer);
-        statusBar.dispose();
-      },
-      { once: true },
-    );
+    surfaces.defer(() => {
+      window.clearInterval(ageTimer);
+    });
   }
 
   // The calibration ledger (P8.5). It lives on this device rather than in the
@@ -1566,6 +1580,8 @@ function setupDomUI(
     // Behind a closed <details>, and it carries the whole pinned calibration
     // catalog with it, so none of this belongs in first paint.
     void initialization.mount('calibration-history', 'Calibration history', async (scope) => {
+      surfaces.attach(scope);
+      const featureSurface = scope.own(new SurfaceLifecycle());
       const [{ CalibrationHistoryStore }, history, { CALIBRATION_JOB_DEFINITIONS, getCalibrationJobDefinition }] =
         await scope.import(
           Promise.all([
@@ -1599,6 +1615,7 @@ function setupDomUI(
       // has to redraw the ledger. Without this the rows keep claiming a result
       // applies to a material it was never measured on.
       profileChangeListeners.add(notifyCalibration);
+      scope.defer(() => profileChangeListeners.delete(notifyCalibration));
 
       // The conditions a result would be applied *to* right now. Read from the
       // live profile rather than remembered, so switching filament immediately
@@ -1628,7 +1645,7 @@ function setupDomUI(
           ? printerConnectionState.handshake.printer.softwareVersion || undefined
           : undefined;
 
-      workspace.onRequestCalibrationHistory = async (operation: CalibrationHistoryOperation) => {
+      featureSurface.bind(workspace, 'onRequestCalibrationHistory', async (operation: CalibrationHistoryOperation) => {
         calibrationBusy = true;
         notifyCalibration();
         try {
@@ -1799,7 +1816,7 @@ function setupDomUI(
           calibrationBusy = false;
           notifyCalibration();
         }
-      };
+      });
 
       const { CalibrationHistoryPanel } = await scope.import(import('./ui/dom/CalibrationHistoryPanel'));
       const calibrationPanel = new CalibrationHistoryPanel(calibrationHistoryHost, {
@@ -1844,15 +1861,6 @@ function setupDomUI(
     });
   }
 
-  window.addEventListener(
-    'pagehide',
-    () => {
-      printWorkflow.dispose();
-      printerSession.dispose();
-    },
-    { once: true },
-  );
-
   // First run: nothing configured yet, so offer the setup path directly rather
   // than leaving a new operator to find the Printer tab. Both the printer and
   // the slicer are remembered, so once either is set this never returns. The
@@ -1863,7 +1871,7 @@ function setupDomUI(
     emptySetupPrinter.hidden = configured;
   };
   refreshFirstRunPrompt();
-  emptySetupPrinter.onclick = () => {
+  surfaces.bind(emptySetupPrinter, 'onclick', () => {
     // Goes through the real tab control the header renders, so this stays
     // correct if the tab set is ever reordered or relabelled.
     document.querySelector<HTMLElement>('[data-view-tab="device"]')?.click();
@@ -1872,13 +1880,13 @@ function setupDomUI(
       'app.main.enterYourPrinterAddressIt',
       'Enter your printer address; it is saved on this device.',
     );
-  };
+  });
 
-  emptyLoadModel.onclick = () => {
+  surfaces.bind(emptyLoadModel, 'onclick', () => {
     void registry
       .invoke('load_model_from_path', 'dom-primary', actionCtx, uiState.get())
       .catch((error) => console.error('[orcaxr] empty-state load action failed:', error));
-  };
+  });
   /**
    * The `‹›` control against the panel edge, which is where the desktop app
    * puts the handle that folds the parameter sidebar away for a wider look at
@@ -1897,17 +1905,19 @@ function setupDomUI(
     if (label) label.textContent = toolbarToggle.title;
     sidebarHandle.setAttribute('aria-expanded', String(!collapsed));
   };
-  uiState.subscribe((state) => {
-    emptyState.hidden = state.modelCount > 0;
-    uiContainer.classList.toggle('no-model', state.modelCount === 0);
-    statusDot.classList.toggle('busy', state.isSlicing);
-    statusDot.classList.toggle('ready', !state.isSlicing && state.gcodeReady);
-    syncSidebarToggle();
-  });
-  toolbarToggle.onclick = () => {
+  surfaces.defer(
+    uiState.subscribe((state) => {
+      emptyState.hidden = state.modelCount > 0;
+      uiContainer.classList.toggle('no-model', state.modelCount === 0);
+      statusDot.classList.toggle('busy', state.isSlicing);
+      statusDot.classList.toggle('ready', !state.isSlicing && state.gcodeReady);
+      syncSidebarToggle();
+    }),
+  );
+  surfaces.bind(toolbarToggle, 'onclick', () => {
     sidebar.classList.toggle('collapsed');
     syncSidebarToggle();
-  };
+  });
 
   /**
    * Single intake for picked and dropped files: a 3MF asks whether to open as
@@ -1961,22 +1971,23 @@ function setupDomUI(
     'position:fixed;inset:16px;z-index:9998;display:none;align-items:center;justify-content:center;' +
     'border:2px dashed var(--oxr-color-accent);border-radius:var(--oxr-radius-lg);background:var(--oxr-bg-sunken);' +
     'color:var(--oxr-text);font:600 16px/1.4 var(--oxr-font-sans);pointer-events:none;text-align:center;padding:24px;';
+  surfaces.defer(() => dropOverlay.remove());
   document.body.appendChild(dropOverlay);
   let dragDepth = 0;
   const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
-  window.addEventListener('dragenter', (event) => {
+  surfaces.listen(window, 'dragenter', (event) => {
     if (!hasFiles(event)) return;
     event.preventDefault();
     dragDepth += 1;
     dropOverlay.hidden = false;
     dropOverlay.style.display = 'flex';
   });
-  window.addEventListener('dragover', (event) => {
+  surfaces.listen(window, 'dragover', (event) => {
     if (!hasFiles(event)) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
   });
-  window.addEventListener('dragleave', (event) => {
+  surfaces.listen(window, 'dragleave', (event) => {
     if (!hasFiles(event)) return;
     dragDepth = Math.max(0, dragDepth - 1);
     if (dragDepth === 0) {
@@ -1984,7 +1995,7 @@ function setupDomUI(
       dropOverlay.style.display = 'none';
     }
   });
-  window.addEventListener('drop', (event) => {
+  surfaces.listen(window, 'drop', (event) => {
     if (!hasFiles(event)) return;
     event.preventDefault();
     dragDepth = 0;
@@ -1993,11 +2004,11 @@ function setupDomUI(
     void intakeFiles(Array.from(event.dataTransfer?.files ?? []));
   });
 
-  fileInput.onchange = async () => {
+  surfaces.bind(fileInput, 'onchange', async () => {
     const files = Array.from(fileInput.files ?? []);
     fileInput.value = '';
     await intakeFiles(files);
-  };
+  });
 
   const downloadGcode = (gcode: string) => {
     const blob = new Blob([gcode], { type: 'text/plain' });
@@ -2007,17 +2018,17 @@ function setupDomUI(
     a.click();
     URL.revokeObjectURL(a.href);
   };
-  workspace.onDownloadGcode = downloadGcode;
+  surfaces.bind(workspace, 'onDownloadGcode', downloadGcode);
   // Generic file save for the export actions (STL today, 3MF/config later).
-  workspace.onDownloadFile = (name, data, mime) => {
+  surfaces.bind(workspace, 'onDownloadFile', (name, data, mime) => {
     const blob = new Blob([data], { type: mime });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = name;
     a.click();
     URL.revokeObjectURL(a.href);
-  };
-  workspace.onRequestLoadStl = () => fileInput.click();
+  });
+  surfaces.bind(workspace, 'onRequestLoadStl', () => fileInput.click());
 
   // Import Zip Archive (File menu): a dedicated .zip-filtered picker routed
   // through the shared importZipArchive path.
@@ -2025,8 +2036,9 @@ function setupDomUI(
   zipInput.type = 'file';
   zipInput.accept = '.zip';
   zipInput.style.display = 'none';
+  surfaces.defer(() => zipInput.remove());
   document.body.appendChild(zipInput);
-  zipInput.onchange = async () => {
+  surfaces.bind(zipInput, 'onchange', async () => {
     const f = zipInput.files?.[0];
     if (!f) return;
     loadingModal.style.display = 'flex';
@@ -2044,8 +2056,8 @@ function setupDomUI(
     }
     loadingModal.style.display = 'none';
     zipInput.value = '';
-  };
-  workspace.onRequestLoadZip = () => zipInput.click();
+  });
+  surfaces.bind(workspace, 'onRequestLoadZip', () => zipInput.click());
 
   // Open G-code (File menu): a read-only viewer route that never touches the
   // canonical project.
@@ -2053,8 +2065,9 @@ function setupDomUI(
   gcodeInput.type = 'file';
   gcodeInput.accept = '.gcode,.gco,.g';
   gcodeInput.style.display = 'none';
+  surfaces.defer(() => gcodeInput.remove());
   document.body.appendChild(gcodeInput);
-  gcodeInput.onchange = async () => {
+  surfaces.bind(gcodeInput, 'onchange', async () => {
     const file = gcodeInput.files?.[0];
     if (!file) return;
     loadingModal.style.display = 'flex';
@@ -2066,17 +2079,23 @@ function setupDomUI(
     }
     loadingModal.style.display = 'none';
     gcodeInput.value = '';
-  };
-  workspace.onRequestOpenGcode = () => gcodeInput.click();
+  });
+  surfaces.bind(workspace, 'onRequestOpenGcode', () => gcodeInput.click());
 
+  const previousImportPreview = workspace.onProjectImportPreview;
   workspace.onProjectImportPreview = showProjectImportPreviewDialog;
+  surfaces.defer(() => {
+    if (workspace.onProjectImportPreview === showProjectImportPreviewDialog)
+      workspace.onProjectImportPreview = previousImportPreview;
+  });
 
   // Right-click in the scene, answered by the catalog (P11.2). The workspace
   // says what was clicked; the menu is generated from the same action model the
   // menu bar and the command palette render, with the same availability, so a
   // shortcut surface can never drift into a private list of operations.
   const sceneContextMenu = new ContextMenu(document.body, { datasetKey: 'sceneContextMenu' });
-  workspace.onRequestSceneContextMenu = (request) => {
+  surfaces.own(sceneContextMenu);
+  surfaces.bind(workspace, 'onRequestSceneContextMenu', (request) => {
     sceneContextMenu.open({
       x: request.clientX,
       y: request.clientY,
@@ -2087,16 +2106,16 @@ function setupDomUI(
         void registry.invoke(action.id, 'dom-context', actionCtx, uiState.get());
       }),
     });
-  };
-  window.addEventListener('pagehide', () => sceneContextMenu.dispose(), { once: true });
+  });
 
   // Open Project (File menu): every 3MF uses worker parse and explicit preview.
   const projInput = document.createElement('input');
   projInput.type = 'file';
   projInput.accept = '.3mf';
   projInput.style.display = 'none';
+  surfaces.defer(() => projInput.remove());
   document.body.appendChild(projInput);
-  projInput.onchange = async () => {
+  surfaces.bind(projInput, 'onchange', async () => {
     const f = projInput.files?.[0];
     if (!f) return;
     loadingModal.style.display = 'flex';
@@ -2111,16 +2130,17 @@ function setupDomUI(
     }
     loadingModal.style.display = 'none';
     projInput.value = '';
-  };
-  workspace.onRequestLoadProject = () => projInput.click();
+  });
+  surfaces.bind(workspace, 'onRequestLoadProject', () => projInput.click());
 
   // Import Config (File menu): a .json picker → workspace.importConfig.
   const cfgInput = document.createElement('input');
   cfgInput.type = 'file';
   cfgInput.accept = '.json';
   cfgInput.style.display = 'none';
+  surfaces.defer(() => cfgInput.remove());
   document.body.appendChild(cfgInput);
-  cfgInput.onchange = async () => {
+  surfaces.bind(cfgInput, 'onchange', async () => {
     const f = cfgInput.files?.[0];
     if (!f) return;
     try {
@@ -2129,8 +2149,8 @@ function setupDomUI(
       statusText.textContent = `Failed to import config: ${(e as Error).message}`;
     }
     cfgInput.value = '';
-  };
-  workspace.onRequestLoadConfig = () => cfgInput.click();
+  });
+  surfaces.bind(workspace, 'onRequestLoadConfig', () => cfgInput.click());
 
   // --- Modal framework (Help menu + setup wizard) --------------------------
   let modalReturnFocus: HTMLElement | null = null;
@@ -2222,7 +2242,8 @@ function setupDomUI(
     (card.querySelector<HTMLElement>('button, [href], input, select, textarea, [tabindex]') ?? card).focus();
   };
   const shortcutCatalog = buildShortcutCatalog(registry.all());
-  document.addEventListener('keydown', (e) => {
+  surfaces.defer(closeModal);
+  surfaces.listen(document, 'keydown', (e) => {
     if (e.key === 'Escape') {
       // Let the command palette own Escape while it is open; otherwise close a
       // help/setup modal first, then clear the active model selection.
@@ -2239,12 +2260,12 @@ function setupDomUI(
     e.preventDefault();
     void registry.invoke(shortcut.actionId, 'keyboard', actionCtx, uiState.get());
   });
-  workspace.onShowModal = ({ title, bodyHtml }) => buildModal(title, bodyHtml);
+  surfaces.bind(workspace, 'onShowModal', ({ title, bodyHtml }) => buildModal(title, bodyHtml));
 
   // Searchable help: topics, per-error troubleshooting, and the action catalog
   // in one index, because someone typing "wipe tower" does not know whether
   // their answer is a concept, an error, or a button.
-  workspace.onShowHelpSearch = () => {
+  surfaces.bind(workspace, 'onShowHelpSearch', () => {
     const body = document.createElement('div');
     const label = document.createElement('label');
     label.htmlFor = 'help-search-input';
@@ -2302,14 +2323,14 @@ function setupDomUI(
     body.append(label, input, results);
     buildModal('Help', body);
     input.focus();
-  };
+  });
 
   // ---- Language (P10.4) ------------------------------------------------
   //
   // The picker lives with the other modals because it is one; the localizer
   // itself is owned by the entry point, which is why it arrives as a getter —
   // `setupDomUI` runs before it exists.
-  workspace.onShowLanguagePicker = () => {
+  surfaces.bind(workspace, 'onShowLanguagePicker', () => {
     const body = document.createElement('div');
     const intro = document.createElement('p');
     intro.textContent = t(
@@ -2357,10 +2378,10 @@ function setupDomUI(
     }
     body.append(intro, list);
     buildModal('Language', body);
-  };
+  });
 
   // Interactive setup wizard: reuse the live profile catalogue.
-  workspace.onShowSetupWizard = () => {
+  surfaces.bind(workspace, 'onShowSetupWizard', () => {
     const opts = workspace.getProfileOptions();
     const body = document.createElement('div');
     const intro = document.createElement('p');
@@ -2443,7 +2464,7 @@ function setupDomUI(
     };
     body.appendChild(apply);
     buildModal('Setup Wizard', body);
-  };
+  });
 
   // Canonical active-plate preflight. Only actions already implemented by the
   // shared registry are projected into this surface.
@@ -2468,12 +2489,12 @@ function setupDomUI(
       statusText.textContent = `Preflight action: ${error instanceof Error ? error.message : String(error)}`;
     },
   });
-  workspace.onPreflight = (result) => {
+  surfaces.own(preflightPanel);
+  surfaces.bind(workspace, 'onPreflight', (result) => {
     preflightPanel.render(result);
     uiState.update({ preflightBlocked: !result.canSlice });
-  };
+  });
   workspace.recomputePreflight();
-  window.addEventListener('pagehide', () => preflightPanel.dispose(), { once: true });
 
   // Wipe-tower auto-position toggle (Section 1).
   const chkWipeTower = document.getElementById('chk-wipe-tower-auto') as HTMLInputElement;
@@ -2491,7 +2512,7 @@ function setupDomUI(
     chkWipeTower.setAttribute('aria-describedby', reason.id);
     chkWipeTower.closest('label')?.appendChild(reason);
   }
-  chkWipeTower.onchange = () => {
+  surfaces.bind(chkWipeTower, 'onchange', () => {
     void registry
       .invoke('auto_place_wipe', 'dom-menu', actionCtx, uiState.get(), {
         wipeTowerAuto: { enabled: chkWipeTower.checked },
@@ -2500,7 +2521,7 @@ function setupDomUI(
         chkWipeTower.checked = workspace.wipeTowerAuto;
       })
       .catch((error) => console.error('[orcaxr] wipe-tower action failed:', error));
-  };
+  });
 
   // Profile pickers: mirror the XR panel's machine/process/filament cyclers.
   const selMachine = document.getElementById('sel-machine') as HTMLSelectElement;
@@ -2573,6 +2594,7 @@ function setupDomUI(
     }
   };
   const headsPanel = document.getElementById('heads-panel') as HTMLDivElement;
+  surfaces.defer(() => headsPanel.replaceChildren());
   const profileFilamentHint = document.getElementById('profile-filament-hint') as HTMLParagraphElement | null;
   const renderProfileSelects = () => {
     const o = workspace.getProfileOptions();
@@ -2788,32 +2810,32 @@ function setupDomUI(
       if (!feedback.applied) persistProfileSelection();
     });
   };
-  selMachine.onchange = () => {
+  surfaces.bind(selMachine, 'onchange', () => {
     workspace.selectProfilePresets({
       machinePresetId: selMachine.value as WorkspacePresetOption['id'],
     });
-  };
-  selProcess.onchange = () => {
+  });
+  surfaces.bind(selProcess, 'onchange', () => {
     workspace.selectProfilePresets({
       processPresetId: selProcess.value as WorkspacePresetOption['id'],
     });
-  };
-  selFilament.onchange = () => {
+  });
+  surfaces.bind(selFilament, 'onchange', () => {
     const selected = workspace.getProfileOptions();
     const filamentPresetIds = [...selected.filamentPresetIds];
     filamentPresetIds[0] = selFilament.value as WorkspacePresetOption['id'];
     workspace.selectProfilePresets({ filamentPresetIds });
-  };
-  workspace.onProfileChanged = () => {
+  });
+  surfaces.bind(workspace, 'onProfileChanged', () => {
     for (const listener of profileChangeListeners) listener();
     renderProfileSelects();
     if (pendingPersistedSelection) queuePersistedProfileRestore();
     else persistProfileSelection();
-  };
-  workspace.onProfileSelectionResult = (feedback) => {
+  });
+  surfaces.bind(workspace, 'onProfileSelectionResult', (feedback) => {
     renderProfileSelectionStatus(profileStatus, { feedback });
     if (feedback.applied && !pendingPersistedSelection) persistProfileSelection();
-  };
+  });
   renderProfileSelects();
   queuePersistedProfileRestore();
 
@@ -2840,7 +2862,7 @@ function setupDomUI(
     return presetStore.library.composeCatalog();
   });
 
-  workspace.onRequestPresetLibrary = async (operation: PresetLibraryOperation) => {
+  surfaces.bind(workspace, 'onRequestPresetLibrary', async (operation: PresetLibraryOperation) => {
     const store = presetStore;
     if (!store) {
       presetMessage = 'The profile catalog has not loaded yet.';
@@ -2879,11 +2901,12 @@ function setupDomUI(
       presetBusy = false;
       notifyPresets();
     }
-  };
+  });
 
   if (presetLibraryHost) {
     // Behind a closed <details>: loaded when it is opened, not at first paint.
     void initialization.mount('preset-library', 'Preset library', async (scope) => {
+      surfaces.attach(scope);
       const { PresetLibraryPanel } = await scope.import(import('./ui/dom/PresetLibraryPanel'));
       const presetPanel = new PresetLibraryPanel(presetLibraryHost, {
         getInventory: () =>
@@ -2974,7 +2997,7 @@ function setupDomUI(
       if (!invoked) throw new Error('The FullSpectrum preference action is unavailable.');
     };
     renderAutoPairStatus();
-    autoPairCheckbox.onchange = async () => {
+    surfaces.bind(autoPairCheckbox, 'onchange', async () => {
       const previous = savedPreference;
       const enabled = autoPairCheckbox.checked;
       try {
@@ -2995,9 +3018,9 @@ function setupDomUI(
         autoPairCheckbox.checked = previous.enabled;
         renderAutoPairStatus(`Preference unchanged: ${error instanceof Error ? error.message : String(error)}`);
       }
-    };
+    });
     if (autoPairConfirmButton) {
-      autoPairConfirmButton.onclick = async () => {
+      surfaces.bind(autoPairConfirmButton, 'onclick', async () => {
         const policy = workspace.getFullSpectrumAutoPairPolicySnapshot();
         if (
           !policy.confirmationRequired ||
@@ -3015,15 +3038,15 @@ function setupDomUI(
         } catch (error) {
           renderAutoPairStatus(`Pairs were not generated: ${error instanceof Error ? error.message : String(error)}`);
         }
-      };
+      });
     }
     const unsubscribeAutoPairStatus = workspace.subscribeCanonicalState(() => renderAutoPairStatus());
-    window.addEventListener('pagehide', unsubscribeAutoPairStatus, { once: true });
+    surfaces.defer(unsubscribeAutoPairStatus);
   }
 
   const recreateColorsButton = document.getElementById('btn-recreate-model-colors') as HTMLButtonElement | null;
   if (recreateColorsButton) {
-    recreateColorsButton.onclick = async () => {
+    surfaces.bind(recreateColorsButton, 'onclick', async () => {
       try {
         await registry.invoke('recreate_model_colors_fullspectrum', 'dom-inspector', actionCtx, uiState.get(), {
           recreateModelColors: { allowNewFullSpectrumRecipes: true },
@@ -3031,12 +3054,12 @@ function setupDomUI(
       } catch (error) {
         console.error('Failed to recreate model colors:', error);
       }
-    };
+    });
   }
 
   const virtualFilamentHost = document.getElementById('virtual-filament-library-host');
   if (virtualFilamentHost) {
-    const colorMatchSearch = new ColorMatchSearchWorkerClient();
+    const colorMatchSearch = surfaces.own(new ColorMatchSearchWorkerClient());
     const virtualFilamentLibrary = new VirtualFilamentLibrary(
       virtualFilamentHost,
       new CanonicalVirtualFilamentLibraryAdapter({
@@ -3060,15 +3083,8 @@ function setupDomUI(
       }),
       { heading: 'Virtual filament library' },
     );
+    surfaces.own(virtualFilamentLibrary);
     virtualFilamentLibrary.mount();
-    window.addEventListener(
-      'pagehide',
-      () => {
-        virtualFilamentLibrary.dispose();
-        colorMatchSearch.dispose();
-      },
-      { once: true },
-    );
   }
 
   const objectsHost = document.getElementById('objects-panel-host');
@@ -3102,8 +3118,8 @@ function setupDomUI(
         statusText.textContent = `Objects panel: ${error instanceof Error ? error.message : String(error)}`;
       },
     });
+    surfaces.own(objectsPanel);
     objectsPanel.mount();
-    window.addEventListener('pagehide', () => objectsPanel.dispose(), { once: true });
   }
 
   // The workspace opens the toolpath preview on its own — after a slice, and
@@ -3117,7 +3133,7 @@ function setupDomUI(
       mode: workspace.getAutomationSnapshot().workspaceMode === 'Preview' ? 'preview' : 'prepare',
     });
   };
-  workspace.onPreviewStateChanged = syncPreviewMode;
+  surfaces.bind(workspace, 'onPreviewStateChanged', syncPreviewMode);
   syncPreviewMode();
 
   const previewPanelHost = document.getElementById('gcode-preview-panel-host');
@@ -3179,13 +3195,13 @@ function setupDomUI(
 
     if (previewPanelHost) {
       const previewPanel = new GcodePreviewPanel(previewPanelHost, previewAdapter);
+      surfaces.own(previewPanel);
       previewPanel.mount();
-      window.addEventListener('pagehide', () => previewPanel.dispose(), { once: true });
     }
     if (previewScrubberHost) {
       const scrubber = new PreviewScrubber(previewScrubberHost, previewAdapter, uiState);
+      surfaces.own(scrubber);
       scrubber.mount();
-      window.addEventListener('pagehide', () => scrubber.dispose(), { once: true });
     }
   }
 
@@ -3241,14 +3257,15 @@ function setupDomUI(
         statusText.textContent = `Paint: ${error instanceof Error ? error.message : String(error)}`;
       },
     });
+    surfaces.own(paintPanel);
     paintPanel.mount();
-    window.addEventListener('pagehide', () => paintPanel.dispose(), { once: true });
   }
 
   const smartPaintPanelHost = document.getElementById('smart-paint-panel-host');
   if (smartPaintPanelHost) {
     // Tool-gated, like the other paint and gizmo panels.
     void initialization.mount('smart-paint-panel', 'Smart Paint controls', async (scope) => {
+      surfaces.attach(scope);
       const { SmartPaintPanel } = await scope.import(import('./ui/dom/SmartPaintPanel'));
       const configure = async (request: NonNullable<ActionInvocation['smartPaint']>): Promise<void> => {
         const invoked = await scope.load(
@@ -3309,6 +3326,7 @@ function setupDomUI(
   if (measurePanelHost) {
     // Tool-gated, like the emboss and SVG panels beside it.
     void initialization.mount('measure-panel', 'Measurement controls', async (scope) => {
+      surfaces.attach(scope);
       const { MeasurePanel } = await scope.import(import('./ui/dom/MeasurePanel'));
       const measurePanel = new MeasurePanel(measurePanelHost, {
         getState: () => {
@@ -3372,6 +3390,7 @@ function setupDomUI(
   if (gcodePanelHost) {
     // Inspector-gated and only useful after a slice, so it is fetched then.
     void initialization.mount('gcode-panel', 'G-code inspector', async (scope) => {
+      surfaces.attach(scope);
       const [{ GcodePanel }, { GcodeDocument }] = await scope.import(
         Promise.all([import('./ui/dom/GcodePanel'), import('./project/gcode/GcodeDocument')]),
       );
@@ -3416,6 +3435,8 @@ function setupDomUI(
   const calibrationParametersHost = document.getElementById('calibration-parameters-host');
   if (calibrationParametersHost) {
     void initialization.mount('calibration-parameters', 'Calibration controls', async (scope) => {
+      surfaces.attach(scope);
+      const featureSurface = scope.own(new SurfaceLifecycle());
       const [{ CalibrationParametersPanel }, form, docs, inventory] = await scope.import(
         Promise.all([
           import('./ui/dom/CalibrationParametersPanel'),
@@ -3428,7 +3449,7 @@ function setupDomUI(
       const announce = (): void => {
         for (const listener of listeners) listener();
       };
-      workspace.onCalibrationParametersChanged = announce;
+      featureSurface.bind(workspace, 'onCalibrationParametersChanged', announce);
 
       const chooser = document.createElement('label');
       chooser.style.cssText = 'display:flex;align-items:center;gap:6px;opacity:0.75;';
@@ -3441,13 +3462,14 @@ function setupDomUI(
         option.textContent = id;
         select.appendChild(option);
       }
-      select.addEventListener('change', () => {
+      featureSurface.listen(select, 'change', () => {
         void registry.invoke('calib_choose', 'dom-inspector', actionCtx, uiState.get(), {
           calibrationWorkflowId: select.value,
         });
       });
       chooser.appendChild(select);
       const panelHost = document.createElement('div');
+      scope.defer(() => calibrationParametersHost.replaceChildren());
       calibrationParametersHost.replaceChildren(chooser, panelHost);
 
       const panel = new CalibrationParametersPanel(panelHost, {
@@ -3513,6 +3535,7 @@ function setupDomUI(
     // In the viewport, so it is seen; loaded on demand, because it is empty
     // until someone starts a calibration.
     void initialization.mount('calibration-session', 'Calibration session', async (scope) => {
+      surfaces.attach(scope);
       const { CalibrationSessionBar } = await scope.import(import('./ui/dom/CalibrationSessionBar'));
       const bar = new CalibrationSessionBar(calibrationSessionHost, {
         getState: () => {
@@ -3583,6 +3606,7 @@ function setupDomUI(
     // Disclosure-gated, so it is fetched when the inspector wants it rather
     // than carried in the main chunk everyone pays for at first paint.
     void initialization.mount('simplify-panel', 'Simplify controls', async (scope) => {
+      surfaces.attach(scope);
       let requested = { useCount: true, decimateRatio: 50, maxError: 1 };
       const { SimplifyPanel } = await scope.import(import('./ui/dom/SimplifyPanel'));
       const simplifyPanel = new SimplifyPanel(simplifyPanelHost, {
@@ -3649,6 +3673,7 @@ function setupDomUI(
     // Disclosure-gated like the simplify panel beside it, and fetched the same
     // way: the ear controls are a tool an operator opens, not first paint.
     void initialization.mount('brim-ears-panel', 'Brim controls', async (scope) => {
+      surfaces.attach(scope);
       const { BrimEarsPanel } = await scope.import(import('./ui/dom/BrimEarsPanel'));
       const brimEarsPanel = new BrimEarsPanel(brimEarsPanelHost, {
         getState: () => {
@@ -3725,6 +3750,7 @@ function setupDomUI(
   if (embossPanelHost) {
     // Disclosure-gated and font-heavy: fetched when the emboss tool wants it.
     void initialization.mount('emboss-panel', 'Emboss controls', async (scope) => {
+      surfaces.attach(scope);
       const { EmbossPanel } = await scope.import(import('./ui/dom/EmbossPanel'));
       const embossPanel = new EmbossPanel(embossPanelHost, {
         getState: () => {
@@ -3806,6 +3832,7 @@ function setupDomUI(
   if (svgPanelHost) {
     // Tool-gated like emboss beside it, and fetched the same way.
     void initialization.mount('svg-panel', 'SVG controls', async (scope) => {
+      surfaces.attach(scope);
       const { SvgPanel } = await scope.import(import('./ui/dom/SvgPanel'));
       const svgPanel = new SvgPanel(svgPanelHost, {
         getState: () => {
@@ -3916,8 +3943,8 @@ function setupDomUI(
         statusText.textContent = `Semantic object editor: ${error instanceof Error ? error.message : String(error)}`;
       },
     });
+    surfaces.own(semanticEditor);
     semanticEditor.mount();
-    window.addEventListener('pagehide', () => semanticEditor.dispose(), { once: true });
   }
 
   const filamentAssignmentHost = document.getElementById('filament-assignment-host');
@@ -3934,8 +3961,8 @@ function setupDomUI(
         statusText.textContent = `Filament assignment: ${error instanceof Error ? error.message : String(error)}`;
       },
     });
+    surfaces.own(selector);
     selector.mount();
-    window.addEventListener('pagehide', () => selector.dispose(), { once: true });
   }
 
   // The same canonical action as the inspector selector, one press away from a
@@ -3957,14 +3984,15 @@ function setupDomUI(
         });
       },
     });
+    surfaces.own(bar);
     bar.mount();
-    window.addEventListener('pagehide', () => bar.dispose(), { once: true });
   }
 
   const layerEventHost = document.getElementById('layer-event-host');
   if (layerEventHost) {
     // Inspector-gated: authored layer events are a tool, not first paint.
     void initialization.mount('layer-events', 'Layer events', async (scope) => {
+      surfaces.attach(scope);
       const { LayerEventPanel } = await scope.import(import('./ui/dom/LayerEventPanel'));
       const layerEvents = new LayerEventPanel(layerEventHost, {
         getSnapshot: () => workspace.getLayerEventSnapshot(),
@@ -4037,8 +4065,8 @@ function setupDomUI(
         statusText.textContent = `Plate manager: ${error instanceof Error ? error.message : String(error)}`;
       },
     });
+    surfaces.own(plateManager);
     plateManager.mount();
-    window.addEventListener('pagehide', () => plateManager.dispose(), { once: true });
   }
 
   // The Project page leads with the project itself, as upstream's does: what is
@@ -4069,11 +4097,12 @@ function setupDomUI(
           .catch((error) => console.error('[orcaxr] save-project action failed:', error));
       },
     });
+    surfaces.own(projectSummary);
     projectSummary.mount();
-    window.addEventListener('pagehide', () => projectSummary.dispose(), { once: true });
   }
 
   void initialization.registry.run('settings', async (scope) => {
+    surfaces.attach(scope);
     const { mountSettingsEditors } = await scope.import(import('./ui/dom/mountSettingsEditors'));
     const settingsHost = document.getElementById('settings-inspector-host');
     if (!settingsHost) throw new Error('The settings surface is missing. Reload the application.');
@@ -4082,6 +4111,7 @@ function setupDomUI(
   const wavePanelHost = document.getElementById('wave-overhangs-panel-host');
   if (wavePanelHost)
     void initialization.mount('wave-overhangs', 'Wave overhang controls', async (scope) => {
+      surfaces.attach(scope);
       const { mountWaveOverhangsPanel } = await scope.import(import('./ui/dom/WaveOverhangsPanel'));
       scope.defer(
         mountWaveOverhangsPanel({
@@ -4099,6 +4129,7 @@ function setupDomUI(
 
   // Filament palette: color swatches that drive paint + 3MF display + slice.
   const swatchWrap = document.getElementById('filament-swatches') as HTMLDivElement;
+  surfaces.defer(() => swatchWrap.replaceChildren());
   const btnAddFilament = document.getElementById('btn-add-filament') as HTMLButtonElement;
   btnAddFilament.title = t(
     'app.main.addAnAuxiliaryPaletteColor',
@@ -4164,24 +4195,24 @@ function setupDomUI(
       vWrap.appendChild(chip);
     }
   };
-  btnAddFilament.onclick = () => workspace.addFilamentSlot();
+  surfaces.bind(btnAddFilament, 'onclick', () => workspace.addFilamentSlot());
   // A palette change (e.g. adopted from a loaded 3MF) must also refresh the
   // heads panel — its per-head color swatches read the same palette.
-  workspace.onPaletteChanged = () => {
+  surfaces.bind(workspace, 'onPaletteChanged', () => {
     renderPalette();
     renderProfileSelects();
-  };
+  });
   renderPalette();
 
   // Printer endpoint and session credential setup. Live operations are
   // read-only until the complete P9 mapping/preflight/send lifecycle exists.
   printerHost.value = printerCfg.host;
-  printerHost.oninput = () => {
+  surfaces.bind(printerHost, 'oninput', () => {
     printerCfg.host = printerHost.value.trim();
     savePrinterEndpointPreferences(printerCfg);
     refreshFirstRunPrompt();
     disposePrinterTransport();
-  };
+  });
 
   // The printer key and the slicer token are remembered on this device so a
   // configured machine stays configured across reloads. The switch below turns
@@ -4266,9 +4297,9 @@ function setupDomUI(
     statusText.textContent = `Switched to ${entry.name}.`;
   };
 
-  printerSelect.onchange = () => activatePrinter(printerSelect.value);
+  surfaces.bind(printerSelect, 'onchange', () => activatePrinter(printerSelect.value));
 
-  btnPrinterAdd.onclick = () => {
+  surfaces.bind(btnPrinterAdd, 'onclick', () => {
     const host = printerHost.value.trim();
     if (!host) {
       statusText.textContent = t(
@@ -4291,9 +4322,9 @@ function setupDomUI(
     } catch (error) {
       statusText.textContent = `Could not add that printer: ${(error as Error).message}`;
     }
-  };
+  });
 
-  btnPrinterRemove.onclick = () => {
+  surfaces.bind(btnPrinterRemove, 'onclick', () => {
     const entry = findPrinter(printers, printerSelect.value);
     if (!entry) return;
     if (!window.confirm(`Remove ${entry.name}? Its saved address and key are deleted from this device.`)) return;
@@ -4316,9 +4347,9 @@ function setupDomUI(
       refreshFirstRunPrompt();
     }
     statusText.textContent = `Removed ${entry.name}.`;
-  };
+  });
 
-  printerApiKey.oninput = () => {
+  surfaces.bind(printerApiKey, 'oninput', () => {
     // The key belongs to the selected printer, not to the app.
     const activeId = printers.defaultId;
     if (activeId) {
@@ -4329,22 +4360,22 @@ function setupDomUI(
     }
     persistCredentials();
     disposePrinterTransport();
-  };
-  rememberCredentials.onchange = () => {
+  });
+  surfaces.bind(rememberCredentials, 'onchange', () => {
     persistCredentials();
     statusText.textContent = rememberCredentials.checked
       ? 'Credentials will be remembered on this device.'
       : 'Stopped remembering credentials; the saved copies were erased.';
-  };
+  });
   // Diagnostics: a bounded, redacted record of this session. Secrets are
   // registered so they are struck from every entry as it is recorded, not on
   // the way out.
   const diagnostics = new DiagnosticsRecorder();
-  window.addEventListener('error', (event) => diagnostics.recordError('window', event.error ?? event.message));
-  window.addEventListener('unhandledrejection', (event) => diagnostics.recordError('promise', event.reason));
+  surfaces.listen(window, 'error', (event) => diagnostics.recordError('window', event.error ?? event.message));
+  surfaces.listen(window, 'unhandledrejection', (event) => diagnostics.recordError('promise', event.reason));
 
   // Diagnostics: the operator reads exactly what would be sent, then decides.
-  workspace.onRequestDiagnosticsExport = async () => {
+  surfaces.bind(workspace, 'onRequestDiagnosticsExport', async () => {
     const bundle = buildDiagnosticsBundle(
       {
         appVersion: window.ORCAXR_VERSION ?? 'unknown',
@@ -4393,7 +4424,7 @@ function setupDomUI(
     link.click();
     URL.revokeObjectURL(url);
     statusText.textContent = `Exported ${bundle.log.length} log entries. No project, addresses, or tokens are in the file.`;
-  };
+  });
 
   // Preferences: this device's setup, versioned and separate from the project.
   const prefReduceMotion = document.getElementById('pref-reduce-motion') as HTMLInputElement;
@@ -4409,13 +4440,13 @@ function setupDomUI(
   const startupPrinter = defaultPrinter(printers);
   if (startupPrinter) printerApiKey.value = keyForPrinter(startupPrinter.id);
   refreshDiagnosticSecrets();
-  prefReduceMotion.onchange = () => {
+  surfaces.bind(prefReduceMotion, 'onchange', () => {
     preferences = { ...preferences, reduceMotion: prefReduceMotion.checked ? 'always' : 'system' };
     savePreferences(preferences);
     applyPreferences(preferences, document.documentElement);
-  };
+  });
 
-  btnPrefsExport.onclick = () => {
+  surfaces.bind(btnPrefsExport, 'onclick', () => {
     const blob = new Blob([JSON.stringify(exportPreferences(), null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -4427,10 +4458,10 @@ function setupDomUI(
       'app.main.exportedThisDeviceSSettings',
       'Exported this device’s settings. The file carries no tokens.',
     );
-  };
+  });
 
-  btnPrefsImport.onclick = () => prefsImportFile.click();
-  prefsImportFile.onchange = async () => {
+  surfaces.bind(btnPrefsImport, 'onclick', () => prefsImportFile.click());
+  surfaces.bind(prefsImportFile, 'onchange', async () => {
     const file = prefsImportFile.files?.[0];
     if (!file) return;
     try {
@@ -4446,9 +4477,9 @@ function setupDomUI(
     } finally {
       prefsImportFile.value = '';
     }
-  };
+  });
 
-  btnPrefsReset.onclick = () => {
+  surfaces.bind(btnPrefsReset, 'onclick', () => {
     resetPreferences();
     printerHost.value = '';
     printerApiKey.value = '';
@@ -4463,9 +4494,9 @@ function setupDomUI(
       'app.main.resetThisDeviceSSettings',
       'Reset this device’s settings. Your projects and presets are untouched.',
     );
-  };
+  });
 
-  btnForgetCredentials.onclick = () => {
+  surfaces.bind(btnForgetCredentials, 'onclick', () => {
     forgetRememberedCredentials();
     printerApiKey.value = '';
     const tokenField = document.getElementById('external-slicer-token') as HTMLInputElement | null;
@@ -4478,10 +4509,11 @@ function setupDomUI(
       'app.main.forgotTheSavedPrinterKey',
       'Forgot the saved printer key and slicer token on this device.',
     );
-  };
+  });
   // Loading the settings surface on demand keeps connection UI outside the core
   // workspace bundle. The shared controller remains available to DOM and XR routes.
   void initialization.mount('external-slicer-controls', 'External slicer controls', async (scope) => {
+    surfaces.attach(scope);
     const { mountExternalSlicerSettings } = await scope.import(import('./ui/dom/ExternalSlicerSettings'));
     scope.own(
       mountExternalSlicerSettings({
@@ -4505,7 +4537,7 @@ function setupDomUI(
     );
   });
 
-  btnPrinterTest.onclick = async () => {
+  surfaces.bind(btnPrinterTest, 'onclick', async () => {
     btnPrinterTest.disabled = true;
     btnPrinterTest.setAttribute('aria-busy', 'true');
     try {
@@ -4514,15 +4546,15 @@ function setupDomUI(
       btnPrinterTest.disabled = false;
       btnPrinterTest.removeAttribute('aria-busy');
     }
-  };
+  });
   const btnPrinterWebcam = document.getElementById('btn-printer-webcam') as HTMLButtonElement;
   btnPrinterWebcam.disabled = false;
   btnPrinterWebcam.textContent = 'Camera';
   btnPrinterWebcam.title = t('app.main.discoverThisPrinterSCameras', "Discover this printer's cameras and watch one");
-  btnPrinterWebcam.onclick = () => {
+  surfaces.bind(btnPrinterWebcam, 'onclick', () => {
     void registry.invoke('view_webcam', 'dom-inspector', actionCtx, uiState.get());
-  };
-  btnPrinterSend.onclick = () => {
+  });
+  surfaces.bind(btnPrinterSend, 'onclick', () => {
     if (printWorkflow.busy) {
       printWorkflow.cancel();
       workspace.setStatus(t('app.main.cancellingTheSend', 'Cancelling the send…'));
@@ -4531,7 +4563,7 @@ function setupDomUI(
     void registry
       .invoke('send_to_printer', 'dom-inspector', actionCtx, uiState.get())
       .catch((error) => workspace.setStatus(`Send failed: ${(error as Error).message}`));
-  };
+  });
   setPrinterSendBusy(false);
 
   // Download and send availability are both registry-driven; webcam discovery
@@ -4539,6 +4571,7 @@ function setupDomUI(
   // Build-plate bar: a chip per plate + an add button. Switching hides the
   // current plate's models and shows the target's (the workspace owns the sets).
   const plateBar = document.getElementById('plate-bar') as HTMLDivElement;
+  surfaces.defer(() => plateBar.replaceChildren());
   const renderPlateBar = () => {
     const plates = workspace.getPlates();
     plateBar.innerHTML = '';
@@ -4581,7 +4614,7 @@ function setupDomUI(
     plateBar.appendChild(add);
     uiState.update({ plateCount: plates.length, modelCount: workspace.modelCount });
   };
-  workspace.onPlatesChanged = renderPlateBar;
+  surfaces.bind(workspace, 'onPlatesChanged', renderPlateBar);
   renderPlateBar();
 
   const updateCanonicalUi = (summary: ReturnType<OrcaWorkspace['getCanonicalSummary']>) => {
@@ -4599,17 +4632,17 @@ function setupDomUI(
       projectionHealthy: summary.projectionHealth.healthy,
     });
   };
-  workspace.onCanonicalStateChanged = updateCanonicalUi;
+  surfaces.bind(workspace, 'onCanonicalStateChanged', updateCanonicalUi);
   updateCanonicalUi(workspace.getCanonicalSummary());
 
-  workspace.onDownloadReady = (ready) => {
+  surfaces.bind(workspace, 'onDownloadReady', (ready) => {
     uiState.update({ gcodeReady: ready });
     // A stale artifact must not stay sendable; an in-flight send keeps its own
     // cancel affordance until it settles.
     if (!printWorkflow.busy) btnPrinterSend.disabled = !ready;
-  };
+  });
 
-  workspace.onSelectionChanged = () => {
+  surfaces.bind(workspace, 'onSelectionChanged', () => {
     const summary = workspace.getCanonicalSummary();
     uiState.update({
       hasSelection: workspace.getObjectsTreeSnapshot().selection.refs.length > 0,
@@ -4619,22 +4652,22 @@ function setupDomUI(
       modelCount: workspace.modelCount,
     });
     renderPlateBar();
-  };
+  });
 
   const domSliceModal = document.getElementById('dom-slice-modal') as HTMLDivElement;
   const domSliceText = document.getElementById('dom-slice-text') as HTMLParagraphElement;
   const domSliceBar = document.getElementById('dom-slice-bar') as HTMLDivElement;
 
-  workspace.onSliceStateChanged = (isSlicing) => {
+  surfaces.bind(workspace, 'onSliceStateChanged', (isSlicing) => {
     if (domSliceModal) {
       domSliceModal.style.display = isSlicing ? 'flex' : 'none';
     }
     // Drive both DOM and immersive action enablement from the same source.
     // Without this, Slice could still look ready while a previous job ran.
     uiState.update({ isSlicing });
-  };
+  });
 
-  workspace.onStatusChanged = (text, percent) => {
+  surfaces.bind(workspace, 'onStatusChanged', (text, percent) => {
     statusText.textContent = text;
     if (percent !== undefined && percent >= 0 && percent <= 100) {
       progressContainer.style.display = 'block';
@@ -4649,7 +4682,7 @@ function setupDomUI(
       status: text,
       progress: percent !== undefined && percent >= 0 && percent <= 100 ? percent : null,
     });
-  };
+  });
 
   // AI & MCP Server
   const chkMcpEnabled = document.getElementById('chk-mcp-enabled') as HTMLInputElement;
@@ -4661,6 +4694,7 @@ function setupDomUI(
   let mcp: OrcaWebMcpClient | null = null;
 
   const renderMcpStatus = (status: Readonly<WebMcpStatus>) => {
+    if (surfaces.signal.aborted) return;
     statusText.textContent = status.message;
     const busy = status.state === 'registering' || status.state === 'connecting';
     const connected = status.state === 'connected' || mcp?.isConnected === true;
@@ -4691,7 +4725,7 @@ function setupDomUI(
     return mcp;
   };
 
-  chkMcpEnabled.onchange = () => {
+  surfaces.bind(chkMcpEnabled, 'onchange', () => {
     mcpControls.style.display = chkMcpEnabled.checked ? 'flex' : 'none';
     if (chkMcpEnabled.checked) {
       ensureMcpClient();
@@ -4702,9 +4736,9 @@ function setupDomUI(
     } else {
       mcp?.disconnect('WebMCP tools disabled.');
     }
-  };
+  });
 
-  btnMcpConnect.onclick = async () => {
+  surfaces.bind(btnMcpConnect, 'onclick', async () => {
     const client = ensureMcpClient();
     if (client.isConnected) {
       client.disconnect();
@@ -4726,9 +4760,9 @@ function setupDomUI(
         inMcpToken.focus();
       }
     }
-  };
+  });
 
-  btnMcpShare.onclick = async () => {
+  surfaces.bind(btnMcpShare, 'onclick', async () => {
     const snippet = {
       mcpServers: {
         orcaxr_webmcp: {
@@ -4749,9 +4783,9 @@ function setupDomUI(
         'Clipboard access was denied. Copy the MCP snippet from a secure browser context.',
       );
     }
-  };
+  });
 
-  window.addEventListener('pagehide', () => mcp?.disconnect(), { once: true });
+  surfaces.defer(() => mcp?.disconnect());
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -4792,9 +4826,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     },
     report: () => {},
   });
-  window.addEventListener('pagehide', (event) => {
-    if (!event.persisted) initialization.dispose();
-  });
+  ownPageLifetime(window, initialization.lifetime, () => initialization.dispose());
   try {
     // The simulator is a development aid, not a headset runtime dependency. Its
     // custom controls pull a substantial rendering stack into the initial page;
@@ -4931,7 +4963,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       report: (message) => workspace.setStatus(message),
     });
     await initialization.registry.run('shell', async (scope) => {
-      setupDomUI(workspace, uiState, actionCtx, registry, () => l10n, initialization);
+      const surfaces = scope.own(new SurfaceLifecycle());
+      setupDomUI(workspace, uiState, actionCtx, registry, () => l10n, initialization, surfaces);
       const persistence = scope.own(
         new persistenceModule.BrowserProjectPersistence({
           project: workspace.createPersistenceProjectPort(),
@@ -4961,8 +4994,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }),
       );
       workspace.connectProjectPersistence(persistence.controller);
-      workspace.onRequestRecoveryView = () => showWorkspaceView?.('project');
-      workspace.onRequestApplicationUpdate = () => persistence.checkForUpdates();
+      surfaces.bind(workspace, 'onRequestRecoveryView', () => showWorkspaceView?.('project'));
+      surfaces.bind(workspace, 'onRequestApplicationUpdate', () => persistence.checkForUpdates());
       initialization.connectRecovery({
         reload: () => persistence.navigate('reload', () => location.reload()),
         report: (message) => workspace.setStatus(message),
@@ -4983,6 +5016,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         menuButton: byId('menu-button') as HTMLButtonElement,
         calibration: byId('calibration-grid'),
       };
+      surfaces.own(domShell);
       domShell.mount(domShellHosts);
 
       // ---- Language (P10.4) ------------------------------------------------
@@ -5001,12 +5035,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.documentElement.dir = l10n.direction;
       };
       applyDocumentLanguage();
-      l10n.subscribe(() => {
-        applyDocumentLanguage();
-        domShell.mount(domShellHosts);
-        hydrateIcons();
-        uiState.update({});
-      });
+      surfaces.defer(
+        l10n.subscribe(() => {
+          applyDocumentLanguage();
+          domShell.mount(domShellHosts);
+          hydrateIcons();
+          uiState.update({});
+        }),
+      );
 
       // A stored choice is a decision and outranks the browser's list; only an
       // operator who has never chosen gets one negotiated for them.
@@ -5042,9 +5078,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             .catch((error) => console.error(`[orcaxr] view action "${actionId}" failed:`, error));
         },
       );
+      surfaces.own(workspaceViews);
       workspaceViews.mount();
-      showWorkspaceView = (id) => workspaceViews.activate(id);
-      window.addEventListener('pagehide', () => workspaceViews.dispose(), { once: true });
+      const showView = (id: WorkspaceViewId) => workspaceViews.activate(id);
+      showWorkspaceView = showView;
+      surfaces.defer(() => {
+        if (showWorkspaceView === showView) showWorkspaceView = undefined;
+      });
 
       // ---- Shell chrome ------------------------------------------------------
       //
@@ -5054,7 +5094,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       hydrateIcons();
 
       // The home button snaps the camera back — the same action the View menu runs.
-      byId('btn-home').addEventListener('click', () => {
+      surfaces.listen(byId('btn-home'), 'click', () => {
         void registry
           .invoke('view_camera_default', 'dom-menu', actionCtx, uiState.get())
           .catch((error) => console.error('[orcaxr] default-view action failed:', error));
@@ -5064,7 +5104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       for (const toggle of document.querySelectorAll<HTMLButtonElement>('[data-card-toggle]')) {
         const card = toggle.closest('.oxr-card');
         if (!card) continue;
-        toggle.addEventListener('click', () => {
+        surfaces.listen(toggle, 'click', () => {
           const folded = card.classList.toggle('folded');
           toggle.setAttribute('aria-expanded', String(!folded));
         });
@@ -5081,7 +5121,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           : t('app.main.switchToDarkMode', 'Switch to dark mode');
         themeButton.setAttribute('aria-label', themeButton.title);
       };
-      themeButton.addEventListener('click', () => {
+      surfaces.listen(themeButton, 'click', () => {
         setDomTheme(activeDomTheme() === 'dark' ? 'light' : 'dark');
         syncThemeButton();
       });
@@ -5128,7 +5168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               : '';
         }
       };
-      advancedSwitch.addEventListener('click', () => {
+      surfaces.listen(advancedSwitch, 'click', () => {
         const on = advancedSwitch.getAttribute('aria-checked') === 'true';
         const target = modeRadio(on ? 'simple' : 'advanced');
         if (!target) return;
@@ -5137,7 +5177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         syncProcessHead();
       });
       for (const button of scopeButtons) {
-        button.addEventListener('click', () => {
+        surfaces.listen(button, 'click', () => {
           const select = targetSelect();
           if (!select) return;
           const wanted =
@@ -5150,15 +5190,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           syncProcessHead();
         });
       }
-      byId('btn-process-search').addEventListener('click', () => {
+      surfaces.listen(byId('btn-process-search'), 'click', () => {
         const search = settingsHostEl.querySelector<HTMLInputElement>('[data-settings-search]');
         search?.focus();
         search?.scrollIntoView({ block: 'nearest' });
       });
       // The panel rebuilds itself whenever the scope or the canonical project
       // changes, so the head reads the DOM it drives rather than caching it.
-      settingsHostEl.addEventListener('change', syncProcessHead);
-      new MutationObserver(() => syncProcessHead()).observe(settingsHostEl, { childList: true, subtree: true });
+      surfaces.listen(settingsHostEl, 'change', syncProcessHead);
+      surfaces
+        .observe(new MutationObserver(() => syncProcessHead()))
+        .observe(settingsHostEl, { childList: true, subtree: true });
       syncProcessHead();
 
       // The renderer fills the window, but the chrome covers its left, right and
@@ -5190,10 +5232,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         );
       };
       centreCameraOnViewport();
-      window.addEventListener('resize', centreCameraOnViewport);
-      new ResizeObserver(centreCameraOnViewport).observe(viewport);
+      surfaces.listen(window, 'resize', centreCameraOnViewport);
+      surfaces.observe(new ResizeObserver(centreCameraOnViewport)).observe(viewport);
       xb.core.renderer?.xr?.addEventListener('sessionstart', centreCameraOnViewport);
       xb.core.renderer?.xr?.addEventListener('sessionend', centreCameraOnViewport);
+      surfaces.defer(() => {
+        xb.core.renderer?.xr?.removeEventListener('sessionstart', centreCameraOnViewport);
+        xb.core.renderer?.xr?.removeEventListener('sessionend', centreCameraOnViewport);
+      });
 
       // ---- Viewport chrome ----------------------------------------------------
       //
@@ -5232,18 +5278,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       syncViewportChrome();
       xb.core.renderer?.xr?.addEventListener('sessionstart', syncViewportChrome);
       xb.core.renderer?.xr?.addEventListener('sessionend', syncViewportChrome);
-      themeButton.addEventListener('click', syncViewportChrome);
+      surfaces.defer(() => {
+        xb.core.renderer?.xr?.removeEventListener('sessionstart', syncViewportChrome);
+        xb.core.renderer?.xr?.removeEventListener('sessionend', syncViewportChrome);
+      });
+      surfaces.listen(themeButton, 'click', syncViewportChrome);
 
       const toolSettingsPanel = byId('tool-settings-panel');
       const toolSettingsTitle = byId('tool-settings-title');
       const toolSettingsContent = byId('tool-settings-content');
+      surfaces.defer(() => toolSettingsContent.replaceChildren());
       const btnCloseToolSettings = byId('btn-close-tool-settings');
 
-      btnCloseToolSettings.onclick = () => {
+      surfaces.bind(btnCloseToolSettings, 'onclick', () => {
         void registry
           .invoke('tool_move', 'dom-toolbar', actionCtx, uiState.get())
           .catch((error) => console.error('[orcaxr] close-tool action failed:', error));
-      };
+      });
 
       let currentSettingsTool = '';
       const updateToolSettings = () => {
@@ -5339,17 +5390,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       };
 
-      uiState.subscribe(updateToolSettings);
-      workspace.onSelectionTransformChanged = updateToolSettings;
+      surfaces.defer(uiState.subscribe(updateToolSettings));
+      surfaces.bind(workspace, 'onSelectionTransformChanged', updateToolSettings);
 
       // The command palette: every action, searchable, one Ctrl/⌘-K away.
       const palette = new CommandPalette(registry, actionCtx, uiState);
 
+      surfaces.defer(() => AiConfigDialog.dispose());
       AiConfigDialog.init();
-      document.getElementById('cmd-ai-config')?.addEventListener('click', () => {
-        AiConfigDialog.show();
-      });
+      const aiConfigTrigger = document.getElementById('cmd-ai-config');
+      if (aiConfigTrigger)
+        surfaces.listen(aiConfigTrigger, 'click', () => {
+          AiConfigDialog.show();
+        });
 
+      surfaces.own(palette);
       palette.mount(
         byId('command-palette'),
         document.getElementById('cmd-input') as HTMLInputElement,

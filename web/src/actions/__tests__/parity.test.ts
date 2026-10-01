@@ -633,9 +633,15 @@ test('composition root injects one registry into the workspace and DOM shell', (
   assert.match(mainSource, /new ActionContext\(workspace, uiState, registry\)/);
   assert.match(mainSource, /registerWorkspaceTools\(mcp, workspace, registry, actionCtx\)/);
 
-  assert.match(mainSource, /emptyLoadModel\.onclick[\s\S]*?\.invoke\('load_model_from_path', 'dom-primary'/);
+  assert.match(
+    mainSource,
+    /surfaces\.bind\(emptyLoadModel, 'onclick',[\s\S]*?\.invoke\('load_model_from_path', 'dom-primary'/,
+  );
   assert.match(mainSource, /add\.onclick[\s\S]*?\.invoke\('add_plate', 'dom-menu'/);
-  assert.match(mainSource, /btnCloseToolSettings\.onclick[\s\S]*?\.invoke\('tool_move', 'dom-toolbar'/);
+  assert.match(
+    mainSource,
+    /surfaces\.bind\(btnCloseToolSettings, 'onclick',[\s\S]*?\.invoke\('tool_move', 'dom-toolbar'/,
+  );
   assert.match(
     mainSource,
     /chip\.onclick[\s\S]*?\.invoke\('activate_plate', 'dom-inspector', actionCtx, uiState\.get\(\), \{ plateId: p\.id \}\)/,

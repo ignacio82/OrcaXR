@@ -1,11 +1,15 @@
+import { SurfaceLifecycle } from '../SurfaceLifecycle';
 import { getAiSessionSecret, purgeLegacyAiSecretStorage, setAiSessionSecret } from '../../security/AiSessionSecrets';
 
 export class AiConfigDialog {
+  private static lifetime?: SurfaceLifecycle;
   private static returnFocus: HTMLElement | null = null;
 
   static init(): void {
     purgeLegacyAiSecretStorage();
     if (document.getElementById('ai-config-dialog')) return;
+    const lifetime = new SurfaceLifecycle();
+    this.lifetime = lifetime;
 
     const dialog = document.createElement('div');
     dialog.id = 'ai-config-dialog';
@@ -30,6 +34,7 @@ export class AiConfigDialog {
           <button type="button" id="ai-config-save" class="action-btn primary" style="width:auto;padding:14px 24px;">Use for this tab</button>
         </div>
       </div>`;
+    lifetime.defer(() => dialog.remove());
     document.body.appendChild(dialog);
 
     const hide = () => {
@@ -40,15 +45,15 @@ export class AiConfigDialog {
     };
     const geminiInput = document.getElementById('ai-gemini-key') as HTMLInputElement;
 
-    document.getElementById('ai-config-cancel')!.onclick = hide;
-    document.getElementById('ai-config-save')!.onclick = () => {
+    lifetime.bind(document.getElementById('ai-config-cancel')!, 'onclick', hide);
+    lifetime.bind(document.getElementById('ai-config-save')!, 'onclick', () => {
       setAiSessionSecret('gemini', geminiInput.value);
       hide();
-    };
-    dialog.onclick = (event) => {
+    });
+    lifetime.bind(dialog, 'onclick', (event) => {
       if (event.target === dialog) hide();
-    };
-    dialog.onkeydown = (event) => {
+    });
+    lifetime.bind(dialog, 'onkeydown', (event) => {
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -69,7 +74,16 @@ export class AiConfigDialog {
           first?.focus();
         }
       }
-    };
+    });
+    lifetime.defer(() => {
+      geminiInput.value = '';
+    });
+  }
+
+  static dispose(): void {
+    this.lifetime?.dispose();
+    this.lifetime = undefined;
+    this.returnFocus = null;
   }
 
   static show(): void {

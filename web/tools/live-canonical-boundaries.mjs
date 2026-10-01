@@ -160,6 +160,14 @@ export function selfTestLiveCanonicalBoundaries() {
       '3MF picker must call workspace.openProject',
     ],
     [
+      'owned picker bypass',
+      inspectMain,
+      `workspace.onProjectImportPreview = async () => true;
+       projectInput.accept = '.3mf';
+       surfaces.bind(projectInput, 'onchange', () => workspace.loadModelFromGroup(group));`,
+      '3MF picker must call workspace.openProject',
+    ],
+    [
       'Objects side door',
       inspectObjectsGateway,
       `new ObjectsPanel(host, adapter);
@@ -251,6 +259,19 @@ export function selfTestLiveCanonicalBoundaries() {
       `tools/live-canonical-boundaries.mjs:1 comments/string negative control failed: ${negative.join('; ')}`,
     );
   }
+  const ownedPickerControl = inspectMain(
+    'self-test-owned-picker.ts',
+    parse(
+      'self-test-owned-picker.ts',
+      `workspace.onProjectImportPreview = async () => true;
+      projectInput.accept = '.3mf';
+      surfaces.bind(projectInput, 'onchange', () => workspace.openProject(bytes));`,
+    ),
+  );
+  if (ownedPickerControl.length > 0)
+    failures.push(
+      `tools/live-canonical-boundaries.mjs:1 owned picker control failed: ${ownedPickerControl.join('; ')}`,
+    );
   const decisionControl = inspectOpen(
     'self-test-decision.ts',
     parse(
@@ -369,11 +390,18 @@ function inspectMain(file, source) {
   );
   const input = accept?.path.slice(0, -'.accept'.length);
   const onchange = input ? all.assignments.find((entry) => entry.path === `${input}.onchange`) : undefined;
-  if (
-    !accept ||
-    !onchange ||
-    !facts(onchange.node.right).calls.some((entry) => entry.path === 'workspace.openProject')
-  ) {
+  const ownedOnchange = input
+    ? all.calls.find(
+        (entry) =>
+          entry.path === 'surfaces.bind' &&
+          entry.node.arguments.length === 3 &&
+          expressionPath(entry.node.arguments[0]) === input &&
+          ts.isStringLiteralLike(entry.node.arguments[1]) &&
+          entry.node.arguments[1].text === 'onchange',
+      )
+    : undefined;
+  const handler = onchange?.node.right ?? ownedOnchange?.node.arguments[2];
+  if (!accept || !handler || !facts(handler).calls.some((entry) => entry.path === 'workspace.openProject')) {
     check.fail(onchange?.node ?? accept?.node ?? source, '3MF picker must call workspace.openProject');
   }
   return check.failures;
