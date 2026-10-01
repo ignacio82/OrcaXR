@@ -533,8 +533,8 @@ export class ActionContext {
   /** Registry handler seam. Presentation callers must use togglePreview(). */
   async applyTogglePreview(): Promise<void> {
     await this.workspace.togglePreview();
-    const workspaceMode = this.workspace.getAutomationSnapshot().workspaceMode;
-    this.ui.update({ mode: workspaceMode === 'Preview' ? 'preview' : 'prepare' });
+    const preview = this.workspace.getPreviewState();
+    this.ui.update({ mode: preview.loading || preview.view ? 'preview' : 'prepare' });
   }
   /** Compatibility gateway for the legacy XR mode card. */
   togglePreview(): void {

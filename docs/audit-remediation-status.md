@@ -400,7 +400,7 @@ the five outstanding human gates.
   crash, unreadable/malformed replies, post failure, deadline and disposal.
   The built browser reaches the second chunk using actual DOM controls and the
   XR registry, preserves canonical state and terminates obsolete source workers.
-  The final production run recorded 77 main-thread timer callbacks during an 841.30 ms
+  This production run recorded 77 main-thread timer callbacks during an 841.30 ms
   open of the fixed fixture. Timings are informational on this host; independent
   hardware performance remains unqualified.
 - Typed import traversal reproduced and fixes false emboss warnings from
@@ -429,7 +429,7 @@ rules, 155 pseudo-localized controls and thirteen slicing files. The final paire
 preview benchmark ratio is 1.662 against the measured 2.5 ceiling. Bundle ceilings
 remain unchanged: main 2,321,334 bytes; total JavaScript 10,550,815 bytes.
 
-## Final software qualification (2026-10-01)
+## Software qualification at 0902ca7 (2026-10-01)
 
 - The fresh native source build completed all 604 steps; the final runtime/UI
   refresh produced image
@@ -464,3 +464,43 @@ These checks used generated fixtures and simulators. No real printer commands,
 deployment replacement or remote push occurred. The software implementation of
 the audit plan is verified; the operational and human release gates above remain
 explicitly pending.
+
+## Completion audit: preview navigation (2026-10-01)
+
+The requirement audit reproduced an uncovered session-ownership gap: an empty
+preview window switched the UI to Prepare while retaining its worker and controls,
+and a standalone preview without a model or published slice could not close through
+the registry. Loading a preview also left Prepare unable to cancel the request.
+The built-browser regression failed before the fix; the registry regression
+independently reproduced the disabled close action.
+
+UI mode now follows the loading or retained inspection session independently of
+drawable geometry. DOM and XR can close that session, including a pending worker,
+without weakening export or send prerequisites. Reselecting Preview preserves the
+pending request. The actual move-filter control recovers an empty window; canonical
+edits invalidate retained, non-drawable slice previews so they cannot be redrawn
+after their artifact becomes stale. Browser tests exercise these transitions, and
+headless tests cover close/disposal plus every export/send surface's artifact guard.
+
+The complete web quality gate passes again: 251 unit files, the supporting suites,
+production navigation/recovery/startup/offline checks, 28 accessibility rules,
+155 pseudo-localized controls and thirteen slicing files. Main JavaScript is
+2,321,516 bytes and total JavaScript is 10,550,997 bytes under unchanged ceilings.
+The bounded-preview benchmark ratio is 1.552; the production 300,002-record fixture
+records 77 main-thread timer callbacks during an 872.20 ms open on this host.
+
+Refreshed image
+`sha256:135825b749656c5c9cd843ee4e2897af58cda255283d725ea1cdada2f14dfbe3`
+passes container HTTP/HTTPS deployment, native retained-download/release and 9/9
+process-reaping checks. Host Express HTTP/HTTPS checks also pass. All 562 built
+web files match the image byte for byte. The native fixture again returns 183,923
+bytes, with within-job SHA-256
+`77eecb21d3e461fe9cde44ea9d7150e6766cd74b1f085c2f9250fd6ae05e7ad1`.
+The final current-source Gitleaks scan passes with unchanged rules, and regenerated
+parity reporting retains the same five human gates.
+
+The README now specifies backend-first release and browser rollback without
+clearing recovery data. This prepares the release sequence; it does not claim it
+has been performed. Credential revocation, supervised U1/CC/Galaxy XR qualification,
+calibration and independent review/security signoff still require operator evidence.
+No deployment, remote push or real-printer mutation occurred during this audit.

@@ -10,12 +10,21 @@ try {
   await page.evaluateOnNewDocument(() => {
     const NativeWorker = globalThis.Worker;
     globalThis.__previewWorkers = [];
+    globalThis.__heldPreviewOpens = [];
     globalThis.Worker = class extends NativeWorker {
       constructor(url, options) {
         super(url, options);
         if (!String(url).includes('gcodePreview.worker')) return;
         const record = { terminated: false, windows: [] };
         globalThis.__previewWorkers.push(record);
+        const post = this.postMessage.bind(this);
+        this.postMessage = (request, ...args) => {
+          if (globalThis.__holdPreviewOpen && request.type === 'open') {
+            globalThis.__heldPreviewOpens.push(() => {
+              if (!record.terminated) post(request, ...args);
+            });
+          } else post(request, ...args);
+        };
         this.addEventListener('message', (event) => {
           if (event.data.type === 'ready')
             record.windows.push({
@@ -103,6 +112,69 @@ try {
   assert.equal(replacement.workers.filter((worker) => !worker.terminated).length, 1);
   assert.ok(replacement.workers.length >= 3, 'replacement cancels an actual running worker');
   assert.ok(replacement.workers.flatMap((worker) => worker.windows).every((window) => window.count <= 240_000));
+
+  // An empty filter is still an open inspection session: keep its controls
+  // reachable so the user can recover or explicitly return to Prepare.
+  await page.evaluate(() => globalThis.window.workspace.updatePreviewView({ moveVisibility: { extrude: false } }));
+  assert.equal(await page.evaluate(() => globalThis.window.workspace.getPreviewState().active), false);
+  assert.equal(await page.evaluate(() => globalThis.window.__orcaUi.get().mode), 'preview');
+  assert.equal(await page.$eval('[data-view-tab="preview"]', (button) => button.getAttribute('aria-selected')), 'true');
+  await page.click('[data-preview-move-filter="extrude"]');
+  await page.waitForFunction(() => globalThis.window.workspace.getPreviewState().active);
+  await page.evaluate(async () => {
+    const ctx = globalThis.window.__orcaCtx;
+    await ctx.registry.invoke('preview_configure', 'xr-inspector', ctx, ctx.ui.get(), {
+      previewView: { moveVisibility: { extrude: false } },
+    });
+  });
+  assert.equal(await page.evaluate(() => globalThis.window.__orcaUi.get().mode), 'preview');
+  await page.click('[data-view-tab="prepare"]');
+  await page.waitForFunction(() => !globalThis.window.workspace.getPreviewState().view);
+  assert.equal(await page.evaluate(() => globalThis.__previewWorkers.filter((worker) => !worker.terminated).length), 0);
+
+  // Hold a real worker's open message so Prepare must cancel pending parsing,
+  // not merely hide a preview that has already completed.
+  for (const surface of ['dom-tab', 'xr-primary']) {
+    await page.evaluate(() => {
+      globalThis.__holdPreviewOpen = true;
+      globalThis.__pendingPreview = globalThis.window.workspace.openGcodeForPreview(
+        'M83\n;LAYER_CHANGE\n;TYPE:Outer wall\nG1 X10 E1 F1200\n',
+        'pending.gcode',
+      );
+    });
+    await page.waitForFunction(() => globalThis.__heldPreviewOpens.length === 1);
+    assert.equal(await page.evaluate(() => globalThis.window.workspace.getPreviewState().loading), true);
+    assert.equal(await page.evaluate(() => globalThis.window.__orcaUi.get().mode), 'preview');
+    await page.click('[data-view-tab="preview"]');
+    assert.equal(
+      await page.evaluate(() => globalThis.window.workspace.getPreviewState().loading),
+      true,
+      'reselecting Preview must preserve its pending worker',
+    );
+    if (surface === 'dom-tab') await page.click('[data-view-tab="prepare"]');
+    else
+      await page.evaluate(async () => {
+        const ctx = globalThis.window.__orcaCtx;
+        await ctx.registry.invoke('toggle_preview', 'xr-primary', ctx, ctx.ui.get());
+      });
+    await page.waitForFunction(() => !globalThis.window.workspace.getPreviewState().loading);
+    assert.equal(await page.evaluate(() => globalThis.__pendingPreview), false);
+    await page.evaluate(() => {
+      globalThis.__holdPreviewOpen = false;
+      for (const release of globalThis.__heldPreviewOpens.splice(0)) release();
+    });
+    assert.equal(await page.evaluate(() => globalThis.window.__orcaUi.get().mode), 'prepare');
+    assert.equal(
+      await page.evaluate(() => globalThis.__previewWorkers.filter((worker) => !worker.terminated).length),
+      0,
+    );
+  }
+  await page.evaluate(() =>
+    globalThis.window.workspace.openGcodeForPreview(
+      'M83\n;LAYER_CHANGE\n;TYPE:Outer wall\nG1 X10 E1 F1200\n',
+      'final.gcode',
+    ),
+  );
   await page.evaluate(() =>
     globalThis.window.dispatchEvent(new globalThis.PageTransitionEvent('pagehide', { persisted: false })),
   );
@@ -117,7 +189,7 @@ try {
     }),
   );
   console.log(
-    'Production preview worker: bounded DOM/XR paging, unchanged canonical state, responsive indexing, source cancellation and disposal passed.',
+    'Production preview worker: bounded DOM/XR paging, unchanged canonical state, responsive indexing, empty-window recovery, pending navigation cancellation and disposal passed.',
   );
 } finally {
   await browser.close();

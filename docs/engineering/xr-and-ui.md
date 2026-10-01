@@ -181,4 +181,9 @@ P10.10 still requires counters, repeated lifecycle leak checks, and Galaxy XR qu
   scrubber and XR scrubber through `preview_configure`. Keep XR narrowing/paging
   controls visible for a retained session even when its current window has no
   drawable moves or lacks mode metadata; otherwise an empty chunk strands the
-  viewer. Closing the session or leaving Preview hides the surface.
+  viewer. UI mode follows a loading or retained inspection session, independently
+  of drawable geometry. Reselecting Preview preserves pending parsing; Prepare
+  cancels it through the registry in DOM and XR. Closing a standalone preview
+  requires neither a loaded model nor a published slice, while export/send keep
+  their exact artifact prerequisites. Closing the session hides the surface;
+  canonical invalidation also clears retained, non-drawable slice previews.

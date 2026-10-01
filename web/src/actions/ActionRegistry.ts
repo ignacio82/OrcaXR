@@ -102,6 +102,7 @@ export type PrerequisiteId =
   | 'has-instance-selection'
   | 'has-clipboard'
   | 'has-gcode'
+  | 'preview-available'
   | 'has-two-models'
   | 'has-multiple-plates'
   | 'not-slicing'
@@ -524,7 +525,6 @@ const GCODE_PREREQUISITES = new Set([
   'file_export_obj',
   'save_gcode_to_downloads',
   'send_to_printer',
-  'toggle_preview',
 ]);
 const TWO_MODEL_PREREQUISITES = new Set(['mesh_boolean_union', 'mesh_boolean_subtract', 'mesh_boolean_intersection']);
 
@@ -534,6 +534,7 @@ function prerequisitesFor(action: ActionDefinition): PrerequisiteId[] {
   else if (SELECTION_PREREQUISITES.has(action.id)) prerequisites.push('has-selection');
   if (MODEL_PREREQUISITES.has(action.id)) prerequisites.push('has-model');
   if (GCODE_PREREQUISITES.has(action.id)) prerequisites.push('has-gcode');
+  if (action.id === 'toggle_preview') prerequisites.push('preview-available');
   if (TWO_MODEL_PREREQUISITES.has(action.id)) prerequisites.push('has-two-models');
   if (action.id === 'edit_paste') prerequisites.push('has-clipboard');
   if (action.id === 'delete_plate') prerequisites.push('has-multiple-plates');
@@ -631,6 +632,10 @@ const PREREQUISITES: Readonly<
   },
   'has-clipboard': { met: (state) => state.hasClipboard, reason: 'Copy or cut a model first.' },
   'has-gcode': { met: (state) => state.gcodeReady, reason: 'Slice successfully first.' },
+  'preview-available': {
+    met: (state) => state.mode === 'preview' || state.gcodeReady,
+    reason: 'Slice successfully first.',
+  },
   'has-two-models': { met: (state) => state.modelCount >= 2, reason: 'Add at least two models first.' },
   'has-multiple-plates': { met: (state) => state.plateCount > 1, reason: 'The only build plate cannot be deleted.' },
   'not-slicing': { met: (state) => !state.isSlicing, reason: 'Wait for the current slice to finish or cancel it.' },

@@ -3128,9 +3128,12 @@ function setupDomUI(
   // from `mode`, so follow the workspace instead of just the toggle, or the
   // header would still read "Prepare" over a visible toolpath. Assigned before
   // the preview panel mounts so its own subscription chains onto this one.
+  // Loading and empty/unsupported windows still own a preview session: its
+  // controls must stay reachable until the operator closes it.
   const syncPreviewMode = () => {
+    const preview = workspace.getPreviewState();
     uiState.update({
-      mode: workspace.getAutomationSnapshot().workspaceMode === 'Preview' ? 'preview' : 'prepare',
+      mode: preview.loading || preview.view ? 'preview' : 'prepare',
     });
   };
   surfaces.bind(workspace, 'onPreviewStateChanged', syncPreviewMode);

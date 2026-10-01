@@ -1442,6 +1442,17 @@ async function inspectAndAuthorFromPreview(page) {
     ['custom', false],
   ]);
 
+  // A non-drawable window still owns the artifact and its layer controls.
+  // Authoring must invalidate that retained session as well as visible lines.
+  await page.evaluate(async () => {
+    const ctx = globalThis.window.__orcaCtx;
+    await ctx.registry.invoke('preview_configure', 'dom-inspector', ctx, ctx.ui.get(), {
+      previewView: { moveVisibility: { extrude: false, travel: false, wipe: false } },
+    });
+  });
+  assert.equal(await page.evaluate(() => globalThis.window.workspace.getPreviewState().active), false);
+  assert.ok(await page.evaluate(() => globalThis.window.workspace.getPreviewState().view));
+
   const before = await page.evaluate(() => globalThis.window.workspace.getLayerEventSnapshot().events.length);
   await page.evaluate(() => globalThis.document.querySelector('[data-preview-author-event="custom"]').click());
   await page.waitForFunction(
@@ -1460,6 +1471,7 @@ async function inspectAndAuthorFromPreview(page) {
   // Authoring changed the project, so the artifact it was viewing is gone.
   await page.waitForFunction(() => globalThis.window.__orcaUi.get().gcodeReady === false, { timeout: 30_000 });
   assert.equal(await page.evaluate(() => globalThis.window.workspace.getPreviewState().active), false);
+  assert.equal(await page.evaluate(() => globalThis.window.workspace.getPreviewState().view), undefined);
 
   await clickMenuAction(page, 'edit_undo');
   await page.waitForFunction(

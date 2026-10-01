@@ -402,6 +402,19 @@ test('prerequisite evaluator gives actionable disabled reasons', () => {
   });
 });
 
+test('DOM and XR can close a standalone preview without granting artifact actions', () => {
+  const standalone = { ...FULL_STATE, mode: 'preview' as const, modelCount: 0, gcodeReady: false };
+  for (const surface of ['dom-primary', 'xr-primary'] as const) {
+    assert.equal(registry.availability('toggle_preview', surface, standalone).state, 'enabled');
+  }
+  for (const action of ['file_export_gcode', 'save_gcode_to_downloads', 'send_to_printer']) {
+    const definition = registry.get(action)!;
+    for (const surface of definition.capability.surfaces) {
+      assert.equal(registry.availability(action, surface, standalone).state, 'disabled');
+    }
+  }
+});
+
 test('every non-inspector action and group resolves an icon', () => {
   const unrenderable = actions
     .filter((action) => action.disclosure !== 'inspector' && !hasIcon(action.icon))

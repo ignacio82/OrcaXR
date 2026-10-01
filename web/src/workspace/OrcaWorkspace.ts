@@ -6371,7 +6371,7 @@ export class OrcaWorkspace extends xb.Script {
   /** Immediately withdraw output controls after a known semantic mutation. */
   private markPublishedGcodeStale(): void {
     if (!this.publishedGcode) return;
-    if (this.previewOn || this.previewLoading) this.clearToolpathPreview();
+    if (this.previewSession || this.previewLoading) this.clearToolpathPreview();
     this.onDownloadReady?.(false);
   }
 
@@ -6386,7 +6386,7 @@ export class OrcaWorkspace extends xb.Script {
     if (!published) return null;
     const gcode = source.isCurrent(published.guard) ? published.gcode : null;
     if (!gcode) {
-      if (this.previewOn || this.previewLoading) this.clearToolpathPreview();
+      if (this.previewSession || this.previewLoading) this.clearToolpathPreview();
     }
     this.onDownloadReady?.(gcode !== null);
     return gcode;
@@ -6767,7 +6767,7 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Toggle between toolpath preview and model view (panel + tests). */
   async togglePreview(): Promise<boolean> {
-    if (this.previewOn || this.previewLoading) {
+    if (this.previewSession || this.previewLoading) {
       this.clearToolpathPreview();
       this.setStatus(t('workspace.orcaWorkspace.modelView', 'model view'));
       return true;
@@ -7336,11 +7336,12 @@ export class OrcaWorkspace extends xb.Script {
         this.openXrSheet(mode === 'device' ? 'xr-device-workspace' : 'xr-project-workspace');
       } else {
         this.closeXrSheet();
+        const previewOpen = this.previewSession !== null || this.previewLoading;
         if (mode === 'preview') {
           this.actionContext.setMode('preview');
-          if (!this.previewOn) this.actionContext.togglePreview();
+          if (!previewOpen) this.actionContext.togglePreview();
         } else {
-          if (this.previewOn) this.actionContext.togglePreview();
+          if (previewOpen) this.actionContext.togglePreview();
           this.actionContext.setMode('prepare');
         }
       }

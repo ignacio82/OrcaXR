@@ -165,6 +165,27 @@ qualified on Linux with a reaping init process: keep Compose's `init: true`
 process-tree behavior. A task stuck in kernel I/O remains owned until it exits;
 the browser reports an unconfirmed cancellation if its cleanup deadline expires.
 
+### Release order and browser rollback
+
+The [audit evidence](docs/audit-remediation-status.md) records the tested image
+and the outstanding credential, supervised hardware and independent review
+gates. A passing automated suite does not complete those release gates.
+
+Deploy the additive server API before publishing the browser update. Retain the
+previous verified web bundle during the backend stage; an all-in-one rollout
+must preserve that bundle at `/app/public` rather than expose both updates in
+one step. Confirm the existing client's slice, download and cancellation paths
+against the updated service before publishing the new web bundle. Keep engine
+files and their adjacent provenance manifest together throughout both stages.
+
+Publish the browser update only after the backend stage is accepted. Installed
+service workers activate through **Help → Check for Update** and the unsaved-work
+decision; never force a reload over an editing session. A browser rollback must
+retain IndexedDB and leave unfamiliar recovery records intact. Restore the
+previous web bundle without clearing site data, preserve a compatible server,
+and let a supporting browser version validate or download the recovery archives.
+See [project recovery](docs/project-recovery.md) for operator recovery choices.
+
 ## Project Status
 
 - **Android App**: Deprecated.

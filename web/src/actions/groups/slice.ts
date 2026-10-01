@@ -50,7 +50,7 @@ export const sliceActions: Action[] = [
     group: 'slice',
     disclosure: 'primary',
     hint: 'Toggle the sliced toolpath preview',
-    isEnabled: (s) => s.modelCount > 0,
+    isEnabled: (s) => s.mode === 'preview' || s.modelCount > 0,
     run: (ctx) => ctx.applyTogglePreview(),
   },
 ];

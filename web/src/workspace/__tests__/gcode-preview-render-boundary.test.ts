@@ -185,4 +185,27 @@ await test('replacement and disposal cancel old sources and reject late sessions
   assert.equal(disposedSessions, 3);
 });
 
+await test('closing a retained non-drawable preview releases it without requiring a sliced artifact', async () => {
+  const surface = new ControlledPreviewSurface();
+  surface.fail = true;
+  let disposed = 0;
+  const workspace = new OrcaWorkspace(buildRegistry(), {
+    previewSurfaceFactory: () => surface,
+    previewSessionFactory: async (gcode, source) =>
+      Object.assign(GcodePreviewSession.fromGcode(gcode, source), {
+        dispose: () => {
+          disposed++;
+        },
+      }),
+  });
+  assert.equal(await workspace.openGcodeForPreview(GCODE, 'unsupported.gcode'), false);
+  assert.ok(workspace.getPreviewState().view, 'the controls can still recover the retained session');
+  assert.equal(await workspace.togglePreview(), true);
+  assert.equal(workspace.getPreviewState().view, undefined);
+  assert.equal(workspace.getPreviewState().unsupportedReason, undefined);
+  assert.equal(disposed, 1);
+  assert.equal(surface.renderCount, 1);
+  workspace.dispose();
+});
+
 console.log(`\n${passed} G-code workspace render-boundary tests passed.`);
