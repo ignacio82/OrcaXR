@@ -10,7 +10,7 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 | A: dependencies | Implemented | Multer 2.4.0, qs 6.16.0, compatible patched web transitive dependencies; XRBlocks 0.17.0 and UIKit 1.0.74 unchanged. CI and the local quality script audit development dependencies at moderate severity. |
 | A: credential source and logging | Implemented | Seven maintenance scripts share verified OpenSSH authentication. No embedded password or automatic host-key acceptance remains. Generated server tokens log only their protected file location. Remembered device-local printer credentials remain optional; UI/docs explain the storage boundary. |
 | A: operational revocation | Pending | Rotation or invalidation of previously exposed credentials and logged tokens requires operator evidence. Source cleanup does not revoke them. History rewriting is a separate coordinated action. |
-| B: printer session and command intent | Pending | Existing controls still need authoritative job identity, session-bound confirmation, fresh-query rejection, and duplicate suppression. |
+| B: printer session and command intent | Implemented; hardware evidence pending | One controller owns selection, connection epochs, subscriptions, queries, and commands. Immutable click/press intents bind exact job history and metadata; fresh queries reject replacement, reconnect, partial/failing responses, and duplicate commands. DOM/XR holds carry single-use confirmations. Emergency stop and distinct firmware restart remain reachable through authenticated HTTP without status/history success. |
 | C: submission lifecycle | Pending | Implement the shared workflow controller, explicit cancellable preparation, upload naming/verification, and post-upload revalidation. |
 | D: process and artifact lifecycle | Pending | Successful native exit, descendant termination, retryable downloads with leases/TTL/release, bounded cancellation. |
 | E: deployment and artifacts | Pending | Static/API separation, Tailscale namespace/trust, adjacent-manifest verification, atomic publication, deployment coverage. The existing local server manifest was repaired only after all three binary copies matched canonical SHA-256 hashes. |
@@ -59,4 +59,38 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 
 The dependency and source-credential change passes its automated gates.
 Hardware, credential revocation, deployment release, and independent review are
-not proven by these checks. Continue with B; the overall plan remains active.
+not proven by these checks. Continue with C; the overall plan remains active.
+
+## Printer command verification (2026-10-01)
+
+- A new full-query regression failed against the prior accumulator: a response
+  containing only progress retained the old `printing` state and filename. Full
+  queries now discard old fields; incremental notifications alone merge.
+- `printer-session-controller.test.ts`: 18 tests cover exact immutable identity,
+  same-filename restarts, job/state changes, printer switches, reconnects,
+  disposal, partial/failed queries, missing metadata, forged/replayed tokens,
+  serialized commands across dialogs, and superseded/late query publication.
+- DOM hold tests retain the original intent across telemetry updates, suppress
+  duplicate releases, and abandon holds and dialogs on disposal/session abort.
+  Real transport tests prove recovery uses authenticated POSTs without opening
+  a WebSocket, and still honors cancellation and disposal.
+- Production browser regressions pass for same-filename replacements during a
+  modal, a DOM hold, and an XR-port hold; failed refresh after confirmation;
+  dialog cancellation on reconnect; successful DOM and XR-port pause/resume;
+  and separately confirmed emergency stop / firmware restart while queries fail.
+  The XR ports now invoke the registered `xr-inspector` surface; the previous
+  `xr-menu` invocation silently skipped those commands. These checks do not
+  substitute for controller/pinch interaction on Galaxy XR.
+- `npm --prefix web run quality`: passes (228 unit test files, integration,
+  architecture, localization/parity/settings checks, production browser/offline,
+  accessibility, pseudo-locales, and all 13 slice test files). Bundle limits are
+  unchanged: main 2,339,383 bytes; total JavaScript 10,548,443 bytes. Final dialog
+  lifecycle/controller tests and type checks were repeated after the corresponding
+  changes; the final XR control layout is included in the accessibility/pseudo
+  production builds. The localization sweep decreased from 178 to 177 strings.
+- Current-source Gitleaks scan passes with the same pinned image and unchanged
+  scanner rules. Regenerated qualification reporting still withholds the parity
+  claim and lists five outstanding human gates.
+
+Installed-firmware identity fields, supervised machine control, credential
+revocation, and independent security/release review remain unqualified.

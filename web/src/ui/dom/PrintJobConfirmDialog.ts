@@ -16,7 +16,8 @@ export interface PrintJobConfirmInput {
  * friction that delays a real stop is worse than the accidental click it
  * prevents.
  */
-export function askPrintJobConfirmation(input: PrintJobConfirmInput): Promise<boolean> {
+export function askPrintJobConfirmation(input: PrintJobConfirmInput, signal?: AbortSignal): Promise<boolean> {
+  if (signal?.aborted) return Promise.resolve(false);
   const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const overlay = document.createElement('div');
   overlay.dataset.printJobConfirm = 'true';
@@ -78,12 +79,17 @@ export function askPrintJobConfirmation(input: PrintJobConfirmInput): Promise<bo
   overlay.appendChild(dialog);
 
   let settle: (confirmed: boolean) => void = () => {};
+  let finished = false;
   const finish = (confirmed: boolean) => {
+    if (finished) return;
+    finished = true;
+    signal?.removeEventListener('abort', onAbort);
     document.removeEventListener('keydown', onKeyDown, true);
     overlay.remove();
     previousFocus?.focus?.();
     settle(confirmed);
   };
+  const onAbort = () => finish(false);
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.preventDefault();
@@ -103,5 +109,6 @@ export function askPrintJobConfirmation(input: PrintJobConfirmInput): Promise<bo
   dismissButton.focus();
   return new Promise<boolean>((resolve) => {
     settle = resolve;
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }

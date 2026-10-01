@@ -353,6 +353,23 @@ export class MoonrakerTransport {
     return result;
   }
 
+  /** Recovery must reach HTTP even when the readiness handshake or socket failed. */
+  async requestRecoveryCommand(command: 'emergency-stop' | 'firmware-restart', signal?: AbortSignal): Promise<unknown> {
+    const operation = 'printer_recovery';
+    if (this.disposed) throw new MoonrakerTransportError('invalid_state', operation);
+    if (signal?.aborted) throw new MoonrakerTransportError('cancelled', operation);
+    if (command !== 'emergency-stop' && command !== 'firmware-restart') {
+      throw new MoonrakerTransportError('invalid_request', operation);
+    }
+    const generation = this.generation;
+    const path = command === 'emergency-stop' ? '/printer/emergency_stop' : '/printer/firmware_restart';
+    const result = await this.fetchResult<unknown>(generation, path, { method: 'POST', signal }, operation, true);
+    if (this.disposed || generation !== this.generation || signal?.aborted) {
+      throw new MoonrakerTransportError('cancelled', operation);
+    }
+    return result;
+  }
+
   /**
    * POST a multipart body (file upload) and accept Moonraker's bare or
    * `result`-wrapped JSON response. Uploads are the only endpoint whose
@@ -489,28 +506,36 @@ export class MoonrakerTransport {
     path: string,
     options: MoonrakerRequestOptions,
     operation: string,
+    recovery = false,
   ): Promise<T> {
-    return this.fetchWith<T>(session, path, options, operation, async (response) => {
-      const declaredLength = Number(response.headers.get('content-length') ?? '0');
-      if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_RESPONSE_BYTES) {
-        throw new MoonrakerTransportError('invalid_response', operation);
-      }
-      const text = await response.text();
-      if (text.length > MAX_JSON_RESPONSE_BYTES) throw new MoonrakerTransportError('invalid_response', operation);
-      let envelope: unknown;
-      try {
-        envelope = JSON.parse(text);
-      } catch {
-        throw new MoonrakerTransportError('invalid_response', operation);
-      }
-      if (!isRecord(envelope)) throw new MoonrakerTransportError('invalid_response', operation);
-      if ('error' in envelope) throw new MoonrakerTransportError('protocol_error', operation);
-      if (!('result' in envelope)) {
-        if (options.acceptBareEnvelope) return envelope as T;
-        throw new MoonrakerTransportError('invalid_response', operation);
-      }
-      return envelope.result as T;
-    });
+    return this.fetchWith<T>(
+      session,
+      path,
+      options,
+      operation,
+      async (response) => {
+        const declaredLength = Number(response.headers.get('content-length') ?? '0');
+        if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_RESPONSE_BYTES) {
+          throw new MoonrakerTransportError('invalid_response', operation);
+        }
+        const text = await response.text();
+        if (text.length > MAX_JSON_RESPONSE_BYTES) throw new MoonrakerTransportError('invalid_response', operation);
+        let envelope: unknown;
+        try {
+          envelope = JSON.parse(text);
+        } catch {
+          throw new MoonrakerTransportError('invalid_response', operation);
+        }
+        if (!isRecord(envelope)) throw new MoonrakerTransportError('invalid_response', operation);
+        if ('error' in envelope) throw new MoonrakerTransportError('protocol_error', operation);
+        if (!('result' in envelope)) {
+          if (options.acceptBareEnvelope) return envelope as T;
+          throw new MoonrakerTransportError('invalid_response', operation);
+        }
+        return envelope.result as T;
+      },
+      recovery,
+    );
   }
 
   /** Shared request plumbing: session guard, credentials, timeout, and abort. */
@@ -520,8 +545,11 @@ export class MoonrakerTransport {
     options: MoonrakerRequestOptions,
     operation: string,
     read: (response: Response) => Promise<T>,
+    recovery = false,
   ): Promise<T> {
-    this.assertCurrentSession(session, operation);
+    if (recovery) {
+      if (this.disposed || session !== this.generation) throw new MoonrakerTransportError('cancelled', operation);
+    } else this.assertCurrentSession(session, operation);
     const url = joinMoonrakerEndpointPath(this.endpoint.transportHttpUrl, path);
     const requestUrl = new URL(url);
     const credentialsInUrl = [...requestUrl.searchParams.values()].some((value) => this.credentials.matches(value));

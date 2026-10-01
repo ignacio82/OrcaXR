@@ -1,3 +1,4 @@
+import type { PrintJobCommandIntent } from '../../printer/PrinterSessionController';
 /**
  * The glanceable printer status, over the build plate (parity P9.7).
  *
@@ -24,7 +25,8 @@ export interface PrinterStatusBarPort {
   getSummary(): PrinterStatusSummary;
   getActions(): readonly GuardedPrinterAction[];
   subscribe(listener: () => void): () => void;
-  run(command: PrintJobCommand): void | Promise<void>;
+  captureIntent(command: PrintJobCommand): PrintJobCommandIntent | undefined;
+  run(intent: PrintJobCommandIntent): void | Promise<void>;
   /** Re-open the session the summary says was lost. */
   reconnect(): void | Promise<void>;
   /** Open the full printer panel for anything this surface deliberately omits. */
@@ -55,14 +57,15 @@ export class PrinterStatusBar {
   private unsubscribe?: () => void;
   private frame?: number;
   private disposed = false;
-  private readonly hold: HoldToConfirm;
+  private readonly hold: HoldToConfirm<PrintJobCommandIntent>;
+  private controlsKey = '';
   private readonly holdBars = new Map<PrintJobCommand, HTMLElement>();
 
   constructor(
     private readonly container: HTMLElement,
     private readonly port: PrinterStatusBarPort,
   ) {
-    this.hold = new HoldToConfirm({ now: () => (port.now ? port.now() : Date.now()) });
+    this.hold = new HoldToConfirm<PrintJobCommandIntent>({ now: () => (port.now ? port.now() : Date.now()) });
   }
 
   mount(): void {
@@ -213,11 +216,16 @@ export class PrinterStatusBar {
   private renderControls(): void {
     const host = this.controls;
     if (!host) return;
+    const actions = this.port.getActions();
+    const key = JSON.stringify(actions);
+    if (key === this.controlsKey) return;
+    this.controlsKey = key;
+    this.hold.cancel();
+    this.stopFrame();
     host.textContent = '';
     this.holdBars.clear();
     const doc = host.ownerDocument;
-    for (const action of this.port.getActions()) {
-      if (action.command === 'firmware-restart') continue;
+    for (const action of actions) {
       host.appendChild(this.buildControl(doc, action));
     }
   }
@@ -254,7 +262,9 @@ export class PrinterStatusBar {
     const begin = (event: Event) => {
       if (!action.enabled) return;
       event.preventDefault();
-      this.hold.press(action);
+      const intent = this.port.captureIntent(action.command);
+      if (!intent) return;
+      this.hold.press(action, intent);
       if (action.holdMs > 0) {
         this.setHoldNote(action.confirmation ?? `Keep holding to ${action.label.toLowerCase()}.`);
         this.startFrame();
@@ -264,9 +274,9 @@ export class PrinterStatusBar {
       const released = this.hold.release();
       this.stopFrame();
       this.paintHold(undefined, 0);
-      if (released.command) {
+      if (released.command && released.context) {
         this.setHoldNote('');
-        void this.port.run(released.command);
+        void this.port.run(released.context);
       } else if (action.holdMs > 0) {
         this.setHoldNote(`${action.label} needs a longer hold — nothing was sent.`);
       }
@@ -336,6 +346,7 @@ export class PrinterStatusBar {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.hold.cancel();
     this.stopFrame();
     this.unsubscribe?.();
     this.unsubscribe = undefined;

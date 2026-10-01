@@ -33,7 +33,15 @@ export interface PrintJobCommandDescriptor {
   readonly reason?: string;
 }
 
-export type PrintJobCommandErrorCode = 'not-allowed' | 'job-changed' | 'request-failed' | 'cancelled';
+export type PrintJobCommandErrorCode =
+  | 'not-allowed'
+  | 'job-changed'
+  | 'request-failed'
+  | 'cancelled'
+  | 'session-changed'
+  | 'confirmation-required'
+  | 'busy'
+  | 'identity-unavailable';
 
 export class PrintJobCommandError extends Error {
   constructor(
@@ -71,7 +79,7 @@ const LABELS: Readonly<Record<PrintJobCommand, string>> = Object.freeze({
  */
 export function printJobCommandAvailability(snapshot: PrintJobSnapshot | null): readonly PrintJobCommandDescriptor[] {
   const state = snapshot?.state;
-  const klippyReady = snapshot?.klippyState === undefined || snapshot.klippyState === 'ready';
+  const klippyReady = snapshot?.klippyState === 'ready';
   const describe = (command: PrintJobCommand, allowed: boolean, reason: string): PrintJobCommandDescriptor =>
     Object.freeze({
       command,
@@ -134,13 +142,9 @@ export async function executePrintJobCommand(
       command,
     );
   }
-  if (
-    request.expectedFilename !== undefined &&
-    request.observed?.filename !== undefined &&
-    request.observed.filename !== request.expectedFilename
-  ) {
+  if (request.expectedFilename !== undefined && request.observed?.filename !== request.expectedFilename) {
     throw new PrintJobCommandError(
-      `The printer is running "${request.observed.filename}", not "${request.expectedFilename}"; nothing was sent.`,
+      `The printer is running "${request.observed?.filename ?? 'an unknown file'}", not "${request.expectedFilename}"; nothing was sent.`,
       'job-changed',
       command,
     );

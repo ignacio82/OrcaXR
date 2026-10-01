@@ -1755,7 +1755,9 @@ async function sliceAndSendActivePlate(page, printer) {
  */
 async function controlRunningPrint(page, printer) {
   await page.waitForFunction(
-    () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'printing',
+    () =>
+      globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'printing' &&
+      globalThis.document.querySelector('[data-print-job-command="pause"]')?.disabled === false,
     { timeout: 30_000 },
   );
   const live = await page.evaluate(() => ({
@@ -1777,13 +1779,16 @@ async function controlRunningPrint(page, printer) {
     ['resume', true],
     ['cancel', false],
     ['emergency-stop', false],
+    ['firmware-restart', false],
   ]);
 
   // A change made at the machine itself must reach this panel: the printer
   // pushes it, nothing here polls for it, and the controls re-derive from it.
   printer.setState({ printState: 'paused' });
   await page.waitForFunction(
-    () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'paused',
+    () =>
+      globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'paused' &&
+      globalThis.document.querySelector('[data-print-job-command="resume"]')?.disabled === false,
     { timeout: 30_000 },
   );
   assert.deepEqual(
@@ -1795,12 +1800,15 @@ async function controlRunningPrint(page, printer) {
       ['resume', false],
       ['cancel', false],
       ['emergency-stop', false],
+      ['firmware-restart', false],
     ],
     'controls follow the machine, not this client',
   );
   printer.setState({ printState: 'printing' });
   await page.waitForFunction(
-    () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'printing',
+    () =>
+      globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'printing' &&
+      globalThis.document.querySelector('[data-print-job-command="pause"]')?.disabled === false,
     { timeout: 30_000 },
   );
 
@@ -1811,7 +1819,9 @@ async function controlRunningPrint(page, printer) {
 
   await clickCommand('pause');
   await page.waitForFunction(
-    () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'paused',
+    () =>
+      globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'paused' &&
+      globalThis.document.querySelector('[data-print-job-command="resume"]')?.disabled === false,
     { timeout: 30_000 },
   );
   assert.equal(
@@ -1821,7 +1831,9 @@ async function controlRunningPrint(page, printer) {
   );
   await clickCommand('resume');
   await page.waitForFunction(
-    () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'printing',
+    () =>
+      globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'printing' &&
+      globalThis.document.querySelector('[data-print-job-command="pause"]')?.disabled === false,
     { timeout: 30_000 },
   );
   // The lifecycle exactly, and nothing extra in it. Pre-print work the operator
@@ -1832,6 +1844,41 @@ async function controlRunningPrint(page, printer) {
   assert.deepEqual(
     printer.commands.filter((command) => LIFECYCLE.has(command)),
     ['start', 'pause', 'resume'],
+  );
+
+  await clickCommand('cancel');
+  await page.waitForSelector('[data-print-job-confirm="true"]');
+  assert.ok(printer.dropSockets() > 0);
+  await page.waitForFunction(() => !globalThis.document.querySelector('[data-print-job-confirm="true"]'));
+  assert.deepEqual(
+    printer.commands.filter((command) => LIFECYCLE.has(command)),
+    ['start', 'pause', 'resume'],
+    'reconnect abandons the open dialog and sends no cancellation',
+  );
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-print-job-command="cancel"]')?.disabled === false,
+  );
+
+  // A failed authoritative refresh after confirmation must never use the
+  // earlier successful reading as permission to cancel.
+  await clickCommand('cancel');
+  await page.waitForSelector('[data-print-job-confirm="true"]');
+  printer.setState({ failJobQuery: true });
+  await page.click('[data-print-job-confirm-choice="confirm"]');
+  await page.waitForFunction(() =>
+    /could not be verified/.test(globalThis.document.getElementById('status-text')?.textContent ?? ''),
+  );
+  assert.deepEqual(
+    printer.commands.filter((command) => LIFECYCLE.has(command)),
+    ['start', 'pause', 'resume'],
+  );
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-print-job-command="cancel"]')?.disabled === true,
+  );
+  printer.setState({ failJobQuery: false });
+  await page.evaluate(() => globalThis.window.workspace.onReconnectPrinter());
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-print-job-command="cancel"]')?.disabled === false,
   );
 
   // A dismissed confirmation must leave the machine untouched.
@@ -1867,6 +1914,22 @@ async function controlRunningPrint(page, printer) {
 
   await clickCommand('cancel');
   await page.waitForSelector('[data-print-job-confirm="true"]', { timeout: 30_000 });
+  printer.replaceJob();
+  await page.click('[data-print-job-confirm-choice="confirm"]');
+  await page.waitForFunction(() =>
+    /running job changed/.test(globalThis.document.getElementById('status-text')?.textContent ?? ''),
+  );
+  assert.deepEqual(
+    printer.commands.filter((command) => LIFECYCLE.has(command)),
+    ['start', 'pause', 'resume'],
+    'the modal for the prior run cannot cancel its same-filename replacement',
+  );
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-print-job-command="cancel"]')?.disabled === false,
+  );
+
+  await clickCommand('cancel');
+  await page.waitForSelector('[data-print-job-confirm="true"]', { timeout: 30_000 });
   await page.click('[data-print-job-confirm-choice="confirm"]');
   await page.waitForFunction(
     () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'cancelled',
@@ -1881,6 +1944,27 @@ async function controlRunningPrint(page, printer) {
     true,
     'a finished job offers nothing to cancel',
   );
+
+  // Recovery is independently confirmed and reaches HTTP when every status
+  // and identity query is failing. Restart must have its own command ID.
+  printer.setState({ failJobQuery: true, failJobIdentity: true });
+  await clickCommand('emergency-stop');
+  await page.waitForSelector('[data-print-job-confirm="true"]');
+  await page.click('[data-print-job-confirm-choice="confirm"]');
+  await page.waitForFunction(() =>
+    /Emergency stop sent/.test(globalThis.document.getElementById('status-text')?.textContent ?? ''),
+  );
+  assert.equal(printer.commands.at(-1), 'emergency-stop');
+  await clickCommand('firmware-restart');
+  await page.waitForSelector('[data-print-job-confirm="true"]');
+  assert.match(await page.$eval('[data-print-job-confirm="true"]', (node) => node.textContent), /Restart this printer/);
+  await page.click('[data-print-job-confirm-choice="confirm"]');
+  await page.waitForFunction(() =>
+    /Firmware restart requested/.test(globalThis.document.getElementById('status-text')?.textContent ?? ''),
+  );
+  assert.equal(printer.commands.at(-1), 'firmware-restart');
+  printer.setState({ failJobQuery: false, failJobIdentity: false });
+  await page.evaluate(() => globalThis.window.workspace.onReconnectPrinter());
 }
 
 /**
@@ -2086,7 +2170,8 @@ async function watchPrintFromAPhone(page, printer) {
   await page.waitForFunction(
     () =>
       globalThis.document.querySelector('[data-printer-status-bar]')?.dataset.printerStatusPresent === 'true' &&
-      globalThis.document.querySelector('[data-printer-status-bar]')?.hidden === false,
+      globalThis.document.querySelector('[data-printer-status-bar]')?.hidden === false &&
+      globalThis.document.querySelector('[data-printer-status-command="pause"]')?.disabled === false,
     { timeout: 30_000 },
   );
   const glance = await page.evaluate(() => ({
@@ -2115,6 +2200,7 @@ async function watchPrintFromAPhone(page, printer) {
       ['resume', '0', true],
       ['cancel', '800', false],
       ['emergency-stop', '1200', false],
+      ['firmware-restart', '800', false],
     ],
     'exactly the destructive commands are held, and availability follows the machine',
   );
@@ -2147,16 +2233,39 @@ async function watchPrintFromAPhone(page, printer) {
   // Pause is one tap, because being slow to reach it costs prints.
   await pressAndRelease(page, '[data-printer-status-command="pause"]', 10);
   await page.waitForFunction(
-    () => /^Paused/.test(globalThis.document.querySelector('[data-printer-status-headline]')?.textContent ?? ''),
+    () =>
+      /^Paused/.test(globalThis.document.querySelector('[data-printer-status-headline]')?.textContent ?? '') &&
+      globalThis.document.querySelector('[data-printer-status-command="resume"]')?.disabled === false,
     { timeout: 30_000 },
   );
   assert.deepEqual(printer.commands.slice(commandsBefore), ['pause']);
   await pressAndRelease(page, '[data-printer-status-command="resume"]', 10);
   await page.waitForFunction(
-    () => /^Printing /.test(globalThis.document.querySelector('[data-printer-status-headline]')?.textContent ?? ''),
+    () =>
+      /^Printing /.test(globalThis.document.querySelector('[data-printer-status-headline]')?.textContent ?? '') &&
+      globalThis.document.querySelector('[data-printer-status-command="pause"]')?.disabled === false,
     { timeout: 30_000 },
   );
   assert.deepEqual(printer.commands.slice(commandsBefore), ['pause', 'resume']);
+
+  // The XR card must reach the registered inspector surface too: its hold
+  // ports run actual commands through the same controller as the DOM card.
+  for (const command of ['pause', 'resume']) {
+    await page.evaluate(async (command) => {
+      const workspace = globalThis.window.workspace;
+      const intent = workspace.onCapturePrinterCommandIntent(command);
+      if (!intent) throw new Error(`XR could not capture ${command}`);
+      await workspace.onRunPrinterStatusCommand(intent);
+    }, command);
+    await page.waitForFunction(
+      (command) =>
+        globalThis.document.querySelector(`[data-printer-status-command="${command === 'pause' ? 'resume' : 'pause'}"]`)
+          ?.disabled === false,
+      {},
+      command,
+    );
+  }
+  assert.deepEqual(printer.commands.slice(commandsBefore), ['pause', 'resume', 'pause', 'resume']);
 
   // Lose the session the way a Wi-Fi blip does: the socket goes, the printer
   // keeps printing, and this client has to say so honestly.
@@ -2183,12 +2292,16 @@ async function watchPrintFromAPhone(page, printer) {
   assert.ok(lost.recovery, 'a lost session says what is being done about it');
   assert.match(lost.reconnect ?? '', /Reconnect|Connect/);
   assert.equal(
-    lost.commands.every(([, disabled]) => disabled === true),
+    lost.commands
+      .filter(([command]) => ['pause', 'resume', 'cancel'].includes(command))
+      .every(([, disabled]) => disabled === true),
     true,
-    'nothing may be commanded against a state nothing can confirm',
+    'ordinary commands need a confirmed state',
   );
   assert.equal(
-    lost.commands.every(([, , title]) => typeof title === 'string' && title.length > 0),
+    lost.commands
+      .filter(([, disabled]) => disabled)
+      .every(([, , title]) => typeof title === 'string' && title.length > 0),
     true,
     'and each refusal says why',
   );
@@ -2198,12 +2311,14 @@ async function watchPrintFromAPhone(page, printer) {
   // and the surface goes back to showing a reading it can stand behind.
   assert.match(lost.recovery ?? '', /Retrying on its own/);
   await page.waitForFunction(
-    () => globalThis.document.querySelector('[data-printer-status-bar]')?.dataset.printerStatusStale === 'false',
+    () =>
+      globalThis.document.querySelector('[data-printer-status-bar]')?.dataset.printerStatusStale === 'false' &&
+      globalThis.document.querySelector('[data-printer-status-command="cancel"]')?.disabled === false,
     { timeout: 60_000 },
   );
   assert.deepEqual(
     printer.commands.slice(commandsBefore),
-    ['pause', 'resume'],
+    ['pause', 'resume', 'pause', 'resume'],
     'nothing was sent while the state could not be confirmed',
   );
   assert.match(
@@ -2217,6 +2332,54 @@ async function watchPrintFromAPhone(page, printer) {
     'and commands are offered again once the machine can confirm its own state',
   );
 
+  assert.deepEqual(
+    lost.commands.filter(([, disabled]) => !disabled).map(([command]) => command),
+    ['emergency-stop', 'firmware-restart'],
+    'recovery remains reachable during socket loss',
+  );
+
+  // The displayed file name can remain unchanged while a new job replaces it.
+  await page.$eval('[data-printer-status-command="cancel"]', (button) => {
+    button.dispatchEvent(new globalThis.PointerEvent('pointerdown', { bubbles: true }));
+  });
+  printer.replaceJob();
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  await page.$eval('[data-printer-status-command="cancel"]', (button) => {
+    button.dispatchEvent(new globalThis.PointerEvent('pointerup', { bubbles: true }));
+  });
+  await page.waitForFunction(() =>
+    /running job changed/.test(globalThis.document.getElementById('status-text')?.textContent ?? ''),
+  );
+  assert.deepEqual(
+    printer.commands.slice(commandsBefore),
+    ['pause', 'resume', 'pause', 'resume'],
+    'a hold cannot follow a same-filename replacement',
+  );
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-printer-status-command="cancel"]')?.disabled === false,
+  );
+
+  // XR uses the same captured intent on press/release. Exercise its public
+  // composition ports without requiring a headset in this browser check.
+  await page.evaluate(() => {
+    globalThis.window.workspace.setStatus('Waiting for XR confirmation');
+    globalThis.xrPrinterIntent = globalThis.window.workspace.onCapturePrinterCommandIntent('cancel');
+    if (!globalThis.xrPrinterIntent) throw new Error('XR did not capture cancel intent');
+  });
+  printer.replaceJob();
+  await page.evaluate(() => globalThis.window.workspace.onRunPrinterStatusCommand(globalThis.xrPrinterIntent));
+  await page.waitForFunction(() =>
+    /running job changed/.test(globalThis.document.getElementById('status-text')?.textContent ?? ''),
+  );
+  assert.deepEqual(
+    printer.commands.slice(commandsBefore),
+    ['pause', 'resume', 'pause', 'resume'],
+    'XR also retains the original job',
+  );
+  await page.waitForFunction(
+    () => globalThis.document.querySelector('[data-printer-status-command="cancel"]')?.disabled === false,
+  );
+
   // And a completed hold does exactly what it said it would.
   await pressAndRelease(page, '[data-printer-status-command="cancel"]', 1_100);
   // The hold *is* the confirmation, so no second dialog stands between the
@@ -2225,7 +2388,7 @@ async function watchPrintFromAPhone(page, printer) {
     () => globalThis.document.querySelector('[data-print-job-state]')?.dataset.printJobState === 'cancelled',
     { timeout: 30_000 },
   );
-  assert.deepEqual(printer.commands.slice(commandsBefore), ['pause', 'resume', 'cancel']);
+  assert.deepEqual(printer.commands.slice(commandsBefore), ['pause', 'resume', 'pause', 'resume', 'cancel']);
   assert.equal(
     await page.$('[data-print-job-confirm="true"]'),
     null,

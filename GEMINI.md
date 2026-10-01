@@ -1212,6 +1212,24 @@ floors, not ceilings.
   first, since a server can echo back the API key it was sent — an existing
   security test caught exactly that leak when `detail` was added raw.
 
+- **Printer commands belong to the job and connection the operator saw.**
+  `PrinterSessionController` owns the selected transport, subscriptions, epoch,
+  query publication, and pending commands. DOM dialogs and DOM/XR holds capture
+  an immutable intent before confirmation; a single-use confirmation carries
+  that exact intent. Fresh full queries reset the object accumulator; only
+  WebSocket patches merge. Ordinary commands require matching Moonraker file
+  metadata and history (`job_id`, `print_start_time`/`start_time`, filename,
+  file size/modification and an active history row) and read them again after
+  confirmation. Missing identity blocks with recovery guidance; a new run of
+  the same filename, changed printer, reconnect, partial response, or failed
+  refresh cannot authorize the old command. Pending ordinary commands are
+  serialized, including their dialogs. Emergency stop and the distinct,
+  confirmed firmware-restart action retain an authenticated, bounded HTTP path
+  without a successful readiness/history query or WebSocket handshake. These
+  checks close client stale-state paths; Moonraker offers no atomic comparison
+  and command transaction against other clients. Simulator/browser evidence
+  does not establish installed-firmware or supervised hardware qualification.
+
 - **A per-request deadline is a property of the payload, not of the transport.**
   Sending the narwhal failed with `invalid_state` *before a byte left the
   browser*. `fetchWith` validated the caller's `timeoutMs` with

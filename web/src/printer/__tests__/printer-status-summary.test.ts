@@ -67,6 +67,7 @@ function reconnecting(delayMs = 4_000): MoonrakerConnectionState {
 function printing(overrides: Partial<PrintJobSnapshot> = {}): PrintJobSnapshot {
   return Object.freeze({
     state: 'printing',
+    klippyState: 'ready',
     filename: 'tower.gcode',
     progress: 0.42,
     currentLayer: 84,
@@ -241,17 +242,23 @@ test('destructive commands are held, recoverable ones are not', () => {
   );
 });
 
-test('a reading nobody can confirm disables every command, with the same reason', () => {
+test('a stale reading disables ordinary commands while keeping recovery reachable', () => {
   const actions = guardedPrinterActions(printJobCommandAvailability(printing()), {
     stale: true,
     staleReason: 'The connection to the printer dropped.',
   });
   assert.equal(
-    actions.every((action) => !action.enabled),
+    actions
+      .filter((action) => ['pause', 'resume', 'cancel'].includes(action.command))
+      .every((action) => !action.enabled),
     true,
     'acting on a state nothing can confirm is guessing',
   );
-  assert.deepEqual([...new Set(actions.map((action) => action.reason))], ['The connection to the printer dropped.']);
+  assert.deepEqual(
+    actions.filter((action) => action.enabled).map((action) => action.command),
+    ['emergency-stop', 'firmware-restart'],
+  );
+  assert.equal(actions.find((action) => action.command === 'pause')?.reason, 'The connection to the printer dropped.');
   assert.equal(
     actions.every((action) => action.holdMs === PRINTER_HOLD_MS[action.command]),
     true,

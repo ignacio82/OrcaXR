@@ -150,7 +150,7 @@ export const advancedActions: Action[] = [
     group: 'advanced',
     disclosure: 'inspector',
     hint: 'Pause the running print on the connected printer',
-    run: (ctx) => ctx.controlPrintJob('pause'),
+    run: (ctx, invocation) => ctx.controlPrintJob('pause', { confirmation: invocation.printJobConfirmation }),
   },
   {
     id: 'printer_resume_print',
@@ -159,7 +159,7 @@ export const advancedActions: Action[] = [
     group: 'advanced',
     disclosure: 'inspector',
     hint: 'Resume the paused print on the connected printer',
-    run: (ctx) => ctx.controlPrintJob('resume'),
+    run: (ctx, invocation) => ctx.controlPrintJob('resume', { confirmation: invocation.printJobConfirmation }),
   },
   {
     id: 'printer_cancel_print',
@@ -168,7 +168,7 @@ export const advancedActions: Action[] = [
     group: 'advanced',
     disclosure: 'inspector',
     hint: 'Stop the running print after an explicit confirmation',
-    run: (ctx, invocation) => ctx.controlPrintJob('cancel', { preconfirmed: invocation.printJobPreconfirmed === true }),
+    run: (ctx, invocation) => ctx.controlPrintJob('cancel', { confirmation: invocation.printJobConfirmation }),
   },
   {
     id: 'printer_emergency_stop',
@@ -177,8 +177,17 @@ export const advancedActions: Action[] = [
     group: 'advanced',
     disclosure: 'inspector',
     hint: 'Halt the printer immediately; Klipper then needs a firmware restart',
+    run: (ctx, invocation) => ctx.controlPrintJob('emergency-stop', { confirmation: invocation.printJobConfirmation }),
+  },
+  {
+    id: 'printer_firmware_restart',
+    label: 'Restart Printer Firmware',
+    icon: 'printer_resume',
+    group: 'advanced',
+    disclosure: 'inspector',
+    hint: 'Restart Klipper on the selected printer after an explicit confirmation',
     run: (ctx, invocation) =>
-      ctx.controlPrintJob('emergency-stop', { preconfirmed: invocation.printJobPreconfirmed === true }),
+      ctx.controlPrintJob('firmware-restart', { confirmation: invocation.printJobConfirmation }),
   },
   {
     id: 'printer_browse_storage',

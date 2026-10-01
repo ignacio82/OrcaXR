@@ -66,7 +66,7 @@ export class PrintJobPanel {
 
     const controls = document.createElement('div');
     controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
-    for (const command of ['pause', 'resume', 'cancel', 'emergency-stop'] as const) {
+    for (const command of ['pause', 'resume', 'cancel', 'emergency-stop', 'firmware-restart'] as const) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'action-btn';

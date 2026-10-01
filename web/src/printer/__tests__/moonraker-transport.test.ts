@@ -590,3 +590,41 @@ async function connectHarness(harness: ReturnType<typeof createHarness>): Promis
 }
 
 console.log('Moonraker transport tests passed');
+
+{
+  const requests: { path: string; method?: string; key: string | null }[] = [];
+  const harness = createHarness(async (input, init) => {
+    requests.push({
+      path: new URL(String(input)).pathname,
+      method: init?.method,
+      key: new Headers(init?.headers).get('X-Api-Key'),
+    });
+    return new Response(JSON.stringify({ result: 'ok' }), { headers: { 'content-type': 'application/json' } });
+  });
+  harness.transport.setSessionCredentials({ apiKey: 'synthetic-recovery-test-key' });
+  await harness.transport.requestRecoveryCommand('emergency-stop');
+  await harness.transport.requestRecoveryCommand('firmware-restart');
+  assert.deepEqual(
+    requests.map(({ path, method }) => ({ path, method })),
+    [
+      { path: '/printer/emergency_stop', method: 'POST' },
+      { path: '/printer/firmware_restart', method: 'POST' },
+    ],
+  );
+  assert.ok(
+    requests.every(({ key }) => key !== null),
+    'recovery preserves authentication',
+  );
+  assert.equal(harness.sockets.length, 0, 'recovery requires neither handshake nor websocket');
+  await assert.rejects(harness.transport.requestRecoveryCommand('pause' as never), assertErrorCode('invalid_request'));
+  const abort = new AbortController();
+  abort.abort();
+  await assert.rejects(
+    harness.transport.requestRecoveryCommand('emergency-stop', abort.signal),
+    assertErrorCode('cancelled'),
+  );
+  harness.transport.dispose();
+  await assert.rejects(harness.transport.requestRecoveryCommand('emergency-stop'), assertErrorCode('invalid_state'));
+  assert.equal(requests.length, 2);
+  console.log('Moonraker HTTP recovery works while disconnected and retains method, auth, abort, and disposal guards.');
+}

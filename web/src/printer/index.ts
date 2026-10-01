@@ -12,3 +12,5 @@ export * from './PrinterConsole';
 export * from './PrinterHistory';
 export * from './PrinterStorage';
 export * from './PrintToolMapping';
+export { PrinterSessionController, isPrinterRecoveryCommand } from './PrinterSessionController';
+export type { PrintJobCommandIntent, PrintJobConfirmation } from './PrinterSessionController';

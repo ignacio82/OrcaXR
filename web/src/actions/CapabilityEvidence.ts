@@ -201,6 +201,7 @@ export const ACTION_IDS_BY_PARITY_TASK = {
     'printer_resume_print',
     'printer_cancel_print',
     'printer_emergency_stop',
+    'printer_firmware_restart',
   ],
   'P9.5': [
     'printer_browse_storage',

@@ -54,6 +54,9 @@ export async function startMoonrakerSimulator(options = {}) {
     nozzleC: options.nozzleC ?? 24.5,
     bedC: options.bedC ?? 23.8,
     message: options.message ?? '',
+    failJobQuery: false,
+    partialJobQuery: false,
+    failJobIdentity: false,
     /** `configfile.settings`, where Klipper's macros live. */
     configSettings: options.configSettings ?? {},
     /** Canned replies by command mnemonic; anything else answers `ok`. */
@@ -77,6 +80,8 @@ export async function startMoonrakerSimulator(options = {}) {
   const sockets = new Set();
   let started = null;
   let notificationId = 0;
+  let jobSequence = 0;
+  let currentJob = null;
   for (const name of options.files ?? []) stored.set(name, Buffer.alloc(1));
   /**
    * Scan metadata, keyed by path, exactly as Moonraker's file manager holds it:
@@ -86,6 +91,21 @@ export async function startMoonrakerSimulator(options = {}) {
    */
   const metadata = new Map(Object.entries(options.metadata ?? {}));
   const modified = new Map(Object.entries(options.modified ?? {}));
+
+  const beginJob = () => {
+    jobSequence++;
+    currentJob = {
+      job_id: `live-${jobSequence}`,
+      filename: state.currentFilename,
+      start_time: 1_700_000_000 + jobSequence,
+      end_time: null,
+      status: 'in_progress',
+      exists: true,
+    };
+    if (!stored.has(state.currentFilename)) stored.set(state.currentFilename, Buffer.from('; External print\n'));
+    if (!modified.has(state.currentFilename)) modified.set(state.currentFilename, 1_600_000_000);
+  };
+  if (['printing', 'paused'].includes(state.printState)) beginJob();
 
   /**
    * Push the objects a state change touched, exactly as Klipper does. Live
@@ -213,6 +233,12 @@ export async function startMoonrakerSimulator(options = {}) {
           },
         });
       }
+      if (state.failJobQuery) {
+        response.writeHead(503, cors);
+        response.end();
+        return;
+      }
+      if (state.partialJobQuery) return json({ status: { virtual_sdcard: { progress: state.progress } } });
       return json({ status: jobStatusObjects(state) });
     }
     if (url.pathname === '/server/files/list') {
@@ -226,6 +252,11 @@ export async function startMoonrakerSimulator(options = {}) {
       return json({ item: { path: parsed.filename, root: 'gcodes' }, print_started: false }, true);
     }
     if (url.pathname === '/server/files/metadata') {
+      if (state.failJobIdentity) {
+        response.writeHead(503, cors);
+        response.end();
+        return;
+      }
       const content = stored.get(url.searchParams.get('filename') ?? '');
       if (!content) {
         response.writeHead(404, { ...cors, 'content-type': 'application/json' });
@@ -238,6 +269,9 @@ export async function startMoonrakerSimulator(options = {}) {
         size: content.length + state.reportedSizeDelta,
         ...(modified.has(path) ? { modified: modified.get(path) } : {}),
         ...(metadata.get(path) ?? {}),
+        ...(currentJob?.filename === path
+          ? { job_id: currentJob.job_id, print_start_time: currentJob.start_time }
+          : {}),
       });
     }
     // The file manager's browse/rename/delete/download surface. Moonraker
@@ -343,6 +377,15 @@ export async function startMoonrakerSimulator(options = {}) {
     }
     // The history the machine keeps of its own runs, paged the way Moonraker
     // pages it: a slice of the ordered list plus the total count.
+    if (url.pathname === '/server/history/job') {
+      const job = [currentJob, ...state.history].find((candidate) => candidate?.job_id === url.searchParams.get('uid'));
+      if (!job) {
+        response.writeHead(404, cors);
+        response.end();
+        return;
+      }
+      return json({ job });
+    }
     if (url.pathname === '/server/history/list') {
       const limit = Number(url.searchParams.get('limit') ?? '20');
       const start = Number(url.searchParams.get('start') ?? '0');
@@ -355,6 +398,7 @@ export async function startMoonrakerSimulator(options = {}) {
       started = url.searchParams.get('filename');
       state.printState = 'printing';
       state.currentFilename = started;
+      beginJob();
       state.progress = state.progress || 0.12;
       state.printDurationS = state.printDurationS || 240;
       state.currentLayer = state.currentLayer || 11;
@@ -382,6 +426,10 @@ export async function startMoonrakerSimulator(options = {}) {
     if (url.pathname === '/printer/print/cancel') {
       commands.push('cancel');
       state.printState = 'cancelled';
+      if (currentJob) {
+        currentJob.status = 'cancelled';
+        currentJob.end_time = currentJob.start_time + state.printDurationS;
+      }
       notifyStatus();
       return json('ok');
     }
@@ -474,7 +522,18 @@ export async function startMoonrakerSimulator(options = {}) {
       state.slots = slots;
     },
     setState(patch) {
+      const wasActive = ['printing', 'paused'].includes(state.printState);
+      const filename = state.currentFilename;
       Object.assign(state, patch);
+      if (['printing', 'paused'].includes(state.printState) && (!wasActive || filename !== state.currentFilename))
+        beginJob();
+      notifyStatus();
+    },
+    /** A fresh run of the same file, which filename-only guards cannot distinguish. */
+    replaceJob(filename = state.currentFilename) {
+      state.currentFilename = filename;
+      state.printState = 'printing';
+      beginJob();
       notifyStatus();
     },
     /** Put a file on the printer, optionally with the scan metadata it would have. */

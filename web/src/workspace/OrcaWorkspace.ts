@@ -60,6 +60,7 @@ import { decodeStl } from '../project/import/formats/stl';
 import { DEFAULT_MODEL_IMPORT_LIMITS } from '../project/import/formats/types';
 import type { LayerEventType } from '../project/domain/model';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
+import type { PrintJobCommandIntent, PrintJobConfirmation } from '../printer/PrinterSessionController';
 import type { PrintJobIntent } from '../printer/PrintJobSubmission';
 import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
@@ -4951,7 +4952,8 @@ export class OrcaWorkspace extends xb.Script {
   onRequestPrintSubmission: ((intent: PrintJobIntent) => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root; owns confirmation. */
   onRequestPrintJobCommand:
-    ((command: PrintJobCommand, options?: { readonly preconfirmed?: boolean }) => Promise<void>) | null = null;
+    ((command: PrintJobCommand, options?: { readonly confirmation?: PrintJobConfirmation }) => Promise<void>) | null =
+    null;
   /** Injected by the live typed printer composition root; owns confirmation. */
   onRequestPrinterStorage: ((operation: PrinterStorageOperation) => Promise<void>) | null = null;
   /** Injected by the live typed printer composition root; owns confirmation. */
@@ -4970,7 +4972,8 @@ export class OrcaWorkspace extends xb.Script {
   onReadPrinterStatus: (() => { summary: PrinterStatusSummary; actions: readonly GuardedPrinterAction[] }) | null =
     null;
   /** Run one guarded lifecycle command that completed its hold in XR (P9.7). */
-  onRunPrinterStatusCommand: ((command: PrintJobCommand) => Promise<void>) | null = null;
+  onCapturePrinterCommandIntent: ((command: PrintJobCommand) => PrintJobCommandIntent | undefined) | null = null;
+  onRunPrinterStatusCommand: ((intent: PrintJobCommandIntent) => Promise<void>) | null = null;
   /** Re-open a session the spatial card reports as lost (P9.7). */
   onReconnectPrinter: (() => Promise<void>) | null = null;
 
@@ -5038,7 +5041,10 @@ export class OrcaWorkspace extends xb.Script {
    * printer state of its own: the shell owns the connection, the live snapshot
    * the operator is looking at, and any confirmation the command needs.
    */
-  public async controlPrintJob(command: PrintJobCommand, options?: { readonly preconfirmed?: boolean }): Promise<void> {
+  public async controlPrintJob(
+    command: PrintJobCommand,
+    options?: { readonly confirmation?: PrintJobConfirmation },
+  ): Promise<void> {
     if (!this.onRequestPrintJobCommand) {
       this.setStatus(
         t('workspace.orcaWorkspace.printerControlsAreUnavailableIn', 'Printer controls are unavailable in this shell.'),
@@ -6793,7 +6799,7 @@ export class OrcaWorkspace extends xb.Script {
   /** The control a ray is currently over; a trigger press starts its hold. */
   private printerHoldTarget: GuardedPrinterAction | null = null;
   private printerHoldController: unknown = null;
-  private readonly printerHold = new HoldToConfirm();
+  private readonly printerHold = new HoldToConfirm<PrintJobCommandIntent>();
   private xrMode: XrWorkspace = 'prepare';
 
   /**
@@ -7675,7 +7681,7 @@ export class OrcaWorkspace extends xb.Script {
     this.printerStatusRecovery = new UIText('', { fontSize: 13, color: '#ffb74d' });
     root.add(this.printerStatusRecovery);
 
-    this.printerStatusControls = new UIPanel({ width: '100%', flexDirection: 'row', gap: 8 });
+    this.printerStatusControls = new UIPanel({ width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 8 });
     root.add(this.printerStatusControls);
 
     this.printerStatusHoldNote = new UIText('', { fontSize: 12, color: '#a0aab5' });
@@ -7693,11 +7699,8 @@ export class OrcaWorkspace extends xb.Script {
     const live = this.onReadPrinterStatus?.();
     if (!live) return;
     const { summary, actions } = live;
-    if (!summary.present) {
-      this.printerHold.cancel();
-      this.printerHoldTarget = null;
-      return;
-    }
+    // This is the explicitly opened Device page. Compact-bar presence must not
+    // hide recovery controls here when the printer is idle or unreadable.
 
     this.printerStatusHeadline?.setText(summary.headline);
     this.printerStatusDetail?.setText(summary.detail);
@@ -7720,12 +7723,15 @@ export class OrcaWorkspace extends xb.Script {
   private rebuildPrinterStatusControls(actions: readonly GuardedPrinterAction[]): void {
     const host = this.printerStatusControls;
     if (!host) return;
+    this.printerHold.cancel();
+    this.printerHoldTarget = null;
+    this.printerHoldController = null;
     for (const child of [...host.children]) host.remove(child);
     this.printerStatusHoldFills.clear();
     for (const action of actions) {
-      if (action.command === 'firmware-restart') continue;
       const btn = new UIPanel({
         flexGrow: 1,
+        minWidth: 150,
         minHeight: 46,
         justifyContent: 'center',
         alignItems: 'center',
@@ -7770,7 +7776,9 @@ export class OrcaWorkspace extends xb.Script {
     const target = this.printerHoldTarget;
     if (!target) return false;
     this.printerHoldController = controller;
-    this.printerHold.press(target);
+    const intent = this.onCapturePrinterCommandIntent?.(target.command);
+    if (!intent) return true;
+    this.printerHold.press(target, intent);
     this.printerStatusHoldNote?.setText(
       target.holdMs > 0 ? (target.confirmation ?? `Keep holding to ${target.label.toLowerCase()}.`) : '',
     );
@@ -7783,9 +7791,9 @@ export class OrcaWorkspace extends xb.Script {
     const released = this.printerHold.release();
     this.printerHoldController = null;
     this.paintPrinterHold(undefined, 0);
-    if (released.command) {
+    if (released.command && released.context) {
       this.printerStatusHoldNote?.setText('');
-      void this.onRunPrinterStatusCommand?.(released.command);
+      void this.onRunPrinterStatusCommand?.(released.context);
       return;
     }
     if (target && target.holdMs > 0) {

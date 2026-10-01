@@ -92,6 +92,20 @@ test('reports an unreadable state as unknown rather than idle', () => {
   assert.equal(model.reset().state, 'unknown');
 });
 
+test('a full query cannot inherit readiness or job fields from an older reading', () => {
+  const model = new PrintJobStatusModel();
+  model.applyQuery(QUERY);
+  const partial = model.applyQuery({ status: { virtual_sdcard: { progress: 0.4 } } });
+  assert.equal(partial.state, 'unknown');
+  assert.equal(partial.filename, undefined);
+  assert.equal(partial.klippyState, undefined);
+  assert.equal(partial.progress, 0.4);
+  model.applyQuery(QUERY);
+  const malformed = model.applyQuery({ print_stats: { state: 'printing' } });
+  assert.equal(malformed.state, 'unknown', 'a query requires its status envelope');
+  assert.equal(malformed.filename, undefined);
+});
+
 test('withholds a remaining estimate while the numbers cannot mean anything', () => {
   const early = projectPrintJobSnapshot(
     { print_stats: { state: 'printing', print_duration: 20 }, virtual_sdcard: { progress: 0.005 } },

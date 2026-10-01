@@ -21,6 +21,7 @@ import type { ObjectTreeEntityRef } from '../project/objects';
 import type { PaintChannel, PaintToolKind } from '../project/painting/PaintStrokeService';
 import type { ScopedOverrideTarget } from '../project/scopedOverrides';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
+import type { PrintJobConfirmation } from '../printer/PrinterSessionController';
 import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { DiscoveryOutcome } from '../printer/PrinterDirectory';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
@@ -589,7 +590,7 @@ export class ActionContext {
     return this.workspace.sendToPrinter();
   }
 
-  controlPrintJob(command: PrintJobCommand, options?: { readonly preconfirmed?: boolean }): Promise<void> {
+  controlPrintJob(command: PrintJobCommand, options?: { readonly confirmation?: PrintJobConfirmation }): Promise<void> {
     return this.workspace.controlPrintJob(command, options);
   }
 

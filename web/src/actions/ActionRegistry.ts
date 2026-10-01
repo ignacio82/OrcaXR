@@ -1,3 +1,4 @@
+import type { PrintJobConfirmation } from '../printer/PrinterSessionController';
 /**
  * ActionRegistry — the ONE declaration of everything OrcaXR can do.
  *
@@ -184,12 +185,8 @@ export interface ActionInvocation {
   printHistoryStart?: number;
   /** Camera the surface wants shown; omitted keeps the current selection. */
   printerCameraUid?: string;
-  /**
-   * True when the surface already took an explicit confirmation gesture for a
-   * destructive printer command — the status surface's hold (P9.7). The shell
-   * then does not ask a second time; one act, one confirmation.
-   */
-  printJobPreconfirmed?: boolean;
+  /** Single-use confirmation bound to the intent captured at gesture start. */
+  printJobConfirmation?: PrintJobConfirmation;
   /** One calibration-ledger change requested by a history surface (P8.5). */
   calibrationHistory?: CalibrationHistoryOperation;
   /** One preset-library change requested by a setup surface (P6.4). */
@@ -549,7 +546,6 @@ function prerequisitesFor(action: ActionDefinition): PrerequisiteId[] {
   if (action.id === 'printer_cancel_print') prerequisites.push('printer-job-active');
   // Deliberately not gated on a job: a hard stop is what an operator reaches
   // for when the machine is doing something it should not be doing at all.
-  if (action.id === 'printer_emergency_stop') prerequisites.push('printer-connected');
   return [...new Set(prerequisites)];
 }
 

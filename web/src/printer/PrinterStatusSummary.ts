@@ -1,3 +1,4 @@
+import { isPrinterRecoveryCommand } from './PrinterSessionController';
 /**
  * The compact printer status both narrow-touch and XR render (parity P9.7).
  *
@@ -248,8 +249,8 @@ function describeTemperature(temperature: { readonly actualC: number; readonly t
  * Turn what the printer permits into what a compact surface may offer, adding
  * the hold each destructive command needs.
  *
- * A stale reading disables everything: the descriptors were computed from a
- * state nothing can confirm, so acting on them is guessing.
+ * A stale reading disables ordinary commands. Recovery commands deliberately
+ * do not depend on a successful status query or WebSocket connection.
  */
 export function guardedPrinterActions(
   descriptors: readonly PrintJobCommandDescriptor[],
@@ -262,8 +263,12 @@ export function guardedPrinterActions(
       Object.freeze({
         command: descriptor.command,
         label: descriptor.label,
-        enabled: descriptor.allowed && !options.stale,
-        ...(options.stale ? { reason: staleReason } : descriptor.reason ? { reason: descriptor.reason } : {}),
+        enabled: descriptor.allowed && (!options.stale || isPrinterRecoveryCommand(descriptor.command)),
+        ...(options.stale && !isPrinterRecoveryCommand(descriptor.command)
+          ? { reason: staleReason }
+          : descriptor.reason
+            ? { reason: descriptor.reason }
+            : {}),
         holdMs: PRINTER_HOLD_MS[descriptor.command],
         ...(HOLD_CONFIRMATION[descriptor.command] ? { confirmation: HOLD_CONFIRMATION[descriptor.command] } : {}),
         destructive: descriptor.destructive,
@@ -294,7 +299,8 @@ export interface HoldToConfirmState {
  * fires on release, which is what makes pause reachable in one tap while cancel
  * is not reachable by accident at all.
  */
-export class HoldToConfirm {
+export class HoldToConfirm<T = undefined> {
+  private context: T | undefined;
   private phase: HoldToConfirmPhase = 'idle';
   private command?: PrintJobCommand;
   private startedAtMs = 0;
@@ -303,8 +309,9 @@ export class HoldToConfirm {
   constructor(private readonly clock: HoldToConfirmClock = { now: () => Date.now() }) {}
 
   /** Begin a hold. Returns the state so a caller can render the first frame. */
-  press(action: GuardedPrinterAction): HoldToConfirmState {
+  press(action: GuardedPrinterAction, context?: T): HoldToConfirmState {
     if (!action.enabled) return this.snapshot();
+    this.context = context;
     this.phase = 'holding';
     this.command = action.command;
     this.requiredMs = action.holdMs;
@@ -322,18 +329,19 @@ export class HoldToConfirm {
    * End the gesture. Returns the command to run, or undefined when the hold was
    * too short — a released-too-early cancel must run nothing at all.
    */
-  release(): { readonly command?: PrintJobCommand; readonly state: HoldToConfirmState } {
+  release(): { readonly command?: PrintJobCommand; readonly context?: T; readonly state: HoldToConfirmState } {
     if (this.phase !== 'holding' || !this.command) {
       this.reset();
       return { state: this.snapshot() };
     }
     const held = this.clock.now() - this.startedAtMs;
     const command = this.command;
+    const context = this.context;
     const satisfied = held >= this.requiredMs;
     this.phase = satisfied ? 'fired' : 'idle';
     const state = this.snapshot();
     this.reset();
-    return satisfied ? { command, state } : { state };
+    return satisfied ? { command, state, context } : { state };
   }
 
   /** Abandon the gesture — a pointer that left the control, a lost ray. */
@@ -345,6 +353,7 @@ export class HoldToConfirm {
   private reset(): void {
     this.phase = 'idle';
     this.command = undefined;
+    this.context = undefined;
     this.startedAtMs = 0;
     this.requiredMs = 0;
   }

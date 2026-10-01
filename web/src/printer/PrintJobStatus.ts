@@ -18,6 +18,7 @@ export interface PrintJobSnapshot {
   /** Klippy's own readiness, which gates every lifecycle command. */
   readonly klippyState?: string;
   readonly filename?: string;
+  readonly virtualSdActive?: boolean;
   /** `print_stats.message` — the failure text when the state is `error`. */
   readonly message?: string;
   /** 0–1, from the file position the printer reports. */
@@ -76,7 +77,8 @@ export class PrintJobStatusModel {
 
   /** Seed from `/printer/objects/query`, whose result wraps a `status` map. */
   applyQuery(payload: unknown, nowMs = Date.now()): PrintJobSnapshot {
-    const status = isRecord(payload) && isRecord(payload.status) ? payload.status : payload;
+    this.reset();
+    const status = isRecord(payload) && isRecord(payload.status) ? payload.status : undefined;
     return this.applyStatus(status, nowMs);
   }
 
@@ -127,6 +129,7 @@ function projectSnapshot(raw: Readonly<Record<string, Record<string, unknown>>>,
 
   assign(snapshot, 'klippyState', stringOrUndefined((raw.webhooks ?? {}).state));
   assign(snapshot, 'filename', nonEmptyString(printStats.filename));
+  assign(snapshot, 'virtualSdActive', typeof virtualSd.is_active === 'boolean' ? virtualSd.is_active : undefined);
   assign(snapshot, 'message', nonEmptyString(printStats.message));
   assign(snapshot, 'progress', progress === undefined ? undefined : clamp01(progress));
   assign(snapshot, 'currentLayer', positiveInteger(info.current_layer));
