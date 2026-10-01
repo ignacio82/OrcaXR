@@ -3307,10 +3307,14 @@ This contract is part of every XR acceptance gate, not optional styling guidance
     WASM/schema versions; forced crash/quota/corruption restores or clearly reports last safe data.
   - **Current:** app-shell/icons are precached; runtime content is NetworkFirst; slicer artifacts
     use a separate bounded cache; production offline reload is tested. A versioned, size-capped
-    IndexedDB autosave ring skips unchanged revisions, prunes/retries on quota pressure, validates
-    snapshots before offering the newest recoverable entry, falls back past corruption, and keeps
-    recovery/discard explicit in headless tests. Composition-root capture/recovery UI, forced-crash
-    qualification, and worker/WASM/schema atomic-update guarantees remain open.
+    IndexedDB recovery store now captures live worker snapshots after five idle seconds (thirty
+    seconds maximum scheduling delay), preserves dirty state, and atomically retains up to three
+    records per project/session. Failed writes retain previous data, other tabs and future schemas
+    are preserved, and older records remain selectable after corruption. DOM/XR list, recover,
+    download and discard use the shared registry; recovery verifies archive/project/asset identity
+    before validated import. Updates and app-owned navigation use Save/Discard/Cancel; ordinary
+    downloads promise handoff only. Browser crash/storage verification is part of the quality gate.
+    Worker/WASM/schema atomic-update guarantees and supervised XR recovery remain open.
 
 - [~] **P10.9 — Build a version-pinned XRBlocks design system and typed adapter.** Exact-pin the
   qualified XRBlocks/UIKit pair and isolate addon imports behind a typed, mockable adapter. Remove
@@ -3387,11 +3391,12 @@ Local starting seams: the [`action groups`](../web/src/actions/groups/),
     canonical state/asset/selection/history authority, allocates fresh project/plate identities,
     retains the selected base profile and physical tools, clears project overrides and virtual
     recipes, and establishes a clean checkpoint. Canonical worker-preview Open and deterministic
-    download Save/Save As exist. A bounded versioned autosave store can identify and validate the
-    newest recoverable snapshot, report corruption, and explicitly discard recovery state, but it
-    is not yet wired to live capture/startup recovery. Recent files, distinct Save versus Save As/
-    file handles, live autosave/recovery, metadata UX, import conflicts, and the full dirty/browser
-    matrix remain.
+    download Save/Save As exist. Live worker autosave and transactional per-session recovery now
+    have DOM/XR startup listings and explicit recover/download/discard actions. Recovery uses the
+    validated import pipeline and stays dirty. Shared Save/Discard/Cancel guards New/Open,
+    startup reload, updates and app-owned navigation; native reload/close uses beforeunload while
+    dirty. Recent-file regrant, distinct Save versus Save As/file handles, metadata UX, the wider
+    import-conflict matrix and supervised browser/headset qualification remain.
 
 - [~] **P11.2 — Close every menu, toolbar, context, camera, and view gap.** File, Edit, View, Add,
   Prepare/tool, plate/object context, Calibration, Device, Help, scene cameras, perspective/
@@ -3719,7 +3724,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | Clean-clone typecheck/test/build/CI and reproducible engine artifacts | P0.3, P12.3 | Aggregate local gate and artifact provenance pass; clean-clone CI/native rebuild qualification remains |
 | Golden 3MF/config/G-code/security fixture oracle | P0.4 | Structural 3MF, semantic G-code, and hostile server fixtures pass; official Snapmaker corpus remains |
 | Shared domain/action/surface boundaries | P0.5, P1.1–P1.2 | Canonical project/history, validated mesh codec, live one-way Three projection, and one injected guarded action registry exist; remaining contextual bypasses and feature commands are tracked explicitly |
-| New/open/recent/save/save-as/dirty prompts/recovery | P1.3–P1.6, P11.1 | Dirty-confirmed canonical New, worker-preview/confirm Open, deterministic save, and a bounded corruption-aware autosave/recovery store exist; composition-root capture/recovery UI, recent files, and distinct Save As/file handles remain |
+| New/open/recent/save/save-as/dirty prompts/recovery | P1.3–P1.6, P11.1 | Canonical New/Open/Save share guarded dirty decisions; live worker autosave and transactional DOM/XR recovery preserve session ownership, future data and failed-write rollback. Recent-file regrant, distinct Save As/file handles and supervised headset evidence remain |
 | BBS 3MF project and generic 3MF round-trip | P1.3 | Deterministic BBS core, lossless envelope, and qualified `p:path` split-model import exist; complete official Orca round-trip remains |
 | Project/plate/object/volume/instance/layer-range model | P1.1, P2.1 | Canonical graph, immutable mesh assets/codec, atomic add/delete commands, live accessible/virtualized DOM tree, and one-way scene projection exist; XR and full edit outcomes remain |
 | Selection set and synchronized scene/Object tree | P1.2, P2.1, P5.1 | Typed canonical plate/object/volume/instance/layer-range multi-selection synchronizes the live DOM tree and Three scene; XR and complete touch/large-project qualification remain |
@@ -3786,7 +3791,7 @@ status. No row is complete until all mapped tasks and applicable cross-cutting P
 | XR update/input ownership, cleanup, comfort, headset budgets | P10.10 | Duplicate owners removed; per-controller sticky UI suppression, transition snapshots, actual-hit targeting, stale-event refusal, and idempotent handle/guard disposal are tested foundations; frame counters/headset budgets remain |
 | Bundle/frame/memory/worker/WASM resource budgets | P10.6, P10.10 | Production chunk budgets pass; runtime/frame/memory/device budgets remain |
 | Client/server/archive/printer/AI security | P10.7 | Bounded server/archive abuse, session-only AI/Moonraker secrets, purge/redaction, and fail-closed external-slicer opt-in/probe foundations pass; full threat/device review remains |
-| PWA offline, coherent updates, autosave/crash recovery | P10.8 | Offline/CSP/update contract and production reload smoke pass; a bounded versioned autosave ring proves quota pruning, corruption fallback, validation, recovery choice, and discard headlessly, while live capture/startup UX and atomic worker/WASM/schema updates remain |
+| PWA offline, coherent updates, autosave/crash recovery | P10.8 | Offline/CSP/reload contracts, live capture and DOM/XR recovery are integrated; updates require a guarded action, quota rollback preserves old data and unknown records survive rollback. Atomic worker/WASM/schema updates and supervised headset evidence remain |
 | Complete menus/cameras/views/shortcuts/help/preferences | P11.2–P11.3 | Shortcut help is generated from the guarded action catalog and basic help claims are truthful; many menu/view behaviors, contextual help, and preferences remain missing |
 | Diagnostics/log export and privacy preview | P11.4 | Real bundle with record-time redaction and a preview that is the file itself; archive members, performance/XR population, and an XR review flow remain |
 | Typed permissioned MCP/voice/AI automation | P11.5 | Scaffolds; remote/unpinned risk |

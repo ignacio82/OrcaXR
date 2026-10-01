@@ -57,6 +57,7 @@
   "actions.actionContext.keyboardShortcuts": "Gyorsbillentyűk",
   "app.main.del": "Del",
   "dialog.recreateModelColors.cancel": "Mégse",
+  "persistence.cancel": "Mégse",
   "startup.feature.camera": "Kamera",
   "ui.brimEarsPanel.brimEars": "Karimás fülek",
   "ui.generatedSettingsPanel.detailLevel": "Részletesség szintje",

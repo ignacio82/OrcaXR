@@ -12,6 +12,33 @@ import type { ActionDefinition as Action } from '../ActionRegistry';
 
 export const fileActions: Action[] = [
   {
+    id: 'file_recover_project',
+    label: 'Recover Project',
+    icon: 'folder_open',
+    group: 'file',
+    disclosure: 'inspector',
+    hint: 'Restore a validated browser recovery snapshot as unsaved work',
+    run: (ctx, invocation) => ctx.projectRecovery('recover', invocation.recoverySessionId),
+  },
+  {
+    id: 'file_download_recovery',
+    label: 'Download Recovery File',
+    icon: 'save',
+    group: 'file',
+    disclosure: 'inspector',
+    hint: 'Download a browser recovery archive',
+    run: (ctx, invocation) => ctx.projectRecovery('download', invocation.recoverySessionId),
+  },
+  {
+    id: 'file_discard_recovery',
+    label: 'Discard Recovery',
+    icon: 'delete',
+    group: 'file',
+    disclosure: 'inspector',
+    hint: 'Delete only the selected browser recovery snapshot',
+    run: (ctx, invocation) => ctx.projectRecovery('discard', invocation.recoverySessionId),
+  },
+  {
     id: 'file_new_project',
     label: 'New Project',
     icon: 'new_project',
@@ -82,7 +109,7 @@ export const fileActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'file',
     hint: 'Save the current project to a .3mf file',
-    isEnabled: (s) => s.modelCount > 0,
+    isEnabled: (s) => s.dirty || s.modelCount > 0,
     run: (ctx) => ctx.saveProject(),
   },
   {
@@ -93,7 +120,7 @@ export const fileActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'file',
     hint: 'Save the current project under a new .3mf name',
-    isEnabled: (s) => s.modelCount > 0,
+    isEnabled: (s) => s.dirty || s.modelCount > 0,
     run: (ctx) => ctx.saveProject(),
   },
   {

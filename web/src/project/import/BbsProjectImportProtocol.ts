@@ -1,6 +1,7 @@
 import type { ParsedProjectImport, ProjectImportMode, ProjectImportSource } from './types';
+import type { ProjectRecoveryProof } from '../ports';
 
-export const BBS_IMPORT_WORKER_PROTOCOL_VERSION = 1 as const;
+export const BBS_IMPORT_WORKER_PROTOCOL_VERSION = 2 as const;
 
 export interface BbsImportWorkerRequest {
   readonly protocolVersion: typeof BBS_IMPORT_WORKER_PROTOCOL_VERSION;
@@ -10,6 +11,7 @@ export interface BbsImportWorkerRequest {
     readonly bytes: Uint8Array;
     readonly source: Readonly<ProjectImportSource>;
     readonly mode: ProjectImportMode;
+    readonly recoveryProof?: ProjectRecoveryProof;
   };
 }
 

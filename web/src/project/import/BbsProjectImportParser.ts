@@ -7,7 +7,10 @@ import {
   type ProjectImportParseRequest,
   type ProjectImportParserPort,
 } from './types';
-import type { CancellationToken } from '../ports';
+import type { CancellationToken, ProjectRecoveryProof } from '../ports';
+import { sha256Bytes } from '../../slicer/Utf8Sha256';
+import { projectFingerprint } from '../domain/canonical';
+import { assetBundleFingerprint } from '../assets';
 
 const THREE_MF_ZIP_SIGNATURES = new Set(['504b0304', '504b0506', '504b0708']);
 
@@ -74,18 +77,32 @@ export class BbsProjectImportParser implements ProjectImportParserPort {
     if (request.mode !== 'replace') {
       throw new Error('BBS project import currently supports replace mode only');
     }
-    return this.parseArchive(request.bytes, request.cancellation);
+    return this.parseArchive(request.bytes, request.cancellation, request.recoveryProof);
   }
 
   /** Worker-friendly path that deliberately carries no base project bundle. */
-  async parseArchive(bytes: Uint8Array, cancellation?: CancellationToken): Promise<ParsedProjectImport> {
+  async parseArchive(
+    bytes: Uint8Array,
+    cancellation?: CancellationToken,
+    recoveryProof?: ProjectRecoveryProof,
+  ): Promise<ParsedProjectImport> {
     throwIfCancelled({ cancellation });
     if (!hasThreeMfZipSignature(bytes)) {
       throw new Error('BBS project import requires a ZIP-signature 3MF archive');
     }
 
+    if (recoveryProof && sha256Bytes(bytes) !== recoveryProof.archiveDigest) {
+      throw new Error('Recovery archive failed its integrity check');
+    }
     const parsed = await this.serializer.deserialize(bytes.slice(), cancellation);
     throwIfCancelled({ cancellation });
+    if (
+      recoveryProof &&
+      (parsed.state.id !== recoveryProof.guard.projectId ||
+        projectFingerprint(parsed.state) !== recoveryProof.guard.semanticHash ||
+        assetBundleFingerprint(parsed.assets) !== recoveryProof.guard.assetFingerprint)
+    )
+      throw new Error('The archive contents do not match the recovery metadata');
     const unhonoured = unhonouredSettings(parsed.state);
     return {
       state: parsed.state,

@@ -331,6 +331,11 @@ export class ActionContext {
   saveProject(): Promise<void> {
     return this.workspace.saveProject();
   }
+  projectRecovery(operation: 'recover' | 'download' | 'discard', id?: string): Promise<void> {
+    if (id !== undefined && (typeof id !== 'string' || id.length > 1024))
+      throw new Error('Invalid recovery selection.');
+    return this.workspace.projectRecovery(operation, id);
+  }
   openProject(): void {
     this.workspace.onRequestLoadProject?.();
   }
@@ -708,31 +713,11 @@ export class ActionContext {
 
   /** Check the PWA service worker for a newer OrcaXR build (Help → Check for Update). */
   async checkForUpdates(): Promise<void> {
-    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    if (this.workspace.onRequestApplicationUpdate) await this.workspace.onRequestApplicationUpdate();
+    else
       this.workspace.setStatus(
         t('actions.actionContext.updateCheckIsUnavailableIn', 'Update check is unavailable in this browser.'),
       );
-      return;
-    }
-    this.workspace.setStatus(t('actions.actionContext.checkingForUpdates', 'Checking for updates…'));
-    try {
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (!reg) {
-        this.workspace.setStatus(
-          t(
-            'actions.actionContext.orcaXRIsRunningTheLatest',
-            'OrcaXR is running the latest version (no update channel).',
-          ),
-        );
-        return;
-      }
-      await reg.update();
-      this.workspace.setStatus(
-        reg.waiting ? 'A new OrcaXR version is ready — reload to update.' : 'OrcaXR is up to date.',
-      );
-    } catch (e) {
-      this.workspace.setStatus(`Update check failed: ${(e as Error).message}`);
-    }
   }
 
   // ---- Help modals (informational) -----------------------------------

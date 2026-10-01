@@ -133,6 +133,7 @@ export interface Capability {
 export interface ActionInvocation {
   /** A failed startup capability; omitted to recover all failed capabilities. */
   readonly startupFeatureId?: string;
+  readonly recoverySessionId?: string;
   /** Exact plate selected by a plate-local control; omitted for the active plate. */
   plateId?: PlateId;
   /** Revision-bound target emitted by the canonical plate manager. */
@@ -512,8 +513,6 @@ const INSTANCE_SELECTION_PREREQUISITES = new Set([
 const SELECTION_PREREQUISITES = new Set(['edit_deselect_all']);
 const MODEL_PREREQUISITES = new Set([
   'edit_delete_all',
-  'file_save_project',
-  'file_save_project_as',
   'file_export_stl',
   'file_export_3mf',
   'view_show_labels',

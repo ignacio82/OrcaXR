@@ -63,6 +63,7 @@ export class BbsProjectImportWorkerClient implements ProjectImportParserPort {
         bytes,
         source: { ...request.source },
         mode: request.mode,
+        ...(request.recoveryProof ? { recoveryProof: request.recoveryProof } : {}),
       },
     };
 
@@ -114,7 +115,7 @@ export class BbsProjectImportWorkerClient implements ProjectImportParserPort {
 }
 
 function defaultWorkerFactory(): BbsImportWorkerLike {
-  return new Worker(new URL('./bbsProjectImport.worker.ts', import.meta.url), { type: 'module' });
+  return new Worker(new URL('../project/serialization/projectArchive.worker.ts', import.meta.url), { type: 'module' });
 }
 
 function defaultRequestId(): string {

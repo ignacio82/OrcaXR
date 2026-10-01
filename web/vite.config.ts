@@ -44,7 +44,7 @@ export default defineConfig({
     ? []
     : [
         VitePWA({
-          registerType: 'autoUpdate',
+          registerType: 'prompt',
           includeAssets: ['icon.svg', 'icons/material/*.svg', 'profiles/catalog.json'],
           workbox: {
             maximumFileSizeToCacheInBytes: 20 * 1024 * 1024,

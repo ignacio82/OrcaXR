@@ -68,6 +68,7 @@
   "app.externalSlicer.offline": "Çevrimdışı",
   "app.main.del": "Sil",
   "dialog.recreateModelColors.cancel": "İptal",
+  "persistence.cancel": "İptal",
   "startup.feature.camera": "Kamera",
   "ui.brimEarsPanel.brimEars": "Kenar  kulakları",
   "ui.generatedSettingsPanel.detailLevel": "Detay seviyesi",

@@ -85,6 +85,7 @@ export class ProjectImportCoordinator {
           sourceHash: baseProject.hash,
         },
         cancellation: request.cancellation,
+        ...(request.recoveryProof ? { recoveryProof: deepFreeze(cloneJson(request.recoveryProof)) } : {}),
       });
     } catch (error) {
       if (request.cancellation?.aborted || error instanceof ImportCancelledError) {

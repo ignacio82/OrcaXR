@@ -87,12 +87,15 @@ try {
       if (optional) {
         const before = await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary());
         await page.click(`[data-startup-recovery="${feature}"]`);
-        await page.waitForFunction(() =>
-          /unsaved work has been kept/.test(globalThis.document.querySelector('#status-text').textContent),
-        );
+        await page.waitForSelector('[data-unsaved-choice="cancel"]');
+        await page.click('[data-unsaved-choice="cancel"]');
         assert.deepEqual(await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary()), before);
-        page.once('dialog', (dialog) => void dialog.accept());
-        await page.evaluate(() => globalThis.window.workspace.newProject());
+        await page.evaluate(() => {
+          globalThis.window.__newProject = globalThis.window.workspace.newProject();
+        });
+        await page.waitForSelector('[data-unsaved-choice="discard"]');
+        await page.click('[data-unsaved-choice="discard"]');
+        await page.evaluate(() => globalThis.window.__newProject);
         assert.equal(await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().dirty), false);
         await Promise.all([
           page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 60_000 }),

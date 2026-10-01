@@ -1,4 +1,12 @@
 import type { FeatureInitializationRegistry } from '../startup/FeatureInitialization';
+import type { ProjectSerializerPort, ProjectRecoveryProof } from '../project/ports';
+import type { UnsavedProjectDecision } from '../ui/UnsavedProjectDecision';
+import type {
+  ProjectPersistenceController,
+  PersistenceProjectPort,
+  NavigationReason,
+  RecoverySessionSummary,
+} from '../persistence/ProjectPersistenceController';
 /**
  * OrcaXR Web — Phase 2 workspace.
  *
@@ -837,6 +845,7 @@ export interface WorkspaceAutomationSnapshot {
 
 export interface OrcaWorkspaceOptions {
   readonly initialization?: FeatureInitializationRegistry;
+  readonly projectSerializer?: ProjectSerializerPort;
   readonly fullSpectrumAutoPairPreferences?: FullSpectrumAutoPairGenerationPreferences;
   /** Renderer dependency seam used to fail closed without constructing test-sized GPU buffers. */
   readonly previewSurfaceFactory?: (options: GcodePreviewSurfaceOptions) => WorkspacePreviewSurface;
@@ -850,6 +859,11 @@ export interface OrcaWorkspaceOptions {
 export type WorkspacePreviewSurface = Pick<GcodePreviewSurface, 'clear' | 'render' | 'setVisible'>;
 
 export class OrcaWorkspace extends xb.Script {
+  private persistence?: ProjectPersistenceController;
+  private recoverySessions: readonly RecoverySessionSummary[] = [];
+  private recoveryStatus = '';
+  public onRequestRecoveryView: (() => void) | null = null;
+  public onRequestApplicationUpdate: (() => Promise<void>) | null = null;
   private uiCore: UICore;
   private readonly lifecycleDisposers: Array<() => void> = [];
   private disposed = false;
@@ -992,6 +1006,7 @@ export class OrcaWorkspace extends xb.Script {
     this.canonicalProject = CanonicalWorkspaceController.createEmpty({
       idSource: new UuidIdSource(cryptographicRandomWord),
       clock: () => new Date(),
+      projectSerializer: options.projectSerializer,
       parent: this.workspace,
       mapping: {
         bedSizeMm: [PLATE_MM, PLATE_MM],
@@ -1080,6 +1095,62 @@ export class OrcaWorkspace extends xb.Script {
   /** Read-only live boundary for diagnostics/E2E; returned summaries are immutable. */
   public getCanonicalSummary() {
     return this.canonicalProject.getSummary();
+  }
+
+  /** Typed canonical persistence boundary; no scene objects cross this port. */
+  public createPersistenceProjectPort(): PersistenceProjectPort {
+    return {
+      read: () => {
+        const summary = this.canonicalProject.getSummary();
+        return {
+          guard: this.canonicalProject.captureProjectExportGuard(),
+          name: summary.projectName,
+          dirty: summary.dirty,
+        };
+      },
+      subscribe: (listener) => this.canonicalProject.subscribe(() => listener(), { emitCurrent: false }),
+      serialize: (purpose, cancellation) => this.canonicalProject.serializeProjectSnapshot(cancellation, { purpose }),
+      acknowledge: (guard) => this.canonicalProject.acknowledgeProjectExport(guard),
+    };
+  }
+
+  public connectProjectPersistence(controller: ProjectPersistenceController): void {
+    if (this.disposed) {
+      controller.dispose();
+      throw new Error('The workspace is closed.');
+    }
+    if (this.persistence) throw new Error('Project persistence is already connected.');
+    this.persistence = controller;
+    this.lifecycleDisposers.push(() => {
+      controller.dispose();
+      this.persistence = undefined;
+    });
+  }
+
+  public updateRecoveryDirectory(rows: readonly RecoverySessionSummary[], message: string): void {
+    if (this.disposed) return;
+    this.recoverySessions = rows.map((row) => Object.freeze({ ...row }));
+    this.recoveryStatus = message;
+    this.refreshXrSheet();
+  }
+
+  public async projectRecovery(operation: 'recover' | 'download' | 'discard', id?: string): Promise<void> {
+    if (!id) {
+      if (xb.core.renderer?.xr?.isPresenting) {
+        await this.loadImmersiveShell();
+        if (!this.disposed) this.openXrSheet('xr-project-workspace');
+      } else this.onRequestRecoveryView?.();
+      return;
+    }
+    if (!this.persistence) throw new Error('Project recovery is unavailable.');
+    if (operation === 'recover') await this.persistence.recoverSession(id);
+    else if (operation === 'download') await this.persistence.downloadRecovery(id);
+    else await this.persistence.discardRecovery(id);
+  }
+
+  public guardProjectNavigation(reason: NavigationReason): Promise<boolean> {
+    if (this.persistence) return this.persistence.guardNavigation(reason);
+    return Promise.resolve(!this.canonicalProject.getSummary().dirty);
   }
 
   /** Read-only canonical hierarchy/selection snapshot for DOM and XR Objects surfaces. */
@@ -1379,6 +1450,7 @@ export class OrcaWorkspace extends xb.Script {
   override dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.unsavedDecisionResolve?.('cancel');
 
     this.actionContext = undefined;
     this.actionStateRefreshers.clear();
@@ -4066,6 +4138,9 @@ export class OrcaWorkspace extends xb.Script {
       this.catalog.profiles[0] ??
       null;
     if (!fallback) return;
+    const before = this.canonicalProject.getSummary();
+    const isPristineStartup =
+      before.revision === 0 && !before.dirty && before.objectCount === 0 && before.history.undoCount === 0;
     if (fallback.machinePresetId && fallback.processPresetId && fallback.filamentPresetId) {
       this.selectProfilePresets({
         machinePresetId: fallback.machinePresetId,
@@ -4075,6 +4150,9 @@ export class OrcaWorkspace extends xb.Script {
     } else {
       this.setProfile(fallback);
     }
+    // Initial catalog defaults establish a new document's baseline. No authored
+    // revision may take this path, including edits made while profiles loaded.
+    if (isPristineStartup) this.canonicalProject.resetProject();
   }
 
   /**
@@ -4593,6 +4671,8 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   onXRSessionEnded() {
+    this.unsavedDecisionResolve?.('cancel');
+    this.importDecisionResolve?.(null);
     if (this.orbitControls) {
       this.orbitControls.enabled = true;
     }
@@ -4935,7 +5015,8 @@ export class OrcaWorkspace extends xb.Script {
   /** Generic file save (STL/3MF export). Wired to a browser download in main.ts. */
   onDownloadFile: ((name: string, data: BlobPart, mime: string) => void) | null = null;
   /** Composition-root confirmation for the immutable worker import preview. */
-  onProjectImportPreview: ((preview: ProjectImportPreview) => Promise<ImportCommitConfirmation | null>) | null = null;
+  onProjectImportPreview:
+    ((preview: ProjectImportPreview, signal?: AbortSignal) => Promise<ImportCommitConfirmation | null>) | null = null;
   /** Injected by main.ts: requests the browser to open the file picker. */
   onRequestLoadStl: (() => void) | null = null;
   /** Injected by main.ts: opens a .zip-filtered picker (Import Zip Archive). */
@@ -7199,6 +7280,10 @@ export class OrcaWorkspace extends xb.Script {
     const card = this.xrCards?.sheet;
     const root = this.sheetRoot;
     if (!card || !root) return;
+    if (this.openSheetPage === 'xr-unsaved-project' && id !== this.openSheetPage)
+      this.unsavedDecisionResolve?.('cancel');
+    this.importDecisionResolve?.(null);
+    if (this.openSheetPage === 'xr-project-import' && id !== this.openSheetPage) this.importDecisionResolve?.(null);
     this.openSheetPage = id;
     for (const child of [...root.children]) {
       try {
@@ -7210,14 +7295,26 @@ export class OrcaWorkspace extends xb.Script {
     if (id === 'xr-device-workspace') this.populateXrDeviceWorkspace(root);
     else if (id === 'xr-project-workspace') this.populateXrProjectWorkspace(root);
     else if (id === 'xr-print-submission') this.populateXrPrintSubmission(root);
+    else if (id === 'xr-unsaved-project')
+      this.xrUi?.renderXrUnsavedProjectDialog(xrBlocksUiAdapter, root, this.unsavedProjectName, (choice) =>
+        this.unsavedDecisionResolve?.(choice),
+      );
+    else if (id === 'xr-project-import' && this.xrImportPreview)
+      this.xrUi?.renderXrProjectImportDialog(xrBlocksUiAdapter, root, this.xrImportPreview, (decision) =>
+        this.importDecisionResolve?.(decision),
+      );
     card.place(null);
     card.show();
   }
 
   public closeXrSheet(): void {
     const cancelSubmission = this.openSheetPage === 'xr-print-submission' ? this.printSubmissionResolve : null;
+    const cancelUnsaved = this.openSheetPage === 'xr-unsaved-project' ? this.unsavedDecisionResolve : null;
+    const cancelImport = this.openSheetPage === 'xr-project-import' ? this.importDecisionResolve : null;
     this.openSheetPage = null;
+    cancelImport?.(null);
     cancelSubmission?.({ choice: 'cancel' });
+    cancelUnsaved?.('cancel');
     this.xrCards?.sheet.hide();
   }
 
@@ -7478,6 +7575,20 @@ export class OrcaWorkspace extends xb.Script {
       modelCount: summary.objectCount,
       isDirty: summary.dirty,
       recentProjects: recents,
+      recoverySessions: this.recoverySessions,
+      recoveryStatus: this.recoveryStatus,
+      onRecoveryOperation: (operation, id) => {
+        if (!this.actionContext) return;
+        const actionId =
+          operation === 'recover'
+            ? 'file_recover_project'
+            : operation === 'download'
+              ? 'file_download_recovery'
+              : 'file_discard_recovery';
+        void this.actionRegistry
+          .invoke(actionId, 'xr-inspector', this.actionContext, this.actionContext.ui.get(), { recoverySessionId: id })
+          .catch((error) => this.setStatus(String(error instanceof Error ? error.message : error)));
+      },
       onOpenProject: () => {
         if (this.actionContext) {
           const action = this.actionRegistry.get('file_open_project');
@@ -7515,6 +7626,61 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   private printSubmissionResolve: ((decision: PrintWorkflowDecision) => void) | null = null;
+  private unsavedDecisionResolve: ((decision: UnsavedProjectDecision) => void) | null = null;
+  private unsavedProjectName = '';
+
+  public async askXrUnsavedProjectDecision(projectName: string, signal?: AbortSignal): Promise<UnsavedProjectDecision> {
+    if (signal?.aborted || this.disposed) return 'cancel';
+    this.unsavedDecisionResolve?.('cancel');
+    await this.loadImmersiveShell();
+    if (signal?.aborted || this.disposed || !this.xrCards?.sheet) return 'cancel';
+    this.unsavedProjectName = projectName;
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (choice: UnsavedProjectDecision) => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener('abort', cancel);
+        this.unsavedDecisionResolve = null;
+        this.closeXrSheet();
+        resolve(choice);
+      };
+      const cancel = () => finish('cancel');
+      this.unsavedDecisionResolve = finish;
+      signal?.addEventListener('abort', cancel, { once: true });
+      this.openXrSheet('xr-unsaved-project');
+    });
+  }
+  private importDecisionResolve: ((decision: ImportCommitConfirmation | null) => void) | null = null;
+  private xrImportPreview?: ProjectImportPreview;
+
+  private async askXrProjectImport(
+    preview: ProjectImportPreview,
+    signal?: AbortSignal,
+  ): Promise<ImportCommitConfirmation | null> {
+    if (signal?.aborted || this.disposed) return null;
+    this.importDecisionResolve?.(null);
+    await this.loadImmersiveShell();
+    if (signal?.aborted || this.disposed || !this.xrCards?.sheet) return null;
+    this.xrImportPreview = preview;
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (decision: ImportCommitConfirmation | null) => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener('abort', cancel);
+        this.importDecisionResolve = null;
+        this.xrImportPreview = undefined;
+        this.closeXrSheet();
+        resolve(decision);
+      };
+      const cancel = () => finish(null);
+      this.importDecisionResolve = finish;
+      signal?.addEventListener('abort', cancel, { once: true });
+      this.openXrSheet('xr-project-import');
+    });
+  }
+
   private xrStartOptions = new Set<PrintStartOptionId>();
   private xrOverwrite = false;
   private pendingPrintInput: PrintWorkflowConfirmation | null = null;
@@ -8395,7 +8561,10 @@ export class OrcaWorkspace extends xb.Script {
     const dirty = this.canonicalProject.getSummary().dirty;
     if (dirty) {
       const confirm = this.onRequestNewProjectConfirmation;
-      if (!confirm || !(await confirm(true))) {
+      const allowed = this.persistence
+        ? await this.persistence.guardNavigation('new')
+        : Boolean(confirm && (await confirm(true)));
+      if (!allowed) {
         this.setStatus(
           t(
             'workspace.orcaWorkspace.newProjectCancelledTheCurrent',
@@ -9144,12 +9313,19 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public async exportPlate3mf(): Promise<void> {
+    if (this.persistence) {
+      await this.persistence.save();
+      return;
+    }
     if (this.canonicalProject.getSummary().objectCount === 0) {
       this.setStatus(t('workspace.orcaWorkspace.nothingToExportAddA', 'Nothing to export — add a model first.'));
       return;
     }
     try {
-      const saved = await this.canonicalProject.saveCanonical3mf();
+      const { serialized: saved } = await this.canonicalProject.serializeProjectSnapshot(undefined, {
+        purpose: 'manual',
+      });
+      if (!this.onDownloadFile) throw new Error('No download surface is available.');
       const filename = saved.suggestedFilename.replace(/\.3mf$/i, '') + '-export.3mf';
       this.onDownloadFile?.(filename, ownedArrayBuffer(saved.bytes), saved.mediaType);
       this.setStatus(t('workspace.orcaWorkspace.exported3mf', 'Plated geometry exported as 3MF.'));
@@ -9161,13 +9337,16 @@ export class OrcaWorkspace extends xb.Script {
   // --- Save / Open Project (Orca File → Save / Open Project) -----------
   /** Save the project as a downloadable OrcaXR .3mf (File → Save Project). */
   public async saveProject(): Promise<void> {
-    if (this.canonicalProject.getSummary().objectCount === 0) {
-      this.setStatus(t('workspace.orcaWorkspace.nothingToSaveAddA', 'Nothing to save — add a model first.'));
+    if (this.persistence) {
+      await this.persistence.save();
       return;
     }
     try {
-      const saved = await this.canonicalProject.saveCanonical3mf();
-      this.onDownloadFile?.(saved.suggestedFilename, ownedArrayBuffer(saved.bytes), saved.mediaType);
+      const snapshot = await this.canonicalProject.serializeProjectSnapshot(undefined, { purpose: 'manual' });
+      const saved = snapshot.serialized;
+      if (!this.onDownloadFile) throw new Error('No download surface is available.');
+      this.onDownloadFile(saved.suggestedFilename, ownedArrayBuffer(saved.bytes), saved.mediaType);
+      this.canonicalProject.acknowledgeProjectExport(snapshot.guard);
       const summary = this.canonicalProject.getSummary();
       recentProjectsStore.add({
         name: saved.suggestedFilename,
@@ -9177,7 +9356,9 @@ export class OrcaWorkspace extends xb.Script {
         modelCount: summary.objectCount,
       });
       const warnings = saved.warnings?.length ?? 0;
-      this.setStatus(`Project saved${warnings > 0 ? ` (${warnings} compatibility warning(s))` : ''}.`);
+      this.setStatus(
+        `Project download started${warnings > 0 ? ` (${warnings} compatibility warning(s))` : ''}. The browser controls completion of the disk write.`,
+      );
     } catch (error) {
       this.setStatus(`Project save failed: ${(error as Error).message}`);
       throw error;
@@ -9185,15 +9366,26 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Restore a scene from OrcaXR project bytes (File → Open Project). */
-  public async openProject(bytes: ArrayBuffer, filename = 'project.3mf'): Promise<boolean> {
+  public async openProject(
+    bytes: ArrayBuffer,
+    filename = 'project.3mf',
+    recoveryProof?: ProjectRecoveryProof,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    if (signal?.aborted || this.disposed) return false;
     if (bytes.byteLength === 0) throw new Error('The selected project is empty.');
     if (this.projectImportInProgress) throw new Error('Another project import preview is already open.');
     this.projectImportInProgress = true;
     try {
-      const prepared = await this.canonicalProject.prepareCanonical3mfImport(new Uint8Array(bytes), {
-        filename,
-        mediaType: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml',
-      });
+      const prepared = await this.canonicalProject.prepareCanonical3mfImport(
+        new Uint8Array(bytes),
+        {
+          filename,
+          mediaType: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml',
+        },
+        signal,
+        recoveryProof,
+      );
       const preview = prepared.preview;
       const confirm = this.onProjectImportPreview;
       if (!confirm) {
@@ -9211,7 +9403,9 @@ export class OrcaWorkspace extends xb.Script {
       let committed = false;
       try {
         const decision = needsDecision
-          ? await confirm(preview)
+          ? xb.core.renderer?.xr?.isPresenting
+            ? await this.askXrProjectImport(preview, signal)
+            : await confirm(preview, signal)
           : ({ confirmed: true, acknowledgedNoticeIds: [] } as ImportCommitConfirmation);
         if (preview.blocked) {
           const errors = preview.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
@@ -9223,6 +9417,9 @@ export class OrcaWorkspace extends xb.Script {
           this.setStatus(t('workspace.orcaWorkspace.projectOpenCancelled', 'Project open cancelled.'));
           return false;
         }
+        if (this.persistence && !(await this.persistence.guardNavigation(recoveryProof ? 'recover' : 'open')))
+          return false;
+        if (signal?.aborted || this.disposed) return false;
         prepared.confirm(decision);
         committed = true;
       } finally {

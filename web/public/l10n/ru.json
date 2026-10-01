@@ -67,6 +67,7 @@
   "app.externalSlicer.offline": "Не в сети",
   "app.main.del": "Del",
   "dialog.recreateModelColors.cancel": "Отмена",
+  "persistence.cancel": "Отмена",
   "startup.feature.camera": "Камера",
   "ui.brimEarsPanel.brimEars": "Ушки каймы",
   "ui.generatedSettingsPanel.detailLevel": "Уровень детализации",

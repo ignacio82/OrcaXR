@@ -57,6 +57,7 @@
   "app.externalSlicer.offline": "Offline",
   "app.main.del": "Del",
   "dialog.recreateModelColors.cancel": "Avbryt",
+  "persistence.cancel": "Avbryt",
   "startup.feature.camera": "Kamera",
   "ui.brimEarsPanel.brimEars": "Brätte öron",
   "ui.generatedSettingsPanel.detailLevel": "Detaljnivå",

@@ -237,6 +237,10 @@ import type {
   CancellationToken,
   ProjectProjectionHealthSnapshot,
   ProjectSerializerPort,
+  ProjectSerializationOptions,
+  ProjectExportGuard,
+  ProjectRecoveryProof,
+  SerializedProjectSnapshot,
   SerializedProject,
 } from '../project/ports';
 import { Bbs3mfProjectSerializer } from '../project/serialization/Bbs3mfProjectSerializer';
@@ -297,6 +301,8 @@ export interface CanonicalWorkspaceControllerOptions {
   readonly initialProjectConfig?: ConfigMap;
   /** Browser worker by default; injectable for deterministic/headless tests. */
   readonly projectImportParser?: ProjectImportParserPort;
+  /** The browser injects an owned worker writer; headless hosts may supply their own codec. */
+  readonly projectSerializer?: ProjectSerializerPort;
   /**
    * Explicit persisted opt-in corresponding to pinned
    * `auto_generate_gradients`; absent is fail-closed/off.
@@ -865,7 +871,7 @@ export class CanonicalWorkspaceController {
     });
     if (options.initialProjectConfig) initialState.config = cloneJson(options.initialProjectConfig);
     const reconciledInitialState = this.withReconciledAutoPairs(initialState);
-    const serializer = this.reconcilingSerializer(new Bbs3mfProjectSerializer());
+    const serializer = this.reconcilingSerializer(options.projectSerializer ?? new Bbs3mfProjectSerializer());
     this.assets = new InMemoryAssetRepository();
     this.session = new EditorSession({
       initialState: reconciledInitialState,
@@ -3881,6 +3887,24 @@ export class CanonicalWorkspaceController {
     return this.session.save(cancellation);
   }
 
+  captureProjectExportGuard(): ProjectExportGuard {
+    this.assertActive();
+    return this.session.captureExportGuard();
+  }
+
+  serializeProjectSnapshot(
+    cancellation?: CancellationToken,
+    options?: ProjectSerializationOptions,
+  ): Promise<SerializedProjectSnapshot> {
+    this.assertActive();
+    return this.session.serializeSnapshot(cancellation, options);
+  }
+
+  acknowledgeProjectExport(guard: ProjectExportGuard): void {
+    this.assertActive();
+    this.session.acknowledgeSavedCheckpoint(guard);
+  }
+
   openCanonical3mf(bytes: Uint8Array, cancellation?: CancellationToken): Promise<string[]> {
     this.assertActive();
     return this.session.open(bytes, cancellation);
@@ -3891,6 +3915,7 @@ export class CanonicalWorkspaceController {
     bytes: Uint8Array,
     source: ProjectImportSource,
     cancellation?: CancellationToken,
+    recoveryProof?: ProjectRecoveryProof,
   ): Promise<PreparedProjectImport> {
     this.assertActive();
     const lifecycle = new ImportCancellationController();
@@ -3902,6 +3927,7 @@ export class CanonicalWorkspaceController {
           source,
           mode: 'replace',
           cancellation: combinedCancellation(lifecycle.token, cancellation),
+          ...(recoveryProof ? { recoveryProof } : {}),
         },
         () => this.importCancellations.delete(lifecycle),
       );
@@ -4109,7 +4135,7 @@ export class CanonicalWorkspaceController {
 
   private reconcilingSerializer(serializer: ProjectSerializerPort): ProjectSerializerPort {
     return {
-      serialize: (snapshot, cancellation) => serializer.serialize(snapshot, cancellation),
+      serialize: (snapshot, cancellation, options) => serializer.serialize(snapshot, cancellation, options),
       deserialize: async (bytes, cancellation) => {
         const parsed = await serializer.deserialize(bytes, cancellation);
         return { ...parsed, state: this.withReconciledAutoPairs(parsed.state) };

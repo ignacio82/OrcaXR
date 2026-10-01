@@ -3010,6 +3010,11 @@ try {
   const policyErrors = [];
   const page = await openReadyPage(browser, url, { width: 1280, height: 720 }, (readyPage) => {
     readyPage.on('pageerror', (error) => pageErrors.push(error.message));
+    // These reloads deliberately test persisted preferences after editing.
+    readyPage.on('dialog', (dialog) => {
+      if (dialog.type() === 'beforeunload') void dialog.accept();
+      else void dialog.dismiss();
+    });
     readyPage.on('console', (message) => {
       if (/Content Security Policy|Refused to (?:load|connect|execute)/i.test(message.text())) {
         policyErrors.push(message.text());
@@ -3235,10 +3240,14 @@ try {
   const openProject = await page.$('[data-action-id="file_open_project"]');
   assert.ok(openProject, 'Open Project action is available');
   const [projectChooser] = await Promise.all([page.waitForFileChooser(), openProject.click()]);
+  const settingsWereDirty = await page.evaluate(() => globalThis.window.workspace.getCanonicalSummary().dirty);
   await projectChooser.accept([fixturePath]);
-  // The workspace is empty here, so there is no decision to put in front of
-  // anyone: nothing is replaced, nothing authored is lost, and repairs report
-  // themselves afterwards. The project must simply open.
+  // Geometry is empty, but authored settings still require the same decision.
+  // The import notice preview itself remains unnecessary for this fixture.
+  if (settingsWereDirty) {
+    await page.waitForSelector('[data-unsaved-choice="discard"]');
+    await page.click('[data-unsaved-choice="discard"]');
+  }
   await page.waitForFunction(() => (globalThis.window.workspace?.getCanonicalSummary?.().objectCount ?? 0) === 2, {
     timeout: 60_000,
   });
@@ -3568,6 +3577,13 @@ try {
     const replace = [...overlay.querySelectorAll('button')].find((button) => button.textContent === 'Replace project');
     replace?.click();
   });
+  await page.waitForSelector('[data-unsaved-choice="discard"]');
+  assert.equal(
+    await page.evaluate(() => globalThis.window.workspace.getVirtualFilamentLibrarySnapshot().mixed.length),
+    0,
+    'confirming archive notices cannot implicitly discard the current unsaved edit',
+  );
+  await page.click('[data-unsaved-choice="discard"]');
   await page.waitForFunction(
     (name) => {
       const rows = globalThis.window.workspace.getVirtualFilamentLibrarySnapshot().mixed;

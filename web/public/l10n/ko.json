@@ -66,6 +66,7 @@
   "app.externalSlicer.offline": "오프라인",
   "app.main.del": "Del",
   "dialog.recreateModelColors.cancel": "취소",
+  "persistence.cancel": "취소",
   "startup.feature.camera": "카메라",
   "ui.brimEarsPanel.brimEars": "브림 귀",
   "ui.generatedSettingsPanel.detailLevel": "세부 레벨",

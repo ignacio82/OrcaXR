@@ -1,6 +1,13 @@
 /// <reference lib="webworker" />
 
+import { BbsProjectImportParser } from '../import/BbsProjectImportParser';
+import {
+  BBS_IMPORT_WORKER_PROTOCOL_VERSION,
+  type BbsImportWorkerRequest,
+  type BbsImportWorkerResponse,
+} from '../import/BbsProjectImportProtocol';
 import { Bbs3mfProjectSerializer } from './Bbs3mfProjectSerializer';
+import { sha256Bytes } from '../../slicer/Utf8Sha256';
 import {
   PROJECT_SERIALIZER_WORKER_PROTOCOL_VERSION,
   type SerializeWorkerRequest,
@@ -10,8 +17,37 @@ import {
 const scope = self as DedicatedWorkerGlobalScope;
 const serializer = new Bbs3mfProjectSerializer();
 
-scope.onmessage = async (event: MessageEvent<SerializeWorkerRequest>) => {
+// One emitted codec bundle, with independently owned import/serialization worker
+// instances. Cancelling an import must never terminate an in-flight export.
+scope.onmessage = async (event: MessageEvent<SerializeWorkerRequest | BbsImportWorkerRequest>) => {
   const message = event.data;
+  if (!message || typeof message !== 'object') return;
+  if ('request' in message) {
+    if (message.protocolVersion !== BBS_IMPORT_WORKER_PROTOCOL_VERSION || !message.requestId || !message.request)
+      return;
+    let response: BbsImportWorkerResponse;
+    try {
+      if (message.request.mode !== 'replace')
+        throw new Error('BBS project import worker currently supports replace mode only');
+      const parser = new BbsProjectImportParser();
+      const result = await parser.parseArchive(message.request.bytes, undefined, message.request.recoveryProof);
+      response = {
+        protocolVersion: BBS_IMPORT_WORKER_PROTOCOL_VERSION,
+        requestId: message.requestId,
+        type: 'parsed',
+        result,
+      };
+    } catch (error) {
+      response = {
+        protocolVersion: BBS_IMPORT_WORKER_PROTOCOL_VERSION,
+        requestId: message.requestId,
+        type: 'error',
+        error: boundedError(error),
+      };
+    }
+    scope.postMessage(response);
+    return;
+  }
   if (message?.protocolVersion !== PROJECT_SERIALIZER_WORKER_PROTOCOL_VERSION || !message.requestId) return;
   let response: SerializeWorkerResponse;
   const transfer: Transferable[] = [];
@@ -36,6 +72,7 @@ scope.onmessage = async (event: MessageEvent<SerializeWorkerRequest>) => {
         suggestedFilename: serialized.suggestedFilename,
         sourceRevision: serialized.sourceRevision,
         sourceHash: serialized.sourceHash,
+        archiveDigest: sha256Bytes(serialized.bytes),
         warnings: serialized.warnings ?? [],
       },
     };

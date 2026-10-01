@@ -43,7 +43,7 @@ export interface PrinterCameraPanelPort {
   /** Discover the printer's cameras. */
   refresh(): void | Promise<void>;
   /** Fetch exactly one frame; the panel owns the timer. */
-  captureFrame(): void | Promise<void>;
+  captureFrame(signal?: AbortSignal): void | Promise<void>;
   /**
    * Report that the browser refused the frame at `url`.
    *
@@ -84,6 +84,8 @@ export class PrinterCameraPanel {
   private liveToggle?: HTMLButtonElement;
   private status?: HTMLElement;
   private timer?: number;
+  private capture?: AbortController;
+  private pollingCamera?: string;
   private live = true;
   /** The frame URL the browser refused, so it is not drawn as a picture. */
   private brokenFrame?: string;
@@ -212,20 +214,38 @@ export class PrinterCameraPanel {
     const camera = this.port.getSelected();
     const shouldPoll =
       !this.disposed && this.live && this.host.isVisible() && camera !== undefined && cameraCanShowFrames(camera);
-    if (!shouldPoll) {
+    if (!shouldPoll || this.pollingCamera !== camera?.uid) {
+      this.capture?.abort();
+      this.capture = undefined;
       if (this.timer !== undefined) {
         this.host.clearInterval(this.timer);
         this.timer = undefined;
       }
-      return;
+      this.pollingCamera = camera?.uid;
+      if (!shouldPoll) return;
     }
     if (this.timer !== undefined) return;
     // The timer is claimed *before* the first frame is asked for. A capture that
     // needs no network — one the browser loads itself — finishes synchronously
     // and notifies, which re-enters this method; with the assignment last, every
     // re-entry saw no timer, started another one, and asked for another frame.
-    this.timer = this.host.setInterval(() => void this.port.captureFrame(), cameraPollIntervalMs(camera));
-    void this.port.captureFrame();
+    this.timer = this.host.setInterval(() => this.captureOneFrame(), cameraPollIntervalMs(camera!));
+    this.captureOneFrame();
+  }
+
+  private captureOneFrame(): void {
+    if (this.disposed || !this.live || !this.host.isVisible() || this.capture) return;
+    const capture = new AbortController();
+    this.capture = capture;
+    void (async () => {
+      try {
+        await this.port.captureFrame(capture.signal);
+      } catch {
+        // The port reports acquisition failures; cancellation is not a frame error.
+      } finally {
+        if (this.capture === capture) this.capture = undefined;
+      }
+    })();
   }
 
   private render(): void {
@@ -350,6 +370,8 @@ export class PrinterCameraPanel {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.capture?.abort();
+    this.capture = undefined;
     if (this.timer !== undefined) this.host.clearInterval(this.timer);
     this.timer = undefined;
     this.unsubscribe?.();

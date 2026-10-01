@@ -11,6 +11,8 @@
 import { createXrButton, createXrChip, createXrSectionHeading } from './XrComponents';
 import type { XrUiAdapter } from './XrUiAdapter';
 import { tokens } from '../tokens';
+import { t } from '../../l10n/t';
+import type { RecoverySessionSummary } from '../../persistence/ProjectPersistenceController';
 
 const C = tokens.color;
 
@@ -72,6 +74,9 @@ export interface XrProjectContext {
     readonly title: string;
     readonly canSlice: boolean;
   } | null;
+  readonly recoverySessions?: readonly RecoverySessionSummary[];
+  readonly recoveryStatus?: string;
+  onRecoveryOperation?(operation: 'recover' | 'download' | 'discard', id: string): void;
   onOpenProject?(): void;
   onSaveProject?(): void;
   onSaveProjectAs?(): void;
@@ -252,6 +257,39 @@ export function renderXrProjectWorkspace<PanelNode, ImageNode, TextNode>(
   });
   ui.appendChild(projButtons, exportBtn.root);
   ui.appendChild(summaryRow, projButtons);
+
+  if (ctx.recoverySessions) {
+    ui.appendChild(container, createXrSectionHeading(ui, t('persistence.recoveryHeading', 'Project recovery')));
+    ui.appendChild(container, ui.createText(ctx.recoveryStatus ?? '', { fontSize: 12, color: C.text }));
+    for (const recovery of ctx.recoverySessions) {
+      const row = ui.createPanel({ width: '100%', flexDirection: 'column', gap: 6, padding: 8 });
+      ui.appendChild(
+        row,
+        ui.createText(
+          `${recovery.projectName}${recovery.savedAt ? ` · ${new Date(recovery.savedAt).toLocaleString()}` : ''}${recovery.reason ? ` · ${recovery.reason}` : ''}`,
+          { fontSize: 12, color: C.text },
+        ),
+      );
+      const buttons = ui.createPanel({ width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 6 });
+      for (const [operation, label] of [
+        ['recover', t('persistence.recover', 'Recover')],
+        ['download', t('persistence.downloadRecovery', 'Download recovery file')],
+        ['discard', t('persistence.discardRecovery', 'Discard recovery')],
+      ] as const) {
+        ui.appendChild(
+          buttons,
+          createXrButton(ui, {
+            label,
+            fontSize: 12,
+            enabled: operation !== 'recover' || recovery.available,
+            onClick: () => ctx.onRecoveryOperation?.(operation, recovery.id),
+          }).root,
+        );
+      }
+      ui.appendChild(row, buttons);
+      ui.appendChild(container, row);
+    }
+  }
 
   // Section 2: Recent Projects List
   if (ctx.recentProjects.length > 0) {

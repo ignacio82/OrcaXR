@@ -461,7 +461,13 @@ function inspectSave(file, source) {
   const body = check.method('OrcaWorkspace', 'saveProject');
   if (!body) return check.failures;
   const all = facts(body);
-  check.requireCall(all, 'this.canonicalProject.saveCanonical3mf', 'save canonical project state');
+  check.requireCall(all, 'this.persistence.save', 'route browser saves through the shared persistence queue');
+  check.requireCall(
+    all,
+    'this.canonicalProject.serializeProjectSnapshot',
+    'serialize canonical project state for an embedding host',
+  );
+  check.requireCall(all, 'this.canonicalProject.acknowledgeProjectExport', 'acknowledge only a guarded manual export');
   check.forbidCalls(all, {
     'this.buildProjectBytes': 'save cannot rebuild project bytes from scene objects',
     buildProjectBytes: 'save cannot rebuild project bytes from scene objects',

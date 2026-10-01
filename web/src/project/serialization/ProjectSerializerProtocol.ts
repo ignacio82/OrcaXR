@@ -25,6 +25,7 @@ export type SerializeWorkerResponse =
         readonly suggestedFilename: string;
         readonly sourceRevision: number;
         readonly sourceHash: string;
+        readonly archiveDigest?: string;
         readonly warnings: readonly string[];
       };
     }

@@ -926,9 +926,9 @@ remains the cross-browser and remote-network fallback.
   recovery and slice cancellation remain available. Overall boot state derives
   from these capabilities, never an unconditional Ready marker.
 - Profile/schema retries fetch and validate fresh data. A failed module import
-  requires reload; recovery uses the shared action intent and refuses reload
-  while the current project is dirty. The complete Save/Discard/Cancel navigation
-  and PWA-update workflow is still pending in plan H.
+  requires reload; recovery uses the shared action intent and the persistence
+  controller's Save/Discard/Cancel decision. Never bypass that decision for a
+  startup retry, application update, or app-owned navigation.
 - Lazy features own panels before mounting and cancel their asynchronous work
   before teardown. A late import/body cannot remount a closed feature. Settings
   adapters are mounted together in a separate chunk, with independent DOM/XR
@@ -937,6 +937,40 @@ remains the cross-browser and remote-network fallback.
   Required profile fetches reject empty/invalid results before
   replacing a valid catalog. Startup failure details have bounded DOM/XR space;
   they must not hide printer recovery controls.
+- Camera polling owns one cancellable frame at a time. Hiding the section,
+  switching cameras or disposing the panel aborts pending acquisition, including
+  work waiting for a printer connection; recheck identity/visibility after each
+  await and before publishing a frame. Stopping only the interval is insufficient.
+
+## Project persistence and recovery
+
+- Snapshot serialization does not change dirty state. Only successful manual
+  download handoff may acknowledge an exact project/revision/hash/asset guard;
+  the browser cannot promise that a disk write finished. Initial catalog defaults
+  establish a clean baseline only before any authored revision exists.
+- The browser injects the owned worker serializer. One persistence queue gives
+  explicit saves priority and coalesces recovery requests. Recovery never falls
+  back onto the UI thread; a failed worker pauses it visibly. Explicit manual
+  export can retry/fall back. Cancellation/disposal settles callers and rejects
+  late results. Import and export workers share one emitted archive-codec bundle,
+  but have independent instances and lifetimes.
+- Recovery captures after five idle seconds, at most thirty seconds into
+  continuous editing. IndexedDB keeps up to three snapshots per project/editing
+  session; sequence allocation, insertion and pruning are one transaction.
+  Failed writes preserve previous records. The default total budget is 512 MiB,
+  adjustable up to the 1 GiB archive limit and available browser quota. Never
+  evict another tab's lineage or automatically delete an unfamiliar schema.
+- Startup lists stored sessions in the DOM/XR Project view. Recover, download and
+  discard share registry actions. Recovery verifies archive SHA-256 and raw
+  project/asset identity before the normal import preview/normalization; it stays
+  dirty until manual export. A corrupt newest record leaves older ones selectable.
+- New/Open, startup reload, app links and PWA updates use Save/Discard/Cancel.
+  Approval is bound to the exact revision, including edits during update
+  activation. Native browser close/reload uses `beforeunload` only while dirty;
+  visibility changes make best-effort captures. No async unload guarantee exists.
+  PWA updates wait for an explicit guarded `SKIP_WAITING` request.
+- Storage/serialization failures are visible and must not trap ordinary editing
+  or manual export. See [the recovery guide](docs/project-recovery.md).
 
 ## External slicer server (`server/`)
 

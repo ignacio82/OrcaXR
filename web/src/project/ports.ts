@@ -1,6 +1,6 @@
 import type { AssetPayload } from './assets';
 import type { JsonValue, ProjectState } from './domain/model';
-import type { PlateId } from './domain/ids';
+import type { PlateId, ProjectId } from './domain/ids';
 import type { SelectionSnapshot } from './selection';
 import type { CommandHistorySnapshot } from './history/commandBus';
 import type { ProjectSnapshot } from './store';
@@ -23,13 +23,43 @@ export interface SerializedProject {
   suggestedFilename: string;
   sourceRevision: number;
   sourceHash: string;
+  /** Optional archive integrity proof computed on the serializer's worker. */
+  archiveDigest?: string;
   /** Compatibility/projection notes produced while building the archive. */
   warnings?: string[];
 }
 
+/** Exact authority represented by a serialized archive, independent of saved state. */
+export interface ProjectExportGuard {
+  readonly projectId: ProjectId;
+  readonly revision: number;
+  readonly semanticHash: string;
+  readonly assetFingerprint: string;
+}
+
+/** Recovery metadata is checked against the raw archive before import normalization. */
+export interface ProjectRecoveryProof {
+  readonly guard: ProjectExportGuard;
+  readonly archiveDigest: string;
+}
+
+export interface SerializedProjectSnapshot {
+  readonly serialized: SerializedProject;
+  readonly guard: ProjectExportGuard;
+}
+
+export interface ProjectSerializationOptions {
+  /** Recovery must stay off the UI thread; explicit manual export may use a fallback. */
+  readonly purpose?: 'manual' | 'recovery' | 'slice';
+}
+
 /** Production implementations adapt this port to the pinned BBS 3MF codec. */
 export interface ProjectSerializerPort {
-  serialize(snapshot: ProjectArchiveSnapshot, cancellation?: CancellationToken): Promise<SerializedProject>;
+  serialize(
+    snapshot: ProjectArchiveSnapshot,
+    cancellation?: CancellationToken,
+    options?: ProjectSerializationOptions,
+  ): Promise<SerializedProject>;
   deserialize(
     bytes: Uint8Array,
     cancellation?: CancellationToken,

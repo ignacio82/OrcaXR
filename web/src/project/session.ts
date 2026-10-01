@@ -20,6 +20,9 @@ import type {
   ProjectArchiveSnapshot,
   ProjectSerializerPort,
   SerializedProject,
+  SerializedProjectSnapshot,
+  ProjectExportGuard,
+  ProjectSerializationOptions,
   SliceAdapterPort,
   SliceResult,
 } from './ports';
@@ -168,22 +171,60 @@ export class EditorSession {
   }
 
   async save(cancellation?: CancellationToken): Promise<SerializedProject> {
+    const snapshot = await this.serializeSnapshot(cancellation, {
+      purpose: 'manual',
+    });
+    this.acknowledgeSavedCheckpoint(snapshot.guard);
+    return snapshot.serialized;
+  }
+
+  /** Recovery serialization never changes the manual-save checkpoint. */
+  async serializeSnapshot(
+    cancellation?: CancellationToken,
+    options: ProjectSerializationOptions = { purpose: 'recovery' },
+  ): Promise<SerializedProjectSnapshot> {
     this.assertActive();
     this.assertProjectProjectionHealthy('save');
+    if (cancellation?.aborted) throw new Error(cancellation.reason ?? 'Serialization cancelled');
+    const guard = this.captureExportGuard();
     const request = this.archiveSnapshot();
-    const sourceAssetHash = assetBundleFingerprint(request.assets);
-    const result = await this.options.serializer.serialize(request, cancellation);
-    if (
-      result.sourceRevision !== request.sourceRevision ||
-      result.sourceHash !== request.sourceHash ||
-      !this.project.isCurrent({ revision: request.sourceRevision, hash: request.sourceHash }) ||
-      assetBundleFingerprint(this.assets.list()) !== sourceAssetHash
-    ) {
+    const result = await this.options.serializer.serialize(request, cancellation, options);
+    this.assertActive();
+    if (cancellation?.aborted) throw new Error(cancellation.reason ?? 'Serialization cancelled');
+    if (result.sourceRevision !== request.sourceRevision || result.sourceHash !== request.sourceHash) {
       throw new StaleProjectResultError('Serialization');
     }
+    return Object.freeze({ serialized: result, guard });
+  }
+
+  captureExportGuard(): ProjectExportGuard {
+    this.assertActive();
+    const current = this.project.getSnapshot();
+    return Object.freeze({
+      projectId: current.state.id,
+      revision: current.revision,
+      semanticHash: current.hash,
+      assetFingerprint: this.assets.bundleFingerprint(),
+    });
+  }
+
+  isExportCurrent(guard: ProjectExportGuard): boolean {
+    if (this.disposed) return false;
+    const current = this.captureExportGuard();
+    return (
+      current.projectId === guard.projectId &&
+      current.revision === guard.revision &&
+      current.semanticHash === guard.semanticHash &&
+      current.assetFingerprint === guard.assetFingerprint
+    );
+  }
+
+  /** Call only after successful manual export handoff; autosave must never call this. */
+  acknowledgeSavedCheckpoint(guard: ProjectExportGuard): void {
+    this.assertActive();
+    if (!this.isExportCurrent(guard)) throw new StaleProjectResultError('Manual export');
     this.assertProjectProjectionHealthy('save');
     this.commands.markCheckpoint();
-    return result;
   }
 
   async open(bytes: Uint8Array, cancellation?: CancellationToken): Promise<string[]> {
@@ -197,7 +238,10 @@ export class EditorSession {
     assertBundleAssets(parsed.state, staged);
 
     this.assets.restore(nextAssets);
-    this.project.replaceState(parsed.state, { reason: 'open-project', dirtyCategories: [] });
+    this.project.replaceState(parsed.state, {
+      reason: 'open-project',
+      dirtyCategories: [],
+    });
     this.selection.clear();
     this.commands.clearHistory({ markCheckpoint: true });
     return [...parsed.warnings];
@@ -215,7 +259,10 @@ export class EditorSession {
     assertBundleAssets(state, staged);
 
     this.assets.restore(assets);
-    this.project.replaceState(state, { reason: 'reset-project', dirtyCategories: [] });
+    this.project.replaceState(state, {
+      reason: 'reset-project',
+      dirtyCategories: [],
+    });
     this.selection.clear();
     this.commands.clearHistory({ markCheckpoint: true });
   }
@@ -238,7 +285,10 @@ export class EditorSession {
       result.plateId !== plateId ||
       result.sourceRevision !== request.sourceRevision ||
       result.sourceHash !== request.sourceHash ||
-      !this.project.isCurrent({ revision: request.sourceRevision, hash: request.sourceHash }) ||
+      !this.project.isCurrent({
+        revision: request.sourceRevision,
+        hash: request.sourceHash,
+      }) ||
       assetBundleFingerprint(this.assets.list()) !== sourceAssetHash
     ) {
       throw new StaleProjectResultError('Slice');

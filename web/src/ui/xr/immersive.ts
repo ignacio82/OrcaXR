@@ -23,3 +23,5 @@ export { renderXrPreviewScrubber } from './XrPreviewScrubber';
 export { renderXrDeviceWorkspace } from './XrDeviceWorkspace';
 export { renderXrProjectWorkspace } from './XrProjectWorkspace';
 export { renderXrPrintSubmissionDialog } from './XrPrintSubmissionDialog';
+export { renderXrUnsavedProjectDialog } from './XrUnsavedProjectDialog';
+export { renderXrProjectImportDialog } from './XrProjectImportDialog';

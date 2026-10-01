@@ -1,54 +1,8 @@
 import type { ImportCommitConfirmation, ProjectImportPreview } from '../project/import/types';
 import { t } from '../l10n/t';
 
-interface PreviewNoticeRow {
-  readonly id: string;
-  readonly category: 'Repair' | 'Conflict' | 'Dropped field' | 'Diagnostic';
-  readonly message: string;
-  readonly detail: string;
-  readonly required: boolean;
-  readonly blocking: boolean;
-}
-
-export function projectImportNoticeRows(preview: ProjectImportPreview): readonly PreviewNoticeRow[] {
-  const required = new Set(preview.requiredAcknowledgementIds);
-  return [
-    ...preview.repairs.map((notice): PreviewNoticeRow => ({
-      id: notice.id,
-      category: 'Repair',
-      message: notice.message,
-      detail: `${notice.kind} · ${notice.path}`,
-      required: required.has(notice.id),
-      blocking: false,
-    })),
-    ...preview.conflicts.map((notice): PreviewNoticeRow => ({
-      id: notice.id,
-      category: 'Conflict',
-      message: notice.message,
-      detail: [notice.kind, notice.path, notice.resolution ? `resolution: ${notice.resolution}` : 'unresolved']
-        .filter(Boolean)
-        .join(' · '),
-      required: required.has(notice.id),
-      blocking: !notice.resolution,
-    })),
-    ...preview.droppedFields.map((notice): PreviewNoticeRow => ({
-      id: notice.id,
-      category: 'Dropped field',
-      message: notice.message,
-      detail: `${notice.path} · ${notice.field}`,
-      required: required.has(notice.id),
-      blocking: false,
-    })),
-    ...preview.diagnostics.map((notice): PreviewNoticeRow => ({
-      id: notice.id,
-      category: 'Diagnostic',
-      message: notice.message,
-      detail: `${notice.severity} · ${notice.code} · ${notice.path}`,
-      required: false,
-      blocking: notice.severity === 'error',
-    })),
-  ];
-}
+import { projectImportNoticeRows } from './ProjectImportPreview';
+export { projectImportNoticeRows } from './ProjectImportPreview';
 
 /**
  * Accessible DOM counterpart for the worker import preview.
@@ -62,7 +16,9 @@ export function projectImportNoticeRows(preview: ProjectImportPreview): readonly
  */
 export function showProjectImportPreviewDialog(
   preview: ProjectImportPreview,
+  signal?: AbortSignal,
 ): Promise<ImportCommitConfirmation | null> {
+  if (signal?.aborted) return Promise.resolve(null);
   const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const rows = projectImportNoticeRows(preview);
 
@@ -162,11 +118,14 @@ export function showProjectImportPreviewDialog(
   const settle = (value: ImportCommitConfirmation | null) => {
     if (settled) return;
     settled = true;
+    signal?.removeEventListener('abort', cancelOnAbort);
     document.removeEventListener('keydown', onKeyDown, true);
     overlay.remove();
     previousFocus?.focus();
     resolveDialog(value);
   };
+  const cancelOnAbort = () => settle(null);
+  signal?.addEventListener('abort', cancelOnAbort, { once: true });
   const requiredIds = [...preview.requiredAcknowledgementIds];
   function updateConfirmAvailability() {
     confirm.disabled = preview.blocked;

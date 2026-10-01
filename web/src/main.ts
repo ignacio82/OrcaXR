@@ -164,7 +164,7 @@ window.ORCAXR_VERSION = 'v34-xr-recenter';
 // index.html for /sw.js (SPA fallback), which is an invalid SW script, so a SW
 // registered by a *previous* `vite preview`/prod visit on this origin can never
 // self-update and gets stuck serving the stale app bundle — masking every code
-// change. Kill it so dev is always fresh. (Prod keeps its autoUpdate SW.)
+// change. Kill it so dev is always fresh. (Production applies service-worker updates through the unsaved-work guard.)
 if (import.meta.env.DEV && 'serviceWorker' in navigator) {
   navigator.serviceWorker
     .getRegistrations()
@@ -382,10 +382,6 @@ function setupDomUI(
   l10n: () => Localizer,
   initialization: ApplicationInitialization,
 ) {
-  workspace.onRequestNewProjectConfirmation = () =>
-    window.confirm(
-      t('app.main.discardTheCurrentUnsavedProject', 'Discard the current unsaved project and start a new project?'),
-    );
   workspace.onRequestSplitToObjectsConfirmation = (confirmation) =>
     window.confirm(
       `Split “${confirmation.objectName}” into separate objects?\n\n` +
@@ -1331,9 +1327,16 @@ function setupDomUI(
           refresh: async () => {
             await scope.load(registry.invoke('view_webcam', 'dom-inspector', actionCtx, uiState.get()));
           },
-          captureFrame: async () => {
+          captureFrame: async (signal) => {
             const camera = selectedCamera();
-            if (!camera || !cameraCanShowFrames(camera)) return;
+            const current = () =>
+              !scope.signal.aborted &&
+              !signal?.aborted &&
+              selectedCamera()?.uid === camera?.uid &&
+              document.visibilityState === 'visible' &&
+              cameraDetails?.open !== false &&
+              devicePage?.hidden !== true;
+            if (!camera || !cameraCanShowFrames(camera) || !current()) return;
             const route = cameraRoute(camera);
             if (!route) {
               // Every route has been tried. Whatever the last one said stands;
@@ -1354,13 +1357,16 @@ function setupDomUI(
             }
             try {
               const { transport } = await scope.load(connectConfiguredPrinter());
-              const bytes = await scope.load(fetchCameraSnapshot(transport, camera, undefined, route));
+              if (!current()) return;
+              const bytes = await scope.load(fetchCameraSnapshot(transport, camera, signal, route));
+              if (!current()) return;
               releaseFrame();
               cameraState.frameUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/jpeg' }));
               cameraRouteWorked(camera);
               delete cameraState.message;
               delete cameraState.failure;
             } catch (error) {
+              if (!current()) return;
               const message = error instanceof PrinterCameraError ? error.message : (error as Error).message;
               cameraRouteFailed(camera, route);
               cameraState.message = message;
@@ -4846,8 +4852,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       initialization.registry.subscribe((snapshot) => uiState.update({ initialization: snapshot })),
     );
     const initializedWorkspace = await initialization.registry.run('workspace', async (scope) => {
+      const persistenceModule = await scope.import(import('./persistence/BrowserProjectPersistence'));
+      const serializer = scope.own(new persistenceModule.WorkerProjectSerializer());
       const workspace = new OrcaWorkspace(registry, {
         initialization: initialization.registry,
+        projectSerializer: serializer,
         fullSpectrumAutoPairPreferences: loadFullSpectrumAutoPairPreferences(),
       });
       scope.own(workspace);
@@ -4895,10 +4904,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       (window as unknown as { __orcaRenderer: unknown }).__orcaRenderer = xb.core.renderer;
       (window as unknown as { THREE: unknown }).THREE = THREE;
       (window as unknown as { __orca: unknown }).__orca = workspace;
-      return { workspace, actionCtx };
+      return { workspace, actionCtx, persistenceModule };
     });
     if (!initializedWorkspace.ready) return;
-    const { workspace, actionCtx } = initializedWorkspace.value;
+    const { workspace, actionCtx, persistenceModule } = initializedWorkspace.value;
     workspace.onRequestStartupRecovery = (id) => initialization.recover(id);
     recoverFeature = (id) => {
       void registry.invoke('help_startup_recovery', 'dom-inspector', actionCtx, uiState.get(), {
@@ -4921,8 +4930,43 @@ document.addEventListener('DOMContentLoaded', async () => {
       },
       report: (message) => workspace.setStatus(message),
     });
-    await initialization.registry.run('shell', async () => {
+    await initialization.registry.run('shell', async (scope) => {
       setupDomUI(workspace, uiState, actionCtx, registry, () => l10n, initialization);
+      const persistence = scope.own(
+        new persistenceModule.BrowserProjectPersistence({
+          project: workspace.createPersistenceProjectPort(),
+          host: document.querySelector('#page-project .page-inner') as HTMLElement,
+          download: (name, bytes, mediaType) => {
+            if (!workspace.onDownloadFile) throw new Error('No download surface is available.');
+            workspace.onDownloadFile(name, Uint8Array.from(bytes).buffer, mediaType);
+          },
+          restore: (bytes, name, proof, signal) =>
+            workspace.openProject(Uint8Array.from(bytes).buffer, name, proof, signal),
+          report: (message) => workspace.setStatus(message),
+          isXrPresenting: () => Boolean(xb.core.renderer?.xr?.isPresenting),
+          chooseInXr: (name, signal) => workspace.askXrUnsavedProjectDecision(name, signal),
+          invoke: (operation, id) =>
+            registry.invoke(
+              operation === 'recover'
+                ? 'file_recover_project'
+                : operation === 'download'
+                  ? 'file_download_recovery'
+                  : 'file_discard_recovery',
+              'dom-inspector',
+              actionCtx,
+              uiState.get(),
+              { recoverySessionId: id },
+            ),
+          directoryChanged: (rows, message) => workspace.updateRecoveryDirectory(rows, message),
+        }),
+      );
+      workspace.connectProjectPersistence(persistence.controller);
+      workspace.onRequestRecoveryView = () => showWorkspaceView?.('project');
+      workspace.onRequestApplicationUpdate = () => persistence.checkForUpdates();
+      initialization.connectRecovery({
+        reload: () => persistence.navigate('reload', () => location.reload()),
+        report: (message) => workspace.setStatus(message),
+      });
 
       // Render the tool rail, primary bar, Add/Tools menus, and mode control from
       // the shared registry (the same catalog the XR shell renders). Mounted after

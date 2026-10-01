@@ -10,6 +10,8 @@ const generated = await readFile(join(root, 'dist', 'sw.js'), 'utf8');
 const staticWorker = await readFile(join(root, 'public', 'coi-serviceworker.js'), 'utf8');
 const iconFiles = (await readdir(join(root, 'public', 'icons', 'material'))).filter((file) => file.endsWith('.svg'));
 
+assert.match(generated, /SKIP_WAITING/, 'application updates must wait for an explicit message');
+assert.doesNotMatch(generated, /clientsClaim\(/, 'updates must not automatically replace controlled clients');
 assert.match(generated, /orcaxr-slicer/, 'PWA must keep a separate slicer cache');
 assert.match(generated, /orcaxr-settings-schema/, 'PWA must keep a bounded runtime settings-schema cache');
 assert.doesNotMatch(

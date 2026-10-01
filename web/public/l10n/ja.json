@@ -55,6 +55,7 @@
   "app.externalSlicer.offline": "オフライン",
   "app.main.del": "Del",
   "dialog.recreateModelColors.cancel": "取消し",
+  "persistence.cancel": "取消し",
   "startup.feature.camera": "カメラ",
   "ui.generatedSettingsPanel.detailLevel": "細部レベル",
   "ui.printSubmissionDialog.sendToPrinter": "プリンタへ送信",

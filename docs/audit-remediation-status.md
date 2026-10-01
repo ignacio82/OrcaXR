@@ -12,11 +12,11 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 | A: operational revocation | Pending | Rotation or invalidation of previously exposed credentials and logged tokens requires operator evidence. Source cleanup does not revoke them. History rewriting is a separate coordinated action. |
 | B: printer session and command intent | Implemented; hardware evidence pending | One controller owns selection, connection epochs, subscriptions, queries, and commands. Immutable click/press intents bind exact job history and metadata; fresh queries reject replacement, reconnect, partial/failing responses, and duplicate commands. DOM/XR holds carry single-use confirmations. Emergency stop and distinct firmware restart remain reachable through authenticated HTTP without status/history success. |
 | C: submission lifecycle | Implemented; hardware evidence pending | Shared DOM/XR workflow owns session/artifact/mapping/option guards, cancellation, preparation, random upload names, exact overwrite and response checks. Stored-file starts also bind confirmation to fresh metadata and readiness. Full web quality passes; supervised firmware evidence remains pending. |
-| D: process and artifact lifecycle | Implemented | Native exit/group termination, repeatable downloads, leases, TTL/release, capacity refusal, artifact validation and bounded browser cancellation pass server, container and full web gates. Fresh native image assembly remains a deployment qualification item. |
-| E: deployment and artifacts | Implemented; qualification in progress | Static/API separation, actual-peer proxy trust, userspace Tailscale configuration, strict adjacent-manifest checks and atomic version publication pass focused tests. Real Express HTTP/HTTPS browser tests pass. Full web quality passes. Freshly built native-container qualification remains in progress. |
-| F: discovery and startup | Implemented; automated qualification passes | Discovery, atomic preferences, session-only fallback and actual external UI slicing pass full web and deployment tests. Core/optional startup health, owned initialization, shared DOM/XR recovery and dirty reload refusal pass the full web gate, including five production-browser fault scenarios. |
-| G: controllers and snapshots | In progress | Printer/session/submission ownership and feature initialization lifetimes are implemented. Opaque copy-on-write asset rollback and import history pass focused regressions and the full web gate. Persistence ownership and remaining surface cleanup are still pending. |
-| H: persistence | Pending | Worker serialization/checkpoints, transactional recovery storage, autosave, recovery flows, navigation/update guards. |
+| D: process and artifact lifecycle | Implemented | Native exit/group termination, repeatable downloads, leases, TTL/release, capacity refusal, artifact validation and bounded browser cancellation pass server, container and full web gates. Fresh native image assembly, non-root process reaping and a real native HTTP slice pass; final changes still require image refresh. |
+| E: deployment and artifacts | Implemented; qualification in progress | Static/API separation, actual-peer proxy trust, userspace Tailscale configuration, strict adjacent-manifest checks and atomic version publication pass focused tests. Real Express HTTP/HTTPS browser tests pass. Full web quality passes. Refreshed native-container HTTP/HTTPS, process reaping and real CLI slicing pass; final changes still require image refresh. |
+| F: discovery and startup | Implemented; automated qualification passes | Discovery, atomic preferences, session-only fallback and actual external UI slicing pass full web and deployment tests. Core/optional startup health, owned initialization, shared DOM/XR recovery and guarded dirty reload pass the full web gate, including five production-browser fault scenarios. |
+| G: controllers and snapshots | In progress | Printer/session/submission ownership and feature initialization lifetimes are implemented. Opaque copy-on-write asset rollback and import history pass focused regressions and the full web gate. Persistence ownership is integrated; remaining surface cleanup is pending. |
+| H: persistence | Implemented; automated qualification passes | Live worker serialization, guarded manual checkpoints, atomic per-session IndexedDB retention, DOM/XR recovery/import decisions, Save/Discard/Cancel, beforeunload and coordinated PWA updates. Focused lifecycle/storage/browser tests and the complete web quality gate pass. Broader device qualification remains pending. |
 | I: large-project performance | Pending | Worker indexing before rich allocations, oversized-layer checkpoints, typed import traversal, measured baselines. |
 | Release qualification | Pending | Full supported-deployment checks, native container build, report regeneration, documentation reduction, supervised U1/CC/Galaxy XR procedures, independent review/security signoff. |
 
@@ -314,3 +314,40 @@ localization/XR suites, production startup/browser/offline workflows,
 files. Unchanged ceilings: main 2,313,191 bytes; total JavaScript 10,591,579 bytes.
 This does not complete the persistence controller or remaining surface ownership
 work.
+
+## Persistence verification (2026-10-01)
+
+- Persistence qualification adds guarded snapshot/checkpoint, queue/disposal,
+  real IndexedDB transaction and DOM/XR decision regressions. The production
+  browser loses a tab, restores through the import worker, preserves dirty state,
+  exercises all three navigation choices and validates per-session discard plus
+  explicit manual export when worker creation fails. Initial profile defaults
+  establish a clean baseline only before any authored revision exists.
+- A production browser rerun exposed a pending camera request proceeding after
+  the panel was hidden. The focused regression now proves cancellation on
+  hide/disposal and prevents overlapping slow captures; the live adapter checks
+  visibility and selected camera again after awaiting a connection/frame.
+- The native source image completed all 604 build steps. Its non-root,
+  init-managed process lifecycle suite passes 9/9, including required descendant
+  reaping. After refreshing the runtime/web layers, real-container HTTP and
+  proxy HTTPS browser checks both pass, including full precache, insecure-LAN
+  behavior, simulator access, retained downloads and API limits.
+- The refreshed container also slices a generated 20 mm cube through its actual
+  pinned native CLI and production HTTP service with bundled Centauri Carbon
+  0.4 mm / 0.20 mm Standard / Elegoo PLA profiles. Two downloads return identical
+  183,923-byte G-code with extruding moves and SHA-256
+  `72958e0f6f29f68d9678eb1ba8a3bdc1dbbd521697f2a476bcc901fe1442ab79`;
+  explicit release then returns 404. The disposable container is non-root,
+  read-only and init-managed. No deployed service or printer was changed.
+  Subsequent implementation commits require another runtime/web image refresh;
+  this does not claim hardware printing or a final-release image.
+
+Full web quality passes: 247 unit test files, integration/project/settings/
+localization/XR suites, production recovery and real IndexedDB fault scenarios,
+five startup recovery scenarios, offline workflows, 28 accessibility rules,
+155 pseudo-localized controls and thirteen slicing test files. Unchanged bundle
+ceilings: main 2,324,209 bytes; total JavaScript 10,474,956 bytes. Import and
+serialization share one emitted archive-worker module with independently owned
+instances, avoiding duplicate codec bundles. Current-source Gitleaks passes with
+the pinned image and unchanged rules. Server tests pass 56/56 against the default
+artifact resolver. Generated parity reporting still lists five human gates.

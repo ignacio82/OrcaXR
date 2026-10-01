@@ -222,7 +222,16 @@ export const ACTION_IDS_BY_PARITY_TASK = {
   'P9.7': ['printer_show_status'],
   'P10.3': ['help_shortcuts'],
   'P10.4': ['help_language'],
-  'P11.1': ['file_new_project', 'file_open_project', 'file_open_recent', 'file_save_project', 'file_save_project_as'],
+  'P11.1': [
+    'file_new_project',
+    'file_open_project',
+    'file_open_recent',
+    'file_save_project',
+    'file_save_project_as',
+    'file_recover_project',
+    'file_download_recovery',
+    'file_discard_recovery',
+  ],
   'P11.2': [
     'view_camera_default',
     'view_camera_top',

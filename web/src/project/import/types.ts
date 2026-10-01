@@ -2,7 +2,7 @@ import type { AssetPayload } from '../assets';
 import type { AssetId } from '../domain/ids';
 import type { JsonValue, ProjectState } from '../domain/model';
 import type { CommandHistorySnapshot } from '../history/commandBus';
-import type { CancellationToken, ProjectArchiveSnapshot } from '../ports';
+import type { CancellationToken, ProjectArchiveSnapshot, ProjectRecoveryProof } from '../ports';
 import type { ProjectSnapshot } from '../store';
 
 export type ProjectImportMode = 'merge' | 'replace';
@@ -20,6 +20,7 @@ export interface ProjectImportRequest {
   source: ProjectImportSource;
   mode?: ProjectImportMode;
   cancellation?: CancellationToken;
+  recoveryProof?: ProjectRecoveryProof;
 }
 
 /**
@@ -33,6 +34,7 @@ export interface ProjectImportParseRequest {
   mode: ProjectImportMode;
   base: ProjectArchiveSnapshot;
   cancellation?: CancellationToken;
+  recoveryProof?: ProjectRecoveryProof;
 }
 
 /**
