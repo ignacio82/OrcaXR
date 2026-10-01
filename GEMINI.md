@@ -1230,6 +1230,24 @@ floors, not ceilings.
   and command transaction against other clients. Simulator/browser evidence
   does not establish installed-firmware or supervised hardware qualification.
 
+- **A send confirmation owns one artifact and printer session through completion.**
+  `PrintWorkflowController` is shared by DOM and XR and owns cancellation,
+  confirmation, upload, verification, explicit preparation, and start. Unknown
+  or incomplete readiness blocks even upload-only; start requires Klipper ready,
+  a recognized idle state, and an inactive virtual SD card. Session, artifact,
+  used-tool mappings, and selected capabilities are revalidated after upload
+  and before each preparation/start. Changed prerequisites retain the file and
+  require another confirmation. Ambiguous POSTs are never retried; a bounded
+  query reconciles current state without claiming the request failed to execute.
+  Non-overwrite filenames use 128 random bits from LAN-compatible
+  `crypto.getRandomValues`; listing failures block. Explicit overwrite names
+  the exact target and its captured size/modification time, rechecks it before
+  upload, and cannot replace an active file. Uploads use the published artifact's
+  SHA-256 checksum and verify response root/path/size and upload-only flags.
+  Both surfaces default to upload-only with overwrite and preparation off.
+  Stored-file starts share the workflow lock and require their own session,
+  metadata, and idle-state confirmation; they do not upload again.
+
 - **A per-request deadline is a property of the payload, not of the transport.**
   Sending the narwhal failed with `invalid_state` *before a byte left the
   browser*. `fetchWith` validated the caller's `timeoutMs` with
@@ -1264,26 +1282,24 @@ floors, not ceilings.
   (`connected` or `reconnecting`, not disposed) and, afterwards, only that the
   session `generation` is unchanged — generation moves when the operator
   deliberately disconnects or switches printers, which is the only thing that
-  should invalidate a finished transfer. Separately, `main.ts` re-establishes the
-  connection *after* the send confirmation dialog: that dialog waits on a person,
-  and the connection does not wait with it.
+  should invalidate a finished transfer. The send workflow captures its session
+  before confirmation and aborts when that session changes; it must never
+  reconnect and transfer an old confirmation to the replacement session.
 
 - **A transfer cannot be capped by duration.** Sending the narwhal to a printer
   failed with a timeout: `MoonrakerTransport` applied its flat 10 s
   `requestTimeoutMs` to every request including the upload, and 95 MB of G-code
   does not cross any real network in ten seconds. That timeout suits a status
   query — which either answers promptly or is broken — but a transfer's honest
-  duration is a function of its bytes. Two complementary fixes, because the two
-  directions differ: an **upload** sends its body before any reply, so
-  `PrintJobSubmission` derives an explicit `timeoutMs` from the artifact size and
-  a declared floor (`MINIMUM_UPLOAD_BYTES_PER_SECOND`, 256 kB/s, plus a fixed
-  setup allowance); a **download** cannot be sized in advance, so `fetchWith`
+  duration is a function of its bytes. An **upload** sends its body before any
+  reply, so `PrintJobSubmission` uses no deadline, reports elapsed time, and
+  exposes operator cancellation. The former 256 kB/s assumed floor rejected a
+  healthy 237 kB/s link and was removed. A **download** cannot be sized in advance, so `fetchWith`
   keeps the short deadline for getting a reply and then re-arms from the
   response's `content-length` once the headers say how much is coming. An
   unknown length deliberately keeps the short deadline rather than guessing
   generously, since that would turn a hung connection into a long wait. The
-  timeout message names the size and the rate the link would have had to
-  sustain, and says nothing was started — the operator is the only one who can
+  operator is the only one who can
   tell "my printer is on slow wifi" from "it is stuck". Note this is the same bug
   shape as the slice attempt cap: whenever a limit guards work whose duration
   scales with the input, it has to scale too, or measure silence instead.

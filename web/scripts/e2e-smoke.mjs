@@ -1672,6 +1672,26 @@ async function sliceAndSendActivePlate(page, printer) {
   assert.equal(printer.started, null, 'uploading alone never starts a print');
   assert.equal(checksumOf(printer.stored.get(storedName)), artifact.checksum);
   assert.equal(printer.stored.get(storedName).length, artifact.byteLength);
+  assert.match(storedName, /_[a-f0-9]{32}\.gcode$/);
+
+  // Change a loaded spool while the upload is finishing. The production
+  // controller must retain the file and refuse both preparation and start.
+  const beforeChangedMapping = printer.commands.length;
+  printer.afterNextUpload(() =>
+    printer.setSlots(artifact.colours.slice(0, 2).map((color) => ({ color, material: 'PETG' }))),
+  );
+  await page.click('#btn-printer-send');
+  await page.waitForSelector('[data-print-submission-dialog="true"]', { timeout: 60_000 });
+  assert.equal(await page.$eval('[data-print-submission-overwrite]', (box) => box.checked), false);
+  await page.click('[data-print-submission-option-input="bed-leveling"]');
+  await page.click('[data-print-submission-choice="upload-and-print"]');
+  await page.waitForFunction(() =>
+    /mapping changed after confirmation/.test(globalThis.document.getElementById('status-text')?.textContent),
+  );
+  assert.equal(printer.stored.size, 2, 'the interrupted workflow retains its uploaded file');
+  assert.deepEqual(printer.commands.slice(beforeChangedMapping), [], 'mapping drift must block preparation and start');
+  assert.equal(printer.started, null);
+  printer.setSlots(artifact.colours.slice(0, 2).map((color, index) => ({ color, material: artifact.types[index] })));
 
   // The same plate sent again must not replace the stored file, and starting
   // is what the operator explicitly asked for this time.
@@ -1713,7 +1733,7 @@ async function sliceAndSendActivePlate(page, printer) {
     beforeStart.includes('gcode:BED_MESH_CALIBRATE'),
     `the plate was never levelled before the print (${JSON.stringify(printer.commands)})`,
   );
-  assert.equal(printer.stored.size, 2, 'the second send picked an unused name');
+  assert.equal(printer.stored.size, 3, 'each confirmed send picked an unused name');
   assert.notEqual(printer.started, storedName);
   assert.equal(checksumOf(printer.stored.get(printer.started)), artifact.checksum);
   assert.match(
@@ -2493,6 +2513,21 @@ async function browsePrinterStorage(page, printer) {
   // Reprint the stored file: nothing is uploaded, and the live job picks it up.
   const storedBefore = printer.stored.size;
   await page.$eval('[data-printer-storage-action="print"]', (button) => button.click());
+  await page.waitForSelector('[data-print-submission-dialog="true"]');
+  printer.putFile('projects/tower.gcode', Buffer.from('G1 X1 Y1 E2\n'), {}, 1_800_000_001);
+  const beforeStaleReprint = printer.commands.length;
+  await page.click('[data-print-submission-choice="upload-and-print"]');
+  await page.waitForFunction(() =>
+    /stored file changed/.test(
+      globalThis.document.querySelector('[data-printer-storage-message]')?.textContent ??
+        globalThis.document.getElementById('status-text')?.textContent ??
+        '',
+    ),
+  );
+  assert.deepEqual(printer.commands.slice(beforeStaleReprint), [], 'replacing a confirmed stored file cannot start it');
+  await page.$eval('[data-printer-storage-action="print"]', (button) => button.click());
+  await page.waitForSelector('[data-print-submission-dialog="true"]');
+  await page.click('[data-print-submission-choice="upload-and-print"]');
   await page.waitForFunction(
     () => /^Printing projects\/tower\.gcode/.test(globalThis.document.getElementById('status-text')?.textContent ?? ''),
     { timeout: 30_000 },

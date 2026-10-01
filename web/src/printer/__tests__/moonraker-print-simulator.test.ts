@@ -10,6 +10,7 @@ import {
   PRINT_JOB_QUERY_PATH,
   executePrintJobCommand,
   submitPrintJob,
+  preparePrintUpload,
   summarizeGcodeToolUsage,
   validateToolMapping,
   queryMoonrakerFilamentSlots,
@@ -156,7 +157,14 @@ class Simulator {
       this.stored.set(parsed.filename, parsed.content);
       // Moonraker answers uploads with an unwrapped object, unlike every other
       // endpoint; the transport must accept it without loosening the rest.
-      return json({ item: { path: parsed.filename, root: 'gcodes' }, print_started: false }, true);
+      return json(
+        {
+          item: { path: parsed.filename, root: 'gcodes', size: parsed.content.length },
+          print_started: false,
+          print_queued: false,
+        },
+        true,
+      );
     }
     if (url.pathname === '/server/files/metadata') {
       const filename = url.searchParams.get('filename') ?? '';
@@ -166,7 +174,7 @@ class Simulator {
         response.end(JSON.stringify({ error: { message: 'not found' } }));
         return;
       }
-      return json({ filename, size: content.length + (this.options.reportedSizeDelta ?? 0) });
+      return json({ filename, size: content.length + (this.options.reportedSizeDelta ?? 0), modified: 123 });
     }
     if (url.pathname === '/printer/print/start') {
       this.started = url.searchParams.get('filename');
@@ -265,16 +273,16 @@ await test('uploads a multicolor artifact byte-for-byte and starts it once confi
       onPhase: (phase) => phases.push(phase),
     });
 
-    assert.equal(result.path, 'PeggyPalette_Plate_1.gcode');
+    assert.match(result.path, /^PeggyPalette_Plate_1_[a-f0-9]{32}\.gcode$/);
     assert.equal(result.startedPrint, true);
-    assert.equal(simulator.started, 'PeggyPalette_Plate_1.gcode');
+    assert.equal(simulator.started, result.path);
     assert.equal(
-      simulator.stored.get('PeggyPalette_Plate_1.gcode')?.toString('utf8'),
+      simulator.stored.get(result.path)?.toString('utf8'),
       MULTICOLOR_GCODE,
       'the printer stored exactly the submitted artifact',
     );
     assert.equal(result.verifiedBytes, Buffer.byteLength(MULTICOLOR_GCODE));
-    assert.deepEqual(phases, ['checking', 'uploading', 'verifying', 'starting', 'done']);
+    assert.deepEqual(phases, ['checking', 'uploading', 'verifying', 'starting', 'completed']);
     assert.ok(
       simulator.apiKeys.every((key) => key === 'simulator-key'),
       'every simulated request carried the session credential',
@@ -303,13 +311,14 @@ await test('reports a tool the printer cannot supply before anything is sent', a
 await test('picks an unused name instead of replacing a stored file', async () => {
   await withPrinter({ files: ['plate.gcode'] }, async ({ transport, simulator }) => {
     const renamed = await submitPrintJob(transport, { filename: 'plate.gcode', gcode: MULTICOLOR_GCODE });
-    assert.equal(renamed.path, 'plate_2.gcode');
+    assert.match(renamed.path, /^plate_[a-f0-9]{32}\.gcode$/);
     assert.equal(simulator.stored.get('plate.gcode')?.length, 1, 'the existing file was left untouched');
 
     const replaced = await submitPrintJob(transport, {
       filename: 'plate.gcode',
       gcode: MULTICOLOR_GCODE,
       overwrite: true,
+      uploadPlan: await preparePrintUpload(transport, 'plate.gcode'),
     });
     assert.equal(replaced.path, 'plate.gcode');
     assert.equal(simulator.stored.get('plate.gcode')?.toString('utf8'), MULTICOLOR_GCODE);
@@ -343,11 +352,15 @@ await test('reads the live job and drives its lifecycle through the real transpo
     const read = async () => status.applyQuery(await transport.request<unknown>(PRINT_JOB_QUERY_PATH));
 
     assert.equal((await read()).state, 'standby');
-    await submitPrintJob(transport, { filename: 'plate.gcode', gcode: MULTICOLOR_GCODE, startPrint: true });
+    const sent = await submitPrintJob(transport, {
+      filename: 'plate.gcode',
+      gcode: MULTICOLOR_GCODE,
+      startPrint: true,
+    });
 
     const printing = await read();
     assert.equal(printing.state, 'printing');
-    assert.equal(printing.filename, 'plate.gcode');
+    assert.equal(printing.filename, sent.path);
     assert.equal(printing.currentLayer, 11);
     assert.equal(printing.totalLayers, 98);
     assert.deepEqual(printing.extruder, { actualC: 219.6, targetC: 220 });
@@ -373,7 +386,7 @@ await test('reads the live job and drives its lifecycle through the real transpo
     await executePrintJobCommand(transport, {
       command: 'cancel',
       observed: resumed,
-      expectedFilename: 'plate.gcode',
+      expectedFilename: sent.path,
     });
     assert.equal((await read()).state, 'cancelled');
     assert.deepEqual(simulator.lifecycle, ['pause', 'resume', 'cancel']);

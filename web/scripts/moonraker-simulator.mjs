@@ -82,6 +82,7 @@ export async function startMoonrakerSimulator(options = {}) {
   let notificationId = 0;
   let jobSequence = 0;
   let currentJob = null;
+  let afterUpload;
   for (const name of options.files ?? []) stored.set(name, Buffer.alloc(1));
   /**
    * Scan metadata, keyed by path, exactly as Moonraker's file manager holds it:
@@ -247,9 +248,20 @@ export async function startMoonrakerSimulator(options = {}) {
     if (url.pathname === '/server/files/upload') {
       const parsed = parseSingleFileMultipart(await readBody(request), request.headers['content-type'] ?? '');
       stored.set(parsed.filename, parsed.content);
+      modified.set(parsed.filename, Date.now() / 1000);
+      const callback = afterUpload;
+      afterUpload = undefined;
+      await callback?.();
       // Moonraker answers uploads with an unwrapped object, unlike every other
       // endpoint; the transport must accept it without loosening the rest.
-      return json({ item: { path: parsed.filename, root: 'gcodes' }, print_started: false }, true);
+      return json(
+        {
+          item: { path: parsed.filename, root: 'gcodes', size: parsed.content.length },
+          print_started: false,
+          print_queued: false,
+        },
+        true,
+      );
     }
     if (url.pathname === '/server/files/metadata') {
       if (state.failJobIdentity) {
@@ -500,6 +512,9 @@ export async function startMoonrakerSimulator(options = {}) {
     stored,
     requests,
     apiKeys,
+    afterNextUpload(callback) {
+      afterUpload = callback;
+    },
     get started() {
       return started;
     },

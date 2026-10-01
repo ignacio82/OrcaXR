@@ -26,12 +26,21 @@ export interface PrinterSelection {
 
 export interface PrinterSessionTransport extends PrintJobCommandTransport {
   readonly state: MoonrakerConnectionState;
-  connect(): Promise<MoonrakerHandshake>;
+  connect(options?: { readonly signal?: AbortSignal }): Promise<MoonrakerHandshake>;
   dispose(): void;
   setObjectSubscription(subscription: MoonrakerObjectSubscription | null): void;
   subscribeState(listener: (state: MoonrakerConnectionState) => void): () => void;
   subscribeNotifications(listener: (notification: MoonrakerNotification) => void): () => void;
   requestRecoveryCommand(command: 'emergency-stop' | 'firmware-restart', signal?: AbortSignal): Promise<unknown>;
+}
+
+export interface PrinterSessionLease<T extends PrinterSessionTransport = MoonrakerTransport> {
+  readonly printerId: string;
+  readonly label: string;
+  readonly generation: number;
+  readonly transport: T;
+  readonly signal: AbortSignal;
+  assertCurrent(): void;
 }
 
 export interface PrintJobIdentity {
@@ -171,16 +180,41 @@ export class PrinterSessionController<T extends PrinterSessionTransport = Moonra
     return transport;
   }
 
-  async connect(): Promise<{ transport: T; handshake: MoonrakerHandshake }> {
+  async connect(signal?: AbortSignal): Promise<{ transport: T; handshake: MoonrakerHandshake }> {
     const transport = this.transportValue;
     if (!transport) throw new Error('Select a printer first.');
-    const handshake = await transport.connect();
+    const handshake = await transport.connect({ signal });
     if (this.transportValue !== transport) throw new Error('The selected printer changed during connection.');
     // Also repairs a failed status/identity read when HTTP and the socket stayed
     // connected: pressing Reconnect must actually refresh those prerequisites.
     if (!this.statusVerified) await this.refresh().catch(() => {});
     if (this.transportValue !== transport) throw new Error('The selected printer changed during connection.');
     return { transport, handshake };
+  }
+
+  captureLease(): PrinterSessionLease<T> {
+    const selected = this.selected;
+    const transport = this.transportValue;
+    const generation = this.generationValue;
+    if (!selected || !transport || this.stateValue?.status !== 'connected')
+      throw new Error('Connect to the selected printer first.');
+    return Object.freeze({
+      printerId: selected.id,
+      label: selected.name ?? selected.endpoint,
+      generation,
+      transport,
+      signal: this.epoch.signal,
+      assertCurrent: () => {
+        if (
+          this.disposed ||
+          this.transportValue !== transport ||
+          this.generationValue !== generation ||
+          this.stateValue?.status !== 'connected'
+        ) {
+          throw new Error('The selected printer or connection changed. Confirm a new send.');
+        }
+      },
+    });
   }
 
   clear(): void {

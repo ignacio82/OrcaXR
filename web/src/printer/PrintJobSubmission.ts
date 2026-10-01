@@ -1,5 +1,10 @@
 import { MoonrakerTransportError } from './MoonrakerTypes';
 import type { GcodeToolUsage } from './PrintToolMapping';
+import {
+  executePrintPreparationStep,
+  PrintPreparationUncertainError,
+  type PrintPreparationStep,
+} from './PrintStartOptions';
 
 /**
  * One artifact the shell has been asked to send, with the facts a safety
@@ -11,6 +16,14 @@ export interface PrintJobIntent {
   readonly gcode: string;
   readonly plateName: string;
   readonly usage: GcodeToolUsage;
+  readonly artifact: {
+    readonly outputHash: string;
+    readonly sourceRevision: number;
+    readonly sourceHash: string;
+    readonly sourceAssetHash: string;
+    readonly plateId: string;
+  };
+  isCurrent(): boolean;
 }
 
 /** Minimal transport surface a submission needs; the real transport satisfies it. */
@@ -40,23 +53,52 @@ export interface PrintReadinessBlocker {
 }
 
 export interface PrintReadiness {
+  /** Complete, recognized state; required even when only storing a file. */
+  readonly known: boolean;
   readonly ready: boolean;
   readonly blockers: readonly PrintReadinessBlocker[];
   /** Exactly what the printer reported; never a guess. */
   readonly klippyState?: string;
   readonly printState?: string;
   readonly currentFilename?: string;
+  readonly virtualSdActive?: boolean;
 }
 
-export type PrintSubmissionPhase = 'checking' | 'uploading' | 'verifying' | 'starting' | 'done';
+export type PrintSubmissionPhase =
+  'checking' | 'confirming' | 'uploading' | 'verifying' | 'preparing' | 'starting' | 'completed';
+
+export interface PrintFileIdentity {
+  readonly filename: string;
+  readonly size: number;
+  readonly modified: number;
+}
+
+export interface PrintUploadPlan {
+  readonly requested: string;
+  readonly unique: string;
+  readonly overwrite: {
+    readonly allowed: boolean;
+    readonly existing: PrintFileIdentity | null;
+    readonly reason?: string;
+  };
+}
+
+export interface PrintSubmissionValidation {
+  readonly phase: PrintSubmissionPhase;
+  readonly signal?: AbortSignal;
+  readonly readiness: PrintReadiness;
+  readonly uploadedPath?: string;
+}
 
 export interface PrintSubmissionRequest {
-  /**
-   * Work to complete on the printer between a verified upload and the start of
-   * the print — levelling the plate, arming a timelapse. It is awaited, and a
-   * failure stops the start rather than printing anyway.
-   */
-  beforeStart?(): Promise<void>;
+  /** Explicit operations chosen in the confirmation, checked again before each POST. */
+  readonly preparation?: readonly PrintPreparationStep[];
+  /** Captured before the confirmation; an overwrite may never manufacture one later. */
+  readonly uploadPlan?: PrintUploadPlan;
+  /** The live workflow verifies its session, artifact, mapping, and capabilities here. */
+  readonly validate?: (context: PrintSubmissionValidation) => Promise<void>;
+  readonly assertCurrent?: () => void;
+  readonly checksum?: string;
   /** Suggested name; it is sanitized and, unless overwriting, made unique. */
   readonly filename: string;
   readonly gcode: string;
@@ -93,7 +135,17 @@ export class PrintSubmissionError extends Error {
   constructor(
     message: string,
     readonly code:
-      'not-ready' | 'empty-artifact' | 'upload-failed' | 'verification-failed' | 'start-failed' | 'cancelled',
+      | 'not-ready'
+      | 'empty-artifact'
+      | 'upload-failed'
+      | 'verification-failed'
+      | 'start-failed'
+      | 'cancelled'
+      | 'listing-failed'
+      | 'target-changed'
+      | 'preparation-uncertain'
+      | 'start-uncertain'
+      | 'stale-context',
     readonly blockers: readonly PrintReadinessBlocker[] = [],
   ) {
     super(message);
@@ -132,6 +184,7 @@ export async function queryPrintReadiness(
     });
   } catch (error) {
     return Object.freeze({
+      known: false,
       ready: false,
       blockers: Object.freeze([
         {
@@ -150,29 +203,43 @@ export async function queryPrintReadiness(
   const klippyState = typeof webhooks?.state === 'string' ? webhooks.state : undefined;
   const printState = typeof printStats?.state === 'string' ? printStats.state : undefined;
   const currentFilename = typeof printStats?.filename === 'string' ? printStats.filename : undefined;
+  const virtualSd = status && isRecord(status.virtual_sdcard) ? status.virtual_sdcard : undefined;
+  const virtualSdActive = typeof virtualSd?.is_active === 'boolean' ? virtualSd.is_active : undefined;
+  const recognizedKlippy = klippyState !== undefined && ['ready', 'startup', 'shutdown', 'error'].includes(klippyState);
+  const recognizedPrint =
+    printState !== undefined &&
+    ['standby', 'printing', 'paused', 'complete', 'cancelled', 'error'].includes(printState);
+  const known = recognizedKlippy && recognizedPrint && virtualSdActive !== undefined;
 
   const blockers: PrintReadinessBlocker[] = [];
-  if (!klippyState) {
-    blockers.push({ code: 'state-unavailable', message: 'The printer did not report a Klippy state.' });
+  if (!recognizedKlippy) {
+    blockers.push({ code: 'state-unavailable', message: 'The printer did not report a recognized Klipper state.' });
   } else if (klippyState !== 'ready') {
     blockers.push({
       code: 'klippy-not-ready',
       message: `Klipper reports "${klippyState}"; it must be ready before a job is sent.`,
     });
   }
-  if (printState === 'printing' || printState === 'paused') {
+  if (!recognizedPrint || virtualSdActive === undefined) {
+    blockers.push({
+      code: 'state-unavailable',
+      message: 'The printer must report a recognized print state and whether its virtual SD card is active.',
+    });
+  } else if (!['standby', 'complete', 'cancelled'].includes(printState!) || virtualSdActive) {
     blockers.push({
       code: 'printer-busy',
-      message: `The printer is ${printState}${currentFilename ? ` "${currentFilename}"` : ''}.`,
+      message: `The printer reports ${printState}${currentFilename ? ` "${currentFilename}"` : ''}${virtualSdActive ? ' with an active virtual SD card' : ''}.`,
     });
   }
 
   return Object.freeze({
+    known,
     ready: blockers.length === 0,
     blockers: Object.freeze(blockers),
     ...(klippyState ? { klippyState } : {}),
     ...(printState ? { printState } : {}),
     ...(currentFilename ? { currentFilename } : {}),
+    ...(virtualSdActive === undefined ? {} : { virtualSdActive }),
   });
 }
 
@@ -192,23 +259,35 @@ export async function submitPrintJob(
   if (bytes.byteLength === 0) throw new PrintSubmissionError('The G-code artifact is empty.', 'empty-artifact');
   throwIfCancelled(request.signal);
 
+  const validate = async (phase: PrintSubmissionPhase, uploadedPath?: string): Promise<void> => {
+    throwIfCancelled(request.signal);
+    const readiness = await queryPrintReadiness(transport, request.signal);
+    if (!readiness.known || (request.startPrint && !readiness.ready)) {
+      throw new PrintSubmissionError(
+        `${uploadedPath ? `${uploadedPath} is stored, but printing was not started. ` : ''}The printer cannot accept this operation: ${readiness.blockers.map((blocker) => blocker.message).join(' ')}`,
+        'not-ready',
+        readiness.blockers,
+      );
+    }
+    await request.validate?.({ phase, readiness, signal: request.signal, ...(uploadedPath ? { uploadedPath } : {}) });
+    throwIfCancelled(request.signal);
+  };
   request.onPhase?.('checking');
-  // Readiness gates starting a print, not storing a file: Moonraker's file
-  // manager accepts uploads while the machine is busy or Klipper is down, and
-  // refusing that would block the ordinary "queue the next plate" workflow.
-  const readiness = await queryPrintReadiness(transport, request.signal);
-  if (request.startPrint && !readiness.ready) {
+  await validate('checking');
+  const plan = request.uploadPlan ?? (await preparePrintUpload(transport, request.filename, request.signal));
+  const requested = sanitizeGcodeFilename(request.filename);
+  if (plan.requested !== requested)
+    throw new PrintSubmissionError('The confirmed upload target changed.', 'target-changed');
+  if (request.overwrite && !request.uploadPlan) {
     throw new PrintSubmissionError(
-      `The printer cannot start a job: ${readiness.blockers.map((blocker) => blocker.message).join(' ')}`,
-      'not-ready',
-      readiness.blockers,
+      'Review the exact file and its metadata before confirming replacement.',
+      'target-changed',
     );
   }
-  throwIfCancelled(request.signal);
-
-  const requested = sanitizeGcodeFilename(request.filename);
-  const existing = await listGcodeFilenames(transport, request.signal);
-  const filename = request.overwrite ? requested : uniqueFilename(requested, existing);
+  const filename = request.overwrite ? plan.requested : plan.unique;
+  await validate('uploading');
+  await validatePrintUploadTarget(transport, plan, request.overwrite === true, request.signal);
+  request.assertCurrent?.();
   throwIfCancelled(request.signal);
 
   request.onPhase?.('uploading');
@@ -216,6 +295,7 @@ export async function submitPrintJob(
   form.set('root', GCODE_ROOT);
   form.set('path', '');
   form.set('print', 'false');
+  if (request.checksum) form.set('checksum', request.checksum);
   form.set('file', new Blob([bytes], { type: 'text/plain' }), filename);
   let uploaded: unknown;
   // No deadline: see `MoonrakerRequestOptions.timeoutMs`. An upload's progress
@@ -224,6 +304,8 @@ export async function submitPrintJob(
   // print over a 237 kB/s link did — or to let it run and let the operator
   // stop it. The caller is required to offer that stop; `main.ts` turns the
   // send button into "Cancel send" for exactly this window.
+  request.assertCurrent?.();
+  throwIfCancelled(request.signal);
   const stopTicking = startElapsedTicks(request, bytes.byteLength);
   try {
     uploaded = await transport.upload<unknown>('/server/files/upload', form, {
@@ -242,10 +324,23 @@ export async function submitPrintJob(
     stopTicking();
   }
   const item = isRecord(uploaded) && isRecord(uploaded.item) ? uploaded.item : undefined;
-  const path = typeof item?.path === 'string' && item.path.length > 0 ? item.path : filename;
-  throwIfCancelled(request.signal);
-
+  if (
+    !isRecord(uploaded) ||
+    !item ||
+    item.root !== GCODE_ROOT ||
+    item.path !== filename ||
+    item.size !== bytes.byteLength ||
+    uploaded.print_started !== false ||
+    uploaded.print_queued !== false
+  ) {
+    throw new PrintSubmissionError(
+      'The upload response did not confirm the requested root, path, byte count, and upload-only mode. Check the printer before trying again.',
+      'verification-failed',
+    );
+  }
+  const path = filename;
   request.onPhase?.('verifying');
+  throwIfCancelled(request.signal);
   const verifiedBytes = await verifyUploadedSize(transport, path, request.signal);
   if (verifiedBytes !== bytes.byteLength) {
     throw new PrintSubmissionError(
@@ -254,26 +349,42 @@ export async function submitPrintJob(
     );
   }
 
+  await validate('verifying', path);
   let startedPrint = false;
   if (request.startPrint) {
-    // Anything the operator asked for around the print happens here: after the
-    // file is on the machine and verified, before it starts. Earlier would move
-    // the toolhead for a send that might still fail; later would be too late.
-    if (request.beforeStart) {
-      try {
-        await request.beforeStart();
-      } catch (error) {
-        if (isCancellation(error, request.signal))
-          throw new PrintSubmissionError('Print start cancelled.', 'cancelled');
+    const retained = await readPrintFileIdentity(transport, path, request.signal);
+    const validateBeforeMutation = async (phase: PrintSubmissionPhase) => {
+      await validate(phase, path);
+      const current = await readPrintFileIdentity(transport, path, request.signal);
+      if (!samePrintFile(retained, current))
+        throw new PrintSubmissionError(`${path} changed after upload. Nothing else was sent.`, 'target-changed');
+      const fresh = await queryPrintReadiness(transport, request.signal);
+      if (!fresh.ready)
         throw new PrintSubmissionError(
-          `${path} uploaded, but the printer did not complete what was asked before starting ` +
-            `(${error instanceof Error ? error.message : String(error)}). ` +
-            'The file is on the printer and can be started from its file list.',
-          'start-failed',
+          `${path} is stored, but printer readiness changed. Printing was not started.`,
+          'not-ready',
+          fresh.blockers,
         );
-      }
+      request.assertCurrent?.();
+      throwIfCancelled(request.signal);
+    };
+    for (const step of request.preparation ?? []) {
+      request.onPhase?.('preparing');
+      await executePrintPreparationStep(transport, step, {
+        signal: request.signal,
+        validate: () => validateBeforeMutation('preparing'),
+      }).catch((error: unknown) => {
+        if (!(error instanceof PrintPreparationUncertainError)) throw error;
+        throw new PrintSubmissionError(
+          `${path} is stored. The ${step.label} request has an uncertain outcome; check fresh printer status before trying again. Nothing was retried.`,
+          'preparation-uncertain',
+        );
+      });
     }
+    await validateBeforeMutation('starting');
     request.onPhase?.('starting');
+    request.assertCurrent?.();
+    throwIfCancelled(request.signal);
     try {
       await transport.request<unknown>(`/printer/print/start?filename=${encodeURIComponent(path)}`, {
         method: 'POST',
@@ -281,17 +392,15 @@ export async function submitPrintJob(
         ...(request.signal ? { signal: request.signal } : {}),
       });
       startedPrint = true;
-    } catch (error) {
-      if (isCancellation(error, request.signal)) throw new PrintSubmissionError('Print start cancelled.', 'cancelled');
+    } catch {
       throw new PrintSubmissionError(
-        `${path} uploaded, but starting the print failed (${describeTransportFailure(error)}). ` +
-          'The file is on the printer and can be started from its file list.',
-        'start-failed',
+        `${path} is stored. The print-start request has an uncertain outcome; check fresh printer status before trying again. It was not retried.`,
+        'start-uncertain',
       );
     }
   }
 
-  request.onPhase?.('done');
+  request.onPhase?.('completed');
   return Object.freeze({
     path,
     root: GCODE_ROOT,
@@ -302,27 +411,141 @@ export async function submitPrintJob(
   });
 }
 
-async function listGcodeFilenames(
+export async function listGcodeFilenames(
   transport: PrintSubmissionTransport,
   signal?: AbortSignal,
 ): Promise<ReadonlySet<string>> {
   try {
     const listed = await transport.request<unknown>(`/server/files/list?root=${GCODE_ROOT}`, {
       operation: 'list_gcodes',
-      ...(signal ? { signal } : {}),
+      signal,
     });
-    const names = new Set<string>();
-    if (Array.isArray(listed)) {
-      for (const entry of listed) {
-        if (isRecord(entry) && typeof entry.path === 'string') names.add(entry.path);
-      }
+    if (
+      !Array.isArray(listed) ||
+      listed.some((entry) => !isRecord(entry) || typeof entry.path !== 'string' || !entry.path)
+    ) {
+      throw new Error('Malformed file list.');
     }
-    return names;
-  } catch {
-    // A printer that cannot list files still accepts uploads; a unique name is
-    // then chosen from the requested one alone.
-    return new Set<string>();
+    return new Set(listed.map((entry: { path: string }) => entry.path));
+  } catch (error) {
+    if (isCancellation(error, signal)) throw new PrintSubmissionError('Send cancelled.', 'cancelled');
+    throw new PrintSubmissionError(
+      'The printer did not report its file list. Refresh the connection before sending; no file was uploaded.',
+      'listing-failed',
+    );
   }
+}
+
+export async function readPrintFileIdentity(
+  transport: PrintSubmissionTransport,
+  filename: string,
+  signal?: AbortSignal,
+): Promise<PrintFileIdentity> {
+  const value = await transport.request<unknown>(`/server/files/metadata?filename=${encodeURIComponent(filename)}`, {
+    signal,
+    operation: 'print_file_identity',
+  });
+  if (
+    !isRecord(value) ||
+    value.filename !== filename ||
+    typeof value.size !== 'number' ||
+    !Number.isSafeInteger(value.size) ||
+    value.size < 0 ||
+    typeof value.modified !== 'number' ||
+    !Number.isFinite(value.modified) ||
+    value.modified < 0
+  ) {
+    throw new PrintSubmissionError(
+      `The printer did not report reliable metadata for ${filename}.`,
+      'verification-failed',
+    );
+  }
+  return Object.freeze({ filename, size: value.size, modified: value.modified });
+}
+
+/** Capture the exact overwrite target before asking the operator to replace it. */
+export async function preparePrintUpload(
+  transport: PrintSubmissionTransport,
+  filename: string,
+  signal?: AbortSignal,
+  randomBytes: () => Uint8Array = () => globalThis.crypto.getRandomValues(new Uint8Array(16)),
+): Promise<PrintUploadPlan> {
+  const requested = sanitizeGcodeFilename(filename);
+  const files = await listGcodeFilenames(transport, signal);
+  let unique = '';
+  for (let attempt = 0; attempt < 16; attempt++) {
+    const random = randomBytes();
+    if (random.length !== 16)
+      throw new PrintSubmissionError('A unique upload name could not be generated.', 'target-changed');
+    const suffix = [...random].map((value) => value.toString(16).padStart(2, '0')).join('');
+    unique = `${requested.slice(0, -6)}_${suffix}.gcode`;
+    if (!files.has(unique)) break;
+    unique = '';
+  }
+  if (!unique)
+    throw new PrintSubmissionError('A unique upload name could not be reserved. Try again.', 'target-changed');
+  let overwrite: PrintUploadPlan['overwrite'] = { allowed: true, existing: null };
+  if (files.has(requested)) {
+    try {
+      overwrite = { allowed: true, existing: await readPrintFileIdentity(transport, requested, signal) };
+    } catch {
+      overwrite = {
+        allowed: false,
+        existing: null,
+        reason: 'The existing file metadata is unavailable. Upload with a unique name instead.',
+      };
+    }
+  }
+  throwIfCancelled(signal);
+  return Object.freeze({ requested, unique, overwrite: Object.freeze(overwrite) });
+}
+
+export async function validatePrintUploadTarget(
+  transport: PrintSubmissionTransport,
+  plan: PrintUploadPlan,
+  overwrite: boolean,
+  signal?: AbortSignal,
+): Promise<void> {
+  const files = await listGcodeFilenames(transport, signal);
+  if (!overwrite) {
+    if (files.has(plan.unique))
+      throw new PrintSubmissionError(
+        'The unique upload name was taken after confirmation. Confirm a new send.',
+        'target-changed',
+      );
+    return;
+  }
+  if (!plan.overwrite.allowed)
+    throw new PrintSubmissionError(plan.overwrite.reason ?? 'Replacing this file is unavailable.', 'target-changed');
+  if (files.has(plan.requested) !== (plan.overwrite.existing !== null))
+    throw new PrintSubmissionError(
+      'The overwrite target changed after confirmation. Review it again.',
+      'target-changed',
+    );
+  if (
+    plan.overwrite.existing &&
+    !samePrintFile(plan.overwrite.existing, await readPrintFileIdentity(transport, plan.requested, signal))
+  ) {
+    throw new PrintSubmissionError(
+      'The overwrite target changed after confirmation. Review it again.',
+      'target-changed',
+    );
+  }
+  const readiness = await queryPrintReadiness(transport, signal);
+  if (
+    !readiness.known ||
+    ((readiness.printState === 'printing' || readiness.printState === 'paused' || readiness.virtualSdActive) &&
+      (!readiness.currentFilename || readiness.currentFilename === plan.requested))
+  ) {
+    throw new PrintSubmissionError(
+      'An active file cannot be replaced. Upload with a unique name instead.',
+      'target-changed',
+    );
+  }
+}
+
+export function samePrintFile(a: PrintFileIdentity, b: PrintFileIdentity): boolean {
+  return a.filename === b.filename && a.size === b.size && a.modified === b.modified;
 }
 
 async function verifyUploadedSize(
@@ -344,18 +567,6 @@ async function verifyUploadedSize(
     `The printer did not report a size for ${path}; the upload could not be verified.`,
     'verification-failed',
   );
-}
-
-function uniqueFilename(filename: string, existing: ReadonlySet<string>): string {
-  if (!existing.has(filename)) return filename;
-  const dot = filename.lastIndexOf('.');
-  const stem = dot > 0 ? filename.slice(0, dot) : filename;
-  const extension = dot > 0 ? filename.slice(dot) : '';
-  for (let attempt = 2; attempt < 1000; attempt += 1) {
-    const candidate = `${stem}_${attempt}${extension}`;
-    if (!existing.has(candidate)) return candidate;
-  }
-  return `${stem}_${Date.now()}${extension}`;
 }
 
 /*

@@ -190,10 +190,10 @@ function readStringArray(payload: unknown, key: string): readonly string[] | und
  * others: the report simply leaves that field unknown, and
  * {@link assessPrintStartOptions} says so rather than guessing.
  */
-export async function queryPrintStartOptions(
+export async function queryPrinterCapabilityReport(
   transport: PrintStartOptionsTransport,
   signal?: AbortSignal,
-): Promise<readonly PrintStartOption[]> {
+): Promise<PrinterCapabilityReport> {
   const ask = async <T>(path: string, operation: string, parse: (payload: unknown) => T): Promise<T | undefined> => {
     try {
       return parse(await transport.request<unknown>(path, { operation, ...(signal ? { signal } : {}) }));
@@ -208,11 +208,82 @@ export async function queryPrintStartOptions(
     ask(PRINTER_GCODE_HELP_PATH, 'gcode_help', parseGcodeCommands),
     ask(SERVER_INFO_PATH, 'server_info', parseServerComponents),
   ]);
-  return assessPrintStartOptions({
+  return Object.freeze({
     ...(objects ? { objects } : {}),
     ...(commands ? { commands } : {}),
     ...(components ? { components } : {}),
   });
+}
+
+export async function queryPrintStartOptions(
+  transport: PrintStartOptionsTransport,
+  signal?: AbortSignal,
+): Promise<readonly PrintStartOption[]> {
+  return assessPrintStartOptions(await queryPrinterCapabilityReport(transport, signal));
+}
+
+export type PrintPreparationStep =
+  | { readonly id: 'timelapse'; readonly label: string; readonly kind: 'timelapse' }
+  | { readonly id: 'bed-leveling'; readonly label: string; readonly kind: 'leveling'; readonly command: string };
+
+export interface PrintPreparationContext {
+  readonly signal?: AbortSignal;
+  /** The workflow rechecks its captured session, artifact, mapping, and readiness. */
+  validate(): Promise<void>;
+}
+
+export function planPrintPreparation(
+  options: readonly PrintStartOption[],
+  enabled: readonly PrintStartOptionId[],
+): readonly PrintPreparationStep[] {
+  const chosen = new Set(enabled);
+  const byId = new Map(options.map((option) => [option.id, option]));
+  for (const id of chosen) {
+    const option = byId.get(id);
+    if (!option || !option.available)
+      throw new PrintStartOptionError(option?.reason ?? `No print option named ${id} was offered.`, id);
+  }
+  const steps: PrintPreparationStep[] = [];
+  if (chosen.has('timelapse'))
+    steps.push(Object.freeze({ id: 'timelapse', label: 'timelapse setup', kind: 'timelapse' }));
+  if (chosen.has('bed-leveling')) {
+    const command = byId.get('bed-leveling')?.command;
+    if (!command || !LEVELING_COMMANDS.some((candidate) => candidate === command))
+      throw new PrintStartOptionError('The printer never named a supported levelling command.', 'bed-leveling');
+    steps.push(Object.freeze({ id: 'bed-leveling', label: 'bed levelling', kind: 'leveling', command }));
+  }
+  return Object.freeze(steps);
+}
+
+export class PrintPreparationUncertainError extends Error {
+  override readonly name = 'PrintPreparationUncertainError';
+}
+
+export async function executePrintPreparationStep(
+  transport: PrintStartOptionsTransport,
+  step: PrintPreparationStep,
+  context: PrintPreparationContext,
+): Promise<void> {
+  await context.validate();
+  if (context.signal?.aborted) throw new MoonrakerTransportError('cancelled', 'print_preparation');
+  try {
+    if (step.kind === 'timelapse') {
+      await transport.request<unknown>(`${TIMELAPSE_SETTINGS_PATH}?enabled=true`, {
+        method: 'POST',
+        operation: 'timelapse_enable',
+        signal: context.signal,
+      });
+    } else {
+      await transport.request<unknown>(`/printer/gcode/script?script=${encodeURIComponent(step.command)}`, {
+        method: 'POST',
+        operation: 'bed_leveling',
+        timeoutMs: LEVELING_TIMEOUT_MS,
+        signal: context.signal,
+      });
+    }
+  } catch (error) {
+    throw new PrintPreparationUncertainError(describe(error, `The printer did not confirm ${step.label}.`));
+  }
 }
 
 export type PrintStartOptionPhase = 'timelapse' | 'leveling';
@@ -252,43 +323,13 @@ export async function applyPrintStartOptions(
   transport: PrintStartOptionsTransport,
   request: ApplyPrintStartOptionsRequest,
 ): Promise<void> {
-  const chosen = new Set(request.enabled);
-  const byId = new Map(request.options.map((option) => [option.id, option]));
-  for (const id of chosen) {
-    const option = byId.get(id);
-    if (!option) throw new PrintStartOptionError(`No print option named ${id} was offered.`, id);
-    if (!option.available) throw new PrintStartOptionError(option.reason, id);
-  }
-
-  if (chosen.has('timelapse')) {
-    request.onPhase?.('timelapse');
+  const steps = planPrintPreparation(request.options, request.enabled);
+  for (const step of steps) {
+    request.onPhase?.(step.kind === 'leveling' ? 'leveling' : 'timelapse');
     try {
-      await transport.request<unknown>(`${TIMELAPSE_SETTINGS_PATH}?enabled=true`, {
-        method: 'POST',
-        operation: 'timelapse_enable',
-        ...(request.signal ? { signal: request.signal } : {}),
-      });
+      await executePrintPreparationStep(transport, step, { signal: request.signal, validate: async () => {} });
     } catch (error) {
-      throw new PrintStartOptionError(describe(error, 'The printer refused to enable the timelapse.'), 'timelapse');
-    }
-  }
-
-  if (chosen.has('bed-leveling')) {
-    const option = byId.get('bed-leveling');
-    const command = option?.command;
-    if (!command) {
-      throw new PrintStartOptionError('The printer never named a levelling command.', 'bed-leveling');
-    }
-    request.onPhase?.('leveling');
-    try {
-      await transport.request<unknown>(`/printer/gcode/script?script=${encodeURIComponent(command)}`, {
-        method: 'POST',
-        operation: 'bed_leveling',
-        timeoutMs: LEVELING_TIMEOUT_MS,
-        ...(request.signal ? { signal: request.signal } : {}),
-      });
-    } catch (error) {
-      throw new PrintStartOptionError(describe(error, `The printer refused ${command}.`), 'bed-leveling');
+      throw new PrintStartOptionError(describe(error, `The printer did not confirm ${step.label}.`), step.id);
     }
   }
 }

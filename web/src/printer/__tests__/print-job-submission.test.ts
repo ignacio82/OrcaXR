@@ -4,6 +4,7 @@ import { MoonrakerTransportError } from '../MoonrakerTypes';
 import {
   PrintSubmissionError,
   queryPrintReadiness,
+  preparePrintUpload,
   sanitizeGcodeFilename,
   submitPrintJob,
   type PrintSubmissionTransport,
@@ -26,6 +27,7 @@ interface FakeOptions {
   holdUpload?: Promise<void>;
   failStart?: MoonrakerTransportError;
   failQuery?: boolean;
+  readinessPayload?: unknown;
 }
 
 function fakeTransport(options: FakeOptions = {}) {
@@ -37,10 +39,12 @@ function fakeTransport(options: FakeOptions = {}) {
       calls.push(path);
       if (path.startsWith('/printer/objects/query')) {
         if (options.failQuery) throw new MoonrakerTransportError('network', 'print_readiness');
+        if (options.readinessPayload !== undefined) return options.readinessPayload as T;
         return {
           status: {
             webhooks: { state: options.klippy ?? 'ready' },
             print_stats: { state: options.printState ?? 'standby', filename: '' },
+            virtual_sdcard: { is_active: options.printState === 'printing' },
           },
         } as T;
       }
@@ -49,7 +53,11 @@ function fakeTransport(options: FakeOptions = {}) {
       }
       if (path.startsWith('/server/files/metadata')) {
         if (options.storedSize === null) return {} as T;
-        return { size: options.storedSize ?? uploads.at(-1)?.size ?? 0 } as T;
+        return {
+          filename: new URL(path, 'http://printer').searchParams.get('filename'),
+          size: options.storedSize ?? uploads.at(-1)?.size ?? 0,
+          modified: 123,
+        } as T;
       }
       if (path.startsWith('/printer/print/start')) {
         if (options.failStart) throw options.failStart;
@@ -64,7 +72,11 @@ function fakeTransport(options: FakeOptions = {}) {
       if (options.failUpload) throw options.failUpload;
       const file = body.get('file') as File;
       uploads.push({ filename: file.name, size: file.size });
-      return { item: { path: file.name, root: 'gcodes' } } as T;
+      return {
+        item: { path: file.name, root: 'gcodes', size: file.size },
+        print_started: false,
+        print_queued: false,
+      } as T;
     },
   };
   return { transport, calls, uploads, uploadTimeouts };
@@ -96,6 +108,19 @@ await test('reports exactly why a printer cannot accept a job', async () => {
   );
 });
 
+await test('missing and unknown readiness fields never authorize automatic start', async () => {
+  for (const status of [
+    { webhooks: { state: 'ready' } },
+    { webhooks: { state: 'ready' }, print_stats: { state: 'future-state' }, virtual_sdcard: { is_active: false } },
+    { webhooks: { state: 'ready' }, print_stats: { state: 'error' }, virtual_sdcard: { is_active: false } },
+    { webhooks: { state: 'ready' }, print_stats: { state: 'standby' } },
+    { webhooks: { state: 'ready' }, print_stats: { state: 'standby' }, virtual_sdcard: { is_active: true } },
+  ]) {
+    const readiness = await queryPrintReadiness(fakeTransport({ readinessPayload: { status } }).transport);
+    assert.equal(readiness.ready, false, 'automatic start requires recognized idle state and inactive virtual SD');
+  }
+});
+
 await test('uploads without starting a print by default and verifies the stored size', async () => {
   const { transport, uploads, calls } = fakeTransport();
   const phases: string[] = [];
@@ -106,15 +131,15 @@ await test('uploads without starting a print by default and verifies the stored 
   });
   assert.equal(result.startedPrint, false, 'uploading never starts a print implicitly');
   assert.equal(result.uploadedBytes, result.verifiedBytes);
-  assert.equal(uploads[0].filename, 'plate.gcode');
-  assert.deepEqual(phases, ['checking', 'uploading', 'verifying', 'done']);
+  assert.match(uploads[0].filename, /^plate_[a-f0-9]{32}\.gcode$/);
+  assert.deepEqual(phases, ['checking', 'uploading', 'verifying', 'completed']);
   assert.ok(!calls.some((call) => call.startsWith('/printer/print/start')));
 });
 
 await test('never overwrites an existing name unless asked', async () => {
   const existing = fakeTransport({ files: ['plate.gcode', 'plate_2.gcode'] });
   const renamed = await submitPrintJob(existing.transport, { filename: 'plate.gcode', gcode: 'G28\n' });
-  assert.equal(renamed.path, 'plate_3.gcode');
+  assert.match(renamed.path, /^plate_[a-f0-9]{32}\.gcode$/);
   assert.equal(renamed.renamedFrom, 'plate.gcode');
 
   const overwriting = fakeTransport({ files: ['plate.gcode'] });
@@ -122,6 +147,7 @@ await test('never overwrites an existing name unless asked', async () => {
     filename: 'plate.gcode',
     gcode: 'G28\n',
     overwrite: true,
+    uploadPlan: await preparePrintUpload(overwriting.transport, 'plate.gcode'),
   });
   assert.equal(replaced.path, 'plate.gcode');
   assert.equal(replaced.renamedFrom, undefined);
@@ -131,7 +157,7 @@ await test('starts the print only when explicitly requested', async () => {
   const { transport, calls } = fakeTransport();
   const result = await submitPrintJob(transport, { filename: 'plate.gcode', gcode: 'G28\n', startPrint: true });
   assert.equal(result.startedPrint, true);
-  assert.ok(calls.some((call) => call.startsWith('/printer/print/start?filename=plate.gcode')));
+  assert.ok(calls.some((call) => call.startsWith('/printer/print/start?filename=plate_')));
 });
 
 await test('refuses to start a print when the printer is not ready', async () => {
@@ -180,8 +206,8 @@ await test('surfaces upload and start failures without claiming success', async 
     () => submitPrintJob(failedStart.transport, { filename: 'plate.gcode', gcode: 'G28\n', startPrint: true }),
     (error: unknown) =>
       error instanceof PrintSubmissionError &&
-      error.code === 'start-failed' &&
-      /uploaded, but starting/.test(error.message),
+      error.code === 'start-uncertain' &&
+      /uncertain outcome/.test(error.message),
   );
 });
 

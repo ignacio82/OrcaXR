@@ -16,7 +16,6 @@ import {
   MoonrakerTransport,
   MoonrakerTransportError,
   PrintJobCommandError,
-  PrintSubmissionError,
   PrintHistoryError,
   PrinterCameraError,
   PrinterConsoleError,
@@ -36,19 +35,14 @@ import {
   listPrinterMacros,
   movePrinterFile,
   queryMoonrakerFilamentSlots,
-  queryPrintReadiness,
   readPrintHistoryTotals,
   readPrinterFileMetadata,
   recentCommands,
   renamedStoragePath,
   runGcodeScript,
   savePrinterEndpointPreferences,
-  startStoredPrint,
-  submitPrintJob,
-  validateToolMapping,
   PrinterSessionController,
   type PrintJobCommandIntent,
-  type MoonrakerFilamentSlot,
   type MoonrakerConnectionState,
   type MoonrakerHandshake,
   type PrintJobCommand,
@@ -83,8 +77,7 @@ import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/Object
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
 import { SelectionFilamentBar } from './ui/dom/SelectionFilamentBar';
 import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
-import { askPrintSubmission } from './ui/dom/PrintSubmissionDialog';
-import { applyPrintStartOptions, queryPrintStartOptions, type PrintStartOptionId } from './printer/PrintStartOptions';
+import { PrintWorkflowController } from './printer/PrintWorkflowController';
 import { askPrintJobConfirmation } from './ui/dom/PrintJobConfirmDialog';
 import { PrintJobPanel } from './ui/dom/PrintJobPanel';
 import { PrinterStatusBar } from './ui/dom/PrinterStatusBar';
@@ -196,17 +189,6 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
 }
 
 /** Human summary of which tools a job needs and what the printer has loaded. */
-function describeToolUsage(tools: readonly number[], slots: readonly MoonrakerFilamentSlot[] | undefined): string {
-  if (tools.length === 0) return 'single filament';
-  const used = tools.map((tool) => `T${tool}`).join(', ');
-  if (!slots || slots.length === 0) {
-    return `${tools.length} tool${tools.length === 1 ? '' : 's'} (${used}); printer slots not reported`;
-  }
-  const loaded = slots.map((slot) => `slot ${slot.slotIndex + 1} ${slot.material} ${slot.colorHex}`).join(', ');
-  return `${tools.length} tool${tools.length === 1 ? '' : 's'} (${used}) — loaded: ${loaded}`;
-}
-
-/** Registry action that owns each lifecycle command, so the panel routes through one path. */
 const PRINT_JOB_ACTION_IDS: Readonly<Record<PrintJobCommand, string>> = Object.freeze({
   pause: 'printer_pause_print',
   resume: 'printer_resume_print',
@@ -531,12 +513,14 @@ function setupDomUI(
     });
   };
 
-  const connectConfiguredPrinter = async (): Promise<{
+  const connectConfiguredPrinter = async (
+    signal?: AbortSignal,
+  ): Promise<{
     transport: MoonrakerTransport;
     handshake: MoonrakerHandshake;
   }> => {
     configuredPrinterTransport();
-    return printerSession.connect();
+    return printerSession.connect(signal);
   };
 
   const capturePrinterIntent = (command: PrintJobCommand): PrintJobCommandIntent | undefined => {
@@ -672,156 +656,71 @@ function setupDomUI(
     }
   };
 
-  // One in-flight send at a time, cancellable from the same button that
-  // started it. A second send cannot race the first onto the same printer.
-  let printSubmission: AbortController | null = null;
+  const printWorkflow = new PrintWorkflowController({
+    captureSession: async (signal) => {
+      await connectConfiguredPrinter(signal);
+      return printerSession.captureLease();
+    },
+    confirm: async (input, signal) =>
+      xb.core.renderer?.xr?.isPresenting
+        ? workspace.askXrPrintSubmission(input, signal)
+        : (await import('./ui/dom/PrintSubmissionDialog')).askPrintSubmission(input, signal),
+  });
 
   workspace.onRequestPrintSubmission = async (intent) => {
-    if (printSubmission) {
+    if (printWorkflow.busy) {
       workspace.setStatus(
         t('app.main.aSendIsAlreadyIn', 'A send is already in progress; cancel it before starting another.'),
       );
       return;
     }
-    if (!printerCfg.host.trim()) {
-      workspace.setStatus(
-        t('app.main.enterAnExplicitMoonrakerEndpoint3', 'Enter an explicit Moonraker endpoint first.'),
-      );
-      return;
-    }
-    const controller = new AbortController();
-    printSubmission = controller;
     setPrinterSendBusy(true);
     try {
-      workspace.setStatus(t('app.main.connectingToThePrinter', 'Connecting to the printer…'));
-      const { transport, handshake } = await connectConfiguredPrinter();
-      if (!handshake.capabilities.fileManagement) {
-        workspace.setStatus(
-          t(
-            'app.main.thisMoonrakerInstanceDoesNot',
-            'This Moonraker instance does not expose file management; nothing was sent.',
-          ),
-        );
-        return;
-      }
-      // Read the machine's own facts before asking anything: what it is doing,
-      // and what it actually has loaded.
-      const readiness = await queryPrintReadiness(transport, controller.signal);
-      let slots: readonly MoonrakerFilamentSlot[] | undefined;
-      try {
-        slots = await queryMoonrakerFilamentSlots(transport, controller.signal);
-      } catch {
-        // Not every Moonraker exposes Snapmaker's slot object; the mapping
-        // check then reports "unknown" instead of pretending it matched.
-        slots = undefined;
-      }
-      // What this particular machine can do around the print — level its plate,
-      // record a timelapse. Asked of the printer rather than assumed, so the
-      // confirmation offers exactly what is really there.
-      const startOptions = await queryPrintStartOptions(transport, controller.signal);
-      const mapping = validateToolMapping(intent.usage, slots);
-      const readinessBlockers = readiness.blockers.map((blocker) => blocker.message);
-      const dialogInput = {
-        filename: intent.filename,
-        plateName: intent.plateName,
-        byteLength: new TextEncoder().encode(intent.gcode).byteLength,
-        endpointLabel: handshake.printer.hostname || printerCfg.host.trim(),
-        printerStateLabel: readiness.ready ? `ready (${readiness.printState ?? 'idle'})` : readinessBlockers.join(' '),
-        toolSummary: describeToolUsage(intent.usage.tools, slots),
-        blockers: [...mapping.blockers.map((notice) => notice.message), ...(readiness.ready ? [] : readinessBlockers)],
-        warnings: mapping.warnings.map((notice) => notice.message),
-        startOptions,
-      };
-      const decision = xb.core.renderer?.xr?.isPresenting
-        ? await workspace.askXrPrintSubmission(dialogInput)
-        : await askPrintSubmission(dialogInput);
-      if (decision.choice === 'cancel') {
-        workspace.setStatus(t('app.main.sendCancelledNothingWasUploaded', 'Send cancelled; nothing was uploaded.'));
-        return;
-      }
-      // The dialog waits on a person, and a printer connection does not wait
-      // with it. Re-establish before committing to an upload that may take
-      // minutes, rather than discovering the session lapsed partway through.
-      await connectConfiguredPrinter();
-      // The XR sheet answers with its own decision shape and does not offer
-      // these yet; reading defensively keeps the flat shell's choices exact
-      // without inventing ones the headset never showed.
-      // Both shells answer with the ids they showed; anything else is nothing.
-      // `applyPrintStartOptions` checks each one against what the printer
-      // actually offered, so an id that never appeared is refused rather than
-      // attempted.
-      const chosenStartOptions = (('startOptions' in decision ? decision.startOptions : []) ??
-        []) as readonly PrintStartOptionId[];
-      const result = await submitPrintJob(transport, {
-        filename: intent.filename,
-        gcode: intent.gcode,
-        startPrint: decision.choice === 'upload-and-print',
-        overwrite: decision.overwrite,
-        signal: controller.signal,
-        beforeStart: async () => {
-          await applyPrintStartOptions(transport, {
-            options: startOptions,
-            enabled: chosenStartOptions,
-            signal: controller.signal,
-            onPhase: (phase) => {
-              workspace.setStatus(
-                phase === 'leveling'
-                  ? t(
-                      'app.main.levellingTheBuildPlate',
-                      'Levelling the build plate; the print starts when it finishes…',
-                    )
-                  : t('app.main.armingTheTimelapse', 'Arming the timelapse…'),
-              );
-            },
-          });
-        },
-        // An upload has no deadline, so the status line is what tells an
-        // operator it is alive. `fetch` cannot report bytes sent, so this
-        // counts time rather than inventing a percentage, and points at the
-        // button that stops it.
+      const result = await printWorkflow.run(intent, {
         onUploadElapsed: ({ elapsedMs, totalBytes }) => {
           const seconds = Math.floor(elapsedMs / 1000);
           const clock = `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`;
           workspace.setStatus(
-            `Uploading ${intent.filename} (${(totalBytes / 1048576).toFixed(1)} MB) — ${clock} elapsed. ` +
-              'Press Cancel send to stop.',
+            t(
+              'app.main.uploadElapsed',
+              'Uploading {filename} ({megabytes} MB) — {elapsed} elapsed. Press Cancel send to stop.',
+              { filename: intent.filename, megabytes: (totalBytes / 1048576).toFixed(1), elapsed: clock },
+            ),
           );
         },
         onPhase: (phase) => {
-          const message =
-            phase === 'uploading'
-              ? // Naming the size is what distinguishes "this is a big file" from
-                // "this has hung", on an upload that legitimately runs for minutes.
-                `Uploading ${intent.filename} (${(new Blob([intent.gcode]).size / 1048576).toFixed(1)} MB)…`
-              : phase === 'verifying'
-                ? 'Verifying the stored file…'
-                : phase === 'starting'
-                  ? 'Starting the print…'
-                  : phase === 'checking'
-                    ? 'Checking the printer…'
-                    : null;
-          if (message) workspace.setStatus(message);
+          const messages = {
+            checking: t('app.main.checkingPrinter', 'Checking the printer…'),
+            confirming: t('app.main.confirmSend', 'Confirm the send options…'),
+            uploading: t('app.main.uploadingFile', 'Uploading {filename}…', { filename: intent.filename }),
+            verifying: t('app.main.verifyingFile', 'Verifying the stored file…'),
+            preparing: t('app.main.preparingPrinter', 'Preparing the printer with the confirmed options…'),
+            starting: t('app.main.startingPrint', 'Starting the print…'),
+            completed: t('app.main.sendCompleted', 'Send completed.'),
+          };
+          workspace.setStatus(messages[phase]);
         },
       });
-      if (result.startedPrint) {
-        // We just changed what the machine is doing; read it back rather than
-        // waiting for the next push so the live panel is correct immediately.
-        await printerSession.refresh().catch(() => {});
+      if (!result) {
+        workspace.setStatus(t('app.main.sendCancelledNothingWasUploaded', 'Send cancelled; nothing was uploaded.'));
+        return;
       }
-      const renamed = result.renamedFrom ? ` (stored as ${result.path} to avoid replacing ${result.renamedFrom})` : '';
+      if (result.startedPrint) await printerSession.refresh().catch(() => {});
       workspace.setStatus(
         result.startedPrint
-          ? `Printing ${result.path} — ${(result.verifiedBytes / 1024).toFixed(0)} KB verified on the printer${renamed}.`
-          : `Uploaded ${result.path} — ${(result.verifiedBytes / 1024).toFixed(0)} KB verified; start it from the printer when ready${renamed}.`,
+          ? t('app.main.verifiedPrint', 'Printing {filename} — {kilobytes} KB verified on the printer.', {
+              filename: result.path,
+              kilobytes: (result.verifiedBytes / 1024).toFixed(0),
+            })
+          : t(
+              'app.main.verifiedUpload',
+              'Uploaded {filename} — {kilobytes} KB verified; start it from the printer when ready.',
+              { filename: result.path, kilobytes: (result.verifiedBytes / 1024).toFixed(0) },
+            ),
       );
     } catch (error) {
-      const message =
-        error instanceof PrintSubmissionError || error instanceof MoonrakerTransportError
-          ? error.message
-          : (error as Error).message;
-      workspace.setStatus(`Send failed: ${message}`);
+      workspace.setStatus(t('app.main.sendFailure', 'Send failed: {reason}', { reason: (error as Error).message }));
     } finally {
-      printSubmission = null;
       setPrinterSendBusy(false);
     }
   };
@@ -929,7 +828,11 @@ function setupDomUI(
           break;
         }
         case 'print': {
-          const started = await startStoredPrint(transport, operation.path);
+          const started = await printWorkflow.startStored(operation.path);
+          if (!started) {
+            storageState.message = 'Print cancelled.';
+            break;
+          }
           await printerSession.refresh().catch(() => {});
           storageState.message = `Printing ${started}.`;
           workspace.setStatus(`Printing ${started} from the printer's own storage.`);
@@ -1936,7 +1839,14 @@ function setupDomUI(
     })();
   }
 
-  window.addEventListener('pagehide', () => printerSession.dispose(), { once: true });
+  window.addEventListener(
+    'pagehide',
+    () => {
+      printWorkflow.dispose();
+      printerSession.dispose();
+    },
+    { once: true },
+  );
 
   // First run: nothing configured yet, so offer the setup path directly rather
   // than leaving a new operator to find the Printer tab. Both the printer and
@@ -4865,8 +4775,8 @@ function setupDomUI(
     void registry.invoke('view_webcam', 'dom-inspector', actionCtx, uiState.get());
   };
   btnPrinterSend.onclick = () => {
-    if (printSubmission) {
-      printSubmission.abort();
+    if (printWorkflow.busy) {
+      printWorkflow.cancel();
       workspace.setStatus(t('app.main.cancellingTheSend', 'Cancelling the send…'));
       return;
     }
@@ -4948,7 +4858,7 @@ function setupDomUI(
     uiState.update({ gcodeReady: ready });
     // A stale artifact must not stay sendable; an in-flight send keeps its own
     // cancel affordance until it settles.
-    if (!printSubmission) btnPrinterSend.disabled = !ready;
+    if (!printWorkflow.busy) btnPrinterSend.disabled = !ready;
   };
 
   workspace.onSelectionChanged = () => {

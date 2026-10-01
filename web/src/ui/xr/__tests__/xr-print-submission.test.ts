@@ -228,4 +228,68 @@ test('a fact the send never learned is reported as unknown, not invented', () =>
   );
 });
 
+test('upload-only remains available with a start blocker and overwrite requires a separate press', () => {
+  const root = new FakePanel({});
+  let uploads = 0;
+  let starts = 0;
+  let overwrites = 0;
+  renderXrPrintSubmissionDialog(
+    adapter,
+    root,
+    samplePrintContext({
+      filename: 'part_unique.gcode',
+      overwriteLabel: 'Use exact name part.gcode, replacing 30 bytes',
+      overwriteAllowed: true,
+      overwriteEnabled: false,
+      readyToPrint: false,
+      blockedReason: 'T1 is not loaded.',
+      onSendOnly: () => {
+        uploads++;
+      },
+      onSendAndPrint: () => {
+        starts++;
+      },
+      onToggleOverwrite: () => {
+        overwrites++;
+      },
+    }),
+  );
+  const buttons = root.buttons();
+  buttons.find((button) => button.texts().some((text) => text.text === 'Send & Print'))!.click();
+  assert.equal(starts, 0);
+  buttons.find((button) => button.texts().some((text) => text.text === 'Send Only'))!.click();
+  assert.equal(uploads, 1);
+  assert.equal(overwrites, 0);
+  const replacement = buttons.find((button) =>
+    button.texts().some((text) => text.text.startsWith('☐ Use exact name')),
+  )!;
+  assert.ok(replacement);
+  replacement.click();
+  assert.equal(overwrites, 1);
+});
+
+test('stored reprint presents a start action without uploading or overwriting', () => {
+  const root = new FakePanel({});
+  let starts = 0;
+  renderXrPrintSubmissionDialog(
+    adapter,
+    root,
+    samplePrintContext({
+      storedFile: true,
+      filename: 'part.gcode',
+      onSendAndPrint: () => {
+        starts++;
+      },
+    }),
+  );
+  assert.equal(
+    root.texts().some((text) => text.text === 'Send Only'),
+    false,
+  );
+  root
+    .buttons()
+    .find((button) => button.texts().some((text) => text.text === 'Start print'))!
+    .click();
+  assert.equal(starts, 1);
+});
 console.log(`\nXrPrintSubmissionDialog: ${passed} tests passed.`);

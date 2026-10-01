@@ -6,6 +6,7 @@
  * controller; save and slice serialize the same canonical state.
  */
 import * as THREE from 'three';
+import { printOverwriteLabel } from '../ui/PrintSubmissionLabels';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import {
   DEFAULT_EMBOSS_FONT_PROPERTY,
@@ -62,6 +63,8 @@ import type { LayerEventType } from '../project/domain/model';
 import type { PrintJobCommand } from '../printer/PrintJobControl';
 import type { PrintJobCommandIntent, PrintJobConfirmation } from '../printer/PrinterSessionController';
 import type { PrintJobIntent } from '../printer/PrintJobSubmission';
+import type { PrintWorkflowConfirmation, PrintWorkflowDecision } from '../printer/PrintWorkflowController';
+import type { PrintStartOptionId } from '../printer/PrintStartOptions';
 import type { PrinterConsoleOperation } from '../printer/PrinterConsole';
 import type { PrinterStorageOperation } from '../printer/PrinterStorage';
 import type { PresetLibraryOperation } from '../settings/presets/PresetLibrary';
@@ -917,7 +920,12 @@ export class OrcaWorkspace extends xb.Script {
   public onSliceStateChanged: ((isSlicing: boolean) => void) | null = null;
   /** Slice/status progress as a percentage, or undefined when nothing runs. */
   private lastStatusPercent: number | undefined;
-  private publishedGcode: { readonly gcode: string; readonly guard: CanonicalProjectSliceGuard } | null = null;
+  private publishedGcode: {
+    readonly gcode: string;
+    readonly outputHash: string;
+    readonly plateId: PlateId;
+    readonly guard: CanonicalProjectSliceGuard;
+  } | null = null;
   /** Per-plate artifacts from the last all-plate slice, guarded as one set. */
   private publishedPlateGcode: {
     readonly plates: ReadonlyMap<PlateId, { gcode: string; byteLength: number; warnings: readonly string[] }>;
@@ -5028,11 +5036,24 @@ export class OrcaWorkspace extends xb.Script {
     const summary = this.canonicalProject.getSummary();
     const plate = summary.plates.find((candidate) => candidate.id === summary.activePlateId);
     const plateName = plate?.name ?? 'Plate';
+    const published = this.publishedGcode;
+    if (!published || published.plateId !== summary.activePlateId) {
+      this.setStatus(
+        t(
+          'workspace.orcaWorkspace.sliceTheActivePlateBefore',
+          'Slice the active plate before sending it to the printer.',
+        ),
+      );
+      return;
+    }
     await this.onRequestPrintSubmission({
       filename: `${summary.projectName}_${plateName}.gcode`,
       gcode,
       plateName,
       usage: summarizeGcodeToolUsage(gcode),
+      artifact: Object.freeze({ ...published.guard, outputHash: published.outputHash, plateId: published.plateId }),
+      isCurrent: () =>
+        this.publishedGcode === published && this.activePlateId === published.plateId && this.getLastGcode() === gcode,
     });
   }
 
@@ -7173,7 +7194,9 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public closeXrSheet(): void {
+    const cancelSubmission = this.openSheetPage === 'xr-print-submission' ? this.printSubmissionResolve : null;
     this.openSheetPage = null;
+    cancelSubmission?.({ choice: 'cancel' });
     this.xrCards?.sheet.hide();
   }
 
@@ -7470,31 +7493,38 @@ export class OrcaWorkspace extends xb.Script {
     });
   }
 
-  private printSubmissionResolve:
-    | ((decision: {
-        choice: 'upload-and-print' | 'upload-only' | 'cancel';
-        overwrite: boolean;
-        startOptions?: readonly string[];
-      }) => void)
-    | null = null;
-  /** Pre-print options ticked in the headset's send sheet, for this send only. */
-  private xrStartOptions = new Set<string>();
-  private pendingPrintInput: any = null;
+  private printSubmissionResolve: ((decision: PrintWorkflowDecision) => void) | null = null;
+  private xrStartOptions = new Set<PrintStartOptionId>();
+  private xrOverwrite = false;
+  private pendingPrintInput: PrintWorkflowConfirmation | null = null;
 
-  public async askXrPrintSubmission(input: any): Promise<{
-    choice: 'upload-and-print' | 'upload-only' | 'cancel';
-    overwrite: boolean;
-    startOptions?: readonly string[];
-  }> {
+  public async askXrPrintSubmission(
+    input: PrintWorkflowConfirmation,
+    signal?: AbortSignal,
+  ): Promise<PrintWorkflowDecision> {
+    if (signal?.aborted) return { choice: 'cancel' };
     this.pendingPrintInput = input;
-    // Each submission starts from nothing ticked, like the flat dialog: a
-    // choice made for one print must not silently carry into the next.
     this.xrStartOptions.clear();
-    // The dialog lives in the immersive chunk, so a submission asked for before
-    // a session has ever started waits for it rather than opening an empty page.
+    this.xrOverwrite = false;
     await this.loadImmersiveShell();
+    if (signal?.aborted) {
+      this.pendingPrintInput = null;
+      return { choice: 'cancel' };
+    }
     return new Promise((resolve) => {
-      this.printSubmissionResolve = resolve;
+      let finished = false;
+      const finish = (decision: PrintWorkflowDecision) => {
+        if (finished) return;
+        finished = true;
+        signal?.removeEventListener('abort', onAbort);
+        this.printSubmissionResolve = null;
+        this.pendingPrintInput = null;
+        this.closeXrSheet();
+        resolve(decision);
+      };
+      const onAbort = () => finish({ choice: 'cancel' });
+      this.printSubmissionResolve = finish;
+      signal?.addEventListener('abort', onAbort, { once: true });
       this.openXrSheet('xr-print-submission');
     });
   }
@@ -7512,14 +7542,9 @@ export class OrcaWorkspace extends xb.Script {
     // real per-tool map can be passed the day the input carries one.
     const toolSlots: never[] = [];
 
-    const startOptions = (input.startOptions ?? []) as readonly {
-      id: string;
-      label: string;
-      detail: string;
-      reason: string;
-      available: boolean;
-    }[];
+    const startOptions = input.startOptions;
     xrUi.renderXrPrintSubmissionDialog(xrBlocksUiAdapter, root, {
+      storedFile: input.mode === 'stored',
       startOptions: startOptions.map((option) => ({
         id: option.id,
         label: option.label,
@@ -7528,13 +7553,25 @@ export class OrcaWorkspace extends xb.Script {
         available: option.available,
         enabled: this.xrStartOptions.has(option.id),
       })),
-      onToggleStartOption: (id: string) => {
+      onToggleStartOption: (requestedId: string) => {
+        const option = input.startOptions.find((option) => option.id === requestedId && option.available);
+        if (!option) return;
+        const id = option.id;
         if (this.xrStartOptions.has(id)) this.xrStartOptions.delete(id);
         else this.xrStartOptions.add(id);
         this.refreshXrSheet();
       },
-      printerName: input.endpointLabel || 'Snapmaker U1',
-      availablePrinters: [input.endpointLabel || 'Snapmaker U1'],
+      printerName: input.endpointLabel,
+      availablePrinters: [input.endpointLabel],
+      filename: this.xrOverwrite ? input.overwrite.filename : input.filename,
+      overwriteLabel: input.mode === 'stored' ? undefined : printOverwriteLabel(input.overwrite),
+      overwriteAllowed: input.overwrite.allowed,
+      overwriteEnabled: this.xrOverwrite,
+      onToggleOverwrite: () => {
+        if (!input.overwrite.allowed) return;
+        this.xrOverwrite = !this.xrOverwrite;
+        this.refreshXrSheet();
+      },
       plateName: input.plateName || 'Plate 1',
       // Only what is actually known. A nozzle this workspace has never been
       // told about, a bed type nobody reported, and an estimate the slicer did
@@ -7544,35 +7581,24 @@ export class OrcaWorkspace extends xb.Script {
       ...(this.headNozzles[0] !== undefined && Number.isFinite(Number(this.headNozzles[0]))
         ? { nozzleMm: Number(this.headNozzles[0]) }
         : {}),
-      ...(input.estimatedDurationFormatted ? { estimatedDurationFormatted: input.estimatedDurationFormatted } : {}),
-      ...(typeof input.estimatedWeightGrams === 'number' ? { estimatedWeightGrams: input.estimatedWeightGrams } : {}),
-      ...(input.estimatedCostFormatted ? { estimatedCostFormatted: input.estimatedCostFormatted } : {}),
       /** The summary the send confirmation computed, verbatim. */
       toolSummaryText: input.toolSummary,
       toolSlots,
       readyToPrint: (input.blockers?.length ?? 0) === 0,
-      blockedReason: input.blockers?.[0],
+      blockedReason: input.blockers.join(' '),
+      warnings: input.warnings,
       onSendAndPrint: () => {
         this.printSubmissionResolve?.({
           choice: 'upload-and-print',
-          overwrite: true,
+          overwrite: this.xrOverwrite,
           startOptions: [...this.xrStartOptions],
         });
-        this.printSubmissionResolve = null;
-        this.pendingPrintInput = null;
-        this.refreshXrSheet();
       },
       onSendOnly: () => {
-        this.printSubmissionResolve?.({ choice: 'upload-only', overwrite: true, startOptions: [] });
-        this.printSubmissionResolve = null;
-        this.pendingPrintInput = null;
-        this.refreshXrSheet();
+        this.printSubmissionResolve?.({ choice: 'upload', overwrite: this.xrOverwrite, startOptions: [] });
       },
       onCancel: () => {
-        this.printSubmissionResolve?.({ choice: 'cancel', overwrite: false });
-        this.printSubmissionResolve = null;
-        this.pendingPrintInput = null;
-        this.refreshXrSheet();
+        this.printSubmissionResolve?.({ choice: 'cancel' });
       },
     });
   }
@@ -9316,6 +9342,8 @@ export class OrcaWorkspace extends xb.Script {
       const gcode = new TextDecoder('utf-8', { fatal: true }).decode(plate.gcode);
       this.publishedGcode = {
         gcode,
+        outputHash: plate.outputHash,
+        plateId: plate.plateId,
         guard: {
           sourceRevision: result.sourceRevision,
           sourceHash: result.sourceHash,
@@ -9388,17 +9416,24 @@ export class OrcaWorkspace extends xb.Script {
         sourceAssetHash: result.sourceAssetHash,
       };
       const decoder = new TextDecoder('utf-8', { fatal: true });
-      const plates = new Map<PlateId, { gcode: string; byteLength: number; warnings: readonly string[] }>();
+      const plates = new Map<
+        PlateId,
+        { gcode: string; outputHash: string; plateId: PlateId; byteLength: number; warnings: readonly string[] }
+      >();
       for (const plate of result.plates) {
         plates.set(plate.plateId, {
           gcode: decoder.decode(plate.gcode),
+          outputHash: plate.outputHash,
+          plateId: plate.plateId,
           byteLength: plate.gcode.byteLength,
           warnings: plate.warnings,
         });
       }
       this.publishedPlateGcode = { plates, guard };
       const active = plates.get(this.activePlateId) ?? [...plates.values()][0];
-      this.publishedGcode = active ? { gcode: active.gcode, guard } : null;
+      this.publishedGcode = active
+        ? { gcode: active.gcode, outputHash: active.outputHash, plateId: active.plateId, guard }
+        : null;
       if (!this.revalidatePublishedGcode()) {
         this.publishedPlateGcode = null;
         throw new Error('The project changed while slicing; the stale results were discarded. Slice again.');

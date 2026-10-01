@@ -1,32 +1,10 @@
 import { t } from '../../l10n/t';
-import type { PrintStartOption, PrintStartOptionId } from '../../printer/PrintStartOptions';
+import type { PrintStartOptionId } from '../../printer/PrintStartOptions';
+import { printOverwriteLabel } from '../PrintSubmissionLabels';
 
-export interface PrintSubmissionDialogInput {
-  readonly filename: string;
-  readonly plateName: string;
-  readonly byteLength: number;
-  readonly endpointLabel: string;
-  readonly printerStateLabel: string;
-  readonly toolSummary: string;
-  /** Reasons the artifact must not be printed as-is; they disable starting. */
-  readonly blockers: readonly string[];
-  readonly warnings: readonly string[];
-  /**
-   * What this particular printer offers around the print — levelling its plate,
-   * recording a timelapse. Assessed from the machine's own answers, so an
-   * unavailable one is shown with the printer's reason rather than hidden.
-   */
-  readonly startOptions?: readonly PrintStartOption[];
-}
-
-export type PrintSubmissionDecision =
-  | { readonly choice: 'cancel' }
-  | {
-      readonly choice: 'upload' | 'upload-and-print';
-      readonly overwrite: boolean;
-      /** Pre-print options the operator ticked; only ever available ones. */
-      readonly startOptions: readonly PrintStartOptionId[];
-    };
+import type { PrintWorkflowConfirmation, PrintWorkflowDecision } from '../../printer/PrintWorkflowController';
+export type PrintSubmissionDialogInput = PrintWorkflowConfirmation;
+export type PrintSubmissionDecision = PrintWorkflowDecision;
 
 /**
  * Confirm exactly what is about to be sent, and whether the printer should
@@ -38,7 +16,11 @@ export type PrintSubmissionDecision =
  * still allowing the file to be stored, and replacing an existing file is an
  * explicit opt-in — otherwise the send picks an unused name.
  */
-export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<PrintSubmissionDecision> {
+export function askPrintSubmission(
+  input: PrintSubmissionDialogInput,
+  signal?: AbortSignal,
+): Promise<PrintSubmissionDecision> {
+  if (signal?.aborted) return Promise.resolve({ choice: 'cancel' });
   const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const overlay = document.createElement('div');
   overlay.dataset.printSubmissionDialog = 'true';
@@ -59,7 +41,10 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
 
   const title = document.createElement('h2');
   title.id = 'orcaxr-print-send-title';
-  title.textContent = t('ui.printSubmissionDialog.sendToPrinter', 'Send to printer');
+  title.textContent =
+    input.mode === 'stored'
+      ? t('ui.printSubmissionDialog.startStoredFile', 'Start stored file')
+      : t('ui.printSubmissionDialog.sendToPrinter', 'Send to printer');
   title.style.cssText = 'margin:0;font-size:16px;';
 
   const body = document.createElement('div');
@@ -71,6 +56,7 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
     ['File', `${input.filename} (${formatBytes(input.byteLength)})`],
     ['Filaments', input.toolSummary],
   ];
+  let fileDetail: HTMLElement | undefined;
   for (const [label, value] of facts) {
     const row = document.createElement('p');
     row.style.cssText = 'margin:0;display:flex;gap:10px;';
@@ -79,6 +65,8 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
     term.style.cssText = 'opacity:0.7;min-width:70px;';
     const detail = document.createElement('span');
     detail.textContent = value;
+    if (label === 'File') fileDetail = detail;
+    detail.style.cssText = 'min-width:0;overflow-wrap:anywhere;';
     row.append(term, detail);
     body.append(row);
   }
@@ -138,11 +126,15 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
   overwrite.type = 'checkbox';
   overwrite.id = 'orcaxr-print-send-overwrite';
   overwrite.dataset.printSubmissionOverwrite = 'true';
+  overwrite.checked = false;
+  overwrite.disabled = !input.overwrite.allowed;
+  overwrite.onchange = () => {
+    if (fileDetail)
+      fileDetail.textContent = `${overwrite.checked && !overwrite.disabled ? input.overwrite.filename : input.filename} (${formatBytes(input.byteLength)})`;
+  };
   const overwriteText = document.createElement('span');
-  overwriteText.textContent = t(
-    'ui.printSubmissionDialog.replaceAStoredFileWith',
-    'Replace a stored file with the same name',
-  );
+  overwriteText.textContent = printOverwriteLabel(input.overwrite);
+  overwriteText.style.cssText = 'min-width:0;overflow-wrap:anywhere;';
   overwriteLabel.append(overwrite, overwriteText);
 
   const actions = document.createElement('div');
@@ -166,17 +158,21 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
       `background:${primary ? 'var(--oxr-surface-hover)' : 'var(--oxr-surface)'};`;
     button.onclick = () =>
       finish(
-        choice === 'cancel' ? { choice } : { choice, overwrite: overwrite.checked, startOptions: chosenOptions() },
+        choice === 'cancel'
+          ? { choice }
+          : { choice, overwrite: overwrite.checked && !overwrite.disabled, startOptions: chosenOptions() },
       );
     buttons.push(button);
     return button;
   };
 
   const startButton = make(
-    'Upload and start print',
+    input.mode === 'stored' ? 'Start print' : 'Upload and start print',
     'upload-and-print',
-    true,
-    'Store the file and immediately start printing it',
+    input.mode === 'stored',
+    input.mode === 'stored'
+      ? 'Start the confirmed file already stored on this printer'
+      : 'Store the file and immediately start printing it',
   );
   if (input.blockers.length > 0) {
     startButton.disabled = true;
@@ -187,25 +183,33 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
       'Resolve the filament mapping problems above before starting this print',
     );
   }
-  actions.append(
-    startButton,
-    make('Upload only', 'upload', input.blockers.length > 0, 'Store the file without starting a print'),
-    make('Cancel', 'cancel', false, 'Send nothing'),
-  );
+  actions.append(startButton);
+  if (input.mode !== 'stored')
+    actions.append(make('Upload only', 'upload', true, 'Store the file without starting a print'));
+  actions.append(make('Cancel', 'cancel', false, 'Send nothing'));
 
   dialog.append(title, body, notices);
   if ((input.startOptions?.length ?? 0) > 0) dialog.append(optionsBox);
-  dialog.append(overwriteLabel, actions);
+  if (input.mode !== 'stored') dialog.append(overwriteLabel);
+  dialog.append(actions);
   overlay.append(dialog);
 
   let settle: (decision: PrintSubmissionDecision) => void = () => {};
+  let finished = false;
   const finish = (decision: PrintSubmissionDecision) => {
+    if (finished) return;
+    finished = true;
+    signal?.removeEventListener('abort', onAbort);
     document.removeEventListener('keydown', onKeyDown, true);
     overlay.remove();
     previousFocus?.focus?.();
     settle(decision);
   };
-  const focusable = (): HTMLElement[] => [overwrite, ...buttons.filter((button) => !button.disabled)];
+  const onAbort = () => finish({ choice: 'cancel' });
+  const focusable = (): HTMLElement[] =>
+    [...optionInputs.values(), ...(input.mode === 'stored' ? [] : [overwrite]), ...buttons].filter(
+      (button) => !button.disabled,
+    );
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.preventDefault();
@@ -224,9 +228,14 @@ export function askPrintSubmission(input: PrintSubmissionDialogInput): Promise<P
   document.addEventListener('keydown', onKeyDown, true);
   document.body.appendChild(overlay);
   // Focus the least destructive enabled action, never "start printing".
-  (buttons.find((button) => button.dataset.printSubmissionChoice === 'upload') ?? buttons[0])?.focus();
+  (
+    buttons.find(
+      (button) => button.dataset.printSubmissionChoice === (input.mode === 'stored' ? 'cancel' : 'upload'),
+    ) ?? buttons[0]
+  )?.focus();
   return new Promise<PrintSubmissionDecision>((resolve) => {
     settle = resolve;
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 

@@ -11,7 +11,7 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 | A: credential source and logging | Implemented | Seven maintenance scripts share verified OpenSSH authentication. No embedded password or automatic host-key acceptance remains. Generated server tokens log only their protected file location. Remembered device-local printer credentials remain optional; UI/docs explain the storage boundary. |
 | A: operational revocation | Pending | Rotation or invalidation of previously exposed credentials and logged tokens requires operator evidence. Source cleanup does not revoke them. History rewriting is a separate coordinated action. |
 | B: printer session and command intent | Implemented; hardware evidence pending | One controller owns selection, connection epochs, subscriptions, queries, and commands. Immutable click/press intents bind exact job history and metadata; fresh queries reject replacement, reconnect, partial/failing responses, and duplicate commands. DOM/XR holds carry single-use confirmations. Emergency stop and distinct firmware restart remain reachable through authenticated HTTP without status/history success. |
-| C: submission lifecycle | Pending | Implement the shared workflow controller, explicit cancellable preparation, upload naming/verification, and post-upload revalidation. |
+| C: submission lifecycle | Implemented; hardware evidence pending | Shared DOM/XR workflow owns session/artifact/mapping/option guards, cancellation, preparation, random upload names, exact overwrite and response checks. Stored-file starts also bind confirmation to fresh metadata and readiness. Full web quality passes; supervised firmware evidence remains pending. |
 | D: process and artifact lifecycle | Pending | Successful native exit, descendant termination, retryable downloads with leases/TTL/release, bounded cancellation. |
 | E: deployment and artifacts | Pending | Static/API separation, Tailscale namespace/trust, adjacent-manifest verification, atomic publication, deployment coverage. The existing local server manifest was repaired only after all three binary copies matched canonical SHA-256 hashes. |
 | F: discovery and startup | Pending | Transactional discovery and truthful capability initialization/recovery on DOM and XR. |
@@ -59,7 +59,7 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 
 The dependency and source-credential change passes its automated gates.
 Hardware, credential revocation, deployment release, and independent review are
-not proven by these checks. Continue with C; the overall plan remains active.
+not proven by these checks. Continue with D; the overall plan remains active.
 
 ## Printer command verification (2026-10-01)
 
@@ -94,3 +94,39 @@ not proven by these checks. Continue with C; the overall plan remains active.
 
 Installed-firmware identity fields, supervised machine control, credential
 revocation, and independent security/release review remain unqualified.
+
+## Submission verification (2026-10-01)
+
+- The readiness regression reproduced automatic-start authorization from missing
+  state fields. Full, recognized Klipper/print/virtual-SD state is now required;
+  only ready, inactive, explicitly idle states authorize start.
+- `print-workflow-controller.test.ts`: 32 tests cover lifecycle order,
+  upload-only defaults, changed artifact/session/mapping/readiness/capabilities,
+  cancellation at each mutation boundary, changed preparation commands,
+  ambiguous preparation/start reconciliation without retries, listing failure,
+  wrong upload root/path/size, changed/active overwrite targets, collision
+  regeneration, two clients choosing the same name, and stale stored reprints.
+- DOM dialog tests cover abort cleanup, focus restoration, exact overwrite
+  metadata, upload-only defaults and blockers. Seven XR renderer tests include
+  an explicit overwrite toggle, upload-only availability with a start blocker,
+  and stored-file confirmation. Both surfaces use one workflow and start
+  options; closing an XR send sheet cancels its pending confirmation.
+- Production browser tests upload the real sliced artifact, change loaded
+  filaments before upload completes, and prove the file remains without any
+  preparation/start request. Replacing a stored file during confirmation also
+  sends no start. Normal verified upload/preparation/start and reprint pass.
+- `npm --prefix web run quality`: passes in full, including 230 unit test files,
+  all integration/project/settings/localization/XR checks, production browser
+  and offline tests, 28 accessibility rules, 155 pseudo-localized controls,
+  and 13 real slicing test files. The initial size check caught a 2,863-byte
+  main-bundle overrun; loading the DOM confirmation on demand resolved it
+  without changing ceilings. Final main: 2,346,538 bytes; JavaScript total:
+  10,562,784 bytes. The localization sweep decreased from 177 to 176 strings.
+- Current-source Gitleaks passes with the same pinned image and unchanged
+  rules. Regenerated parity reporting still withholds the claim and lists five
+  outstanding human gates. Upload checksum and response validation follow the
+  [Moonraker file API](https://moonraker.readthedocs.io/en/latest/external_api/file_manager/).
+
+No printer hardware was mutated during these tests. Moonraker has no atomic
+client-side check-and-start transaction; other-client races and installed
+firmware compatibility still require supervised qualification.

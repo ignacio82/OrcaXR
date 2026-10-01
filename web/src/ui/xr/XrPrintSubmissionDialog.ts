@@ -41,6 +41,12 @@ export interface XrPrintStartOptionRow {
 }
 
 export interface XrPrintSubmissionContext {
+  readonly storedFile?: boolean;
+  readonly filename?: string;
+  readonly overwriteLabel?: string;
+  readonly overwriteAllowed?: boolean;
+  readonly overwriteEnabled?: boolean;
+  onToggleOverwrite?(): void;
   readonly printerName: string;
   readonly availablePrinters: readonly string[];
   readonly plateName: string;
@@ -65,6 +71,7 @@ export interface XrPrintSubmissionContext {
   readonly toolSummaryText?: string;
   readonly readyToPrint: boolean;
   readonly blockedReason?: string;
+  readonly warnings?: readonly string[];
   /** Pre-print options this machine reported; empty when it reported none. */
   readonly startOptions?: readonly XrPrintStartOptionRow[];
   onToggleStartOption?(id: string): void;
@@ -177,6 +184,20 @@ export function renderXrPrintSubmissionDialog<PanelNode, ImageNode, TextNode>(
     { fontSize: 12, color: '#a0aab5' },
   );
   ui.appendChild(printerCard, metaText);
+
+  if (ctx.filename)
+    ui.appendChild(container, ui.createText(`File: ${ctx.filename}`, { fontSize: 12, color: C.textMuted }));
+  if (ctx.overwriteLabel) {
+    const overwrite = createXrButton(ui, {
+      label: `${ctx.overwriteEnabled ? '☑' : '☐'} ${ctx.overwriteLabel}`,
+      fontSize: 12,
+      enabled: ctx.overwriteAllowed,
+      onClick: () => {
+        if (ctx.overwriteAllowed) ctx.onToggleOverwrite?.();
+      },
+    });
+    ui.appendChild(container, overwrite.root);
+  }
 
   // Section 2: Filament Slot Mapping
   if (ctx.toolSlots.length === 0 && ctx.toolSummaryText) {
@@ -291,6 +312,9 @@ export function renderXrPrintSubmissionDialog<PanelNode, ImageNode, TextNode>(
     });
     ui.appendChild(container, blockNotice);
   }
+  for (const warning of ctx.warnings ?? []) {
+    ui.appendChild(container, ui.createText(warning, { fontSize: 12, color: C.warn }));
+  }
 
   // What the machine can do around the print. An unavailable row stays on
   // screen carrying the printer's own reason, exactly as the flat dialog does:
@@ -354,8 +378,8 @@ export function renderXrPrintSubmissionDialog<PanelNode, ImageNode, TextNode>(
   ui.appendChild(container, actionRow);
 
   const sendAndPrintBtn = createXrButton(ui, {
-    label: 'Send & Print',
-    primary: true,
+    label: ctx.storedFile ? 'Start print' : 'Send & Print',
+    primary: ctx.storedFile === true,
     flexGrow: 2,
     enabled: ctx.readyToPrint,
     onClick: ctx.onSendAndPrint,
@@ -364,11 +388,12 @@ export function renderXrPrintSubmissionDialog<PanelNode, ImageNode, TextNode>(
 
   const sendOnlyBtn = createXrButton(ui, {
     label: 'Send Only',
+    primary: true,
     flexGrow: 1,
-    enabled: ctx.readyToPrint,
+    enabled: true,
     onClick: ctx.onSendOnly,
   });
-  ui.appendChild(actionRow, sendOnlyBtn.root);
+  if (!ctx.storedFile) ui.appendChild(actionRow, sendOnlyBtn.root);
 
   const cancelBtn = createXrButton(ui, {
     label: 'Cancel',
