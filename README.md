@@ -91,6 +91,29 @@ Generated server tokens are stored with owner-only permissions. Startup logs nam
 the protected file only; they never print its value. Keep token files out of
 shared diagnostics and use `ORCAXR_SERVER_TOKEN_FILE` for managed deployments.
 
+### Slicer job recovery and cancellation
+
+`POST /slice?async=1` returns a job ID. `GET /jobs/:id` reports status and,
+after completion, `completedAt` and `expiresAt` timestamps. Completed G-code can
+be downloaded repeatedly from `GET /jobs/:id/gcode` for ten minutes by default
+(`ORCAXR_JOB_TTL_MS`). Interrupted downloads do not delete the result. Synchronous
+`POST /slice` responses also expose the ID through `X-OrcaXR-Job-Id` for retries.
+
+`DELETE /jobs/:id` cancels active work or releases a terminal result, returning
+its terminal status before release. Repeated release is idempotent. Downloads
+already in progress retain their files until all readers finish. New work gets
+a retryable 503 when retained results fill the configured capacity. Browser
+clients verify the job ID, SHA-256, and artifact byte count before releasing a
+completed result; unsupported or failed releases fall back to TTL cleanup.
+
+Only successful native process completion can publish G-code. Cancellation
+terminates the owned process group before releasing the worker slot, including
+descendants that outlive their parent or ignore SIGTERM. This guarantee is
+qualified on Linux with a reaping init process: keep Compose's `init: true`
+(or use `docker run --init`). Other hosts do not have equivalent qualified
+process-tree behavior. A task stuck in kernel I/O remains owned until it exits;
+the browser reports an unconfirmed cancellation if its cleanup deadline expires.
+
 ## Project Status
 
 - **Android App**: Deprecated.

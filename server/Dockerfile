@@ -155,7 +155,7 @@ COPY --from=tailscale /usr/local/bin/tailscale /usr/local/bin/tailscale
 COPY --from=tailscale /usr/local/bin/tailscaled /usr/local/bin/tailscaled
 
 # Copy server code and entrypoint
-COPY server/server.js server/security.mjs server/slice_worker.mjs server/preset_key_types.json ./
+COPY server/server.js server/security.mjs server/slice_worker.mjs server/owned-process.mjs server/preset_key_types.json ./
 COPY server/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 

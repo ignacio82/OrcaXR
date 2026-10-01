@@ -1,13 +1,25 @@
 import express from "express";
 import multer from "multer";
 import cors from "cors";
-import { spawn } from "node:child_process";
-import { createReadStream, existsSync, readFileSync } from "node:fs";
+import {
+  spawnDetached,
+  terminateProcessTree,
+  waitForChild,
+} from "./owned-process.mjs";
+export { terminateProcessTree } from "./owned-process.mjs";
+import {
+  constants as fsConstants,
+  createReadStream,
+  closeSync,
+  openSync,
+  readSync,
+  existsSync,
+  readFileSync,
+} from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
-import readline from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   bearerTokenMatches,
@@ -57,7 +69,10 @@ const CLI_PROVENANCE_PATH =
 
 function sha256File(filePath) {
   try {
-    return crypto.createHash("sha256").update(readFileSync(filePath)).digest("hex");
+    return crypto
+      .createHash("sha256")
+      .update(readFileSync(filePath))
+      .digest("hex");
   } catch {
     return null;
   }
@@ -102,7 +117,8 @@ function buildCliAttestation(engine) {
       schemaVersion: 1,
       engine,
       attested: false,
-      reason: "This server's Snapmaker Orca binary does not match the provenance manifest beside it.",
+      reason:
+        "This server's Snapmaker Orca binary does not match the provenance manifest beside it.",
       artifacts: { [path.basename(binaryPath)]: digest },
     };
   }
@@ -152,17 +168,21 @@ function buildEngineAttestation(engine) {
       schemaVersion: 1,
       engine,
       attested: false,
-      reason: "The server ships no engine provenance manifest beside its WASM artifacts.",
+      reason:
+        "The server ships no engine provenance manifest beside its WASM artifacts.",
     };
   }
   const declared = provenance?.outputs ?? {};
-  const matches = Object.entries(artifacts).every(([name, digest]) => declared[name] === digest);
+  const matches = Object.entries(artifacts).every(
+    ([name, digest]) => declared[name] === digest,
+  );
   if (!matches) {
     return {
       schemaVersion: 1,
       engine,
       attested: false,
-      reason: "The server's WASM artifacts do not match the provenance manifest beside them.",
+      reason:
+        "The server's WASM artifacts do not match the provenance manifest beside them.",
       artifacts,
     };
   }
@@ -286,86 +306,52 @@ async function writeCliPresets(overrides, directory) {
 }
 
 function watchProgressPipe(fifoPath, onProgress) {
-  const stream = createReadStream(fifoPath);
-  const lines = readline.createInterface({ input: stream });
-  lines.on("line", (line) => {
-    try {
-      const event = JSON.parse(line);
-      const percent = Number(event.total_percent ?? event.plate_percent);
-      if (Number.isFinite(percent))
-        onProgress(Math.max(0, Math.min(100, percent)), event.message || "");
-    } catch {
-      // A partial/non-JSON progress line is engine chatter, not a request failure.
+  // A blocking FIFO read can occupy a libuv thread forever when a crashing
+  // engine never opens its writer. Nonblocking polling keeps cleanup finite.
+  const fd = openSync(fifoPath, fsConstants.O_RDWR | fsConstants.O_NONBLOCK);
+  const buffer = Buffer.alloc(16 * 1024);
+  let pending = "";
+  const poll = () => {
+    for (let batch = 0; batch < 16; batch++) {
+      let count;
+      try {
+        count = readSync(fd, buffer, 0, buffer.length, null);
+      } catch {
+        // EAGAIN is normal for a quiet FIFO; progress I/O failures are also
+        // optional telemetry and must not crash the server's interval callback.
+        return;
+      }
+      if (!count) return;
+      pending += buffer.toString("utf8", 0, count);
+      let newline;
+      while ((newline = pending.indexOf("\n")) !== -1) {
+        const line = pending.slice(0, newline);
+        pending = pending.slice(newline + 1);
+        try {
+          const event = JSON.parse(line);
+          const percent = Number(event.total_percent ?? event.plate_percent);
+          if (Number.isFinite(percent))
+            onProgress(
+              Math.max(0, Math.min(100, percent)),
+              event.message || "",
+            );
+        } catch {
+          /* Partial/non-JSON engine chatter isn't a request failure. */
+        }
+      }
+      if (pending.length > 64 * 1024) pending = "";
     }
-  });
-  stream.on("error", () => {});
-  return () => {
-    lines.close();
-    stream.destroy();
   };
-}
-
-function signalProcessTree(child, signal) {
-  if (!child?.pid || child.exitCode !== null || child.signalCode !== null)
-    return;
-  try {
-    if (process.platform !== "win32") process.kill(-child.pid, signal);
-    else child.kill(signal);
-  } catch (error) {
-    if (error.code !== "ESRCH") throw error;
-  }
-}
-
-/** Terminate a detached child and all descendants, escalating after a bounded grace period. */
-export async function terminateProcessTree(child, graceMs = 5000) {
-  if (!child?.pid || child.exitCode !== null || child.signalCode !== null)
-    return;
-  const closed = new Promise((resolve) => child.once("close", resolve));
-  signalProcessTree(child, "SIGTERM");
-  const graceful = await Promise.race([
-    closed.then(() => true),
-    new Promise((resolve) => setTimeout(() => resolve(false), graceMs)),
-  ]);
-  if (graceful) return;
-  signalProcessTree(child, "SIGKILL");
-  await Promise.race([
-    closed,
-    new Promise((resolve) => setTimeout(resolve, 1000)),
-  ]);
-}
-
-function spawnDetached(command, args, options = {}) {
-  return spawn(command, args, {
-    ...options,
-    detached: process.platform !== "win32",
-    stdio: options.stdio ?? ["ignore", "pipe", "pipe"],
-  });
-}
-
-function waitForChild(child, signal, onData = () => {}, killGraceMs = 5000) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const settle = (callback, value) => {
-      if (settled) return;
-      settled = true;
-      signal?.removeEventListener("abort", onAbort);
-      callback(value);
-    };
-    const onAbort = () => {
-      void terminateProcessTree(child, killGraceMs)
-        .catch(() => {})
-        .finally(() => settle(reject, abortReason(signal)));
-    };
-    if (signal?.aborted) onAbort();
-    else signal?.addEventListener("abort", onAbort, { once: true });
-    child.stdout?.on("data", onData);
-    child.stderr?.on("data", onData);
-    child.once("error", (error) => settle(reject, error));
-    child.once("close", (code) => {
-      if (signal?.aborted) settle(reject, abortReason(signal));
-      else settle(resolve, code);
-    });
-  });
+  const timer = setInterval(poll, 50);
+  timer.unref();
+  return () => {
+    clearInterval(timer);
+    try {
+      poll();
+    } finally {
+      closeSync(fd);
+    }
+  };
 }
 
 async function makeFifo(fifoPath, signal, killGraceMs) {
@@ -377,14 +363,10 @@ async function makeFifo(fifoPath, signal, killGraceMs) {
   }
 }
 
-async function runCliSlice({
-  modelPath,
-  outputPath,
-  overrides,
-  onProgress,
-  signal,
-  config,
-}) {
+export async function runCliSlice(
+  { modelPath, outputPath, overrides, onProgress, signal, config },
+  launch = spawnDetached,
+) {
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "orcaxr-out-"));
   const fifoPath = path.join(outDir, "progress.pipe");
   let stopWatching = () => {};
@@ -418,7 +400,7 @@ async function runCliSlice({
     const [command, commandArgs] = XVFB_RUN
       ? [XVFB_RUN, ["-a", "orca-slicer", ...args]]
       : ["orca-slicer", args];
-    const child = spawnDetached(command, commandArgs, {
+    const child = launch(command, commandArgs, {
       env: slicerEnvironment({ SNAPMAKER_ORCA_ALLOW_NEWER_FILE: "1" }),
     });
     let log = "";
@@ -430,6 +412,14 @@ async function runCliSlice({
       },
       config.childKillGraceMs,
     );
+    if (code !== 0)
+      throw Object.assign(
+        new Error(
+          `Native slicer did not exit successfully (${code}). Log:\n${log}`,
+        ),
+        { code: "NATIVE_EXIT_FAILED" },
+      );
+    if (signal?.aborted) throw abortReason(signal);
     const files = await fs.readdir(outDir);
     const gcodeFile = files.find((file) => file.endsWith(".gcode"));
     if (!gcodeFile)
@@ -442,8 +432,11 @@ async function runCliSlice({
       throw new Error("Slicer output exceeds ORCAXR_MAX_GCODE_BYTES");
     await fs.copyFile(sourcePath, outputPath);
   } finally {
-    stopWatching();
-    await fs.rm(outDir, { recursive: true, force: true }).catch(() => {});
+    try {
+      stopWatching();
+    } finally {
+      await fs.rm(outDir, { recursive: true, force: true }).catch(() => {});
+    }
   }
 }
 
@@ -559,7 +552,8 @@ export const WEB_SECURITY_HEADERS = {
 };
 
 export const applyWebHeaders = (res) => {
-  for (const [k, v] of Object.entries(WEB_SECURITY_HEADERS)) res.setHeader(k, v);
+  for (const [k, v] of Object.entries(WEB_SECURITY_HEADERS))
+    res.setHeader(k, v);
 };
 
 function createRateMiddleware(limiter, config = {}) {
@@ -567,8 +561,7 @@ function createRateMiddleware(limiter, config = {}) {
     const userLogin = config.trustedProxy
       ? req.get("tailscale-user-login")
       : null;
-    const key =
-      userLogin || req.ip || req.socket?.remoteAddress || "unknown";
+    const key = userLogin || req.ip || req.socket?.remoteAddress || "unknown";
     const result = limiter.consume(key);
     res.setHeader("X-RateLimit-Remaining", String(result.remaining));
     if (!result.allowed) {
@@ -616,8 +609,7 @@ function normalizeConfig(base, overrides = {}) {
     config.authRequired = true;
   } else {
     config.trustSameOrigin = false;
-    config.authRequired =
-      Boolean(config.token) || !isLoopbackHost(config.host);
+    config.authRequired = Boolean(config.token) || !isLoopbackHost(config.host);
   }
   config.allowLoopbackOrigins = isLoopbackHost(config.host);
   return validateServerConfig(config);
@@ -674,6 +666,11 @@ export function createSlicerService(options = {}) {
           origin: true,
           methods: ["GET", "POST", "DELETE", "OPTIONS"],
           allowedHeaders: ["Authorization", "Content-Type"],
+          exposedHeaders: [
+            "X-OrcaXR-Job-Id",
+            "X-OrcaXR-Gcode-SHA256",
+            "X-OrcaXR-Gcode-Bytes",
+          ],
           credentials: false,
           maxAge: 600,
         });
@@ -690,7 +687,8 @@ export function createSlicerService(options = {}) {
   );
   app.use((req, res, next) => {
     if (req.method === "OPTIONS" || !config.authRequired) return next();
-    if (config.trustSameOrigin && isSameOriginRequest(req, config)) return next();
+    if (config.trustSameOrigin && isSameOriginRequest(req, config))
+      return next();
     if (!bearerTokenMatches(req.get("authorization"), config.token)) {
       res.setHeader("WWW-Authenticate", 'Bearer realm="OrcaXR slicer"');
       return sendError(
@@ -735,8 +733,44 @@ export function createSlicerService(options = {}) {
 
   const removeJob = async (job) => {
     clearTimeout(job.queueTimer);
-    if (!jobs.delete(job.id)) return;
-    await cleanupJob(job, true);
+    job.released = true;
+    if (job.downloads > 0) return;
+    job.cleanupPromise ??= (async () => {
+      await cleanupJob(job, true);
+      jobs.delete(job.id);
+    })();
+    await job.cleanupPromise;
+  };
+
+  const sendResult = async (job, res) => {
+    if (
+      job.released ||
+      (job.completedAt !== undefined &&
+        Date.now() >= job.completedAt + config.jobTtlMs)
+    ) {
+      await removeJob(job);
+      throw new HttpError(
+        410,
+        "JOB_EXPIRED",
+        "The slice result was released or expired.",
+      );
+    }
+    // Acquire synchronously, before sendFile can yield to DELETE or expiry.
+    job.downloads++;
+    res.setHeader("X-OrcaXR-Job-Id", job.id);
+    res.setHeader("X-OrcaXR-Gcode-SHA256", job.outputSha256);
+    res.setHeader("X-OrcaXR-Gcode-Bytes", String(job.outputBytes));
+    res.type("text/plain");
+    try {
+      await new Promise((resolve, reject) =>
+        res.sendFile(job.outputPath, (error) =>
+          error ? reject(error) : resolve(),
+        ),
+      );
+    } finally {
+      job.downloads--;
+      if (job.released) await removeJob(job);
+    }
   };
 
   const executeJob = async (job) => {
@@ -770,6 +804,12 @@ export function createSlicerService(options = {}) {
       if (stat.size > config.maxGcodeBytes)
         throw new Error("Slicer output exceeds configured G-code limit");
       await fs.chmod(job.outputPath, 0o600);
+      const hash = crypto.createHash("sha256");
+      for await (const chunk of createReadStream(job.outputPath))
+        hash.update(chunk);
+      if (job.controller.signal.aborted)
+        throw abortReason(job.controller.signal);
+      job.outputSha256 = hash.digest("hex");
       job.outputBytes = stat.size;
       job.percent = 100;
       job.message = "";
@@ -808,6 +848,7 @@ export function createSlicerService(options = {}) {
     } finally {
       clearTimeout(timeout);
       job.updatedAt = Date.now();
+      job.completedAt = job.updatedAt;
       await cleanupJob(job, false);
       delete job.overrides;
     }
@@ -840,6 +881,7 @@ export function createSlicerService(options = {}) {
 
   const reserveUpload = (req, res, next) => {
     if (jobs.size + pendingUploads >= config.maxStoredJobs) {
+      res.setHeader("Retry-After", "5");
       return sendError(
         res,
         new HttpError(503, "SERVER_BUSY", "The slicer job queue is full."),
@@ -936,6 +978,8 @@ export function createSlicerService(options = {}) {
           message: "",
           createdAt: now,
           updatedAt: now,
+          downloads: 0,
+          released: false,
           controller: new AbortController(),
           modelPath,
           configPath,
@@ -974,6 +1018,7 @@ export function createSlicerService(options = {}) {
               );
             }
             job.updatedAt = Date.now();
+            job.completedAt = job.updatedAt;
             await cleanupJob(job, true);
             delete job.overrides;
           },
@@ -981,6 +1026,8 @@ export function createSlicerService(options = {}) {
 
         if (req.query.async === "1")
           return res.status(202).json({ job: job.id });
+
+        res.setHeader("X-OrcaXR-Job-Id", job.id);
 
         const abortOnDisconnect = () => {
           if (!res.writableEnded && ["queued", "running"].includes(job.status))
@@ -992,7 +1039,6 @@ export function createSlicerService(options = {}) {
         req.removeListener("aborted", abortOnDisconnect);
         res.removeListener("close", abortOnDisconnect);
         if (res.destroyed && !res.writableEnded) {
-          await removeJob(job);
           return;
         }
         if (job.status !== "done") {
@@ -1003,22 +1049,12 @@ export function createSlicerService(options = {}) {
               "Slicing failed. Check the server logs.",
               500,
             );
-          await removeJob(job);
           return sendError(
             res,
             new HttpError(error.status, error.code, error.message),
           );
         }
-        res.type("text/plain");
-        try {
-          await new Promise((resolve, reject) => {
-            res.sendFile(job.outputPath, (error) =>
-              error ? reject(error) : resolve(),
-            );
-          });
-        } finally {
-          await removeJob(job);
-        }
+        await sendResult(job, res);
       } catch (error) {
         await cleanupPaths(...owned);
         throw error;
@@ -1041,6 +1077,12 @@ export function createSlicerService(options = {}) {
       message: job.message,
       error: job.publicError?.message,
       errorCode: job.publicError?.code,
+      ...(job.completedAt === undefined
+        ? {}
+        : {
+            completedAt: job.completedAt,
+            expiresAt: job.completedAt + config.jobTtlMs,
+          }),
     });
   });
 
@@ -1056,16 +1098,7 @@ export function createSlicerService(options = {}) {
       if (job.status !== "done") {
         throw new HttpError(409, "JOB_NOT_READY", `Job is ${job.status}.`);
       }
-      res.type("text/plain");
-      try {
-        await new Promise((resolve, reject) => {
-          res.sendFile(job.outputPath, (error) =>
-            error ? reject(error) : resolve(),
-          );
-        });
-      } finally {
-        await removeJob(job);
-      }
+      await sendResult(job, res);
     }),
   );
 
@@ -1073,17 +1106,11 @@ export function createSlicerService(options = {}) {
     "/jobs/:id",
     asyncRoute(async (req, res) => {
       const job = jobs.get(req.params.id);
-      if (!job)
-        return sendError(
-          res,
-          new HttpError(404, "JOB_NOT_FOUND", "No such job."),
-        );
+      if (!job) return res.json({ status: "released", released: true });
       if (!["queued", "running", "cancelling"].includes(job.status)) {
-        throw new HttpError(
-          409,
-          "JOB_NOT_CANCELLABLE",
-          `Job is ${job.status}.`,
-        );
+        const status = job.status;
+        await removeJob(job);
+        return res.json({ status, released: true });
       }
       cancelJob(job);
       const status = job.status;
@@ -1109,9 +1136,7 @@ export function createSlicerService(options = {}) {
             /-[A-Za-z0-9_-]{8,}\./.test(rel);
           res.setHeader(
             "Cache-Control",
-            contentHashed
-              ? "public, max-age=31536000, immutable"
-              : "no-cache",
+            contentHashed ? "public, max-age=31536000, immutable" : "no-cache",
           );
         },
       }),
@@ -1187,7 +1212,11 @@ export function createSlicerService(options = {}) {
       const now = Date.now();
       for (const job of jobs.values()) {
         if (!["done", "error", "cancelled"].includes(job.status)) continue;
-        if (now - job.updatedAt > config.jobTtlMs) void removeJob(job);
+        if (
+          job.completedAt !== undefined &&
+          now - job.completedAt >= config.jobTtlMs
+        )
+          void removeJob(job);
       }
     },
     Math.min(60_000, Math.max(1000, Math.floor(config.jobTtlMs / 2))),

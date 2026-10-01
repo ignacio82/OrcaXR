@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { sha256Bytes } from '../Utf8Sha256';
 import artifactProvenance from '../../../../wasm/artifact-provenance.json' with { type: 'json' };
 import type { PlateId } from '../../project/domain/ids';
 import { SliceRouteCancellationError, SliceRouteError } from '../../project/slicing/SliceJobCoordinator';
@@ -398,6 +399,89 @@ await test('legacy synchronous external responses report that cancellation was n
       pending,
       (error: unknown) => error instanceof SlicerClientCancellationError && !error.cancellationConfirmed,
     );
+  } finally {
+    restore.restore();
+  }
+});
+
+await test('the public external route validates the completed download before releasing its job', async () => {
+  const restore = installExternalHarness();
+  try {
+    restore.storage.setItem('external_slicer_url', 'http://slicer.local:3000');
+    restore.storage.setItem('external_slicer_enabled', 'true');
+    const gcode = '; complete\nG1 X1\n';
+    const bytes = encoder.encode(gcode);
+    restore.fetchImpl = async (request) => {
+      restore.requests.push(request);
+      if (request.method === 'POST') return jsonResponse({ job: 'job-release' }, 202);
+      if (request.method === 'DELETE') return jsonResponse({ status: 'done', released: true });
+      if (request.url.endsWith('/gcode'))
+        return new Response(gcode, {
+          headers: {
+            'x-orcaxr-job-id': 'job-release',
+            'x-orcaxr-gcode-sha256': sha256Bytes(bytes).slice(7),
+            'x-orcaxr-gcode-bytes': String(bytes.length),
+          },
+        });
+      return jsonResponse({ status: 'done' });
+    };
+    assert.equal(
+      await new SlicerClient().sliceProjectWithRoute(
+        new ArrayBuffer(8),
+        { kind: 'external-server', endpoint: 'http://slicer.local:3000' },
+        { externalPollIntervalMs: 1 },
+      ),
+      gcode,
+    );
+    assert.deepEqual(
+      restore.requests.map((request) => request.method),
+      ['POST', 'GET', 'GET', 'DELETE'],
+    );
+  } finally {
+    restore.restore();
+  }
+});
+
+await test('the public cancellation timeout includes an unresponsive DELETE', async () => {
+  const restore = installExternalHarness();
+  try {
+    restore.storage.setItem('external_slicer_url', 'http://slicer.local:3000');
+    restore.storage.setItem('external_slicer_enabled', 'true');
+    let release!: (response: Response) => void;
+    const accepted = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    restore.fetchImpl = async (request) => {
+      restore.requests.push(request);
+      return request.method === 'POST' ? accepted : new Promise(() => {});
+    };
+    const abort = new AbortController();
+    const pending = new SlicerClient().sliceProjectWithRoute(
+      new ArrayBuffer(8),
+      { kind: 'external-server', endpoint: 'http://slicer.local:3000' },
+      { signal: abort.signal, externalPollIntervalMs: 1, externalCancellationTimeoutMs: 25 },
+    );
+    await waitUntil(() => restore.requests.length === 1);
+    abort.abort();
+    release(jsonResponse({ job: 'job-hung' }, 202));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await assert.rejects(
+        Promise.race([
+          pending,
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('outer safeguard')), 500);
+          }),
+        ]),
+        (error: unknown) =>
+          error instanceof SlicerClientCancellationError &&
+          error.outcome === 'unconfirmed' &&
+          /timed out/.test(error.message),
+      );
+      assert.equal(restore.requests[1].signal.aborted, true);
+    } finally {
+      clearTimeout(timer);
+    }
   } finally {
     restore.restore();
   }

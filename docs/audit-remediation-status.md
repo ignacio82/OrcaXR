@@ -12,7 +12,7 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 | A: operational revocation | Pending | Rotation or invalidation of previously exposed credentials and logged tokens requires operator evidence. Source cleanup does not revoke them. History rewriting is a separate coordinated action. |
 | B: printer session and command intent | Implemented; hardware evidence pending | One controller owns selection, connection epochs, subscriptions, queries, and commands. Immutable click/press intents bind exact job history and metadata; fresh queries reject replacement, reconnect, partial/failing responses, and duplicate commands. DOM/XR holds carry single-use confirmations. Emergency stop and distinct firmware restart remain reachable through authenticated HTTP without status/history success. |
 | C: submission lifecycle | Implemented; hardware evidence pending | Shared DOM/XR workflow owns session/artifact/mapping/option guards, cancellation, preparation, random upload names, exact overwrite and response checks. Stored-file starts also bind confirmation to fresh metadata and readiness. Full web quality passes; supervised firmware evidence remains pending. |
-| D: process and artifact lifecycle | Pending | Successful native exit, descendant termination, retryable downloads with leases/TTL/release, bounded cancellation. |
+| D: process and artifact lifecycle | Implemented | Native exit/group termination, repeatable downloads, leases, TTL/release, capacity refusal, artifact validation and bounded browser cancellation pass server, container and full web gates. Fresh native image assembly remains a deployment qualification item. |
 | E: deployment and artifacts | Pending | Static/API separation, Tailscale namespace/trust, adjacent-manifest verification, atomic publication, deployment coverage. The existing local server manifest was repaired only after all three binary copies matched canonical SHA-256 hashes. |
 | F: discovery and startup | Pending | Transactional discovery and truthful capability initialization/recovery on DOM and XR. |
 | G: controllers and snapshots | Pending | Controller ownership/disposal and opaque immutable asset rollback snapshots. |
@@ -130,3 +130,34 @@ revocation, and independent security/release review remain unqualified.
 No printer hardware was mutated during these tests. Moonraker has no atomic
 client-side check-and-start transaction; other-client races and installed
 firmware compatibility still require supervised qualification.
+
+## Slicing lifecycle verification (2026-10-01)
+
+- Native regressions reproduced publication after exit 17 or a signal, and a
+  live descendant after the immediate child exited. Nine lifecycle tests now
+  cover those cases, normal/missing/oversized output, a CLI that never opens its
+  progress FIFO, cancellation, and SIGKILL escalation of a TERM-ignoring child.
+  The same nine pass in an isolated Linux container with `--init`, including
+  disappearance of adopted descendants from `/proc`. This uses the existing
+  runtime image with current code mounted; it is not a fresh native image build.
+- All 48 server tests pass against the default artifact path. HTTP regressions
+  cover interrupted/repeated/concurrent downloads, expiry and release while
+  transferring, retained-capacity refusal, synchronous job recovery, bounded
+  private diagnostics, and unsuccessful jobs never publishing partial output.
+- The old browser deadline probe failed because a hung DELETE never reached its
+  timer. Nineteen helper tests and fourteen canonical-route tests now cover
+  hung DELETE/body/poll/delay, independent cleanup cancellation, distinct
+  terminal outcomes, complete download before release, digest/length/identity
+  mismatch, insecure-LAN hashing, older servers, and failed or hung releases.
+- Full `npm --prefix web run quality` passes: 231 unit test files, all
+  integration/project/settings/localization/XR checks, production browser and
+  offline tests, 28 accessibility rules, 155 pseudo-localized controls, and
+  thirteen real slicing test files. Unchanged budgets: main 2,344,997 bytes;
+  total JavaScript 10,565,669 bytes.
+- Qualification reporting was regenerated; the five human gates remain
+  incomplete. Current-source scanning uses the same pinned Gitleaks image and
+  unchanged repository rules.
+
+Process-tree settlement is qualified on Linux with an init reaper. A kernel task
+that remains alive after SIGKILL keeps its worker slot; cancellation cannot be
+reported confirmed prematurely. Other host platforms remain unqualified.

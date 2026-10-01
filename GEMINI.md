@@ -918,9 +918,33 @@ The server defaults to loopback. Any non-loopback `HOST` fails startup unless
 `ORCAXR_SERVER_TOKEN` contains at least 32 bytes and
 `ORCAXR_ALLOWED_ORIGINS` contains exact HTTP(S) origins; wildcard CORS is
 forbidden. Upload/JSON/ZIP/output/rate/queue/job/time limits are configurable,
-child process trees are cancelled and reaped, completed jobs expire, and logs
+owned Linux process groups are cancelled before releasing their worker slots,
+completed jobs expire, and logs
 record only bounded error class/code—not engine messages that may contain paths
 or secrets. Keep the abuse tests green when adding an endpoint or runner.
+
+Native output is private until the process exits successfully and its regular,
+nonempty, bounded file passes validation. Nonzero/signaled exit, timeout, or
+cancellation cannot publish a partial file. Track the detached process group
+even after the leader exits; SIGTERM escalates to SIGKILL, and settlement waits
+for all owned live members. Linux `/proc` distinguishes dead zombies from running
+members; the supported container must retain `init: true` to reap adopted
+descendants. Other host platforms have no qualified process-tree guarantee.
+A kernel task that cannot yet exit continues to occupy its slot. Native progress
+FIFO reads are nonblocking so an engine that never opens its writer cannot strand
+libuv threads during cleanup.
+
+Completed job downloads are repeatable until terminal-completion TTL (ten minutes
+by default) or explicit DELETE. Each transfer holds a file lease; expiry/release
+cannot unlink a file until all readers finish. Capacity rejects new work with a
+retryable 503 rather than evicting unexpired results. GET status reports terminal
+timestamps; synchronous responses expose `X-OrcaXR-Job-Id`. Both download routes
+expose SHA-256 and uncompressed byte-count headers. The browser validates those
+before a best-effort release; missing evidence on an older server leaves TTL
+cleanup in charge. Cancellation uses one independent deadline for DELETE, JSON,
+polling, and delays, and distinguishes confirmed cancellation from an already
+terminal job and an unconfirmed outcome. Its 30-second inner deadline precedes
+the canonical route's 31-second outer cleanup safeguard.
 
 Multer is pinned to 2.4.0 or newer: 2.2/2.3 can orphan disk writes when an
 upload aborts before the filename callback. Keep the delayed-storage regression

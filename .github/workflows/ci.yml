@@ -144,6 +144,13 @@ jobs:
         env:
           ORCAXR_SERVER_TOKEN: test-only-token-00000000000000000
           ORCAXR_ALLOWED_ORIGINS: https://app.example
+      - name: Verify process group termination and init reaping in the built image
+        run: >-
+          docker compose -f server/docker-compose.yml run --rm --no-deps
+          --entrypoint node -e HOST=127.0.0.1 -e ORCAXR_TRUST=loopback
+          -e ORCAXR_TEST_REQUIRE_REAP=1
+          -v "$PWD/server/process-lifecycle.test.mjs:/app/process-lifecycle.test.mjs:ro"
+          orcaxr --test /app/process-lifecycle.test.mjs
 
   secrets:
     name: Secret scan

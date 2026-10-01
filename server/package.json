@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test server.unit.test.mjs server.integration.test.mjs multipart.test.mjs",
+    "test": "node --test server.unit.test.mjs server.integration.test.mjs multipart.test.mjs process-lifecycle.test.mjs",
     "test:unit": "node --test server.unit.test.mjs",
     "test:integration": "node --test server.integration.test.mjs multipart.test.mjs"
   },
