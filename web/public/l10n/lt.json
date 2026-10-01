@@ -63,6 +63,7 @@
   "action.view_show_gcode_window.label": "Rodyti G-kodo langą",
   "action.view_show_navigator.label": "Rodyti 3D navigatorių",
   "actions.actionContext.keyboardShortcuts": "Klaviatūros nuorodos",
+  "app.externalSlicer.offline": "Neprisijungus",
   "app.main.del": "Del",
   "dialog.recreateModelColors.cancel": "Atšaukti",
   "ui.brimEarsPanel.brimEars": "Krašto \"ausys\"",

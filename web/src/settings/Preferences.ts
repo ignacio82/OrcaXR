@@ -11,18 +11,22 @@
  * silent loss, and migration is not hypothetical here: the slicer route was
  * originally written under unnamespaced keys (`external_slicer_url`,
  * `external_slicer_enabled`) that collide with anything else on the origin, and
- * v2 moves them under `orcaxr.`. An old install is migrated on first read.
+ * v2 moves them under `orcaxr.`. Version 3 adds one atomic slicer connection
+ * record, so endpoint, opt-in and attestation cannot persist independently.
+ * Existing v1/v2 routes remain readable migration inputs.
  *
  * Secrets are not part of this. `RememberedCredentials` owns those, with its
  * own switch, so exporting preferences to share a setup cannot leak a token.
  */
 
-export const PREFERENCES_SCHEMA_VERSION = 2;
+export const PREFERENCES_SCHEMA_VERSION = 3;
 
 const STORAGE_KEY = 'orcaxr.preferences';
 /** Pre-v2 keys, unnamespaced and therefore collision-prone. */
 const LEGACY_SLICER_URL_KEY = 'external_slicer_url';
 const LEGACY_SLICER_ENABLED_KEY = 'external_slicer_enabled';
+
+export const SLICER_CONNECTION_KEY = 'orcaxr.slicer.connection';
 
 export const SLICER_URL_KEY = 'orcaxr.slicer.url';
 export const SLICER_ENABLED_KEY = 'orcaxr.slicer.enabled';
@@ -41,12 +45,24 @@ export const LANGUAGE_KEY = 'orcaxr.language';
 
 export const PREFERENCE_KEYS: readonly string[] = Object.freeze([
   STORAGE_KEY,
+  SLICER_CONNECTION_KEY,
   SLICER_URL_KEY,
   SLICER_ENABLED_KEY,
+  'oxr_slicer_origin',
   LANGUAGE_KEY,
   'orcaxr.printer',
   'orcaxr.credentials',
 ]);
+
+type PreferenceChange = 'import' | 'reset';
+const preferenceListeners = new Set<(kind: PreferenceChange) => void>();
+export function subscribePreferenceChanges(listener: (kind: PreferenceChange) => void): () => void {
+  preferenceListeners.add(listener);
+  return () => preferenceListeners.delete(listener);
+}
+function notifyPreferenceChange(kind: PreferenceChange): void {
+  for (const listener of preferenceListeners) listener(kind);
+}
 
 /** Keys that hold work, not settings. Reset must leave every one of these alone. */
 export const PROJECT_DATA_KEYS: readonly string[] = Object.freeze([
@@ -151,8 +167,12 @@ export function exportPreferences(storage: KeyValueStorage | null = browserStora
     migrateLegacyKeys(storage);
     for (const key of PREFERENCE_KEYS) {
       if (key === 'orcaxr.credentials') continue;
-      const value = storage.getItem(key);
-      if (value !== null) values[key] = value;
+      try {
+        const value = storage.getItem(key);
+        if (value !== null) values[key] = value;
+      } catch {
+        /* Export the available preferences when browser storage is blocked. */
+      }
     }
   }
   return Object.freeze({
@@ -200,7 +220,8 @@ export function importPreferences(
   }
   if (!storage) return { applied: [], warnings: ['This browser has no storage to import into.'] };
 
-  for (const [key, value] of Object.entries(candidate.values)) {
+  for (const [key, raw] of Object.entries(candidate.values)) {
+    let value = raw;
     if (typeof value !== 'string') {
       warnings.push(`Ignored ${key}: a preference value must be text.`);
       continue;
@@ -213,13 +234,44 @@ export function importPreferences(
       warnings.push(`Ignored ${key}: not a preference this build recognises.`);
       continue;
     }
+    if (key === SLICER_CONNECTION_KEY) {
+      try {
+        const connection = JSON.parse(value);
+        value = JSON.stringify({ ...connection, enabled: false, explicitlyDisabled: true, attestation: null });
+      } catch {
+        /* The connection reader will reject a malformed record. */
+      }
+    }
     try {
-      storage.setItem(key, value);
+      storage.setItem(key, value as string);
       applied.push(key);
     } catch {
       warnings.push(`Could not store ${key}; this browser refused the write.`);
     }
   }
+  // An imported endpoint has not been attested in this session. Preserve it as
+  // a disabled candidate, including imports made before the atomic record existed.
+  if (
+    !applied.includes(SLICER_CONNECTION_KEY) &&
+    applied.some((key) => key === SLICER_URL_KEY || key === SLICER_ENABLED_KEY)
+  ) {
+    try {
+      storage.setItem(
+        SLICER_CONNECTION_KEY,
+        JSON.stringify({
+          version: 1,
+          endpoint: storage.getItem(SLICER_URL_KEY) ?? '',
+          enabled: false,
+          explicitlyDisabled: true,
+          origin: 'user',
+          attestation: null,
+        }),
+      );
+    } catch {
+      warnings.push('Could not store the imported slicer connection.');
+    }
+  }
+  notifyPreferenceChange('import');
   // A pre-v2 export names the old keys, so migrate straight after applying it.
   migrateLegacyKeys(storage);
   return { applied: Object.freeze(applied), warnings: Object.freeze(warnings) };
@@ -233,7 +285,10 @@ export function importPreferences(
  * work, not a setting.
  */
 export function resetPreferences(storage: KeyValueStorage | null = browserStorage()): void {
-  if (!storage) return;
+  if (!storage) {
+    notifyPreferenceChange('reset');
+    return;
+  }
   for (const key of [...PREFERENCE_KEYS, LEGACY_SLICER_URL_KEY, LEGACY_SLICER_ENABLED_KEY]) {
     try {
       storage.removeItem(key);
@@ -241,6 +296,7 @@ export function resetPreferences(storage: KeyValueStorage | null = browserStorag
       // Nothing useful to do; the caller reports the outcome.
     }
   }
+  notifyPreferenceChange('reset');
 }
 
 /**

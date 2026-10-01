@@ -65,6 +65,7 @@
   "action.view_show_gcode_window.label": "G-code Penceresini Göster",
   "action.view_show_navigator.label": "3D Gezgini Göster",
   "actions.actionContext.keyboardShortcuts": "Klavye kısayolları",
+  "app.externalSlicer.offline": "Çevrimdışı",
   "app.main.del": "Sil",
   "dialog.recreateModelColors.cancel": "İptal",
   "ui.brimEarsPanel.brimEars": "Kenar  kulakları",

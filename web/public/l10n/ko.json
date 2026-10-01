@@ -63,6 +63,7 @@
   "action.view_show_gcode_window.label": "Gcode 창 표시 (G)",
   "action.view_show_navigator.label": "3D 내비게이터 표시",
   "actions.actionContext.keyboardShortcuts": "키보드 단축키",
+  "app.externalSlicer.offline": "오프라인",
   "app.main.del": "Del",
   "dialog.recreateModelColors.cancel": "취소",
   "ui.brimEarsPanel.brimEars": "브림 귀",

@@ -1,7 +1,15 @@
 import { fetchLocalNetwork, normalizeHttpEndpoint } from '../net/LocalNetworkAccess';
-import { SLICER_ENABLED_KEY, SLICER_URL_KEY, migrateLegacyKeys } from '../settings/Preferences';
+import { subscribePreferenceChanges } from '../settings/Preferences';
+import { ExternalSlicerConnectionController } from './ExternalSlicerConnectionController';
+import {
+  attestExternalEndpoint,
+  canonicalExternalEndpoint,
+  type ExternalEngineFetcher,
+  type EngineAttestation,
+  type VerifiedEngineAttestation,
+} from './ExternalEngineAttestation';
+import type { SliceEngineMetadata } from '../project/slicing/types';
 import { loadRememberedCredentials, saveRememberedCredentials } from '../settings/RememberedCredentials';
-import { PINNED_ENGINE_PROVENANCE } from './pinnedEngineProvenance';
 import { SlicerClientCancellationError } from './SlicerClientCancellationError';
 import type { ExternalJobContext } from './ExternalSlicerJobs';
 export { SlicerClientCancellationError } from './SlicerClientCancellationError';
@@ -20,7 +28,12 @@ export interface SliceProgress {
 }
 
 export type SlicerClientProjectRoute =
-  { readonly kind: 'browser-wasm' } | { readonly kind: 'external-server'; readonly endpoint: string };
+  | { readonly kind: 'browser-wasm' }
+  | { readonly kind: 'external-server'; readonly endpoint: string; readonly connectionGeneration?: number };
+
+export type AttestedProjectRoute =
+  | { readonly attested: true; readonly route: SlicerClientProjectRoute; readonly externalEngine?: SliceEngineMetadata }
+  | { readonly attested: false; readonly reason: string };
 
 export interface SlicerClientProjectSliceOptions {
   readonly maxThreads?: number;
@@ -100,15 +113,20 @@ function isolationFailureMessage(subject: string): string {
   );
 }
 
-// Namespaced since preferences v2; an install written under the old
-// unnamespaced names is migrated by `Preferences.migrateLegacyKeys`, which
-// runs before anything reads them.
-const EXTERNAL_URL_KEY = SLICER_URL_KEY;
-const EXTERNAL_ENABLED_KEY = SLICER_ENABLED_KEY;
-const SLICER_ORIGIN_STORAGE_KEY = 'oxr_slicer_origin';
+const externalConnection = new ExternalSlicerConnectionController(() => {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
+  }
+});
+const unsubscribeExternalPreferences = subscribePreferenceChanges((kind) =>
+  externalConnection.preferencesChanged(kind === 'reset'),
+);
+const fetchExternalEngine: ExternalEngineFetcher = (url, signal) =>
+  fetchLocalNetwork(url, { signal, headers: SlicerClient.externalAuthHeaders() });
 
 export class SlicerClient {
-  private static externalConnectionEpoch = 0;
   private module: Slic3rModule | null = null;
   private loading: Promise<Slic3rModule> | null = null;
   private slicing = false;
@@ -130,48 +148,37 @@ export class SlicerClient {
   private workerJobSeq = 0;
   private projectProgress: ((progress: SliceProgress) => void) | null = null;
 
-  // ---- External slicer configuration (shared by the 2D + XR UIs) --------
-  // Two independent pieces of state: the saved URL (survives being turned
-  // off) and an explicit enabled flag. A model is used externally only when
-  // a URL is configured AND the flag is on, so the user can keep a server
-  // saved while slicing locally, and can delete it outright.
+  // One controller is shared by the DOM/XR configuration and every slice route.
   static getExternalSlicerUrl(): string {
-    // Migration is idempotent and runs here because this is the first read on
-    // every path that cares about the route.
-    migrateLegacyKeys(localStorage);
-    return localStorage.getItem(EXTERNAL_URL_KEY) || '';
+    return externalConnection.snapshot.endpoint;
   }
-
-  private static setExternalSlicerUrl(url: string): void {
-    const v = url.trim();
-    if (v) localStorage.setItem(EXTERNAL_URL_KEY, v);
-    else localStorage.removeItem(EXTERNAL_URL_KEY);
+  static getExternalSlicerOriginType() {
+    return externalConnection.snapshot.origin;
   }
-
-  static getExternalSlicerOriginType(): 'user' | 'auto-discovered' | 'none' {
-    if (!SlicerClient.getExternalSlicerUrl()) return 'none';
-    return localStorage.getItem(SLICER_ORIGIN_STORAGE_KEY) === 'auto-discovered' ? 'auto-discovered' : 'user';
-  }
-
   static isExternalSlicerEnabled(): boolean {
-    if (!SlicerClient.getExternalSlicerUrl()) return false;
-    // Fail closed for legacy URL-only preferences. An external endpoint may
-    // receive model geometry, so only an explicit, persisted opt-in is valid.
-    return localStorage.getItem(EXTERNAL_ENABLED_KEY) === 'true';
+    return externalConnection.snapshot.enabled;
   }
-
-  /** Route all slices locally and invalidate any connection probe in flight. */
+  static getExternalSlicerConnection() {
+    return externalConnection.snapshot;
+  }
+  static subscribeExternalSlicerConnection(listener: Parameters<ExternalSlicerConnectionController['subscribe']>[0]) {
+    return externalConnection.subscribe(listener);
+  }
+  static invalidateExternalSlicerProbe(): void {
+    externalConnection.invalidate();
+  }
+  static refreshExternalSlicerPreferences(): void {
+    externalConnection.preferencesChanged();
+  }
+  static disposeExternalSlicerConnection(): void {
+    unsubscribeExternalPreferences();
+    externalConnection.dispose();
+  }
   static disableExternalSlicer(): void {
-    SlicerClient.externalConnectionEpoch += 1;
-    localStorage.setItem(EXTERNAL_ENABLED_KEY, 'false');
+    externalConnection.disable();
   }
-
-  /** Forget the configured external slicer entirely. */
   static clearExternalSlicer(): void {
-    SlicerClient.externalConnectionEpoch += 1;
-    localStorage.removeItem(EXTERNAL_URL_KEY);
-    localStorage.removeItem(EXTERNAL_ENABLED_KEY);
-    localStorage.removeItem(SLICER_ORIGIN_STORAGE_KEY);
+    externalConnection.clear();
   }
 
   /**
@@ -181,6 +188,7 @@ export class SlicerClient {
    * `persist: false` to change only the live value.
    */
   static setExternalSlicerToken(token: string, options: { readonly persist?: boolean } = {}): void {
+    if (externalSlicerToken !== token.trim()) externalConnection.invalidate();
     externalSlicerToken = token.trim();
     if (options.persist === false) return;
     const stored = loadRememberedCredentials();
@@ -200,7 +208,8 @@ export class SlicerClient {
 
   /** True when the next slice will be dispatched to the external server. */
   static useExternalSlicer(): boolean {
-    return !!SlicerClient.getExternalSlicerUrl() && SlicerClient.isExternalSlicerEnabled();
+    const state = externalConnection.snapshot;
+    return !!state.endpoint && state.enabled;
   }
 
   /**
@@ -218,182 +227,93 @@ export class SlicerClient {
    * CLI route — the one that exists precisely to match desktop output — refuse
    * itself.
    */
-  static async attestExternalEngine(
-    fetcher: (url: string) => Promise<{ ok: boolean; status?: number; json?: () => Promise<unknown> }> = (url) =>
-      fetchLocalNetwork(url, { headers: SlicerClient.externalAuthHeaders() }),
-  ): Promise<{ attested: true; commit: string } | { attested: false; reason: string }> {
-    const endpoint = SlicerClient.useExternalSlicer() ? SlicerClient.getExternalSlicerUrl() : '';
-    if (!endpoint) return { attested: false, reason: 'No external slicer is enabled.' };
-    let payload: unknown;
+  static async attestExternalEngine(fetcher: ExternalEngineFetcher = fetchExternalEngine): Promise<EngineAttestation> {
+    if (!SlicerClient.useExternalSlicer()) return { attested: false, reason: 'No external slicer is enabled.' };
+    const capture = await SlicerClient.attestCapturedProjectRoute(fetcher);
+    if (!capture.attested) return capture;
+    return { attested: true, commit: capture.externalEngine!.commit };
+  }
+
+  /** Bind proof and endpoint to one generation; never re-read preferences to choose the proven route. */
+  static async attestCapturedProjectRoute(
+    fetcher: ExternalEngineFetcher = fetchExternalEngine,
+  ): Promise<AttestedProjectRoute> {
+    const state = externalConnection.snapshot;
+    if (state.configurationError) return { attested: false, reason: state.configurationError };
+    if (!state.enabled) return { attested: true, route: Object.freeze({ kind: 'browser-wasm' }) };
+    const changed = 'The external slicer changed while its engine was being checked.';
+    const abort = new AbortController();
+    const unsubscribe = externalConnection.subscribe((next) => {
+      if (next.generation !== state.generation) abort.abort(changed);
+    });
+    const timer = setTimeout(() => abort.abort('The external slicer engine check timed out.'), 8_000);
+    let removeAbort = () => {};
     try {
-      const response = await fetcher(`${canonicalExternalEndpoint(endpoint)}/engine`);
-      if (!response.ok) {
-        // The status separates the two ways this fails in practice, which
-        // otherwise look identical from the browser: an old server has no
-        // /engine route at all, and a secured one wants a token first.
-        if (response.status === 401 || response.status === 403) {
-          return {
-            attested: false,
-            reason: 'The external slicer requires a token before it will report its engine.',
-          };
-        }
-        const status = response.status === undefined ? '' : ` (HTTP ${response.status})`;
-        return {
-          attested: false,
-          reason: `The external slicer did not report its engine provenance${status}; update the slicer server to a build that serves /engine.`,
-        };
-      }
-      payload = await response.json?.();
-    } catch {
-      return { attested: false, reason: 'The external slicer could not be reached to check its engine.' };
+      const cancelled = new Promise<VerifiedEngineAttestation>((resolve) => {
+        const onAbort = () => resolve({ attested: false, reason: String(abort.signal.reason) });
+        abort.signal.addEventListener('abort', onAbort, { once: true });
+        removeAbort = () => abort.signal.removeEventListener('abort', onAbort);
+      });
+      const proof = await Promise.race([attestExternalEndpoint(state.endpoint, fetcher, abort.signal), cancelled]);
+      if (externalConnection.snapshot.generation !== state.generation) return { attested: false, reason: changed };
+      if (!proof.attested) return proof;
+      return Object.freeze({
+        attested: true,
+        route: Object.freeze({
+          kind: 'external-server',
+          endpoint: state.endpoint,
+          connectionGeneration: state.generation,
+        }),
+        externalEngine: Object.freeze({ commit: proof.commit, artifactHash: proof.artifactHash }),
+      });
+    } finally {
+      clearTimeout(timer);
+      removeAbort();
+      unsubscribe();
     }
-    if (typeof payload !== 'object' || payload === null) {
-      return { attested: false, reason: 'The external slicer returned a malformed engine attestation.' };
-    }
-    const record = payload as {
-      engine?: unknown;
-      attested?: unknown;
-      reason?: unknown;
-      artifacts?: unknown;
-      patches?: unknown;
-      upstream?: { commit?: unknown };
-    };
-    if (record.attested !== true) {
-      const reason = typeof record.reason === 'string' ? record.reason : 'It reported no verifiable engine build.';
-      return { attested: false, reason };
-    }
-    const artifacts = record.artifacts;
-    if (typeof artifacts !== 'object' || artifacts === null) {
-      return { attested: false, reason: 'The external slicer attested no engine artifacts.' };
-    }
-    if (record.upstream?.commit !== PINNED_ENGINE_PROVENANCE.commit) {
-      return { attested: false, reason: 'The external slicer reports a different pinned engine commit.' };
-    }
-    const failure =
-      record.engine === 'wasm'
-        ? compareWasmArtifacts(artifacts as Record<string, unknown>)
-        : compareCliPatches(record.patches);
-    if (failure) return { attested: false, reason: failure };
-    return { attested: true, commit: PINNED_ENGINE_PROVENANCE.commit };
   }
 
   /** Capture one immutable semantic route. Callers must not re-decide mid-job. */
   static captureProjectRoute(): SlicerClientProjectRoute {
-    const endpoint = SlicerClient.useExternalSlicer()
-      ? canonicalExternalEndpoint(SlicerClient.getExternalSlicerUrl())
-      : '';
+    const state = externalConnection.snapshot;
+    if (state.configurationError) throw new Error(state.configurationError);
+    const endpoint = state.enabled ? canonicalExternalEndpoint(state.endpoint) : '';
     return endpoint ? { kind: 'external-server', endpoint } : { kind: 'browser-wasm' };
   }
 
-  /**
-   * Verify a user-selected endpoint before making it the active slice route.
-   *
-   * The current route is disabled before probing. This keeps a failed attempt
-   * to replace endpoint A with candidate B from leaving A silently active
-   * while the UI reports B as offline. The last configured URL remains saved so
-   * the UI can restore it, but slicing stays local after any failed probe.
-   */
-  static async connectExternalSlicer(
+  /** A replacement stays disabled until both reachability and provenance succeed. */
+  static connectExternalSlicer(
     candidate: string,
-    probe: (url: string) => Promise<{ ok: boolean }> = (url) =>
-      fetchLocalNetwork(url, { headers: SlicerClient.externalAuthHeaders() }),
+    fetcher: ExternalEngineFetcher = fetchExternalEngine,
+    origin: 'user' | 'auto-discovered' = 'user',
   ): Promise<string> {
-    SlicerClient.disableExternalSlicer();
-    const connectionEpoch = SlicerClient.externalConnectionEpoch;
-    let endpoint: string;
-    try {
-      endpoint = canonicalExternalEndpoint(candidate);
-    } catch (error) {
-      throw new Error('Enter a plain HTTP or HTTPS external slicer URL without credentials, query, or fragment.', {
-        cause: error,
-      });
-    }
-
-    const response = await probe(`${endpoint}/ping`);
-    if (!response.ok) throw new Error('The external slicer did not accept the connection.');
-    if (connectionEpoch !== SlicerClient.externalConnectionEpoch) {
-      throw new Error('The external slicer connection attempt was superseded.');
-    }
-
-    SlicerClient.setExternalSlicerUrl(endpoint);
-    localStorage.setItem(SLICER_ORIGIN_STORAGE_KEY, 'user');
-    // This is intentionally the sole code path that writes enabled=true.
-    localStorage.setItem(EXTERNAL_ENABLED_KEY, 'true');
-    return endpoint;
+    return externalConnection.connect(
+      candidate,
+      async (endpoint, signal) => {
+        const response = await fetcher(`${endpoint}/ping`, signal);
+        if (!response.ok) throw new Error('The external slicer did not accept the connection.');
+        return attestExternalEndpoint(endpoint, fetcher, signal);
+      },
+      origin,
+    );
   }
 
-  /**
-   * Probe the origin that served the app for an attested external slicer.
-   *
-   * Only activates if the server passes full engine attestation. Reverts to
-   * browser-wasm on any failure. Explicit user-configured endpoints are never
-   * overwritten.
-   */
+  /** Attest the serving origin privately, then activate only if no newer intent intervened. */
   static async autoDiscoverExternalSlicer(
-    fetcher?: (url: string) => Promise<{ ok: boolean; status?: number; json?: () => Promise<unknown> }>,
+    fetcher: ExternalEngineFetcher = fetchExternalEngine,
   ): Promise<
     | { readonly discovered: true; readonly endpoint: string; readonly commit: string }
     | { readonly discovered: false; readonly reason: string }
   > {
-    if (SlicerClient.getExternalSlicerUrl() && SlicerClient.getExternalSlicerOriginType() === 'user') {
-      return { discovered: false, reason: 'A user-configured slicer endpoint is already set.' };
-    }
-
     if (typeof window === 'undefined' || !window.location?.origin) {
       return { discovered: false, reason: 'No window location available.' };
     }
-    const origin = window.location.origin;
     if (window.location.protocol === 'file:' || window.location.hostname.endsWith('github.io')) {
       return { discovered: false, reason: 'Static hosting environment does not run an external slicer.' };
     }
-
-    let canonicalCandidate: string;
-    try {
-      canonicalCandidate = canonicalExternalEndpoint(origin);
-    } catch (error) {
-      return {
-        discovered: false,
-        reason: error instanceof Error ? error.message : 'Invalid candidate origin.',
-      };
-    }
-
-    const savedUrl = SlicerClient.getExternalSlicerUrl();
-    const savedEnabled = localStorage.getItem(EXTERNAL_ENABLED_KEY);
-    const savedOriginType = localStorage.getItem(SLICER_ORIGIN_STORAGE_KEY);
-
-    SlicerClient.setExternalSlicerUrl(canonicalCandidate);
-    localStorage.setItem(EXTERNAL_ENABLED_KEY, 'true');
-
-    try {
-      const attestation = await SlicerClient.attestExternalEngine(fetcher);
-      if (attestation.attested) {
-        localStorage.setItem(SLICER_ORIGIN_STORAGE_KEY, 'auto-discovered');
-        return { discovered: true, endpoint: canonicalCandidate, commit: attestation.commit };
-      }
-
-      SlicerClient.disableExternalSlicer();
-      if (savedUrl && savedOriginType === 'user') {
-        SlicerClient.setExternalSlicerUrl(savedUrl);
-        if (savedEnabled !== null) localStorage.setItem(EXTERNAL_ENABLED_KEY, savedEnabled);
-        if (savedOriginType !== null) localStorage.setItem(SLICER_ORIGIN_STORAGE_KEY, savedOriginType);
-      } else {
-        SlicerClient.clearExternalSlicer();
-      }
-      return { discovered: false, reason: attestation.reason };
-    } catch (error) {
-      SlicerClient.disableExternalSlicer();
-      if (savedUrl && savedOriginType === 'user') {
-        SlicerClient.setExternalSlicerUrl(savedUrl);
-        if (savedEnabled !== null) localStorage.setItem(EXTERNAL_ENABLED_KEY, savedEnabled);
-        if (savedOriginType !== null) localStorage.setItem(SLICER_ORIGIN_STORAGE_KEY, savedOriginType);
-      } else {
-        SlicerClient.clearExternalSlicer();
-      }
-      return {
-        discovered: false,
-        reason: error instanceof Error ? error.message : 'Attestation request failed.',
-      };
-    }
+    return externalConnection.discover(window.location.origin, (endpoint, signal) =>
+      attestExternalEndpoint(endpoint, fetcher, signal),
+    );
   }
 
   async load(): Promise<void> {
@@ -684,7 +604,12 @@ export class SlicerClient {
       const externalUrl = canonicalExternalEndpoint(route.endpoint);
       const context = this.externalJobContext(externalUrl, options);
       const enabledEndpoint = SlicerClient.captureProjectRoute();
-      if (enabledEndpoint.kind !== 'external-server' || enabledEndpoint.endpoint !== externalUrl) {
+      if (
+        enabledEndpoint.kind !== 'external-server' ||
+        enabledEndpoint.endpoint !== externalUrl ||
+        (route.connectionGeneration !== undefined &&
+          route.connectionGeneration !== externalConnection.snapshot.generation)
+      ) {
         throw new Error('External slicer consent or endpoint changed after the route was captured.');
       }
       this.emitProjectProgress({ percent: 0, message: 'Slicing project externally...' }, options.onProgress);
@@ -1067,50 +992,4 @@ function signalReason(signal: AbortSignal): Error {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function canonicalExternalEndpoint(value: string): string {
-  const normalized = normalizeHttpEndpoint(value);
-  if (!normalized) throw new Error('The captured external slicer endpoint is invalid.');
-  const endpoint = new URL(normalized);
-  if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash || /[?#]/.test(normalized)) {
-    throw new Error('Canonical external slicer URLs cannot contain credentials, query parameters, or fragments.');
-  }
-  return normalized;
-}
-
-/** A WASM server must run byte-identical artifacts to the ones this client verified. */
-function compareWasmArtifacts(declared: Record<string, unknown>): string | undefined {
-  for (const [name, digest] of Object.entries(PINNED_ENGINE_PROVENANCE.artifacts)) {
-    if (declared[name] !== digest) {
-      return `The external slicer runs a different ${name} than this build verified.`;
-    }
-  }
-  return undefined;
-}
-
-/**
- * A CLI server must run the pinned upstream commit with exactly the OrcaXR
- * patches this build knows. An unknown or altered patch changes what the
- * engine emits, so it is named rather than tolerated.
- */
-function compareCliPatches(reported: unknown): string | undefined {
-  if (!Array.isArray(reported)) {
-    return 'The external slicer did not report which engine patches it was built with.';
-  }
-  const applied = new Map<string, unknown>();
-  for (const entry of reported) {
-    if (typeof entry !== 'object' || entry === null) continue;
-    const record = entry as { name?: unknown; sha256?: unknown };
-    if (typeof record.name === 'string') applied.set(record.name, record.sha256);
-  }
-  const expected = PINNED_ENGINE_PROVENANCE.cliPatches as Readonly<Record<string, string>>;
-  for (const [name, digest] of Object.entries(expected)) {
-    if (!applied.has(name)) return `The external slicer was built without the ${name} engine patch.`;
-    if (applied.get(name) !== digest) return `The external slicer carries a different ${name} than this build pins.`;
-  }
-  for (const name of applied.keys()) {
-    if (!(name in expected)) return `The external slicer carries an engine patch this build does not know: ${name}.`;
-  }
-  return undefined;
 }

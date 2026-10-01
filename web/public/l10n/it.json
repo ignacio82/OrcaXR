@@ -63,6 +63,7 @@
   "action.view_show_gcode_window.label": "Mostra finestra del G-code",
   "action.view_show_navigator.label": "Mostra navigatore 3D",
   "actions.actionContext.keyboardShortcuts": "Scorciatoie da tastiera",
+  "app.externalSlicer.offline": "Non in linea",
   "app.main.del": "Elimina",
   "dialog.recreateModelColors.cancel": "Annulla",
   "ui.brimEarsPanel.brimEars": "Tesa ad orecchio",

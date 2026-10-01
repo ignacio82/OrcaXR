@@ -557,12 +557,14 @@ function setupDomUI(
     corsSetting: string,
     cause: unknown,
     appOrigin?: string,
+    isCurrent: () => boolean = () => true,
   ): Promise<void> => {
     const diagnosis = await diagnoseLocalNetwork(endpoint, service, corsSetting, cause, {
       // The all-in-one server publishes this app beside the slicer, so a
       // configured one is the shortest way out of a mixed-content block.
       ...(appOrigin ? { appOrigin } : {}),
     });
+    if (!isCurrent()) return;
     workspace.setStatus(diagnosis.summary);
     if (!endpoint || !diagnosis.blocked) return;
     const paragraphs = diagnosis.detail
@@ -4602,160 +4604,36 @@ function setupDomUI(
       'Forgot the saved printer key and slicer token on this device.',
     );
   };
-  const externalSlicerUrl = document.getElementById('external-slicer-url') as HTMLInputElement;
-  const externalSlicerStatus = document.getElementById('external-slicer-status') as HTMLSpanElement;
-  const btnExternalSlicerConnect = document.getElementById('btn-external-slicer-connect') as HTMLButtonElement;
-  const externalSlicerControls = document.getElementById('external-slicer-controls') as HTMLDivElement;
-  const externalSlicerEnabled = document.getElementById('external-slicer-enabled') as HTMLInputElement;
-  const btnExternalSlicerDelete = document.getElementById('btn-external-slicer-delete') as HTMLButtonElement;
-  const externalSlicerHint = document.getElementById('external-slicer-hint') as HTMLParagraphElement;
-  externalSlicerUrl.value = SlicerClient.getExternalSlicerUrl();
-  const externalSlicerToken = document.getElementById('external-slicer-token') as HTMLInputElement;
-  // Session-only by design: the token is a credential, so it is held in memory
-  // for this tab rather than persisted where a later script could read it back.
-  externalSlicerToken.value = remembered.slicerToken;
-  externalSlicerToken.addEventListener('input', () => {
-    SlicerClient.setExternalSlicerToken(externalSlicerToken.value);
-    persistCredentials();
-  });
-
-  const updateExternalSlicerStatus = (connected: boolean, autoDiscovered = false) => {
-    if (connected) {
-      if (autoDiscovered || SlicerClient.getExternalSlicerOriginType() === 'auto-discovered') {
-        externalSlicerStatus.innerHTML =
-          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--oxr-ok);"></span> Slicing here · attested';
-      } else {
-        externalSlicerStatus.innerHTML =
-          '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--oxr-ok);"></span> Online';
-      }
-      externalSlicerStatus.style.color = 'var(--oxr-ok)';
-    } else {
-      externalSlicerStatus.innerHTML =
-        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--oxr-danger);"></span> Offline';
-      externalSlicerStatus.style.color = '#f44336';
-    }
-  };
-
-  // Show the enable/delete controls only once a server is saved, and keep
-  // the checkbox + hint in sync with the shared SlicerClient state.
-  const refreshExternalSlicerControls = () => {
-    const configured = !!SlicerClient.getExternalSlicerUrl();
-    externalSlicerControls.style.display = configured ? 'flex' : 'none';
-    externalSlicerHint.style.display = configured ? 'block' : 'none';
-    refreshFirstRunPrompt();
-    const enabled = SlicerClient.isExternalSlicerEnabled();
-    externalSlicerEnabled.checked = enabled;
-    externalSlicerHint.textContent = enabled
-      ? 'On — models will be sliced on the external server.'
-      : 'Off — slicing locally in‑browser.';
-  };
-
-  const connectExternalSlicerCandidate = async (candidate: string) => {
-    btnExternalSlicerConnect.disabled = true;
-    btnExternalSlicerConnect.textContent = '...';
-    // connectExternalSlicer disables the previous route synchronously before
-    // its probe begins. Reflect that fail-closed state while the request is in
-    // flight instead of leaving a stale checked control on screen.
-    const connection = SlicerClient.connectExternalSlicer(candidate);
-    refreshExternalSlicerControls();
-    try {
-      const endpoint = await connection;
-      externalSlicerUrl.value = endpoint;
-      updateExternalSlicerStatus(true);
-      statusText.textContent = t(
-        'app.main.externalSlicerConnectedExternalSlicing',
-        'External slicer connected — external slicing is on.',
-      );
-    } catch (error) {
-      // A failed candidate never replaces the last verified URL and the
-      // previous route stays disabled. Restore what can actually be enabled.
-      externalSlicerUrl.value = SlicerClient.getExternalSlicerUrl();
-      updateExternalSlicerStatus(false);
-      statusText.textContent = t(
-        'app.main.externalSlicerConnectionFailedSlicing',
-        'External slicer connection failed — slicing locally.',
-      );
-      await reportLocalNetworkFailure(
-        normalizeHttpEndpoint(candidate),
-        'slicer server',
-        "the server's ORCAXR_ALLOWED_ORIGINS",
-        error,
-        normalizeHttpEndpoint(candidate),
-      );
-    } finally {
-      btnExternalSlicerConnect.disabled = false;
-      btnExternalSlicerConnect.textContent = 'Connect';
-      refreshExternalSlicerControls();
-    }
-  };
-
-  externalSlicerEnabled.onchange = async () => {
-    if (!externalSlicerEnabled.checked) {
+  // Loading the settings surface on demand keeps connection UI outside the core
+  // workspace bundle. The shared controller remains available to DOM and XR routes.
+  void import('./ui/dom/ExternalSlicerSettings')
+    .then(({ mountExternalSlicerSettings }) => {
+      mountExternalSlicerSettings({
+        root: document,
+        initialToken: remembered.slicerToken,
+        status: (message) => {
+          statusText.textContent = message;
+        },
+        changed: refreshFirstRunPrompt,
+        credentialsChanged: persistCredentials,
+        reportFailure: (endpoint, error, isCurrent) =>
+          reportLocalNetworkFailure(
+            endpoint,
+            'slicer server',
+            "the server's ORCAXR_ALLOWED_ORIGINS",
+            error,
+            endpoint,
+            isCurrent,
+          ),
+      });
+    })
+    .catch(() => {
       SlicerClient.disableExternalSlicer();
-      updateExternalSlicerStatus(false);
-      refreshExternalSlicerControls();
-      return;
-    }
-
-    // Turning a saved endpoint back on is another explicit connection attempt:
-    // probe it before routing any model geometry to it.
-    const configured = SlicerClient.getExternalSlicerUrl();
-    externalSlicerUrl.value = configured;
-    await connectExternalSlicerCandidate(configured);
-  };
-
-  btnExternalSlicerDelete.onclick = () => {
-    SlicerClient.clearExternalSlicer();
-    externalSlicerUrl.value = '';
-    updateExternalSlicerStatus(false);
-    refreshExternalSlicerControls();
-    statusText.textContent = t(
-      'app.main.externalSlicerRemovedSlicingLocally',
-      'External slicer removed — slicing locally.',
-    );
-  };
-
-  btnExternalSlicerConnect.onclick = async () => {
-    const candidate = externalSlicerUrl.value;
-    if (!candidate.trim()) {
-      SlicerClient.clearExternalSlicer();
-      updateExternalSlicerStatus(false);
-      refreshExternalSlicerControls();
-      return;
-    }
-    await connectExternalSlicerCandidate(candidate);
-  };
-
-  refreshExternalSlicerControls();
-  const insecureWarning = document.getElementById('external-slicer-insecure-warning');
-  if (insecureWarning && typeof window !== 'undefined' && window.isSecureContext === false) {
-    const isLoopback =
-      ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname) ||
-      window.location.hostname.endsWith('.localhost');
-    if (!isLoopback) {
-      insecureWarning.style.display = 'block';
-    }
-  }
-
-  if (SlicerClient.useExternalSlicer()) {
-    // Re-check only a route the user explicitly left enabled. A saved-but-off
-    // URL remains completely idle on page load.
-    void connectExternalSlicerCandidate(externalSlicerUrl.value);
-  } else {
-    // Auto-discover when served from all-in-one container
-    void (async () => {
-      const discovery = await SlicerClient.autoDiscoverExternalSlicer();
-      if (discovery.discovered) {
-        externalSlicerUrl.value = discovery.endpoint;
-        updateExternalSlicerStatus(true, true);
-        refreshExternalSlicerControls();
-        statusText.textContent = t(
-          'app.main.externalSlicerAutoDiscoveredAttested',
-          'External slicer auto-discovered — slicing on container.',
-        );
-      }
-    })();
-  }
+      statusText.textContent = t(
+        'app.externalSlicer.settingsUnavailable',
+        'External slicer settings could not load. Slicing stays local.',
+      );
+    });
 
   btnPrinterTest.onclick = async () => {
     btnPrinterTest.disabled = true;

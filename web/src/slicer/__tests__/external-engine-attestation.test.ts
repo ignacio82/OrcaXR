@@ -81,7 +81,7 @@ const attestedCli = {
     commit: PINNED_ENGINE_PROVENANCE.commit,
   },
   patches: Object.entries(PINNED_ENGINE_PROVENANCE.cliPatches).map(([name, sha256]) => ({ name, sha256 })),
-  artifacts: { 'snapmaker-orca': 'c0ffee' },
+  artifacts: { 'snapmaker-orca': 'c0ffee'.padEnd(64, '0') },
 };
 
 await test('a CLI engine on the pinned commit with the pinned patches is attested', async () => {
@@ -90,6 +90,97 @@ await test('a CLI engine on the pinned commit with the pinned patches is atteste
     attested: true,
     commit: PINNED_ENGINE_PROVENANCE.commit,
   });
+});
+
+await test('canonical route capture binds the endpoint and exact attested engine', async () => {
+  for (const payload of [attested, attestedCli]) {
+    enabledExternal();
+    const result = await SlicerClient.attestCapturedProjectRoute(respond(payload));
+    assert.equal(result.attested, true);
+    if (!result.attested) return;
+    assert.equal(result.route.kind, 'external-server');
+    if (result.route.kind !== 'external-server') return;
+    assert.equal(result.route.endpoint, 'http://127.0.0.1:8787');
+    assert.equal(typeof result.route.connectionGeneration, 'number');
+    assert.deepEqual(result.externalEngine, {
+      commit: PINNED_ENGINE_PROVENANCE.commit,
+      artifactHash: `sha256:${payload.engine === 'wasm' ? attested.artifacts['slic3r.wasm'] : attestedCli.artifacts['snapmaker-orca']}`,
+    });
+    assert.ok(Object.isFrozen(result.route));
+    assert.ok(Object.isFrozen(result.externalEngine));
+  }
+});
+
+await test('an engine must name a recognized protocol and a complete executable digest', async () => {
+  for (const payload of [
+    { ...attestedCli, schemaVersion: 2 },
+    { ...attestedCli, engine: 'unknown' },
+    { ...attestedCli, artifacts: {} },
+    { ...attestedCli, artifacts: { 'snapmaker-orca': 'c0ffee' } },
+    { ...attestedCli, patches: [...attestedCli.patches, attestedCli.patches[0]] },
+    { ...attestedCli, patches: [...attestedCli.patches, null] },
+  ]) {
+    enabledExternal();
+    const result = await SlicerClient.attestCapturedProjectRoute(respond(payload));
+    assert.equal(result.attested, false);
+  }
+});
+
+await test('canonical capture rejects disable/re-enable, changed credentials and failed storage resets', async () => {
+  for (const supersede of [
+    () => SlicerClient.disableExternalSlicer(),
+    () => SlicerClient.setExternalSlicerToken('changed', { persist: false }),
+    () => SlicerClient.refreshExternalSlicerPreferences(),
+  ]) {
+    enabledExternal();
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const pending = SlicerClient.attestCapturedProjectRoute(async () => {
+      await waiting;
+      return { ok: true, json: async () => attested };
+    });
+    supersede();
+    const result = await pending;
+    release();
+    assert.equal(result.attested, false);
+    if (!result.attested) assert.match(result.reason, /changed/);
+  }
+  SlicerClient.setExternalSlicerToken('', { persist: false });
+});
+
+await test('a captured external route cannot dispatch after consent changes back to the same endpoint', async () => {
+  enabledExternal();
+  const result = await SlicerClient.attestCapturedProjectRoute(respond(attested));
+  assert.equal(result.attested, true);
+  if (!result.attested) return;
+  await SlicerClient.connectExternalSlicer('http://127.0.0.1:8787', respond(attested));
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = async () => {
+    requests++;
+    throw new Error('Unexpected dispatch');
+  };
+  try {
+    await assert.rejects(
+      new SlicerClient().sliceProjectWithRoute(new ArrayBuffer(1), result.route),
+      /consent or endpoint changed/,
+    );
+    assert.equal(requests, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await test('local canonical slicing does not probe any external endpoint', async () => {
+  installStorage();
+  assert.deepEqual(
+    await SlicerClient.attestCapturedProjectRoute(async () => {
+      throw new Error('A browser route must not probe');
+    }),
+    { attested: true, route: { kind: 'browser-wasm' } },
+  );
 });
 
 await test('a CLI engine whose patch set differs is refused by name', async () => {
@@ -247,6 +338,41 @@ await test('a server that wants a token says so instead of blaming its provenanc
     assert.match(missing.reason, /HTTP 404/);
     assert.match(missing.reason, /serves \/engine/);
   }
+});
+
+await test('manual connection requires engine proof in addition to a successful ping', async () => {
+  installStorage();
+  await assert.rejects(
+    SlicerClient.connectExternalSlicer('http://candidate.test', async () => ({ ok: true })),
+    /malformed engine attestation/,
+  );
+  assert.equal(SlicerClient.useExternalSlicer(), false);
+  assert.equal(SlicerClient.getExternalSlicerUrl(), '');
+});
+
+await test('a late attestation cannot authorize a route after a credential or preference change', async () => {
+  for (const change of [
+    () => SlicerClient.setExternalSlicerToken('changed-session-token', { persist: false }),
+    () => SlicerClient.disableExternalSlicer(),
+  ]) {
+    enabledExternal();
+    SlicerClient.setExternalSlicerToken('', { persist: false });
+    let release!: (value: unknown) => void;
+    const pending = SlicerClient.attestExternalEngine(async () => ({
+      ok: true,
+      json: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    }));
+    await Promise.resolve();
+    change();
+    release(attested);
+    const result = await pending;
+    assert.equal(result.attested, false);
+    if (!result.attested) assert.match(result.reason, /changed while/);
+  }
+  SlicerClient.setExternalSlicerToken('', { persist: false });
 });
 
 console.log(`\nExternal engine attestation: ${passed} tests passed.`);

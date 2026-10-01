@@ -6,6 +6,7 @@ import {
   PREFERENCE_KEYS,
   PROJECT_DATA_KEYS,
   SLICER_ENABLED_KEY,
+  SLICER_CONNECTION_KEY,
   SLICER_URL_KEY,
   applyPreferences,
   exportPreferences,
@@ -198,6 +199,38 @@ test('no storage at all is survivable throughout', () => {
     importPreferences({ format: 'orcaxr.preferences', schemaVersion: 2, values: {} }, null).warnings[0],
     /no storage/,
   );
+});
+
+test('importing modern or legacy slicer settings requires a new attested connection', () => {
+  for (const values of [
+    {
+      [SLICER_CONNECTION_KEY]: JSON.stringify({
+        version: 1,
+        endpoint: 'http://imported.test',
+        enabled: true,
+        explicitlyDisabled: false,
+        origin: 'user',
+        attestation: { commit: '0'.repeat(40) },
+      }),
+    },
+    { [SLICER_URL_KEY]: 'http://imported.test', [SLICER_ENABLED_KEY]: 'true' },
+  ]) {
+    const store = storage();
+    importPreferences({ format: 'orcaxr.preferences', schemaVersion: PREFERENCES_SCHEMA_VERSION, values }, store);
+    const record = JSON.parse(store.getItem(SLICER_CONNECTION_KEY)!);
+    assert.equal(record.endpoint, 'http://imported.test');
+    assert.equal(record.enabled, false);
+    assert.equal(record.attestation, null);
+    assert.equal(record.explicitlyDisabled, true);
+  }
+});
+
+test('a blocked store yields a usable preference export instead of throwing', () => {
+  const store = storage();
+  store.getItem = () => {
+    throw new Error('Storage blocked');
+  };
+  assert.deepEqual(exportPreferences(store).values, {});
 });
 
 console.log(`\nApplication preferences: ${passed} tests passed.`);

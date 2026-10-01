@@ -65,6 +65,7 @@
   "action.view_show_gcode_window.label": "显示G-code窗口",
   "action.view_show_navigator.label": "显示3D导航器",
   "actions.actionContext.keyboardShortcuts": "快捷键",
+  "app.externalSlicer.offline": "离线",
   "app.main.del": "删除",
   "dialog.recreateModelColors.cancel": "取消",
   "ui.brimEarsPanel.brimEars": "圆盘",

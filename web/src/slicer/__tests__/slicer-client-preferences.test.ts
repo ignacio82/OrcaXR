@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { SlicerClient } from '../SlicerClient.ts';
 import { PINNED_ENGINE_PROVENANCE } from '../pinnedEngineProvenance.ts';
+
+const attestedWasm = {
+  schemaVersion: 1,
+  engine: 'wasm',
+  attested: true,
+  upstream: { commit: PINNED_ENGINE_PROVENANCE.commit },
+  artifacts: PINNED_ENGINE_PROVENANCE.artifacts,
+};
+const accepted = async () => ({ ok: true, json: async () => attestedWasm });
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -50,14 +58,15 @@ try {
   SlicerClient.disableExternalSlicer();
   assert.equal(SlicerClient.useExternalSlicer(), false, 'a saved-but-disabled URL must keep slicing local');
 
-  await SlicerClient.connectExternalSlicer('http://saved.local:3000', async () => ({ ok: true }));
+  await SlicerClient.connectExternalSlicer('http://saved.local:3000', accepted);
   assert.equal(SlicerClient.useExternalSlicer(), true);
   let releaseSuccessfulProbe: ((response: { ok: boolean }) => void) | undefined;
   const successfulProbe = new Promise<{ ok: boolean }>((resolve) => {
     releaseSuccessfulProbe = resolve;
   });
   const connecting = SlicerClient.connectExternalSlicer('candidate.local:4000/', async (url) => {
-    assert.equal(url, 'http://candidate.local:4000/ping');
+    assert.ok(['http://candidate.local:4000/ping', 'http://candidate.local:4000/engine'].includes(url));
+    if (url.endsWith('/engine')) return accepted();
     assert.equal(
       SlicerClient.useExternalSlicer(),
       false,
@@ -71,7 +80,7 @@ try {
   assert.equal(SlicerClient.getExternalSlicerUrl(), 'http://candidate.local:4000');
   assert.equal(SlicerClient.useExternalSlicer(), true, 'only a successful probe may activate the candidate');
 
-  await SlicerClient.connectExternalSlicer('http://route-a.local:3000', async () => ({ ok: true }));
+  await SlicerClient.connectExternalSlicer('http://route-a.local:3000', accepted);
   await assert.rejects(
     SlicerClient.connectExternalSlicer('http://candidate-b.local:3000', async (url) => {
       assert.equal(url, 'http://candidate-b.local:3000/ping');
@@ -114,7 +123,7 @@ try {
         commit: PINNED_ENGINE_PROVENANCE.commit,
       },
       patches: Object.entries(PINNED_ENGINE_PROVENANCE.cliPatches).map(([name, sha256]) => ({ name, sha256 })),
-      artifacts: { 'snapmaker-orca': 'c0ffee' },
+      artifacts: { 'snapmaker-orca': 'c0ffee'.padEnd(64, '0') },
     };
 
     // 1. Successful auto-discovery
@@ -137,7 +146,7 @@ try {
     assert.equal(SlicerClient.getExternalSlicerOriginType(), 'auto-discovered');
 
     // 2. Explicit user configuration is NOT overwritten by auto-discovery
-    await SlicerClient.connectExternalSlicer('http://user-configured.local:3000', async () => ({ ok: true }));
+    await SlicerClient.connectExternalSlicer('http://user-configured.local:3000', accepted);
     assert.equal(SlicerClient.getExternalSlicerOriginType(), 'user');
     assert.equal(SlicerClient.getExternalSlicerUrl(), 'http://user-configured.local:3000');
 
@@ -174,23 +183,6 @@ try {
     if (originalWindow) (globalThis as { window?: unknown }).window = originalWindow;
     else Reflect.deleteProperty(globalThis, 'window');
   }
-
-  const mainSource = readFileSync(new URL('../../main.ts', import.meta.url), 'utf8');
-  assert.match(
-    mainSource,
-    /if \(SlicerClient\.useExternalSlicer\(\)\) \{[\s\S]{0,240}connectExternalSlicerCandidate/,
-    'startup probing must be gated by the persisted explicit opt-in, not merely by a saved URL',
-  );
-  assert.doesNotMatch(
-    mainSource,
-    /if \(externalSlicerUrl\.value\) \{[\s\S]{0,160}(?:\.click\(|connectExternalSlicerCandidate)/,
-    'a saved URL alone must not trigger a startup probe',
-  );
-  assert.match(
-    mainSource,
-    /externalSlicerUrl\.value = SlicerClient\.getExternalSlicerUrl\(\);[\s\S]{0,180}updateExternalSlicerStatus\(false\)/,
-    'a failed replacement must restore the URL that matches the disabled saved route',
-  );
 } finally {
   if (originalStorage) Object.defineProperty(globalThis, 'localStorage', originalStorage);
   else Reflect.deleteProperty(globalThis, 'localStorage');

@@ -65,6 +65,7 @@
   "action.view_show_gcode_window.label": "G-Code-Fenster anzeigen",
   "action.view_show_navigator.label": "3D-Navigator anzeigen",
   "actions.actionContext.keyboardShortcuts": "Tastaturkürzel",
+  "app.externalSlicer.offline": "Offline",
   "app.main.del": "Entf",
   "dialog.recreateModelColors.cancel": "Abbrechen",
   "ui.brimEarsPanel.brimEars": "Brim Ohren",

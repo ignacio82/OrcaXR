@@ -72,7 +72,7 @@ OrcaXR can be self-hosted as an all-in-one container that packages the full Web 
 docker compose -f server/docker-compose.yml up -d
 ```
 
-- **Web UI & Slicing**: Navigate to `http://localhost:3000`. The browser UI automatically discovers the native CLI slicer on the container with zero configuration.
+- **Web UI & Slicing**: Navigate to `http://localhost:3000`. The browser UI discovers and verifies the container’s native CLI slicer automatically. An explicitly disabled or forgotten connection stays off across reloads; use Connect to enable it again. If browser storage is unavailable, a verified connection works for the current tab and the settings show that it cannot be remembered.
 - **Same-Origin Trust**: Slicing from the served UI is authorized automatically without requiring bearer tokens. Non-browser API clients use a token supplied through `ORCAXR_SERVER_TOKEN_FILE` or `ORCAXR_SERVER_TOKEN`. Loopback-only same-origin deployments can also generate a persistent token in `~/.orcaxr/server-token`.
 
 Generated server tokens are stored with owner-only permissions. Startup logs name

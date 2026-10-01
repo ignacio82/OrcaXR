@@ -14,7 +14,7 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 | C: submission lifecycle | Implemented; hardware evidence pending | Shared DOM/XR workflow owns session/artifact/mapping/option guards, cancellation, preparation, random upload names, exact overwrite and response checks. Stored-file starts also bind confirmation to fresh metadata and readiness. Full web quality passes; supervised firmware evidence remains pending. |
 | D: process and artifact lifecycle | Implemented | Native exit/group termination, repeatable downloads, leases, TTL/release, capacity refusal, artifact validation and bounded browser cancellation pass server, container and full web gates. Fresh native image assembly remains a deployment qualification item. |
 | E: deployment and artifacts | Implemented; qualification in progress | Static/API separation, actual-peer proxy trust, userspace Tailscale configuration, strict adjacent-manifest checks and atomic version publication pass focused tests. Real Express HTTP/HTTPS browser tests pass. Full web quality passes. Freshly built native-container qualification remains in progress. |
-| F: discovery and startup | Pending | Transactional discovery and truthful capability initialization/recovery on DOM and XR. |
+| F: discovery and startup | Discovery implemented; startup pending | Private generation-guarded probes, atomic route persistence, disabled-choice preservation, session-only storage fallback and actual external UI slicing pass focused and live deployment tests. Full web quality passes; truthful startup health remains next. |
 | G: controllers and snapshots | Pending | Controller ownership/disposal and opaque immutable asset rollback snapshots. |
 | H: persistence | Pending | Worker serialization/checkpoints, transactional recovery storage, autosave, recovery flows, navigation/update guards. |
 | I: large-project performance | Pending | Worker indexing before rich allocations, oversized-layer checkpoints, typed import traversal, measured baselines. |
@@ -211,3 +211,43 @@ adjacent metadata to be committed before qualification; that metadata-only commi
 is `5b90733`, and the generated release report now includes its exact Git blob.
 Live tailnet enrollment, actual printer/XR hardware, credential rotation and
 independent release signoff remain unqualified.
+
+## Discovery verification (2026-10-01)
+
+- The original probe reproduced an external route becoming enabled while its
+  discovery request was still pending. Discovery now probes an explicit candidate
+  without writing shared preferences, then commits one attested route only while
+  its generation remains current.
+- Twenty-one controller tests cover late success/failure after manual selection,
+  disable/forget/token or candidate edits, preference changes, reset, disposal,
+  bounded hung probes, repeated connections, coherent atomic storage, and blocked
+  or full storage. An additional regression reproduced a rejected preference reset
+  reviving old persisted state; reset now preserves the operator’s session intent.
+- Twenty attestation tests include manual connections requiring provenance after
+  ping, bounded invalidation of hung proofs, complete native executable digests,
+  exact patch sets, and captured endpoint/engine/generation identity. Canonical
+  route tests retain the generation and reject secret-bearing URLs before requests.
+- Four DOM lifecycle tests exercise real controls against the shared controller,
+  including late status updates, draft preservation, disabled remounts and disposal.
+  The real-Express browser suite also passes delayed attestation versus a manual
+  choice and disabled-discovery reloads over both insecure HTTP and proxy HTTPS.
+- A real browser with a throwing storage getter reproduced a startup failure in
+  legacy AI credential cleanup. The getter is now guarded, and both deployment
+  origins boot and connect with an explicit session-only persistence hint.
+- The actual Slice control reproduced a hardcoded browser route that ignored the
+  attested external choice; all-plate slicing also omitted engine metadata. Both
+  now consume one captured route and proof, reject changed consent before upload,
+  and pass real UI slicing through the deterministic external fixture on HTTP and
+  HTTPS. The native executable itself remains separately qualified.
+- Preference imports preserve the chosen endpoint as disabled until reconnection.
+  Export/reset includes the atomic record and legacy origin marker, with no change
+  to optional credential remembrance. New status messages use the existing
+  localization pipeline, and the settings surface loads in its own lazy chunk.
+
+Full web quality passes, including 233 unit test files, the integration/project/
+settings/localization/XR suites, production browser and offline workflows,
+28 accessibility rules, 155 pseudo-localized controls and thirteen slicing test
+files. Unchanged ceilings: main 2,349,793 bytes; total JavaScript 10,574,317 bytes.
+Current-source Gitleaks passes with the pinned image and unchanged rules.
+Feature initialization, core dependency gates, and shared DOM/XR startup recovery
+are still pending; F is not complete.

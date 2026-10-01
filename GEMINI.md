@@ -891,6 +891,32 @@ HTTP exposes status, credentials, webcam frames, and uploaded G-code, so use it
 only on trusted LANs. Tailscale Serve or another trusted HTTPS reverse proxy
 remains the cross-browser and remote-network fallback.
 
+## External slicer connection ownership
+
+- `ExternalSlicerConnectionController` owns one immutable session route, a
+  preference generation and abortable, bounded probes. Serving-origin discovery
+  never writes preferences until attestation succeeds. Manual connect requires
+  both `/ping` and engine proof, and disables the previous route before probing.
+  Disable, forget, candidate/token edits, preference import/reset, storage events
+  and disposal supersede pending work; a late response cannot restore a route.
+- Preferences v3 stores endpoint, enabled state, origin and the successful proof
+  in one `orcaxr.slicer.connection` JSON record. Legacy keys are read only as
+  migration inputs when that record is absent. A disabled or forgotten choice
+  stays local across startup; imported connection settings require reconnection.
+  Remembered proof is informational: canonical slicing still attests the engine.
+- Canonical active/all-plate slicing captures endpoint, connection generation and
+  engine digest together. Never attest one endpoint and re-read preferences to
+  select another, or hardcode the browser route after accepting external proof.
+  Native proofs require a complete executable digest and exact, nonduplicate
+  patch list. Changed consent or credentials invalidate a captured submission.
+- Storage failure leaves the current session operational and reports session-only
+  persistence. Failed writes or resets must never re-adopt stale enabled bytes.
+  The lazy DOM settings surface renders controller snapshots and owns its
+  listeners; BFCache suspends probes without destroying reusable controls.
+  Slicer credentials retain the separate optional device-local remembrance policy.
+  Reading the storage property itself can throw; legacy AI credential cleanup
+  must guard that getter too, otherwise it prevents the whole shell from booting.
+
 ## External slicer server (`server/`)
 
 Dockerized HTTP endpoint (`POST /slice`, STL or signature-validated project 3MF plus flattened-overrides JSON) the

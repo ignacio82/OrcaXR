@@ -3,6 +3,14 @@ export type AiProvider = 'gemini' | 'openai';
 const LEGACY_STORAGE_KEYS = ['orca_gemini_key', 'orca_openai_key'] as const;
 const sessionSecrets: Record<AiProvider, string> = { gemini: '', openai: '' };
 
+function browserStorage(): Pick<Storage, 'removeItem'> | null {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
 /** Keep user-supplied provider credentials in this JavaScript session only. */
 export function setAiSessionSecret(provider: AiProvider, value: string): void {
   sessionSecrets[provider] = value.trim();
@@ -18,9 +26,7 @@ export function clearAiSessionSecrets(): void {
 }
 
 /** Delete credentials written by older builds; never migrate them back into memory. */
-export function purgeLegacyAiSecretStorage(
-  storage: Pick<Storage, 'removeItem'> | null = typeof localStorage === 'undefined' ? null : localStorage,
-): void {
+export function purgeLegacyAiSecretStorage(storage: Pick<Storage, 'removeItem'> | null = browserStorage()): void {
   if (!storage) return;
   for (const key of LEGACY_STORAGE_KEYS) {
     try {

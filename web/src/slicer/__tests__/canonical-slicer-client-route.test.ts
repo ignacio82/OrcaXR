@@ -208,6 +208,21 @@ await test('engine-provenance mismatch fails before model bytes reach SlicerClie
   assert.equal(client.calls.length, 0);
 });
 
+await test('normalizing an external route retains its captured connection generation', async () => {
+  const client = new RecordingClient();
+  const adapter = new CanonicalSlicerClientRoute({
+    client,
+    route: { kind: 'external-server', endpoint: 'https://slicer.example.test/api/', connectionGeneration: 7 },
+    externalEngine: BROWSER_WASM_ENGINE_METADATA,
+  });
+  await adapter.execute(requestFor(adapter.metadata.engine), new AbortController().signal);
+  assert.deepEqual(client.calls[0].route, {
+    kind: 'external-server',
+    endpoint: 'https://slicer.example.test/api',
+    connectionGeneration: 7,
+  });
+});
+
 await test('adapter preserves abort reasons and never converts cancellation into a retryable route failure', async () => {
   const reason = new Error('cancelled by fixture');
   const client: CanonicalProjectSlicerClientPort = {

@@ -208,7 +208,7 @@ import {
 
 import { FilamentPalette } from './FilamentPalette';
 import { bedSizeFromProfile, ProfileCatalog, type SlicerProfile } from '../slicer/ProfileLoader';
-import { SlicerClient, type SlicerClientProjectRoute } from '../slicer/SlicerClient';
+import { SlicerClient, type AttestedProjectRoute } from '../slicer/SlicerClient';
 import {
   filamentPresetAgreesWithSlot,
   matchFilamentPreset,
@@ -9300,16 +9300,15 @@ export class OrcaWorkspace extends xb.Script {
    * Otherwise the operator is told precisely what failed instead of getting a
    * blanket refusal, and nothing leaves the browser.
    */
-  private async resolveCanonicalSliceRoute(): Promise<SlicerClientProjectRoute | null> {
-    if (!SlicerClient.useExternalSlicer()) return { kind: 'browser-wasm' };
-    const attestation = await SlicerClient.attestExternalEngine();
+  private async resolveCanonicalSliceRoute(): Promise<Extract<AttestedProjectRoute, { attested: true }> | null> {
+    const attestation = await SlicerClient.attestCapturedProjectRoute();
     if (!attestation.attested) {
       this.setStatus(
         `slice failed: the external slicer is not an attested engine route. ${attestation.reason} Disable the external slicer to use the verified browser engine.`,
       );
       return null;
     }
-    return SlicerClient.captureProjectRoute();
+    return attestation;
   }
 
   public async sliceNow() {
@@ -9327,7 +9326,8 @@ export class OrcaWorkspace extends xb.Script {
       workspace: this.canonicalProject,
       client: this.slicer,
       thumbnails: this.thumbnailPort(),
-      route: { kind: 'browser-wasm' },
+      route: route.route,
+      externalEngine: route.externalEngine,
       maxThreads: 4,
       preflight,
     });
@@ -9399,7 +9399,8 @@ export class OrcaWorkspace extends xb.Script {
       workspace: this.canonicalProject,
       client: this.slicer,
       thumbnails: this.thumbnailPort(),
-      route,
+      route: route.route,
+      externalEngine: route.externalEngine,
       maxThreads: 4,
       preflight: this.createLiveProfilePreflight(),
     });

@@ -226,7 +226,17 @@ function normalizedRoute(route: SlicerClientProjectRoute): SlicerClientProjectRo
   if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash || /[?#]/.test(route.endpoint)) {
     throw new Error('Canonical external slice routes cannot contain credentials, query parameters, or fragments.');
   }
-  return Object.freeze({ kind: 'external-server', endpoint: endpoint.href.replace(/\/+$/, '') });
+  if (
+    route.connectionGeneration !== undefined &&
+    (!Number.isSafeInteger(route.connectionGeneration) || route.connectionGeneration < 0)
+  ) {
+    throw new Error('Canonical external slice route requires a valid connection generation.');
+  }
+  return Object.freeze({
+    kind: 'external-server',
+    endpoint: endpoint.href.replace(/\/+$/, ''),
+    ...(route.connectionGeneration === undefined ? {} : { connectionGeneration: route.connectionGeneration }),
+  });
 }
 
 function validatedExternalEngine(engine: SliceEngineMetadata | undefined): SliceEngineMetadata {
