@@ -736,6 +736,12 @@ export class ActionContext {
   }
 
   // ---- Help modals (informational) -----------------------------------
+  async recoverStartup(featureId?: string): Promise<void> {
+    if (featureId !== undefined && !/^[a-z][a-z0-9-]{0,63}$/.test(featureId))
+      throw new Error('Invalid startup feature.');
+    await this.workspace.onRequestStartupRecovery?.(featureId);
+  }
+
   showAbout(): void {
     this.workspace.showModal(t('actions.actionContext.aboutOrcaXR', 'About OrcaXR'), ABOUT_HTML);
   }

@@ -79,7 +79,11 @@ export interface XrShellHost {
   readonly registry: ActionRegistry;
   /** `null` before the composition root injects an action context. */
   actionState(): Readonly<UiStateShape> | null;
-  invoke(action: Action, surface: ActionSurface): void;
+  invoke(
+    action: Action,
+    surface: ActionSurface,
+    invocation?: import('../../actions/ActionRegistry').ActionInvocation,
+  ): void;
 
   workspaceMode(): XrWorkspaceMode;
   setWorkspaceMode(mode: XrWorkspaceMode): void;
@@ -405,6 +409,10 @@ export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
       status: this.host.statusLine(),
       progress: this.host.progress(),
       onRun: (action) => this.host.invoke(action, 'xr-primary'),
+      onRecoverStartup: (featureId) => {
+        const action = this.host.registry.get('help_startup_recovery');
+        if (action) this.host.invoke(action, 'xr-inspector', { startupFeatureId: featureId });
+      },
       onSelectPlate: (plateId) => this.host.selectPlate(plateId),
       onAddPlate: () => this.run('add_plate', 'xr-primary'),
       // Renaming, reordering and un-printing a plate are `scene` inspector

@@ -1,3 +1,4 @@
+import { initializationFeatureLabel } from '../../startup/labels';
 /**
  * XrDesk — the primary bar and the plate strip, below the work.
  *
@@ -22,6 +23,7 @@ import {
   createXrProgressBar,
   createXrRow,
   createXrSurfaceBody,
+  createXrColumn,
   createXrTextButton,
   type XrProgressBar,
   type XrTextButton,
@@ -49,6 +51,7 @@ export interface XrDeskContext {
   onSelectPlate(plateId: string): void;
   onAddPlate(): void;
   onManagePlates(): void;
+  onRecoverStartup?(featureId: string): void;
 }
 
 export interface XrDeskRender<PanelNode> {
@@ -135,6 +138,46 @@ export function renderXrDesk<PanelNode, ImageNode, TextNode>(
   const percent = ui.createText('', { fontSize: XR_TYPE.micro, color: C.textMuted, flexShrink: 0 });
   ui.appendChild(strip, percent);
 
+  const startup = createXrColumn(ui, { gap: 4, height: 44, maxHeight: 44, flexShrink: 0, overflow: 'scroll' });
+  ui.appendChild(body, startup);
+  let startupSignature = '';
+  const drawStartup = (next: XrDeskContext): void => {
+    const snapshot = next.state.initialization;
+    const signature = JSON.stringify(snapshot);
+    if (signature === startupSignature) return;
+    startupSignature = signature;
+    ui.clearChildren(startup);
+    ui.setPanelProperties(startup, { display: snapshot && snapshot.phase !== 'ready' ? 'flex' : 'none' });
+    if (!snapshot || snapshot.phase === 'ready') return;
+    for (const feature of snapshot.features.filter(
+      (feature) => feature.phase === 'failed' || (feature.core && feature.phase !== 'ready'),
+    )) {
+      const row = createXrRow(ui, { gap: 8, flexShrink: 0 });
+      ui.appendChild(startup, row);
+      ui.appendChild(
+        row,
+        ui.createText(
+          feature.phase === 'failed'
+            ? `${initializationFeatureLabel(feature)}: ${feature.reason}`
+            : t('startup.loadingFeature', 'Loading {feature}…', { feature: initializationFeatureLabel(feature) }),
+          { fontSize: XR_TYPE.caption, color: C.textMuted, flexGrow: 1, flexShrink: 1 },
+        ),
+      );
+      if (feature.phase !== 'failed') continue;
+      const button = createXrTextButton(ui, {
+        label:
+          feature.recovery === 'reload'
+            ? t('startup.reloadFeature', 'Reload to restore {feature}', {
+                feature: initializationFeatureLabel(feature),
+              })
+            : t('startup.retryFeature', 'Retry {feature}', { feature: initializationFeatureLabel(feature) }),
+        height: 40,
+        onClick: () => ctx.onRecoverStartup?.(feature.id),
+      });
+      ui.appendChild(row, button.root);
+    }
+  };
+
   const drawPlates = (plates: readonly XrDeskPlate[]): void => {
     ui.clearChildren(plateRow);
     for (const plate of plates) {
@@ -155,6 +198,7 @@ export function renderXrDesk<PanelNode, ImageNode, TextNode>(
       button.setEnabled(next.registry.availability(action, 'xr-primary', next.state).state === 'enabled');
     }
     drawPlates(next.plates);
+    drawStartup(next);
     ui.setText(statusText, next.status);
     bar.setProgress(next.progress);
     ui.setText(percent, next.progress === null ? '' : `${Math.round(next.progress * 100)}%`);

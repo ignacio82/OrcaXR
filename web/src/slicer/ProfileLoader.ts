@@ -137,38 +137,27 @@ export class ProfileCatalog {
     return true;
   }
 
-  async load(): Promise<void> {
-    // Single bundled catalog: one fetch, and no per-file URLs — vite's dev
-    // middleware serves the SPA fallback for filenames containing '@'
-    // (every process/filament profile), which silently gutted profiles.
-    let catalog: unknown;
-    try {
-      const baseUrl = import.meta.env.BASE_URL;
-      const url = baseUrl.endsWith('/') ? `${baseUrl}profiles/catalog.json` : `${baseUrl}/profiles/catalog.json`;
-      const cacheBustUrl = `${url}?t=${Date.now()}`;
-      const r = await fetch(cacheBustUrl, { cache: 'no-store' });
-      if (!r.ok) {
-        console.error(`[orcaxr] failed to fetch catalog: HTTP ${r.status}`);
-        return;
-      }
-      catalog = await r.json();
-    } catch (e) {
-      console.error('[orcaxr] failed to fetch catalog (network/parse error)', e);
-      return;
-    }
-    try {
-      this.replaceFromRaw(this.compose ? this.compose(catalog) : catalog, catalog);
-      const blocking = this.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
-      if (blocking.length > 0) {
-        console.error(
-          `[orcaxr] omitted incompatible profile combinations (${blocking.length} catalog diagnostics)`,
-          blocking,
-        );
-      }
-      console.warn(`[orcaxr] ${this.diagnostics[0]?.message ?? 'Profile corpus provenance is unverified.'}`);
-    } catch (error) {
-      console.error('[orcaxr] profile catalog failed compatibility validation', error);
-    }
+  async load(signal?: AbortSignal): Promise<void> {
+    const base = import.meta.env?.BASE_URL ?? '/';
+    const url = `${base.endsWith('/') ? base : `${base}/`}profiles/catalog.json`;
+    const response = await fetch(`${url}?t=${Date.now()}`, { cache: 'no-store', signal });
+    if (!response.ok) throw new Error(`Printer profiles could not be loaded (HTTP ${response.status}).`);
+    const catalog: unknown = await response.json();
+    if (signal?.aborted) throw signal.reason;
+    const candidate = ProfileCatalog.fromRaw(this.compose ? this.compose(catalog) : catalog);
+    if (candidate.profiles.length === 0) throw new Error('Printer profile validation produced no usable profiles.');
+    if (signal?.aborted) throw signal.reason;
+    this.raw = catalog;
+    this.graph = candidate.graph;
+    this.profiles = candidate.profiles;
+    this.diagnostics = candidate.diagnostics;
+    const blocking = this.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+    if (blocking.length)
+      console.error(
+        `[orcaxr] omitted incompatible profile combinations (${blocking.length} catalog diagnostics)`,
+        blocking,
+      );
+    console.warn(`[orcaxr] ${this.diagnostics[0]?.message ?? 'Profile corpus provenance is unverified.'}`);
   }
 
   /**

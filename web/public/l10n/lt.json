@@ -66,6 +66,7 @@
   "app.externalSlicer.offline": "Neprisijungus",
   "app.main.del": "Del",
   "dialog.recreateModelColors.cancel": "Atšaukti",
+  "startup.feature.camera": "Kamera",
   "ui.brimEarsPanel.brimEars": "Krašto \"ausys\"",
   "ui.generatedSettingsPanel.detailLevel": "Detalių lygis",
   "ui.printSubmissionDialog.sendToPrinter": "Siųsti į spausdintuvą",

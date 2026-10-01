@@ -402,6 +402,40 @@ test('a primary verb that cannot run is dim rather than absent', () => {
   assert.ok(dim.length > 0, 'a bright Slice on an empty plate is a false affordance');
 });
 
+test('startup failures expose the same reason and recovery target on the XR desk', () => {
+  const root = host();
+  const recovered: string[] = [];
+  const state: UiStateShape = {
+    ...STATE,
+    initialization: {
+      phase: 'failed',
+      features: [
+        { id: 'workspace', label: 'Workspace', core: true, phase: 'ready', reason: '' },
+        { id: 'shell', label: 'Controls', core: true, phase: 'ready', reason: '' },
+        {
+          id: 'settings',
+          label: 'Settings schema',
+          core: true,
+          phase: 'failed',
+          reason: 'Schema request failed',
+          recovery: 'retry',
+        },
+      ],
+    },
+  };
+  const render = renderXrDesk(ui, root, { ...deskContext(), state, onRecoverStartup: (id) => recovered.push(id) });
+  assert.ok(render.root.labels().includes('Settings schema: Schema request failed'));
+  const retry = render.root.buttons().find((button) => button.labels().includes('Retry Settings schema'));
+  assert.ok(retry);
+  retry.click();
+  assert.deepEqual(recovered, ['settings']);
+  assert.equal(registry.availability('slice_active_plate', 'xr-primary', state).state, 'disabled');
+  assert.equal(registry.availability('printer_emergency_stop', 'xr-inspector', state).state, 'enabled');
+  assert.equal(registry.availability('help_startup_recovery', 'xr-inspector', state).state, 'enabled');
+  render.refresh({ ...deskContext(), state: { ...STATE, initialization: { phase: 'ready', features: [] } } });
+  assert.ok(!render.root.labels().includes('Settings schema: Schema request failed'));
+});
+
 // ---- The inspector --------------------------------------------------------
 
 test('the inspector stacks open panels as tabs and offers the directory', () => {

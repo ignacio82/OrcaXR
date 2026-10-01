@@ -917,6 +917,27 @@ remains the cross-browser and remote-network fallback.
   Reading the storage property itself can throw; legacy AI credential cleanup
   must guard that getter too, otherwise it prevents the whole shell from booting.
 
+## Application initialization
+
+- The initialization registry owns feature phases, deadlines, retry attempts and
+  partial resources. Workspace, shell, required profiles and settings schema are
+  core; unrequested camera/AI/printer/XR integrations stay idle. A missing core
+  dependency disables dependent registry actions in both surfaces; printer
+  recovery and slice cancellation remain available. Overall boot state derives
+  from these capabilities, never an unconditional Ready marker.
+- Profile/schema retries fetch and validate fresh data. A failed module import
+  requires reload; recovery uses the shared action intent and refuses reload
+  while the current project is dirty. The complete Save/Discard/Cancel navigation
+  and PWA-update workflow is still pending in plan H.
+- Lazy features own panels before mounting and cancel their asynchronous work
+  before teardown. A late import/body cannot remount a closed feature. Settings
+  adapters are mounted together in a separate chunk, with independent DOM/XR
+  draft guards. The architecture gate requires registry invocation in that
+  extracted owner and still rejects presentation-layer direct writes.
+  Required profile fetches reject empty/invalid results before
+  replacing a valid catalog. Startup failure details have bounded DOM/XR space;
+  they must not hide printer recovery controls.
+
 ## External slicer server (`server/`)
 
 Dockerized HTTP endpoint (`POST /slice`, STL or signature-validated project 3MF plus flattened-overrides JSON) the

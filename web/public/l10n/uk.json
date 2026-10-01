@@ -65,6 +65,7 @@
   "app.externalSlicer.offline": "Не в мережі",
   "app.main.del": "Видалити",
   "dialog.recreateModelColors.cancel": "Скасувати",
+  "startup.feature.camera": "Камера",
   "ui.brimEarsPanel.brimEars": "Вушка кайми",
   "ui.generatedSettingsPanel.detailLevel": "Рівень деталізації",
   "ui.printSubmissionDialog.sendToPrinter": "Надіслати на принтер",

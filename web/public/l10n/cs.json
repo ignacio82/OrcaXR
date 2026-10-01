@@ -58,6 +58,7 @@
   "app.externalSlicer.offline": "Offline",
   "app.main.del": "Smazat",
   "dialog.recreateModelColors.cancel": "Zrušit",
+  "startup.feature.camera": "Kamera",
   "ui.brimEarsPanel.brimEars": "Uši límce",
   "ui.generatedSettingsPanel.detailLevel": "Úroveň detailu",
   "ui.printSubmissionDialog.sendToPrinter": "Odeslat do tiskárny",

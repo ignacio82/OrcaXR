@@ -68,6 +68,7 @@
   "app.externalSlicer.offline": "离线",
   "app.main.del": "删除",
   "dialog.recreateModelColors.cancel": "取消",
+  "startup.feature.camera": "摄像机",
   "ui.brimEarsPanel.brimEars": "圆盘",
   "ui.generatedSettingsPanel.detailLevel": "细节等级",
   "ui.printSubmissionDialog.sendToPrinter": "发送到打印机",

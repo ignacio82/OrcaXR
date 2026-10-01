@@ -66,6 +66,7 @@
   "app.externalSlicer.offline": "Offline",
   "app.main.del": "Esborrar",
   "dialog.recreateModelColors.cancel": "Cancel·lar",
+  "startup.feature.camera": "Càmera",
   "ui.brimEarsPanel.brimEars": "Orelles de la Vora d'Adherència",
   "ui.generatedSettingsPanel.detailLevel": "Nivell de detall",
   "ui.printSubmissionDialog.sendToPrinter": "Enviar a la impressora",

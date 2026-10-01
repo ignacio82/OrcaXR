@@ -150,6 +150,20 @@
         visibility: hidden;
         pointer-events: none;
       }
+      #app-boot[data-shell-usable="true"],
+      #app-boot[data-boot-state="failed"],
+      #app-boot[data-boot-state="degraded"] {
+        inset: auto;
+        inset-block-start: 64px;
+        inset-inline-end: 12px;
+        width: min(32rem, calc(100vw - 24px));
+        max-height: 40vh;
+        overflow: auto;
+        padding: 16px;
+        border: 1px solid var(--oxr-stroke);
+        border-radius: 8px;
+        z-index: 80;
+      }
       .boot-card {
         display: flex;
         flex-direction: column;

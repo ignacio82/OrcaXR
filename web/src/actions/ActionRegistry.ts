@@ -1,4 +1,5 @@
 import type { PrintJobConfirmation } from '../printer/PrinterSessionController';
+import { initializationBlockReason } from '../startup/InitializationPolicy';
 /**
  * ActionRegistry — the ONE declaration of everything OrcaXR can do.
  *
@@ -130,6 +131,8 @@ export interface Capability {
 
 /** Transient, non-canonical target data supplied by a presentation surface. */
 export interface ActionInvocation {
+  /** A failed startup capability; omitted to recover all failed capabilities. */
+  readonly startupFeatureId?: string;
   /** Exact plate selected by a plate-local control; omitted for the active plate. */
   plateId?: PlateId;
   /** Revision-bound target emitted by the canonical plate manager. */
@@ -807,6 +810,8 @@ export class ActionRegistry {
     if (action.capability.status === 'unavailable' || action.capability.status === 'blocked') {
       return { state: 'disabled', reason: action.capability.reason ?? 'Unavailable.' };
     }
+    const startup = initializationBlockReason(action, state.initialization);
+    if (startup) return { state: 'disabled', reason: startup };
     for (const prerequisite of action.capability.prerequisites) {
       const rule = PREREQUISITES[prerequisite];
       if (!rule.met(state)) return { state: 'disabled', reason: rule.reason };
@@ -840,6 +845,7 @@ export class ActionRegistry {
   /** Compatibility wrappers for non-rendering callers; prefer availability(). */
   static enabled(a: Action, s: Readonly<UiStateShape>): boolean {
     if (a.capability.status === 'unavailable' || a.capability.status === 'blocked') return false;
+    if (initializationBlockReason(a, s.initialization)) return false;
     for (const prerequisite of a.capability.prerequisites) {
       if (!PREREQUISITES[prerequisite].met(s)) return false;
     }
@@ -852,6 +858,8 @@ export class ActionRegistry {
     if (a.capability.status === 'unavailable' || a.capability.status === 'blocked') {
       return a.capability.reason;
     }
+    const startup = initializationBlockReason(a, s.initialization);
+    if (startup) return startup;
     for (const prerequisite of a.capability.prerequisites) {
       const rule = PREREQUISITES[prerequisite];
       if (!rule.met(s)) return rule.reason;

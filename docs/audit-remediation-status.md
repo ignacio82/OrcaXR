@@ -14,7 +14,7 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 | C: submission lifecycle | Implemented; hardware evidence pending | Shared DOM/XR workflow owns session/artifact/mapping/option guards, cancellation, preparation, random upload names, exact overwrite and response checks. Stored-file starts also bind confirmation to fresh metadata and readiness. Full web quality passes; supervised firmware evidence remains pending. |
 | D: process and artifact lifecycle | Implemented | Native exit/group termination, repeatable downloads, leases, TTL/release, capacity refusal, artifact validation and bounded browser cancellation pass server, container and full web gates. Fresh native image assembly remains a deployment qualification item. |
 | E: deployment and artifacts | Implemented; qualification in progress | Static/API separation, actual-peer proxy trust, userspace Tailscale configuration, strict adjacent-manifest checks and atomic version publication pass focused tests. Real Express HTTP/HTTPS browser tests pass. Full web quality passes. Freshly built native-container qualification remains in progress. |
-| F: discovery and startup | Discovery implemented; startup pending | Private generation-guarded probes, atomic route persistence, disabled-choice preservation, session-only storage fallback and actual external UI slicing pass focused and live deployment tests. Full web quality passes; truthful startup health remains next. |
+| F: discovery and startup | Implemented; automated qualification passes | Discovery, atomic preferences, session-only fallback and actual external UI slicing pass full web and deployment tests. Core/optional startup health, owned initialization, shared DOM/XR recovery and dirty reload refusal pass the full web gate, including five production-browser fault scenarios. |
 | G: controllers and snapshots | Pending | Controller ownership/disposal and opaque immutable asset rollback snapshots. |
 | H: persistence | Pending | Worker serialization/checkpoints, transactional recovery storage, autosave, recovery flows, navigation/update guards. |
 | I: large-project performance | Pending | Worker indexing before rich allocations, oversized-layer checkpoints, typed import traversal, measured baselines. |
@@ -249,5 +249,39 @@ settings/localization/XR suites, production browser and offline workflows,
 28 accessibility rules, 155 pseudo-localized controls and thirteen slicing test
 files. Unchanged ceilings: main 2,349,793 bytes; total JavaScript 10,574,317 bytes.
 Current-source Gitleaks passes with the pinned image and unchanged rules.
-Feature initialization, core dependency gates, and shared DOM/XR startup recovery
-are still pending; F is not complete.
+Startup qualification follows below; discovery evidence alone does not establish
+application readiness.
+
+## Startup verification (2026-10-01)
+
+- A browser regression reproduced Ready while the required settings schema
+  returned HTTP 503. The marker now derives from core workspace, shell, profiles
+  and settings capabilities; unused optional integrations remain idle.
+- Nine registry tests cover required/optional health, single-flight retry,
+  partial-resource disposal, cancellation, deadlines, late import rejection and
+  module failures that need reload. Policy/surface tests preserve printer
+  recovery availability and show the same recovery target in DOM and XR.
+- Required profile fetches now reject errors instead of swallowing them. A
+  follow-up regression caught empty catalogs replacing valid data; failed,
+  malformed, empty and late responses now preserve the previous usable catalog.
+- Built-browser tests pass profile/schema failures, one request for repeated
+  retry gestures, recovery without duplicate panels, and optional panel failure.
+  Reload leaves a dirty project intact, then succeeds after explicit discard.
+  Both HTTP and HTTPS deployment suites still pass with the derived Ready state.
+- Startup controls and the shared settings adapters load separately; lazy panels
+  are owned before mount and late imports cannot restore disposed features.
+  Recovery text uses the localization pipeline. The XR desk retains its existing
+  physical size with a bounded, scrollable failure row.
+- Architecture checks follow the extracted settings adapter and still require
+  `settings_apply_project` through the action registry, while forbidding direct
+  canonical writes throughout the presentation layer. Startup recovery is an
+  inspector action shared by the DOM status surface and XR desk.
+
+Full web quality passes: 238 unit test files, integration/project/settings/
+localization/XR suites, five startup fault scenarios, offline workflows,
+28 accessibility rules, 155 pseudo-localized controls and thirteen slicing test
+files. Unchanged ceilings: main 2,312,049 bytes; total JavaScript 10,588,763 bytes.
+The final build also passes the real Express HTTP/HTTPS deployment suites and
+the current-source scan with the pinned Gitleaks image and unchanged rules.
+Broader navigation/update protection and Save/Discard/Cancel persistence flows
+remain in H; hardware qualification is not implied by renderer or browser tests.

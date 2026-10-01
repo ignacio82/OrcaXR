@@ -1,3 +1,4 @@
+import type { FeatureInitializationRegistry } from '../startup/FeatureInitialization';
 /**
  * OrcaXR Web — Phase 2 workspace.
  *
@@ -835,6 +836,7 @@ export interface WorkspaceAutomationSnapshot {
 }
 
 export interface OrcaWorkspaceOptions {
+  readonly initialization?: FeatureInitializationRegistry;
   readonly fullSpectrumAutoPairPreferences?: FullSpectrumAutoPairGenerationPreferences;
   /** Renderer dependency seam used to fail closed without constructing test-sized GPU buffers. */
   readonly previewSurfaceFactory?: (options: GcodePreviewSurfaceOptions) => WorkspacePreviewSurface;
@@ -855,6 +857,7 @@ export class OrcaWorkspace extends xb.Script {
   /** True once a post-import local-engine warm-up has been scheduled. */
   private slicerWarmupQueued = false;
   private catalog = new ProfileCatalog();
+  private readonly initialization?: FeatureInitializationRegistry;
   private profile: SlicerProfile | null = null;
   /** Prevent the asynchronous catalog default from overwriting an import's
    * canonical slicing configuration while its preview is open or after commit. */
@@ -985,6 +988,7 @@ export class OrcaWorkspace extends xb.Script {
     this.previewSurfaceFactory =
       options.previewSurfaceFactory ?? ((surfaceOptions) => new GcodePreviewSurface(surfaceOptions));
     if (options.catalog) this.catalog = options.catalog;
+    this.initialization = options.initialization;
     this.canonicalProject = CanonicalWorkspaceController.createEmpty({
       idSource: new UuidIdSource(cryptographicRandomWord),
       clock: () => new Date(),
@@ -1311,40 +1315,30 @@ export class OrcaWorkspace extends xb.Script {
     // Do not fetch the large local WASM slicer during first paint. Most first
     // visits are spent choosing a printer or inspecting the workspace; the
     // warm-up is scheduled after the first model arrives instead.
-    // Load the profile catalog; default to the user's Centauri Carbon.
-    // One flaky fetch (mobile network, the COI service-worker reload racing
-    // the request) used to leave the catalog empty for the whole session —
-    // blank, dead profile dropdowns. Retry with backoff and again when the
-    // browser comes back online.
-    let catalogLoading = false;
-    const loadCatalog = async () => {
-      if (catalogLoading || this.catalog.profiles.length > 0) return;
-      catalogLoading = true;
-      try {
-        for (let attempt = 0; this.catalog.profiles.length === 0 && attempt < 4; attempt++) {
-          if (attempt > 0) {
-            const delay = 1000 * 2 ** (attempt - 1);
-            console.warn(`[orcaxr] profile catalog empty — retry ${attempt} in ${delay} ms`);
-            await new Promise((r) => setTimeout(r, delay));
-          }
-          await this.catalog.load();
-        }
-        if (this.catalog.profiles.length === 0) {
-          this.setStatus(
-            t(
-              'workspace.orcaWorkspace.profileCatalogFailedToLoad',
-              'Profile catalog failed to load — check the connection and reload.',
-            ),
-          );
-          return;
-        }
-        this.applyCatalogDefaultProfile();
-      } finally {
-        catalogLoading = false;
+    // Profiles are a required capability with a visible, idempotent retry.
+    const loadProfiles = () => {
+      if (this.initialization) {
+        void this.initialization.run('profiles', async (scope) => {
+          this.lifecycleDisposers.push(() => scope.dispose());
+          await scope.load(this.loadRequiredProfiles(scope.signal));
+        });
+      } else {
+        const abort = new AbortController();
+        this.lifecycleDisposers.push(() => abort.abort());
+        void this.loadRequiredProfiles(abort.signal).catch((error) => {
+          if (!this.disposed)
+            this.setStatus(
+              t('startup.profileError', 'Printer profiles: {reason}', {
+                reason: error instanceof Error ? error.message : String(error),
+              }),
+            );
+        });
       }
     };
-    void loadCatalog();
-    const onOnline = () => void loadCatalog();
+    loadProfiles();
+    const onOnline = () => {
+      if (this.catalog.profiles.length === 0 && !this.disposed) loadProfiles();
+    };
     window.addEventListener('online', onOnline);
     this.lifecycleDisposers.push(() => window.removeEventListener('online', onOnline));
     this.slicer.onProgress = (p) => this.setStatus(`Slicing... ${p.message}`, p.percent);
@@ -1370,6 +1364,15 @@ export class OrcaWorkspace extends xb.Script {
       activeSession?.removeEventListener('select', onSelect);
       activeSession = null;
     });
+  }
+
+  private async loadRequiredProfiles(signal: AbortSignal): Promise<void> {
+    if (this.catalog.profiles.length === 0) await this.catalog.load(signal);
+    if (signal.aborted) throw signal.reason;
+    if (this.disposed) throw new Error('The workspace is closed.');
+    if (this.catalog.profiles.length === 0)
+      throw new Error('No usable printer profiles were loaded. Retry when the connection is available.');
+    this.applyCatalogDefaultProfile();
   }
 
   /** Release every listener, subscription, UI card, and owned GPU resource. */
@@ -2865,6 +2868,8 @@ export class OrcaWorkspace extends xb.Script {
    * the privacy preview and how to hand over a download, because both differ
    * between DOM and XR and neither belongs in canonical logic.
    */
+  public onRequestStartupRecovery: ((featureId?: string) => Promise<void>) | null = null;
+
   public onRequestDiagnosticsExport: (() => Promise<void> | void) | null = null;
 
   public exportDiagnostics(): void {
@@ -6889,17 +6894,33 @@ export class OrcaWorkspace extends xb.Script {
    * invalid margin — so a failure is reported and the flat shell continues.
    */
   public async loadImmersiveShell(): Promise<XrUiModule | null> {
+    if (this.disposed) return null;
     if (this.xrUi) return this.xrUi;
-    this.xrUiLoad ??= import('../ui/xr/immersive')
-      .then((module) => {
-        this.xrUi = module;
-        this.buildXrSurfaces(module);
-        return module;
-      })
-      .catch((error) => {
-        console.error('[orcaxr] the immersive shell failed to load', error);
-        return null;
-      });
+    const install = (module: XrUiModule) => {
+      if (this.disposed) throw new Error('The workspace is closed.');
+      this.buildXrSurfaces(module);
+      this.xrUi = module;
+      return module;
+    };
+    this.xrUiLoad ??= this.initialization
+      ? this.initialization
+          .run('xr', async (scope) => {
+            const module = await scope.import(import('../ui/xr/immersive'));
+            scope.defer(() => {
+              for (const card of Object.values(this.xrCards ?? {})) {
+                card.hide();
+                card.reset();
+              }
+              this.xrShell = null;
+              this.xrUi = null;
+            });
+            return install(module);
+          })
+          .then((result) => (result.ready ? result.value : null))
+      : import('../ui/xr/immersive').then(install).catch((error) => {
+          console.error('[orcaxr] the immersive shell failed to load', error);
+          return null;
+        });
     return this.xrUiLoad;
   }
 
@@ -7000,9 +7021,9 @@ export class OrcaWorkspace extends xb.Script {
     return {
       registry: this.actionRegistry,
       actionState: () => this.actionContext?.ui.get() ?? null,
-      invoke: (action, surface) => {
+      invoke: (action, surface, invocation) => {
         if (!this.actionContext) return;
-        void this.actionRegistry.invoke(action, surface, this.actionContext, this.actionContext.ui.get());
+        void this.actionRegistry.invoke(action, surface, this.actionContext, this.actionContext.ui.get(), invocation);
       },
       workspaceMode: () => this.xrMode,
       setWorkspaceMode: (mode) => this.setXrMode(mode),

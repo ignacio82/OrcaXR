@@ -8,6 +8,7 @@ export function inspectLiveCanonicalBoundaries(root) {
     return [relative, parse(file, fs.readFileSync(file, 'utf8'))];
   };
   const main = read('src/main.ts');
+  const settingsEditors = read('src/ui/dom/mountSettingsEditors.ts');
   const workspace = read('src/workspace/OrcaWorkspace.ts');
   const controller = read('src/workspace/CanonicalWorkspaceController.ts');
   const slicer = read('src/workspace/CanonicalWorkspaceSlicer.ts');
@@ -17,7 +18,8 @@ export function inspectLiveCanonicalBoundaries(root) {
     ...inspectMain(...main),
     ...inspectObjectsGateway(...main),
     ...inspectSemanticObjectsGateway(...main),
-    ...inspectSettingsGateway(...main),
+    ...inspectSettingsGateway(...main, { requireRegistryInvocation: false }),
+    ...inspectSettingsGateway(...settingsEditors),
     ...inspectVirtualFilamentsGateway(...main),
     ...presentation.flatMap(([file, source]) =>
       inspectSemanticObjectsGateway(file, source, { requireRegistryInvocation: false }),

@@ -1,3 +1,4 @@
+import type { ApplicationInitialization } from './startup/ApplicationInitialization';
 /**
  * OrcaXR Web — entry point.
  *
@@ -72,7 +73,6 @@ import { buildShortcutCatalog, isShortcutEditingTarget, matchShortcut } from './
 import { DomShell } from './ui/dom/DomShell';
 import { CommandPalette } from './ui/dom/CommandPalette';
 import { ContextMenu, contextMenuGroups } from './ui/dom/ContextMenu';
-import type { GeneratedSettingsPanelAdapter } from './ui/dom/GeneratedSettingsPanel';
 import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/ObjectsPanel';
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
 import { SelectionFilamentBar } from './ui/dom/SelectionFilamentBar';
@@ -150,11 +150,6 @@ import {
 import { AiConfigDialog } from './ui/dom/AiConfigDialog';
 import { showProjectImportPreviewDialog } from './import/ProjectImportPreviewDialog';
 import type { ObjectTreeEntityRef } from './project/objects';
-import type { ConfigMap } from './project/domain/model';
-import { loadEngineOptionCatalog, type EngineOptionCatalog } from './settings/generated/loader';
-import { applySettingsCommitToConfig, decodeSettingsConfig } from './settings/editor';
-import type { ProjectSettingsOverrideSnapshot } from './project/settingsOverrides';
-import type { ScopedOverrideSnapshot, ScopedOverrideTargetOption } from './project/scopedOverrides';
 import { t } from './l10n/t';
 import { diagnoseLocalNetwork, normalizeHttpEndpoint } from './net/LocalNetworkAccess';
 
@@ -385,6 +380,7 @@ function setupDomUI(
   actionCtx: ActionContext,
   registry: ActionRegistry,
   l10n: () => Localizer,
+  initialization: ApplicationInitialization,
 ) {
   workspace.onRequestNewProjectConfirmation = () =>
     window.confirm(
@@ -890,8 +886,8 @@ function setupDomUI(
   const printerStorageHost = document.getElementById('printer-storage-host');
   if (printerStorageHost) {
     // Behind a closed <details>: loaded when it is opened, not at first paint.
-    void (async () => {
-      const { PrinterStoragePanel } = await import('./ui/dom/PrinterStoragePanel');
+    void initialization.mount('printer-storage', 'Printer files', async (scope) => {
+      const { PrinterStoragePanel } = await scope.import(import('./ui/dom/PrinterStoragePanel'));
       const storagePanel = new PrinterStoragePanel(printerStorageHost, {
         getListing: () => storageState.listing,
         getMetadata: () => storageState.metadata,
@@ -917,9 +913,11 @@ function setupDomUI(
             .finally(notifyStorage);
         },
         run: async (operation) => {
-          await registry.invoke(PRINTER_STORAGE_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
-            printerStorage: operation,
-          });
+          await scope.load(
+            registry.invoke(PRINTER_STORAGE_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
+              printerStorage: operation,
+            }),
+          );
         },
         askName: async (current) => {
           const next = window.prompt(
@@ -940,16 +938,13 @@ function setupDomUI(
             dismissLabel: 'Keep it',
           }),
       });
+      scope.own(storagePanel);
       storagePanel.mount();
-      window.addEventListener(
-        'pagehide',
-        () => {
-          releaseThumbnail();
-          storagePanel.dispose();
-        },
-        { once: true },
-      );
-    })();
+      scope.defer(() => {
+        releaseThumbnail();
+        storagePanel.dispose();
+      });
+    });
   }
 
   // The console: what is typed goes to the firmware, so nothing is sent until
@@ -1031,8 +1026,8 @@ function setupDomUI(
   const printerConsoleHost = document.getElementById('printer-console-host');
   if (printerConsoleHost) {
     // Behind a closed <details>: loaded when it is opened, not at first paint.
-    void (async () => {
-      const { PrinterConsolePanel } = await import('./ui/dom/PrinterConsolePanel');
+    void initialization.mount('printer-console', 'Printer console', async (scope) => {
+      const { PrinterConsolePanel } = await scope.import(import('./ui/dom/PrinterConsolePanel'));
       const consolePanel = new PrinterConsolePanel(printerConsoleHost, {
         getEntries: () => consoleLog.entries,
         getMacros: () => consoleState.macros,
@@ -1047,9 +1042,11 @@ function setupDomUI(
           return () => consoleListeners.delete(listener);
         },
         run: async (operation) => {
-          await registry.invoke(PRINTER_CONSOLE_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
-            printerConsole: operation,
-          });
+          await scope.load(
+            registry.invoke(PRINTER_CONSOLE_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
+              printerConsole: operation,
+            }),
+          );
         },
         askParameters: async (macro) => {
           const values: Record<string, string> = {};
@@ -1064,9 +1061,9 @@ function setupDomUI(
           return values;
         },
       });
+      scope.own(consolePanel);
       consolePanel.mount();
-      window.addEventListener('pagehide', () => consolePanel.dispose(), { once: true });
-    })();
+    });
   }
 
   // The printer's own record of what it has run. Paged rather than fetched
@@ -1114,8 +1111,8 @@ function setupDomUI(
   const printerHistoryHost = document.getElementById('printer-history-host');
   if (printerHistoryHost) {
     // Behind a closed <details>: loaded when it is opened, not at first paint.
-    void (async () => {
-      const { PrintHistoryPanel } = await import('./ui/dom/PrintHistoryPanel');
+    void initialization.mount('printer-history', 'Printer history', async (scope) => {
+      const { PrintHistoryPanel } = await scope.import(import('./ui/dom/PrintHistoryPanel'));
       const historyPanel = new PrintHistoryPanel(printerHistoryHost, {
         getPage: () => historyState.page,
         getTotals: () => historyState.totals,
@@ -1128,14 +1125,16 @@ function setupDomUI(
           return () => historyListeners.delete(listener);
         },
         load: async (start) => {
-          await registry.invoke('printer_view_history', 'dom-inspector', actionCtx, uiState.get(), {
-            printHistoryStart: start,
-          });
+          await scope.load(
+            registry.invoke('printer_view_history', 'dom-inspector', actionCtx, uiState.get(), {
+              printHistoryStart: start,
+            }),
+          );
         },
       });
+      scope.own(historyPanel);
       historyPanel.mount();
-      window.addEventListener('pagehide', () => historyPanel.dispose(), { once: true });
-    })();
+    });
   }
 
   // The camera. Every frame is its own authenticated request, so the panel owns
@@ -1303,8 +1302,8 @@ function setupDomUI(
     const pageVisibility = devicePage ? new MutationObserver(announceVisibility) : undefined;
     if (devicePage) pageVisibility?.observe(devicePage, { attributes: true, attributeFilter: ['hidden'] });
     // Behind a closed <details>: loaded when it is opened, not at first paint.
-    void (async () => {
-      const { PrinterCameraPanel } = await import('./ui/dom/PrinterCameraPanel');
+    void initialization.mount('printer-camera-panel', 'Printer camera controls', async (scope) => {
+      const { PrinterCameraPanel } = await scope.import(import('./ui/dom/PrinterCameraPanel'));
       const cameraPanel = new PrinterCameraPanel(
         printerCameraHost,
         {
@@ -1330,7 +1329,7 @@ function setupDomUI(
             notifyCamera();
           },
           refresh: async () => {
-            await registry.invoke('view_webcam', 'dom-inspector', actionCtx, uiState.get());
+            await scope.load(registry.invoke('view_webcam', 'dom-inspector', actionCtx, uiState.get()));
           },
           captureFrame: async () => {
             const camera = selectedCamera();
@@ -1354,8 +1353,8 @@ function setupDomUI(
               return;
             }
             try {
-              const { transport } = await connectConfiguredPrinter();
-              const bytes = await fetchCameraSnapshot(transport, camera, undefined, route);
+              const { transport } = await scope.load(connectConfiguredPrinter());
+              const bytes = await scope.load(fetchCameraSnapshot(transport, camera, undefined, route));
               releaseFrame();
               cameraState.frameUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/jpeg' }));
               cameraRouteWorked(camera);
@@ -1401,18 +1400,15 @@ function setupDomUI(
           clearInterval: (handle) => window.clearInterval(handle),
         },
       );
+      scope.own(cameraPanel);
       cameraPanel.mount();
-      window.addEventListener(
-        'pagehide',
-        () => {
-          releaseFrame();
-          cameraPanel.dispose();
-          pageVisibility?.disconnect();
-          document.removeEventListener('visibilitychange', announceVisibility);
-        },
-        { once: true },
-      );
-    })();
+      scope.defer(() => {
+        releaseFrame();
+        cameraPanel.dispose();
+        pageVisibility?.disconnect();
+        document.removeEventListener('visibilitychange', announceVisibility);
+      });
+    });
   }
 
   const printJobHost = document.getElementById('printer-job-host');
@@ -1563,15 +1559,18 @@ function setupDomUI(
   if (calibrationHistoryHost) {
     // Behind a closed <details>, and it carries the whole pinned calibration
     // catalog with it, so none of this belongs in first paint.
-    void (async () => {
+    void initialization.mount('calibration-history', 'Calibration history', async (scope) => {
       const [{ CalibrationHistoryStore }, history, { CALIBRATION_JOB_DEFINITIONS, getCalibrationJobDefinition }] =
-        await Promise.all([
-          import('./project/calibration/historyStore'),
-          import('./project/calibration/history'),
-          import('./project/calibration/definitions'),
-        ]);
-      const { describeCalibrationApplication, planCalibrationApplication } =
-        await import('./project/calibration/application');
+        await scope.import(
+          Promise.all([
+            import('./project/calibration/historyStore'),
+            import('./project/calibration/history'),
+            import('./project/calibration/definitions'),
+          ]),
+        );
+      const { describeCalibrationApplication, planCalibrationApplication } = await scope.import(
+        import('./project/calibration/application'),
+      );
       const {
         UNKNOWN_CONDITION,
         assessCalibrationApplicability,
@@ -1796,7 +1795,7 @@ function setupDomUI(
         }
       };
 
-      const { CalibrationHistoryPanel } = await import('./ui/dom/CalibrationHistoryPanel');
+      const { CalibrationHistoryPanel } = await scope.import(import('./ui/dom/CalibrationHistoryPanel'));
       const calibrationPanel = new CalibrationHistoryPanel(calibrationHistoryHost, {
         getRecords: () => calibrationStore.history.list(),
         getMethods: () =>
@@ -1822,12 +1821,10 @@ function setupDomUI(
           return () => calibrationListeners.delete(listener);
         },
         run: async (operation) => {
-          await registry.invoke(
-            CALIBRATION_HISTORY_ACTION_IDS[operation.kind],
-            'dom-inspector',
-            actionCtx,
-            uiState.get(),
-            { calibrationHistory: operation },
+          await scope.load(
+            registry.invoke(CALIBRATION_HISTORY_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
+              calibrationHistory: operation,
+            }),
           );
         },
         confirmDelete: async (record) =>
@@ -1836,9 +1833,9 @@ function setupDomUI(
               'The measurement cannot be recovered.',
           ),
       });
+      scope.own(calibrationPanel);
       calibrationPanel.mount();
-      window.addEventListener('pagehide', () => calibrationPanel.dispose(), { once: true });
-    })();
+    });
   }
 
   window.addEventListener(
@@ -2880,8 +2877,8 @@ function setupDomUI(
 
   if (presetLibraryHost) {
     // Behind a closed <details>: loaded when it is opened, not at first paint.
-    void (async () => {
-      const { PresetLibraryPanel } = await import('./ui/dom/PresetLibraryPanel');
+    void initialization.mount('preset-library', 'Preset library', async (scope) => {
+      const { PresetLibraryPanel } = await scope.import(import('./ui/dom/PresetLibraryPanel'));
       const presetPanel = new PresetLibraryPanel(presetLibraryHost, {
         getInventory: () =>
           presetStore?.library.inventory() ?? { vendors: Object.freeze([]), models: Object.freeze([]) },
@@ -2902,9 +2899,11 @@ function setupDomUI(
           return () => presetListeners.delete(listener);
         },
         run: async (operation) => {
-          await registry.invoke(PRESET_LIBRARY_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
-            presetLibrary: operation,
-          });
+          await scope.load(
+            registry.invoke(PRESET_LIBRARY_ACTION_IDS[operation.kind], 'dom-inspector', actionCtx, uiState.get(), {
+              presetLibrary: operation,
+            }),
+          );
         },
         chooseBundle: () =>
           new Promise<string | undefined>((resolve) => {
@@ -2928,9 +2927,9 @@ function setupDomUI(
             `Delete your preset "${name}"? Projects already using it keep the values they were sliced with.`,
           ),
       });
+      scope.own(presetPanel);
       presetPanel.mount();
-      window.addEventListener('pagehide', () => presetPanel.dispose(), { once: true });
-    })();
+    });
   }
 
   const autoPairCheckbox = document.getElementById('chk-full-spectrum-auto-pairs') as HTMLInputElement | null;
@@ -3243,12 +3242,14 @@ function setupDomUI(
   const smartPaintPanelHost = document.getElementById('smart-paint-panel-host');
   if (smartPaintPanelHost) {
     // Tool-gated, like the other paint and gizmo panels.
-    void (async () => {
-      const { SmartPaintPanel } = await import('./ui/dom/SmartPaintPanel');
+    void initialization.mount('smart-paint-panel', 'Smart Paint controls', async (scope) => {
+      const { SmartPaintPanel } = await scope.import(import('./ui/dom/SmartPaintPanel'));
       const configure = async (request: NonNullable<ActionInvocation['smartPaint']>): Promise<void> => {
-        const invoked = await registry.invoke('paint_smart_configure', 'dom-inspector', actionCtx, uiState.get(), {
-          smartPaint: request,
-        });
+        const invoked = await scope.load(
+          registry.invoke('paint_smart_configure', 'dom-inspector', actionCtx, uiState.get(), {
+            smartPaint: request,
+          }),
+        );
         if (!invoked) throw new Error('The Smart Paint configuration action is unavailable.');
       };
       const smartPaintPanel = new SmartPaintPanel(smartPaintPanelHost, {
@@ -3272,31 +3273,37 @@ function setupDomUI(
         onSetPrompt: (prompt) => configure({ prompt }),
         onAssignRegion: (id, value) => configure({ region: { id, value } }),
         onRequest: async () => {
-          const invoked = await registry.invoke('paint_smart_request', 'dom-inspector', actionCtx, uiState.get());
+          const invoked = await scope.load(
+            registry.invoke('paint_smart_request', 'dom-inspector', actionCtx, uiState.get()),
+          );
           if (!invoked) throw new Error('Select a model part before asking the Smart Paint assistant.');
         },
         onApply: async () => {
-          const invoked = await registry.invoke('paint_smart_apply', 'dom-inspector', actionCtx, uiState.get());
+          const invoked = await scope.load(
+            registry.invoke('paint_smart_apply', 'dom-inspector', actionCtx, uiState.get()),
+          );
           if (!invoked) throw new Error('Applying the Smart Paint mask is unavailable.');
         },
         onCancel: async () => {
-          const invoked = await registry.invoke('paint_smart_cancel', 'dom-inspector', actionCtx, uiState.get());
+          const invoked = await scope.load(
+            registry.invoke('paint_smart_cancel', 'dom-inspector', actionCtx, uiState.get()),
+          );
           if (!invoked) throw new Error('Discarding the Smart Paint mask is unavailable.');
         },
         onError: (error) => {
           statusText.textContent = `Smart Paint: ${error instanceof Error ? error.message : String(error)}`;
         },
       });
+      scope.own(smartPaintPanel);
       smartPaintPanel.mount();
-      window.addEventListener('pagehide', () => smartPaintPanel.dispose(), { once: true });
-    })();
+    });
   }
 
   const measurePanelHost = document.getElementById('measure-panel-host');
   if (measurePanelHost) {
     // Tool-gated, like the emboss and SVG panels beside it.
-    void (async () => {
-      const { MeasurePanel } = await import('./ui/dom/MeasurePanel');
+    void initialization.mount('measure-panel', 'Measurement controls', async (scope) => {
+      const { MeasurePanel } = await scope.import(import('./ui/dom/MeasurePanel'));
       const measurePanel = new MeasurePanel(measurePanelHost, {
         getState: () => {
           const measure = workspace.getMeasureSnapshot();
@@ -3328,39 +3335,40 @@ function setupDomUI(
           };
         },
         onActivate: async () => {
-          const invoked = await registry.invoke('tool_measure', 'dom-toolbar', actionCtx, uiState.get());
+          const invoked = await scope.load(registry.invoke('tool_measure', 'dom-toolbar', actionCtx, uiState.get()));
           if (!invoked) throw new Error('Add a model before measuring it.');
         },
         onClear: async () => {
-          const invoked = await registry.invoke('measure_clear', 'dom-inspector', actionCtx, uiState.get());
+          const invoked = await scope.load(registry.invoke('measure_clear', 'dom-inspector', actionCtx, uiState.get()));
           if (!invoked) throw new Error('Clearing the measurement is unavailable.');
         },
         onAlign: async (kind, parameter) => {
-          const invoked = await registry.invoke('assembly_align', 'dom-inspector', actionCtx, uiState.get(), {
-            assemblyAlignment: {
-              kind: kind as NonNullable<ActionInvocation['assemblyAlignment']>['kind'],
-              ...(parameter !== undefined ? { parameter } : {}),
-            },
-          });
+          const invoked = await scope.load(
+            registry.invoke('assembly_align', 'dom-inspector', actionCtx, uiState.get(), {
+              assemblyAlignment: {
+                kind: kind as NonNullable<ActionInvocation['assemblyAlignment']>['kind'],
+                ...(parameter !== undefined ? { parameter } : {}),
+              },
+            }),
+          );
           if (!invoked) throw new Error('Assembly alignment is unavailable.');
         },
         onError: (error) => {
           statusText.textContent = `Measure: ${error instanceof Error ? error.message : String(error)}`;
         },
       });
+      scope.own(measurePanel);
       measurePanel.mount();
-      window.addEventListener('pagehide', () => measurePanel.dispose(), { once: true });
-    })();
+    });
   }
 
   const gcodePanelHost = document.getElementById('gcode-panel-host');
   if (gcodePanelHost) {
     // Inspector-gated and only useful after a slice, so it is fetched then.
-    void (async () => {
-      const [{ GcodePanel }, { GcodeDocument }] = await Promise.all([
-        import('./ui/dom/GcodePanel'),
-        import('./project/gcode/GcodeDocument'),
-      ]);
+    void initialization.mount('gcode-panel', 'G-code inspector', async (scope) => {
+      const [{ GcodePanel }, { GcodeDocument }] = await scope.import(
+        Promise.all([import('./ui/dom/GcodePanel'), import('./project/gcode/GcodeDocument')]),
+      );
       // Rebuilt only when the program itself changes: indexing is cheap but a
       // fresh document on every canonical tick would drop the operator's
       // scroll position and search while they were reading.
@@ -3394,20 +3402,22 @@ function setupDomUI(
           statusText.textContent = `G-code: ${error instanceof Error ? error.message : String(error)}`;
         },
       });
+      scope.own(panel);
       panel.mount();
-      window.addEventListener('pagehide', () => panel.dispose(), { once: true });
-    })();
+    });
   }
 
   const calibrationParametersHost = document.getElementById('calibration-parameters-host');
   if (calibrationParametersHost) {
-    void (async () => {
-      const [{ CalibrationParametersPanel }, form, docs, inventory] = await Promise.all([
-        import('./ui/dom/CalibrationParametersPanel'),
-        import('./project/calibration/form'),
-        import('./project/calibration/docs'),
-        import('./features/calibrationInventory'),
-      ]);
+    void initialization.mount('calibration-parameters', 'Calibration controls', async (scope) => {
+      const [{ CalibrationParametersPanel }, form, docs, inventory] = await scope.import(
+        Promise.all([
+          import('./ui/dom/CalibrationParametersPanel'),
+          import('./project/calibration/form'),
+          import('./project/calibration/docs'),
+          import('./features/calibrationInventory'),
+        ]),
+      );
       const listeners = new Set<() => void>();
       const announce = (): void => {
         for (const listener of listeners) listener();
@@ -3470,13 +3480,15 @@ function setupDomUI(
           return () => listeners.delete(listener);
         },
         onEdit: async (key, text) => {
-          const invoked = await registry.invoke('calib_configure', 'dom-inspector', actionCtx, uiState.get(), {
-            calibrationParameter: { key, text },
-          });
+          const invoked = await scope.load(
+            registry.invoke('calib_configure', 'dom-inspector', actionCtx, uiState.get(), {
+              calibrationParameter: { key, text },
+            }),
+          );
           if (!invoked) throw new Error('Setting a calibration parameter is unavailable.');
         },
         onReset: async () => {
-          await registry.invoke('calib_reset_parameters', 'dom-inspector', actionCtx, uiState.get());
+          await scope.load(registry.invoke('calib_reset_parameters', 'dom-inspector', actionCtx, uiState.get()));
         },
         onGenerate: () => {
           throw new Error('Building a compiled calibration plan into the project is not available yet (P8.2).');
@@ -3485,17 +3497,17 @@ function setupDomUI(
           statusText.textContent = `Calibration: ${error instanceof Error ? error.message : String(error)}`;
         },
       });
+      scope.own(panel);
       panel.mount();
-      window.addEventListener('pagehide', () => panel.dispose(), { once: true });
-    })();
+    });
   }
 
   const calibrationSessionHost = document.getElementById('calibration-session-host');
   if (calibrationSessionHost) {
     // In the viewport, so it is seen; loaded on demand, because it is empty
     // until someone starts a calibration.
-    void (async () => {
-      const { CalibrationSessionBar } = await import('./ui/dom/CalibrationSessionBar');
+    void initialization.mount('calibration-session', 'Calibration session', async (scope) => {
+      const { CalibrationSessionBar } = await scope.import(import('./ui/dom/CalibrationSessionBar'));
       const bar = new CalibrationSessionBar(calibrationSessionHost, {
         getState: () => {
           const ui = uiState.get();
@@ -3520,11 +3532,15 @@ function setupDomUI(
           };
         },
         onDiscard: async () => {
-          const invoked = await registry.invoke('calib_session_discard', 'dom-inspector', actionCtx, uiState.get());
+          const invoked = await scope.load(
+            registry.invoke('calib_session_discard', 'dom-inspector', actionCtx, uiState.get()),
+          );
           if (!invoked) throw new Error('There is no calibration to discard.');
         },
         onKeep: async () => {
-          const invoked = await registry.invoke('calib_session_keep', 'dom-inspector', actionCtx, uiState.get());
+          const invoked = await scope.load(
+            registry.invoke('calib_session_keep', 'dom-inspector', actionCtx, uiState.get()),
+          );
           if (!invoked) throw new Error('There is no calibration to keep.');
         },
         // Routed through the same registry actions the toolbar uses: the
@@ -3532,33 +3548,37 @@ function setupDomUI(
         // slicing and sending it must not take a second code path that could
         // drift from the one everything else is tested against.
         onSlice: async () => {
-          const invoked = await registry.invoke('slice_active_plate', 'dom-toolbar', actionCtx, uiState.get());
+          const invoked = await scope.load(
+            registry.invoke('slice_active_plate', 'dom-toolbar', actionCtx, uiState.get()),
+          );
           if (!invoked) throw new Error('Slicing the calibration is unavailable.');
         },
         onExport: async () => {
-          const invoked = await registry.invoke('save_gcode_to_downloads', 'dom-toolbar', actionCtx, uiState.get());
+          const invoked = await scope.load(
+            registry.invoke('save_gcode_to_downloads', 'dom-toolbar', actionCtx, uiState.get()),
+          );
           if (!invoked) throw new Error('Saving the calibration G-code is unavailable.');
         },
         onSend: async () => {
-          const invoked = await registry.invoke('send_to_printer', 'dom-toolbar', actionCtx, uiState.get());
+          const invoked = await scope.load(registry.invoke('send_to_printer', 'dom-toolbar', actionCtx, uiState.get()));
           if (!invoked) throw new Error('Sending the calibration is unavailable.');
         },
         onError: (error) => {
           statusText.textContent = `Calibration: ${error instanceof Error ? error.message : String(error)}`;
         },
       });
+      scope.own(bar);
       bar.mount();
-      window.addEventListener('pagehide', () => bar.dispose(), { once: true });
-    })();
+    });
   }
 
   const simplifyPanelHost = document.getElementById('simplify-panel-host');
   if (simplifyPanelHost) {
     // Disclosure-gated, so it is fetched when the inspector wants it rather
     // than carried in the main chunk everyone pays for at first paint.
-    void (async () => {
+    void initialization.mount('simplify-panel', 'Simplify controls', async (scope) => {
       let requested = { useCount: true, decimateRatio: 50, maxError: 1 };
-      const { SimplifyPanel } = await import('./ui/dom/SimplifyPanel');
+      const { SimplifyPanel } = await scope.import(import('./ui/dom/SimplifyPanel'));
       const simplifyPanel = new SimplifyPanel(simplifyPanelHost, {
         getState: () => {
           const snapshot = workspace.getSimplifySnapshot();
@@ -3588,36 +3608,42 @@ function setupDomUI(
         },
         onPreview: async (configuration) => {
           requested = { ...configuration };
-          const invoked = await registry.invoke('simplify_preview', 'dom-inspector', actionCtx, uiState.get(), {
-            simplifyByError: !configuration.useCount,
-            simplifyRatio: configuration.decimateRatio,
-            simplifyMaxError: configuration.maxError,
-          });
+          const invoked = await scope.load(
+            registry.invoke('simplify_preview', 'dom-inspector', actionCtx, uiState.get(), {
+              simplifyByError: !configuration.useCount,
+              simplifyRatio: configuration.decimateRatio,
+              simplifyMaxError: configuration.maxError,
+            }),
+          );
           if (!invoked) throw new Error('Select a model before previewing a simplify.');
         },
         onApply: async () => {
-          const invoked = await registry.invoke('simplify_apply', 'dom-inspector', actionCtx, uiState.get());
+          const invoked = await scope.load(
+            registry.invoke('simplify_apply', 'dom-inspector', actionCtx, uiState.get()),
+          );
           if (!invoked) throw new Error('There is no simplify preview to apply.');
         },
         onCancel: async () => {
-          const invoked = await registry.invoke('simplify_cancel', 'dom-inspector', actionCtx, uiState.get());
+          const invoked = await scope.load(
+            registry.invoke('simplify_cancel', 'dom-inspector', actionCtx, uiState.get()),
+          );
           if (!invoked) throw new Error('There is no simplify preview to cancel.');
         },
         onError: (error) => {
           statusText.textContent = `Simplify: ${error instanceof Error ? error.message : String(error)}`;
         },
       });
+      scope.own(simplifyPanel);
       simplifyPanel.mount();
-      window.addEventListener('pagehide', () => simplifyPanel.dispose(), { once: true });
-    })();
+    });
   }
 
   const brimEarsPanelHost = document.getElementById('brim-ears-panel-host');
   if (brimEarsPanelHost) {
     // Disclosure-gated like the simplify panel beside it, and fetched the same
     // way: the ear controls are a tool an operator opens, not first paint.
-    void (async () => {
-      const { BrimEarsPanel } = await import('./ui/dom/BrimEarsPanel');
+    void initialization.mount('brim-ears-panel', 'Brim controls', async (scope) => {
+      const { BrimEarsPanel } = await scope.import(import('./ui/dom/BrimEarsPanel'));
       const brimEarsPanel = new BrimEarsPanel(brimEarsPanelHost, {
         getState: () => {
           const snapshot = workspace.getBrimEarSnapshot();
@@ -3649,43 +3675,51 @@ function setupDomUI(
           };
         },
         onActivate: async () => {
-          const invoked = await registry.invoke('tool_brim_ears', 'dom-toolbar', actionCtx, uiState.get());
+          const invoked = await scope.load(registry.invoke('tool_brim_ears', 'dom-toolbar', actionCtx, uiState.get()));
           if (!invoked) throw new Error('Select a model part before placing brim ears.');
         },
         onSetRadius: async (radiusMm) => {
-          const invoked = await registry.invoke('brim_ears_configure', 'dom-inspector', actionCtx, uiState.get(), {
-            brimEarRadiusMm: radiusMm,
-          });
+          const invoked = await scope.load(
+            registry.invoke('brim_ears_configure', 'dom-inspector', actionCtx, uiState.get(), {
+              brimEarRadiusMm: radiusMm,
+            }),
+          );
           if (!invoked) throw new Error('Setting the brim-ear radius is unavailable.');
         },
         onRemove: async (index) => {
-          const invoked = await registry.invoke('brim_ears_remove', 'dom-inspector', actionCtx, uiState.get(), {
-            brimEarIndex: index,
-          });
+          const invoked = await scope.load(
+            registry.invoke('brim_ears_remove', 'dom-inspector', actionCtx, uiState.get(), {
+              brimEarIndex: index,
+            }),
+          );
           if (!invoked) throw new Error('Removing a brim ear is unavailable.');
         },
         onAutoPlace: async () => {
-          const invoked = await registry.invoke('brim_ears_auto', 'dom-inspector', actionCtx, uiState.get());
+          const invoked = await scope.load(
+            registry.invoke('brim_ears_auto', 'dom-inspector', actionCtx, uiState.get()),
+          );
           if (!invoked) throw new Error('Automatic brim-ear placement is unavailable.');
         },
         onClear: async () => {
-          const invoked = await registry.invoke('brim_ears_clear', 'dom-inspector', actionCtx, uiState.get());
+          const invoked = await scope.load(
+            registry.invoke('brim_ears_clear', 'dom-inspector', actionCtx, uiState.get()),
+          );
           if (!invoked) throw new Error('Clearing brim ears is unavailable.');
         },
         onError: (error) => {
           statusText.textContent = `Brim ears: ${error instanceof Error ? error.message : String(error)}`;
         },
       });
+      scope.own(brimEarsPanel);
       brimEarsPanel.mount();
-      window.addEventListener('pagehide', () => brimEarsPanel.dispose(), { once: true });
-    })();
+    });
   }
 
   const embossPanelHost = document.getElementById('emboss-panel-host');
   if (embossPanelHost) {
     // Disclosure-gated and font-heavy: fetched when the emboss tool wants it.
-    void (async () => {
-      const { EmbossPanel } = await import('./ui/dom/EmbossPanel');
+    void initialization.mount('emboss-panel', 'Emboss controls', async (scope) => {
+      const { EmbossPanel } = await scope.import(import('./ui/dom/EmbossPanel'));
       const embossPanel = new EmbossPanel(embossPanelHost, {
         getState: () => {
           const snapshot = workspace.getEmbossSnapshot();
@@ -3717,13 +3751,15 @@ function setupDomUI(
           };
         },
         onActivate: async () => {
-          const invoked = await registry.invoke('add_emboss', 'dom-toolbar', actionCtx, uiState.get());
+          const invoked = await scope.load(registry.invoke('add_emboss', 'dom-toolbar', actionCtx, uiState.get()));
           if (!invoked) throw new Error('Load a model before embossing text onto it.');
         },
         onLoadFont: async (name, bytes) => {
-          const invoked = await registry.invoke('emboss_load_font', 'dom-inspector', actionCtx, uiState.get(), {
-            emboss: { font: { name, bytes } },
-          });
+          const invoked = await scope.load(
+            registry.invoke('emboss_load_font', 'dom-inspector', actionCtx, uiState.get(), {
+              emboss: { font: { name, bytes } },
+            }),
+          );
           if (!invoked) throw new Error('Loading an emboss font is unavailable.');
         },
         onConfigure: async (patch) => {
@@ -3740,29 +3776,31 @@ function setupDomUI(
             },
             ...(patch.depthMm === undefined ? {} : { projection: { depthMm: patch.depthMm } }),
           };
-          const invoked = await registry.invoke('emboss_configure', 'dom-inspector', actionCtx, uiState.get(), {
-            emboss: { recipe },
-          });
+          const invoked = await scope.load(
+            registry.invoke('emboss_configure', 'dom-inspector', actionCtx, uiState.get(), {
+              emboss: { recipe },
+            }),
+          );
           if (!invoked) throw new Error('Changing the emboss recipe is unavailable.');
         },
         onApply: async () => {
-          const invoked = await registry.invoke('emboss_apply', 'dom-inspector', actionCtx, uiState.get());
+          const invoked = await scope.load(registry.invoke('emboss_apply', 'dom-inspector', actionCtx, uiState.get()));
           if (!invoked) throw new Error('Adding embossed text is unavailable.');
         },
         onError: (error) => {
           statusText.textContent = `Emboss: ${error instanceof Error ? error.message : String(error)}`;
         },
       });
+      scope.own(embossPanel);
       embossPanel.mount();
-      window.addEventListener('pagehide', () => embossPanel.dispose(), { once: true });
-    })();
+    });
   }
 
   const svgPanelHost = document.getElementById('svg-panel-host');
   if (svgPanelHost) {
     // Tool-gated like emboss beside it, and fetched the same way.
-    void (async () => {
-      const { SvgPanel } = await import('./ui/dom/SvgPanel');
+    void initialization.mount('svg-panel', 'SVG controls', async (scope) => {
+      const { SvgPanel } = await scope.import(import('./ui/dom/SvgPanel'));
       const svgPanel = new SvgPanel(svgPanelHost, {
         getState: () => {
           const snapshot = workspace.getSvgPartSnapshot();
@@ -3790,32 +3828,36 @@ function setupDomUI(
           };
         },
         onActivate: async () => {
-          const invoked = await registry.invoke('tool_svg', 'dom-toolbar', actionCtx, uiState.get());
+          const invoked = await scope.load(registry.invoke('tool_svg', 'dom-toolbar', actionCtx, uiState.get()));
           if (!invoked) throw new Error('Load a model before cutting an SVG part.');
         },
         onLoadDrawing: async (name, source) => {
-          const invoked = await registry.invoke('svg_load_drawing', 'dom-inspector', actionCtx, uiState.get(), {
-            svg: { drawing: { name, source } },
-          });
+          const invoked = await scope.load(
+            registry.invoke('svg_load_drawing', 'dom-inspector', actionCtx, uiState.get(), {
+              svg: { drawing: { name, source } },
+            }),
+          );
           if (!invoked) throw new Error('Loading an SVG drawing is unavailable.');
         },
         onConfigure: async (patch) => {
-          const invoked = await registry.invoke('svg_configure', 'dom-inspector', actionCtx, uiState.get(), {
-            svg: { size: patch },
-          });
+          const invoked = await scope.load(
+            registry.invoke('svg_configure', 'dom-inspector', actionCtx, uiState.get(), {
+              svg: { size: patch },
+            }),
+          );
           if (!invoked) throw new Error('Changing the SVG part size is unavailable.');
         },
         onApply: async () => {
-          const invoked = await registry.invoke('svg_apply', 'dom-inspector', actionCtx, uiState.get());
+          const invoked = await scope.load(registry.invoke('svg_apply', 'dom-inspector', actionCtx, uiState.get()));
           if (!invoked) throw new Error('Adding an SVG part is unavailable.');
         },
         onError: (error) => {
           statusText.textContent = `SVG part: ${error instanceof Error ? error.message : String(error)}`;
         },
       });
+      scope.own(svgPanel);
       svgPanel.mount();
-      window.addEventListener('pagehide', () => svgPanel.dispose(), { once: true });
-    })();
+    });
   }
 
   const semanticObjectEditorHost = document.getElementById('semantic-object-editor-host');
@@ -3916,25 +3958,27 @@ function setupDomUI(
   const layerEventHost = document.getElementById('layer-event-host');
   if (layerEventHost) {
     // Inspector-gated: authored layer events are a tool, not first paint.
-    void (async () => {
-      const { LayerEventPanel } = await import('./ui/dom/LayerEventPanel');
+    void initialization.mount('layer-events', 'Layer events', async (scope) => {
+      const { LayerEventPanel } = await scope.import(import('./ui/dom/LayerEventPanel'));
       const layerEvents = new LayerEventPanel(layerEventHost, {
         getSnapshot: () => workspace.getLayerEventSnapshot(),
         getCapabilities: () => workspace.getLayerEventCapabilities(),
         subscribe: (listener) => workspace.subscribeCanonicalState(listener),
         onMutate: async (request) => {
-          const invoked = await registry.invoke('layer_event_mutate', 'dom-inspector', actionCtx, uiState.get(), {
-            layerEventMutation: request,
-          });
+          const invoked = await scope.load(
+            registry.invoke('layer_event_mutate', 'dom-inspector', actionCtx, uiState.get(), {
+              layerEventMutation: request,
+            }),
+          );
           if (!invoked) throw new Error('Layer-event authoring is unavailable in the current workspace state.');
         },
         onError: (error) => {
           statusText.textContent = `Layer event: ${error instanceof Error ? error.message : String(error)}`;
         },
       });
+      scope.own(layerEvents);
       layerEvents.mount();
-      window.addEventListener('pagehide', () => layerEvents.dispose(), { once: true });
-    })();
+    });
   }
 
   const plateManagerHost = document.getElementById('plate-manager-host');
@@ -4023,191 +4067,17 @@ function setupDomUI(
     window.addEventListener('pagehide', () => projectSummary.dispose(), { once: true });
   }
 
-  // One generated schema and one guarded canonical override seam serve every
-  // field. Raw unknown/unavailable keys remain untouched by typed editor commits.
-  const settingsHost = document.getElementById('settings-inspector-host');
-  if (settingsHost) {
-    const catalogPromise = loadEngineOptionCatalog();
-    const projectPanelSnapshot = (catalog: EngineOptionCatalog, raw: ProjectSettingsOverrideSnapshot) => ({
-      revision: raw.sourceRevision,
-      sourceHash: raw.sourceHash,
-      inherited: decodeSettingsConfig(catalog, raw.inheritedConfig as unknown as Readonly<ConfigMap>).values,
-      overrides: decodeSettingsConfig(catalog, raw.overrides as unknown as Readonly<ConfigMap>).values,
-    });
-    // A factory rather than one shared object, because two surfaces now read
-    // through this adapter. The snapshot it last handed out is what its stale
-    // guard compares against, so a single instance shared between the panel and
-    // the headset would let one surface's apply move the other's guard — and the
-    // second surface would then be told its own draft was stale with no way to
-    // notice it had gone out of date.
-    const makeProjectAdapter = (): GeneratedSettingsPanelAdapter => {
-      let displayedRaw: ProjectSettingsOverrideSnapshot | undefined;
-      return {
-        load: async () => {
-          const catalog = await catalogPromise;
-          displayedRaw = workspace.getProjectSettingsOverrideSnapshot();
-          return projectPanelSnapshot(catalog, displayedRaw);
-        },
-        subscribe: (listener) =>
-          workspace.subscribeCanonicalState(() => {
-            const current = workspace.getProjectSettingsOverrideSnapshot();
-            if (
-              !displayedRaw ||
-              current.sourceRevision !== displayedRaw.sourceRevision ||
-              current.sourceHash !== displayedRaw.sourceHash
-            ) {
-              listener();
-            }
-          }),
-        apply: async (request) => {
-          const raw = displayedRaw;
-          if (!raw || raw.sourceRevision !== request.expectedRevision || raw.sourceHash !== request.sourceHash) {
-            throw new Error('The settings draft no longer matches the displayed canonical project snapshot.');
-          }
-          const overrides = applySettingsCommitToConfig(
-            raw.overrides as unknown as Readonly<ConfigMap>,
-            request.commit,
-          );
-          const invoked = await registry.invoke('settings_apply_project', 'dom-inspector', actionCtx, uiState.get(), {
-            projectSettingsApply: {
-              inheritedConfig: raw.inheritedConfig as unknown as Readonly<ConfigMap>,
-              overrides,
-              sourceRevision: raw.sourceRevision,
-              sourceHash: raw.sourceHash,
-            },
-          });
-          if (!invoked) throw new Error('The project settings action is unavailable in the current workspace state.');
-          displayedRaw = workspace.getProjectSettingsOverrideSnapshot();
-          return projectPanelSnapshot(await catalogPromise, displayedRaw);
-        },
-        cancel: (request) => {
-          const raw = displayedRaw;
-          if (!raw || raw.sourceRevision !== request.expectedRevision || raw.sourceHash !== request.sourceHash) {
-            throw new Error('The settings draft no longer matches the displayed canonical project snapshot.');
-          }
-        },
-        onError: (error) => {
-          statusText.textContent = `Project settings: ${error instanceof Error ? error.message : String(error)}`;
-        },
-      };
-    };
-    const projectAdapter = makeProjectAdapter();
-
-    // A plate, object, part, or height range stores overrides alone, so its
-    // adapter reads the resolved chain as "inherited" and writes only the map
-    // for that node. One panel, one commit path; the scope decides what may be
-    // stored and who wins (P6.5).
-    const nodeAdapter = (option: ScopedOverrideTargetOption): GeneratedSettingsPanelAdapter => {
-      let displayed: ScopedOverrideSnapshot | undefined;
-      const project = async (raw: ScopedOverrideSnapshot) => {
-        const catalog = await catalogPromise;
-        return {
-          revision: raw.sourceRevision,
-          sourceHash: raw.sourceHash,
-          inherited: decodeSettingsConfig(catalog, raw.inheritedConfig).values,
-          overrides: decodeSettingsConfig(catalog, raw.overrides).values,
-        };
-      };
-      return {
-        load: async () => {
-          displayed = workspace.getScopedOverrideSnapshot(option.target);
-          return project(displayed);
-        },
-        subscribe: (listener) =>
-          workspace.subscribeCanonicalState(() => {
-            const current = workspace.getScopedOverrideSnapshot(option.target);
-            if (
-              !displayed ||
-              current.sourceRevision !== displayed.sourceRevision ||
-              current.sourceHash !== displayed.sourceHash
-            ) {
-              listener();
-            }
-          }),
-        apply: async (request) => {
-          const raw = displayed;
-          if (!raw || raw.sourceRevision !== request.expectedRevision || raw.sourceHash !== request.sourceHash) {
-            throw new Error('The settings draft no longer matches the displayed canonical project snapshot.');
-          }
-          const overrides = applySettingsCommitToConfig(raw.overrides, request.commit);
-          const invoked = await registry.invoke('settings_apply_scoped', 'dom-inspector', actionCtx, uiState.get(), {
-            scopedSettingsApply: {
-              target: option.target,
-              overrides,
-              sourceRevision: raw.sourceRevision,
-              sourceHash: raw.sourceHash,
-            },
-          });
-          if (!invoked) throw new Error('The scoped settings action is unavailable in the current workspace state.');
-          displayed = workspace.getScopedOverrideSnapshot(option.target);
-          return project(displayed);
-        },
-        cancel: (request) => {
-          const raw = displayed;
-          if (!raw || raw.sourceRevision !== request.expectedRevision || raw.sourceHash !== request.sourceHash) {
-            throw new Error('The settings draft no longer matches the displayed canonical project snapshot.');
-          }
-        },
-        onError: (error) => {
-          statusText.textContent = `${option.path} settings: ${error instanceof Error ? error.message : String(error)}`;
-        },
-      };
-    };
-
-    void (async () => {
-      // Inspector-gated: scoped overrides are a panel an operator opens.
-      const { ScopedSettingsPanel } = await import('./ui/dom/ScopedSettingsPanel');
-      const { ScopedSettingsStepper } = await import('./settings/editor/scopedStepper');
-
-      // The headset gets the same settings through the same adapters. Not a
-      // second settings implementation: one query, one draft editor, one commit
-      // path, and a different way of naming a value — pressed rather than typed
-      // (P6.5).
-      const stepper = new ScopedSettingsStepper({
-        loadCatalog: () => catalogPromise,
-        listTargets: () => workspace.listScopedOverrideTargets(),
-        adapterFor: (targetId) => {
-          if (targetId === 'project') return makeProjectAdapter();
-          const option = workspace.listScopedOverrideTargets().find((entry) => entry.id === targetId);
-          if (!option) throw new Error(`No settings target named ${targetId} is in the project.`);
-          return nodeAdapter(option);
-        },
-        onChange: () => workspace.refreshXrScopedSettings(),
-        onError: (error) => {
-          statusText.textContent = `Settings: ${error instanceof Error ? error.message : String(error)}`;
-        },
-      });
-      workspace.setScopedSettingsPort(stepper);
-      // The spatial panel follows what the operator is pointing at. Only on a
-      // *changed* selection: reasserting it on every canonical revision would
-      // drag the panel back off a plate or a part the operator had cycled to.
-      let followedTarget: string | null = null;
-      workspace.subscribeCanonicalState(() => {
-        const target = workspace.scopedOverrideTargetIdForSelection();
-        if (target === followedTarget) return;
-        followedTarget = target;
-        if (target) stepper.selectTarget(target);
-      });
-      window.addEventListener('pagehide', () => stepper.dispose(), { once: true });
-
-      const settingsPanel = new ScopedSettingsPanel(
-        settingsHost,
-        {
-          listTargets: () => workspace.listScopedOverrideTargets(),
-          subscribe: (listener) => workspace.subscribeCanonicalState(listener),
-          adapterFor: (option) => (option.scope === 'project' ? projectAdapter : nodeAdapter(option)),
-          onError: (error) => {
-            statusText.textContent = `Settings: ${error instanceof Error ? error.message : String(error)}`;
-          },
-        },
-        { panel: { loadCatalog: () => catalogPromise } },
-      );
-      void settingsPanel.mount();
-      window.addEventListener('pagehide', () => settingsPanel.dispose(), { once: true });
-
-      const wavePanelHost = document.getElementById('wave-overhangs-panel-host');
-      if (wavePanelHost) {
-        const { mountWaveOverhangsPanel } = await import('./ui/dom/WaveOverhangsPanel');
+  void initialization.registry.run('settings', async (scope) => {
+    const { mountSettingsEditors } = await scope.import(import('./ui/dom/mountSettingsEditors'));
+    const settingsHost = document.getElementById('settings-inspector-host');
+    if (!settingsHost) throw new Error('The settings surface is missing. Reload the application.');
+    await mountSettingsEditors({ workspace, registry, actionCtx, uiState, settingsHost, statusText }, scope);
+  });
+  const wavePanelHost = document.getElementById('wave-overhangs-panel-host');
+  if (wavePanelHost)
+    void initialization.mount('wave-overhangs', 'Wave overhang controls', async (scope) => {
+      const { mountWaveOverhangsPanel } = await scope.import(import('./ui/dom/WaveOverhangsPanel'));
+      scope.defer(
         mountWaveOverhangsPanel({
           container: wavePanelHost,
           workspace,
@@ -4217,10 +4087,9 @@ function setupDomUI(
           onErrorMessage: (msg) => {
             statusText.textContent = msg;
           },
-        });
-      }
-    })();
-  }
+        }),
+      );
+    });
 
   // Filament palette: color swatches that drive paint + 3MF display + slice.
   const swatchWrap = document.getElementById('filament-swatches') as HTMLDivElement;
@@ -4606,8 +4475,9 @@ function setupDomUI(
   };
   // Loading the settings surface on demand keeps connection UI outside the core
   // workspace bundle. The shared controller remains available to DOM and XR routes.
-  void import('./ui/dom/ExternalSlicerSettings')
-    .then(({ mountExternalSlicerSettings }) => {
+  void initialization.mount('external-slicer-controls', 'External slicer controls', async (scope) => {
+    const { mountExternalSlicerSettings } = await scope.import(import('./ui/dom/ExternalSlicerSettings'));
+    scope.own(
       mountExternalSlicerSettings({
         root: document,
         initialToken: remembered.slicerToken,
@@ -4625,15 +4495,9 @@ function setupDomUI(
             endpoint,
             isCurrent,
           ),
-      });
-    })
-    .catch(() => {
-      SlicerClient.disableExternalSlicer();
-      statusText.textContent = t(
-        'app.externalSlicer.settingsUnavailable',
-        'External slicer settings could not load. Slicing stays local.',
-      );
-    });
+      }),
+    );
+  });
 
   btnPrinterTest.onclick = async () => {
     btnPrinterTest.disabled = true;
@@ -4885,420 +4749,498 @@ function setupDomUI(
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // The simulator is a development aid, not a headset runtime dependency. Its
-  // custom controls pull a substantial rendering stack into the initial page;
-  // defer that cost in production unless someone explicitly asks for desktop
-  // simulation (`?simulator=1`). It still loads before `xb.init`, so simulator
-  // behaviour is unchanged for local development and opt-in QA sessions.
-  const wantsSimulator = import.meta.env.DEV || new URLSearchParams(window.location.search).get('simulator') === '1';
-  if (wantsSimulator) await import('xrblocks/addons/simulator/SimulatorAddons.js');
-
-  // Design tokens as CSS custom properties — the DOM shell's single source of
-  // truth for colours/spacing (the XR shell reads the same `tokens` object).
-  // Both themes are emitted; the attribute below picks the one in force.
-  injectTokenCss();
-  setDomTheme(initialDomTheme());
-
-  const options = new xb.Options();
-  options.setAppTitle('OrcaXR Slicer');
-  options.enableReticles();
-  options.enableHands();
-  options.hands.enabled = true;
-  options.hands.visualization = true;
-  // Visible pointer rays: without them there's no way to aim at the
-  // control panel from a distance (the reticle alone is easy to miss).
-  options.controllers.enabled = true;
-  options.controllers.visualizeRays = true;
-  options.controllers.performRaycastOnUpdate = true;
-  options.enableUI();
-
-  options.uikit.enable(uikit);
-
-  const registry = buildRegistry();
-  // Localization is attached to the registry rather than to each shell: every
-  // surface already reads its text through `all()` and `get()`, so one seam
-  // covers DOM, XR, the palette, and context menus at the same instant. A menu
-  // that translated while a tooltip did not reads as a broken translation.
-  // No `reference` is passed: the English for every message is already at its
-  // call site as the `source` argument, so shipping a second copy in the bundle
-  // would cost every operator ~80 KB to render text the code already contains.
-  const l10n = new Localizer({
-    load: createCatalogLoader('l10n/'),
-    onProblem: (problem) => console.warn(`[orcaxr-web] message ${problem.id ?? ''}: ${problem.message}`),
+  const bootstrap = await Promise.all([
+    import('./startup/ApplicationInitialization'),
+    import('./ui/dom/StartupStatus'),
+  ]).catch(() => {
+    // No workspace exists yet, so this last-resort reload cannot discard edits.
+    const host = document.getElementById('app-boot')!;
+    host.dataset.bootState = 'failed';
+    const message = document.createElement('p');
+    message.textContent = t(
+      'startup.bootstrapFailed',
+      'The application could not load its startup controls. Check the connection and reload.',
+    );
+    const reload = document.createElement('button');
+    reload.type = 'button';
+    reload.dataset.startupReload = 'true';
+    reload.textContent = t('startup.reload', 'Reload application');
+    reload.addEventListener('click', () => location.reload());
+    host.replaceChildren(message, reload);
+    return null;
   });
-  registry.useTextSource(l10n);
-  // Every surface outside the action catalogue reads its text through `t`,
-  // which finds the localizer here rather than being handed one; installing it
-  // before anything is built is what makes that true from the first frame.
-  installLocalizer(l10n);
-  (window as unknown as { __orcaL10n: unknown }).__orcaL10n = l10n;
-
-  const workspace = new OrcaWorkspace(registry, {
-    fullSpectrumAutoPairPreferences: loadFullSpectrumAutoPairPreferences(),
-  });
-  (window as any).workspace = workspace;
-
-  // Foundation for the shared-registry UI (Phase 1 renders both shells from
-  // these). Construct now so the store is live and debuggable from the console.
-  const uiState = new UiState();
-  const actionCtx = new ActionContext(workspace, uiState, registry);
-  // The XR tool card (built eagerly in the workspace ctor) routes clicks through
-  // this at click time, so both shells run identical action handlers.
-  workspace.actionContext = actionCtx;
-  (window as unknown as { __orcaUi: unknown }).__orcaUi = uiState;
-  (window as unknown as { __orcaCtx: unknown }).__orcaCtx = actionCtx;
-
-  // A desktop slicer window is not a simulated headset. The simulator's
-  // living-room passthrough stand-in is what a flat browser session would
-  // otherwise show behind the build plate, so it is cleared here and replaced
-  // by the plain gradient the plate sits on below. A real session supplies its
-  // own background — passthrough in AR, the transition colour in VR — so this
-  // changes nothing in the headset.
-  for (const environment of options.simulator.environments) {
-    environment.scenePath = null;
-    environment.scenePlanesPath = null;
-  }
-
-  xb.add(workspace);
-  await xb.init(options);
-
-  // Setup OrbitControls for 2D mode navigation
-  const canvas = document.querySelector('canvas') as HTMLCanvasElement;
-  const orbit = new OrbitControls(xb.core.camera, canvas);
-  // Orbit around the live plate position — a hardcoded target here silently
-  // diverges when the workspace constants move (the plate "disappeared" once).
-  orbit.target.copy(workspace.plateFocus());
-  orbit.update();
-  workspace.orbitControls = orbit;
-  // Start on the plate. Without this the window opens on whatever pose the XR
-  // runtime seeded, which in a flat browser is a room-scale view of a plate the
-  // size of a postage stamp.
-  if (!xb.core.renderer?.xr?.isPresenting) workspace.frameCameraView('default');
-  workspace.setup2DControls(canvas);
-
-  // Debug handles for remote scene inspection / automated testing via CDP.
-  (window as unknown as { __orcaScene: unknown }).__orcaScene = xb.core.scene;
-  (window as unknown as { __orcaRenderer: unknown }).__orcaRenderer = xb.core.renderer;
-  (window as unknown as { THREE: unknown }).THREE = THREE;
-  (window as unknown as { __orca: unknown }).__orca = workspace;
-  setupDomUI(workspace, uiState, actionCtx, registry, () => l10n);
-
-  // Render the tool rail, primary bar, Add/Tools menus, and mode control from
-  // the shared registry (the same catalog the XR shell renders). Mounted after
-  // setupDomUI so the file-input + onRequestLoadStl the Load action depends on
-  // is in place.
-  const byId = (id: string) => document.getElementById(id) as HTMLElement;
-  const domShell = new DomShell(registry, actionCtx, uiState);
-  const domShellHosts = {
-    toolbar: byId('model-toolbar'),
-    primary: byId('action-panel'),
-    quickActions: byId('quick-actions'),
-    printActions: byId('print-actions'),
-    menuBar: byId('menu-bar-host'),
-    menuButton: byId('menu-button') as HTMLButtonElement,
-    calibration: byId('calibration-grid'),
+  if (!bootstrap) return;
+  const [{ ApplicationInitialization }, { StartupStatus }] = bootstrap;
+  const initialization = new ApplicationInitialization();
+  let recoverFeature = (id: string) => {
+    void initialization.recover(id);
   };
-  domShell.mount(domShellHosts);
-
-  // ---- Language (P10.4) ------------------------------------------------
-  //
-  // `lang` and `dir` are not decoration: `lang` is what a screen reader picks a
-  // voice from, and `dir` is what mirrors the layout. Both move with the same
-  // subscription that repaints, so the app is never announcing German text in
-  // an English voice.
-  //
-  // The repaint is a full remount rather than a refresh, because every label in
-  // the rail, the primary bar, and the menu columns was written at build time.
-  // A surface that kept its old words until it next opened would leave the
-  // operator unable to tell which parts of the switch took effect.
-  const applyDocumentLanguage = () => {
-    document.documentElement.lang = l10n.locale;
-    document.documentElement.dir = l10n.direction;
-  };
-  applyDocumentLanguage();
-  l10n.subscribe(() => {
-    applyDocumentLanguage();
-    domShell.mount(domShellHosts);
-    hydrateIcons();
-    uiState.update({});
-  });
-
-  // A stored choice is a decision and outranks the browser's list; only an
-  // operator who has never chosen gets one negotiated for them.
-  void (async () => {
-    let stored: string | null;
-    try {
-      stored = localStorage.getItem(LANGUAGE_KEY);
-    } catch {
-      // Private mode: nothing was stored, so the browser's list decides.
-      stored = null;
-    }
-    const target = stored && findLocale(stored) ? stored : negotiateLocale([...(navigator.languages ?? [])]);
-    if (target !== l10n.locale) await l10n.setLocale(target);
-  })();
-
-  // Prepare · Preview · Device · Project — the workspace the whole window is
-  // showing, not a panel inside one. Prepare and Preview share the parameter
-  // sidebar; Device and Project are pages over the viewport.
-  const workspaceViews = new WorkspaceViews(
-    {
-      tabs: byId('view-tabs'),
-      sidebar: byId('param-sidebar'),
-      toolbar: byId('viewport-toolbar'),
-      plateBar: byId('plate-bar'),
-      devicePage: byId('page-device'),
-      projectPage: byId('page-project'),
-      previewCard: byId('card-preview'),
-    },
-    uiState,
-    (actionId) => {
-      void registry
-        .invoke(actionId, 'dom-primary', actionCtx, uiState.get())
-        .catch((error) => console.error(`[orcaxr] view action "${actionId}" failed:`, error));
-    },
+  const startupStatus = initialization.lifetime.own(
+    new StartupStatus(document.getElementById('app-boot')!, initialization.registry, (id) => recoverFeature(id)),
   );
-  workspaceViews.mount();
-  showWorkspaceView = (id) => workspaceViews.activate(id);
-  window.addEventListener('pagehide', () => workspaceViews.dispose(), { once: true });
-
-  // ---- Shell chrome ------------------------------------------------------
-  //
-  // Icons are declared in the markup as `data-icon` and resolved here, so
-  // index.html never has to know where the vendored SVGs live or what the
-  // deployment's base path is.
-  hydrateIcons();
-
-  // The home button snaps the camera back — the same action the View menu runs.
-  byId('btn-home').addEventListener('click', () => {
-    void registry
-      .invoke('view_camera_default', 'dom-menu', actionCtx, uiState.get())
-      .catch((error) => console.error('[orcaxr] default-view action failed:', error));
+  startupStatus.mount();
+  initialization.connectRecovery({
+    reload: async () => {
+      location.reload();
+      return true;
+    },
+    report: () => {},
   });
+  window.addEventListener('pagehide', (event) => {
+    if (!event.persisted) initialization.dispose();
+  });
+  try {
+    // The simulator is a development aid, not a headset runtime dependency. Its
+    // custom controls pull a substantial rendering stack into the initial page;
+    // defer that cost in production unless someone explicitly asks for desktop
+    // simulation (`?simulator=1`). It still loads before `xb.init`, so simulator
+    // behaviour is unchanged for local development and opt-in QA sessions.
+    const wantsSimulator = import.meta.env.DEV || new URLSearchParams(window.location.search).get('simulator') === '1';
+    if (wantsSimulator)
+      await initialization.mount('simulator', 'Desktop simulator', (scope) =>
+        scope.import(import('xrblocks/addons/simulator/SimulatorAddons.js')),
+      );
 
-  // Sidebar cards fold away, as upstream's do, and say so to assistive tech.
-  for (const toggle of document.querySelectorAll<HTMLButtonElement>('[data-card-toggle]')) {
-    const card = toggle.closest('.oxr-card');
-    if (!card) continue;
-    toggle.addEventListener('click', () => {
-      const folded = card.classList.toggle('folded');
-      toggle.setAttribute('aria-expanded', String(!folded));
+    // Design tokens as CSS custom properties — the DOM shell's single source of
+    // truth for colours/spacing (the XR shell reads the same `tokens` object).
+    // Both themes are emitted; the attribute below picks the one in force.
+    injectTokenCss();
+    setDomTheme(initialDomTheme());
+
+    const options = new xb.Options();
+    options.setAppTitle('OrcaXR Slicer');
+    options.enableReticles();
+    options.enableHands();
+    options.hands.enabled = true;
+    options.hands.visualization = true;
+    // Visible pointer rays: without them there's no way to aim at the
+    // control panel from a distance (the reticle alone is easy to miss).
+    options.controllers.enabled = true;
+    options.controllers.visualizeRays = true;
+    options.controllers.performRaycastOnUpdate = true;
+    options.enableUI();
+
+    options.uikit.enable(uikit);
+
+    const registry = buildRegistry();
+    // Localization is attached to the registry rather than to each shell: every
+    // surface already reads its text through `all()` and `get()`, so one seam
+    // covers DOM, XR, the palette, and context menus at the same instant. A menu
+    // that translated while a tooltip did not reads as a broken translation.
+    // No `reference` is passed: the English for every message is already at its
+    // call site as the `source` argument, so shipping a second copy in the bundle
+    // would cost every operator ~80 KB to render text the code already contains.
+    const l10n = new Localizer({
+      load: createCatalogLoader('l10n/'),
+      onProblem: (problem) => console.warn(`[orcaxr-web] message ${problem.id ?? ''}: ${problem.message}`),
     });
-  }
+    registry.useTextSource(l10n);
+    // Every surface outside the action catalogue reads its text through `t`,
+    // which finds the localizer here rather than being handed one; installing it
+    // before anything is built is what makes that true from the first frame.
+    installLocalizer(l10n);
+    (window as unknown as { __orcaL10n: unknown }).__orcaL10n = l10n;
 
-  // Dark mode. An explicit choice is remembered on this device and outranks
-  // everything else, which is what the official application's preference does.
-  const themeButton = byId('btn-theme') as HTMLButtonElement;
-  const syncThemeButton = () => {
-    const dark = activeDomTheme() === 'dark';
-    themeButton.setAttribute('aria-pressed', String(dark));
-    themeButton.title = dark
-      ? t('app.main.switchToLightMode', 'Switch to light mode')
-      : t('app.main.switchToDarkMode', 'Switch to dark mode');
-    themeButton.setAttribute('aria-label', themeButton.title);
-  };
-  themeButton.addEventListener('click', () => {
-    setDomTheme(activeDomTheme() === 'dark' ? 'light' : 'dark');
-    syncThemeButton();
-  });
-  syncThemeButton();
-
-  // ---- Process card head -------------------------------------------------
-  //
-  // Upstream puts two controls on the Process band: which scope is being
-  // edited, and how much of the schema to show. Both already exist inside the
-  // panel below — the scope picker and the Simple/Advanced/Develop modes — so
-  // these drive those real controls rather than keeping a second state.
-  const settingsHostEl = byId('settings-inspector-host');
-  const advancedSwitch = byId('process-advanced') as HTMLButtonElement;
-  const scopeButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-process-scope]')];
-  const modeRadio = (mode: string) => settingsHostEl.querySelector<HTMLInputElement>(`[data-settings-mode="${mode}"]`);
-  const targetSelect = () => settingsHostEl.querySelector<HTMLSelectElement>('[data-scoped-settings-target]');
-  const objectOption = () => {
-    const select = targetSelect();
-    if (!select) return undefined;
-    const options = [...select.options];
-    return (
-      options.find((option) => option.dataset.scope === 'object') ??
-      options.find((option) => option.dataset.scope === 'part') ??
-      options.find((option) => option.dataset.scope === 'layerRange')
+    const uiState = new UiState();
+    initialization.lifetime.defer(
+      initialization.registry.subscribe((snapshot) => uiState.update({ initialization: snapshot })),
     );
-  };
-  const syncProcessHead = () => {
-    const simple = modeRadio('simple');
-    const advanced = modeRadio('advanced');
-    advancedSwitch.disabled = !simple || !advanced;
-    advancedSwitch.setAttribute('aria-checked', String(Boolean(simple && !simple.checked)));
+    const initializedWorkspace = await initialization.registry.run('workspace', async (scope) => {
+      const workspace = new OrcaWorkspace(registry, {
+        initialization: initialization.registry,
+        fullSpectrumAutoPairPreferences: loadFullSpectrumAutoPairPreferences(),
+      });
+      scope.own(workspace);
+      (window as any).workspace = workspace;
 
-    const select = targetSelect();
-    const object = objectOption();
-    const scope = select?.selectedOptions[0]?.dataset.scope ?? 'project';
-    for (const button of scopeButtons) {
-      const wantsObjects = button.dataset.processScope === 'objects';
-      button.setAttribute('aria-pressed', String(wantsObjects === (scope !== 'project')));
-      button.disabled = !select || (wantsObjects && !object);
-      button.title =
-        wantsObjects && !object
-          ? t('app.main.selectAnObjectToGive', 'Add an object to the plate to give it its own settings')
-          : '';
-    }
-  };
-  advancedSwitch.addEventListener('click', () => {
-    const on = advancedSwitch.getAttribute('aria-checked') === 'true';
-    const target = modeRadio(on ? 'simple' : 'advanced');
-    if (!target) return;
-    target.checked = true;
-    target.dispatchEvent(new Event('change', { bubbles: true }));
-    syncProcessHead();
-  });
-  for (const button of scopeButtons) {
-    button.addEventListener('click', () => {
-      const select = targetSelect();
-      if (!select) return;
-      const wanted =
-        button.dataset.processScope === 'objects'
-          ? objectOption()
-          : [...select.options].find((option) => option.dataset.scope === 'project');
-      if (!wanted) return;
-      select.value = wanted.value;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
+      // Foundation for the shared-registry UI (Phase 1 renders both shells from
+      // these). Construct now so the store is live and debuggable from the console.
+      const actionCtx = new ActionContext(workspace, uiState, registry);
+      // The XR tool card (built eagerly in the workspace ctor) routes clicks through
+      // this at click time, so both shells run identical action handlers.
+      workspace.actionContext = actionCtx;
+      (window as unknown as { __orcaUi: unknown }).__orcaUi = uiState;
+      (window as unknown as { __orcaCtx: unknown }).__orcaCtx = actionCtx;
+
+      // A desktop slicer window is not a simulated headset. The simulator's
+      // living-room passthrough stand-in is what a flat browser session would
+      // otherwise show behind the build plate, so it is cleared here and replaced
+      // by the plain gradient the plate sits on below. A real session supplies its
+      // own background — passthrough in AR, the transition colour in VR — so this
+      // changes nothing in the headset.
+      for (const environment of options.simulator.environments) {
+        environment.scenePath = null;
+        environment.scenePlanesPath = null;
+      }
+
+      xb.add(workspace);
+      await scope.load(xb.init(options));
+
+      // Setup OrbitControls for 2D mode navigation
+      const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+      const orbit = new OrbitControls(xb.core.camera, canvas);
+      // Orbit around the live plate position — a hardcoded target here silently
+      // diverges when the workspace constants move (the plate "disappeared" once).
+      orbit.target.copy(workspace.plateFocus());
+      orbit.update();
+      workspace.orbitControls = orbit;
+      // Start on the plate. Without this the window opens on whatever pose the XR
+      // runtime seeded, which in a flat browser is a room-scale view of a plate the
+      // size of a postage stamp.
+      if (!xb.core.renderer?.xr?.isPresenting) workspace.frameCameraView('default');
+      workspace.setup2DControls(canvas);
+
+      // Debug handles for remote scene inspection / automated testing via CDP.
+      (window as unknown as { __orcaScene: unknown }).__orcaScene = xb.core.scene;
+      (window as unknown as { __orcaRenderer: unknown }).__orcaRenderer = xb.core.renderer;
+      (window as unknown as { THREE: unknown }).THREE = THREE;
+      (window as unknown as { __orca: unknown }).__orca = workspace;
+      return { workspace, actionCtx };
+    });
+    if (!initializedWorkspace.ready) return;
+    const { workspace, actionCtx } = initializedWorkspace.value;
+    workspace.onRequestStartupRecovery = (id) => initialization.recover(id);
+    recoverFeature = (id) => {
+      void registry.invoke('help_startup_recovery', 'dom-inspector', actionCtx, uiState.get(), {
+        startupFeatureId: id,
+      });
+    };
+    initialization.connectRecovery({
+      reload: async () => {
+        if (workspace.getCanonicalSummary().dirty) {
+          workspace.setStatus(
+            t(
+              'startup.unsavedReloadBlocked',
+              'Save or discard the current project before reloading. Your unsaved work has been kept.',
+            ),
+          );
+          return false;
+        }
+        location.reload();
+        return true;
+      },
+      report: (message) => workspace.setStatus(message),
+    });
+    await initialization.registry.run('shell', async () => {
+      setupDomUI(workspace, uiState, actionCtx, registry, () => l10n, initialization);
+
+      // Render the tool rail, primary bar, Add/Tools menus, and mode control from
+      // the shared registry (the same catalog the XR shell renders). Mounted after
+      // setupDomUI so the file-input + onRequestLoadStl the Load action depends on
+      // is in place.
+      const byId = (id: string) => document.getElementById(id) as HTMLElement;
+      const domShell = new DomShell(registry, actionCtx, uiState);
+      const domShellHosts = {
+        toolbar: byId('model-toolbar'),
+        primary: byId('action-panel'),
+        quickActions: byId('quick-actions'),
+        printActions: byId('print-actions'),
+        menuBar: byId('menu-bar-host'),
+        menuButton: byId('menu-button') as HTMLButtonElement,
+        calibration: byId('calibration-grid'),
+      };
+      domShell.mount(domShellHosts);
+
+      // ---- Language (P10.4) ------------------------------------------------
+      //
+      // `lang` and `dir` are not decoration: `lang` is what a screen reader picks a
+      // voice from, and `dir` is what mirrors the layout. Both move with the same
+      // subscription that repaints, so the app is never announcing German text in
+      // an English voice.
+      //
+      // The repaint is a full remount rather than a refresh, because every label in
+      // the rail, the primary bar, and the menu columns was written at build time.
+      // A surface that kept its old words until it next opened would leave the
+      // operator unable to tell which parts of the switch took effect.
+      const applyDocumentLanguage = () => {
+        document.documentElement.lang = l10n.locale;
+        document.documentElement.dir = l10n.direction;
+      };
+      applyDocumentLanguage();
+      l10n.subscribe(() => {
+        applyDocumentLanguage();
+        domShell.mount(domShellHosts);
+        hydrateIcons();
+        uiState.update({});
+      });
+
+      // A stored choice is a decision and outranks the browser's list; only an
+      // operator who has never chosen gets one negotiated for them.
+      void (async () => {
+        let stored: string | null;
+        try {
+          stored = localStorage.getItem(LANGUAGE_KEY);
+        } catch {
+          // Private mode: nothing was stored, so the browser's list decides.
+          stored = null;
+        }
+        const target = stored && findLocale(stored) ? stored : negotiateLocale([...(navigator.languages ?? [])]);
+        if (target !== l10n.locale) await l10n.setLocale(target);
+      })();
+
+      // Prepare · Preview · Device · Project — the workspace the whole window is
+      // showing, not a panel inside one. Prepare and Preview share the parameter
+      // sidebar; Device and Project are pages over the viewport.
+      const workspaceViews = new WorkspaceViews(
+        {
+          tabs: byId('view-tabs'),
+          sidebar: byId('param-sidebar'),
+          toolbar: byId('viewport-toolbar'),
+          plateBar: byId('plate-bar'),
+          devicePage: byId('page-device'),
+          projectPage: byId('page-project'),
+          previewCard: byId('card-preview'),
+        },
+        uiState,
+        (actionId) => {
+          void registry
+            .invoke(actionId, 'dom-primary', actionCtx, uiState.get())
+            .catch((error) => console.error(`[orcaxr] view action "${actionId}" failed:`, error));
+        },
+      );
+      workspaceViews.mount();
+      showWorkspaceView = (id) => workspaceViews.activate(id);
+      window.addEventListener('pagehide', () => workspaceViews.dispose(), { once: true });
+
+      // ---- Shell chrome ------------------------------------------------------
+      //
+      // Icons are declared in the markup as `data-icon` and resolved here, so
+      // index.html never has to know where the vendored SVGs live or what the
+      // deployment's base path is.
+      hydrateIcons();
+
+      // The home button snaps the camera back — the same action the View menu runs.
+      byId('btn-home').addEventListener('click', () => {
+        void registry
+          .invoke('view_camera_default', 'dom-menu', actionCtx, uiState.get())
+          .catch((error) => console.error('[orcaxr] default-view action failed:', error));
+      });
+
+      // Sidebar cards fold away, as upstream's do, and say so to assistive tech.
+      for (const toggle of document.querySelectorAll<HTMLButtonElement>('[data-card-toggle]')) {
+        const card = toggle.closest('.oxr-card');
+        if (!card) continue;
+        toggle.addEventListener('click', () => {
+          const folded = card.classList.toggle('folded');
+          toggle.setAttribute('aria-expanded', String(!folded));
+        });
+      }
+
+      // Dark mode. An explicit choice is remembered on this device and outranks
+      // everything else, which is what the official application's preference does.
+      const themeButton = byId('btn-theme') as HTMLButtonElement;
+      const syncThemeButton = () => {
+        const dark = activeDomTheme() === 'dark';
+        themeButton.setAttribute('aria-pressed', String(dark));
+        themeButton.title = dark
+          ? t('app.main.switchToLightMode', 'Switch to light mode')
+          : t('app.main.switchToDarkMode', 'Switch to dark mode');
+        themeButton.setAttribute('aria-label', themeButton.title);
+      };
+      themeButton.addEventListener('click', () => {
+        setDomTheme(activeDomTheme() === 'dark' ? 'light' : 'dark');
+        syncThemeButton();
+      });
+      syncThemeButton();
+
+      // ---- Process card head -------------------------------------------------
+      //
+      // Upstream puts two controls on the Process band: which scope is being
+      // edited, and how much of the schema to show. Both already exist inside the
+      // panel below — the scope picker and the Simple/Advanced/Develop modes — so
+      // these drive those real controls rather than keeping a second state.
+      const settingsHostEl = byId('settings-inspector-host');
+      const advancedSwitch = byId('process-advanced') as HTMLButtonElement;
+      const scopeButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-process-scope]')];
+      const modeRadio = (mode: string) =>
+        settingsHostEl.querySelector<HTMLInputElement>(`[data-settings-mode="${mode}"]`);
+      const targetSelect = () => settingsHostEl.querySelector<HTMLSelectElement>('[data-scoped-settings-target]');
+      const objectOption = () => {
+        const select = targetSelect();
+        if (!select) return undefined;
+        const options = [...select.options];
+        return (
+          options.find((option) => option.dataset.scope === 'object') ??
+          options.find((option) => option.dataset.scope === 'part') ??
+          options.find((option) => option.dataset.scope === 'layerRange')
+        );
+      };
+      const syncProcessHead = () => {
+        const simple = modeRadio('simple');
+        const advanced = modeRadio('advanced');
+        advancedSwitch.disabled = !simple || !advanced;
+        advancedSwitch.setAttribute('aria-checked', String(Boolean(simple && !simple.checked)));
+
+        const select = targetSelect();
+        const object = objectOption();
+        const scope = select?.selectedOptions[0]?.dataset.scope ?? 'project';
+        for (const button of scopeButtons) {
+          const wantsObjects = button.dataset.processScope === 'objects';
+          button.setAttribute('aria-pressed', String(wantsObjects === (scope !== 'project')));
+          button.disabled = !select || (wantsObjects && !object);
+          button.title =
+            wantsObjects && !object
+              ? t('app.main.selectAnObjectToGive', 'Add an object to the plate to give it its own settings')
+              : '';
+        }
+      };
+      advancedSwitch.addEventListener('click', () => {
+        const on = advancedSwitch.getAttribute('aria-checked') === 'true';
+        const target = modeRadio(on ? 'simple' : 'advanced');
+        if (!target) return;
+        target.checked = true;
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+        syncProcessHead();
+      });
+      for (const button of scopeButtons) {
+        button.addEventListener('click', () => {
+          const select = targetSelect();
+          if (!select) return;
+          const wanted =
+            button.dataset.processScope === 'objects'
+              ? objectOption()
+              : [...select.options].find((option) => option.dataset.scope === 'project');
+          if (!wanted) return;
+          select.value = wanted.value;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          syncProcessHead();
+        });
+      }
+      byId('btn-process-search').addEventListener('click', () => {
+        const search = settingsHostEl.querySelector<HTMLInputElement>('[data-settings-search]');
+        search?.focus();
+        search?.scrollIntoView({ block: 'nearest' });
+      });
+      // The panel rebuilds itself whenever the scope or the canonical project
+      // changes, so the head reads the DOM it drives rather than caching it.
+      settingsHostEl.addEventListener('change', syncProcessHead);
+      new MutationObserver(() => syncProcessHead()).observe(settingsHostEl, { childList: true, subtree: true });
       syncProcessHead();
-    });
-  }
-  byId('btn-process-search').addEventListener('click', () => {
-    const search = settingsHostEl.querySelector<HTMLInputElement>('[data-settings-search]');
-    search?.focus();
-    search?.scrollIntoView({ block: 'nearest' });
-  });
-  // The panel rebuilds itself whenever the scope or the canonical project
-  // changes, so the head reads the DOM it drives rather than caching it.
-  settingsHostEl.addEventListener('change', syncProcessHead);
-  new MutationObserver(() => syncProcessHead()).observe(settingsHostEl, { childList: true, subtree: true });
-  syncProcessHead();
 
-  // The renderer fills the window, but the chrome covers its left, right and
-  // top edges. Shift the camera's projection so the build plate is centred in
-  // the *visible* viewport instead of behind the inspector. XR sessions drive
-  // the camera themselves, so the offset is cleared for the duration.
-  const viewport = byId('viewport');
-  const centreCameraOnViewport = () => {
-    const camera = xb.core.camera;
-    if (!(camera instanceof THREE.PerspectiveCamera)) return;
-    if (xb.core.renderer?.xr?.isPresenting) {
-      camera.clearViewOffset();
-      return;
-    }
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const rect = viewport.getBoundingClientRect();
-    if (rect.width < 1 || rect.height < 1 || width < 1 || height < 1) {
-      camera.clearViewOffset();
-      return;
-    }
-    camera.setViewOffset(
-      width,
-      height,
-      Math.round(width / 2 - (rect.left + rect.width / 2)),
-      Math.round(height / 2 - (rect.top + rect.height / 2)),
-      width,
-      height,
-    );
-  };
-  centreCameraOnViewport();
-  window.addEventListener('resize', centreCameraOnViewport);
-  new ResizeObserver(centreCameraOnViewport).observe(viewport);
-  xb.core.renderer?.xr?.addEventListener('sessionstart', centreCameraOnViewport);
-  xb.core.renderer?.xr?.addEventListener('sessionend', centreCameraOnViewport);
+      // The renderer fills the window, but the chrome covers its left, right and
+      // top edges. Shift the camera's projection so the build plate is centred in
+      // the *visible* viewport instead of behind the inspector. XR sessions drive
+      // the camera themselves, so the offset is cleared for the duration.
+      const viewport = byId('viewport');
+      const centreCameraOnViewport = () => {
+        const camera = xb.core.camera;
+        if (!(camera instanceof THREE.PerspectiveCamera)) return;
+        if (xb.core.renderer?.xr?.isPresenting) {
+          camera.clearViewOffset();
+          return;
+        }
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        const rect = viewport.getBoundingClientRect();
+        if (rect.width < 1 || rect.height < 1 || width < 1 || height < 1) {
+          camera.clearViewOffset();
+          return;
+        }
+        camera.setViewOffset(
+          width,
+          height,
+          Math.round(width / 2 - (rect.left + rect.width / 2)),
+          Math.round(height / 2 - (rect.top + rect.height / 2)),
+          width,
+          height,
+        );
+      };
+      centreCameraOnViewport();
+      window.addEventListener('resize', centreCameraOnViewport);
+      new ResizeObserver(centreCameraOnViewport).observe(viewport);
+      xb.core.renderer?.xr?.addEventListener('sessionstart', centreCameraOnViewport);
+      xb.core.renderer?.xr?.addEventListener('sessionend', centreCameraOnViewport);
 
-  // ---- Viewport chrome ----------------------------------------------------
-  //
-  // The wash the plate stands on is painted by the page, not the renderer: the
-  // WebGL canvas is transparent by design (that is what lets the docked chrome
-  // sit over it), so the gradient belongs to the stylesheet where it follows
-  // the theme with everything else.
-  //
-  // The reticle does not. It is an XR aiming cue, and in a desktop window it is
-  // a stray dot in the middle of a slicer's viewport where the operator already
-  // has a pointer. It comes back for the session that needs it.
-  // A headset renders at a wide field of view because the display fills the
-  // wearer's vision. A window does not, and the same 90° through a monitor
-  // leaves the build plate the size of a postage stamp in the middle of the
-  // frame. The flat shell uses the field of view a desktop slicer uses; an XR
-  // session's projection comes from the runtime, so the value is restored for
-  // the sake of anything that reads it rather than because the session needs it.
-  const XR_FOV = xb.core.camera instanceof THREE.PerspectiveCamera ? xb.core.camera.fov : 90;
-  const FLAT_FOV = 45;
-  const syncViewportChrome = () => {
-    const presenting = Boolean(xb.core.renderer?.xr?.isPresenting);
-    const camera = xb.core.camera;
-    if (camera instanceof THREE.PerspectiveCamera) {
-      const wanted = presenting ? XR_FOV : FLAT_FOV;
-      if (camera.fov !== wanted) {
-        camera.fov = wanted;
-        camera.updateProjectionMatrix();
-      }
-    }
-    const reticles = xb.core.input?.reticles;
-    if (reticles) reticles.visible = presenting;
-    // The plate is dressed for the surface it is being seen on: a grabbable
-    // object in the headset, a slicer's bed in the window.
-    workspace.setPlateAppearance(presenting ? 'xr' : activeDomTheme() === 'dark' ? 'flat-dark' : 'flat-light');
-  };
-  syncViewportChrome();
-  xb.core.renderer?.xr?.addEventListener('sessionstart', syncViewportChrome);
-  xb.core.renderer?.xr?.addEventListener('sessionend', syncViewportChrome);
-  themeButton.addEventListener('click', syncViewportChrome);
+      // ---- Viewport chrome ----------------------------------------------------
+      //
+      // The wash the plate stands on is painted by the page, not the renderer: the
+      // WebGL canvas is transparent by design (that is what lets the docked chrome
+      // sit over it), so the gradient belongs to the stylesheet where it follows
+      // the theme with everything else.
+      //
+      // The reticle does not. It is an XR aiming cue, and in a desktop window it is
+      // a stray dot in the middle of a slicer's viewport where the operator already
+      // has a pointer. It comes back for the session that needs it.
+      // A headset renders at a wide field of view because the display fills the
+      // wearer's vision. A window does not, and the same 90° through a monitor
+      // leaves the build plate the size of a postage stamp in the middle of the
+      // frame. The flat shell uses the field of view a desktop slicer uses; an XR
+      // session's projection comes from the runtime, so the value is restored for
+      // the sake of anything that reads it rather than because the session needs it.
+      const XR_FOV = xb.core.camera instanceof THREE.PerspectiveCamera ? xb.core.camera.fov : 90;
+      const FLAT_FOV = 45;
+      const syncViewportChrome = () => {
+        const presenting = Boolean(xb.core.renderer?.xr?.isPresenting);
+        const camera = xb.core.camera;
+        if (camera instanceof THREE.PerspectiveCamera) {
+          const wanted = presenting ? XR_FOV : FLAT_FOV;
+          if (camera.fov !== wanted) {
+            camera.fov = wanted;
+            camera.updateProjectionMatrix();
+          }
+        }
+        const reticles = xb.core.input?.reticles;
+        if (reticles) reticles.visible = presenting;
+        // The plate is dressed for the surface it is being seen on: a grabbable
+        // object in the headset, a slicer's bed in the window.
+        workspace.setPlateAppearance(presenting ? 'xr' : activeDomTheme() === 'dark' ? 'flat-dark' : 'flat-light');
+      };
+      syncViewportChrome();
+      xb.core.renderer?.xr?.addEventListener('sessionstart', syncViewportChrome);
+      xb.core.renderer?.xr?.addEventListener('sessionend', syncViewportChrome);
+      themeButton.addEventListener('click', syncViewportChrome);
 
-  const toolSettingsPanel = byId('tool-settings-panel');
-  const toolSettingsTitle = byId('tool-settings-title');
-  const toolSettingsContent = byId('tool-settings-content');
-  const btnCloseToolSettings = byId('btn-close-tool-settings');
+      const toolSettingsPanel = byId('tool-settings-panel');
+      const toolSettingsTitle = byId('tool-settings-title');
+      const toolSettingsContent = byId('tool-settings-content');
+      const btnCloseToolSettings = byId('btn-close-tool-settings');
 
-  btnCloseToolSettings.onclick = () => {
-    void registry
-      .invoke('tool_move', 'dom-toolbar', actionCtx, uiState.get())
-      .catch((error) => console.error('[orcaxr] close-tool action failed:', error));
-  };
+      btnCloseToolSettings.onclick = () => {
+        void registry
+          .invoke('tool_move', 'dom-toolbar', actionCtx, uiState.get())
+          .catch((error) => console.error('[orcaxr] close-tool action failed:', error));
+      };
 
-  let currentSettingsTool = '';
-  const updateToolSettings = () => {
-    const s = uiState.get();
-    const hasSelection = !!workspace.getSelectedModelScale();
+      let currentSettingsTool = '';
+      const updateToolSettings = () => {
+        const s = uiState.get();
+        const hasSelection = !!workspace.getSelectedModelScale();
 
-    // Colour painting has its own canonical panel; this legacy surface only
-    // covers the numeric transform tools.
-    if (hasSelection && (s.activeTool === 'move' || s.activeTool === 'rotate' || s.activeTool === 'scale')) {
-      toolSettingsPanel.style.display = 'block';
+        // Colour painting has its own canonical panel; this legacy surface only
+        // covers the numeric transform tools.
+        if (hasSelection && (s.activeTool === 'move' || s.activeTool === 'rotate' || s.activeTool === 'scale')) {
+          toolSettingsPanel.style.display = 'block';
 
-      const pos = workspace.getSelectedModelPosition() || new THREE.Vector3();
-      const rot = workspace.getSelectedModelRotation() || new THREE.Euler();
-      const scl = workspace.getSelectedModelScale() || new THREE.Vector3(1, 1, 1);
+          const pos = workspace.getSelectedModelPosition() || new THREE.Vector3();
+          const rot = workspace.getSelectedModelRotation() || new THREE.Euler();
+          const scl = workspace.getSelectedModelScale() || new THREE.Vector3(1, 1, 1);
 
-      let xVal = 0,
-        yVal = 0,
-        zVal = 0;
-      if (s.activeTool === 'move') {
-        xVal = pos.x;
-        yVal = pos.y;
-        zVal = pos.z;
-      } else if (s.activeTool === 'rotate') {
-        xVal = THREE.MathUtils.radToDeg(rot.x);
-        yVal = THREE.MathUtils.radToDeg(rot.y);
-        zVal = THREE.MathUtils.radToDeg(rot.z);
-      } else if (s.activeTool === 'scale') {
-        xVal = scl.x * 100;
-        yVal = scl.y * 100;
-        zVal = scl.z * 100;
-      }
+          let xVal = 0,
+            yVal = 0,
+            zVal = 0;
+          if (s.activeTool === 'move') {
+            xVal = pos.x;
+            yVal = pos.y;
+            zVal = pos.z;
+          } else if (s.activeTool === 'rotate') {
+            xVal = THREE.MathUtils.radToDeg(rot.x);
+            yVal = THREE.MathUtils.radToDeg(rot.y);
+            zVal = THREE.MathUtils.radToDeg(rot.z);
+          } else if (s.activeTool === 'scale') {
+            xVal = scl.x * 100;
+            yVal = scl.y * 100;
+            zVal = scl.z * 100;
+          }
 
-      if (currentSettingsTool !== s.activeTool) {
-        currentSettingsTool = s.activeTool;
-        let title = '';
-        if (s.activeTool === 'move') title = 'Move (mm)';
-        else if (s.activeTool === 'rotate') title = 'Rotate (deg)';
-        else if (s.activeTool === 'scale') title = 'Scale (%)';
+          if (currentSettingsTool !== s.activeTool) {
+            currentSettingsTool = s.activeTool;
+            let title = '';
+            if (s.activeTool === 'move') title = 'Move (mm)';
+            else if (s.activeTool === 'rotate') title = 'Rotate (deg)';
+            else if (s.activeTool === 'scale') title = 'Scale (%)';
 
-        toolSettingsTitle.textContent = title;
-        toolSettingsContent.innerHTML = `
+            toolSettingsTitle.textContent = title;
+            toolSettingsContent.innerHTML = `
           <div style="display:flex; flex-direction:column; gap:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <span style="font-size:13px; color:var(--oxr-text-muted); width:20px;">X</span>
@@ -5315,64 +5257,69 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         `;
 
-        const inX = byId('ts-x') as HTMLInputElement;
-        const inY = byId('ts-y') as HTMLInputElement;
-        const inZ = byId('ts-z') as HTMLInputElement;
+            const inX = byId('ts-x') as HTMLInputElement;
+            const inY = byId('ts-y') as HTMLInputElement;
+            const inZ = byId('ts-z') as HTMLInputElement;
 
-        const onTransformChange = () => {
-          const x = parseFloat(inX.value) || 0;
-          const y = parseFloat(inY.value) || 0;
-          const z = parseFloat(inZ.value) || 0;
-          if (s.activeTool === 'move') {
-            workspace.setSelectedModelPosition(x, y, z);
-          } else if (s.activeTool === 'rotate') {
-            workspace.setSelectedModelRotation(
-              THREE.MathUtils.degToRad(x),
-              THREE.MathUtils.degToRad(y),
-              THREE.MathUtils.degToRad(z),
-            );
-          } else if (s.activeTool === 'scale') {
-            workspace.setSelectedModelScale(x / 100, y / 100, z / 100);
+            const onTransformChange = () => {
+              const x = parseFloat(inX.value) || 0;
+              const y = parseFloat(inY.value) || 0;
+              const z = parseFloat(inZ.value) || 0;
+              if (s.activeTool === 'move') {
+                workspace.setSelectedModelPosition(x, y, z);
+              } else if (s.activeTool === 'rotate') {
+                workspace.setSelectedModelRotation(
+                  THREE.MathUtils.degToRad(x),
+                  THREE.MathUtils.degToRad(y),
+                  THREE.MathUtils.degToRad(z),
+                );
+              } else if (s.activeTool === 'scale') {
+                workspace.setSelectedModelScale(x / 100, y / 100, z / 100);
+              }
+            };
+
+            inX.onchange = onTransformChange;
+            inY.onchange = onTransformChange;
+            inZ.onchange = onTransformChange;
           }
-        };
 
-        inX.onchange = onTransformChange;
-        inY.onchange = onTransformChange;
-        inZ.onchange = onTransformChange;
-      }
+          const inX = byId('ts-x') as HTMLInputElement;
+          const inY = byId('ts-y') as HTMLInputElement;
+          const inZ = byId('ts-z') as HTMLInputElement;
+          if (inX && document.activeElement !== inX) inX.value = xVal.toFixed(2);
+          if (inY && document.activeElement !== inY) inY.value = yVal.toFixed(2);
+          if (inZ && document.activeElement !== inZ) inZ.value = zVal.toFixed(2);
+        } else {
+          toolSettingsPanel.style.display = 'none';
+          currentSettingsTool = '';
+        }
+      };
 
-      const inX = byId('ts-x') as HTMLInputElement;
-      const inY = byId('ts-y') as HTMLInputElement;
-      const inZ = byId('ts-z') as HTMLInputElement;
-      if (inX && document.activeElement !== inX) inX.value = xVal.toFixed(2);
-      if (inY && document.activeElement !== inY) inY.value = yVal.toFixed(2);
-      if (inZ && document.activeElement !== inZ) inZ.value = zVal.toFixed(2);
-    } else {
-      toolSettingsPanel.style.display = 'none';
-      currentSettingsTool = '';
-    }
-  };
+      uiState.subscribe(updateToolSettings);
+      workspace.onSelectionTransformChanged = updateToolSettings;
 
-  uiState.subscribe(updateToolSettings);
-  workspace.onSelectionTransformChanged = updateToolSettings;
+      // The command palette: every action, searchable, one Ctrl/⌘-K away.
+      const palette = new CommandPalette(registry, actionCtx, uiState);
 
-  // The command palette: every action, searchable, one Ctrl/⌘-K away.
-  const palette = new CommandPalette(registry, actionCtx, uiState);
+      AiConfigDialog.init();
+      document.getElementById('cmd-ai-config')?.addEventListener('click', () => {
+        AiConfigDialog.show();
+      });
 
-  AiConfigDialog.init();
-  document.getElementById('cmd-ai-config')?.addEventListener('click', () => {
-    AiConfigDialog.show();
-  });
+      palette.mount(
+        byId('command-palette'),
+        document.getElementById('cmd-input') as HTMLInputElement,
+        byId('cmd-list'),
+        byId('cmd-search-btn'),
+      );
 
-  palette.mount(
-    byId('command-palette'),
-    document.getElementById('cmd-input') as HTMLInputElement,
-    byId('cmd-list'),
-    byId('cmd-search-btn'),
-  );
-
-  // Remove the first-paint readiness surface only after both the workspace and
-  // its actionable shell exist. This avoids a blank / seemingly frozen canvas
-  // on cold headset loads.
-  document.getElementById('app-boot')?.classList.add('ready');
+      // Remove the first-paint readiness surface only after both the workspace and
+      // its actionable shell exist. This avoids a blank / seemingly frozen canvas
+      // on cold headset loads.
+    });
+  } catch (error) {
+    await initialization.registry.run('shell', () => {
+      throw error;
+    });
+  }
 });

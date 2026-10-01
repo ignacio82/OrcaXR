@@ -12,6 +12,7 @@
  */
 
 import type { PrintJobState } from '../printer/PrintJobStatus';
+import type { InitializationSnapshot } from '../startup/FeatureInitialization';
 
 /** Which modal surface the workspace is in — drives the tool rail + inspector. */
 export type WorkspaceMode = 'prepare' | 'preview';
@@ -24,6 +25,7 @@ export type WorkspaceMode = 'prepare' | 'preview';
 export type PrinterJobUiState = PrintJobState | 'disconnected';
 
 export interface UiStateShape {
+  readonly initialization?: InitializationSnapshot;
   /** Active modal surface. */
   mode: WorkspaceMode;
   /** Active modal tool ('move' | 'rotate' | 'scale' | 'lay_on_face' | 'paint'). */

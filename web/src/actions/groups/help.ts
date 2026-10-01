@@ -16,6 +16,15 @@ const GITHUB = 'https://github.com/ignacio82/OrcaXR';
 
 export const helpActions: Action[] = [
   {
+    id: 'help_startup_recovery',
+    label: 'Retry Unavailable Features',
+    icon: 'update',
+    group: 'help',
+    disclosure: 'inspector',
+    hint: 'Restore failed startup capabilities while protecting unsaved work',
+    run: (ctx, invocation) => ctx.recoverStartup(invocation.startupFeatureId),
+  },
+  {
     id: 'help_setup_wizard',
     label: 'Setup Wizard',
     icon: 'wizard',
