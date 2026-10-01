@@ -41,6 +41,10 @@ jobs:
         working-directory: web
       - run: npm run quality
         working-directory: web
+      - run: npm ci
+        working-directory: server
+      - name: Exercise built UI through Express and a local HTTPS proxy
+        run: npm --prefix server run test:deployment
       - run: npm audit --include=dev --audit-level=moderate
         working-directory: web
       - name: Upload browser diagnostics on failure
@@ -113,6 +117,8 @@ jobs:
           cache-dependency-path: wasm/package-lock.json
       - run: npm ci
         working-directory: wasm
+      - run: npm run test:artifacts
+        working-directory: wasm
       - run: npm run verify:artifacts
         working-directory: wasm
       - run: npm run test:cube
@@ -151,6 +157,13 @@ jobs:
           -e ORCAXR_TEST_REQUIRE_REAP=1
           -v "$PWD/server/process-lifecycle.test.mjs:/app/process-lifecycle.test.mjs:ro"
           orcaxr --test /app/process-lifecycle.test.mjs
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm --prefix web ci && npm --prefix server ci
+      - name: Exercise the built container over HTTP and proxy HTTPS
+        run: npm --prefix server run test:deployment:container
 
   secrets:
     name: Secret scan

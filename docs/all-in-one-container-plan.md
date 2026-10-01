@@ -1,5 +1,12 @@
 # OrcaXR All-in-One Local Container & Tailscale Integration Plan
 
+This is the historical design proposal. Current deployment instructions and
+behavior are in [README.md](../README.md#self-hosting--all-in-one-container-docker)
+and [audit remediation evidence](audit-remediation-status.md). In particular,
+base Compose deliberately publishes LAN access; the optional userspace sidecar
+shares the application's network namespace, and WASM publication uses verified
+version directories. Examples below are design history, not deployment commands.
+
 **Status:** revised after a code review against the shipped server
 (`server/server.js`, `server/security.mjs`, `server/Dockerfile`) and the
 shipped client (`web/src/slicer/SlicerClient.ts`,

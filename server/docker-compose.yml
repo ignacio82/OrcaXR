@@ -17,8 +17,8 @@ services:
       # the headset or a phone.
       #
       # For a deployment that should NOT be open to the LAN, revert this to
-      # "127.0.0.1:3000:3000" *and* drop ORCAXR_ACCEPT_LAN_EXPOSURE, then reach
-      # it over Tailscale Serve (see docs/all-in-one-container-plan.md), or
+      # "127.0.0.1:3000:3000", keeping the acknowledgment for the container's
+      # 0.0.0.0 listener, then reach it over Tailscale Serve (see README.md), or
       # switch to ORCAXR_TRUST=token with ORCAXR_SERVER_TOKEN and an explicit
       # ORCAXR_ALLOWED_ORIGINS.
       - "0.0.0.0:3000:3000"
@@ -28,6 +28,7 @@ services:
       - SLICER_ENGINE=cli
       - ORCAXR_TRUST=same-origin
       - ORCAXR_ACCEPT_LAN_EXPOSURE=yes-i-understand
+      - ORCAXR_TRUSTED_PROXY=loopback
     volumes:
       - orcaxr-data:/home/orcaxr/.orcaxr
     restart: unless-stopped
@@ -37,19 +38,18 @@ services:
   tailscale:
     image: tailscale/tailscale:v1.78.1
     container_name: orcaxr-tailscale
-    network_mode: host
+    network_mode: service:orcaxr
+    depends_on:
+      - orcaxr
     environment:
       - TS_AUTHKEY=${TS_AUTHKEY:-}
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_HOSTNAME=orcaxr
       - TS_SERVE_CONFIG=/config/tailscale-serve.json
-      - TS_USERSPACE=false
+      - TS_USERSPACE=true
     volumes:
       - tailscale-state:/var/lib/tailscale
-      - ./tailscale-serve.json:/config/tailscale-serve.json:ro
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - NET_ADMIN
-      - SYS_MODULE
+      - ./tailscale:/config:ro
     restart: unless-stopped
     profiles:
       - tailscale

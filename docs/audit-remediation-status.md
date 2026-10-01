@@ -13,7 +13,7 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 | B: printer session and command intent | Implemented; hardware evidence pending | One controller owns selection, connection epochs, subscriptions, queries, and commands. Immutable click/press intents bind exact job history and metadata; fresh queries reject replacement, reconnect, partial/failing responses, and duplicate commands. DOM/XR holds carry single-use confirmations. Emergency stop and distinct firmware restart remain reachable through authenticated HTTP without status/history success. |
 | C: submission lifecycle | Implemented; hardware evidence pending | Shared DOM/XR workflow owns session/artifact/mapping/option guards, cancellation, preparation, random upload names, exact overwrite and response checks. Stored-file starts also bind confirmation to fresh metadata and readiness. Full web quality passes; supervised firmware evidence remains pending. |
 | D: process and artifact lifecycle | Implemented | Native exit/group termination, repeatable downloads, leases, TTL/release, capacity refusal, artifact validation and bounded browser cancellation pass server, container and full web gates. Fresh native image assembly remains a deployment qualification item. |
-| E: deployment and artifacts | Pending | Static/API separation, Tailscale namespace/trust, adjacent-manifest verification, atomic publication, deployment coverage. The existing local server manifest was repaired only after all three binary copies matched canonical SHA-256 hashes. |
+| E: deployment and artifacts | Implemented; qualification in progress | Static/API separation, actual-peer proxy trust, userspace Tailscale configuration, strict adjacent-manifest checks and atomic version publication pass focused tests. Real Express HTTP/HTTPS browser tests pass. Full web quality passes. Freshly built native-container qualification remains in progress. |
 | F: discovery and startup | Pending | Transactional discovery and truthful capability initialization/recovery on DOM and XR. |
 | G: controllers and snapshots | Pending | Controller ownership/disposal and opaque immutable asset rollback snapshots. |
 | H: persistence | Pending | Worker serialization/checkpoints, transactional recovery storage, autosave, recovery flows, navigation/update guards. |
@@ -41,15 +41,15 @@ reduce that plan, and it does not claim completion of the separate parity backlo
   all three report zero vulnerabilities. Initial audits found two affected
   server packages and seven affected web dependency packages.
 - `npm --prefix wasm run verify:artifacts`: passes, including the optional
-  server deployment binaries. The current verifier still lacks the adjacent
-  manifest and partial-directory checks required by E.
+  server deployment binaries. At this checkpoint, the verifier did not yet cover adjacent
+  manifests or partial directories; E adds those checks below.
 - `npm --prefix web run quality`: passes in full, including architecture,
   localization, production browser workflows, offline, accessibility (28 axe
   rules), pseudo-locales (155 critical controls), all 13 slicing test files,
   and unchanged bundle ceilings. Main chunk: 2,328,292 bytes; total JavaScript:
   10,537,352 bytes. These existing browser tests use the Vite-built preview and
-  simulator; the real-Express/container deployment suite required by E remains
-  to be implemented.
+  simulator; the real-Express/container deployment suite had not yet been
+  implemented at this checkpoint. E records its later evidence below.
 - Current-source Gitleaks scan: passes with repository configuration and full
   redaction, using image digest
   `sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f`.
@@ -59,7 +59,7 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 
 The dependency and source-credential change passes its automated gates.
 Hardware, credential revocation, deployment release, and independent review are
-not proven by these checks. Continue with D; the overall plan remains active.
+not proven by these checks. The overall plan remains active.
 
 ## Printer command verification (2026-10-01)
 
@@ -161,3 +161,53 @@ firmware compatibility still require supervised qualification.
 Process-tree settlement is qualified on Linux with an init reaper. A kernel task
 that remains alive after SIGKILL keeps its worker slot; cancellation cannot be
 reported confirmed prematurely. Other host platforms remain unqualified.
+
+## Deployment verification (2026-10-01)
+
+- Real HTTP regressions first reproduced static assets exhausting the API
+  allowance and reserved API paths returning SPA HTML. Seven deployment tests
+  now cover cold assets and entry-point caching, JSON API misses, token and
+  same-origin mutation authorization, malformed forwarded protocol, and actual
+  socket authority for authentication, CORS and rate identity.
+- Artifact tests reproduced acceptance of a stale adjacent manifest and a
+  partially populated optional copy. Seven expanded cases now cover schema,
+  source/input identity, expected filenames, missing/changed files, concurrent
+  publication, old readers, invalid sources and interrupted staging. Initial
+  publication builds its whole directory privately before activation; readers
+  never see a partial root, including simultaneous first publishers. All
+  required/present copies pass the shared verifier. Canonical/browser adjacent
+  manifests were added only after independently checking every binary hash.
+- A real WASM slice through Express passes against the default resolver,
+  without an environment override, and validates the returned output digest.
+  The server suite passes 56 tests. Native manifest regression additionally
+  reproduced acceptance of an unsupported schema; the shared verifier now
+  rejects wrong schema/source and malformed patch or executable identities.
+- The new browser suite serves the actual production build through Express.
+  Both insecure HTTP LAN and a local HTTPS proxy pass cold loads, automatic
+  attested discovery, retained downloads, and API rate limits. HTTPS verifies
+  every one of 157 precache entries and cross-origin isolation. The HTTP case
+  connects to the existing Moonraker simulator; no hardware is contacted.
+- Those browser checks exposed an unguarded service-worker registration on
+  insecure LAN pages. The helper now skips registration there, and the actual
+  page script is covered in addition to its pure reload-decision tests.
+- A separate regression found the browser's WASM digest differed from the
+  canonical published bytes. The pin now matches the independently verified
+  binaries; the engine source and binaries are unchanged. Web security checks,
+  a unit regression, Docker coherence checks and live discovery assertions keep
+  that mismatch from recurring.
+- Base and Tailscale-profile Compose validation pass. The optional sidecar uses
+  shared application networking, userspace mode and a directory configuration
+  mount; base LAN publication remains intentional. Embedded startup uses the
+  same loopback trust boundary. A native image build is in progress; its browser
+  and process-reaping checks are not yet recorded as passing.
+- All three dependency audits report zero vulnerabilities. Current-source
+  Gitleaks passes with the existing pinned image and unchanged rules.
+
+Full web quality passes, including 231 unit test files, production browser and
+complete offline checks, 28 accessibility rules, 155 pseudo-localized controls,
+and all thirteen slicing test files. Main remains 2,344,997 bytes; total JavaScript
+remains 10,565,669 bytes, with unchanged ceilings. The artifact gate required the
+adjacent metadata to be committed before qualification; that metadata-only commit
+is `5b90733`, and the generated release report now includes its exact Git blob.
+Live tailnet enrollment, actual printer/XR hardware, credential rotation and
+independent release signoff remain unqualified.

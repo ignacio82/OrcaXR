@@ -5,9 +5,11 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test server.unit.test.mjs server.integration.test.mjs multipart.test.mjs process-lifecycle.test.mjs",
+    "test": "node --test server.unit.test.mjs server.integration.test.mjs multipart.test.mjs process-lifecycle.test.mjs deployment.test.mjs wasm-runtime.test.mjs",
     "test:unit": "node --test server.unit.test.mjs",
-    "test:integration": "node --test server.integration.test.mjs multipart.test.mjs"
+    "test:integration": "node --test server.integration.test.mjs multipart.test.mjs",
+    "test:deployment": "node deployment-browser.mjs",
+    "test:deployment:container": "node deployment-browser.mjs --container"
   },
   "keywords": [],
   "author": "",

@@ -2,6 +2,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 
+import { verifyArtifactSet } from "../wasm/artifact-set.mjs";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export function detectSliceInputKind(modelPath, bytes) {
@@ -22,7 +24,9 @@ export function detectSliceInputKind(modelPath, bytes) {
     throw new Error("ZIP project input must use the validated .3mf route");
   }
   if (extension !== ".stl") {
-    throw new Error(`Unsupported slicer input extension: ${extension || "(none)"}`);
+    throw new Error(
+      `Unsupported slicer input extension: ${extension || "(none)"}`,
+    );
   }
   return "model";
 }
@@ -68,8 +72,9 @@ export function startSliceInput(
  * (or failing to prove) another.
  */
 export function wasmDirCandidates(env = process.env) {
+  if (env.ORCAXR_WASM_DIR) return [env.ORCAXR_WASM_DIR];
   return [
-    env.ORCAXR_WASM_DIR,
+    path.resolve(__dirname, "wasm-artifacts/current"),
     // Container image, and the local publish target of `wasm/`'s build script.
     path.resolve(__dirname, "wasm-dist"),
     path.resolve(__dirname, "wasm/dist"),
@@ -79,28 +84,27 @@ export function wasmDirCandidates(env = process.env) {
   ].filter(Boolean);
 }
 
-/** The first candidate that actually holds a loadable module, or null. */
+/** A present partial set is an error, never a reason to silently load a fallback. */
 export function resolveWasmDir(env = process.env) {
-  return (
-    wasmDirCandidates(env).find((candidate) =>
-      fs.existsSync(path.join(candidate, "slic3r.mjs")),
-    ) ?? null
-  );
+  for (const candidate of wasmDirCandidates(env)) {
+    try {
+      fs.lstatSync(candidate);
+      return fs.realpathSync(candidate);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      if (
+        env.ORCAXR_WASM_DIR ||
+        (path.basename(candidate) === "current" &&
+          fs.existsSync(path.dirname(candidate)))
+      )
+        return candidate;
+    }
+  }
+  return null;
 }
 
-/**
- * The provenance manifest for a resolved artifact directory.
- *
- * Published copies carry the manifest beside the artifacts; the repository's
- * own `wasm/dist` is published one level below its `wasm/artifact-provenance.json`.
- * Returns the beside-path when neither exists, so the caller reports the
- * location it looked for rather than a silent null.
- */
 export function resolveWasmProvenancePath(wasmDir) {
-  const beside = path.join(wasmDir, "artifact-provenance.json");
-  if (fs.existsSync(beside)) return beside;
-  const above = path.resolve(wasmDir, "..", "artifact-provenance.json");
-  return fs.existsSync(above) ? above : beside;
+  return path.join(wasmDir, "artifact-provenance.json");
 }
 
 async function run() {
@@ -117,7 +121,8 @@ async function run() {
 
   const overridesJson = fs.readFileSync(configPath, "utf8");
 
-  const wasmDir = resolveWasmDir();
+  const candidate = resolveWasmDir();
+  const wasmDir = candidate ? verifyArtifactSet(candidate).directory : null;
   if (!wasmDir) {
     throw new Error(
       `WASM artifacts not found; checked: ${wasmDirCandidates().join(", ")}`,

@@ -24,7 +24,7 @@ export const PINNED_ENGINE_PROVENANCE = Object.freeze({
   cliVersion: '2.3.4',
   artifacts: Object.freeze({
     'slic3r.mjs': 'b90d06ccfeb526a4d0d7e08a56ebb5401175f7337f7d9b35c039bd738448f03e',
-    'slic3r.wasm': '746503927b36b2d86b63413937f4cef357ac5ab0fe42489bea7cebf41e72a221',
+    'slic3r.wasm': 'daa8eba6cf79d209252ba3e537f633891e2def25e11822fc3489bd17041c9d01',
   }),
   /** `server/patches/`, by name and digest, in the order they are applied. */
   cliPatches: Object.freeze({

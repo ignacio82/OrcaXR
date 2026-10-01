@@ -251,6 +251,7 @@ test("same-origin trust modes and predicates enforce authorization boundaries", 
   const mockReq = (headers = {}, method = "GET", protocol = "http") => ({
     method,
     protocol,
+    socket: { remoteAddress: "127.0.0.1", encrypted: protocol === "https" },
     get: (name) => headers[name.toLowerCase()],
   });
 
@@ -576,7 +577,7 @@ test("the WASM attestation hashes the same directory the slice worker loads", as
   };
   await fs.writeFile(
     path.join(distDir, "artifact-provenance.json"),
-    JSON.stringify({ engine: { commit: PINNED_ENGINE_COMMIT }, outputs }),
+    JSON.stringify({ ...JSON.parse(await fs.readFile(new URL("../wasm/artifact-provenance.json", import.meta.url), "utf8")), outputs }),
   );
 
   const previous = process.env.ORCAXR_WASM_DIR;
@@ -625,7 +626,19 @@ test("the WASM attestation hashes the same directory the slice worker loads", as
   await fs.writeFile(path.join(distDir, "slic3r.wasm"), "\0asm-tampered");
   const swapped = await readEngine();
   assert.equal(swapped.attested, false, "a swapped artifact cannot keep attesting");
-  assert.match(swapped.reason, /do not match the provenance manifest/i);
+  assert.match(swapped.reason, /does not match the provenance manifest/i);
+  assert.equal(swapped.reasonCode, "ARTIFACT_HASH");
+  await fs.writeFile(path.join(distDir, "slic3r.wasm"), "\0asm-original");
+  const manifest = JSON.parse(await fs.readFile(path.join(distDir, "artifact-provenance.json"), "utf8"));
+  manifest.schemaVersion = 99;
+  await fs.writeFile(path.join(distDir, "artifact-provenance.json"), JSON.stringify(manifest));
+  assert.equal((await readEngine()).reasonCode, "MANIFEST_SCHEMA");
+  await fs.rm(path.join(distDir, "artifact-provenance.json"));
+  // A parent manifest cannot conceal a missing adjacent manifest.
+  await fs.writeFile(path.join(dir, "artifact-provenance.json"), JSON.stringify({ ...manifest, schemaVersion: 1 }));
+  assert.equal((await readEngine()).reasonCode, "MANIFEST_MISSING");
+  process.env.ORCAXR_WASM_DIR = path.join(dir, "missing-explicit-deployment");
+  assert.equal((await readEngine()).reasonCode, "SET_MISSING", "an invalid explicit path must not attest a fallback build");
 });
 
 
@@ -699,4 +712,17 @@ test("a CLI engine attests its upstream commit, patch set, and the binary it wil
   const swapped = await read("/engine");
   assert.equal(swapped.attested, false, "a binary that no longer matches its manifest cannot attest");
   assert.match(swapped.reason, /does not match the provenance manifest/i);
+  await fs.writeFile(binaryPath, "#!/bin/sh\nexit 0\n");
+  for (const [change, code] of [
+    [(m) => { m.schemaVersion = 2; }, "MANIFEST_SCHEMA"],
+    [(m) => { m.engine.commit = "0".repeat(40); }, "SOURCE_IDENTITY"],
+    [(m) => { m.patches = [{ name: "bad.patch", sha256: "not-a-digest" }]; }, "MANIFEST_SCHEMA"],
+  ]) {
+    const invalid = structuredClone(manifest);
+    change(invalid);
+    await fs.writeFile(manifestPath, JSON.stringify(invalid));
+    const rejected = await read("/engine");
+    assert.equal(rejected.attested, false, code);
+    assert.equal(rejected.reasonCode, code);
+  }
 });

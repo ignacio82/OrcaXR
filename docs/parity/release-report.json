@@ -26,8 +26,12 @@
       ]
     },
     "engine": {
-      "count": 3,
+      "count": 4,
       "entries": [
+        {
+          "blob": "4cc096b74f748c4353394477682b90f3fcffcc7c",
+          "path": "web/public/slicer/artifact-provenance.json"
+        },
         {
           "blob": "84f9f1ac0834bc0527102b887a74b1e787cde575",
           "path": "web/public/slicer/slic3r.d.mts"

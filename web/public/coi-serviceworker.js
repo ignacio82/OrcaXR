@@ -188,6 +188,7 @@ if (typeof module !== 'undefined' && module.exports) {
     });
     if (decision.clearGuard) writeGuard(null);
     if (window.crossOriginIsolated) return; // already isolated (real headers)
+    if (!window.isSecureContext || !navigator.serviceWorker) return;
 
     const script = document.currentScript;
     const src = script && script.src;

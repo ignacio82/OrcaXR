@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { SlicerClient } from '../SlicerClient';
 import { PINNED_ENGINE_PROVENANCE } from '../pinnedEngineProvenance';
@@ -40,6 +41,14 @@ const attested = {
 const respond =
   (payload: unknown, ok = true) =>
   async () => ({ ok, json: async () => payload });
+
+await test('the browser accepts the exact engine artifacts that the repository publishes', () => {
+  const manifest = JSON.parse(
+    readFileSync(new URL('../../../../wasm/artifact-provenance.json', import.meta.url), 'utf8'),
+  );
+  assert.equal(PINNED_ENGINE_PROVENANCE.commit, manifest.engine.commit);
+  assert.deepEqual(PINNED_ENGINE_PROVENANCE.artifacts, manifest.outputs);
+});
 
 await test('an engine matching the verified build is attested', async () => {
   enabledExternal();

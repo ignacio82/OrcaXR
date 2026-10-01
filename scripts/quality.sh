@@ -15,10 +15,12 @@ npm --prefix web run quality
 
 npm --prefix server test
 npm --prefix server run test:integration
+npm --prefix server run test:deployment
 ORCAXR_SERVER_TOKEN=test-only-token-00000000000000000 \
 ORCAXR_ALLOWED_ORIGINS=https://app.example \
   docker compose -f server/docker-compose.yml config --quiet
 
+npm --prefix wasm run test:artifacts
 npm --prefix wasm run verify:artifacts
 npm --prefix wasm run test:cube
 npm --prefix wasm run test:profile
@@ -36,4 +38,5 @@ if [[ "${ORCAXR_BUILD_CONTAINER:-0}" == "1" ]]; then
   ORCAXR_SERVER_TOKEN="${ORCAXR_SERVER_TOKEN:?set ORCAXR_SERVER_TOKEN for the container build}" \
   ORCAXR_ALLOWED_ORIGINS="${ORCAXR_ALLOWED_ORIGINS:?set ORCAXR_ALLOWED_ORIGINS for the container build}" \
     docker compose -f server/docker-compose.yml build
+  npm --prefix server run test:deployment:container
 fi

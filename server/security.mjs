@@ -11,6 +11,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createInflateRaw } from "node:zlib";
 import os from "node:os";
 import path from "node:path";
+import { isIP } from "node:net";
 
 const MiB = 1024 * 1024;
 const LOOPBACK_ORIGIN =
@@ -53,6 +54,38 @@ export function isLoopbackHost(host) {
   );
 }
 
+/** Socket addresses only: never derive proxy authority from forwarded req.ip. */
+export function isTrustedProxyAddress(address, config) {
+  if (!config.trustedProxy || typeof address !== "string") return false;
+  const ip = address.toLowerCase().replace(/^::ffff:/, "");
+  return ip === "::1" || (isIP(ip) === 4 && ip.startsWith("127."));
+}
+
+export function isTrustedProxyPeer(req, config) {
+  return isTrustedProxyAddress(req.socket?.remoteAddress, config);
+}
+
+/** null means a trusted peer supplied an invalid or ambiguous protocol. */
+export function requestScheme(req, config) {
+  if (isTrustedProxyPeer(req, config)) {
+    const forwarded = req.get("x-forwarded-proto");
+    if (forwarded !== undefined) {
+      return forwarded === "http" || forwarded === "https" ? forwarded : null;
+    }
+  }
+  return req.socket?.encrypted ? "https" : "http";
+}
+
+export function rateLimitIdentity(req, config) {
+  const user = isTrustedProxyPeer(req, config)
+    ? req.get("tailscale-user-login")
+    : null;
+  // One identity, not a forwarding chain; bound retained limiter keys as well.
+  if (typeof user === "string" && /^[^\s,\x00-\x1f\x7f]{1,254}$/.test(user))
+    return `user:${user}`;
+  return `peer:${req.socket?.remoteAddress || "unknown"}`;
+}
+
 function parseOrigins(raw) {
   if (!raw?.trim()) return [];
   return raw
@@ -90,7 +123,9 @@ export function loadServerConfig(env = process.env) {
   let trustMode;
   if (trustRaw) {
     if (!["loopback", "same-origin", "token"].includes(trustRaw)) {
-      throw new Error("Invalid ORCAXR_TRUST: must be loopback, same-origin, or token");
+      throw new Error(
+        "Invalid ORCAXR_TRUST: must be loopback, same-origin, or token",
+      );
     }
     trustMode = trustRaw;
   } else {
@@ -101,7 +136,8 @@ export function loadServerConfig(env = process.env) {
     env.ORCAXR_TRUSTED_PROXY === "loopback" ||
     env.ORCAXR_TRUSTED_PROXY === "true" ||
     env.ORCAXR_TRUSTED_PROXY === "1";
-  const acceptLanExposure = env.ORCAXR_ACCEPT_LAN_EXPOSURE === "yes-i-understand";
+  const acceptLanExposure =
+    env.ORCAXR_ACCEPT_LAN_EXPOSURE === "yes-i-understand";
 
   let token = "";
   let tokenFile = env.ORCAXR_SERVER_TOKEN_FILE?.trim() || "";
@@ -134,7 +170,10 @@ export function loadServerConfig(env = process.env) {
         if (!existsSync(tokenDir)) {
           mkdirSync(tokenDir, { recursive: true, mode: 0o700 });
         }
-        writeFileSync(tokenPath, token + "\n", { mode: 0o600, encoding: "utf8" });
+        writeFileSync(tokenPath, token + "\n", {
+          mode: 0o600,
+          encoding: "utf8",
+        });
         try {
           chmodSync(tokenPath, 0o600);
         } catch {}
@@ -352,8 +391,8 @@ export function validateServerConfig(config) {
 }
 
 export function isSameOriginRequest(req, config) {
-  const forwardedProto = config.trustedProxy ? req.get("x-forwarded-proto") : null;
-  const scheme = (forwardedProto || req.protocol || "http").split(",")[0].trim();
+  const scheme = requestScheme(req, config);
+  if (scheme === null) return false;
   const host = req.get("host");
   if (!host) return false;
   const self = `${scheme}://${host}`.toLowerCase();
@@ -378,12 +417,12 @@ export function isSameOriginRequest(req, config) {
 }
 
 export function isOriginAllowed(origin, config, req = null) {
+  const scheme = req ? requestScheme(req, config) : null;
+  if (req && scheme === null) return false;
   if (!origin) return true; // Non-browser clients do not send Origin.
   if (config.explicitOrigins?.includes(origin)) return true;
   if (config.allowLoopbackOrigins && LOOPBACK_ORIGIN.test(origin)) return true;
   if (config.trustSameOrigin && req) {
-    const forwardedProto = config.trustedProxy ? req.get("x-forwarded-proto") : null;
-    const scheme = (forwardedProto || req.protocol || "http").split(",")[0].trim();
     const host = req.get("host");
     if (host && origin.toLowerCase() === `${scheme}://${host}`.toLowerCase()) {
       return true;
@@ -411,7 +450,11 @@ export function parseOverridesJson(raw, maxBytes) {
   // Multipart bracket fields can produce arrays or null-prototype objects.
   // Do not coerce them: they are not the one JSON text field the API accepts.
   if (raw !== undefined && typeof raw !== "string") {
-    throw new HttpError(400, "INVALID_OVERRIDES", "Overrides must be JSON text.");
+    throw new HttpError(
+      400,
+      "INVALID_OVERRIDES",
+      "Overrides must be JSON text.",
+    );
   }
   const text = raw === undefined || raw === "" ? "{}" : raw;
   if (Buffer.byteLength(text, "utf8") > maxBytes) {

@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y \
 # flags and profile schemas shift between releases — never track "latest").
 ARG ORCA_VERSION=2.3.4
 ARG ORCA_COMMIT=9fd12ffb2b1b80c9fb4c14564754d2ec1573a626
+ARG ORCA_BUILD_JOBS=2
 RUN for i in 1 2 3 4 5; do \
       git clone --filter=blob:none --no-checkout https://github.com/Snapmaker/OrcaSlicer.git /orca && break || { echo "git clone retry $i"; rm -rf /orca; sleep 5; }; \
     done \
@@ -37,10 +38,10 @@ WORKDIR /orca
 
 # Dependencies first — they are patch-independent, so iterating on OrcaXR
 # patches only rebuilds the (much cheaper) slicer stage below.
-RUN ./build_linux.sh -dr
+RUN nice -n 10 ./build_linux.sh -dr -j "${ORCA_BUILD_JOBS}"
 
 COPY server/patches/ /orca-patches/
-RUN git apply --verbose /orca-patches/*.patch && ./build_linux.sh -sr
+RUN git apply --verbose /orca-patches/*.patch && nice -n 10 ./build_linux.sh -sr -j "${ORCA_BUILD_JOBS}"
 
 # Record what this engine actually is, so the server can prove it to a client
 # instead of asking to be trusted. The patch digests are part of the identity:
@@ -123,12 +124,17 @@ RUN set -eu; \
 COPY server/package*.json ./
 RUN npm ci --omit=dev
 
-# The WASM engine, with the provenance manifest beside it.
-COPY wasm/dist /app/wasm-dist
-COPY wasm/artifact-provenance.json /app/wasm-dist/artifact-provenance.json
+# Stage and verify the complete set before switching the runtime pointer.
+# The server's ../wasm module import resolves here in the flattened image layout.
+COPY wasm/artifact-set.mjs wasm/publish-artifacts.mjs wasm/artifact-provenance.json /wasm/
+COPY wasm/dist /tmp/wasm-input
+RUN node /wasm/publish-artifacts.mjs /tmp/wasm-input /app/wasm-artifacts /wasm/artifact-provenance.json \
+    && rm -rf /tmp/wasm-input
 
 # Copy compiled Web UI static assets
 COPY --from=web-builder /build/web/dist /app/public
+RUN node --input-type=module -e 'import { readArtifactManifest, verifyArtifactSet } from "/wasm/artifact-set.mjs"; \
+    verifyArtifactSet("/app/public/slicer", readArtifactManifest("/wasm/artifact-provenance.json"));'
 COPY --from=web-builder /build/web/src/slicer/pinnedEngineProvenance.ts /tmp/pinnedEngineProvenance.ts
 
 # Build-time coherence check: verify the compiled front-end's engine pin
@@ -137,6 +143,10 @@ RUN node -e '\
   const fs = require("fs"); \
   const prov = JSON.parse(fs.readFileSync("/app/orca/engine-provenance.json", "utf8")); \
   const pinnedTs = fs.readFileSync("/tmp/pinnedEngineProvenance.ts", "utf8"); \
+  const wasm = JSON.parse(fs.readFileSync("/wasm/artifact-provenance.json", "utf8")); \
+  for (const digest of Object.values(wasm.outputs)) { \
+    if (!pinnedTs.includes(digest)) throw new Error("COHERENCE FAILURE: Front-end WASM digest differs from publication."); \
+  } \
   if (!pinnedTs.includes(prov.engine.commit)) { \
     console.error("COHERENCE FAILURE: Front-end pinned commit does not match server engine commit."); \
     process.exit(1); \
@@ -149,6 +159,9 @@ RUN node -e '\
   } \
   console.log("Coherence check passed: front-end pins match engine provenance."); \
 ' && rm -f /tmp/pinnedEngineProvenance.ts
+
+RUN node --input-type=module -e 'import { verifyNativeArtifact } from "/wasm/artifact-set.mjs"; \
+    verifyNativeArtifact("/app/orca/engine-provenance.json");'
 
 # Copy Tailscale binaries
 COPY --from=tailscale /usr/local/bin/tailscale /usr/local/bin/tailscale

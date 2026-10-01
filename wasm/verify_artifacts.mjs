@@ -1,14 +1,13 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { lstatSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { readArtifactManifest, verifyArtifactSet } from "./artifact-set.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
-const manifest = JSON.parse(
-  readFileSync(join(here, "artifact-provenance.json"), "utf8"),
-);
+const manifest = readArtifactManifest(join(here, "artifact-provenance.json"));
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 const tracked = execFileSync(
@@ -29,45 +28,41 @@ if (inputHash !== manifest.inputs.aggregateSha256) {
   throw new Error(`WASM source/patch provenance drift: ${inputHash}`);
 }
 
-for (const [name, expected] of Object.entries(manifest.outputs)) {
-  for (const directory of manifest.publishedCopies) {
-    const path = join(root, directory, name);
-    const actual = sha256(readFileSync(path));
-    if (actual !== expected) {
-      throw new Error(
-        `${relative(root, path)} hash mismatch: ${actual} != ${expected}`,
-      );
-    }
+// A present directory is a deployment claim, even if only one file arrived.
+const present = (filename) => {
+  try {
+    lstatSync(filename);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
   }
+};
+const checked = [];
+const skipped = [];
+for (const directory of manifest.publishedCopies) {
+  verifyArtifactSet(join(root, directory), manifest);
+  checked.push(directory);
 }
-
-// A deployment copy (the external slicer's wasm-dist) is not in the repository,
-// so a clean clone simply has nothing to check. Verify it when it is present —
-// a drifted server copy is exactly what makes an external slice route
-// unverifiable — and say plainly when it was skipped.
-const optionalCopies = manifest.optionalPublishedCopies ?? [];
-const checkedOptional = [];
-for (const directory of optionalCopies) {
-  const present = Object.keys(manifest.outputs).map((name) => join(root, directory, name));
-  if (!present.every((path) => existsSync(path))) continue;
-  for (const [name, expected] of Object.entries(manifest.outputs)) {
-    const path = join(root, directory, name);
-    const actual = sha256(readFileSync(path));
-    if (actual !== expected) {
-      throw new Error(
-        `${relative(root, path)} hash mismatch: ${actual} != ${expected}`,
-      );
-    }
+for (const directory of manifest.optionalPublishedCopies ?? []) {
+  if (!present(join(root, directory))) {
+    skipped.push(directory);
+    continue;
   }
-  checkedOptional.push(directory);
+  verifyArtifactSet(join(root, directory), manifest);
+  checked.push(directory);
 }
-
-const skippedOptional = optionalCopies.filter((directory) => !checkedOptional.includes(directory));
+for (const directory of manifest.optionalPublishedSets ?? []) {
+  if (!present(join(root, directory))) {
+    skipped.push(directory);
+    continue;
+  }
+  verifyArtifactSet(join(root, directory, "current"), manifest);
+  checked.push(directory + "/current");
+}
 console.log(
-  `WASM artifacts verified for ${manifest.engine.commit}: ` +
-    Object.keys(manifest.outputs).join(", ") +
-    (checkedOptional.length > 0 ? ` (also verified ${checkedOptional.join(", ")})` : "") +
-    (skippedOptional.length > 0
-      ? ` (skipped absent deployment copies: ${skippedOptional.join(", ")})`
+  `WASM artifacts verified for ${manifest.engine.commit}: ${checked.join(", ")}` +
+    (skipped.length
+      ? ` (skipped absent deployment copies: ${skipped.join(", ")})`
       : ""),
 );

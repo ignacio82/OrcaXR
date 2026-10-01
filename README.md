@@ -73,23 +73,74 @@ docker compose -f server/docker-compose.yml up -d
 ```
 
 - **Web UI & Slicing**: Navigate to `http://localhost:3000`. The browser UI automatically discovers the native CLI slicer on the container with zero configuration.
-- **Same-Origin Trust**: Slicing from the served UI is authorized automatically without requiring bearer tokens. Non-browser API clients use the persistent bearer token saved to `~/.orcaxr/server-token`.
+- **Same-Origin Trust**: Slicing from the served UI is authorized automatically without requiring bearer tokens. Non-browser API clients use a token supplied through `ORCAXR_SERVER_TOKEN_FILE` or `ORCAXR_SERVER_TOKEN`. Loopback-only same-origin deployments can also generate a persistent token in `~/.orcaxr/server-token`.
 
 Generated server tokens are stored with owner-only permissions. Startup logs name
 the protected file only; they never print its value. Keep token files out of
 shared diagnostics and use `ORCAXR_SERVER_TOKEN_FILE` for managed deployments.
 
-- **Headset / WebXR Access via Tailscale**: For spatial slicing on standalone XR headsets (such as the Samsung Galaxy XR) which require a secure HTTPS context for WebXR, launch with your Tailscale auth key:
+To add HTTPS through the optional Tailscale sidecar, supply `TS_AUTHKEY` through
+your process environment or secret manager, then enable its Compose profile:
 
 ```bash
-TS_AUTHKEY="tskey-auth-..." docker compose -f server/docker-compose.yml up -d
+docker compose -f server/docker-compose.yml --profile tailscale up -d --build
 ```
 
-Tailscale Serve will automatically provision HTTPS certificates at `https://orcaxr.<your-tailnet>.ts.net`, giving headsets immediate access to WebXR, full-power CLI slicing, and 3D spatial interaction.
+Enable HTTPS certificates in your tailnet and open the node's Serve URL from
+another authenticated tailnet device. The sidecar uses userspace networking,
+shares OrcaXR's network namespace, and forwards to `127.0.0.1:3000`. Its whole
+`server/tailscale/` configuration directory is mounted so Serve detects updates,
+as required by the [Tailscale Docker configuration](https://tailscale.com/docs/features/containers/docker/docker-params).
+No host networking, TUN device, or added network capability is needed.
 
-Generated server tokens are stored with owner-only permissions. Startup logs name
-the protected file only; they never print its value. Keep token files out of
-shared diagnostics and use `ORCAXR_SERVER_TOKEN_FILE` for managed deployments.
+**The Tailscale profile adds access; it does not remove LAN access.** Base Compose
+still publishes `0.0.0.0:3000`, with its explicit LAN-exposure acknowledgment.
+For a tailnet-only deployment, bind the published port to `127.0.0.1:3000:3000`
+and keep the container's listener reachable by its loopback proxy. LAN mode
+requires a trusted local network; HTTPS is required for WebXR and service workers.
+
+`ORCAXR_TRUSTED_PROXY=loopback` accepts forwarded protocol and Tailscale identity
+only from the actual loopback socket peer, never from `X-Forwarded-For` or a
+client-supplied IP. A trusted proxy must overwrite those headers and supply one
+exact `http` or `https` protocol. Same-origin authentication, CORS, and rate-limit
+identity use this same boundary. Embedded Tailscale startup (when explicitly
+passing `TS_AUTHKEY` into the application container) uses the same userspace
+networking and loopback trust; the Compose profile is the normal deployment.
+
+Application assets and HTML navigations bypass the API request allowance.
+Hashed assets cache immutably; entry points revalidate. API routes retain their
+authentication, CORS, request/upload limits, and bounded slicing admission.
+Unknown API routes return JSON errors, never the application shell.
+
+### Engine artifact publication
+
+Every required or present deployment copy must contain both engine files and
+its adjacent `artifact-provenance.json`. Verification checks schema, pinned
+source, build-input identity, expected filenames, and actual SHA-256 hashes.
+Missing files, stale manifests, and partial optional copies fail verification.
+
+```bash
+npm --prefix wasm run verify:artifacts
+npm --prefix wasm run publish:server
+```
+
+The publisher copies and verifies a complete immutable version under
+`server/wasm-artifacts/sets/`, then atomically switches `current`. Existing workers
+keep their resolved version. Old sets remain for active readers and rollback;
+remove them only with the service stopped. Do not update active engine files in
+place. Docker assembly uses the same publisher and verifier for the runtime set
+and the built browser copy. Server `/engine` reports a specific `reasonCode`
+when attestation fails; changing an environment path cannot make a partial set
+fall back silently to another engine.
+
+Run `npm --prefix server run test:deployment` after building the web app to test
+cold HTTP LAN and local HTTPS proxy loads, complete precaching, simulated slicing,
+and API limits through Express. After building the image, run
+`npm --prefix server run test:deployment:container` for the same checks against
+its packaged UI and server. These tests use a deterministic test runner and local
+certificates, and never contact printer hardware or join a tailnet. Native builds
+default to two top-level jobs; use `--build-arg ORCA_BUILD_JOBS=1` on a busy host.
+Some upstream dependency subbuilds choose their own worker counts.
 
 ### Slicer job recovery and cancellation
 

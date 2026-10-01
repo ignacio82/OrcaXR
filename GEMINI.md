@@ -479,10 +479,20 @@ engine (`libslic3r` via WASM) as the computational core.
   (whose Dockerfile populated `/app/wasm/dist`) executed a real engine while
   reporting `attested: false`, and the client refused a route that was in fact
   sound. Attesting a directory you do not load is the same defect in the other
-  direction, and is worse. The resolver order is `ORCAXR_WASM_DIR` →
-  `<server>/wasm-dist` → `<server>/wasm/dist` → `<repo>/wasm/dist`; the
-  provenance manifest is read beside the artifacts, falling back one level up
-  because `wasm/dist` publishes its manifest at `wasm/artifact-provenance.json`.
+  direction, and is worse. An explicit `ORCAXR_WASM_DIR` is authoritative and
+  never falls back. Otherwise the resolver prefers `<server>/wasm-artifacts/current`,
+  then `<server>/wasm-dist`, `<server>/wasm/dist`, and `<repo>/wasm/dist`.
+  A present partial deployment fails instead of selecting another build. Every
+  set requires an adjacent manifest; parent manifests are not substitutes.
+  Shared `wasm/artifact-set.mjs` checks schema, exact source pin, input identity,
+  filenames and hashes. The local/Docker publisher verifies a complete immutable
+  version before an atomic `current` symlink rename. Workers resolve that pointer
+  once and old versions stay available until readers have stopped. `/engine`
+  reports specific mismatch codes from the same verifier. Native attestation
+  likewise checks schema, exact source pin, patch identities and executable hash.
+  The browser's artifact hash literals must match the canonical manifest; both
+  `security:check` and Docker assembly enforce this. A formerly stale browser
+  WASM pin made a correct default server reject itself during discovery.
 - The Docker build context is the repository root, so `/.dockerignore` is
   load-bearing: without it the daemon receives ~16 GB (`third_party/` is 14 GB)
   before the first instruction. Anything a stage `COPY`s must not be excluded
@@ -793,7 +803,7 @@ Each patch verified by incremental `cmake --build` (0 FAILED objects) + `./gradl
 
 ## Web → local services: Chrome Local Network Access + CORS
 
-`web/src/printer/` is the single Moonraker boundary: explicit endpoint normalization without scheme/port probing, typed HTTP/WebSocket handshake/state/capabilities, cancellation/timeouts, stale-event rejection, reconnect/heartbeat, and bounded redacted diagnostics. `main.ts` uses it through `ActionRegistry` for live connection tests and read-only filament-slot inspection; sparse physical slot IDs are preserved and never auto-applied to project mappings. Printer API keys and slicer tokens are optionally remembered in device-local browser storage (enabled by default); disabling remembrance erases saved copies. That storage is not encrypted by OrcaXR and is accessible to same-origin scripts and browser-profile users. Transport credentials remain per-instance memory, and AI credentials remain tab-memory only. Legacy printer clients are retired. Printer mutation is live behind explicit confirmation, but filename-only checks do not yet bind a command to an authoritative job identity; `plan.md` requires session/job-bound controls and post-upload revalidation. Hardware qualification remains incomplete. `AiSessionSecrets` purges legacy plaintext AI keys rather than migrating them. External-slicer URLs may persist, but routing activates only after attestation and opt-in; failed replacement, disable, or clear fail closed to local slicing.
+`web/src/printer/` is the single Moonraker boundary: explicit endpoint normalization without scheme/port probing, typed HTTP/WebSocket handshake/state/capabilities, cancellation/timeouts, stale-event rejection, reconnect/heartbeat, and bounded redacted diagnostics. `main.ts` uses it through `ActionRegistry` for live connection tests and read-only filament-slot inspection; sparse physical slot IDs are preserved and never auto-applied to project mappings. Printer API keys and slicer tokens are optionally remembered in device-local browser storage (enabled by default); disabling remembrance erases saved copies. That storage is not encrypted by OrcaXR and is accessible to same-origin scripts and browser-profile users. Transport credentials remain per-instance memory, and AI credentials remain tab-memory only. Legacy printer clients are retired. Printer mutation uses session/job-bound intents, authoritative fresh queries, and post-upload revalidation through the shared controllers. Hardware qualification remains incomplete. `AiSessionSecrets` purges legacy plaintext AI keys rather than migrating them. External-slicer URLs may persist, but routing activates only after attestation and opt-in; failed replacement, disable, or clear fail closed to local slicing.
 
 The hosted app is HTTPS (`https://orcaxr.martinez.fyi/slicer/`), while
 Moonraker and the optional external slicer commonly expose HTTP on the LAN.
@@ -1337,7 +1347,7 @@ floors, not ceilings.
   what `faceIndex` is resolved against for paint, measure, and brim ears, so a
   decimated display mesh needs a separate full-resolution picking mesh first.
 
-- **All-in-one container architecture, web UI serving, and same-origin trust.** The Dockerfile builds a unified all-in-one image combining the web front-end (`/app/public`), native CLI engine (`/app/orca/bin/snapmaker-orca`), WASM engine (`/app/wasm-dist`), and Tailscale binaries. Build-time coherence asserts that `web/src/slicer/pinnedEngineProvenance.ts` commit and patch digests match `/app/orca/engine-provenance.json`. Static assets and SPA routes are served with exact `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: credentialless`, and `Permissions-Policy` matching `web/vite.config.ts`. In `ORCAXR_TRUST=same-origin` mode, same-origin browser requests (`isSameOriginRequest`) are trusted on loopback and Tailscale Serve HTTPS boundaries without manual token entry, while non-browser API clients authenticate via `~/.orcaxr/server-token` (0600 permissions). `SlicerClient` probes the serving origin on startup via `autoDiscoverExternalSlicer`, connects only upon valid engine attestation, and preserves explicit user endpoints.
+- **All-in-one container architecture, web UI serving, and same-origin trust.** The Dockerfile builds a unified all-in-one image combining the web front-end (`/app/public`), native CLI engine (`/app/orca/bin/snapmaker-orca`), versioned WASM engine (`/app/wasm-artifacts/current`), and Tailscale binaries. Build-time coherence asserts that `web/src/slicer/pinnedEngineProvenance.ts` commit and patch digests match `/app/orca/engine-provenance.json`. Static assets and SPA routes are served with exact `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: credentialless`, and `Permissions-Policy` matching `web/vite.config.ts`. In `ORCAXR_TRUST=same-origin` mode, same-origin browser requests (`isSameOriginRequest`) are trusted on loopback and Tailscale Serve HTTPS boundaries without manual token entry, while non-browser API clients authenticate with an explicitly provisioned token (loopback-only same-origin setups can generate `~/.orcaxr/server-token`) (0600 permissions). `SlicerClient` probes the serving origin on startup via `autoDiscoverExternalSlicer`, connects only upon valid engine attestation, and preserves explicit user endpoints.
 
 ## Web UI UX gotchas
 
@@ -1379,3 +1389,25 @@ floors, not ceilings.
 - **Multi-extruder filament selectors:** When the selected printer profile has multiple extruders (e.g., Snapmaker U1), the UI generates individual filament dropdowns for each extruder head (H-1, H-2, etc.). The global `sel-filament` dropdown MUST be hidden in this state (`display: 'none'`) to avoid redundancy and user confusion. Do not reintroduce a visible global filament dropdown alongside the per-head dropdowns.
 - **The web profile corpus is a verified pinned overlay, not an editable copy.** `npm --prefix web run profiles:verify` requires `third_party/SnapmakerOrca` HEAD `9fd12ffb2b1b80c9fb4c14564754d2ec1573a626`, proves every same-path Snapmaker/Elegoo profile byte-identical to that Git tree, checks the imported inheritance closure, SHA-256-locks OrcaXR-only target adaptations in `web/scripts/profile-overlays.lock.json`, and verifies deterministic `catalog.json` ordering. Use `profiles:sync` deliberately after reviewing source/profile changes; never hand-edit a mirrored leaf or describe the local Elegoo adaptations as upstream-pinned. The calibration catalog is likewise generated from exact pinned Git blobs: use `calibration:verify` in normal gates and `calibration:sync` only after reviewing upstream source/resource or local-binding changes; never hand-edit its generated JSON. **What ships is the vendor bundle's registered set, not the whole upstream directory:** `resources/profiles/<Vendor>.json`'s `machine_list` / `process_list` / `filament_list` is the authority on which leaves the official slicer actually shows — the tree also holds unregistered ` copy`/`_old`/experiment leaves that must stay out. Every Snapmaker U1 and Elegoo CC leaf that bundle registers is now vendored, so the picker matches the official slicer per nozzle. Preset compatibility is **nozzle-scoped by exact `compatible_printers` lists**: a filament preset named `@U1 0.6 nozzle` reaches only the 0.6 mm machine, so adding a process preset for a nozzle whose filament family is missing leaves that variant listed-but-unsliceable and raises `no-compatible-filament` errors in `ProfileCatalog.diagnostics`. Add the whole nozzle family or none of it; `profile-loader.test.ts` holds the corpus to zero error diagnostics.
 21. **`normalize_fdm()` crashes with a null-deref when traversing the component graph if no options are set.** Patch `0076-normalize-fdm-null-deref.patch` fixes this for the server backend.
+
+## Deployment verification boundaries
+
+- Serve existing static assets and explicit HTML navigations before API rate/auth
+  middleware. Reserved API paths never become SPA documents, even with HTML Accept;
+  wildcard fetch Accept is not a document navigation. Preserve hashed immutable
+  caching, entry-point revalidation, COOP/COEP and permissions headers. The isolation
+  shim must check both secure context and service-worker availability before registration.
+- The optional Tailscale sidecar shares `service:orcaxr` networking, uses userspace
+  mode, and mounts its Serve configuration directory. Base Compose intentionally
+  keeps LAN publication. Trust protocol/identity only when the actual socket peer
+  is loopback; never use forwarded `req.ip` for this decision. Authentication,
+  CORS and rate keys share the predicate; malformed trusted protocols are rejected.
+  Embedded startup applies the same loopback/userspace rules.
+- Deployment browser tests use the actual built UI through Express and local HTTPS,
+  an insecure HTTP hostname, a complete precache inventory and the printer simulator.
+  The container variant mounts only its deterministic test entrypoint and ephemeral
+  certificates; it does not replace packaged application code or contact real printers.
+  These checks supplement, rather than replace, native engine fixtures and hardware tests.
+- Native Docker builds default to two lower-priority top-level jobs; reduce
+  `ORCA_BUILD_JOBS` to one on a busy host. Upstream dependency subbuilds can
+  choose their own worker counts. The exact engine source pin is unchanged.

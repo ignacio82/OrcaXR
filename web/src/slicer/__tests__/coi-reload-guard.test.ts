@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 
 /**
  * The COI shim's reload decision.
@@ -91,6 +92,19 @@ test('the hard-reload sequence that broke slicing now recovers', () => {
 test('an insecure or service-worker-less context gives up quietly', () => {
   assert.equal(decideCoiReload({ ...strandedPage, secureContext: false }).reload, false);
   assert.equal(decideCoiReload({ ...strandedPage, serviceWorkerAvailable: false }).reload, false);
+});
+
+test('the page script never attempts registration on an insecure LAN origin', () => {
+  let registrations = 0;
+  for (const navigator of [{}, { serviceWorker: undefined }, { serviceWorker: { register: () => registrations++ } }]) {
+    runInNewContext(readFileSync(shimPath, 'utf8'), {
+      window: { isSecureContext: false, crossOriginIsolated: false },
+      navigator,
+      document: { currentScript: { src: 'http://orcaxr-lan.test/coi-serviceworker.js' } },
+      sessionStorage: { getItem: () => null },
+    });
+  }
+  assert.equal(registrations, 0);
 });
 
 console.log(`\nCOI reload guard: ${passed} tests passed.`);

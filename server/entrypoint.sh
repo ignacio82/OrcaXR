@@ -5,8 +5,7 @@ set -e
 if [ -n "${TS_AUTHKEY}" ] && [ -x /usr/local/bin/tailscaled ]; then
   echo "[OrcaXR] Starting Tailscale daemon..."
   mkdir -p /var/lib/tailscale /run/tailscale
-  /usr/local/bin/tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/run/tailscale/tailscaled.sock &
-  TAILSCALED_PID=$!
+  /usr/local/bin/tailscaled --tun=userspace-networking --state=/var/lib/tailscale/tailscaled.state --socket=/run/tailscale/tailscaled.sock &
 
   # Wait for tailscaled socket to become available
   for i in $(seq 1 30); do
@@ -26,10 +25,12 @@ if [ -n "${TS_AUTHKEY}" ] && [ -x /usr/local/bin/tailscaled ]; then
     --authkey="${TS_AUTHKEY}" \
     --hostname="${TS_HOSTNAME:-orcaxr}" \
     ${EXTRA_ARGS}
+  unset TS_AUTHKEY
 
   if [ "${TS_SERVE_ENABLED:-true}" = "true" ]; then
     echo "[OrcaXR] Configuring Tailscale Serve on port ${PORT:-3000}..."
-    /usr/local/bin/tailscale --socket=/run/tailscale/tailscaled.sock serve --bg "${PORT:-3000}" || {
+    export ORCAXR_TRUSTED_PROXY=loopback
+    /usr/local/bin/tailscale --socket=/run/tailscale/tailscaled.sock serve --bg "http://127.0.0.1:${PORT:-3000}" || {
       echo "[OrcaXR] Warning: tailscale serve failed; check tailscale serve status."
     }
   fi
@@ -37,10 +38,10 @@ fi
 
 # Ensure /home/orcaxr/.orcaxr directory exists and has right permissions
 mkdir -p /home/orcaxr/.orcaxr
-chown -R orcaxr:orcaxr /home/orcaxr
 
 # Drop privileges to user 'orcaxr' if running as root
 if [ "$(id -u)" = "0" ]; then
+  chown -R orcaxr:orcaxr /home/orcaxr
   exec setpriv --reuid=orcaxr --regid=orcaxr --init-groups node /app/server.js "$@"
 else
   exec node /app/server.js "$@"

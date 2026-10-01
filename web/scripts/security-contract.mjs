@@ -45,8 +45,27 @@ const { PINNED_ENGINE_PROVENANCE } = await import('../src/slicer/pinnedEnginePro
   for (const [, name, digest] of block.matchAll(/'([^']+\.patch)':\s*\n?\s*'([0-9a-f]{64})'/g)) {
     pinned[name] = digest;
   }
-  return { PINNED_ENGINE_PROVENANCE: { cliPatches: pinned } };
+  const artifacts = {};
+  const artifactBlock = source.match(/artifacts: Object\.freeze\(\{([\s\S]*?)\}\)/)?.[1] ?? '';
+  for (const [, name, digest] of artifactBlock.matchAll(/'([^']+)':\s*'([0-9a-f]{64})'/g)) {
+    artifacts[name] = digest;
+  }
+  return {
+    PINNED_ENGINE_PROVENANCE: {
+      commit: source.match(/commit:\s*'([0-9a-f]{40})'/)?.[1],
+      artifacts,
+      cliPatches: pinned,
+    },
+  };
 });
+
+const provenance = JSON.parse(await readFile(join(root, '..', 'wasm/artifact-provenance.json'), 'utf8'));
+assert.equal(PINNED_ENGINE_PROVENANCE.commit, provenance.engine.commit, 'browser engine commit drift');
+assert.deepEqual(
+  PINNED_ENGINE_PROVENANCE.artifacts,
+  provenance.outputs,
+  'browser artifact pin differs from publication',
+);
 
 const patchDirectory = join(root, '..', 'server', 'patches');
 const patchFiles = (await readdir(patchDirectory)).filter((name) => name.endsWith('.patch')).sort();

@@ -29,12 +29,21 @@ import {
   isLoopbackHost,
   isOriginAllowed,
   isSameOriginRequest,
+  isTrustedProxyAddress,
+  rateLimitIdentity,
+  requestScheme,
   loadServerConfig,
   parseOverridesJson,
   validateServerConfig,
   WindowRateLimiter,
 } from "./security.mjs";
-import { resolveWasmDir, resolveWasmProvenancePath } from "./slice_worker.mjs";
+import { resolveWasmDir } from "./slice_worker.mjs";
+
+import {
+  ArtifactSetError,
+  verifyArtifactSet,
+  verifyNativeArtifact,
+} from "../wasm/artifact-set.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ENGINE = (process.env.SLICER_ENGINE || "cli").toLowerCase();
@@ -67,132 +76,65 @@ const MACHINE_KEYS = new Set(KEY_TYPES.machine);
 const CLI_PROVENANCE_PATH =
   process.env.ORCAXR_CLI_PROVENANCE || "/app/orca/engine-provenance.json";
 
-function sha256File(filePath) {
-  try {
-    return crypto
-      .createHash("sha256")
-      .update(readFileSync(filePath))
-      .digest("hex");
-  } catch {
-    return null;
-  }
-}
-
-/** Attest the native Snapmaker Orca binary this server would execute. */
 function buildCliAttestation(engine) {
-  let provenance = null;
   try {
-    provenance = JSON.parse(readFileSync(CLI_PROVENANCE_PATH, "utf8"));
-  } catch {
+    const { manifest, artifacts } = verifyNativeArtifact(CLI_PROVENANCE_PATH);
+    return {
+      schemaVersion: 1,
+      engine,
+      attested: true,
+      upstream: manifest.engine,
+      patches: manifest.patches,
+      artifacts,
+    };
+  } catch (error) {
+    const code =
+      error instanceof ArtifactSetError ? error.code : "SET_UNREADABLE";
     return {
       schemaVersion: 1,
       engine,
       attested: false,
+      reasonCode: code,
       reason:
-        "This server ships no engine provenance manifest beside its Snapmaker Orca binary, so it cannot prove which build it runs.",
+        code === "MANIFEST_MISSING"
+          ? "This server ships no engine provenance manifest beside its Snapmaker Orca binary."
+          : error instanceof ArtifactSetError
+            ? error.message
+            : "The server could not read its native engine artifact set.",
     };
   }
-  const binaryPath = provenance?.binary?.path;
-  if (typeof binaryPath !== "string" || binaryPath.length === 0) {
-    return {
-      schemaVersion: 1,
-      engine,
-      attested: false,
-      reason: "This server's engine provenance manifest names no binary.",
-    };
-  }
-  // Hash what would actually run, not what the manifest claims, so a swapped
-  // binary cannot inherit the manifest's good name.
-  const digest = sha256File(binaryPath);
-  if (digest === null) {
-    return {
-      schemaVersion: 1,
-      engine,
-      attested: false,
-      reason: "This server could not read its own Snapmaker Orca binary.",
-    };
-  }
-  if (digest !== provenance.binary.sha256) {
-    return {
-      schemaVersion: 1,
-      engine,
-      attested: false,
-      reason:
-        "This server's Snapmaker Orca binary does not match the provenance manifest beside it.",
-      artifacts: { [path.basename(binaryPath)]: digest },
-    };
-  }
-  return {
-    schemaVersion: 1,
-    engine,
-    attested: true,
-    upstream: provenance.engine ?? null,
-    patches: provenance.patches ?? [],
-    artifacts: { [path.basename(binaryPath)]: digest },
-  };
 }
 
 function buildEngineAttestation(engine) {
   if (engine !== "wasm") return buildCliAttestation(engine);
-  // Resolved per request, through the same resolver `slice_worker.mjs` uses to
-  // load the module: the digests below must belong to the build that would
-  // actually run, not to a second copy that happens to sit beside the server.
-  const wasmDistDir = resolveWasmDir();
-  if (wasmDistDir === null) {
-    return {
-      schemaVersion: 1,
-      engine,
-      attested: false,
-      reason: "The server could not read its own WASM engine artifacts.",
-    };
-  }
-  const artifacts = {
-    "slic3r.mjs": sha256File(path.join(wasmDistDir, "slic3r.mjs")),
-    "slic3r.wasm": sha256File(path.join(wasmDistDir, "slic3r.wasm")),
-  };
-  if (Object.values(artifacts).some((value) => value === null)) {
-    return {
-      schemaVersion: 1,
-      engine,
-      attested: false,
-      reason: "The server could not read its own WASM engine artifacts.",
-    };
-  }
-  let provenance = null;
   try {
-    provenance = JSON.parse(
-      readFileSync(resolveWasmProvenancePath(wasmDistDir), "utf8"),
-    );
-  } catch {
+    const directory = resolveWasmDir();
+    if (!directory)
+      throw new ArtifactSetError(
+        "SET_MISSING",
+        "The server could not read its own WASM artifact set.",
+      );
+    const verified = verifyArtifactSet(directory);
+    return {
+      schemaVersion: 1,
+      engine,
+      attested: true,
+      upstream: verified.manifest.engine,
+      artifacts: verified.artifacts,
+    };
+  } catch (error) {
     return {
       schemaVersion: 1,
       engine,
       attested: false,
+      reasonCode:
+        error instanceof ArtifactSetError ? error.code : "SET_UNREADABLE",
       reason:
-        "The server ships no engine provenance manifest beside its WASM artifacts.",
+        error instanceof ArtifactSetError
+          ? error.message
+          : "The server could not read its own WASM artifact set.",
     };
   }
-  const declared = provenance?.outputs ?? {};
-  const matches = Object.entries(artifacts).every(
-    ([name, digest]) => declared[name] === digest,
-  );
-  if (!matches) {
-    return {
-      schemaVersion: 1,
-      engine,
-      attested: false,
-      reason:
-        "The server's WASM artifacts do not match the provenance manifest beside them.",
-      artifacts,
-    };
-  }
-  return {
-    schemaVersion: 1,
-    engine,
-    attested: true,
-    upstream: provenance.engine ?? null,
-    artifacts,
-  };
 }
 const FILAMENT_KEYS = new Set(KEY_TYPES.filament);
 const CLI_CRASH_KEYS = new Set([]);
@@ -558,11 +500,7 @@ export const applyWebHeaders = (res) => {
 
 function createRateMiddleware(limiter, config = {}) {
   return (req, res, next) => {
-    const userLogin = config.trustedProxy
-      ? req.get("tailscale-user-login")
-      : null;
-    const key = userLogin || req.ip || req.socket?.remoteAddress || "unknown";
-    const result = limiter.consume(key);
+    const result = limiter.consume(rateLimitIdentity(req, config));
     res.setHeader("X-RateLimit-Remaining", String(result.remaining));
     if (!result.allowed) {
       res.setHeader("Retry-After", String(result.retryAfterSeconds));
@@ -651,12 +589,96 @@ export function createSlicerService(options = {}) {
   let pendingUploads = 0;
 
   app.disable("x-powered-by");
-  app.set("trust proxy", config.trustedProxy ? "loopback" : false);
+  app.set(
+    "trust proxy",
+    (address, hop) => hop === 0 && isTrustedProxyAddress(address, config),
+  );
   app.use((req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
     next();
   });
+  app.use((req, res, next) => {
+    if (requestScheme(req, config) === null) {
+      return sendError(
+        res,
+        new HttpError(
+          400,
+          "INVALID_FORWARDED_PROTOCOL",
+          "The proxy protocol must be exactly http or https.",
+        ),
+      );
+    }
+    next();
+  });
+
+  const WEB_ROOT = path.resolve(
+    options.webRoot ??
+      options.env?.ORCAXR_WEB_ROOT ??
+      process.env.ORCAXR_WEB_ROOT ??
+      path.join(__dirname, "public"),
+  );
+  const SERVES_WEB_UI = existsSync(path.join(WEB_ROOT, "index.html"));
+  const reservedApiPath = (requestPath) =>
+    /^\/(?:api|jobs|slice|engine|ping)(?:\/|$)/i.test(requestPath);
+  if (SERVES_WEB_UI) {
+    const assets = express.static(WEB_ROOT, {
+      index: false,
+      redirect: false,
+      etag: true,
+      lastModified: true,
+      setHeaders: (res, filePath) => {
+        applyWebHeaders(res);
+        const rel = path.relative(WEB_ROOT, filePath);
+        const contentHashed =
+          rel.startsWith("assets" + path.sep) &&
+          /-[A-Za-z0-9_-]{8,}\./.test(rel);
+        res.setHeader(
+          "Cache-Control",
+          contentHashed ? "public, max-age=31536000, immutable" : "no-cache",
+        );
+      },
+    });
+    // Assets and document navigations never spend API admission or rate allowance.
+    // Decode before excluding API names so encoded paths cannot shadow a route.
+    app.use((req, res, next) => {
+      let requestPath;
+      try {
+        requestPath = path.posix.normalize(
+          decodeURIComponent(req.path).replace(/\\/g, "/"),
+        );
+      } catch {
+        return next();
+      }
+      if (reservedApiPath(requestPath)) return next();
+      assets(req, res, next);
+    });
+    app.get(/.*/, (req, res, next) => {
+      let requestPath;
+      try {
+        requestPath = path.posix.normalize(
+          decodeURIComponent(req.path).replace(/\\/g, "/"),
+        );
+      } catch {
+        return next();
+      }
+      if (reservedApiPath(requestPath) || path.extname(requestPath))
+        return next();
+      // A wildcard fetch Accept is not a request for an HTML document.
+      if (
+        !/(?:^|,)\s*text\/html(?:\s*;|\s*,|\s*$)/i.test(
+          req.get("accept") ?? "",
+        ) ||
+        !req.accepts("html")
+      )
+        return next();
+      applyWebHeaders(res);
+      res.setHeader("Cache-Control", "no-cache");
+      res.sendFile(path.join(WEB_ROOT, "index.html"), (error) => {
+        if (error) next(error);
+      });
+    });
+  }
   app.use(createRateMiddleware(generalLimiter, config));
   app.use(
     cors((req, callback) => {
@@ -1117,42 +1139,6 @@ export function createSlicerService(options = {}) {
       res.status(status === "cancelled" ? 200 : 202).json({ status });
     }),
   );
-
-  const WEB_ROOT =
-    process.env.ORCAXR_WEB_ROOT || path.join(__dirname, "public");
-  const SERVES_WEB_UI = existsSync(path.join(WEB_ROOT, "index.html"));
-
-  if (SERVES_WEB_UI) {
-    app.use(
-      express.static(WEB_ROOT, {
-        index: false,
-        etag: true,
-        lastModified: true,
-        setHeaders: (res, filePath) => {
-          applyWebHeaders(res);
-          const rel = path.relative(WEB_ROOT, filePath);
-          const contentHashed =
-            rel.startsWith("assets" + path.sep) &&
-            /-[A-Za-z0-9_-]{8,}\./.test(rel);
-          res.setHeader(
-            "Cache-Control",
-            contentHashed ? "public, max-age=31536000, immutable" : "no-cache",
-          );
-        },
-      }),
-    );
-
-    const INDEX_HTML = path.join(WEB_ROOT, "index.html");
-    // Registered after every API route: anything that reaches here matched none
-    // of them. Only real document navigations get the SPA shell.
-    app.get(/.*/, (req, res, next) => {
-      if (!req.accepts("html")) return next(); // fetch/XHR → JSON 404
-      if (path.extname(req.path)) return next(); // missing asset → 404
-      applyWebHeaders(res);
-      res.setHeader("Cache-Control", "no-cache");
-      res.sendFile(INDEX_HTML, (error) => (error ? next() : undefined));
-    });
-  }
 
   app.use(async (error, req, res, next) => {
     if (req.file?.path) await cleanupPaths(req.file.path);

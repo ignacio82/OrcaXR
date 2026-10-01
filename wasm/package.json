@@ -13,7 +13,9 @@
     "test:painted-prime-tower": "ORCAXR_PRIME_TOWER=1 node test_slice_painted.mjs",
     "test:fullspectrum": "node test_slice_project_fs.mjs",
     "test:wave": "node test_slice_wave_overhang.mjs",
-    "verify:artifacts": "node verify_artifacts.mjs"
+    "verify:artifacts": "node verify_artifacts.mjs",
+    "publish:server": "node publish-artifacts.mjs dist ../server/wasm-artifacts artifact-provenance.json",
+    "test:artifacts": "node --test artifact-publication.test.mjs"
   },
   "dependencies": {
     "fflate": "0.8.3"
