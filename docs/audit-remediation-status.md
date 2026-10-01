@@ -18,7 +18,7 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 | G: controllers and snapshots | In progress | Printer/session/submission ownership and feature initialization lifetimes are implemented. Opaque copy-on-write asset rollback and import history pass focused regressions and the full web gate. Persistence ownership is integrated; remaining surface cleanup is pending. |
 | H: persistence | Implemented; automated qualification passes | Live worker serialization, guarded manual checkpoints, atomic per-session IndexedDB retention, DOM/XR recovery/import decisions, Save/Discard/Cancel, beforeunload and coordinated PWA updates. Focused lifecycle/storage/browser tests and the complete web quality gate pass. Broader device qualification remains pending. |
 | I: large-project performance | Pending | Worker indexing before rich allocations, oversized-layer checkpoints, typed import traversal, measured baselines. |
-| Release qualification | Pending | Full supported-deployment checks, native container build, report regeneration, documentation reduction, supervised U1/CC/Galaxy XR procedures, independent review/security signoff. |
+| Release qualification | Pending | Full supported-deployment checks, native container build, final report regeneration, supervised U1/CC/Galaxy XR procedures, independent review/security signoff. |
 
 ## Reproduced regressions and verification (2026-10-01)
 
@@ -351,3 +351,13 @@ serialization share one emitted archive-worker module with independently owned
 instances, avoiding duplicate codec bundles. Current-source Gitleaks passes with
 the pinned image and unchanged rules. Server tests pass 56/56 against the default
 artifact resolver. Generated parity reporting still lists five human gates.
+
+## Technical context reduction (2026-10-01)
+
+`GEMINI.md` now keeps the cross-cutting constraints and required reading in 310
+lines. Detailed canonical/parity, XR/UI, runtime/deployment, engine and large-model
+context moved into maintained topic documents. Retired Android/JNI guidance has
+its own clearly marked historical archive; current WASM memory, config, indexing
+and provenance constraints remain in the active guidance. Relative documentation
+links were rebased and checked. The obsolete seven-action XR rail and pre-attestation
+external-routing statements were corrected to match the shipped behavior.
