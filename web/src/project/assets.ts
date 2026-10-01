@@ -1,5 +1,5 @@
 import { compareCanonicalText } from './domain/canonical';
-import { canonicalStringify, cloneJson, fnv1a64 } from './domain/canonical';
+import { canonicalStringify, cloneJson, deepFreeze, fnv1a64 } from './domain/canonical';
 import type { AssetId } from './domain/ids';
 import type { SourceAssetDescriptor } from './domain/model';
 
@@ -10,6 +10,12 @@ export interface AssetPayload {
 
 export interface AssetRepositorySnapshot {
   readonly entries: AssetPayload[];
+}
+
+declare const internalSnapshotBrand: unique symbol;
+/** Opaque, repository-owned rollback state. Never deserialize or accept it from a caller. */
+export interface AssetRepositoryInternalSnapshot {
+  readonly [internalSnapshotBrand]: true;
 }
 
 export interface AssetRepository {
@@ -41,6 +47,9 @@ export interface AssetRepository {
    */
   bundleFingerprint(): string;
   findByDigest(digest: string): AssetPayload | undefined;
+  captureInternal(): AssetRepositoryInternalSnapshot;
+  restoreInternal(snapshot: AssetRepositoryInternalSnapshot): void;
+  /** Serialized bundle boundary: public callers receive copies and imports are validated. */
   capture(): AssetRepositorySnapshot;
   restore(snapshot: AssetRepositorySnapshot): void;
 }
@@ -53,32 +62,40 @@ export function contentDigest(bytes: Uint8Array): string {
 export function assetBundleFingerprint(assets: readonly AssetPayload[]): string {
   const canonical = canonicalStringify(
     [...assets]
-      .map((asset) => ({ descriptor: asset.descriptor, content: contentDigest(asset.bytes) }))
+      .map((asset) => ({
+        descriptor: asset.descriptor,
+        content: contentDigest(asset.bytes),
+      }))
       .sort((left, right) => compareCanonicalText(left.descriptor.id, right.descriptor.id)),
   );
   return `fnv1a64:${fnv1a64(new TextEncoder().encode(canonical))}`;
 }
 
 /**
- * Immutable-by-contract byte repository. Reads and snapshots return copies;
+ * Immutable byte records with copy-on-write repository versions. Public reads return copies;
  * replacing an existing ID with different metadata or bytes is rejected.
  */
+interface RepositoryVersion {
+  readonly entries: ReadonlyMap<AssetId, AssetPayload>;
+  fingerprint?: string;
+  snapshot?: AssetRepositoryInternalSnapshot;
+}
 export class InMemoryAssetRepository implements AssetRepository {
-  private entries = new Map<AssetId, AssetPayload>();
-  /** Cleared by every mutation, so it can never describe stale contents. */
-  private cachedBundleFingerprint: string | undefined;
+  private version: RepositoryVersion = { entries: new Map() };
+  private readonly snapshots = new WeakMap<AssetRepositoryInternalSnapshot, RepositoryVersion>();
+  private readonly contentDigests = new WeakMap<AssetPayload, string>();
 
   has(id: AssetId): boolean {
-    return this.entries.has(id);
+    return this.version.entries.has(id);
   }
 
   get(id: AssetId): AssetPayload | undefined {
-    const entry = this.entries.get(id);
+    const entry = this.version.entries.get(id);
     return entry ? clonePayload(entry) : undefined;
   }
 
   peek(id: AssetId): AssetPayload | undefined {
-    return this.entries.get(id);
+    return this.version.entries.get(id);
   }
 
   put(descriptor: SourceAssetDescriptor, bytes: Uint8Array): void {
@@ -90,36 +107,65 @@ export class InMemoryAssetRepository implements AssetRepository {
     if (descriptor.digest.startsWith('fnv1a64:') && descriptor.digest !== contentDigest(bytes)) {
       throw new Error(`Asset ${descriptor.id} content does not match its digest`);
     }
-    const next = { descriptor: cloneJson(descriptor), bytes: bytes.slice() };
-    const existing = this.entries.get(descriptor.id);
+    const existing = this.version.entries.get(descriptor.id);
     if (existing) {
-      if (!samePayload(existing, next)) {
+      if (!samePayload(existing, { descriptor, bytes })) {
         throw new Error(`Immutable asset ${descriptor.id} cannot be replaced`);
       }
       return;
     }
-    this.entries.set(descriptor.id, next);
-    this.cachedBundleFingerprint = undefined;
+    const entries = new Map(this.version.entries);
+    entries.set(descriptor.id, immutablePayload({ descriptor, bytes }));
+    this.version = { entries };
   }
 
   remove(id: AssetId): void {
-    if (this.entries.delete(id)) this.cachedBundleFingerprint = undefined;
+    if (!this.version.entries.has(id)) return;
+    const entries = new Map(this.version.entries);
+    entries.delete(id);
+    this.version = { entries };
   }
 
   bundleFingerprint(): string {
-    this.cachedBundleFingerprint ??= assetBundleFingerprint(this.list());
-    return this.cachedBundleFingerprint;
+    if (this.version.fingerprint !== undefined) return this.version.fingerprint;
+    const contents = [...this.version.entries.values()]
+      .map((asset) => {
+        let content = this.contentDigests.get(asset);
+        if (content === undefined) {
+          content = contentDigest(asset.bytes);
+          this.contentDigests.set(asset, content);
+        }
+        return { descriptor: asset.descriptor, content };
+      })
+      .sort((left, right) => compareCanonicalText(left.descriptor.id, right.descriptor.id));
+    this.version.fingerprint = `fnv1a64:${fnv1a64(new TextEncoder().encode(canonicalStringify(contents)))}`;
+    return this.version.fingerprint;
   }
 
   list(): AssetPayload[] {
-    return Array.from(this.entries.values(), clonePayload).sort((a, b) =>
+    return Array.from(this.version.entries.values(), clonePayload).sort((a, b) =>
       compareCanonicalText(a.descriptor.id, b.descriptor.id),
     );
   }
 
   findByDigest(digest: string): AssetPayload | undefined {
-    const entry = Array.from(this.entries.values()).find((candidate) => candidate.descriptor.digest === digest);
+    const entry = Array.from(this.version.entries.values()).find((candidate) => candidate.descriptor.digest === digest);
     return entry ? clonePayload(entry) : undefined;
+  }
+
+  captureInternal(): AssetRepositoryInternalSnapshot {
+    if (!this.version.snapshot) {
+      const snapshot = Object.freeze({}) as AssetRepositoryInternalSnapshot;
+      this.version.snapshot = snapshot;
+      this.snapshots.set(snapshot, this.version);
+    }
+    return this.version.snapshot;
+  }
+
+  restoreInternal(snapshot: AssetRepositoryInternalSnapshot): void {
+    const version = this.snapshots.get(snapshot);
+    if (!version) throw new Error('Invalid or foreign internal asset snapshot.');
+    this.version = version;
   }
 
   capture(): AssetRepositorySnapshot {
@@ -138,15 +184,25 @@ export class InMemoryAssetRepository implements AssetRepository {
       if (entry.descriptor.digest.startsWith('fnv1a64:') && entry.descriptor.digest !== contentDigest(entry.bytes)) {
         throw new Error(`Asset snapshot has invalid digest for ${entry.descriptor.id}`);
       }
-      restored.set(entry.descriptor.id, clonePayload(entry));
+      restored.set(entry.descriptor.id, immutablePayload(entry));
     }
-    this.entries = restored;
-    this.cachedBundleFingerprint = undefined;
+    this.version = { entries: restored };
   }
 }
 
+function immutablePayload(payload: AssetPayload): AssetPayload {
+  const owned = clonePayload(payload);
+  deepFreeze(owned.descriptor);
+  // Typed-array elements cannot be frozen; only audited peek consumers may read
+  // these private bytes. Every public mutable read and untrusted import copies.
+  return Object.freeze(owned);
+}
+
 function clonePayload(payload: AssetPayload): AssetPayload {
-  return { descriptor: cloneJson(payload.descriptor), bytes: payload.bytes.slice() };
+  return {
+    descriptor: cloneJson(payload.descriptor),
+    bytes: payload.bytes.slice(),
+  };
 }
 
 function samePayload(left: AssetPayload, right: AssetPayload): boolean {

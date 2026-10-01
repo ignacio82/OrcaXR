@@ -15,7 +15,7 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 | D: process and artifact lifecycle | Implemented | Native exit/group termination, repeatable downloads, leases, TTL/release, capacity refusal, artifact validation and bounded browser cancellation pass server, container and full web gates. Fresh native image assembly remains a deployment qualification item. |
 | E: deployment and artifacts | Implemented; qualification in progress | Static/API separation, actual-peer proxy trust, userspace Tailscale configuration, strict adjacent-manifest checks and atomic version publication pass focused tests. Real Express HTTP/HTTPS browser tests pass. Full web quality passes. Freshly built native-container qualification remains in progress. |
 | F: discovery and startup | Implemented; automated qualification passes | Discovery, atomic preferences, session-only fallback and actual external UI slicing pass full web and deployment tests. Core/optional startup health, owned initialization, shared DOM/XR recovery and dirty reload refusal pass the full web gate, including five production-browser fault scenarios. |
-| G: controllers and snapshots | Pending | Controller ownership/disposal and opaque immutable asset rollback snapshots. |
+| G: controllers and snapshots | In progress | Printer/session/submission ownership and feature initialization lifetimes are implemented. Opaque copy-on-write asset rollback and import history pass focused regressions and the full web gate. Persistence ownership and remaining surface cleanup are still pending. |
 | H: persistence | Pending | Worker serialization/checkpoints, transactional recovery storage, autosave, recovery flows, navigation/update guards. |
 | I: large-project performance | Pending | Worker indexing before rich allocations, oversized-layer checkpoints, typed import traversal, measured baselines. |
 | Release qualification | Pending | Full supported-deployment checks, native container build, report regeneration, documentation reduction, supervised U1/CC/Galaxy XR procedures, independent review/security signoff. |
@@ -285,3 +285,32 @@ The final build also passes the real Express HTTP/HTTPS deployment suites and
 the current-source scan with the pinned Gitleaks image and unchanged rules.
 Broader navigation/update protection and Save/Discard/Cancel persistence flows
 remain in H; hardware qualification is not implied by renderer or browser tests.
+
+## Asset rollback verification (2026-10-01)
+
+- A regression reproduced 6,291,456 copied mesh bytes during transform/settings
+  edits and undo/redo with a 1 MiB fixture. Repository-owned opaque snapshots now
+  restore immutable records and cached fingerprints by reference. Insert/remove
+  create new maps; serialized imports still validate and public mutable reads
+  still copy. Forged and foreign handles are rejected.
+- Seven focused regressions cover ordinary edits, transaction/command failure,
+  failed undo/redo, independent repository versions, defensive public reads,
+  invalid serialized imports, import undo/redo and fingerprint copy avoidance.
+  Import history releases its serialized staging copy after validation and
+  includes the replaced and imported payload sizes in its history estimate.
+- Audited both production `peek()` consumers: the Three projection and canonical
+  bounds reader only read shared descriptors/bytes; their mesh decoder allocates
+  separate position/index buffers. Descriptors are deeply frozen on insertion.
+- Fixed 8 MiB generated fixture, Node 22.21.0, twenty transform/undo pairs on the
+  same host: copied bytes fell from 335,544,320 to zero; median pair duration fell
+  from 10.38 ms to 0.59 ms, with p95 14.51 ms to 1.55 ms. Asset fingerprint
+  `fnv1a64:ac1234b6ba312faf` and semantic hash `fnv1a64:66c954a755f47ac5`
+  stayed identical. `bench:assets` runs in the project gate and enforces zero
+  copied bytes; timing is reported without a hardware-independent latency claim.
+
+Full web quality passes: 239 unit test files, integration/project/settings/
+localization/XR suites, production startup/browser/offline workflows,
+28 accessibility rules, 155 pseudo-localized controls and thirteen slicing test
+files. Unchanged ceilings: main 2,313,191 bytes; total JavaScript 10,591,579 bytes.
+This does not complete the persistence controller or remaining surface ownership
+work.

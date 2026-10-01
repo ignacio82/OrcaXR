@@ -1,4 +1,4 @@
-import type { AssetRepositorySnapshot } from '../assets';
+import type { AssetRepositoryInternalSnapshot } from '../assets';
 import type { DirtyCategory, ProjectState } from '../domain/model';
 import type { SelectionSnapshot } from '../selection';
 import { CompositeProjectCommand, type CommandContext, type ProjectCommand } from './command';
@@ -19,7 +19,7 @@ interface HistoryEntry {
 interface AtomicSnapshot {
   state: ProjectState;
   selection: SelectionSnapshot;
-  assets: AssetRepositorySnapshot;
+  assets: AssetRepositoryInternalSnapshot;
 }
 
 export interface CommandBusOptions {
@@ -293,12 +293,12 @@ export class CommandBus implements CommandBusPort {
     return {
       state: this.context.project.getSnapshot().state,
       selection: this.context.selection.getSnapshot(),
-      assets: this.context.assets.capture(),
+      assets: this.context.assets.captureInternal(),
     };
   }
 
   private restoreAtomic(snapshot: AtomicSnapshot, reason: string): void {
-    this.context.assets.restore(snapshot.assets);
+    this.context.assets.restoreInternal(snapshot.assets);
     this.context.project.restoreState(snapshot.state, reason);
     this.context.selection.restore(snapshot.selection);
   }

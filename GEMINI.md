@@ -1050,6 +1050,17 @@ logic verified against `src/OrcaSlicer.cpp` in the submodule):
 
 ## Large-model performance (load-bearing)
 
+- Command rollback uses repository-owned opaque snapshot handles. Versions share
+  immutable asset records and copy only the map on insert/remove; restoring a
+  version also restores its cached bundle fingerprint. Serialized bundles remain
+  a separate validated boundary, and public mutable reads still copy. Imported
+  history validates once, retains version handles for undo/redo, and accounts for
+  both replaced and imported payloads in the history budget. The only production
+  `peek()` consumers are the Three projection and canonical bounds reader; both
+  decode into new position/index arrays and must never mutate shared bytes.
+  `npm --prefix web run bench:assets` enforces zero payload copies for twenty
+  transform/undo pairs over an 8 MiB generated asset; timing is informational.
+
 Measured on `~/Downloads/narwhal.3mf` — 1,897,256 facets, 629k of them painted,
 stored as 161 MB of mesh XML inside a 28 MB archive. Every number below is from
 that project on a desktop; a Galaxy XR is several times slower, so these are
