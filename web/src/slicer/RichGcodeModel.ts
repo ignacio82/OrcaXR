@@ -109,6 +109,9 @@ export interface RichGcodeParseOptions {
  */
 export interface GcodeParserCheckpoint {
   readonly offset: number;
+  /** Original semantic record ordinal at this checkpoint. */
+  readonly recordOffset: number;
+  readonly pathPointOffset: number;
   readonly line: number;
   readonly x: number;
   readonly y: number;
@@ -140,22 +143,23 @@ export interface GcodeParserCheckpoint {
   readonly hotendTemperatures: Float64Array;
 }
 
-/** One layer's span in the source, and the state to start reading it from. */
+/** A bounded span within a layer, and the state to resume reading it from. */
 export interface GcodeLayerIndexEntry {
-  /** Zero for everything before the first layer change, then one per layer. */
+  /** Absolute layer ID; multiple bounded spans may share this ID. */
   readonly layer: number;
   readonly startOffset: number;
   readonly endOffsetExclusive: number;
-  /** Records a whole-file parse emits before this layer, so a window can be budgeted. */
+  /** Records a whole-file parse emits before this span, so a window can be budgeted. */
   readonly recordsBefore: number;
+  readonly pathPointsBefore: number;
   readonly checkpoint: GcodeParserCheckpoint;
 }
 
 /**
- * Where every layer lives in the source, and nothing else.
+ * Resumable layer/record spans, without rich record columns.
  *
  * Built by one pass that counts records without keeping them, so indexing a
- * print costs a scan and a few hundred small checkpoints rather than hundreds
+ * print costs a scan and bounded checkpoint metadata rather than hundreds
  * of megabytes of columns. It is what lets the preview show any part of a print
  * too large to hold all at once.
  */
@@ -164,6 +168,7 @@ export interface GcodeLayerIndex {
   readonly layerCount: number;
   /** Records a whole-file parse would have produced. */
   readonly recordCount: number;
+  readonly pathPointCount: number;
   readonly sourceLength: number;
   readonly warnings: readonly GcodeParseWarning[];
   readonly complete: boolean;
@@ -175,7 +180,9 @@ export interface GcodeLayerIndex {
 interface InternalParseOptions {
   /** The index pass counts records without allocating columns for them. */
   readonly retainRecords?: boolean;
-  readonly onLayerBoundary?: (checkpoint: GcodeParserCheckpoint, recordsBefore: number) => void;
+  readonly onLayerBoundary?: (checkpoint: GcodeParserCheckpoint, recordsBefore: number) => boolean;
+  readonly onRecordBoundary?: (checkpoint: GcodeParserCheckpoint, recordsBefore: number) => boolean;
+  readonly checkpointRecords?: number;
 }
 
 export interface GcodeFilamentIdentity {
@@ -196,7 +203,8 @@ export interface GcodeParseWarning {
   readonly endOffset: number;
 }
 
-export type GcodeTerminationReason = 'input-cap' | 'line-cap' | 'record-cap' | 'path-point-cap' | 'numeric-cap';
+export type GcodeTerminationReason =
+  'input-cap' | 'line-cap' | 'record-cap' | 'path-point-cap' | 'numeric-cap' | 'index-cap';
 
 /**
  * One row per classified move or source marker. Numeric data is stored in
@@ -247,6 +255,8 @@ export interface RichGcodePathPoints {
 }
 
 export interface RichGcodeModel {
+  /** Columns are local; semantic/source record IDs add this offset. */
+  readonly recordOffset?: number;
   readonly columns: RichGcodeColumns;
   readonly pathPoints: RichGcodePathPoints;
   readonly roles: readonly string[];
@@ -255,6 +265,8 @@ export interface RichGcodeModel {
   readonly warnings: readonly GcodeParseWarning[];
   readonly sourceLength: number;
   readonly parsedCharacters: number;
+  /** Number of source lines preceding this window. */
+  readonly sourceLineOffset?: number;
   readonly parsedLines: number;
   readonly complete: boolean;
   readonly terminationReason?: GcodeTerminationReason;
@@ -344,31 +356,60 @@ export function parseRichGcodeModel(gcode: string, options: RichGcodeParseOption
  * entirely reachable, because any window can be parsed later from the
  * checkpoint this leaves behind.
  */
+/** Bounded checkpoint metadata, independent of the source's layer count. */
+export const GCODE_INDEX_BYTE_BUDGET = 64 * 1024 * 1024;
+
 export function indexRichGcodeLayers(gcode: string, options: RichGcodeParseOptions = {}): GcodeLayerIndex {
-  const boundaries: Array<{ checkpoint: GcodeParserCheckpoint; recordsBefore: number }> = [];
+  const boundaries: Array<{ layer: number; checkpoint: GcodeParserCheckpoint; recordsBefore: number }> = [];
+  let checkpointBytes = 0;
+  let stoppedAt: number | undefined;
+  const addBoundary = (checkpoint: GcodeParserCheckpoint, recordsBefore: number, layer: number): boolean => {
+    const previous = boundaries.at(-1);
+    // A record checkpoint immediately before a layer marker is the same source
+    // boundary. Keep its post-marker layer label without duplicating metadata.
+    if (previous?.checkpoint.offset === checkpoint.offset) {
+      previous.layer = layer;
+      return true;
+    }
+    const bytes =
+      256 +
+      checkpoint.hotendTemperatures.byteLength +
+      checkpoint.roles.reduce((sum, role) => sum + 16 + role.length * 2, 0) +
+      checkpoint.filaments.reduce((sum, filament) => sum + 64 + (filament.color?.length ?? 0) * 2, 0) +
+      checkpoint.toolFilaments.length * 32;
+    if (checkpointBytes + bytes > GCODE_INDEX_BYTE_BUDGET) {
+      stoppedAt = checkpoint.offset;
+      return false;
+    }
+    checkpointBytes += bytes;
+    boundaries.push({ layer, checkpoint, recordsBefore });
+    return true;
+  };
   const parser = new RichGcodeParser(gcode, options, {
     retainRecords: false,
-    onLayerBoundary: (checkpoint, recordsBefore) => boundaries.push({ checkpoint, recordsBefore }),
+    checkpointRecords: resolveLimits(options.limits).records,
+    onLayerBoundary: (checkpoint, recordsBefore) => addBoundary(checkpoint, recordsBefore, checkpoint.layerCount + 1),
+    onRecordBoundary: (checkpoint, recordsBefore) => addBoundary(checkpoint, recordsBefore, checkpoint.layerCount),
   });
   const model = parser.parse();
-  const parsedEnd = model.parsedCharacters;
-  const entries: GcodeLayerIndexEntry[] = [];
-  // Everything before the first layer change is the preamble: start, purge, and
-  // whatever the profile emits. It is layer zero so a window can include it.
-  const preambleEnd = boundaries[0]?.checkpoint.offset ?? parsedEnd;
-  entries.push({
-    layer: 0,
-    startOffset: 0,
-    endOffsetExclusive: preambleEnd,
-    recordsBefore: 0,
-    checkpoint: parser.initialCheckpoint(),
-  });
-  boundaries.forEach((boundary, index) => {
+  const parsedEnd = stoppedAt ?? model.parsedCharacters;
+  const entries: GcodeLayerIndexEntry[] = [
+    {
+      layer: 0,
+      startOffset: 0,
+      endOffsetExclusive: boundaries[0]?.checkpoint.offset ?? parsedEnd,
+      recordsBefore: 0,
+      pathPointsBefore: 0,
+      checkpoint: parser.initialCheckpoint(),
+    },
+  ];
+  boundaries.forEach((boundary, position) => {
     entries.push({
-      layer: index + 1,
+      layer: boundary.layer,
       startOffset: boundary.checkpoint.offset,
-      endOffsetExclusive: boundaries[index + 1]?.checkpoint.offset ?? parsedEnd,
+      endOffsetExclusive: boundaries[position + 1]?.checkpoint.offset ?? parsedEnd,
       recordsBefore: boundary.recordsBefore,
+      pathPointsBefore: boundary.checkpoint.pathPointOffset,
       checkpoint: boundary.checkpoint,
     });
   });
@@ -376,6 +417,7 @@ export function indexRichGcodeLayers(gcode: string, options: RichGcodeParseOptio
     entries: Object.freeze(entries),
     layerCount: model.layerCount,
     recordCount: model.columns.count,
+    pathPointCount: model.pathPoints.count,
     sourceLength: model.sourceLength,
     warnings: model.warnings,
     complete: model.complete,
@@ -385,7 +427,8 @@ export function indexRichGcodeLayers(gcode: string, options: RichGcodeParseOptio
 }
 
 /**
- * Parse exactly the layers `[firstLayer, lastLayer]` of an indexed print.
+ * Parse the inclusive index-entry span `[firstEntry, lastEntry]`.
+ * Entries can share a layer ID when that layer needs multiple bounded windows.
  *
  * The records are the ones a whole-file parse would have produced for that
  * span, because parsing resumes from the state the index captured — pinned by
@@ -394,21 +437,28 @@ export function indexRichGcodeLayers(gcode: string, options: RichGcodeParseOptio
 export function parseRichGcodeLayerWindow(
   gcode: string,
   index: GcodeLayerIndex,
-  firstLayer: number,
-  lastLayer: number,
+  firstEntry: number,
+  lastEntry: number,
   options: RichGcodeParseOptions = {},
 ): RichGcodeModel {
   if (index.entries.length === 0) throw new RangeError('An empty G-code layer index has no window to parse');
-  const first = clampLayerIndex(firstLayer, index);
-  const last = clampLayerIndex(lastLayer, index);
+  const first = clampLayerIndex(firstEntry, index);
+  const last = clampLayerIndex(lastEntry, index);
   if (last < first) throw new RangeError('A G-code layer window must not end before it starts');
   const from = index.entries[first];
   const to = index.entries[last];
-  return new RichGcodeParser(gcode, {
+  const model = new RichGcodeParser(gcode, {
     ...options,
     range: { startOffset: from.startOffset, endOffsetExclusive: to.endOffsetExclusive },
     resumeFrom: from.checkpoint,
   }).parse();
+  return index.complete
+    ? model
+    : {
+        ...model,
+        complete: false,
+        terminationReason: model.terminationReason ?? index.terminationReason,
+      };
 }
 
 function clampLayerIndex(layer: number, index: GcodeLayerIndex): number {
@@ -457,7 +507,13 @@ class RichGcodeParser {
   private terminationReason: GcodeTerminationReason | undefined;
 
   private readonly range: { readonly startOffset: number; readonly endOffsetExclusive: number } | undefined;
-  private readonly onLayerBoundary: ((checkpoint: GcodeParserCheckpoint, recordsBefore: number) => void) | undefined;
+  private readonly onLayerBoundary: InternalParseOptions['onLayerBoundary'];
+  private readonly onRecordBoundary: InternalParseOptions['onRecordBoundary'];
+  private readonly checkpointRecords: number;
+  private recordsAtCheckpoint = 0;
+  private pathPointsAtCheckpoint = 0;
+  private pathPointOffset = 0;
+  private recordOffset = 0;
   private readonly initial: GcodeParserCheckpoint;
   private startLine = 1;
 
@@ -481,6 +537,8 @@ class RichGcodeParser {
     this.filamentColors = normalizeFilamentColors(options.filamentColors);
     this.filament = this.ensureToolFilament(0, wholeInputLocation());
     this.onLayerBoundary = internal.onLayerBoundary;
+    this.onRecordBoundary = internal.onRecordBoundary;
+    this.checkpointRecords = internal.checkpointRecords ?? Number.MAX_SAFE_INTEGER;
     this.range = options.range ? normalizeRange(options.range, gcode.length) : undefined;
     if (options.resumeFrom) this.restoreCheckpoint(options.resumeFrom);
     this.initial = this.captureCheckpoint(this.range?.startOffset ?? 0, this.startLine);
@@ -495,6 +553,8 @@ class RichGcodeParser {
   captureCheckpoint(offset: number, line: number): GcodeParserCheckpoint {
     return Object.freeze({
       offset,
+      recordOffset: this.recordOffset + this.columns.count,
+      pathPointOffset: this.pathPointOffset + this.columns.totalPathPoints,
       line,
       x: this.x,
       y: this.y,
@@ -528,6 +588,8 @@ class RichGcodeParser {
   }
 
   private restoreCheckpoint(checkpoint: GcodeParserCheckpoint): void {
+    this.recordOffset = checkpoint.recordOffset;
+    this.pathPointOffset = checkpoint.pathPointOffset;
     this.x = checkpoint.x;
     this.y = checkpoint.y;
     this.z = checkpoint.z;
@@ -614,6 +676,21 @@ class RichGcodeParser {
         commandLineNumber: -1,
       };
 
+      // Each pinned command/tag emits at most one semantic record. Checkpoint
+      // before the next source line, never halfway through a move or arc.
+      if (this.onRecordBoundary && this.columns.count - this.recordsAtCheckpoint >= this.checkpointRecords) {
+        if (!this.onRecordBoundary(this.captureCheckpoint(start, line), this.columns.count)) {
+          this.stop(
+            'index-cap',
+            'index-memory-cap',
+            'G-code checkpoint metadata exceeds the bounded index budget; only a prefix was indexed',
+            location,
+          );
+          break;
+        }
+        this.recordsAtCheckpoint = this.columns.count;
+        this.pathPointsAtCheckpoint = this.columns.totalPathPoints;
+      }
       this.parsedLines += 1;
       this.parsedCharacters = rawEnd;
       const cutByInputCap =
@@ -648,6 +725,7 @@ class RichGcodeParser {
 
     const built = this.columns.finish();
     return {
+      ...(this.range ? { recordOffset: this.recordOffset, sourceLineOffset: this.startLine - 1 } : {}),
       columns: built.columns,
       pathPoints: built.pathPoints,
       roles: Object.freeze([...this.roles]),
@@ -811,7 +889,20 @@ class RichGcodeParser {
     if (exactComment === 'LAYER_CHANGE' || exactComment === ' CHANGE_LAYER') {
       // Captured before the layer advances and before the marker is emitted, so
       // resuming here reproduces this line rather than skipping it.
-      this.onLayerBoundary?.(this.captureCheckpoint(source.startOffset, source.line), this.columns.count);
+      if (
+        this.onLayerBoundary &&
+        !this.onLayerBoundary(this.captureCheckpoint(source.startOffset, source.line), this.columns.count)
+      ) {
+        this.stop(
+          'index-cap',
+          'index-memory-cap',
+          'G-code checkpoint metadata exceeds the bounded index budget; only a prefix was indexed',
+          source,
+        );
+        return;
+      }
+      this.recordsAtCheckpoint = this.columns.count;
+      this.pathPointsAtCheckpoint = this.columns.totalPathPoints;
       this.layerCount += 1;
       this.emitMarker(GCODE_RECORD_KIND.LAYER_CHANGE, source);
       return;
@@ -1102,7 +1193,26 @@ class RichGcodeParser {
       );
       return;
     }
-    if (interpolation.count > this.columns.remainingPathPoints) {
+    // The index has no retained sidecar, but a single arc must still fit.
+    // Split before an arc when its complete sidecar would overflow this window.
+    if (
+      this.onRecordBoundary &&
+      interpolation.count <= this.limits.pathPoints &&
+      this.columns.totalPathPoints - this.pathPointsAtCheckpoint + interpolation.count > this.limits.pathPoints
+    ) {
+      if (!this.onRecordBoundary(this.captureCheckpoint(source.startOffset, source.line), this.columns.count)) {
+        this.stop(
+          'index-cap',
+          'index-memory-cap',
+          'G-code checkpoint metadata exceeds the bounded index budget; only a prefix was indexed',
+          source,
+        );
+        return;
+      }
+      this.recordsAtCheckpoint = this.columns.count;
+      this.pathPointsAtCheckpoint = this.columns.totalPathPoints;
+    }
+    if (interpolation.count > Math.min(this.limits.pathPoints, this.columns.remainingPathPoints)) {
       this.stop(
         'path-point-cap',
         'arc-path-point-cap',
@@ -1456,7 +1566,8 @@ class RichGcodeParser {
       this.terminationReason === 'line-cap' ||
       this.terminationReason === 'record-cap' ||
       this.terminationReason === 'path-point-cap' ||
-      this.terminationReason === 'numeric-cap'
+      this.terminationReason === 'numeric-cap' ||
+      this.terminationReason === 'index-cap'
     );
   }
 }
@@ -1984,6 +2095,12 @@ class RecordColumnsBuilder {
     return this.length;
   }
 
+  private indexedPathPoints = 0;
+
+  get totalPathPoints(): number {
+    return this.retain ? this.pathPoints.count : this.indexedPathPoints;
+  }
+
   get remainingRecords(): number {
     return this.maximum - this.length;
   }
@@ -2010,6 +2127,7 @@ class RecordColumnsBuilder {
     if (!this.retain) {
       // Counting only: the caller wants the shape of the parse, not its data.
       this.length += 1;
+      this.indexedPathPoints += pathCount;
       return 'ok';
     }
     if (this.length === this.capacity) this.grow();
@@ -2082,7 +2200,9 @@ class RecordColumnsBuilder {
         arcCenterX: this.arcCenterX.subarray(0, length),
         arcCenterY: this.arcCenterY.subarray(0, length),
       },
-      pathPoints: this.pathPoints.finish(),
+      pathPoints: this.retain
+        ? this.pathPoints.finish()
+        : { ...this.pathPoints.finish(), count: this.indexedPathPoints },
     };
   }
 

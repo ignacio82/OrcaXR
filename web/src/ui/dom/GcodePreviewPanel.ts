@@ -1,6 +1,10 @@
 import { formatArtifactDuration, type GcodeArtifactSummary } from '../../slicer/GcodeArtifactSummary';
 import type { GcodePreviewMode } from '../../slicer/GcodePreviewModel';
-import type { GcodePreviewMoveFilterId, GcodePreviewViewPatch } from '../../slicer/GcodePreviewSession';
+import type {
+  GcodePreviewMoveFilterId,
+  GcodePreviewViewPatch,
+  GcodePreviewWindowState,
+} from '../../slicer/GcodePreviewSession';
 import { t } from '../../l10n/t';
 
 export interface GcodePreviewPanelLegendEntry {
@@ -13,6 +17,8 @@ export interface GcodePreviewPanelLegendEntry {
 
 export interface GcodePreviewPanelState {
   readonly active: boolean;
+  readonly loading?: boolean;
+  readonly window?: GcodePreviewWindowState;
   readonly source?: { readonly kind: 'slice' | 'file'; readonly name: string };
   readonly view?: {
     readonly mode: GcodePreviewMode;
@@ -135,11 +141,14 @@ export class GcodePreviewPanel {
     const status = document.createElement('p');
     status.dataset.previewStatus = 'true';
     status.style.cssText = 'margin:0;opacity:0.75;';
-    status.textContent = state.active
-      ? `Showing ${state.source?.name ?? 'sliced G-code'}${state.layerLabel ? ` — ${state.layerLabel}` : ''}`
-      : state.source && state.unsupportedReason
-        ? `Preview unavailable for ${state.source.name}. Adjust the controls below or open another G-code file.`
-        : 'Slice the plate or open a G-code file to inspect toolpaths.';
+    root.setAttribute('aria-busy', String(state.loading === true));
+    status.textContent = state.loading
+      ? t('ui.preview.loading', 'Reading G-code preview…')
+      : state.active
+        ? `Showing ${state.source?.name ?? 'sliced G-code'}${state.layerLabel ? ` — ${state.layerLabel}` : ''}`
+        : state.source && state.unsupportedReason
+          ? `Preview unavailable for ${state.source.name}. Adjust the controls below or open another G-code file.`
+          : (state.unsupportedReason ?? 'Slice the plate or open a G-code file to inspect toolpaths.');
     root.append(status);
     // A failed renderer keeps the bounded session so the operator can narrow
     // layers/move classes or choose another mode. Explicitly closing preview
@@ -233,6 +242,23 @@ export class GcodePreviewPanel {
     label.textContent = t('ui.gcodePreviewPanel.singleLayer', 'Single layer');
     single.append(checkbox, label);
     group.append(single);
+    if (state.window) {
+      const window = state.window;
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
+      for (const direction of [-1, 1] as const) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.previewWindowStep = String(direction);
+        button.textContent =
+          direction === -1 ? t('ui.preview.previousMoves', 'Previous moves') : t('ui.preview.nextMoves', 'Next moves');
+        button.disabled = !!state.loading || !(direction === -1 ? window.hasPrevious : window.hasNext);
+        button.style.cssText = controlStyle(false);
+        button.onclick = () => void this.run(() => this.adapter.onUpdateView({ windowStep: direction }));
+        row.append(button);
+      }
+      group.append(row);
+    }
     return group;
   }
 

@@ -50,7 +50,7 @@ export const outputActions: Action[] = [
         ctx.reportCapabilityUnavailable('Set preview view', 'Choose a preview control first.');
         return;
       }
-      ctx.updatePreviewView(request);
+      return ctx.updatePreviewView(request);
     },
   },
   {

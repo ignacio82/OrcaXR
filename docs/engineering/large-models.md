@@ -154,31 +154,62 @@ floors, not ceilings.
   smaller `maxRenderedSegments`. Full parse costs ~4.4 s and ~400 MB of typed
   columns at ~132 B per record, of which about a quarter is `RecordColumnsBuilder`
   doubling slack that `finish()` keeps because it hands out `subarray` views.
-  **When a file still exceeds the budget the notice must be quantified**: it now
-  names the moves drawn and the height reached and states that the sliced G-code
-  is complete, because "parser termination reason: record-cap" left the obvious
-  and wrong conclusion — that the model had not been sliced — fully available.
-  **The ceiling is now a fallback rather than a cliff.** `indexRichGcodeLayers`
-  makes one pass that counts records without keeping any and captures a
-  `GcodeParserCheckpoint` at every layer boundary — all the machine state
-  (position, modality, tool, temperatures, fan, role, derived width/height) that
-  lets `parseRichGcodeLayerWindow` resume mid-file and produce exactly the
-  records a whole-file parse would have. Indexing the narwhal costs 3.9 s and
-  **1 MB**; a 50-layer window is 454 ms and 37 MB, one layer 21 ms. Equality is
-  pinned by test and was verified on the real print: all 3,173,016 records
-  across all 491 windows matched a whole-file parse with zero mismatches, which
-  is what proves the checkpoint misses no state. `GcodePreviewSession.fromGcode`
-  decides by *trying* the whole parse and asking the model whether it fit — never
-  by estimating from file size, because the one direction an estimate can be
-  wrong in is quietly dropping the top of a print. A print that fits is read
-  whole and behaves exactly as before; one that does not is indexed and windowed,
-  every layer stays reachable, and `windowNotice()` names the layers on screen
-  out of the total and says the slice is complete. Two traps worth remembering:
-  a window's budget must be `min(window budget, resolved record limit)` or a
-  caller that lowers the limit gets a window it cannot hold, and **the index pass
-  must not be bounded by the record cap at all** — it retains nothing, and
-  bounding it made it report a truncated *print*, which is the exact failure the
-  index exists to make impossible.
+  The current browser viewer indexes before allocating rich columns. It parses
+  the whole input only when the complete index fits 240,000 records and the
+  path-point budget; otherwise it loads bounded windows immediately. An unusually
+  large layer gets additional record checkpoints, and arc-heavy spans get
+  checkpoints before a whole arc would overflow the path budget. A single arc
+  larger than that budget remains explicitly incomplete; no partial arc is drawn.
+  Index checkpoint metadata has a 64 MiB accounting budget, and input/line caps
+  remain explicit. The index counts records without retaining columns or applying
+  the window's record cap to the whole input.
+
+  Checkpoints preserve machine state, absolute source offsets/lines and original
+  semantic record IDs. Inspection reports original IDs; render projection indices
+  stay local to the loaded columns and use `recordOffset` to recover source identity.
+  Previous/Next moves controls in DOM and XR reach all chunks of a large layer;
+  colour/filter changes preserve the selected chunk. Notices quantify the layers
+  and records shown. A complete index means only that the supplied input was fully
+  indexed, never proof that a slice finished. Incomplete input names its limiting
+  reason and says that later input was not inspected.
+
+  `WorkerGcodePreviewSession` owns one browser worker per source. Indexing,
+  window parsing and default projection/inspection run there; the main thread
+  receives transferred bounded snapshots and reuses those projections across
+  surfaces. The worker retains one source (at most 256 Mi UTF-16 code units),
+  its index and one window; the main thread retains its current window. A source
+  replacement/disposal terminates the old worker immediately. Window requests
+  settle obsolete callers immediately and coalesce to one pending request while
+  the active bounded parse finishes; obsolete replies are never published.
+  Requests have a 120-second deadline; failure disables that preview visibly
+  instead of falling back to a blocking main-thread parse. No worker holds old
+  response buffers after transferring them. Engine completion releases its slicing
+  slot before asynchronous preview completes, so a new slice can supersede a
+  still-indexing artifact. This bounds live owners; garbage
+  collection can temporarily retain unreachable previous windows.
+
+  The generated 300,002-record single-layer regression previously retained all
+  records and allocated a 524,288-element Float32 column. It now retains at most
+  240,000 with no column allocation above that cap, and every remaining record is
+  reachable. Index-first scanning is additional work for small files: the same
+  Node fixture measured 426.6 ms before and 603.1 ms in the isolated bounded
+  implementation. The improvement is bounded allocation and responsiveness,
+  not a claim of faster total parsing. Production Chromium evidence records
+  heartbeat progress during worker indexing rather than inventing a universal
+  latency threshold. `bench:preview` alternates five whole-parse/reference and
+  indexed-window opens after warmup and collection. The measured paired ratios
+  were 1.45–1.65 (median 1.59); CI caps the median at 2.5, roughly 50% headroom
+  over the observed worst pair. This compares work on the same runtime/host,
+  with no absolute device latency assertion. Earlier narwhal measurements remain historical;
+  hardware/XR qualification of this implementation is still pending.
+
+- Import feature detection walks typed volume emboss recipes, so unrelated
+  extension flags do not generate geometry warnings and no project-wide JSON
+  string is allocated. Save/slice snapshot preparation shares the frozen canonical
+  state and cached hash, validates one defensive asset bundle once, and uses the
+  repository's cached fingerprint for freshness. Public/untrusted byte boundaries
+  still copy and validate; derived fingerprints never replace output SHA-256 or
+  engine provenance.
 
 - **A slice is not cancelled for going quiet.** Slicing the narwhal at 0.12 mm
   failed with an idle timeout, because the engine legitimately says nothing for
@@ -272,7 +303,11 @@ floors, not ceilings.
   confirmation. Missing identity blocks with recovery guidance; a new run of
   the same filename, changed printer, reconnect, partial response, or failed
   refresh cannot authorize the old command. Pending ordinary commands are
-  serialized, including their dialogs. Emergency stop and the distinct,
+  serialized, including their dialogs. After command verification begins, its
+  completion or refusal invalidates the old job identity before releasing the
+  command lock; only a completed authoritative refresh re-enables ordinary
+  controls. This prevents a retry hold from capturing a just-rejected identity.
+  Emergency stop and the distinct,
   confirmed firmware-restart action retain an authenticated, bounded HTTP path
   without a successful readiness/history query or WebSocket handshake. These
   checks close client stale-state paths; Moonraker offers no atomic comparison
@@ -363,4 +398,3 @@ floors, not ceilings.
   decimated display mesh needs a separate full-resolution picking mesh first.
 
 - **All-in-one container architecture, web UI serving, and same-origin trust.** The Dockerfile builds a unified all-in-one image combining the web front-end (`/app/public`), native CLI engine (`/app/orca/bin/snapmaker-orca`), versioned WASM engine (`/app/wasm-artifacts/current`), and Tailscale binaries. Build-time coherence asserts that `web/src/slicer/pinnedEngineProvenance.ts` commit and patch digests match `/app/orca/engine-provenance.json`. Static assets and SPA routes are served with exact `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: credentialless`, and `Permissions-Policy` matching `web/vite.config.ts`. In `ORCAXR_TRUST=same-origin` mode, same-origin browser requests (`isSameOriginRequest`) are trusted on loopback and Tailscale Serve HTTPS boundaries without manual token entry, while non-browser API clients authenticate with an explicitly provisioned token (loopback-only same-origin setups can generate `~/.orcaxr/server-token`) (0600 permissions). `SlicerClient` probes the serving origin on startup via `autoDiscoverExternalSlicer`, connects only upon valid engine attestation, and preserves explicit user endpoints.
-

@@ -425,7 +425,7 @@ export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
   private drawScrubber(): void {
     const card = this.surfaces.scrubber;
     const preview = this.host.previewState();
-    if (!preview || !preview.active || this.host.workspaceMode() !== 'preview') {
+    if (!preview?.view || this.host.workspaceMode() !== 'preview') {
       this.previewScrubber = null;
       this.scrubberUp = false;
       card.hide();
@@ -465,7 +465,8 @@ export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
   /** Repaint only the scrubber, for the many small preview updates. */
   refreshPreview(): void {
     const preview = this.host.previewState();
-    if (this.previewScrubber && preview && preview.active) this.previewScrubber.refresh(preview);
+    if (this.previewScrubber && preview?.view && this.host.workspaceMode() === 'preview')
+      this.previewScrubber.refresh(preview);
     else this.drawScrubber();
   }
 

@@ -1,3 +1,4 @@
+import type { ProjectState } from '../domain/model';
 import type { AssetId } from '../domain/ids';
 import { Bbs3mfProjectSerializer } from '../serialization/Bbs3mfProjectSerializer';
 import {
@@ -42,16 +43,17 @@ const UNHONOURED_SETTINGS = Object.freeze([
 ]);
 
 /** Which unhonoured settings this project actually carries. */
-function unhonouredSettings(state: unknown): ImportDiagnostic[] {
-  // Read from the serialized state rather than from the archive text, so this
-  // reports what was actually parsed rather than what happened to appear in a
-  // file — a comment mentioning `use_surface` would otherwise raise a warning
-  // about geometry nobody asked for.
-  const serialized = JSON.stringify(state ?? {});
+function unhonouredSettings(state: ProjectState): ImportDiagnostic[] {
+  const present = new Set<string>();
+  for (const plate of state.plates)
+    for (const object of plate.objects)
+      for (const volume of object.volumes) {
+        if (volume.embossText?.projection.useSurface || volume.embossSvg?.useSurface) present.add('use_surface');
+        if (volume.embossText?.font.perGlyph) present.add('per_glyph');
+      }
   const notices: ImportDiagnostic[] = [];
   for (const setting of UNHONOURED_SETTINGS) {
-    const camel = setting.field.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
-    if (new RegExp(`"${camel}":true`).test(serialized)) {
+    if (present.has(setting.field)) {
       notices.push({
         id: `unhonoured-${setting.field}`,
         code: `unhonoured-${setting.field}`,

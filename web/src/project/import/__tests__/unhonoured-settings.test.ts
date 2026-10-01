@@ -95,7 +95,7 @@ await test('a project that projects onto the surface says the geometry will diff
     for (const plate of state.plates) {
       for (const object of plate.objects) {
         for (const volume of object.volumes) {
-          (volume as unknown as { svg?: unknown }).svg = { depthMm: 1, useSurface: true };
+          volume.embossText = embossConfiguration({ projection: { depthMm: 1, useSurface: true } });
         }
       }
     }
@@ -115,7 +115,7 @@ await test('the warning describes the divergence, not the missing feature', asyn
     for (const plate of state.plates) {
       for (const object of plate.objects) {
         for (const volume of object.volumes) {
-          (volume as unknown as { svg?: unknown }).svg = { depthMm: 1, useSurface: true };
+          volume.embossText = embossConfiguration({ projection: { depthMm: 1, useSurface: true } });
         }
       }
     }
@@ -123,6 +123,17 @@ await test('the warning describes the divergence, not the missing feature', asyn
   const notice = (await diagnosticsFor(bytes)).find((entry) => entry.code === 'unhonoured-use_surface');
   assert.ok(notice);
   assert.doesNotMatch(notice.message, /unsupported|not implemented|roadmap/i);
+});
+
+await test('per-glyph text is detected once even across multiple volumes', async () => {
+  const bytes = await archive((state) => {
+    for (const plate of state.plates)
+      for (const object of plate.objects)
+        for (const volume of object.volumes)
+          volume.embossText = embossConfiguration({ font: { ...DEFAULT_EMBOSS_FONT_PROPERTY, perGlyph: true } });
+  });
+  const notices = (await diagnosticsFor(bytes)).filter((entry) => entry.code === 'unhonoured-per_glyph');
+  assert.equal(notices.length, 1);
 });
 
 /**

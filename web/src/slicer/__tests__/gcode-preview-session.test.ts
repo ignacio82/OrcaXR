@@ -134,7 +134,7 @@ test('a windowed layer contains exactly the records a whole parse would give it'
   }
 });
 
-test('a streamed window says which layers it is showing, and that the slice is whole', () => {
+test('a streamed window names its layers and distinguishes complete input indexing', () => {
   const session = GcodePreviewSession.fromGcode(
     tallPrint(60, 40),
     { kind: 'file', name: 'tall.gcode' },
@@ -143,7 +143,7 @@ test('a streamed window says which layers it is showing, and that the slice is w
   const notice = session.windowNotice();
   assert.ok(notice, 'a partial window must announce itself');
   assert.match(notice, /Showing layers \d+–\d+ of 60/, 'naming what is drawn and what exists');
-  assert.match(notice, /sliced G-code is complete/, 'so a window is never read as a failed slice');
+  assert.match(notice, /supplied G-code was fully indexed/, 'so a window is never read as a failed slice');
 });
 
 test('a print that fits is read whole and says nothing', () => {

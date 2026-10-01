@@ -115,7 +115,7 @@ export interface ReadyGcodePreviewProjection {
   readonly mode: GcodePreviewModeDefinition;
   readonly sourceRecordCount: number;
   readonly count: number;
-  /** Indirection into RichGcodeModel.columns; no object is allocated per source line. */
+  /** Window-local column indices; add model.recordOffset for original source record IDs. */
   readonly recordIndices: Uint32Array;
   readonly values: Float32Array;
   readonly valueValid: Uint8Array;
@@ -346,6 +346,9 @@ export function projectGcodePreview(model: RichGcodeModel, request: GcodePreview
 
 function validateModel(model: RichGcodeModel): void {
   const count = model.columns.count;
+  const offset = model.recordOffset ?? 0;
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset + count > 0xffff_ffff)
+    invalidModel('Source record offset is outside the bounded domain');
   if (!Number.isSafeInteger(count) || count < 0 || count > GCODE_PREVIEW_HARD_CAPS.projectedRecords) {
     invalidModel('Rich G-code record count is outside the bounded preview domain');
   }
@@ -433,10 +436,11 @@ function validateRequest(model: RichGcodeModel, request: GcodePreviewRequest): V
   validateMask(request.eventVisibility, GCODE_PREVIEW_EVENT_COUNT, 'event');
 
   const [firstLayer, lastLayer] = validateIntegerRange(request.layerRange, 0, model.layerCount, 'layer', false);
-  const [firstRecord, lastRecord] = validateIntegerRange(
+  const offset = model.recordOffset ?? 0;
+  const [firstSourceRecord, lastSourceRecord] = validateIntegerRange(
     request.recordRange,
-    0,
-    Math.max(0, model.columns.count - 1),
+    offset,
+    offset + Math.max(0, model.columns.count - 1),
     'record',
     model.columns.count === 0,
   );
@@ -470,8 +474,8 @@ function validateRequest(model: RichGcodeModel, request: GcodePreviewRequest): V
     eventVisibility: request.eventVisibility,
     firstLayer,
     lastLayer,
-    firstRecord,
-    lastRecord,
+    firstRecord: firstSourceRecord - offset,
+    lastRecord: lastSourceRecord - offset,
     ...(request.valueRange ? { valueRange: request.valueRange } : {}),
     ...(request.layerTimes ? { layerTimes: request.layerTimes } : {}),
     maximum,

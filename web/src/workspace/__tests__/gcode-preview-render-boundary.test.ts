@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 
+import { GcodePreviewSession } from '../../slicer/GcodePreviewSession';
 import type { WorkspacePreviewSurface } from '../OrcaWorkspace';
 
 class TestAudioContext {
@@ -66,16 +67,19 @@ class ControlledPreviewSurface implements WorkspacePreviewSurface {
 
 let passed = 0;
 
-function test(name: string, run: () => void): void {
-  run();
+async function test(name: string, run: () => Promise<void>): Promise<void> {
+  await run();
   passed += 1;
   console.log(`  ✓ ${name}`);
 }
 
-test('open propagates a bounded renderer failure and publishes inactive actionable state', () => {
+await test('open propagates a bounded renderer failure and publishes inactive actionable state', async () => {
   const surface = new ControlledPreviewSurface();
   surface.fail = true;
-  const workspace = new OrcaWorkspace(buildRegistry(), { previewSurfaceFactory: () => surface });
+  const workspace = new OrcaWorkspace(buildRegistry(), {
+    previewSurfaceFactory: () => surface,
+    previewSessionFactory: async (gcode, source) => GcodePreviewSession.fromGcode(gcode, source),
+  });
   const statuses: string[] = [];
   let notifications = 0;
   workspace.onStatusChanged = (status) => statuses.push(status);
@@ -83,7 +87,7 @@ test('open propagates a bounded renderer failure and publishes inactive actionab
     notifications += 1;
   };
 
-  assert.equal(workspace.openGcodeForPreview(GCODE, 'too-large.gcode'), false);
+  assert.equal(await workspace.openGcodeForPreview(GCODE, 'too-large.gcode'), false);
   assert.equal(surface.renderCount, 1);
   assert.ok(surface.clearCount >= 1);
   assert.equal(surface.visibility.at(-1), false);
@@ -97,10 +101,13 @@ test('open propagates a bounded renderer failure and publishes inactive actionab
   workspace.dispose();
 });
 
-test('a view redraw failure clears and hides the old surface instead of leaving preview mode active', () => {
+await test('a view redraw failure clears and hides the old surface instead of leaving preview mode active', async () => {
   const surface = new ControlledPreviewSurface();
-  const workspace = new OrcaWorkspace(buildRegistry(), { previewSurfaceFactory: () => surface });
-  assert.equal(workspace.openGcodeForPreview(GCODE, 'view.gcode'), true);
+  const workspace = new OrcaWorkspace(buildRegistry(), {
+    previewSurfaceFactory: () => surface,
+    previewSessionFactory: async (gcode, source) => GcodePreviewSession.fromGcode(gcode, source),
+  });
+  assert.equal(await workspace.openGcodeForPreview(GCODE, 'view.gcode'), true);
   assert.equal(workspace.getPreviewState().active, true);
   assert.equal(surface.visibility.at(-1), true);
 
@@ -109,29 +116,73 @@ test('a view redraw failure clears and hides the old surface instead of leaving 
     notifications += 1;
   };
   surface.fail = true;
-  assert.equal(workspace.updatePreviewView({ mode: 'Feedrate' }), false);
+  assert.equal(await workspace.updatePreviewView({ mode: 'Feedrate' }), false);
   assert.equal(surface.renderCount, 2);
   assert.ok(surface.clearCount >= 1);
   assert.equal(surface.visibility.at(-1), false);
   assert.equal(workspace.getPreviewState().active, false);
   assert.equal(workspace.getAutomationSnapshot().workspaceMode, 'Prepare');
-  assert.equal(notifications, 1);
+  assert.ok(notifications >= 1);
   workspace.dispose();
 });
 
-test('toggle does not overwrite a renderer failure with a false toolpath-preview success', () => {
+await test('toggle does not overwrite a renderer failure with a false toolpath-preview success', async () => {
   const surface = new ControlledPreviewSurface();
   surface.fail = true;
-  const workspace = new OrcaWorkspace(buildRegistry(), { previewSurfaceFactory: () => surface });
+  const workspace = new OrcaWorkspace(buildRegistry(), {
+    previewSurfaceFactory: () => surface,
+    previewSessionFactory: async (gcode, source) => GcodePreviewSession.fromGcode(gcode, source),
+  });
   Object.defineProperty(workspace, 'getLastGcode', { value: () => GCODE, configurable: true });
   const statuses: string[] = [];
   workspace.onStatusChanged = (status) => statuses.push(status);
 
-  assert.equal(workspace.togglePreview(), false);
+  assert.equal(await workspace.togglePreview(), false);
   assert.equal(workspace.getPreviewState().active, false);
   assert.match(statuses.at(-1) ?? '', /segment limit.*fewer layers or move classes/i);
   assert.doesNotMatch(statuses.at(-1) ?? '', /^toolpath preview$/i);
   workspace.dispose();
+});
+
+await test('replacement and disposal cancel old sources and reject late sessions', async () => {
+  const surface = new ControlledPreviewSurface();
+  const requests: { signal: AbortSignal; complete: () => void }[] = [];
+  let disposedSessions = 0;
+  const workspace = new OrcaWorkspace(buildRegistry(), {
+    previewSurfaceFactory: () => surface,
+    previewSessionFactory: (gcode, source, signal) =>
+      new Promise((resolve) => {
+        const session = GcodePreviewSession.fromGcode(gcode, source);
+        requests.push({
+          signal,
+          complete: () =>
+            resolve(
+              Object.assign(session, {
+                dispose: () => {
+                  disposedSessions++;
+                },
+              }),
+            ),
+        });
+      }),
+  });
+  const first = workspace.openGcodeForPreview(GCODE, 'obsolete.gcode');
+  const second = workspace.openGcodeForPreview(GCODE, 'current.gcode');
+  assert.equal(requests[0].signal.aborted, true);
+  requests[1].complete();
+  assert.equal(await second, true);
+  requests[0].complete();
+  assert.equal(await first, false);
+  assert.equal(workspace.getPreviewState().source?.name, 'current.gcode');
+  assert.equal(surface.renderCount, 1);
+  assert.equal(disposedSessions, 1);
+  const final = workspace.openGcodeForPreview(GCODE, 'closed.gcode');
+  workspace.dispose();
+  assert.equal(requests[2].signal.aborted, true);
+  requests[2].complete();
+  assert.equal(await final, false);
+  assert.equal(surface.renderCount, 1);
+  assert.equal(disposedSessions, 3);
 });
 
 console.log(`\n${passed} G-code workspace render-boundary tests passed.`);

@@ -20,7 +20,7 @@ are fixture-specific evidence, not device-independent performance guarantees.
   asset-guarded slice coordinator remain headless; live legacy state is only a
   migration source, never a second canonical model. Published G-code is bound
   to the exact submitted semantic snapshot; preview/download/send fail closed
-  after drift; printer mutation stays disabled until P9 safety. Auto-place wipe tower
+  after drift; printer mutations pass the owned session and submission guards. Auto-place wipe tower
   plans Chebyshev clearance across 8 bed candidates and commits `SetPlateWipeTowerCommand`
   to the active plate without undefined properties in canonical JSON. **It reserves the
   tower's printed footprint against the printable rectangle, never its body against a
@@ -99,8 +99,8 @@ are fixture-specific evidence, not device-independent performance guarantees.
   the diagnosis names it and links to it. Never answer this failure with "check the
   address": the address is fine, and a retry cannot succeed.
 - The live G-code viewer renders the bounded rich model plus the preview
-  projection: `GcodePreviewSession` (UI-free) owns mode, layer window, and
-  move-class filters, and `ui/preview/GcodePreviewSurface` draws exactly the
+  projection: the UI-free session owns mode, bounded record/layer windows, and
+  move-class filters; the browser owns its parser worker and cached projections, and `ui/preview/GcodePreviewSurface` draws exactly the
   projected records with the projection's RGBA. Never colour or filter a
   toolpath in the renderer, and never fabricate metadata the projection reports
   as unsupported. Standalone G-code opens read-only and must not touch canonical

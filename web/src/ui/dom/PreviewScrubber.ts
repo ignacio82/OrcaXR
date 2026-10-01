@@ -22,6 +22,7 @@ export class PreviewScrubber {
   private layerReadout?: HTMLElement;
   private zReadout?: HTMLElement;
   private legend?: HTMLElement;
+  private windowButtons: HTMLButtonElement[] = [];
   private legendSignature = '';
 
   constructor(
@@ -55,7 +56,20 @@ export class PreviewScrubber {
     const legend = document.createElement('div');
     legend.className = 'preview-scrubber-legend';
 
-    root.append(layerReadout, slider, zReadout, legend);
+    for (const direction of [-1, 1] as const) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.previewWindowStep = String(direction);
+      button.textContent =
+        direction === -1 ? t('ui.preview.previousMoves', 'Previous moves') : t('ui.preview.nextMoves', 'Next moves');
+      button.onclick = () => {
+        void Promise.resolve(this.adapter.onUpdateView({ windowStep: direction })).catch((error) =>
+          this.adapter.onError?.(error),
+        );
+      };
+      this.windowButtons.push(button);
+    }
+    root.append(layerReadout, slider, zReadout, ...this.windowButtons, legend);
     this.container.replaceChildren(root);
 
     this.root = root;
@@ -85,6 +99,7 @@ export class PreviewScrubber {
     this.zReadout = undefined;
     this.legend = undefined;
     this.legendSignature = '';
+    this.windowButtons = [];
   }
 
   refresh(): void {
@@ -95,10 +110,15 @@ export class PreviewScrubber {
     // No projected layer window — or no toolpath on screen — means there is
     // nothing honest to scrub.
     const previewing = this.ui.get().mode === 'preview';
-    const usable = previewing && state.active && !!bounds && !!view && bounds[1] > bounds[0];
+    const usable = previewing && state.active && !!bounds && !!view && (bounds[1] > bounds[0] || !!state.window);
     this.container.hidden = !usable;
     if (!usable || !bounds || !view) return;
 
+    this.root.setAttribute('aria-busy', String(state.loading === true));
+    this.windowButtons.forEach((button, index) => {
+      button.hidden = !state.window;
+      button.disabled = !!state.loading || !(index === 0 ? state.window?.hasPrevious : state.window?.hasNext);
+    });
     const [minLayer, maxLayer] = bounds;
     const [low, high] = view.layerRange;
     const slider = this.slider;

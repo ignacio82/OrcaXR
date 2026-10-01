@@ -314,3 +314,13 @@ logic verified against `src/OrcaSlicer.cpp` in the submodule):
 - Native Docker builds default to two lower-priority top-level jobs; reduce
   `ORCA_BUILD_JOBS` to one on a busy host. Upstream dependency subbuilds can
   choose their own worker counts. The exact engine source pin is unchanged.
+
+- `npm --prefix server run test:native:container` qualifies the actual pinned CLI
+  in a disposable non-root, read-only, init-managed image over production HTTP.
+  It slices the generated cube with bundled Centauri Carbon profiles, checks
+  attestation, repeatable identical output and explicit release. The manual native
+  CI job and optional container stage of `scripts/quality.sh` include it after
+  HTTP/HTTPS browser qualification. Set `ORCAXR_TEST_IMAGE` to choose another
+  already-built image. It uses the web package's installed TypeScript loader to
+  consume the same profile resolver as the browser; no separate test config is
+  guessed. This is software qualification and never sends printer commands.

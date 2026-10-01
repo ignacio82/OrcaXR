@@ -18,14 +18,7 @@ import {
   type RichGcodeParseOptions,
 } from './RichGcodeModel';
 
-/**
- * Skip the whole-print attempt above this size.
- *
- * The decision to stream is made by *trying* to read the print whole and
- * checking whether it fit, which needs no estimate of characters per record and
- * cannot be wrong. This only avoids paying for an attempt that is certain to
- * fail: past the parser's own character budget there is nothing to try.
- */
+/** Hard input bound; whole/window selection is based on the lightweight index. */
 export const GCODE_PREVIEW_WHOLE_PARSE_CEILING_CHARACTERS = RICH_GCODE_HARD_CAPS.inputCharacters;
 
 /** Records one loaded window may hold — about 30 MB of columns. */
@@ -61,7 +54,17 @@ export interface GcodePreviewViewState {
   readonly moveVisibility: Readonly<Record<GcodePreviewMoveFilterId, boolean>>;
 }
 
+export interface GcodePreviewWindowState {
+  readonly firstRecord: number;
+  readonly lastRecord: number;
+  readonly totalRecords: number;
+  readonly hasPrevious: boolean;
+  readonly hasNext: boolean;
+}
+
 export interface GcodePreviewViewPatch {
+  /** Visit adjacent bounded records, including further moves in one large layer. */
+  readonly windowStep?: -1 | 1;
   readonly mode?: GcodePreviewMode;
   readonly layerRange?: readonly [number, number];
   readonly singleLayer?: boolean;
@@ -73,6 +76,26 @@ export interface GcodePreviewSessionSource {
   readonly kind: 'slice' | 'file';
   readonly name: string;
 }
+
+/** Shared browser/headless contract; parsing can complete asynchronously. */
+export interface GcodePreviewSessionPort {
+  readonly source: GcodePreviewSessionSource;
+  readonly model: RichGcodeModel;
+  readonly layerBounds: readonly [number, number];
+  readonly windowState?: GcodePreviewWindowState;
+  readonly summary?: import('./GcodeArtifactSummary').GcodeArtifactSummary;
+  getView(): GcodePreviewViewState;
+  updateView(patch: GcodePreviewViewPatch): GcodePreviewViewState | Promise<GcodePreviewViewState>;
+  project(request?: Partial<GcodePreviewRequest>): GcodePreviewProjection;
+  inspect(): GcodeInspectionState;
+  windowNotice(): string | undefined;
+  dispose?(): void;
+}
+export type GcodePreviewSessionFactory = (
+  gcode: string,
+  source: GcodePreviewSessionSource,
+  signal: AbortSignal,
+) => Promise<GcodePreviewSessionPort>;
 
 /**
  * UI-independent viewer state for one G-code source: it owns the parsed rich
@@ -112,7 +135,7 @@ export class GcodePreviewSession {
   /**
    * Read a print whole when it fits, and a window at a time when it does not.
    *
-   * The choice is the file's size, not the caller's: a print large enough that
+   * The index counts the records before any rich columns are allocated: a print large enough that
    * one parse would cost hundreds of megabytes cannot be shown all at once by
    * any budget, and reading it in windows is what keeps every layer reachable
    * instead of silently stopping partway up.
@@ -122,22 +145,45 @@ export class GcodePreviewSession {
     source: GcodePreviewSessionSource,
     options: RichGcodeParseOptions = {},
   ): GcodePreviewSession {
-    if (gcode.length <= GCODE_PREVIEW_WHOLE_PARSE_CEILING_CHARACTERS) {
-      const whole = parseRichGcodeModel(gcode, options);
-      // It fit, so show all of it. Asking the model whether it fit is exact,
-      // where guessing from the file size would sometimes be wrong in the one
-      // direction that matters — quietly dropping the top of a print.
-      if (whole.complete) return new GcodePreviewSession(whole, source);
+    // Index before allocating columns. The index ignores retention limits while
+    // counting, and inserts resumable checkpoints within oversized layers.
+    const boundedOptions: RichGcodeParseOptions = {
+      ...options,
+      limits: {
+        ...options.limits,
+        records: Math.min(
+          GCODE_PREVIEW_WINDOW_RECORD_BUDGET,
+          options.limits?.records ?? GCODE_PREVIEW_WINDOW_RECORD_BUDGET,
+        ),
+      },
+    };
+    const index = indexRichGcodeLayers(gcode, boundedOptions);
+    const recordBudget = index.limits.records;
+    if (index.complete && index.recordCount <= recordBudget && index.pathPointCount <= index.limits.pathPoints) {
+      return new GcodePreviewSession(parseRichGcodeModel(gcode, boundedOptions), source);
     }
-    const index = indexRichGcodeLayers(gcode, options);
-    // A window can never hold more than one parse would keep, so a caller that
-    // lowers the record limit lowers the window with it.
-    const recordBudget = Math.min(GCODE_PREVIEW_WINDOW_RECORD_BUDGET, index.limits.records);
+    options = boundedOptions;
     const stream: StreamingSource = { gcode, index, options, recordBudget, loadedFirst: 0, loadedLast: 0 };
     const last = windowEnd(index, 0, recordBudget);
     stream.loadedLast = last;
     const model = parseRichGcodeLayerWindow(gcode, index, 0, last, options);
     return new GcodePreviewSession(model, source, stream);
+  }
+
+  get windowState(): GcodePreviewWindowState | undefined {
+    const stream = this.stream;
+    if (!stream) return undefined;
+    const entries = stream.index.entries;
+    return Object.freeze({
+      firstRecord: entries[stream.loadedFirst].recordsBefore,
+      lastRecord: Math.max(
+        0,
+        entries[stream.loadedLast].recordsBefore + recordsIn(stream.index, stream.loadedLast) - 1,
+      ),
+      totalRecords: stream.index.recordCount,
+      hasPrevious: stream.loadedFirst > 0,
+      hasNext: stream.loadedLast < entries.length - 1,
+    });
   }
 
   /** The model behind the current window; whole-print when not streaming. */
@@ -189,7 +235,14 @@ export class GcodePreviewSession {
     if (singleLayer) low = high;
     // Load before publishing the view, so a caller that projects immediately
     // never sees a range the loaded window cannot answer for.
-    [low, high] = this.ensureWindow(low, high);
+    if (patch.windowStep !== undefined && patch.windowStep !== -1 && patch.windowStep !== 1)
+      throw new Error('A preview window step must be -1 or 1');
+    [low, high] =
+      patch.windowStep && this.stream
+        ? this.stepWindow(patch.windowStep, singleLayer)
+        : patch.layerRange || patch.singleLayer !== undefined
+          ? this.ensureWindow(low, high)
+          : [low, high];
     this.view = Object.freeze({
       mode,
       layerRange: Object.freeze([low, high]) as readonly [number, number],
@@ -211,8 +264,8 @@ export class GcodePreviewSession {
     const stream = this.stream;
     if (!stream) return [low, high];
     const entries = stream.index.entries;
-    const targetFirst = entryForLayer(stream.index, low);
-    const targetLast = entryForLayer(stream.index, high);
+    const targetFirst = entryForLayer(stream.index, low, 'first');
+    const targetLast = entryForLayer(stream.index, high, 'last');
 
     let first: number;
     let last: number;
@@ -239,12 +292,41 @@ export class GcodePreviewSession {
       }
     }
 
-    if (first !== stream.loadedFirst || last !== stream.loadedLast) {
+    return this.loadWindow(first, last);
+  }
+
+  private loadWindow(first: number, last: number): [number, number] {
+    const stream = this.stream!;
+    const entries = stream.index.entries;
+    if (
+      first !== stream.loadedFirst ||
+      last !== stream.loadedLast ||
+      (this.loaded.columns.count > 0 && this.loaded.columns.kind.byteLength === 0)
+    ) {
       this.loaded = parseRichGcodeLayerWindow(stream.gcode, stream.index, first, last, stream.options);
       stream.loadedFirst = first;
       stream.loadedLast = last;
     }
     return [entries[first].layer, entries[last].layer];
+  }
+
+  private stepWindow(direction: -1 | 1, singleLayer: boolean): [number, number] {
+    const stream = this.stream!;
+    const entries = stream.index.entries;
+    let first: number;
+    let last: number;
+    if (direction === 1) {
+      if (stream.loadedLast >= entries.length - 1) return [...this.loadedLayerBounds];
+      first = stream.loadedLast + 1;
+      last = windowEnd(stream.index, first, stream.recordBudget);
+      if (singleLayer) last = Math.min(last, entryForLayer(stream.index, entries[first].layer, 'last'));
+    } else {
+      if (stream.loadedFirst === 0) return [...this.loadedLayerBounds];
+      last = stream.loadedFirst - 1;
+      first = windowStart(stream.index, last, stream.recordBudget);
+      if (singleLayer) first = Math.max(first, entryForLayer(stream.index, entries[last].layer, 'first'));
+    }
+    return this.loadWindow(first, last);
   }
 
   /** Current projection for the active view; `unsupported` stays explicit. */
@@ -259,7 +341,11 @@ export class GcodePreviewSession {
 
   /** Layer/record inspection state for sliders, ticks, and the tool marker. */
   inspect(): GcodeInspectionState {
-    return inspectGcode(this.model, { layerRange: this.view.layerRange, singleLayer: this.view.singleLayer });
+    return inspectGcode(this.model, {
+      layerRange: this.view.layerRange,
+      singleLayer: this.view.singleLayer,
+      clampLayerRange: true,
+    });
   }
 
   /**
@@ -274,10 +360,14 @@ export class GcodePreviewSession {
     if (!stream) return undefined;
     const [low, high] = this.loadedLayerBounds;
     const [, top] = this.layerBounds;
-    if (low <= this.layerBounds[0] && high >= top) return undefined;
+    const window = this.windowState!;
+    const coverage = stream.index.complete
+      ? 'The supplied G-code was fully indexed.'
+      : `Only a prefix was indexed (${stream.index.terminationReason ?? 'unknown termination'}); later input has not been inspected.`;
     return (
-      `Showing layers ${low}–${high} of ${top}. This print is too large to hold at once, ` +
-      'so it is read a window at a time — move the layer range to see the rest. The sliced G-code is complete.'
+      `Showing layers ${low}–${high} of ${top}, records ${window.firstRecord + 1}–${window.lastRecord + 1} of ${window.totalRecords}. ` +
+      'Use the layer range or Previous/Next moves to inspect another bounded window. ' +
+      coverage
     );
   }
 
@@ -296,9 +386,7 @@ export class GcodePreviewSession {
 /**
  * The last index entry that fits in the record budget starting at `first`.
  *
- * Always at least one layer: a single layer larger than the budget is still
- * shown, because refusing to draw a layer is worse than briefly exceeding a
- * self-imposed ceiling.
+ * Oversized layers have multiple checkpoints, each within the record budget.
  */
 function windowEnd(index: GcodeLayerIndex, first: number, budget: number): number {
   const entries = index.entries;
@@ -306,7 +394,7 @@ function windowEnd(index: GcodeLayerIndex, first: number, budget: number): numbe
   let last = first;
   for (let candidate = first + 1; candidate < entries.length; candidate += 1) {
     const through = entries[candidate].recordsBefore + recordsIn(index, candidate) - startRecords;
-    if (through > budget) break;
+    if (through > budget || pathPointsThrough(index, first, candidate) > index.limits.pathPoints) break;
     last = candidate;
   }
   return last;
@@ -315,9 +403,7 @@ function windowEnd(index: GcodeLayerIndex, first: number, budget: number): numbe
 /**
  * The earliest index entry that fits in the record budget ending at `last`.
  *
- * Always at least one layer: a single layer larger than the budget is still
- * shown, because refusing to draw a layer is worse than briefly exceeding a
- * self-imposed ceiling.
+ * Oversized layers have multiple checkpoints, each within the record budget.
  */
 function windowStart(index: GcodeLayerIndex, last: number, budget: number): number {
   const entries = index.entries;
@@ -325,10 +411,14 @@ function windowStart(index: GcodeLayerIndex, last: number, budget: number): numb
   let first = last;
   for (let candidate = last - 1; candidate >= 0; candidate -= 1) {
     const through = endRecords - entries[candidate].recordsBefore;
-    if (through > budget) break;
+    if (through > budget || pathPointsThrough(index, candidate, last) > index.limits.pathPoints) break;
     first = candidate;
   }
   return first;
+}
+
+function pathPointsThrough(index: GcodeLayerIndex, first: number, last: number): number {
+  return (index.entries[last + 1]?.pathPointsBefore ?? index.pathPointCount) - index.entries[first].pathPointsBefore;
 }
 
 function recordsIn(index: GcodeLayerIndex, entry: number): number {
@@ -337,12 +427,16 @@ function recordsIn(index: GcodeLayerIndex, entry: number): number {
 }
 
 /** Index-entry position holding `layer`, clamped into range. */
-function entryForLayer(index: GcodeLayerIndex, layer: number): number {
+function entryForLayer(index: GcodeLayerIndex, layer: number, edge: 'first' | 'last'): number {
   const entries = index.entries;
-  for (let position = entries.length - 1; position >= 0; position -= 1) {
-    if (entries[position].layer <= layer) return position;
+  let low = 0;
+  let high = entries.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (entries[middle].layer < layer || (edge === 'last' && entries[middle].layer === layer)) low = middle + 1;
+    else high = middle;
   }
-  return 0;
+  return Math.max(0, Math.min(entries.length - 1, edge === 'last' ? low - 1 : low));
 }
 
 function layerBounds(model: RichGcodeModel): readonly [number, number] {

@@ -156,6 +156,23 @@ export function renderXrPreviewScrubber<PanelNode, ImageNode, TextNode>(
   }
   ui.appendChild(body, scrub);
 
+  const windowRow = createXrRow(ui, { gap: 5, flexShrink: 0 });
+  const windowButtons = ([-1, 1] as const).map((direction) => {
+    const button = createXrTextButton(ui, {
+      label:
+        direction === -1 ? t('ui.preview.previousMoves', 'Previous moves') : t('ui.preview.nextMoves', 'Next moves'),
+      fontSize: XR_TYPE.caption,
+      height: 36,
+      paddingX: 8,
+      onClick: () => handlers.onUpdateView({ windowStep: direction }),
+    });
+    ui.appendChild(windowRow, button.root);
+    return button;
+  });
+  const windowText = ui.createText('', { fontSize: XR_TYPE.micro, color: C.textMuted, flexShrink: 1 });
+  ui.appendChild(windowRow, windowText);
+  ui.appendChild(body, windowRow);
+
   // ---- What is drawn -----------------------------------------------------
   const filters = createXrRow(ui, { gap: 4, flexWrap: 'wrap', flexShrink: 0 });
   const filterButtons = new Map<string, ReturnType<typeof createXrTextButton<PanelNode, ImageNode, TextNode>>>();
@@ -241,6 +258,13 @@ export function renderXrPreviewScrubber<PanelNode, ImageNode, TextNode>(
 
   const apply = (next: GcodePreviewPanelState): void => {
     current = next;
+    ui.setPanelProperties(windowRow, { display: next.window ? 'flex' : 'none' });
+    windowButtons[0].setEnabled(!next.loading && next.window?.hasPrevious === true);
+    windowButtons[1].setEnabled(!next.loading && next.window?.hasNext === true);
+    ui.setText(
+      windowText,
+      next.loading ? t('ui.preview.loading', 'Reading G-code preview…') : (next.limitations[0] ?? ''),
+    );
     const [low, high] = bounds(next);
     const layer = layerOf(next);
     ui.setText(

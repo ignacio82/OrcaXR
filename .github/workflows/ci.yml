@@ -164,6 +164,8 @@ jobs:
       - run: npm --prefix web ci && npm --prefix server ci
       - name: Exercise the built container over HTTP and proxy HTTPS
         run: npm --prefix server run test:deployment:container
+      - name: Slice with the actual pinned native CLI and validate retained output
+        run: npm --prefix server run test:native:container
 
   secrets:
     name: Secret scan

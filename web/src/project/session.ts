@@ -1,6 +1,6 @@
 import {
   InMemoryAssetRepository,
-  assetBundleFingerprint,
+  type AssetPayload,
   type AssetRepository,
   type AssetRepositorySnapshot,
 } from './assets';
@@ -82,7 +82,7 @@ export class EditorSession {
     this.project = new ProjectStore(options.initialState);
     this.selection = options.selection ?? new SelectionStore();
     this.assets = options.assets ?? new InMemoryAssetRepository();
-    assertBundleAssets(options.initialState, this.assets);
+    assertBundleAssets(options.initialState, this.assets.list());
     this.commands = new CommandBus(
       { project: this.project, selection: this.selection, assets: this.assets },
       options.history,
@@ -235,7 +235,7 @@ export class EditorSession {
     // Validate the whole bundle in a temporary immutable repository before commit.
     const staged = new InMemoryAssetRepository();
     staged.restore(nextAssets);
-    assertBundleAssets(parsed.state, staged);
+    assertBundleAssets(parsed.state, staged.list());
 
     this.assets.restore(nextAssets);
     this.project.replaceState(parsed.state, {
@@ -256,7 +256,7 @@ export class EditorSession {
     assertValidProjectState(state);
     const staged = new InMemoryAssetRepository();
     staged.restore(assets);
-    assertBundleAssets(state, staged);
+    assertBundleAssets(state, staged.list());
 
     this.assets.restore(assets);
     this.project.replaceState(state, {
@@ -278,9 +278,10 @@ export class EditorSession {
       throw new Error('EditorSession slicing is not configured; use CanonicalSliceJobCoordinator');
     }
     const request = this.archiveSnapshot();
-    const sourceAssetHash = assetBundleFingerprint(request.assets);
+    const sourceAssetHash = this.assets.bundleFingerprint();
     if (!findPlate(request.state, plateId)) throw new Error(`Unknown plate ${plateId}`);
     const result = await slicer.slice({ ...request, plateId, cancellation });
+    this.assertActive();
     if (
       result.plateId !== plateId ||
       result.sourceRevision !== request.sourceRevision ||
@@ -289,7 +290,7 @@ export class EditorSession {
         revision: request.sourceRevision,
         hash: request.sourceHash,
       }) ||
-      assetBundleFingerprint(this.assets.list()) !== sourceAssetHash
+      this.assets.bundleFingerprint() !== sourceAssetHash
     ) {
       throw new StaleProjectResultError('Slice');
     }
@@ -320,10 +321,11 @@ export class EditorSession {
 
   private archiveSnapshot(): ProjectArchiveSnapshot {
     const snapshot = this.project.getSnapshot();
-    assertBundleAssets(snapshot.state, this.assets);
+    const assets = this.assets.list();
+    assertBundleAssets(snapshot.state, assets);
     return {
       state: snapshot.state,
-      assets: this.assets.list(),
+      assets,
       sourceRevision: snapshot.revision,
       sourceHash: snapshot.hash,
     };
@@ -444,16 +446,17 @@ function projectionHealthEqual(left: ProjectProjectionHealthSnapshot, right: Pro
   );
 }
 
-function assertBundleAssets(state: ProjectState, repository: AssetRepository): void {
+function assertBundleAssets(state: ProjectState, assets: readonly AssetPayload[]): void {
+  const supplied = new Map(assets.map((payload) => [payload.descriptor.id, payload]));
   const expected = new Map(state.sourceAssets.map((descriptor) => [descriptor.id, descriptor]));
   for (const descriptor of state.sourceAssets) {
-    const payload = repository.get(descriptor.id);
+    const payload = supplied.get(descriptor.id);
     if (!payload) throw new Error(`Project bundle is missing source asset ${descriptor.id}`);
     if (canonicalStringify(payload.descriptor) !== canonicalStringify(descriptor)) {
       throw new Error(`Project bundle metadata differs for source asset ${descriptor.id}`);
     }
   }
-  for (const payload of repository.list()) {
+  for (const payload of assets) {
     if (!expected.has(payload.descriptor.id)) {
       throw new Error(`Project bundle contains undeclared asset ${payload.descriptor.id}`);
     }

@@ -1354,12 +1354,30 @@ async function inspectAndAuthorFromPreview(page) {
       ?.closest('details')
       ?.setAttribute('open', '');
   });
-  // A successful slice already opens the preview; only ask for it when it is
-  // closed, or the toggle would close the very view under test.
+  // A successful slice or the Preview tab opens the preview. Worker parsing is
+  // asynchronous: a loading preview already owns that request, so toggling it
+  // again would cancel the very view under test.
   await page.evaluate(() => {
-    if (!globalThis.window.workspace.getPreviewState().active) globalThis.window.workspace.togglePreview();
+    const preview = globalThis.window.workspace.getPreviewState();
+    if (!preview.active && !preview.loading) void globalThis.window.workspace.togglePreview();
   });
-  await page.waitForFunction(() => globalThis.window.workspace.getPreviewState().active === true, { timeout: 60_000 });
+  try {
+    await page.waitForFunction(() => globalThis.window.workspace.getPreviewState().active === true, {
+      timeout: 60_000,
+    });
+  } catch (error) {
+    const state = await page.evaluate(() => {
+      const preview = globalThis.window.workspace.getPreviewState();
+      return {
+        active: preview.active,
+        loading: preview.loading,
+        reason: preview.unsupportedReason,
+        window: preview.window,
+        view: preview.view,
+      };
+    });
+    throw new Error(`Sliced preview did not open: ${JSON.stringify(state)}`, { cause: error });
+  }
 
   // The engine's own totals for this artifact, read rather than recomputed.
   const summary = await page.evaluate(() => globalThis.window.workspace.getPreviewState().summary);

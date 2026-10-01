@@ -15,6 +15,8 @@ export const GCODE_INSPECTION_HARD_CAPS = Object.freeze({
 });
 
 export interface GcodeInspectionRequest {
+  /** Viewer windows may include empty marker-only layers at either edge. */
+  readonly clampLayerRange?: boolean;
   /** Inclusive rich layer IDs. Defaults to the complete record-bearing domain. */
   readonly layerRange?: readonly [number, number];
   /** Pinned one-layer mode collapses both handles to the upper layer. */
@@ -188,10 +190,22 @@ export function inspectGcode(model: RichGcodeModel, request: GcodeInspectionRequ
   validateModel(model);
   const visibility = validateVisibility(request.recordVisibility, model.columns.count);
   const layers = buildLayerIndex(model);
-  const layerSelection = selectLayers(layers, request.layerRange, request.singleLayer ?? false);
+  const layerSelection = selectLayers(
+    layers,
+    request.layerRange,
+    request.singleLayer ?? false,
+    request.clampLayerRange,
+  );
   const recordIndices = selectRecords(model, visibility, layerSelection);
   const moveSelection = selectMoveRange(recordIndices, request.moveRange);
-  const current = selectCurrent(model, layers, recordIndices, moveSelection, request.currentRecord);
+  const offset = model.recordOffset ?? 0;
+  const current = selectCurrent(
+    model,
+    layers,
+    recordIndices,
+    moveSelection,
+    request.currentRecord === undefined ? undefined : request.currentRecord - offset,
+  );
   const ticks = buildTicks(model, visibility, layerSelection);
   const toolMarker =
     request.showToolMarker && current
@@ -219,13 +233,35 @@ export function inspectGcode(model: RichGcodeModel, request: GcodeInspectionRequ
 
   return Object.freeze({
     sourceRecordCount: model.columns.count,
-    layers,
+    layers:
+      offset === 0
+        ? layers
+        : Object.freeze({
+            ...layers,
+            firstRecord: layers.firstRecord.map((record) => record + offset),
+            lastRecord: layers.lastRecord.map((record) => record + offset),
+          }),
     layerSelection,
-    recordIndices,
-    moveSelection,
-    current,
-    ticks,
-    toolMarker,
+    recordIndices: offset === 0 ? recordIndices : recordIndices.map((record) => record + offset),
+    moveSelection:
+      moveSelection && offset !== 0
+        ? Object.freeze({
+            ...moveSelection,
+            firstRecord: moveSelection.firstRecord + offset,
+            lastRecord: moveSelection.lastRecord + offset,
+          })
+        : moveSelection,
+    current: current && offset !== 0 ? Object.freeze({ ...current, record: current.record + offset }) : current,
+    ticks:
+      offset === 0
+        ? ticks
+        : Object.freeze(
+            ticks.map((tick) =>
+              Object.freeze({ ...tick, id: `${tick.kind}:${tick.record + offset}`, record: tick.record + offset }),
+            ),
+          ),
+    toolMarker:
+      toolMarker && offset !== 0 ? Object.freeze({ ...toolMarker, record: toolMarker.record + offset }) : toolMarker,
     sourceWindow,
     focusBounds,
     limitations,
@@ -289,10 +325,16 @@ function validateModel(model: RichGcodeModel): void {
     count > RICH_GCODE_HARD_CAPS.records ||
     !Number.isSafeInteger(model.layerCount) ||
     model.layerCount < 0 ||
-    model.layerCount > count ||
+    !Number.isSafeInteger(model.recordOffset ?? 0) ||
+    (model.recordOffset ?? 0) < 0 ||
+    (model.recordOffset ?? 0) + count > 0xffff_ffff ||
+    model.layerCount > (model.recordOffset ?? 0) + count ||
     model.layerCount > RICH_GCODE_HARD_CAPS.lines ||
     !Number.isSafeInteger(model.sourceLength) ||
     model.sourceLength < 0 ||
+    !Number.isSafeInteger(model.sourceLineOffset ?? 0) ||
+    (model.sourceLineOffset ?? 0) < 0 ||
+    (model.sourceLineOffset ?? 0) + model.parsedLines > RICH_GCODE_HARD_CAPS.lines ||
     !Number.isSafeInteger(model.parsedLines) ||
     model.parsedLines < 0 ||
     model.parsedLines > RICH_GCODE_HARD_CAPS.lines
@@ -346,8 +388,8 @@ function validateModel(model: RichGcodeModel): void {
       invalidModel(`Record ${index} has a non-finite position`);
     }
     if (
-      columns.sourceLine[index] < 1 ||
-      columns.sourceLine[index] > model.parsedLines ||
+      columns.sourceLine[index] < (model.sourceLineOffset ?? 0) + 1 ||
+      columns.sourceLine[index] > (model.sourceLineOffset ?? 0) + model.parsedLines ||
       columns.sourceStartOffset[index] > columns.sourceEndOffset[index] ||
       columns.sourceEndOffset[index] > model.sourceLength
     ) {
@@ -375,45 +417,28 @@ function validateVisibility(mask: Uint8Array | undefined, count: number): Uint8A
 }
 
 function buildLayerIndex(model: RichGcodeModel): GcodeInspectionLayerIndex {
-  const maximumLayer = model.layerCount;
-  const first = new Uint32Array(maximumLayer + 1);
-  first.fill(0xffff_ffff);
-  const last = new Uint32Array(maximumLayer + 1);
-  const z = new Float64Array(maximumLayer + 1);
-  z.fill(Number.NEGATIVE_INFINITY);
-  // A layer's height is where it is printed, which only extrusions report: a
-  // travel or wipe may be lifted by the retraction Z-hop, and taking the
-  // maximum over those would overstate every layer by the hop and mislocate
-  // anything authored against it.
-  const extrudeZ = new Float64Array(maximumLayer + 1);
-  extrudeZ.fill(Number.NEGATIVE_INFINITY);
-  const present = new Uint8Array(maximumLayer + 1);
+  const spans = new Map<number, { first: number; last: number; z: number; extrudeZ: number }>();
   for (let record = 0; record < model.columns.count; record += 1) {
     const kind = model.columns.kind[record];
     if (INSPECTABLE_KIND[kind] === 0) continue;
     const layer = model.columns.layer[record];
-    present[layer] = 1;
-    first[layer] = Math.min(first[layer], record);
-    last[layer] = record;
-    z[layer] = Math.max(z[layer], model.columns.startZ[record], model.columns.endZ[record]);
-    if (kind === GCODE_RECORD_KIND.EXTRUDE) {
-      extrudeZ[layer] = Math.max(extrudeZ[layer], model.columns.startZ[record], model.columns.endZ[record]);
-    }
+    const span = spans.get(layer) ?? { first: record, last: record, z: -Infinity, extrudeZ: -Infinity };
+    span.last = record;
+    const z = Math.max(model.columns.startZ[record], model.columns.endZ[record]);
+    span.z = Math.max(span.z, z);
+    if (kind === GCODE_RECORD_KIND.EXTRUDE) span.extrudeZ = Math.max(span.extrudeZ, z);
+    spans.set(layer, span);
   }
-  const layerIds: number[] = [];
+  const layerIds = [...spans.keys()].sort((left, right) => left - right);
   const zValues: number[] = [];
   const firstRecords: number[] = [];
   const lastRecords: number[] = [];
-  for (let layer = 0; layer <= maximumLayer; layer += 1) {
-    if (present[layer] === 0) continue;
-    layerIds.push(layer);
-    // Prefer the extrusion height; fall back only for a layer that prints
-    // nothing (a travel-only or marker-only layer), where the observed Z is
-    // the only fact available.
-    const printZ = Number.isFinite(extrudeZ[layer]) ? extrudeZ[layer] : z[layer];
+  for (const layer of layerIds) {
+    const span = spans.get(layer)!;
+    const printZ = Number.isFinite(span.extrudeZ) ? span.extrudeZ : span.z;
     zValues.push(Number.isFinite(printZ) ? printZ : 0);
-    firstRecords.push(first[layer]);
-    lastRecords.push(last[layer]);
+    firstRecords.push(span.first);
+    lastRecords.push(span.last);
   }
   return Object.freeze({
     count: layerIds.length,
@@ -428,13 +453,21 @@ function selectLayers(
   layers: GcodeInspectionLayerIndex,
   requested: readonly [number, number] | undefined,
   singleLayer: boolean,
+  clamp = false,
 ): GcodeInspectionLayerSelection | null {
   if (layers.count === 0) {
-    if (requested) throw new GcodeInspectionError('invalid-layer-range', 'An empty inspection has no layer range');
+    if (requested && !clamp)
+      throw new GcodeInspectionError('invalid-layer-range', 'An empty inspection has no layer range');
     return null;
   }
   let firstLayer = requested?.[0] ?? layers.layerIds[0];
-  const lastLayer = requested?.[1] ?? layers.layerIds[layers.count - 1];
+  let lastLayer = requested?.[1] ?? layers.layerIds[layers.count - 1];
+  if (clamp) {
+    const available = layers.layerIds.filter((layer) => layer >= firstLayer && layer <= lastLayer);
+    if (!available.length) return null;
+    firstLayer = available[0];
+    lastLayer = available[available.length - 1];
+  }
   const firstOrdinal = layers.layerIds.indexOf(firstLayer);
   const lastOrdinal = layers.layerIds.indexOf(lastLayer);
   if (

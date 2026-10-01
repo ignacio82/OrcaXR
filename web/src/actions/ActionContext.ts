@@ -443,8 +443,8 @@ export class ActionContext {
 
   // ---- Preview --------------------------------------------------------
   /** Apply a bounded preview view change from any viewer surface. */
-  updatePreviewView(patch: GcodePreviewViewPatch): void {
-    this.workspace.updatePreviewView(patch);
+  async updatePreviewView(patch: GcodePreviewViewPatch): Promise<void> {
+    await this.workspace.updatePreviewView(patch);
   }
 
   /** Ask the shell for a standalone G-code file to inspect. */
@@ -531,8 +531,8 @@ export class ActionContext {
     return this.workspace.sliceNow();
   }
   /** Registry handler seam. Presentation callers must use togglePreview(). */
-  applyTogglePreview(): void {
-    this.workspace.togglePreview();
+  async applyTogglePreview(): Promise<void> {
+    await this.workspace.togglePreview();
     const workspaceMode = this.workspace.getAutomationSnapshot().workspaceMode;
     this.ui.update({ mode: workspaceMode === 'Preview' ? 'preview' : 'prepare' });
   }

@@ -387,4 +387,28 @@ await test('clears a surface projection failure when that surface detaches', asy
   session.dispose();
 });
 
+await test('slice retains one defensive asset copy and reuses its repository fingerprint', async () => {
+  const fixture = createProjectFixture();
+  const assets = new InMemoryAssetRepository();
+  assets.put(fixture.asset.descriptor, fixture.asset.bytes);
+  const fingerprint = assets.bundleFingerprint();
+  let copies = 0;
+  const list = assets.list.bind(assets);
+  assets.list = () => {
+    copies++;
+    return list();
+  };
+  const session = new EditorSession({
+    initialState: fixture.state,
+    assets,
+    serializer: new MemorySerializer(),
+    slicer: new VerifyingSlicer(),
+  });
+  copies = 0;
+  await session.slice();
+  assert.equal(copies, 1, 'only the untrusted slicer payload needs a defensive bundle copy');
+  assert.equal(assets.bundleFingerprint(), fingerprint);
+  session.dispose();
+});
+
 console.log(`\nHeadless editor session: ${passed} tests passed.`);

@@ -297,6 +297,7 @@ export class PrinterSessionController<T extends PrinterSessionTransport = Moonra
     else this.ordinaryBusy = intent;
     const transport = this.transportValue!;
     const signal = this.epoch.signal;
+    let queriedJob = false;
     this.emit();
     try {
       if (intent.command !== 'pause' && intent.command !== 'resume') {
@@ -315,6 +316,7 @@ export class PrinterSessionController<T extends PrinterSessionTransport = Moonra
       if (isPrinterRecoveryCommand(intent.command)) {
         await transport.requestRecoveryCommand(intent.command, signal);
       } else {
+        queriedJob = true;
         const fresh = await this.readAuthoritative(signal);
         this.assertSession(intent);
         if (!sameIdentity(intent.job, fresh.identity) || intent.displayedFilename !== fresh.snapshot.filename) {
@@ -346,6 +348,15 @@ export class PrinterSessionController<T extends PrinterSessionTransport = Moonra
         intent.command,
       );
     } finally {
+      if (queriedJob && !signal.aborted) {
+        // A completed command or rejected identity makes the old reading
+        // unsuitable for another gesture. Keep controls unavailable until the
+        // replacement refresh finishes, including during its first HTTP read.
+        this.refreshSequence++;
+        this.statusVerified = false;
+        this.identity = undefined;
+        this.identityFailure = 'Verifying the current printer job. Wait for the status refresh before trying again.';
+      }
       if (recovery && this.recoveryBusy.get(intent.command) === intent) this.recoveryBusy.delete(intent.command);
       if (this.ordinaryBusy === intent) this.ordinaryBusy = null;
       this.emit();

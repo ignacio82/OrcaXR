@@ -247,6 +247,9 @@ out of scope unless the user explicitly changes the target.
 - Preserve the measured zero-payload-copy command path and bounded worker lifetimes.
   Read the detailed large-model document before changing mesh parsing/serialization,
   painting, preview or history. Do not commit private real-world qualification models.
+- Browser G-code preview indexes in an owned worker before allocating rich columns.
+  Each window holds at most 240,000 records; checkpoints inside large layers and
+  Previous/Next moves preserve access. Source replacement terminates the worker.
 - Rich G-code preview preserves semantic record IDs, tool/modal state, source spans,
   arc interpolation and explicit incomplete-prefix diagnostics. Rendering consumes
   projected colors/filtering and reports unsupported metadata honestly.
@@ -288,8 +291,10 @@ npm --prefix web run profiles:verify
 npm --prefix web run settings:verify
 npm --prefix web run calibration:verify
 npm --prefix web run bench:assets
+npm --prefix web run bench:preview
 npm --prefix web run test:recovery-storage
 npm --prefix server run test:deployment:container
+npm --prefix server run test:native:container
 ```
 
 - Run full development-dependency audits at moderate severity for web, server and

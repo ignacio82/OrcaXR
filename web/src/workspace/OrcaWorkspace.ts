@@ -100,7 +100,9 @@ import { summarizeGcodeArtifact, type GcodeArtifactSummary } from '../slicer/Gco
 import { GCODE_PREVIEW_MODES } from '../slicer/GcodePreviewModel';
 import {
   GCODE_PREVIEW_MOVE_FILTERS,
-  GcodePreviewSession,
+  type GcodePreviewSessionPort,
+  type GcodePreviewSessionFactory,
+  type GcodePreviewWindowState,
   type GcodePreviewSessionSource,
   type GcodePreviewViewPatch,
   type GcodePreviewViewState,
@@ -848,6 +850,7 @@ export interface OrcaWorkspaceOptions {
   readonly projectSerializer?: ProjectSerializerPort;
   readonly fullSpectrumAutoPairPreferences?: FullSpectrumAutoPairGenerationPreferences;
   /** Renderer dependency seam used to fail closed without constructing test-sized GPU buffers. */
+  readonly previewSessionFactory?: GcodePreviewSessionFactory;
   readonly previewSurfaceFactory?: (options: GcodePreviewSurfaceOptions) => WorkspacePreviewSurface;
   /**
    * Already-loaded profile corpus, so a caller with no network (a test, an
@@ -950,7 +953,11 @@ export class OrcaWorkspace extends xb.Script {
   } | null = null;
   private previewSurface: WorkspacePreviewSurface | null = null;
   private readonly previewSurfaceFactory: (options: GcodePreviewSurfaceOptions) => WorkspacePreviewSurface;
-  private previewSession: GcodePreviewSession | null = null;
+  private previewSession: GcodePreviewSessionPort | null = null;
+  private readonly previewSessionFactory: GcodePreviewSessionFactory;
+  private previewAbort?: AbortController;
+  private previewLoading = false;
+  private previewRequest = 0;
   private previewSummary: GcodeArtifactSummary | null = null;
   private previewOn = false;
   private previewUnsupportedReason: string | null = null;
@@ -999,6 +1006,12 @@ export class OrcaWorkspace extends xb.Script {
     options: OrcaWorkspaceOptions = {},
   ) {
     super();
+    this.previewSessionFactory =
+      options.previewSessionFactory ??
+      (async (gcode, source, signal) => {
+        const { WorkerGcodePreviewSession } = await import('../slicer/WorkerGcodePreviewSession');
+        return WorkerGcodePreviewSession.create(gcode, source, signal);
+      });
     this.previewSurfaceFactory =
       options.previewSurfaceFactory ?? ((surfaceOptions) => new GcodePreviewSurface(surfaceOptions));
     if (options.catalog) this.catalog = options.catalog;
@@ -1450,6 +1463,7 @@ export class OrcaWorkspace extends xb.Script {
   override dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.clearToolpathPreview();
     this.unsavedDecisionResolve?.('cancel');
 
     this.actionContext = undefined;
@@ -5493,14 +5507,14 @@ export class OrcaWorkspace extends xb.Script {
     } catch (error) {
       // G-code and unknown containers still get a precise message below.
       if (/\.(gcode|gco|g)$/i.test(name)) {
-        return this.openGcodeForPreview(new TextDecoder('utf-8', { fatal: false }).decode(source), name)
+        return (await this.openGcodeForPreview(new TextDecoder('utf-8', { fatal: false }).decode(source), name))
           ? 'gcode'
           : 'cancelled';
       }
       throw error;
     }
     if (detection.format === 'gcode') {
-      return this.openGcodeForPreview(new TextDecoder('utf-8', { fatal: false }).decode(source), name)
+      return (await this.openGcodeForPreview(new TextDecoder('utf-8', { fatal: false }).decode(source), name))
         ? 'gcode'
         : 'cancelled';
     }
@@ -6357,7 +6371,7 @@ export class OrcaWorkspace extends xb.Script {
   /** Immediately withdraw output controls after a known semantic mutation. */
   private markPublishedGcodeStale(): void {
     if (!this.publishedGcode) return;
-    if (this.previewOn) this.clearToolpathPreview();
+    if (this.previewOn || this.previewLoading) this.clearToolpathPreview();
     this.onDownloadReady?.(false);
   }
 
@@ -6372,7 +6386,7 @@ export class OrcaWorkspace extends xb.Script {
     if (!published) return null;
     const gcode = source.isCurrent(published.guard) ? published.gcode : null;
     if (!gcode) {
-      if (this.previewOn) this.clearToolpathPreview();
+      if (this.previewOn || this.previewLoading) this.clearToolpathPreview();
     }
     this.onDownloadReady?.(gcode !== null);
     return gcode;
@@ -6501,20 +6515,43 @@ export class OrcaWorkspace extends xb.Script {
    * layer window all come from the bounded rich model and preview projection,
    * so the viewer never invents metadata the source does not carry.
    */
-  private showToolpathPreview(
+  private async showToolpathPreview(
     gcode: string,
     source: GcodePreviewSessionSource = { kind: 'slice', name: 'plate' },
-  ): boolean {
+  ): Promise<boolean> {
+    if (this.disposed) return false;
     this.clearToolpathPreview();
+    const abort = new AbortController();
+    this.previewAbort = abort;
+    this.previewLoading = true;
+    this.onPreviewStateChanged?.();
     try {
-      this.previewSession = GcodePreviewSession.fromGcode(gcode, source);
+      const session = await this.previewSessionFactory(gcode, source, abort.signal);
+      if (
+        abort.signal.aborted ||
+        this.disposed ||
+        this.previewAbort !== abort ||
+        (source.kind === 'slice' && this.getLastGcode() !== gcode)
+      ) {
+        session.dispose?.();
+        return false;
+      }
+      this.previewSession = session;
+      this.previewSummary = session.summary ?? summarizeGcodeArtifact(gcode);
+      this.previewLoading = false;
+      return this.renderPreviewProjection();
     } catch (error) {
-      this.setStatus(`Could not read the G-code: ${(error as Error).message}`);
+      if (!abort.signal.aborted && this.previewAbort === abort) {
+        this.previewUnsupportedReason = `Could not read the G-code: ${(error as Error).message}`;
+        this.setStatus(this.previewUnsupportedReason);
+      }
       return false;
+    } finally {
+      if (this.previewAbort === abort) {
+        this.previewLoading = false;
+        this.onPreviewStateChanged?.();
+      }
     }
-    // Read the engine's own totals once, from the artifact now on screen.
-    this.previewSummary = summarizeGcodeArtifact(gcode);
-    return this.renderPreviewProjection();
   }
 
   /** Redraw the active preview session; returns false when nothing is drawn. */
@@ -6566,6 +6603,11 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   private clearToolpathPreview() {
+    this.previewRequest++;
+    this.previewAbort?.abort();
+    this.previewAbort = undefined;
+    this.previewLoading = false;
+    this.previewSession?.dispose?.();
     this.previewSurface?.clear();
     this.previewSurface?.setVisible(false);
     this.previewSession = null;
@@ -6579,6 +6621,8 @@ export class OrcaWorkspace extends xb.Script {
   /** Read-only preview state for DOM/XR surfaces and automation. */
   public getPreviewState(): {
     readonly active: boolean;
+    readonly loading: boolean;
+    readonly window?: GcodePreviewWindowState;
     readonly source?: GcodePreviewSessionSource;
     readonly view?: GcodePreviewViewState;
     readonly layerBounds?: readonly [number, number];
@@ -6603,8 +6647,16 @@ export class OrcaWorkspace extends xb.Script {
     readonly summary?: GcodeArtifactSummary;
   } {
     const session = this.previewSession;
-    const base = { modes: GCODE_PREVIEW_MODES, moveFilters: GCODE_PREVIEW_MOVE_FILTERS };
-    if (!session) return { active: false, legend: [], limitations: [], ticks: [], ...base };
+    const base = { modes: GCODE_PREVIEW_MODES, moveFilters: GCODE_PREVIEW_MOVE_FILTERS, loading: this.previewLoading };
+    if (!session)
+      return {
+        active: false,
+        legend: [],
+        limitations: [],
+        ticks: [],
+        unsupportedReason: this.previewUnsupportedReason ?? undefined,
+        ...base,
+      };
     const projection = session.project();
     const inspection = session.inspect();
     const unsupportedReason =
@@ -6625,6 +6677,7 @@ export class OrcaWorkspace extends xb.Script {
     return {
       active: this.previewOn,
       source: session.source,
+      window: session.windowState,
       view: session.getView(),
       layerBounds: session.layerBounds,
       ...base,
@@ -6668,29 +6721,43 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Apply a bounded preview view change and redraw. */
-  public updatePreviewView(patch: GcodePreviewViewPatch): boolean {
-    if (!this.previewSession) {
+  public async updatePreviewView(patch: GcodePreviewViewPatch): Promise<boolean> {
+    const session = this.previewSession;
+    if (!session) {
       this.setStatus(
         t('workspace.orcaWorkspace.sliceOrOpenGCode', 'Slice or open G-code before changing the preview.'),
       );
       return false;
     }
+    const request = ++this.previewRequest;
+    this.previewLoading = true;
+    this.onPreviewStateChanged?.();
     try {
-      this.previewSession.updateView(patch);
+      await session.updateView(patch);
+      if (this.previewSession !== session || request !== this.previewRequest || this.disposed) return false;
+      this.previewLoading = false;
+      return this.renderPreviewProjection();
     } catch (error) {
-      this.setStatus(`Preview: ${(error as Error).message}`);
-      return false;
+      if (this.previewSession !== session || request !== this.previewRequest || this.disposed) return false;
+      // Worker failure invalidates its buffers. Clear the owner before publishing
+      // the failure so state readers cannot project a disposed session.
+      this.clearToolpathPreview();
+      return this.deactivatePreviewRendering(`Preview: ${(error as Error).message}`);
+    } finally {
+      if (request === this.previewRequest) {
+        this.previewLoading = false;
+        this.onPreviewStateChanged?.();
+      }
     }
-    return this.renderPreviewProjection();
   }
 
   /** Open a standalone G-code artifact in the viewer without touching the project. */
-  public openGcodeForPreview(gcode: string, name: string): boolean {
+  public async openGcodeForPreview(gcode: string, name: string): Promise<boolean> {
     if (!gcode.trim()) {
       this.setStatus(`${name} is empty.`);
       return false;
     }
-    if (!this.showToolpathPreview(gcode, { kind: 'file', name })) return false;
+    if (!(await this.showToolpathPreview(gcode, { kind: 'file', name }))) return false;
     const session = this.previewSession;
     if (!session) return false;
     const layers = session.layerBounds;
@@ -6699,8 +6766,8 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Toggle between toolpath preview and model view (panel + tests). */
-  togglePreview(): boolean {
-    if (this.previewOn) {
+  async togglePreview(): Promise<boolean> {
+    if (this.previewOn || this.previewLoading) {
       this.clearToolpathPreview();
       this.setStatus(t('workspace.orcaWorkspace.modelView', 'model view'));
       return true;
@@ -6714,7 +6781,7 @@ export class OrcaWorkspace extends xb.Script {
         );
         return false;
       }
-      if (!this.showToolpathPreview(gcode)) return false;
+      if (!(await this.showToolpathPreview(gcode))) return false;
       this.setStatus(t('workspace.orcaWorkspace.toolpathPreview', 'toolpath preview'));
       return true;
     }
@@ -7147,8 +7214,14 @@ export class OrcaWorkspace extends xb.Script {
       contextLabel: () => this.xrContextLabel(),
       previewState: () => this.getPreviewState() as unknown as GcodePreviewPanelState,
       updatePreview: (patch) => {
-        this.updatePreviewView(patch);
-        this.refreshXrPreviewScrubber();
+        if (!this.actionContext) return;
+        void this.actionRegistry.invoke(
+          'preview_configure',
+          'xr-inspector',
+          this.actionContext,
+          this.actionContext.ui.get(),
+          { previewView: patch },
+        );
       },
       authorLayerEvent: (type, topZMm) => {
         const summary = this.canonicalProject.getSummary();
@@ -9582,7 +9655,9 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(
         `SLICED in ${elapsedMs} ms\n${(plate.gcode.byteLength / 1024).toFixed(0)} KB, ${lines} lines, ${layers} layers${warningSuffix}`,
       );
-      this.showToolpathPreview(gcode);
+      // The engine job is complete. Preview owns its own worker and must not
+      // retain the slicing slot while indexing the artifact.
+      void this.showToolpathPreview(gcode);
       return;
     } catch (e) {
       if (e instanceof SlicePreflightError) this.publishPreflightResult(e.result);
@@ -9664,7 +9739,7 @@ export class OrcaWorkspace extends xb.Script {
         `SLICED ${plates.size} plate(s) in ${elapsedMs} ms\n${(totalBytes / 1024).toFixed(0)} KB total` +
           (warningCount > 0 ? `, ${warningCount} warning(s)` : ''),
       );
-      if (active) this.showToolpathPreview(active.gcode);
+      if (active) void this.showToolpathPreview(active.gcode);
       return plates.size;
     } catch (error) {
       if (error instanceof SlicePreflightError) this.publishPreflightResult(error.result);

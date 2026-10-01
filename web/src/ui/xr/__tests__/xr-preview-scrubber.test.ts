@@ -10,6 +10,7 @@
 import assert from 'node:assert/strict';
 import type { GcodePreviewPanelState } from '../../dom/GcodePreviewPanel';
 import type { GcodePreviewViewPatch } from '../../../slicer/GcodePreviewSession';
+import { XrImmersiveShell } from '../XrImmersiveShell';
 import { renderXrPreviewScrubber } from '../XrPreviewScrubber';
 import { createFakeXrUi, FakePanel } from './fakeXrUi';
 
@@ -160,6 +161,78 @@ test('a grab bar appears only where the surface can actually be pinned', () => {
   const withoutPin = host();
   renderXrPreviewScrubber(ui, withoutPin, state(), { onUpdateView: () => {} });
   assert.ok(!withoutPin.labels().includes('Toolpath'));
+});
+
+test('bounded move windows are reachable and disabled while loading or at an edge', () => {
+  const patches: GcodePreviewViewPatch[] = [];
+  const root = host();
+  const first = state({
+    window: { firstRecord: 0, lastRecord: 31, totalRecords: 90, hasPrevious: false, hasNext: true },
+  });
+  const render = renderXrPreviewScrubber(ui, root, first, { onUpdateView: (patch) => patches.push(patch) });
+  const previous = root.buttons().find((button) => button.labels().includes('Previous moves'))!;
+  const next = root.buttons().find((button) => button.labels().includes('Next moves'))!;
+  previous.click();
+  next.click();
+  assert.deepEqual(patches, [{ windowStep: 1 }]);
+  render.refresh({ ...first, loading: true });
+  next.click();
+  assert.equal(patches.length, 1);
+  render.refresh({
+    ...first,
+    window: { firstRecord: 64, lastRecord: 89, totalRecords: 90, hasPrevious: true, hasNext: false },
+  });
+  next.click();
+  previous.click();
+  assert.deepEqual(patches.at(-1), { windowStep: -1 });
+});
+
+test('an empty or unsupported window keeps XR narrowing and paging controls reachable', () => {
+  const root = host();
+  let visible = false;
+  let mode = 'preview';
+  let current = state({
+    active: false,
+    unsupportedReason: 'No drawable moves in this window.',
+    window: { firstRecord: 0, lastRecord: 31, totalRecords: 90, hasPrevious: false, hasNext: true },
+  });
+  const patches: GcodePreviewViewPatch[] = [];
+  const shell = new XrImmersiveShell(
+    ui,
+    {
+      scrubber: {
+        content: root,
+        show: () => {
+          visible = true;
+        },
+        hide: () => {
+          visible = false;
+        },
+        reset: () => ui.clearChildren(root),
+        place: () => {},
+      },
+    } as never,
+    {
+      previewState: () => current,
+      workspaceMode: () => mode,
+      updatePreview: (patch: GcodePreviewViewPatch) => patches.push(patch),
+    } as never,
+    (content, next, _pinned, handlers) => renderXrPreviewScrubber(ui, content, next, handlers),
+  );
+  shell.refreshPreview();
+  assert.equal(visible, true, 'a retained session must keep its recovery controls');
+  root
+    .buttons()
+    .find((button) => button.labels().includes('Next moves'))!
+    .click();
+  assert.deepEqual(patches, [{ windowStep: 1 }]);
+  mode = 'prepare';
+  shell.refreshPreview();
+  assert.equal(visible, false);
+  mode = 'preview';
+  current = { ...current, view: undefined };
+  shell.refreshPreview();
+  assert.equal(visible, false, 'closing the preview removes the retained controls');
 });
 
 console.log(`\nXR preview scrubber: ${passed} tests passed.`);

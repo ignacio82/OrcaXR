@@ -164,6 +164,40 @@ await test('a dialog for A cannot cancel a newer run of the same filename', asyn
   controller.dispose();
 });
 
+await test('a rejected job identity stays unavailable until the replacement refresh finishes', async () => {
+  const { controller, transport } = await fixture();
+  const intent = controller.captureIntent('cancel');
+  transport.jobId = '000002';
+  transport.startedAt++;
+  let queries = 0;
+  let release!: () => void;
+  transport.afterRead = async (path) => {
+    if (path === PRINT_JOB_QUERY_PATH && ++queries === 3) {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    }
+  };
+  await assert.rejects(controller.execute(intent, controller.confirm(intent)), /running job changed/);
+  assert.deepEqual(transport.posts, []);
+  assert.deepEqual(
+    controller
+      .availability()
+      .filter((action) => action.allowed)
+      .map((action) => action.command),
+    ['emergency-stop', 'firmware-restart'],
+    'releasing the command lock must not republish the rejected identity',
+  );
+  assert.throws(() => controller.captureIntent('cancel'));
+  release();
+  await controller.refresh();
+  const replacement = controller.captureIntent('cancel');
+  assert.equal(replacement.job?.jobId, '000002');
+  await controller.execute(replacement, controller.confirm(replacement));
+  assert.deepEqual(transport.posts, ['/printer/print/cancel']);
+  controller.dispose();
+});
+
 await test('printer changes and reconnects invalidate captured holds', async () => {
   for (const change of ['printer', 'reconnect', 'dispose']) {
     const { controller, transport } = await fixture();

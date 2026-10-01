@@ -2073,7 +2073,7 @@ function setupDomUI(
     loadingModal.style.display = 'flex';
     loadingModalText.textContent = `Reading ${file.name}...`;
     try {
-      workspace.openGcodeForPreview(await file.text(), file.name);
+      await workspace.openGcodeForPreview(await file.text(), file.name);
     } catch (error) {
       statusText.textContent = `Failed to open G-code: ${(error as Error).message}`;
     }

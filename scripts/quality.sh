@@ -39,4 +39,5 @@ if [[ "${ORCAXR_BUILD_CONTAINER:-0}" == "1" ]]; then
   ORCAXR_ALLOWED_ORIGINS="${ORCAXR_ALLOWED_ORIGINS:?set ORCAXR_ALLOWED_ORIGINS for the container build}" \
     docker compose -f server/docker-compose.yml build
   npm --prefix server run test:deployment:container
+  npm --prefix server run test:native:container
 fi
