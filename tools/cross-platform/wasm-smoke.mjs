@@ -8,10 +8,23 @@ const root = new URL('../../', import.meta.url);
 const corpus = JSON.parse(await readFile(new URL('testdata/cross-platform/canonical-vectors.json', root)));
 const schema = JSON.parse(await readFile(new URL('contracts/core-protocol.json', root)));
 const workerSource = `
-import initialize, { core_info, evaluate } from '/wasm/orcaxr_core.js';
+import initialize, { core_info, evaluate, GcodeSession } from '/wasm/orcaxr_core.js';
+import { replayGcode } from '/gcode-replay.mjs';
 const exports = await initialize({ module_or_path: new URL(self.location.href).searchParams.has('missing')
   ? '/missing.wasm' : '/wasm/orcaxr_core_bg.wasm' });
-self.onmessage = ({data}) => {
+self.onmessage = async ({data}) => {
+  if (data.operation === 'gcode') {
+    try {
+      const metrics = await replayGcode(GcodeSession, exports.memory);
+      const session = new GcodeSession(1, 0, '{}');
+      let packet;
+      try { session.seal(); packet = session.whole(); } finally { session.free(); }
+      self.postMessage({result: {requestId: data.requestId, type: 'gcode-tested', metrics, packet}, memoryBytes: exports.memory.buffer.byteLength}, [packet.buffer]);
+    } catch (error) {
+      self.postMessage({result: {requestId: data.requestId, type: 'gcode-failed', message: String(error)}});
+    }
+    return;
+  }
   const result = JSON.parse(evaluate(JSON.stringify(data)));
   self.postMessage({result, memoryBytes: exports.memory.buffer.byteLength});
 };
@@ -23,6 +36,11 @@ const server = createServer(async (request, response) => {
     response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'");
     if (path === '/') { response.setHeader('Content-Type', 'text/html'); response.end('<!doctype html><title>OrcaXR core boundary tests</title>'); }
     else if (path === '/worker.mjs') { response.setHeader('Content-Type', 'text/javascript'); response.end(workerSource); }
+    else if (['/gcode-replay.mjs', '/gcode-vectors.json', '/gcode-buffer.json'].includes(path)) {
+      const file = path.endsWith('.mjs') ? 'tools/cross-platform/gcode-replay.mjs' : path === '/gcode-buffer.json' ? 'contracts/gcode-buffer.json' : 'testdata/cross-platform/gcode-vectors.json';
+      response.setHeader('Content-Type', path.endsWith('.mjs') ? 'text/javascript' : 'application/json');
+      response.end(await readFile(new URL(file,root)));
+    }
     else if (['/wasm/orcaxr_core.js', '/wasm/orcaxr_core_bg.wasm'].includes(path)) {
       response.setHeader('Content-Type', path.endsWith('.wasm') ? 'application/wasm' : 'text/javascript');
       response.end(await readFile(new URL(`core/dist${path}`, root)));
@@ -78,6 +96,12 @@ try {
       finally { clearTimeout(timeout); rejectReady = undefined; }
       return {
         close,
+        gcode() {
+          return new Promise((resolve,reject) => {
+            pending.set('gcode',{resolve,reject});
+            worker.postMessage({operation:'gcode',requestId:'gcode'});
+          });
+        },
         evaluate(input, id) {
           if (closed) return Promise.reject(new Error('Core disposed'));
           if (pending.has(id)) return Promise.reject(new Error('Duplicate request'));
@@ -109,6 +133,10 @@ try {
         if (iteration === 39) finalBytes = reply.memoryBytes;
       }
       check(finalBytes === warmBytes, 'WASM linear memory kept growing after warmup');
+      const gcode = await client.gcode();
+      check(gcode.result.type === 'gcode-tested', gcode.result.message ?? 'G-code binding failed');
+      const packet = gcode.result.packet;
+      check(packet instanceof Uint8Array && packet.byteLength >= 24 && new DataView(packet.buffer,packet.byteOffset).getUint32(0,true) === 0x5047584f, 'G-code owned packet transfer failed');
       client.close();
       for (let index = 0; index < 10; index++) {
         const repeated = await start();
@@ -121,7 +149,7 @@ try {
       check(await start({missing: true}).then(client => {client.close(); return false;}, () => true), 'Missing WASM accepted');
       check(clients.size === 0, 'Worker owners retained');
       return {vectors: corpus.vectors.length, invalid: corpus.invalid.length, largePayloadRepeats: 40,
-        wasmLinearMemoryBytes: finalBytes, disposalCycles: 10, crossOriginIsolated};
+        wasmLinearMemoryBytes: finalBytes, disposalCycles: 10, crossOriginIsolated, gcode: gcode.result.metrics};
     } finally { for (const close of clients) close(); }
   }, {corpus, schema});
   assert.equal(result.vectors, corpus.vectors.length);

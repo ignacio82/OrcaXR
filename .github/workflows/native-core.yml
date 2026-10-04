@@ -36,8 +36,10 @@ jobs:
       - name: Verify generated contracts and source inventory
         run: |
           node tools/cross-platform/generate-contracts.mjs
+          node tools/cross-platform/generate-gcode-layout.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inventory.mjs
       - name: Rust contracts and dependency checks
         working-directory: core

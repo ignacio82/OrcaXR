@@ -3,6 +3,7 @@ use jni::{
     objects::{JClass, JString},
     sys::jstring,
 };
+mod gcode;
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr,

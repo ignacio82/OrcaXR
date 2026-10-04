@@ -4,13 +4,20 @@ This tracks implementation of [`plan.md`](../plan.md). It does not replace or
 reduce that plan, and it does not claim completion of the separate parity backlog.
 
 The separate [native Android/Rust migration](android-native-rust-plan.md) now has
-Stage A build infrastructure. [Native-core evidence](engineering/native-core.md)
+Stage A build infrastructure and an initial shared G-code computation port.
+[Native-core evidence](engineering/native-core.md)
 records the exact verification scope: Rust and generated-binding checks, real
 browser WASM vectors, Android debug/release builds, JVM/JNI tests, non-XR emulator
 startup, and native artifact alignment. Rust and all three npm development audits
 pass; the configured redacted source scan finds no leaks. These checks do not
 close project editing, native slicing, XR, physical-device, or existing supervised
 printer/security/credential gates.
+
+G-code evidence covers the unchanged TypeScript reference against host Rust,
+browser WASM, and Android JNI, bounded packed columns, UTF-16 preservation,
+source/session lifecycle, and cancellation. Production preview, projections,
+inspection, native rendering, and physical-device performance remain migration
+work; these development bindings do not change release support.
 
 ## Current implementation
 

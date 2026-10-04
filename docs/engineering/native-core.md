@@ -1,11 +1,15 @@
 # Native Android and shared-core development
 
-This document records the implementation and evidence for Stage A of the
+This document records Stage A and the initial Phase 3 computation port of the
 [migration plan](../android-native-rust-plan.md). The production web project and
 current C++ engine remain authoritative. The Android application is a development
 shell: it checks the JNI handshake and explicitly reports that editing is not
 available. No native project, renderer, slicing service, printer operation, or XR
 workflow is implemented yet.
+
+The shared G-code parser, index, bounded windows, and owned binary transport now
+run through both host bindings. They are development APIs; production browser
+preview still uses TypeScript, and the Android shell does not yet display G-code.
 
 ## Build decisions
 
@@ -80,6 +84,48 @@ These assets are not yet consumed or bundled by the native shell. On web scope
 changes, commit the web authority first and explicitly regenerate the inventory;
 CI rejects silent inventory drift.
 
+## G-code computation and ownership
+
+The Rust parser preserves modal state, semantic record IDs, source spans in UTF-16
+units, one record per G2/G3 command, Float32 assignment order, and explicit
+incomplete-prefix diagnostics. Its source-bound index retains checkpoints without
+rich columns or interpolation arrays; windows reconstruct columns from immutable
+source ownership. Checkpoint metadata retains the existing 64 MiB accounting cap.
+Role names, colors, and diagnostic text use UTF-16 unit arrays in the binding
+metadata, preserving lone surrogates as well as non-BMP characters. Hosts rebuild
+strings explicitly. JSON numeric decoding enables `serde_json/float_roundtrip`;
+default decoding rounded a reference checkpoint to the adjacent binary64 value.
+
+`contracts/gcode-buffer.json` generates the Rust writer and TypeScript/Kotlin
+layout descriptors. Version 1 packets contain a checked little-endian header,
+bounded JSON metadata, and aligned typed columns. Session input arrives in at most
+65,536-unit chunks with exact offsets and declared total length. Sealing binds one
+immutable source/index. Index pages contain at most 256 entries and never expose
+resumable machine state. The session caps rich windows at 240,000 records and
+8 million path points; metadata is capped at 8 MiB and complete packets at 160 MiB.
+These are hard refusal limits, **not qualified device memory budgets**. Oversized
+metadata/packets return a resource error; they are not silently truncated.
+
+Native handles are positive, never reused, and limited to four live owners,
+including cancelled work still holding resources. Admission capacity is released
+after the last work reference and its buffers have actually been dropped.
+Close removes the handle and signals cancellation without waiting on the work
+mutex. Active work retains its owner until it settles. Source scans check
+cancellation every line/4,096 units and arc interpolation every 256 points;
+cancelled parses publish no result. Kotlin serializes work, rejects replies after
+close, and releases a pending native packet on allocation/transfer failure. Java
+owns each direct output buffer; views remain valid after native close. JNI stores
+no Java references and catches Rust unwinds. Browser sessions belong in disposable
+task workers; ordinary transferred ArrayBuffers work without cross-origin isolation.
+
+This transport is not zero-copy: JNI/WASM copies each source chunk into Rust, Rust
+accumulates it, sealing currently copies into an immutable Arc allocation, packing
+copies columns, and the final packet copies into host-owned memory. Previous
+windows are not retained by the session. Packing and metadata encoding are bounded
+but do not yet have intermediate cancellation checks. Renderer consumers, preview
+projection/inspection, full generated request/result validators, production worker
+selection, offline packaging, and device latency/memory budgets remain open.
+
 ## Repeatable checks
 
 Install the SDK/NDK above, set `ANDROID_HOME` (or `android/local.properties`), and
@@ -93,8 +139,10 @@ rustup toolchain install 1.94.1 --profile minimal --component rustfmt --componen
 cargo +1.94.1 install wasm-bindgen-cli --version 0.2.129 --locked --jobs 2
 cargo +1.94.1 install cargo-audit --version 0.22.2 --locked --jobs 2
 node tools/cross-platform/generate-contracts.mjs
+node tools/cross-platform/generate-gcode-layout.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inventory.mjs
 ```
 
@@ -168,6 +216,31 @@ Initial local verification on 2026-10-04 established:
 Full development-dependency audits for web, server, and engine tooling also report
 zero vulnerabilities. These foundation changes do not modify the web runtime or
 replace its existing quality and release gates.
+
+Initial G-code verification on 2026-10-04 established:
+
+- An independently generated corpus captures the unchanged production TypeScript
+  regressions plus deterministic modal, arc, UTF-16, malformed-input, and checkpoint
+  cases. All 98 parse/index traces and 358 windows agree on host Rust, actual
+  browser WASM, and Android x86_64 JNI. Every Float32 column is compared by bits;
+  host Rust also compares the full private checkpoint state.
+- Resource tests traverse all 300,002 records of one large layer with no retained
+  column capacity above 240,000, check whole-arc cap failures, exercise 1,024
+  deterministic malformed UTF-16/numeric inputs, and settle cooperative cancellation.
+  Source upload, sealing, cancellation, range, and resource rejections are tested.
+- Twelve browser reopen/index/window/close cycles over that large layer retain
+  a stable 57,540,608-byte WASM linear-memory allocation. They transfer a total
+  360,018,192 packet bytes within the worker. A separate packet transfer to the
+  host survives session disposal. These numbers exclude JS/browser RSS and do not
+  qualify physical-device performance or a total application memory ceiling.
+- Eight Android instrumentation tests pass, including all parser vectors, stale
+  handles, owner-capacity refusal, close during indexing, writable direct-buffer
+  checks, malformed UTF-8 packet metadata, and buffer survival after native close.
+  The native shell still passes three cold starts on the API 34 emulator.
+
+The parser port does not yet replace the production web preview. Stage B and the
+Phase 3 exit gate remain open until projections, inspection, production packaging,
+rollback selection, renderer integration, and device measurements are verified.
 
 The workflow `.github/workflows/native-core.yml` repeats these checks independently
 of the existing web/server/engine gates. Its first GitHub-hosted run is not yet

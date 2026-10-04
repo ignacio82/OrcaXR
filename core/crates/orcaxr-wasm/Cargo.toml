@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 orcaxr-contracts.workspace = true
+orcaxr-gcode.workspace = true
 wasm-bindgen.workspace = true
 
 [lints]

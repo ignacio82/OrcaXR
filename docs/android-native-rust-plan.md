@@ -13,6 +13,13 @@ contracts, offline manifests, and clean-runner qualification are still required.
 No renderer, native slicing route, native project editing, or XR journey is
 qualified by these foundation tests.
 
+The first Phase 3 computation implementation now includes the Rust rich G-code
+parser, immutable source/index ownership, bounded windows, cooperative native
+cancellation, and generated packed-column layouts through WASM/JNI. The linked
+engineering document records differential and resource evidence. Production
+browser preview still uses TypeScript; projections, inspection, native rendering,
+shipping asset integration, and device budgets remain required before Stage B.
+
 Build an adaptive native Android application for phones, tablets, Googlebook,
 and Android XR while preserving the web application. Introduce Rust as a shared
 implementation of selected computation and, subsequently, the canonical project

@@ -164,6 +164,7 @@ version = "0.1.0"
 dependencies = [
  "jni",
  "orcaxr-contracts",
+ "orcaxr-gcode",
 ]
 
 [[package]]
@@ -177,10 +178,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "orcaxr-gcode"
+version = "0.1.0"
+dependencies = [
+ "ryu-js",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "orcaxr-wasm"
 version = "0.1.0"
 dependencies = [
  "orcaxr-contracts",
+ "orcaxr-gcode",
  "wasm-bindgen",
 ]
 
