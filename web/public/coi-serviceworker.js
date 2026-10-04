@@ -45,7 +45,7 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof window === 'undefined') {
   // ---------- service worker context ----------
   const CACHE_PREFIX = 'orcaxr-coi-';
-  const SHELL_CACHE = `${CACHE_PREFIX}shell-v2`;
+  const SHELL_CACHE = `${CACHE_PREFIX}shell-v3`;
   const SLICER_CACHE = `${CACHE_PREFIX}slicer-v1`;
 
   const withIsolationHeaders = (res) => {
@@ -87,11 +87,32 @@ if (typeof module !== 'undefined' && module.exports) {
       resources.add(iconManifestUrl.href);
       for (const file of icons) resources.add(new URL(`icons/material/${file}`, scope).href);
     }
+    // The first offline preview needs the owned worker, its dependency graph,
+    // and the exact Rust asset pair even if no preview was opened online.
+    const previewManifestUrl = new URL('core-preview-assets.json', scope);
+    const previewResponse = await fetch(previewManifestUrl, { cache: 'no-cache' });
+    if (!previewResponse.ok) throw new Error('Preview asset inventory is unavailable');
+    const preview = await previewResponse.json();
+    if (preview.schemaVersion !== 1 || preview.workerProtocol !== 2 || !Array.isArray(preview.assets) || preview.assets.length > 256)
+      throw new Error('Preview asset inventory is incompatible');
+    resources.add(previewManifestUrl.href);
+    for (const file of preview.assets) {
+      if (typeof file !== 'string' || file.length > 512 || !/^(assets|core)\/[A-Za-z0-9_./-]+$/.test(file))
+        throw new Error('Invalid preview asset path');
+      const url = new URL(file, scope);
+      if (!url.href.startsWith(scope.href)) throw new Error('Preview asset is outside the application');
+      resources.add(url.href);
+    }
     await cache.addAll([...resources]);
   };
 
   self.addEventListener('install', (event) => {
-    event.waitUntil(precacheShell().then(() => self.skipWaiting()));
+    event.waitUntil(precacheShell());
+  });
+  // BrowserProjectPersistence sends this only through its Save/Discard/Cancel
+  // guard. An update must not activate over a live unsaved project by itself.
+  self.addEventListener('message', (event) => {
+    if (event.data?.type === 'SKIP_WAITING') event.waitUntil(self.skipWaiting());
   });
   self.addEventListener('activate', (event) => {
     event.waitUntil((async () => {

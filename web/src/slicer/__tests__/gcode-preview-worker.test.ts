@@ -31,10 +31,11 @@ class ControlledWorker implements PreviewWorkerPort {
     else this.session!.updateView(request.patch);
     const session = this.session!;
     this.deliver({
-      version: 1,
+      version: 2,
       id: request.id,
       type: 'ready',
       snapshot: structuredClone({
+        adapter: 'typescript',
         model: session.model,
         view: session.getView(),
         layerBounds: session.layerBounds,
@@ -51,7 +52,10 @@ class ControlledWorker implements PreviewWorkerPort {
   }
 }
 async function open(worker = new ControlledWorker(), abort = new AbortController()) {
-  const pending = WorkerGcodePreviewSession.create(GCODE, SOURCE, abort.signal, { workerFactory: () => worker });
+  const pending = WorkerGcodePreviewSession.create(GCODE, SOURCE, abort.signal, {
+    adapter: 'typescript',
+    workerFactory: () => worker,
+  });
   worker.reply();
   return { session: await pending, worker, abort };
 }
@@ -102,7 +106,10 @@ await test('one in-flight view plus one merged latest request preserves original
 await test('abort settles opening and later windows, removes listeners and rejects late results', async () => {
   const worker = new ControlledWorker();
   const abort = new AbortController();
-  const pending = WorkerGcodePreviewSession.create(GCODE, SOURCE, abort.signal, { workerFactory: () => worker });
+  const pending = WorkerGcodePreviewSession.create(GCODE, SOURCE, abort.signal, {
+    adapter: 'typescript',
+    workerFactory: () => worker,
+  });
   const rejected = assert.rejects(pending, PreviewRequestCancelledError);
   abort.abort();
   await rejected;
@@ -124,7 +131,7 @@ await test('a crash, malformed message, unreadable message and post failure sett
     (worker: ControlledWorker) => worker.deliver({ version: 9 } as unknown as PreviewWorkerResponse),
     (worker: ControlledWorker) =>
       worker.deliver({
-        version: 1,
+        version: 2,
         id: worker.messages.at(-1)!.id,
         type: 'ready',
         snapshot: {} as PreviewWorkerSnapshot,
@@ -140,7 +147,10 @@ await test('a crash, malformed message, unreadable message and post failure sett
   const worker = new ControlledWorker();
   worker.throwOnPost = true;
   await assert.rejects(
-    WorkerGcodePreviewSession.create(GCODE, SOURCE, new AbortController().signal, { workerFactory: () => worker }),
+    WorkerGcodePreviewSession.create(GCODE, SOURCE, new AbortController().signal, {
+      adapter: 'typescript',
+      workerFactory: () => worker,
+    }),
     /Could not send/,
   );
   assert.equal(worker.terminated, 1);
@@ -150,6 +160,7 @@ await test('hung opening has a deadline and unavailable workers never trigger a 
   const worker = new ControlledWorker();
   await assert.rejects(
     WorkerGcodePreviewSession.create(GCODE, SOURCE, new AbortController().signal, {
+      adapter: 'typescript',
       workerFactory: () => worker,
       deadlineMs: 10,
     }),
@@ -164,5 +175,18 @@ await test('hung opening has a deadline and unavailable workers never trigger a 
     }),
     /Worker unavailable/,
   );
+});
+await test('the selected adapter is immutable and replies from another adapter fail closed', async () => {
+  const worker = new ControlledWorker();
+  const pending = WorkerGcodePreviewSession.create(GCODE, SOURCE, new AbortController().signal, {
+    adapter: 'rust',
+    workerFactory: () => worker,
+  });
+  const refused = assert.rejects(pending);
+  assert.equal(worker.messages[0].type, 'open');
+  assert.equal((worker.messages[0] as any).adapter, 'rust');
+  worker.reply(); // Reference output cannot silently replace Rust authority.
+  await refused;
+  assert.equal(worker.terminated, 1);
 });
 console.log(`\nG-code preview worker ownership: ${passed} tests passed.`);

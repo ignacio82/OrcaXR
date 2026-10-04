@@ -285,6 +285,18 @@ try {
       1,
       "all-plate slicing must carry the same attested engine identity",
     );
+    await page.waitForFunction(
+      () => !window.workspace.getPreviewState().loading,
+      { timeout: 30_000 },
+    );
+    const previewState = await page.evaluate(() =>
+      window.workspace.getPreviewState(),
+    );
+    assert.ok(
+      previewState.view,
+      previewState.unsupportedReason ||
+        "the production Rust preview must open the external slice on HTTP and HTTPS",
+    );
 
     const api = await page.evaluate(async () => {
       const bytes = new Uint8Array(134);

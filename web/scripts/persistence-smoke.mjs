@@ -176,6 +176,7 @@ try {
   if (activePage && !activePage.isClosed())
     console.error(
       await activePage.evaluate(() => ({
+        boot: globalThis.document.querySelector('#app-boot')?.outerHTML,
         status: globalThis.document.querySelector('#status-text')?.textContent,
         recovery: globalThis.document.querySelector('[data-recovery-panel]')?.textContent,
         dialogs: [...globalThis.document.querySelectorAll('[role="dialog"]')].map((node) => node.textContent),

@@ -18,7 +18,7 @@ browser WASM, and Android JNI, bounded packed columns, UTF-16 preservation,
 source/session lifecycle, and cancellation. Projection, bounded inspection and
 playback also run through development session bindings. Generated browser metadata
 guards, packet checks and the bounded source owner now replay actual WASM outputs.
-Production integration, search, generated request contracts, complete Kotlin host
+Native production integration, search, generated request contracts, complete Kotlin host
 validators, native rendering, and physical-device performance
 remain migration work; these bindings do not change release support.
 
@@ -33,8 +33,22 @@ malformed headers/text, and clear stale pending transfers. Cancellation now cove
 metadata/column packing. The browser source owner also agrees with those 4,554
 queries; packet decoding covers 456 models/windows and rejects 26 deliberately
 corrupted view packets. Transfer/reopen/disposal and pre-copy request bounds pass.
-The production preview worker still uses TypeScript and the native application
-remains a development shell.
+The production preview worker now defaults to Rust, with a fixed startup
+TypeScript rollback and versioned, digest-checked manifest/WASM packaging. Both
+adapters pass bounded DOM/XR paging, canonical-state preservation, empty-filter
+recovery, cancellation and disposal in Chromium. First-preview offline tests
+cover the PWA and static `/slicer/` host; static updates preserve a dirty project
+on Cancel and activate/reload through the existing guard on Discard. Missing and
+corrupt pairs fail without switching adapters; fetch cancellation and explicit
+retry pass without isolation under production CSP. The native application
+remains a development shell. These are software tests, not device performance
+or physical XR qualification.
+The complete web gate passes with 258 unit-test files and unchanged JS ceilings
+(2,264,048-byte entry; 10,574,850-byte total). The container web build, all 56 server
+tests, actual HTTP/HTTPS browser checks with external-slice preview, four current
+engine artifact copies, dependency audits and the redacted 1,556-file source scan
+pass. An initial persistence startup timeout did not recur in the focused retry
+or full repeated gate; startup-state failure diagnostics were added.
 The existing web truncated-parse notice reports the inspected prefix without inferring
 that slicing completed. Full web quality, optimized Rust reference tests,
 Clippy, cross-target compilation, dependency audits and the configured redacted

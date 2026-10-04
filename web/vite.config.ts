@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { sharedPreviewWorker } from './tools/shared-preview-worker';
+import { CORE_BROWSER_ASSET } from '../core/browser/asset';
 
 // GitHub Pages deploy (ORCAXR_DEPLOY=1): serve under /slicer/ and drop the
 // VitePWA service worker — the coi-serviceworker shim owns the SW scope there
@@ -40,83 +42,93 @@ export default defineConfig({
       },
     },
   },
-  plugins: deploy
-    ? []
-    : [
-        VitePWA({
-          registerType: 'prompt',
-          includeAssets: ['icon.svg', 'icons/material/*.svg', 'profiles/catalog.json'],
-          workbox: {
-            maximumFileSizeToCacheInBytes: 20 * 1024 * 1024,
-            ignoreURLParametersMatching: [/^t$/],
-            // The slicer WASM module (slic3r.mjs + the ~16 MB slic3r.wasm) is
-            // rebuilt whenever libslic3r changes. Precaching it cache-first pins a
-            // stale copy: the browser keeps serving the old binary even after the
-            // server ships a fix, which manifests as a slice that hangs forever on
-            // an outdated engine. Keep it OUT of the precache manifest and serve it
-            // NetworkFirst instead — always fresh when online, with a cached
-            // fallback so offline XR use still works after one online load.
-            globIgnores: [
-              '**/slicer/**',
-              // Optional features use normal network-on-demand requests. Keeping
-              // them out of precache protects first launch on headset Wi-Fi.
-              '**/assets/SimulatorAddons-*.js',
-              '**/assets/genai-*.js',
-              '**/assets/spark.module-*.js',
-              // Upstream calibration geometry: 1.7 MB that only matters to an
-              // operator actually running a flow or tolerance calibration.
-              // Precaching it would make every install pay for a feature most
-              // people never open, and it is verified by hash on arrival, so a
-              // cached-and-stale copy would be refused rather than used.
-              '**/calibration/*.3mf',
-              '**/calibration/*.stl',
-            ],
-            cleanupOutdatedCaches: true,
-            runtimeCaching: [
-              {
-                // The generated schema is larger than Workbox's default
-                // precache patterns and is fetched by URL at runtime. Cache the
-                // exact content-hashed v2 asset only after a successful online
-                // load so the settings panel remains available offline without
-                // pinning an old schema while connected.
-                urlPattern: ({ url }: { url: URL }) =>
-                  /\/assets\/engine-options\.schema-[^/]+\.json$/.test(url.pathname),
-                handler: 'NetworkFirst',
-                options: {
-                  cacheName: 'orcaxr-settings-schema',
-                  expiration: { maxEntries: 2 },
-                  cacheableResponse: { statuses: [0, 200] },
+  plugins: [
+    sharedPreviewWorker(),
+    ...(deploy
+      ? []
+      : [
+          VitePWA({
+            registerType: 'prompt',
+            includeAssets: ['icon.svg', 'icons/material/*.svg', 'profiles/catalog.json'],
+            workbox: {
+              additionalManifestEntries: [CORE_BROWSER_ASSET.manifest, CORE_BROWSER_ASSET.wasm].map((asset) => ({
+                url: asset.path,
+                revision: asset.sha256,
+              })),
+              maximumFileSizeToCacheInBytes: 20 * 1024 * 1024,
+              ignoreURLParametersMatching: [/^t$/],
+              // The slicer WASM module (slic3r.mjs + the ~16 MB slic3r.wasm) is
+              // rebuilt whenever libslic3r changes. Precaching it cache-first pins a
+              // stale copy: the browser keeps serving the old binary even after the
+              // server ships a fix, which manifests as a slice that hangs forever on
+              // an outdated engine. Keep it OUT of the precache manifest and serve it
+              // NetworkFirst instead — always fresh when online, with a cached
+              // fallback so offline XR use still works after one online load.
+              globIgnores: [
+                '**/slicer/**',
+                // The pair above already has exact SHA-256 revisions. A glob
+                // entry would register each WASM URL again with another hash.
+                '**/core/**',
+                // Optional features use normal network-on-demand requests. Keeping
+                // them out of precache protects first launch on headset Wi-Fi.
+                '**/assets/SimulatorAddons-*.js',
+                '**/assets/genai-*.js',
+                '**/assets/spark.module-*.js',
+                // Upstream calibration geometry: 1.7 MB that only matters to an
+                // operator actually running a flow or tolerance calibration.
+                // Precaching it would make every install pay for a feature most
+                // people never open, and it is verified by hash on arrival, so a
+                // cached-and-stale copy would be refused rather than used.
+                '**/calibration/*.3mf',
+                '**/calibration/*.stl',
+              ],
+              cleanupOutdatedCaches: true,
+              runtimeCaching: [
+                {
+                  // The generated schema is larger than Workbox's default
+                  // precache patterns and is fetched by URL at runtime. Cache the
+                  // exact content-hashed v2 asset only after a successful online
+                  // load so the settings panel remains available offline without
+                  // pinning an old schema while connected.
+                  urlPattern: ({ url }: { url: URL }) =>
+                    /\/assets\/engine-options\.schema-[^/]+\.json$/.test(url.pathname),
+                  handler: 'NetworkFirst',
+                  options: {
+                    cacheName: 'orcaxr-settings-schema',
+                    expiration: { maxEntries: 2 },
+                    cacheableResponse: { statuses: [0, 200] },
+                  },
                 },
-              },
-              {
-                urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith('/slicer/'),
-                handler: 'NetworkFirst',
-                options: {
-                  cacheName: 'orcaxr-slicer',
-                  expiration: { maxEntries: 4 },
-                  cacheableResponse: { statuses: [0, 200] },
+                {
+                  urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith('/slicer/'),
+                  handler: 'NetworkFirst',
+                  options: {
+                    cacheName: 'orcaxr-slicer',
+                    expiration: { maxEntries: 4 },
+                    cacheableResponse: { statuses: [0, 200] },
+                  },
                 },
-              },
-            ],
-          },
-          manifest: {
-            name: 'OrcaXR Slicer',
-            short_name: 'OrcaXR',
-            description: 'OrcaXR pure-web front-end: XR Blocks + three.js workspace',
-            theme_color: '#14171a',
-            background_color: '#14171a',
-            display: 'standalone',
-            icons: [
-              {
-                src: 'icon.svg',
-                sizes: '192x192 512x512',
-                type: 'image/svg+xml',
-                purpose: 'any',
-              },
-            ],
-          },
-        }),
-      ],
+              ],
+            },
+            manifest: {
+              name: 'OrcaXR Slicer',
+              short_name: 'OrcaXR',
+              description: 'OrcaXR pure-web front-end: XR Blocks + three.js workspace',
+              theme_color: '#14171a',
+              background_color: '#14171a',
+              display: 'standalone',
+              icons: [
+                {
+                  src: 'icon.svg',
+                  sizes: '192x192 512x512',
+                  type: 'image/svg+xml',
+                  purpose: 'any',
+                },
+              ],
+            },
+          }),
+        ]),
+  ],
   server: {
     // Reachable from the headset via `adb reverse tcp:8081 tcp:8081`
     // (Chrome on the headset opens http://localhost:8081 — localhost is a

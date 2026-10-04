@@ -9,7 +9,7 @@ Initial Stage A evidence is maintained in [native-core build and evidence](engin
 The development shell, bounded Rust canonicalizer, generated request bindings,
 cross-language fixtures, migration inventory, artifact checks, and new CI workflow
 exist. Phases 0 and 1 remain open: physical baselines, complete transport/session
-contracts, offline manifests, and clean-runner qualification are still required.
+contracts, native offline manifests, and clean-runner qualification are still required.
 No renderer, native slicing route, native project editing, or XR journey is
 qualified by these foundation tests.
 
@@ -20,10 +20,11 @@ engineering document records differential and resource evidence. The 12-mode Rus
 preview projection, bounded inspection and playback now have development WASM/JNI
 session bindings and independently generated source/window expectations. Generated
 browser metadata validation and the bounded worker-side source owner now replay
-the actual WASM corpus. Production browser preview still uses TypeScript; search,
+the actual WASM corpus. Production browser preview now uses the Rust worker
+adapter, with a fixed startup reference choice and verified offline asset pair; search,
 generated request contracts, complete Kotlin host validators, native
-rendering, shipping asset integration, and device budgets remain required before
-Stage B.
+rendering, native asset integration, and device budgets remain required to qualify
+Stage B fully. No phase exit is closed by the browser integration alone.
 
 Build an adaptive native Android application for phones, tablets, Googlebook,
 and Android XR while preserving the web application. Introduce Rust as a shared
@@ -493,6 +494,9 @@ that native code automatically reduces total memory.
 - [ ] Replace the browser worker implementation behind its existing session
   interface; account for source conversion and WASM transfer overhead in benchmarks.
   Keep a startup-selectable reference adapter during qualification.
+  Browser integration and packaged/offline loading now exist; the production
+  regression exercises both adapters including conversion and transfer. This
+  task remains open for the required repeated device performance measurements.
 - [ ] Bind the same library to Android and render the resulting columns through
   the native viewport. Verify identical semantic IDs and projections across hosts.
 - [ ] Add fuzz/property tests for malformed numbers, huge lines, truncated arcs,

@@ -9,12 +9,14 @@ import type {
 } from './GcodePreviewSession';
 import type { RichGcodeModel, RichGcodeParseOptions } from './RichGcodeModel';
 
+export type PreviewAdapter = 'rust' | 'typescript';
 export type PreviewWorkerRequest = {
-  readonly version: 1;
+  readonly version: 2;
   readonly id: number;
 } & (
   | {
       readonly type: 'open';
+      readonly adapter: PreviewAdapter;
       readonly gcode: string;
       readonly source: GcodePreviewSessionSource;
       readonly options?: RichGcodeParseOptions;
@@ -23,6 +25,7 @@ export type PreviewWorkerRequest = {
 );
 
 export interface PreviewWorkerSnapshot {
+  readonly adapter: PreviewAdapter;
   readonly model: RichGcodeModel;
   readonly view: GcodePreviewViewState;
   readonly layerBounds: readonly [number, number];
@@ -32,7 +35,7 @@ export interface PreviewWorkerSnapshot {
   readonly projection: GcodePreviewProjection;
   readonly inspection: GcodeInspectionState;
 }
-export type PreviewWorkerResponse = { readonly version: 1; readonly id: number } & (
+export type PreviewWorkerResponse = { readonly version: 2; readonly id: number } & (
   | { readonly type: 'ready'; readonly snapshot: PreviewWorkerSnapshot }
   | { readonly type: 'error'; readonly message: string }
 );

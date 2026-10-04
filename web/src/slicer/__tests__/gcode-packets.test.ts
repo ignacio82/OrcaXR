@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { GCODE_FIELDS, GCODE_LAYOUT } from '../../../../contracts/generated/gcode-layout';
 import { validateGcodeMetadata } from '../../../../contracts/generated/gcode-metadata';
 import { decodeGcodeModel, decodeGcodeIndex, decodeGcodeIndexPage } from '../core/GcodePackets';
+import { hasPackedGcodeOwnership } from '../core/GcodeBufferOwnership';
 
 const corpus = JSON.parse(
   readFileSync(new URL('../../../../testdata/cross-platform/gcode-vectors.json', import.meta.url), 'utf8'),
@@ -70,10 +71,13 @@ for (const vector of corpus.vectors) {
   for (const expected of [vector.binding.model, ...vector.binding.windows]) {
     const { bytes } = encode(expected);
     const model = decodeGcodeModel(bytes);
+    assert.equal(hasPackedGcodeOwnership(model), true);
     assert.deepEqual(snapshot(model), expected, vector.id);
     assert.equal(model.columns.endX.buffer, bytes.buffer, 'columns must share the one owned transfer buffer');
     const transferred = structuredClone(model, { transfer: [bytes.buffer] });
     assert.equal(bytes.byteLength, 0);
+    assert.equal(hasPackedGcodeOwnership(model), false, 'transferred owner is detached');
+    assert.equal(hasPackedGcodeOwnership(transferred), true);
     assert.deepEqual(snapshot(transferred), expected);
     assert.throws(() => decodeGcodeModel(bytes));
     models++;
@@ -81,6 +85,27 @@ for (const vector of corpus.vectors) {
 }
 
 const fixture = corpus.vectors.find((v: any) => v.binding.model.columns.count > 3).binding.model;
+for (const mutate of [
+  (m: any) => {
+    m.columns.endX = m.columns.endX.slice();
+  },
+  (m: any) => {
+    m.columns.endX = new Float32Array(m.columns.endX.buffer, m.columns.endX.byteOffset + 4, m.columns.count);
+  },
+  (m: any) => {
+    m.pathPoints.count++;
+  },
+  (m: any) => {
+    new DataView(m.columns.kind.buffer).setUint32(4, 99, true);
+  },
+  (m: any) => {
+    new DataView(m.columns.kind.buffer).setUint32(20, 1, true);
+  },
+]) {
+  const model = decodeGcodeModel(encode(fixture).bytes);
+  mutate(model);
+  assert.equal(hasPackedGcodeOwnership(model), false, 'reject excess, substituted and mismatched column ownership');
+}
 for (const [offset, bad] of [
   [0, 0],
   [4, 99],

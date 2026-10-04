@@ -63,11 +63,10 @@ engine (`libslic3r` via WASM) as the computational core.
   [native Android and Rust plan](docs/android-native-rust-plan.md). The initial
   Compose shell, Rust canonicalization and G-code computation bindings are
   development infrastructure, not a usable native slicer. Current release support
-  remains unchanged. Rust preview projections, bounded inspection and playback
-  are exposed through development WASM/JNI session bindings; production renderer
-  integration and physical-device qualification remain open. Browser packet
-  validation and a source owner are tested against real WASM but are not yet
-  connected to the production preview worker. Native PCVR
+  remains unchanged. The production browser preview worker now uses Rust parsing,
+  projection and inspection behind the existing session interface, with an
+  explicit TypeScript startup rollback. Native rendering, search and physical-device
+  qualification remain open. Native PCVR
   remains outside scope.
 
 ## Stack
@@ -268,7 +267,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   projected colors/filtering and reports unsupported metadata honestly.
 - A pinned G2/G3 arc remains one semantic source record; no partial arc is published
   on parser cap failure. Preserve Float32 operation order and bounded path-point data.
-- Never instantiate WASM to warm the cache: each instance commits a 256 MiB shared
+- Never instantiate slicing-engine WASM to warm the cache: each instance commits a 256 MiB shared
   heap and ten workers. Prefetch/drain bytes only. Shrinking the thread pool without
   device qualification can deadlock synchronous threaded slicing.
 - `/slicer/` uses NetworkFirst and is excluded from precache. A service worker from

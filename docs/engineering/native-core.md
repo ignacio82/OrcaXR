@@ -8,13 +8,13 @@ available. No native project, renderer, slicing service, printer operation, or X
 workflow is implemented yet.
 
 The shared G-code parser, index, bounded windows, and owned binary transport now
-run through both host bindings. They are development APIs; production browser
-preview still uses TypeScript, and the Android shell does not yet display G-code.
+run through both host bindings. Production browser preview now uses the Rust
+adapter, and the Android shell does not yet display G-code.
 Preview projection, bounded inspection and playback are also exposed through
-source-owned session queries. Neither application's renderer consumes these
-development bindings yet. The browser source owner and checked packet decoder now
-exist under `web/src/slicer/core`; the real-WASM replay exercises them, but the
-production preview worker has not switched to this adapter.
+source-owned session queries. The browser renderer consumes the checked model,
+projection and inspection packets through its existing worker session interface.
+Playback remains a binding API without a new production playback workflow.
+Native renderer integration and device qualification remain open.
 
 ## Build decisions
 
@@ -66,7 +66,7 @@ generated; their development leaf request validation is implemented in Rust.
 `contracts/gcode-metadata.json` now generates 26 bounded TypeScript metadata
 types/validators. Browser request encoders also validate shapes and enforce bounds
 before entering WASM. Generated request contracts, the corresponding Kotlin
-metadata validation, and production adapter integration remain open.
+metadata validation remain open.
 
 The core parses bounded JSON into UTF-16 strings and sorts keys by code units.
 It preserves escaped lone surrogates, resolves duplicate keys like `JSON.parse`,
@@ -82,8 +82,8 @@ The browser harness exercises the actual WASM binary in a module worker under a
 CSP with `wasm-unsafe-eval` and without cross-origin isolation. The test owner
 terminates a worker to cancel synchronous leaf computation and rejects pending
 replies. This verifies that ownership pattern, not a production session transport
-or a cooperative cancellation API. The browser application does not load the new
-core yet, so production service-worker packaging is also still open.
+or a cooperative cancellation API. The production worker now uses the same source
+owner; its loading and offline packaging are described below.
 
 `contracts/generated/migration-inventory.json` captures all 226 registry actions
 at web commit `fc9da4e`, including handler presence, surfaces, exclusions, shortcuts,
@@ -137,8 +137,8 @@ selectors releases the old columns before parsing the replacement. An explicit
 selector on every view query prevents accidental use of the last loaded window.
 Packed outputs are independent allocations. Metadata encoding checks cancellation
 on writes; column serialization checks every 4,096 elements and before publishing.
-Renderer consumers, search, generated request contracts, complete Kotlin result
-validation, production worker selection, offline packaging, and device
+Native renderer consumers, search, generated request contracts, complete Kotlin result
+validation, and device
 latency/memory budgets remain open.
 
 The internal Rust projection implements all 12 display modes, composable
@@ -160,9 +160,9 @@ an accessible legend label by one binary64 ULP. The pinned pure-Rust `libm`
 implementation resolves that observed difference in debug and optimized host
 tests. The source-owned binding corpus also includes those 128 extreme cases.
 This is corpus evidence, not proof for every float, browser engine or physical
-device; production consumer integration has its own remaining gates.
+device; physical consumer qualification has its own remaining gates.
 
-## Development view queries
+## Source-owned view queries
 
 `Session.view` / WASM `GcodeSession.view` / Kotlin `GcodeSession.view` accept bounded
 JSON with required `version: 1`, `operation`, `window` and `request` fields. `window`
@@ -250,9 +250,9 @@ Initialization failure releases the native owner. Host disposal is idempotent,
 and subsequent work, including an in-progress page iterator, refuses a closed
 owner. Raw wasm-bindgen `.free()` is **not** idempotent; the host clears its handle
 before calling it. Synchronous work is cancelled by the containing worker's
-termination, not a main-thread callback into a busy WASM call. Production worker
-selection, request deadlines, artifact loading/handshake and offline packaging
-still need to connect this owner to the existing worker lifecycle.
+termination, not a main-thread callback into a busy WASM call. The production
+worker connects this owner to its existing 120-second deadline, replacement,
+coalescing, cancellation and disposal lifecycle.
 
 Host encoders accept the existing typed preview/inspection API, reject unknown
 fields and substitute source/checkpoint options, and preserve Float32 duration
@@ -263,6 +263,51 @@ have an 8 MiB bound. Shared/resizable/detached typed inputs are refused. Rust st
 owns semantic computation checks. These encoders are currently hand-written;
 replay verifies their behavior, but does not replace the plan's generated request
 contract requirement.
+
+## Production browser adapter and packaging
+
+The default preview adapter is Rust. `?previewCore=typescript` selects the
+independent reference when the worker host module first loads. The choice remains
+fixed for that module lifetime; changing it requires a guarded reload. A failed
+Rust request never silently changes adapters. Protocol version 2 binds replies to
+the chosen adapter. Canonical project state, artifact summary authority, UI and
+renderer behavior remain in their existing TypeScript owners. The legacy explicit
+`project(overrides)` synchronous API still uses the reference function; production
+surfaces consume the worker's cached default projection.
+
+Both adapters use the same window/view controller. Rust retains source/index and
+one parsed window, copies an owned packet to JS, computes its views, and transfers
+the packet and view buffers. It then drops the host frame; re-opening the same
+selector copies fresh host bytes while reusing Rust's cached model. The main
+receiver checks each column's exact range in the one bounded packet before using
+the existing semantic snapshot checks. It does not relax per-column backing
+limits for reference output. This is bounded ownership, not zero-copy transport.
+
+`node tools/cross-platform/package-browser-core.mjs --write` packages the output
+of `build-wasm.py`. Normal `web` dev/build commands verify current source hashes,
+exact glue/declaration hashes, manifest and WASM without requiring Rust. The
+tracked `core/browser` glue and `web/public/core/<manifest-sha256>` asset pair
+are one set. The loader bounds decoded response bytes, verifies both SHA-256
+identities, initializes only verified bytes, then checks the core handshake.
+Compressed Content-Length describes transfer bytes, so stream length and digest
+remain authoritative. It works without WebCrypto subtle or cross-origin isolation.
+Missing/corrupt assets fail visibly; reopening explicitly retries. Worker
+termination cancels loading as well as synchronous computation.
+
+The preview worker is an additional entry in the main Rollup graph. Sharing pure
+parser/projection modules avoids duplicating the reference implementation beyond
+the JS budget. Worker imports are static: Vite's application dynamic-import
+preload helper accesses `document` and cannot run there. Strict entry signatures
+keep application startup out of the worker. The generated preview inventory
+contains its host, worker and complete dependency graph plus the exact asset pair.
+Both service workers cache these bytes without instantiation. Workbox excludes
+`core/**` from its glob because explicit SHA-256 entries already own those URLs.
+Static-host updates wait for the existing unsaved-work guard's `SKIP_WAITING`.
+
+Vite warns about wasm-bindgen's unused default sibling WASM URL. The loader always
+passes verified bytes; the exact generated glue stays unchanged for provenance.
+No separate default-path binary is served or fetched. Docker's web-builder copies
+the same core/contracts/tooling inputs and verifies this packaged set.
 
 ## Repeatable checks
 
@@ -281,7 +326,8 @@ node tools/cross-platform/generate-gcode-layout.mjs
 node tools/cross-platform/generate-preview-catalog.mjs
 node tools/cross-platform/generate-view-layout.mjs
 node tools/cross-platform/generate-gcode-metadata.mjs
-node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts
+node tools/cross-platform/package-browser-core.mjs
+node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts rust-gcode-loading.test.ts
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
@@ -384,10 +430,10 @@ Initial G-code verification on 2026-10-04 established:
   checks, malformed UTF-8 packet metadata, and buffer survival after native close.
   The native shell still passes three cold starts on the API 34 emulator.
 
-The parser port does not yet replace the production web preview. Stage B and the
-Phase 3 exit gate remain open until production packaging, full host validators,
-search, rollback selection, renderer integration, and device measurements are
-verified.
+The parser now backs the production browser preview with verified packaging and
+a startup reference rollback. Stage B and the Phase 3 exit gate remain open for
+complete Kotlin host validators, search, native renderer integration and device
+measurements.
 
 Host projection verification on 2026-10-04 establishes 1,567 reference
 projections/rejections over 202 models, including all display modes, filter
@@ -428,8 +474,8 @@ model/header/text/column cases. Source-owner tests cover pre-copy request bounds
 split/isolated surrogates, Float32 NaN/Infinity bits, failed initialization,
 short pages and repeated disposal. Every source replay transfers a model, refuses
 queries against its detached frame, reopens a fresh frame, and rejects work after
-disposal. These checks exercise the browser host implementation, not the shipping
-preview worker or a native renderer.
+disposal. Those corpus checks exercise the host boundary. The production worker
+also has separate two-adapter browser tests; native rendering remains untested.
 
 The current browser repeat test remains stable at 57,540,608 bytes of WASM linear
 memory for parser reopen cycles; canonicalization alone settles at 12,058,624
@@ -442,14 +488,36 @@ emulator; this is not ARM64 or 16 KB-page runtime evidence.
 
 The projection compiles for WASM, Android ARM64 and Android x86_64. Debug and
 optimized host reference tests, strict Clippy, regeneration checks and Cargo audit
-pass. Full web quality and targeted post-fix checks pass after the browser host
-boundary and leading-blank-line source-context correction, including 257
+pass. Full web quality passes after the production browser integration, including 258
 unit-test files, production browser/recovery/offline checks,
 accessibility, pseudo-localization, slicing and bundle budgets. The existing
-TypeScript preview benchmark records a 1.543 indexed/whole median ratio against
+TypeScript preview benchmark records a 1.594 indexed/whole median ratio against
 its 2.5 ceiling; this does not measure the Rust projection. All three npm audits
-report zero vulnerabilities. The configured redacted secret scan covers 1,541
+report zero vulnerabilities. The configured redacted secret scan covers 1,556
 UTF-8 source files, including six with embedded NULs, with no findings.
+
+Production Chromium replays the same 300,002-record source through both adapters
+and checks identical initial view state, bounded DOM/XR paging, empty-filter
+recovery, replacement, pending-navigation cancellation and disposal. The final
+gate observed 550.69 ms for Rust and 979.70 ms for TypeScript, including initial
+source conversion, indexing, parsing, host transfer and presentation. Those are
+single synthetic-host observations, not device acceptance measurements. The
+final JS entry is 2,264,048 bytes and all JS totals 10,574,850 bytes under unchanged
+limits. The Rust WASM adds 593,569 bytes outside that JS budget.
+
+Loader tests cover bounded/compressed responses, strict handshake, missing and
+corrupt pairs, no silent fallback, fetch cancellation, explicit retry, and idle
+startup. First-preview offline tests pass for the PWA and static `/slicer/` host;
+static updates exercise Cancel and Discard through the real unsaved-work guard.
+Vite development preview, the Docker web-builder, all 56 server tests and actual
+Express HTTP/HTTPS browser qualification also pass, including Rust preview of
+external slice output on insecure LAN. Canonical and both present local server
+engine copies now verify against the pinned manifest; old ignored local copies
+were retained when refreshed. This does not qualify a new native engine build.
+
+One initial full run timed out waiting for persistence-test startup readiness;
+the focused retry and complete repeated gate passed without extending timeouts.
+Failure diagnostics now include the boot feature state for a recurrence.
 The wave-settings gate now reconstructs the pinned source plus the tracked build
 patch in a temporary directory; an older local engine checkout no longer changes
 the test authority, and absent source never silently skips that check.

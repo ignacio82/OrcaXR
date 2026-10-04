@@ -57,3 +57,12 @@ secrets/
 *.md
 *.png
 *.py
+
+# Shared-core development products are not web build inputs.
+core/target/
+core/dist/
+android/.gradle/
+android/.kotlin/
+android/**/build/
+tools/cross-platform/results/
+**/__pycache__/

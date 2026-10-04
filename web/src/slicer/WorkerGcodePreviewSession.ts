@@ -8,8 +8,14 @@ import {
   type GcodePreviewSessionSource,
   type GcodePreviewViewPatch,
   type GcodePreviewViewState,
-} from './GcodePreviewSession';
-import type { PreviewWorkerRequest, PreviewWorkerResponse, PreviewWorkerSnapshot } from './GcodePreviewWorkerProtocol';
+} from './GcodePreviewController';
+import { hasPackedGcodeOwnership } from './core/GcodeBufferOwnership';
+import type {
+  PreviewAdapter,
+  PreviewWorkerRequest,
+  PreviewWorkerResponse,
+  PreviewWorkerSnapshot,
+} from './GcodePreviewWorkerProtocol';
 
 export class PreviewRequestCancelledError extends Error {
   constructor() {
@@ -23,6 +29,12 @@ export interface PreviewWorkerPort {
   postMessage(request: PreviewWorkerRequest): void;
   terminate(): void;
 }
+// Selected once when this module starts. No live session changes authority.
+const STARTUP_ADAPTER: PreviewAdapter =
+  typeof location !== 'undefined' && new URL(location.href).searchParams.get('previewCore') === 'typescript'
+    ? 'typescript'
+    : 'rust';
+
 interface Pending {
   readonly request: PreviewWorkerRequest;
   readonly resolve: () => void;
@@ -30,6 +42,7 @@ interface Pending {
   cancelled: boolean;
 }
 export interface WorkerPreviewOptions {
+  readonly adapter?: PreviewAdapter;
   readonly workerFactory?: () => PreviewWorkerPort;
   readonly deadlineMs?: number;
   readonly parseOptions?: RichGcodeParseOptions;
@@ -44,12 +57,15 @@ export class WorkerGcodePreviewSession implements GcodePreviewSessionPort {
   private sequence = 0;
   private disposed = false;
   private readonly worker: PreviewWorkerPort;
+  private readonly adapter: PreviewAdapter;
   private readonly abort: () => void;
   private constructor(
     readonly source: GcodePreviewSessionSource,
     private readonly signal: AbortSignal,
     private readonly options: WorkerPreviewOptions,
   ) {
+    this.adapter = options.adapter ?? STARTUP_ADAPTER;
+    if (this.adapter !== 'rust' && this.adapter !== 'typescript') throw new Error('Invalid preview adapter');
     this.worker =
       options.workerFactory?.() ?? new Worker(new URL('./gcodePreview.worker.ts', import.meta.url), { type: 'module' });
     this.abort = () => this.dispose();
@@ -73,9 +89,10 @@ export class WorkerGcodePreviewSession implements GcodePreviewSessionPort {
     const session = new WorkerGcodePreviewSession(source, signal, options);
     try {
       await session.enqueue({
-        version: 1,
+        version: 2,
         id: ++session.sequence,
         type: 'open',
+        adapter: session.adapter,
         gcode,
         source,
         options: options.parseOptions,
@@ -128,7 +145,7 @@ export class WorkerGcodePreviewSession implements GcodePreviewSessionPort {
         ...patch,
         moveVisibility: { ...previous.patch.moveVisibility, ...patch.moveVisibility },
       };
-    await this.enqueue({ version: 1, id: ++this.sequence, type: 'view', patch });
+    await this.enqueue({ version: 2, id: ++this.sequence, type: 'view', patch });
     return this.getView();
   }
   dispose(): void {
@@ -167,7 +184,7 @@ export class WorkerGcodePreviewSession implements GcodePreviewSessionPort {
     const pending = this.active;
     if (
       !pending ||
-      response?.version !== 1 ||
+      response?.version !== 2 ||
       response.id !== pending.request.id ||
       !['ready', 'error'].includes(response.type)
     ) {
@@ -181,6 +198,8 @@ export class WorkerGcodePreviewSession implements GcodePreviewSessionPort {
         throw new Error(
           typeof response.message === 'string' ? response.message.slice(0, 512) : 'G-code preview failed.',
         );
+      if (response.snapshot.adapter !== this.adapter)
+        throw new Error('The preview worker changed computation adapters.');
       validateSnapshot(response.snapshot);
       if (!pending.cancelled) {
         this.snapshot = response.snapshot;
@@ -253,6 +272,8 @@ function validateSnapshot(snapshot: PreviewWorkerSnapshot): void {
     snapshot.summary.perTool.length > 256
   )
     invalid();
+  const packed = snapshot.adapter === 'rust';
+  if (packed && !hasPackedGcodeOwnership(model)) invalid();
   const columns = model.columns;
   const groups = [
     [Uint8Array, ['kind', 'pathKind']],
@@ -287,7 +308,7 @@ function validateSnapshot(snapshot: PreviewWorkerSnapshot): void {
       if (
         !(column instanceof type) ||
         column.length !== count ||
-        column.buffer.byteLength > GCODE_PREVIEW_WINDOW_RECORD_BUDGET * type.BYTES_PER_ELEMENT
+        (!packed && column.buffer.byteLength > GCODE_PREVIEW_WINDOW_RECORD_BUDGET * type.BYTES_PER_ELEMENT)
       )
         invalid();
     }
@@ -296,7 +317,7 @@ function validateSnapshot(snapshot: PreviewWorkerSnapshot): void {
     if (
       !(values instanceof Float32Array) ||
       values.length !== model.pathPoints.count ||
-      values.buffer.byteLength > RICH_GCODE_HARD_CAPS.pathPoints * 4
+      (!packed && values.buffer.byteLength > RICH_GCODE_HARD_CAPS.pathPoints * 4)
     )
       invalid();
   }

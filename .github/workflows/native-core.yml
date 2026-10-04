@@ -40,6 +40,7 @@ jobs:
           node tools/cross-platform/generate-preview-catalog.mjs
           node tools/cross-platform/generate-view-layout.mjs
           node tools/cross-platform/generate-gcode-metadata.mjs
+          node tools/cross-platform/package-browser-core.mjs
           node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs

@@ -59,7 +59,19 @@ try {
     };
   }, schemaAsset);
   assert.deepEqual(offline, { icon: 200, engine: 200, schema: 200, schemaVersion: 2 });
-  console.log('Offline smoke passed (app reload, settings schema v2, XR icon, NetworkFirst slicer fallback).');
+  assert.equal(
+    await page.evaluate(() =>
+      globalThis.window.workspace.openGcodeForPreview(
+        'M83\n;LAYER_CHANGE\n;TYPE:Outer wall\nG1 X10 E1 F1200\n',
+        'offline-first.gcode',
+      ),
+    ),
+    true,
+    'the first Rust preview must work without a prior online preview',
+  );
+  console.log(
+    'Offline smoke passed (app reload, first Rust preview, settings schema v2, XR icon, NetworkFirst slicer fallback).',
+  );
 } finally {
   if (page) await page.setOfflineMode(false).catch(() => {});
   await browser.close();

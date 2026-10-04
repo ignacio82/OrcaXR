@@ -26,11 +26,22 @@ The GitHub Pages cross-origin-isolation shim must not own cross-origin fetches:
 them so the page origin can obtain/use Local Network Access permission for HTTP
 or HTTPS targets. Do not restore a hand-written subnet allowlist; Chrome's
 classification includes details that application code should not duplicate.
-For same-origin requests it precaches the deploy app shell and bundled XR icons,
+For same-origin requests it precaches the deploy app shell, bundled XR icons and
+the generated preview host/worker graph with its exact Rust manifest/WASM pair,
 uses NetworkFirst at runtime, keeps the large slicer artifacts in a separate
 four-entry cache, supplies the offline navigation fallback, and restores COOP/
 COEP headers. Update its cache version and offline contract whenever deploy
 assets or worker/schema compatibility changes.
+
+The static shell cache is now `shell-v3`. Installation leaves updates waiting;
+the existing persistence Save/Discard/Cancel flow sends `SKIP_WAITING` only after
+the navigation guard succeeds. First installation still claims the page to
+establish isolation. The production PWA likewise precaches the versioned Rust
+pair once, using explicit SHA-256 revisions and excluding `core/**` from glob
+discovery. This byte caching never instantiates WASM. Both deployments support
+the first preview offline without an earlier online preview. The core loader
+verifies the paired bytes and handshake even when a service worker supplies them.
+See [native-core packaging](native-core.md#production-browser-adapter-and-packaging).
 
 A camera Moonraker reports is almost never served by Moonraker.
 `PrinterCamera.resolveCameraSources` answers two questions, and both were once

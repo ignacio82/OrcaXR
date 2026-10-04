@@ -65,6 +65,11 @@ COPY web/package*.json ./web/
 WORKDIR /build/web
 RUN npm ci
 COPY web/ ./
+COPY core/Cargo.toml core/Cargo.lock core/rust-toolchain.toml /build/core/
+COPY core/crates/ /build/core/crates/
+COPY core/browser/ /build/core/browser/
+COPY contracts/ /build/contracts/
+COPY tools/cross-platform/ /build/tools/cross-platform/
 RUN npm run build
 
 # ---- Stage 3: tailscale — extract official Tailscale daemon and client binaries

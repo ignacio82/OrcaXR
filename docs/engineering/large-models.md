@@ -179,7 +179,14 @@ floors, not ceilings.
   `WorkerGcodePreviewSession` owns one browser worker per source. Indexing,
   window parsing and default projection/inspection run there; the main thread
   receives transferred bounded snapshots and reuses those projections across
-  surfaces. The worker retains one source (at most 256 Mi UTF-16 code units),
+  surfaces. Rust is the default computation adapter; `?previewCore=typescript`
+  selects the reference when the host module loads and requires reload to change.
+  The shared controller preserves window and view policy. Rust copies source
+  chunks into its owner and returns checked packed buffers; after transfer the
+  worker drops the host frame while Rust retains at most one parsed window.
+  The main receiver validates exact column ranges in that one owned packet.
+  Neither this transport nor the existing reference transport is zero-copy.
+  The worker retains one source (at most 256 Mi UTF-16 code units),
   its index and one window; the main thread retains its current window. A source
   replacement/disposal terminates the old worker immediately. Window requests
   settle obsolete callers immediately and coalesce to one pending request while
@@ -205,6 +212,14 @@ floors, not ceilings.
   over the observed worst pair. This compares work on the same runtime/host,
   with no absolute device latency assertion. Earlier narwhal measurements remain historical;
   hardware/XR qualification of this implementation is still pending.
+
+  The production regression now executes both adapters on the same generated
+  300,002-record source, checks identical initial view state, DOM/XR window moves,
+  empty-filter recovery and pending-work cancellation. It includes Rust source
+  conversion, index, parsing, packet decoding and rendering in the open timing;
+  those single-run observations are not the five-run device acceptance benchmark.
+  The JS source and Rust source can coexist during initial conversion. WASM
+  linear memory measurements exclude renderer storage, JS garbage and process RSS.
 
 - Import feature detection walks typed volume emboss recipes, so unrelated
   extension flags do not generate geometry warnings and no project-wide JSON
