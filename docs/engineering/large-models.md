@@ -171,7 +171,10 @@ floors, not ceilings.
   colour/filter changes preserve the selected chunk. Notices quantify the layers
   and records shown. A complete index means only that the supplied input was fully
   indexed, never proof that a slice finished. Incomplete input names its limiting
-  reason and says that later input was not inspected.
+  reason and says that later input was not inspected. The standalone projection's
+  truncated-parse notice follows the same rule: it reports the drawn height and
+  record count without claiming that the sliced G-code is complete. Numeric range
+  failures name the parser limit without describing a small input as oversized.
 
   `WorkerGcodePreviewSession` owns one browser worker per source. Indexing,
   window parsing and default projection/inspection run there; the main thread

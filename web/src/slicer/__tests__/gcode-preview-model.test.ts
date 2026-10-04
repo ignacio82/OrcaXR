@@ -77,7 +77,7 @@ function fixture(): RichGcodeModel {
   );
 }
 
-test('a print that outgrows the preview budget says so in millimetres, and clears the slice', () => {
+test('a print that outgrows the preview budget reports its extent without claiming slice completion', () => {
   // A real 78 mm three-colour model slices to 95 MB and 3.17M records. Under the
   // previous budget the parser stopped a quarter of the way up and the preview
   // drew the stump as if it were the whole print, which reads as a failed slice.
@@ -102,9 +102,11 @@ test('a print that outgrows the preview budget says so in millimetres, and clear
   assert.match(limitation.message, /up to Z \d+\.\d+ mm/, 'in a height the operator can compare to the model');
   assert.match(
     limitation.message,
-    /sliced G-code itself is complete/,
-    'and must not leave "my model was not fully sliced" as the available conclusion',
+    /Later input was not inspected/,
+    'input outside the parse budget must remain unqualified',
   );
+  assert.match(limitation.message, /does not determine whether slicing completed/);
+  assert.doesNotMatch(limitation.message, /G-code itself is complete/);
 
   // The same input inside the budget reports nothing and reaches the last layer.
   const whole = parseRichGcodeModel(gcode);
@@ -116,6 +118,16 @@ test('a print that outgrows the preview budget says so in millimetres, and clear
     ),
     [],
   );
+});
+
+test('a numeric limit reports an uninspected suffix without calling a small input oversized', () => {
+  const model = parseRichGcodeModel('G1 X2\nG2 X1e999 Y5 I1\nG1 X3');
+  assert.equal(model.terminationReason, 'numeric-cap');
+  const projection = projectGcodePreview(model, { mode: 'FeatureType' });
+  const message = projection.limitations[0].message;
+  assert.match(message, /preview parser reached a limit \(numeric-cap\)/);
+  assert.match(message, /Later input was not inspected/);
+  assert.doesNotMatch(message, /G-code is larger|G-code itself is complete/);
 });
 
 test('inventory exactly covers the 12 pinned EViewType values with explicit units and scales', () => {

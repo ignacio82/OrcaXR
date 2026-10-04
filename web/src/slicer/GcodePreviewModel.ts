@@ -903,8 +903,8 @@ function legendEntry(
  * "Parser termination reason: record-cap" told someone looking at a quarter of
  * their model nothing, and left the obvious and wrong conclusion available:
  * that the slice itself had failed. The limit is the preview's, not the
- * engine's, so the height actually drawn and the fact that the G-code is whole
- * are the two things worth saying.
+ * engine's. Report the height actually drawn without inferring slice completion
+ * from a parser that did not inspect the rest of the input.
  */
 function sourceLimitations(model: RichGcodeModel): readonly GcodePreviewLimitation[] {
   if (model.complete) return Object.freeze([]);
@@ -915,8 +915,8 @@ function sourceLimitations(model: RichGcodeModel): readonly GcodePreviewLimitati
       code: 'source-incomplete',
       message:
         `This preview shows only the first ${model.columns.count.toLocaleString('en-US')} moves${height}, ` +
-        `because the G-code is larger than the preview can hold (${model.terminationReason ?? 'unknown limit'}). ` +
-        'The sliced G-code itself is complete — this affects what is drawn, not what will print.',
+        `because the preview parser reached a limit (${model.terminationReason ?? 'unknown limit'}). ` +
+        'Later input was not inspected. This preview limit does not determine whether slicing completed.',
     }),
   ]);
 }
