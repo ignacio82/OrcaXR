@@ -1,5 +1,7 @@
 // Executed inside the real browser task worker. Expectations come from the
 // independent production TypeScript parser, never from another Rust binding.
+import { decodeGcodeModel, decodeGcodeIndex, decodeGcodeIndexPage } from '/gcode-packets.mjs';
+import { packetSnapshot } from '/packet-snapshot.mjs';
 export async function replayGcode(GcodeSession, memory) {
   const corpus = await (await fetch('/gcode-vectors.json')).json();
   const layout = await (await fetch('/gcode-buffer.json')).json();
@@ -39,15 +41,19 @@ export async function replayGcode(GcodeSession, memory) {
       for (let offset = 0; offset < vector.sourceUnits.length; offset += 4093)
         session.append(offset, new Uint16Array(vector.sourceUnits.slice(offset, offset+4093)));
       const info = JSON.parse(session.seal()), expected = vector.binding;
+      const checkedInfo = decodeGcodeIndex(JSON.stringify(info),vector.sourceUnits.length);
       const {entries, ...index} = expected.index;
       same(info,{...index,version:layout.version,entryCount:entries.length},`${vector.id}.info`);
       const entriesWithoutCheckpoints = entries.map(({checkpoint,...entry}) => entry);
       same(JSON.parse(session.page(0,layout.maxIndexPageEntries)), entriesWithoutCheckpoints.slice(0,layout.maxIndexPageEntries), `${vector.id}.page`);
+      same(decodeGcodeIndexPage(session.page(0,layout.maxIndexPageEntries),checkedInfo),entriesWithoutCheckpoints.slice(0,layout.maxIndexPageEntries),`${vector.id}.checked-page`);
       const whole = session.whole(); packetBytes += whole.length;
       same(decode(whole), expected.model, `${vector.id}.whole`);
+      same(packetSnapshot(decodeGcodeModel(whole)),expected.model,`${vector.id}.host-decoder`);
       for (let entry = 0; entry < entries.length; entry++) {
         const packet = session.window(entry,entry); packetBytes += packet.length;
         same(decode(packet), expected.windows[entry], `${vector.id}.window.${entry}`);
+        same(packetSnapshot(decodeGcodeModel(packet)),expected.windows[entry],`${vector.id}.checked-window.${entry}`);
         windows++;
       }
     } finally { session.free(); }

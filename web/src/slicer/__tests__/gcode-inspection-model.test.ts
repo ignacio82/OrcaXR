@@ -261,6 +261,31 @@ test('tool marker and bounded G-code window follow the exact current rich record
   assert.equal(truncated?.text.length, GCODE_INSPECTION_HARD_CAPS.sourceLineCharacters);
 });
 
+test('source context reaches the first blank line without revisiting its newline', () => {
+  for (const prefix of ['\n', '\n\n', '\r\n']) {
+    const source = prefix + 'G1 X1 F600';
+    const currentLine = prefix.split('\n').length;
+    for (const context of [0, 1, 3, 50]) {
+      const window = inspectGcode(parseRichGcodeModel(source), {
+        gcodeSource: source,
+        sourceContextLines: context,
+      }).sourceWindow!;
+      const first = Math.max(1, currentLine - context);
+      assert.equal(window.firstLine, first);
+      assert.equal(window.lastLine, currentLine);
+      assert.deepEqual(
+        window.lines.map(({ number, text, current }) => ({ number, text, current })),
+        Array.from({ length: currentLine - first + 1 }, (_, i) => ({
+          number: first + i,
+          text: first + i === currentLine ? 'G1 X1 F600' : '',
+          current: first + i === currentLine,
+        })),
+      );
+      assert.equal(window.lines.filter((line) => line.current).length, 1);
+    }
+  }
+});
+
 test('step and playback sequences are bounded, directional, wrap-aware, and immutable', () => {
   const state = inspectGcode(fixture(), { moveRange: [0, 4], currentRecord: 3 });
   assert.equal(stepGcodeInspection(state, 1), 5);

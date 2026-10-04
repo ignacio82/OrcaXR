@@ -12,7 +12,9 @@ run through both host bindings. They are development APIs; production browser
 preview still uses TypeScript, and the Android shell does not yet display G-code.
 Preview projection, bounded inspection and playback are also exposed through
 source-owned session queries. Neither application's renderer consumes these
-development bindings yet.
+development bindings yet. The browser source owner and checked packet decoder now
+exist under `web/src/slicer/core`; the real-WASM replay exercises them, but the
+production preview worker has not switched to this adapter.
 
 ## Build decisions
 
@@ -61,8 +63,10 @@ It is a deliberately limited schema subset; unsupported schema constructs must
 fail generation. The full project session, command/result/error and cancellation
 schemas in Phase 1/4 remain to be implemented. The G-code packet layouts below are
 generated; their development leaf request validation is implemented in Rust.
-Complete generated host request/result validators and production adapters remain
-open.
+`contracts/gcode-metadata.json` now generates 26 bounded TypeScript metadata
+types/validators. Browser request encoders also validate shapes and enforce bounds
+before entering WASM. Generated request contracts, the corresponding Kotlin
+metadata validation, and production adapter integration remain open.
 
 The core parses bounded JSON into UTF-16 strings and sorts keys by code units.
 It preserves escaped lone surrogates, resolves duplicate keys like `JSON.parse`,
@@ -133,8 +137,9 @@ selectors releases the old columns before parsing the replacement. An explicit
 selector on every view query prevents accidental use of the last loaded window.
 Packed outputs are independent allocations. Metadata encoding checks cancellation
 on writes; column serialization checks every 4,096 elements and before publishing.
-Renderer consumers, search, full generated request/result validators, production
-worker selection, offline packaging, and device latency/memory budgets remain open.
+Renderer consumers, search, generated request contracts, complete Kotlin result
+validation, production worker selection, offline packaging, and device
+latency/memory budgets remain open.
 
 The internal Rust projection implements all 12 display modes, composable
 role/tool/event/layer/record/value filters, numeric ranges, accessible legends,
@@ -166,7 +171,7 @@ inclusive index-entry range. It is never implicit, nullable or a substitute sour
 Requests over 8 MiB UTF-8, malformed/unknown fields, invalid selectors and unknown
 versions are refused. JNI checks Java string length before copying, then Rust
 checks UTF-8 bytes. Raw wasm-bindgen glue copies strings before entering Rust;
-the future production host validator must enforce the bound before that copy.
+the browser source owner's encoder enforces the byte bound before that copy.
 
 | Operation | Request payload | Output kind |
 | --- | --- | --- |
@@ -204,8 +209,60 @@ on allocation/transfer failure. Every native prepare clears any pending packet,
 including when the new request fails. Close can independently cancel work; the
 Kotlin owner rejects any reply that races with close. WASM outputs are copied into
 host-owned Uint8Arrays and can be transferred after disposing the Rust session.
-The packet checks cover headers, column bounds, UTF-8, and Android tick references;
-complete generated metadata/result validation remains required for production.
+The packet checks cover headers, column bounds, UTF-8, and Android tick references.
+The browser decoder additionally validates generated metadata and relational
+source/column references as described below; equivalent complete Kotlin validation
+remains required for production.
+
+## Browser host boundary
+
+`GcodePackets` accepts complete, fixed ordinary ArrayBuffers with exact packet
+lengths, zero alignment padding, bounded counts and strict UTF-8 metadata. It
+rejects shared, resizable, detached and oversized backing buffers. Its generated
+metadata guards reject unknown fields and enforce finite numbers, integer/text
+bounds, and a validation-node budget. Additional checks bind indices, source
+spans, layer selections, cursor/tool-marker positions, ticks and visible records
+to the decoded model. Projection indices remain local; inspection/playback IDs
+remain original source IDs. Typed columns share the single owned packet buffer.
+String reconstruction preserves individual UTF-16 code units.
+
+Source-window `endOffset` includes a trailing CR in CRLF input, while its displayed
+`text` omits that CR. At the 4,096-unit limit this distinction also affects the
+truncation flag. Do not validate display length as exact raw-span length.
+Context scanning also stops before the delimiter immediately preceding the
+cursor's line. When that delimiter is at offset zero, clamping a backward search
+to zero rediscovers it and can produce negative line numbers. Both TypeScript and
+Rust now move to the first blank line in that case; the shared corpus includes
+leading LF, repeated LF and CRLF inputs.
+
+`CoreGcodeSource` takes an already initialized binding and is intended for a
+disposable task worker. It sends chunks of at most 65,536 UTF-16 units, validates
+and freezes index metadata, and checks consecutive pages, declared page lengths,
+and complete-source coverage. The host refuses index counts above the parser's
+64 MiB accounting budget divided by its minimum 256-byte checkpoint charge, plus
+the initial entry. This is a corruption bound, not a measured JS heap budget.
+It retains no JS source string or model columns. Each opened frame binds view
+queries to an immutable selector and source; callers own its decoded buffers.
+Transferring a frame invalidates further queries against that frame. Reopening
+gets fresh host bytes while Rust may reuse its one cached parsed model.
+
+Initialization failure releases the native owner. Host disposal is idempotent,
+and subsequent work, including an in-progress page iterator, refuses a closed
+owner. Raw wasm-bindgen `.free()` is **not** idempotent; the host clears its handle
+before calling it. Synchronous work is cancelled by the containing worker's
+termination, not a main-thread callback into a busy WASM call. Production worker
+selection, request deadlines, artifact loading/handshake and offline packaging
+still need to connect this owner to the existing worker lifecycle.
+
+Host encoders accept the existing typed preview/inspection API, reject unknown
+fields and substitute source/checkpoint options, and preserve Float32 duration
+bits and UTF-16 provenance/colors. They write bounded ASCII JSON directly, charging
+each byte before appending it, rather than materializing an unbounded typed-array
+copy and then checking its size. Parser options have a 64 KiB bound; view requests
+have an 8 MiB bound. Shared/resizable/detached typed inputs are refused. Rust still
+owns semantic computation checks. These encoders are currently hand-written;
+replay verifies their behavior, but does not replace the plan's generated request
+contract requirement.
 
 ## Repeatable checks
 
@@ -223,6 +280,8 @@ node tools/cross-platform/generate-contracts.mjs
 node tools/cross-platform/generate-gcode-layout.mjs
 node tools/cross-platform/generate-preview-catalog.mjs
 node tools/cross-platform/generate-view-layout.mjs
+node tools/cross-platform/generate-gcode-metadata.mjs
+node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
@@ -341,7 +400,7 @@ that output capacities exactly match the selected counts. Malformed model inject
 is confined to these host tests; the binding corpus below uses actual session
 sources and selectors.
 
-Host inspection verification covers 1,169 reference cases over 453 models,
+Host inspection verification covers 1,181 reference cases over 456 models,
 including source windows, lone surrogates, layer/move ranges, original record IDs,
 event ticks, cursor/marker/focus bounds, stepping, playback and explicit errors.
 Resource cases verify the 100,000-tick cap before allocating tick strings, the
@@ -351,15 +410,26 @@ under 4 MiB with one interned label; the associated 100,000-frame playback remai
 bounded. Column packing also settles cancellation with a five-second watchdog;
 that watchdog is not a UI latency target.
 
-An additional independent corpus constructs 4,479 view queries over 100 immutable
+An additional independent corpus constructs 4,554 view queries over 103 immutable
 sources, including whole/window switches, ten rejections, all 12 preview modes,
 128 extreme logarithmic-duration cases, inspection/source context and playback.
 All cases agree on host Rust, actual browser WASM and Android x86_64 JNI. Successful
-browser results total 4,617,792 packet bytes. A transferred view packet remains
+browser results total 4,654,356 packet bytes. A transferred view packet remains
 valid after Rust session disposal and worker termination. Android checks rejected
 requests followed by valid work, buffer survival, malformed headers/UTF-8, and
 clearing a pending packet when a subsequent prepare fails. No test injects model
 columns into the production binding API.
+
+The new browser packet decoder additionally agrees with all 456 whole/window
+models and all 4,554 real-WASM view cases. The source owner replays those same
+4,554 requests over 103 sources, including ten refusals. Actual-WASM mutation
+tests reject 26 corrupted view packets, in addition to unit-tested malformed
+model/header/text/column cases. Source-owner tests cover pre-copy request bounds,
+split/isolated surrogates, Float32 NaN/Infinity bits, failed initialization,
+short pages and repeated disposal. Every source replay transfers a model, refuses
+queries against its detached frame, reopens a fresh frame, and rejects work after
+disposal. These checks exercise the browser host implementation, not the shipping
+preview worker or a native renderer.
 
 The current browser repeat test remains stable at 57,540,608 bytes of WASM linear
 memory for parser reopen cycles; canonicalization alone settles at 12,058,624
@@ -372,12 +442,13 @@ emulator; this is not ARM64 or 16 KB-page runtime evidence.
 
 The projection compiles for WASM, Android ARM64 and Android x86_64. Debug and
 optimized host reference tests, strict Clippy, regeneration checks and Cargo audit
-pass. Full web quality also passes after the incomplete-prefix notice correction,
-including 255 unit-test files, production browser/recovery/offline checks,
+pass. Full web quality and targeted post-fix checks pass after the browser host
+boundary and leading-blank-line source-context correction, including 257
+unit-test files, production browser/recovery/offline checks,
 accessibility, pseudo-localization, slicing and bundle budgets. The existing
-TypeScript preview benchmark records a 1.615 indexed/whole median ratio against
+TypeScript preview benchmark records a 1.543 indexed/whole median ratio against
 its 2.5 ceiling; this does not measure the Rust projection. All three npm audits
-report zero vulnerabilities. The configured redacted secret scan covers 1,532
+report zero vulnerabilities. The configured redacted secret scan covers 1,541
 UTF-8 source files, including six with embedded NULs, with no findings.
 The wave-settings gate now reconstructs the pinned source plus the tracked build
 patch in a temporary directory; an older local engine checkout no longer changes

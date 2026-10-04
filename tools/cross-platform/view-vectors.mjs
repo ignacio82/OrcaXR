@@ -149,6 +149,8 @@ function sourceVector(id, sourceUnits, options) {
 }
 const parser = JSON.parse(read("testdata/cross-platform/gcode-vectors.json"));
 for (const v of parser.vectors) sourceVector(v.id, v.sourceUnits, v.options);
+for (const [i, prefix] of ["\n", "\n\n", "\r\n"].entries())
+  sourceVector(`view-leading-blank-${i}`, units(prefix + "G1 X1 F600"), {});
 const { vector, whole, source } = sourceVector(
   "view-extremes",
   units(

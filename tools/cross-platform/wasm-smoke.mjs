@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { launchBrowser } from '../../web/scripts/preview-harness.mjs';
+import { build } from '../../web/node_modules/esbuild/lib/main.js';
 
 const root = new URL('../../', import.meta.url);
 const corpus = JSON.parse(await readFile(new URL('testdata/cross-platform/canonical-vectors.json', root)));
 const schema = JSON.parse(await readFile(new URL('contracts/core-protocol.json', root)));
+const packets = await build({entryPoints:[new URL('web/src/slicer/core/GcodePackets.ts',root).pathname],bundle:true,format:'esm',platform:'browser',write:false});
+const sourceOwner = await build({entryPoints:[new URL('web/src/slicer/core/CoreGcodeSource.ts',root).pathname],bundle:true,format:'esm',platform:'browser',write:false});
 const workerSource = `
 import initialize, { core_info, evaluate, GcodeSession } from '/wasm/orcaxr_core.js';
 import { replayGcode } from '/gcode-replay.mjs';
@@ -38,7 +41,9 @@ const server = createServer(async (request, response) => {
     response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'");
     if (path === '/') { response.setHeader('Content-Type', 'text/html'); response.end('<!doctype html><title>OrcaXR core boundary tests</title>'); }
     else if (path === '/worker.mjs') { response.setHeader('Content-Type', 'text/javascript'); response.end(workerSource); }
-    else if (['/gcode-replay.mjs', '/view-replay.mjs', '/gcode-vectors.json', '/view-vectors.json', '/gcode-buffer.json', '/gcode-view-buffer.json'].includes(path)) {
+    else if (path === '/gcode-packets.mjs') { response.setHeader('Content-Type','text/javascript'); response.end(packets.outputFiles[0].text); }
+    else if (path === '/gcode-source.mjs') { response.setHeader('Content-Type','text/javascript'); response.end(sourceOwner.outputFiles[0].text); }
+    else if (['/gcode-replay.mjs', '/view-replay.mjs', '/packet-snapshot.mjs', '/gcode-vectors.json', '/view-vectors.json', '/gcode-buffer.json', '/gcode-view-buffer.json'].includes(path)) {
       const file = path.endsWith('.mjs') ? 'tools/cross-platform'+path : path.endsWith('-buffer.json') ? 'contracts'+path : 'testdata/cross-platform'+path;
       response.setHeader('Content-Type', path.endsWith('.mjs') ? 'text/javascript' : 'application/json');
       response.end(await readFile(new URL(file,root)));

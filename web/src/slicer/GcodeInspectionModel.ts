@@ -684,7 +684,9 @@ function buildSourceWindow(
   let windowStart = current.sourceStartOffset;
   let firstLine = current.sourceLine;
   for (let index = 0; index < context && windowStart > 0; index += 1) {
-    const priorNewline = source.lastIndexOf('\n', Math.max(0, windowStart - 2));
+    // At offset 1 the preceding newline is byte/code-unit 0. Searching from
+    // zero would find that same delimiter again instead of the previous line.
+    const priorNewline = windowStart < 2 ? -1 : source.lastIndexOf('\n', windowStart - 2);
     windowStart = priorNewline < 0 ? 0 : priorNewline + 1;
     firstLine -= 1;
   }

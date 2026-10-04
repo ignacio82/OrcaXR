@@ -65,7 +65,9 @@ engine (`libslic3r` via WASM) as the computational core.
   development infrastructure, not a usable native slicer. Current release support
   remains unchanged. Rust preview projections, bounded inspection and playback
   are exposed through development WASM/JNI session bindings; production renderer
-  integration and physical-device qualification remain open. Native PCVR
+  integration and physical-device qualification remain open. Browser packet
+  validation and a source owner are tested against real WASM but are not yet
+  connected to the production preview worker. Native PCVR
   remains outside scope.
 
 ## Stack

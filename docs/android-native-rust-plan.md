@@ -18,8 +18,10 @@ parser, immutable source/index ownership, bounded windows, cooperative native
 cancellation, and generated packed-column layouts through WASM/JNI. The linked
 engineering document records differential and resource evidence. The 12-mode Rust
 preview projection, bounded inspection and playback now have development WASM/JNI
-session bindings and independently generated source/window expectations. Production
-browser preview still uses TypeScript; search, complete host validators, native
+session bindings and independently generated source/window expectations. Generated
+browser metadata validation and the bounded worker-side source owner now replay
+the actual WASM corpus. Production browser preview still uses TypeScript; search,
+generated request contracts, complete Kotlin host validators, native
 rendering, shipping asset integration, and device budgets remain required before
 Stage B.
 

@@ -764,13 +764,17 @@ fn source_window(
         if start == 0 {
             break;
         }
-        let from = start.saturating_sub(2).min(source.len().saturating_sub(1));
         let mut previous = None;
-        for i in (0..=from).rev() {
-            poll(cancel, i)?;
-            if source[i] == 10 {
-                previous = Some(i);
-                break;
+        // At offset 1, code unit 0 is the delimiter immediately before this
+        // line. It must not be rediscovered as the previous line's delimiter.
+        if let Some(from) = start.checked_sub(2) {
+            let from = from.min(source.len().saturating_sub(1));
+            for i in (0..=from).rev() {
+                poll(cancel, i)?;
+                if source[i] == 10 {
+                    previous = Some(i);
+                    break;
+                }
             }
         }
         start = previous.map_or(0, |i| i + 1);

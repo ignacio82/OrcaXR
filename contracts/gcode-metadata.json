@@ -1,0 +1,895 @@
+{
+  "schemaVersion": 1,
+  "description": "Bounded OXGP/OXGV metadata and index-page shapes. Relational column/source invariants are checked by each host decoder; no unknown fields.",
+  "maxValidationNodes": 4194304,
+  "definitions": {
+    "Text": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "integer": true,
+        "min": 0,
+        "max": 65535
+      },
+      "minLength": 0,
+      "maxLength": 65536
+    },
+    "Provenance": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "integer": true,
+        "min": 0,
+        "max": 65535
+      },
+      "minLength": 0,
+      "maxLength": 256
+    },
+    "Limits": {
+      "type": "object",
+      "fields": {
+        "inputCharacters": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 268435456
+        },
+        "lines": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 16000000
+        },
+        "records": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 240000
+        },
+        "pathPoints": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 8000000
+        },
+        "warnings": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 2048
+        },
+        "lineCharacters": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 65536
+        },
+        "roles": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 512
+        },
+        "filaments": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 4096
+        }
+      }
+    },
+    "Termination": {
+      "enum": [
+        "input-cap",
+        "line-cap",
+        "record-cap",
+        "path-point-cap",
+        "numeric-cap",
+        "index-cap"
+      ]
+    },
+    "Warning": {
+      "type": "object",
+      "fields": {
+        "severity": {
+          "enum": [
+            "warning",
+            "error"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "message": {
+          "ref": "Text"
+        },
+        "line": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 16000000
+        },
+        "startOffset": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 268435456
+        },
+        "endOffset": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 268435456
+        }
+      }
+    },
+    "Filament": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 4095
+        },
+        "tool": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 255
+        },
+        "source": {
+          "enum": [
+            "tool",
+            "color-change"
+          ]
+        },
+        "color": {
+          "ref": "Text",
+          "optional": true
+        }
+      }
+    },
+    "Model": {
+      "type": "object",
+      "fields": {
+        "recordOffset": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 4294967295,
+          "optional": true
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "ref": "Text"
+          },
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "filaments": {
+          "type": "array",
+          "items": {
+            "ref": "Filament"
+          },
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "layerCount": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 16000000
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "ref": "Warning"
+          },
+          "minLength": 0,
+          "maxLength": 2048
+        },
+        "sourceLength": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 268435456
+        },
+        "parsedCharacters": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 268435456
+        },
+        "sourceLineOffset": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 16000000,
+          "optional": true
+        },
+        "parsedLines": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 16000000
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "terminationReason": {
+          "ref": "Termination",
+          "optional": true
+        },
+        "limits": {
+          "ref": "Limits"
+        }
+      }
+    },
+    "Index": {
+      "type": "object",
+      "fields": {
+        "version": {
+          "enum": [
+            1
+          ]
+        },
+        "entryCount": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 16000001
+        },
+        "layerCount": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 16000000
+        },
+        "recordCount": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 4294967295
+        },
+        "pathPointCount": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 9007199254740991
+        },
+        "sourceLength": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 268435456
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "ref": "Warning"
+          },
+          "minLength": 0,
+          "maxLength": 2048
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "terminationReason": {
+          "ref": "Termination",
+          "optional": true
+        },
+        "limits": {
+          "ref": "Limits"
+        }
+      }
+    },
+    "IndexEntry": {
+      "type": "object",
+      "fields": {
+        "layer": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 16000000
+        },
+        "startOffset": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 268435456
+        },
+        "endOffsetExclusive": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 268435456
+        },
+        "recordsBefore": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 4294967295
+        },
+        "pathPointsBefore": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 9007199254740991
+        }
+      }
+    },
+    "IndexPage": {
+      "type": "array",
+      "items": {
+        "ref": "IndexEntry"
+      },
+      "minLength": 0,
+      "maxLength": 256
+    },
+    "Mode": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "enum": [
+            "FeatureType",
+            "Height",
+            "Width",
+            "Feedrate",
+            "FanSpeed",
+            "Temperature",
+            "VolumetricRate",
+            "Tool",
+            "ColorPrint",
+            "FilamentId",
+            "LayerTime",
+            "LayerTimeLog"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "valueKind": {
+          "enum": [
+            "category",
+            "number"
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 256,
+          "nullable": true
+        },
+        "scale": {
+          "enum": [
+            "categorical",
+            "linear",
+            "log"
+          ]
+        }
+      }
+    },
+    "Limitation": {
+      "type": "object",
+      "fields": {
+        "code": {
+          "enum": [
+            "source-incomplete"
+          ]
+        },
+        "message": {
+          "ref": "Text"
+        }
+      }
+    },
+    "Legend": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "accessibleLabel": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "pattern": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "color": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "min": 0,
+            "max": 1
+          },
+          "minLength": 4,
+          "maxLength": 4
+        }
+      }
+    },
+    "Range": {
+      "type": "object",
+      "fields": {
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "scale": {
+          "enum": [
+            "linear",
+            "log"
+          ]
+        },
+        "sampleCount": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 240000
+        }
+      }
+    },
+    "Missing": {
+      "type": "object",
+      "fields": {
+        "key": {
+          "enum": [
+            "filament-colors",
+            "layer-times",
+            "role-color"
+          ]
+        },
+        "message": {
+          "ref": "Text"
+        },
+        "indices": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "integer": true,
+            "min": 0,
+            "max": 4294967295
+          },
+          "minLength": 0,
+          "maxLength": 64
+        },
+        "additionalCount": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 4294967295
+        }
+      }
+    },
+    "PreviewReady": {
+      "type": "object",
+      "fields": {
+        "status": {
+          "enum": [
+            "ready"
+          ]
+        },
+        "mode": {
+          "ref": "Mode"
+        },
+        "sourceRecordCount": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 240000
+        },
+        "range": {
+          "ref": "Range",
+          "optional": true
+        },
+        "legend": {
+          "type": "array",
+          "items": {
+            "ref": "Legend"
+          },
+          "minLength": 0,
+          "maxLength": 8192
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "ref": "Limitation"
+          },
+          "minLength": 0,
+          "maxLength": 1
+        },
+        "layerTimeProvenance": {
+          "ref": "Provenance",
+          "optional": true
+        }
+      }
+    },
+    "PreviewUnsupported": {
+      "type": "object",
+      "fields": {
+        "status": {
+          "enum": [
+            "unsupported"
+          ]
+        },
+        "mode": {
+          "ref": "Mode"
+        },
+        "sourceRecordCount": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 240000
+        },
+        "missingMetadata": {
+          "type": "array",
+          "items": {
+            "ref": "Missing"
+          },
+          "minLength": 1,
+          "maxLength": 3
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "ref": "Limitation"
+          },
+          "minLength": 0,
+          "maxLength": 1
+        }
+      }
+    },
+    "LayerSelection": {
+      "type": "object",
+      "fields": {
+        "firstLayer": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 16000000
+        },
+        "lastLayer": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 16000000
+        },
+        "firstZMm": {
+          "type": "number"
+        },
+        "lastZMm": {
+          "type": "number"
+        },
+        "singleLayer": {
+          "type": "boolean"
+        },
+        "accessibleLabel": {
+          "type": "string",
+          "maxLength": 512
+        }
+      }
+    },
+    "MoveSelection": {
+      "type": "object",
+      "fields": {
+        "firstOrdinal": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 239999
+        },
+        "lastOrdinal": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 239999
+        },
+        "firstRecord": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 4294967295
+        },
+        "lastRecord": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 4294967295
+        },
+        "count": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 240000
+        },
+        "accessibleLabel": {
+          "type": "string",
+          "maxLength": 512
+        }
+      }
+    },
+    "Cursor": {
+      "type": "object",
+      "fields": {
+        "ordinal": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 239999
+        },
+        "record": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 4294967295
+        },
+        "kind": {
+          "enum": [
+            1,
+            2,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ]
+        },
+        "kindLabel": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "layer": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 16000000
+        },
+        "zMm": {
+          "type": "number"
+        },
+        "tool": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 255
+        },
+        "filament": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 4095
+        },
+        "sourceLine": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 16000000
+        },
+        "sourceStartOffset": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 268435456
+        },
+        "sourceEndOffset": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 268435456
+        },
+        "positionMm": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minLength": 3,
+          "maxLength": 3
+        },
+        "accessibleLabel": {
+          "type": "string",
+          "maxLength": 512
+        }
+      }
+    },
+    "ToolMarker": {
+      "type": "object",
+      "fields": {
+        "visible": {
+          "type": "boolean"
+        },
+        "record": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 4294967295
+        },
+        "tool": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 255
+        },
+        "positionMm": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minLength": 3,
+          "maxLength": 3
+        },
+        "accessibleLabel": {
+          "type": "string",
+          "maxLength": 512
+        }
+      }
+    },
+    "SourceLine": {
+      "type": "object",
+      "fields": {
+        "number": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 16000050
+        },
+        "startOffset": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 268435456
+        },
+        "endOffset": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 268435456
+        },
+        "text": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "integer": true,
+            "min": 0,
+            "max": 65535
+          },
+          "minLength": 0,
+          "maxLength": 4096
+        },
+        "current": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "SourceWindow": {
+      "type": "object",
+      "fields": {
+        "currentLine": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 16000000
+        },
+        "firstLine": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 16000050
+        },
+        "lastLine": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 16000050
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "ref": "SourceLine"
+          },
+          "minLength": 1,
+          "maxLength": 101
+        }
+      }
+    },
+    "Bounds": {
+      "type": "object",
+      "fields": {
+        "minMm": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minLength": 3,
+          "maxLength": 3
+        },
+        "maxMm": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minLength": 3,
+          "maxLength": 3
+        }
+      }
+    },
+    "Inspection": {
+      "type": "object",
+      "fields": {
+        "sourceRecordCount": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 240000
+        },
+        "layerSelection": {
+          "ref": "LayerSelection",
+          "nullable": true
+        },
+        "moveSelection": {
+          "ref": "MoveSelection",
+          "nullable": true
+        },
+        "current": {
+          "ref": "Cursor",
+          "nullable": true
+        },
+        "toolMarker": {
+          "ref": "ToolMarker",
+          "nullable": true
+        },
+        "sourceWindow": {
+          "ref": "SourceWindow",
+          "nullable": true
+        },
+        "focusBounds": {
+          "ref": "Bounds",
+          "nullable": true
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "ref": "Limitation"
+          },
+          "minLength": 0,
+          "maxLength": 1
+        },
+        "tickLabels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "minLength": 0,
+          "maxLength": 100000
+        }
+      }
+    },
+    "Playback": {
+      "type": "object",
+      "fields": {}
+    }
+  }
+}
