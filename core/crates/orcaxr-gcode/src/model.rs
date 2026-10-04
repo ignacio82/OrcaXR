@@ -127,6 +127,18 @@ pub enum Termination {
     NumericCap,
     IndexCap,
 }
+impl Termination {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::InputCap => "input-cap",
+            Self::LineCap => "line-cap",
+            Self::RecordCap => "record-cap",
+            Self::PathPointCap => "path-point-cap",
+            Self::NumericCap => "numeric-cap",
+            Self::IndexCap => "index-cap",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]

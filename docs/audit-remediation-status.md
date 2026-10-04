@@ -15,9 +15,19 @@ printer/security/credential gates.
 
 G-code evidence covers the unchanged TypeScript reference against host Rust,
 browser WASM, and Android JNI, bounded packed columns, UTF-16 preservation,
-source/session lifecycle, and cancellation. Production preview, projections,
-inspection, native rendering, and physical-device performance remain migration
+source/session lifecycle, and cancellation. Production integration, projection
+bindings, inspection, native rendering, and physical-device performance remain migration
 work; these development bindings do not change release support.
+
+The Rust preview projection now passes 1,567 host reference cases covering all
+12 modes, filters, legends, exact Float32 outputs, malformed inputs and unsupported
+metadata. Resource tests add bounded-window projection, cancellation and independent
+outputs. Projection bindings and production integration remain open. The existing
+web truncated-parse notice now reports the inspected prefix without inferring
+that slicing completed. Full web quality, optimized Rust reference tests,
+Clippy, cross-target compilation, dependency audits and the configured redacted
+source scan pass. The wave-settings source test uses pinned Git content plus the
+tracked build patch rather than a mutable developer checkout.
 
 ## Current implementation
 

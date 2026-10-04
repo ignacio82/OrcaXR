@@ -10,6 +10,8 @@ workflow is implemented yet.
 The shared G-code parser, index, bounded windows, and owned binary transport now
 run through both host bindings. They are development APIs; production browser
 preview still uses TypeScript, and the Android shell does not yet display G-code.
+The Rust preview projection is implemented and tested on the host, but is not yet
+exposed through WASM/JNI or used by either application's renderer.
 
 ## Build decisions
 
@@ -24,6 +26,7 @@ preview still uses TypeScript, and the Android shell does not yet display G-code
 | Compose | BOM 2026.03.01; Activity 1.13.0, Lifecycle 2.10.0 |
 | NDK | 29.0.14206865; API 31 linkers; ARM64 and x86_64 |
 | Rust | 1.94.1, locked dependencies; Android targets and `wasm32-unknown-unknown` |
+| Preview math | `libm` 0.2.16 with default architecture features disabled; same log/exp arithmetic on every target |
 | Browser bindings | `wasm-bindgen` / CLI 0.2.129 as one matched set |
 | JNI | Direct `jni` crate 0.21.1 boundary; exact-class consumer keep rule |
 | Dependency checks | Gradle SHA-256 verification metadata; Cargo lockfile and cargo-audit 0.22.2 |
@@ -123,8 +126,28 @@ accumulates it, sealing currently copies into an immutable Arc allocation, packi
 copies columns, and the final packet copies into host-owned memory. Previous
 windows are not retained by the session. Packing and metadata encoding are bounded
 but do not yet have intermediate cancellation checks. Renderer consumers, preview
-projection/inspection, full generated request/result validators, production worker
+projection bindings, inspection, full generated request/result validators, production worker
 selection, offline packaging, and device latency/memory budgets remain open.
+
+The internal Rust projection implements all 12 display modes, composable
+role/tool/event/layer/record/value filters, numeric ranges, accessible legends,
+and explicit unsupported results for absent filament colors, unspecified role
+colors, and missing authoritative layer times. It preserves local column indices
+for rendering and validates source-record ranges against the window's offset.
+Each output owns its arrays; no mutable view into source columns escapes. Count
+and cap validation precede exact-sized output allocations. Cancellation checks
+cover validation, path points, prefix-height scanning, missing-metadata scans,
+and output passes; cancelled work publishes no projection.
+
+`contracts/gcode-preview.json` generates the Rust palette and mode catalog. The
+production TypeScript implementation remains the independent behavioral oracle.
+Its tests and deterministic parser inputs generate `preview-vectors.json`, with
+Float32 columns stored as raw bits and source-derived text as UTF-16 units.
+The corpus includes extreme finite Float32 layer times: platform libc `exp` changed
+an accessible legend label by one binary64 ULP. The pinned pure-Rust `libm`
+implementation resolves that observed difference in debug and optimized host
+tests. This is corpus evidence, not proof for every float or every browser engine;
+actual projection replay on WASM/JNI remains required before switching consumers.
 
 ## Repeatable checks
 
@@ -140,9 +163,11 @@ cargo +1.94.1 install wasm-bindgen-cli --version 0.2.129 --locked --jobs 2
 cargo +1.94.1 install cargo-audit --version 0.22.2 --locked --jobs 2
 node tools/cross-platform/generate-contracts.mjs
 node tools/cross-platform/generate-gcode-layout.mjs
+node tools/cross-platform/generate-preview-catalog.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inventory.mjs
 ```
 
@@ -152,6 +177,7 @@ Run these in `core/` so the pinned Rust toolchain is selected:
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked --jobs 2 -- -D warnings
 cargo test --workspace --locked --jobs 2
+cargo test -p orcaxr-gcode --test preview --release --locked --jobs 2
 cargo audit
 ```
 
@@ -241,6 +267,29 @@ Initial G-code verification on 2026-10-04 established:
 The parser port does not yet replace the production web preview. Stage B and the
 Phase 3 exit gate remain open until projections, inspection, production packaging,
 rollback selection, renderer integration, and device measurements are verified.
+
+Initial host projection verification on 2026-10-04 establishes 1,567 reference
+projections/rejections over 202 models, including all display modes, filter
+combinations, exact Float32 output bits, legends and labels, malformed models,
+missing-metadata diagnostics, UTF-16 provenance, nonzero window offsets, and
+128 logarithmic-duration cases spanning finite Float32 exponents. Additional
+tests verify cancellation settlement, cap refusals and output independence.
+The 300,002-record resource test now also projects each bounded window and checks
+that output capacities exactly match the selected counts. These are host tests;
+they establish neither platform projection bindings nor device performance.
+
+The projection compiles for WASM, Android ARM64 and Android x86_64. Debug and
+optimized host reference tests, strict Clippy, regeneration checks and Cargo audit
+pass. Full web quality also passes after the incomplete-prefix notice correction,
+including 255 unit-test files, production browser/recovery/offline checks,
+accessibility, pseudo-localization, slicing and bundle budgets. The existing
+TypeScript preview benchmark records a 1.615 indexed/whole median ratio against
+its 2.5 ceiling; this does not measure the Rust projection. All three npm audits
+report zero vulnerabilities. The configured redacted secret scan covers 1,507
+text files plus six source files containing embedded NULs, with no findings.
+The wave-settings gate now reconstructs the pinned source plus the tracked build
+patch in a temporary directory; an older local engine checkout no longer changes
+the test authority, and absent source never silently skips that check.
 
 The workflow `.github/workflows/native-core.yml` repeats these checks independently
 of the existing web/server/engine gates. Its first GitHub-hosted run is not yet

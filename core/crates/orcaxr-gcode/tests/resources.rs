@@ -38,6 +38,24 @@ fn a_large_single_layer_is_fully_reachable_with_bounded_columns() {
         assert!(model.columns.start_x.capacity() <= PREVIEW_WINDOW_RECORDS);
         assert!(model.columns.kind.capacity() <= PREVIEW_WINDOW_RECORDS);
         assert!(model.columns.source_line.capacity() <= PREVIEW_WINDOW_RECORDS);
+        let request =
+            serde_json::from_str(r#"{"mode":"FeatureType","maxProjectedRecords":240000}"#).unwrap();
+        let projected = preview::project(&model, &request, &Cancellation::default()).unwrap();
+        let preview::Preview::Ready {
+            count,
+            record_indices,
+            values,
+            colors_rgba,
+            ..
+        } = projected
+        else {
+            panic!("generated moves must have known feature colors");
+        };
+        assert_eq!(count, model.columns.count);
+        assert_eq!(record_indices, (0..count as u32).collect::<Vec<_>>());
+        assert_eq!(record_indices.capacity(), count);
+        assert_eq!(values.capacity(), count);
+        assert_eq!(colors_rgba.capacity(), count * 4);
         next += model.columns.count;
     }
     assert_eq!(next, index.record_count);

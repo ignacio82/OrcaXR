@@ -7,6 +7,8 @@ mod lexer;
 mod model;
 mod packet;
 mod parser;
+mod path;
+pub mod preview;
 mod session;
 mod text;
 

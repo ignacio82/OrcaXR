@@ -14,6 +14,7 @@ orcaxr-gcode = { path = "crates/orcaxr-gcode" }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.150", features = ["float_roundtrip"] }
 ryu-js = "=1.0.3"
+libm = { version = "=0.2.16", default-features = false }
 sha2 = "=0.10.9"
 wasm-bindgen = "=0.2.129"
 jni = "=0.21.1"
