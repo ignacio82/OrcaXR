@@ -15,15 +15,21 @@ printer/security/credential gates.
 
 G-code evidence covers the unchanged TypeScript reference against host Rust,
 browser WASM, and Android JNI, bounded packed columns, UTF-16 preservation,
-source/session lifecycle, and cancellation. Production integration, projection
-bindings, inspection, native rendering, and physical-device performance remain migration
-work; these development bindings do not change release support.
+source/session lifecycle, and cancellation. Projection, bounded inspection and
+playback also run through development session bindings. Production integration,
+search, complete host validators, native rendering, and physical-device performance
+remain migration work; these bindings do not change release support.
 
 The Rust preview projection now passes 1,567 host reference cases covering all
 12 modes, filters, legends, exact Float32 outputs, malformed inputs and unsupported
 metadata. Resource tests add bounded-window projection, cancellation and independent
-outputs. Projection bindings and production integration remain open. The existing
-web truncated-parse notice now reports the inspected prefix without inferring
+outputs. Host inspection adds 1,169 cases over 453 models. Another 4,479 queries
+over 100 immutable sources agree across host Rust, browser WASM and Android JNI,
+including explicit window selection, Float32 extremes, UTF-16 context, playback
+and ten rejections. Bounded packets preserve ownership after disposal, reject
+malformed headers/text, and clear stale pending transfers. Cancellation now covers
+metadata/column packing. The native application remains a development shell.
+The existing web truncated-parse notice reports the inspected prefix without inferring
 that slicing completed. Full web quality, optimized Rust reference tests,
 Clippy, cross-target compilation, dependency audits and the configured redacted
 source scan pass. The wave-settings source test uses pinned Git content plus the

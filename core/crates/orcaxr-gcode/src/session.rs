@@ -1,6 +1,7 @@
 use crate::{
-    Cancellation, Index, Limits, Options, ParseError, index_with_cancellation, layout, pack,
-    packet, parse_window_with_cancellation, parse_with_cancellation,
+    Cancellation, Index, Limits, Model, Options, ParseError, index_with_cancellation, inspection,
+    layout, packet, parse_window_with_cancellation, parse_with_cancellation, preview, view_packet,
+    view_request::{Request, Window},
 };
 use serde::Serialize;
 
@@ -12,6 +13,9 @@ pub enum SessionError {
     SourceLength,
     ResourceLimit,
     Cancelled,
+    InvalidRequest,
+    UnsupportedProtocol,
+    Computation(&'static str),
 }
 impl SessionError {
     pub fn code(self) -> &'static str {
@@ -22,6 +26,9 @@ impl SessionError {
             Self::SourceLength => "source_length",
             Self::ResourceLimit => "resource_limit",
             Self::Cancelled => "cancelled",
+            Self::InvalidRequest => "invalid_request",
+            Self::UnsupportedProtocol => "unsupported_protocol",
+            Self::Computation(code) => code,
         }
     }
 }
@@ -40,13 +47,14 @@ enum State {
     Indexed(Index),
     Failed,
 }
-/// One immutable source and index. A parsed window is returned to the host;
-/// the session does not retain previous windows or packed transfer buffers.
+/// One immutable source/index and at most one parsed window. Old columns are
+/// released before parsing a different selector; packed transfers are not kept.
 pub struct Session {
     state: State,
     expected: usize,
     options: Options,
     cancellation: Cancellation,
+    loaded: Option<(Window, Model)>,
 }
 impl Session {
     pub fn new(
@@ -80,6 +88,7 @@ impl Session {
             expected,
             options,
             cancellation,
+            loaded: None,
         })
     }
     fn active(&self) -> Result<(), SessionError> {
@@ -144,18 +153,21 @@ impl Session {
             #[serde(skip_serializing_if = "Option::is_none")]
             termination_reason: Option<crate::Termination>,
         }
-        let value = packet::json(&Info {
-            version: layout::VERSION,
-            entry_count: index.entries.len(),
-            layer_count: index.layer_count,
-            record_count: index.record_count,
-            path_point_count: index.path_point_count,
-            source_length: index.source_length,
-            complete: index.complete,
-            warnings: &index.warnings,
-            limits: index.limits,
-            termination_reason: index.termination_reason,
-        })?;
+        let value = packet::json_with_cancellation(
+            &Info {
+                version: layout::VERSION,
+                entry_count: index.entries.len(),
+                layer_count: index.layer_count,
+                record_count: index.record_count,
+                path_point_count: index.path_point_count,
+                source_length: index.source_length,
+                complete: index.complete,
+                warnings: &index.warnings,
+                limits: index.limits,
+                termination_reason: index.termination_reason,
+            },
+            Some(&self.cancellation),
+        )?;
         String::from_utf8(value).map_err(|_| SessionError::InvalidState)
     }
     pub fn page(&self, start: usize, count: usize) -> Result<String, SessionError> {
@@ -185,30 +197,114 @@ impl Session {
                 path_points_before: v.path_points_before,
             })
             .collect();
-        String::from_utf8(packet::json(&entries)?).map_err(|_| SessionError::InvalidState)
+        String::from_utf8(packet::json_with_cancellation(
+            &entries,
+            Some(&self.cancellation),
+        )?)
+        .map_err(|_| SessionError::InvalidState)
     }
-    pub fn window(&self, first: usize, last: usize) -> Result<Vec<u8>, SessionError> {
+    fn load(&mut self, window: Window) -> Result<(), SessionError> {
         let index = self.index()?;
-        if first > last || last >= index.entries.len() {
+        if let Window::Entries(first, last) = window
+            && (first > last || last >= index.entries.len())
+        {
             return Err(SessionError::InvalidRange);
         }
-        // Rejected/cancelled parses publish no packet. Whole arcs remain atomic.
-        let model = parse_window_with_cancellation(
-            index,
-            first as isize,
-            last as isize,
-            &self.options,
+        if self
+            .loaded
+            .as_ref()
+            .is_some_and(|(selected, _)| *selected == window)
+        {
+            return Ok(());
+        }
+        self.loaded = None;
+        let index = self.index()?;
+        let model = match window {
+            Window::Whole => {
+                parse_with_cancellation(&index.source, &self.options, &self.cancellation)?
+            }
+            Window::Entries(first, last) => parse_window_with_cancellation(
+                index,
+                first as isize,
+                last as isize,
+                &self.options,
+                &self.cancellation,
+            )?,
+        };
+        self.active()?;
+        self.loaded = Some((window, model));
+        Ok(())
+    }
+    fn packed(&mut self, window: Window) -> Result<Vec<u8>, SessionError> {
+        self.load(window)?;
+        let result = packet::pack_with_cancellation(
+            &self.loaded.as_ref().ok_or(SessionError::InvalidState)?.1,
             &self.cancellation,
         )?;
-        let result = pack(&model)?;
         self.active()?;
         Ok(result)
     }
-    pub fn whole(&self) -> Result<Vec<u8>, SessionError> {
-        let index = self.index()?;
-        let model = parse_with_cancellation(&index.source, &self.options, &self.cancellation)?;
-        let result = pack(&model)?;
+    pub fn window(&mut self, first: usize, last: usize) -> Result<Vec<u8>, SessionError> {
+        self.packed(Window::Entries(first, last))
+    }
+    pub fn whole(&mut self) -> Result<Vec<u8>, SessionError> {
+        self.packed(Window::Whole)
+    }
+    pub fn view(&mut self, json: &str) -> Result<Vec<u8>, SessionError> {
         self.active()?;
-        Ok(result)
+        let request = Request::parse(json)?;
+        self.load(request.window())?;
+        let model = &self.loaded.as_ref().ok_or(SessionError::InvalidState)?.1;
+        let cancel = &self.cancellation;
+        match request {
+            Request::Preview { request, .. } => {
+                let projection = preview::project(
+                    model,
+                    &request.map_layer_times(crate::view_request::LayerTimes::decode),
+                    cancel,
+                )
+                .map_err(|e| SessionError::Computation(e.code))?;
+                view_packet::preview(&projection, cancel)
+            }
+            Request::Inspection {
+                request,
+                include_source,
+                ..
+            } => {
+                let state = inspection::inspect(
+                    model,
+                    &request,
+                    if include_source {
+                        Some(&self.index()?.source)
+                    } else {
+                        None
+                    },
+                    cancel,
+                )
+                .map_err(|e| SessionError::Computation(e.code))?;
+                view_packet::inspection(&state, cancel)
+            }
+            Request::Playback {
+                request,
+                playback,
+                include_source,
+                ..
+            } => {
+                let state = inspection::inspect(
+                    model,
+                    &request,
+                    if include_source {
+                        Some(&self.index()?.source)
+                    } else {
+                        None
+                    },
+                    cancel,
+                )
+                .map_err(|e| SessionError::Computation(e.code))?;
+                let frames = inspection::playback(&state, &playback, cancel)
+                    .map_err(|e| SessionError::Computation(e.code))?;
+                view_packet::playback(&frames, cancel)
+            }
+        }
     }
 }

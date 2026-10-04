@@ -25,6 +25,21 @@ class GcodeSession(sourceUnits: Int, options: String = "{}") : AutoCloseable {
         return packet(first, last)
     }
     fun whole(): GcodePacket = packet(-1, -1)
+    /** Versioned development leaf request; see native-core.md. Computation is
+     * serialized with parser work; close can cancel without acquiring gate. */
+    fun view(request: String): GcodeViewPacket = work { current ->
+        require(request.length <= GcodeViewLayout.MAX_REQUEST_BYTES) { "resource_limit" }
+        val size = NativeGcode.prepareView(current, request)
+        try {
+            check(size in 32..GcodeViewLayout.MAX_PACKET_BYTES) { "invalid_buffer" }
+            val buffer = ByteBuffer.allocateDirect(size)
+            NativeGcode.copy(current, buffer)
+            GcodeViewPacket(buffer)
+        } catch (error: Throwable) {
+            close()
+            throw error
+        }
+    }
     private fun packet(first: Int, last: Int): GcodePacket = work { current ->
         try {
             val size = NativeGcode.prepare(current, first, last)

@@ -2,12 +2,16 @@ use crate::{Model, SessionError, layout};
 use serde::Serialize;
 use std::io::{self, Write};
 
-pub(crate) struct BoundedJson {
+pub(crate) struct BoundedJson<'a> {
     bytes: Vec<u8>,
     maximum: usize,
+    cancellation: Option<&'a crate::Cancellation>,
 }
-impl Write for BoundedJson {
+impl Write for BoundedJson<'_> {
     fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        if self.cancellation.is_some_and(|c| c.is_cancelled()) {
+            return Err(io::Error::other("cancelled"));
+        }
         let end = self
             .bytes
             .len()
@@ -29,12 +33,22 @@ impl Write for BoundedJson {
         Ok(())
     }
 }
-pub(crate) fn json(value: &impl Serialize) -> Result<Vec<u8>, SessionError> {
+pub(crate) fn json_with_cancellation(
+    value: &impl Serialize,
+    cancellation: Option<&crate::Cancellation>,
+) -> Result<Vec<u8>, SessionError> {
     let mut writer = BoundedJson {
         bytes: Vec::new(),
         maximum: layout::MAX_METADATA_BYTES,
+        cancellation,
     };
-    serde_json::to_writer(&mut writer, value).map_err(|_| SessionError::ResourceLimit)?;
+    serde_json::to_writer(&mut writer, value).map_err(|_| {
+        if cancellation.is_some_and(|c| c.is_cancelled()) {
+            SessionError::Cancelled
+        } else {
+            SessionError::ResourceLimit
+        }
+    })?;
     Ok(writer.bytes)
 }
 
@@ -61,6 +75,15 @@ struct Metadata<'a> {
 /// An owned, little-endian packet. No view into reallocatable WASM memory or
 /// parser storage survives this operation. Headers and each column align to 4.
 pub fn pack(model: &Model) -> Result<Vec<u8>, SessionError> {
+    pack_with_cancellation(model, &crate::Cancellation::default())
+}
+pub fn pack_with_cancellation(
+    model: &Model,
+    cancel: &crate::Cancellation,
+) -> Result<Vec<u8>, SessionError> {
+    if cancel.is_cancelled() {
+        return Err(SessionError::Cancelled);
+    }
     if model.columns.count > layout::MAX_WINDOW_RECORDS
         || model.path_points.count > layout::MAX_PATH_POINTS
     {
@@ -69,20 +92,23 @@ pub fn pack(model: &Model) -> Result<Vec<u8>, SessionError> {
     if !layout::valid_lengths(model) {
         return Err(SessionError::InvalidState);
     }
-    let metadata = json(&Metadata {
-        record_offset: model.record_offset,
-        roles: &model.roles,
-        filaments: &model.filaments,
-        layer_count: model.layer_count,
-        warnings: &model.warnings,
-        source_length: model.source_length,
-        parsed_characters: model.parsed_characters,
-        source_line_offset: model.source_line_offset,
-        parsed_lines: model.parsed_lines,
-        complete: model.complete,
-        termination_reason: model.termination_reason,
-        limits: model.limits,
-    })?;
+    let metadata = json_with_cancellation(
+        &Metadata {
+            record_offset: model.record_offset,
+            roles: &model.roles,
+            filaments: &model.filaments,
+            layer_count: model.layer_count,
+            warnings: &model.warnings,
+            source_length: model.source_length,
+            parsed_characters: model.parsed_characters,
+            source_line_offset: model.source_line_offset,
+            parsed_lines: model.parsed_lines,
+            complete: model.complete,
+            termination_reason: model.termination_reason,
+            limits: model.limits,
+        },
+        Some(cancel),
+    )?;
     let data_start = (24 + metadata.len() + 3) & !3;
     let total = layout::columns_bytes(model.columns.count, model.path_points.count)
         .and_then(|bytes| bytes.checked_add(data_start))
@@ -104,7 +130,10 @@ pub fn pack(model: &Model) -> Result<Vec<u8>, SessionError> {
     }
     bytes.extend(metadata);
     bytes.resize(data_start, 0);
-    layout::write_columns(model, &mut bytes);
+    layout::write_columns(model, &mut bytes, cancel)?;
+    if cancel.is_cancelled() {
+        return Err(SessionError::Cancelled);
+    }
     if bytes.len() != total {
         return Err(SessionError::InvalidState);
     }

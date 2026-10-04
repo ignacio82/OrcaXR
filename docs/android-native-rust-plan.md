@@ -17,10 +17,11 @@ The first Phase 3 computation implementation now includes the Rust rich G-code
 parser, immutable source/index ownership, bounded windows, cooperative native
 cancellation, and generated packed-column layouts through WASM/JNI. The linked
 engineering document records differential and resource evidence. The 12-mode Rust
-preview projection now has host differential/resource tests; its WASM/JNI bindings
-are still pending. Production browser preview still uses TypeScript; inspection,
-native rendering, shipping asset integration, and device budgets remain required
-before Stage B.
+preview projection, bounded inspection and playback now have development WASM/JNI
+session bindings and independently generated source/window expectations. Production
+browser preview still uses TypeScript; search, complete host validators, native
+rendering, shipping asset integration, and device budgets remain required before
+Stage B.
 
 Build an adaptive native Android application for phones, tablets, Googlebook,
 and Android XR while preserving the web application. Introduce Rust as a shared

@@ -63,8 +63,9 @@ engine (`libslic3r` via WASM) as the computational core.
   [native Android and Rust plan](docs/android-native-rust-plan.md). The initial
   Compose shell, Rust canonicalization and G-code computation bindings are
   development infrastructure, not a usable native slicer. Current release support
-  remains unchanged. Rust preview projections have host differential tests but
-  are not yet exposed through platform bindings. Native PCVR
+  remains unchanged. Rust preview projections, bounded inspection and playback
+  are exposed through development WASM/JNI session bindings; production renderer
+  integration and physical-device qualification remain open. Native PCVR
   remains outside scope.
 
 ## Stack

@@ -75,191 +75,351 @@ pub fn valid_lengths(model: &crate::Model) -> bool {
         && model.path_points.y.len() == model.path_points.count
         && model.path_points.z.len() == model.path_points.count
 }
-pub fn write_columns(model: &crate::Model, output: &mut Vec<u8>) {
-    for value in &model.columns.kind {
-        output.extend_from_slice(&value.to_le_bytes());
+pub fn write_columns(
+    model: &crate::Model,
+    output: &mut Vec<u8>,
+    cancel: &crate::Cancellation,
+) -> Result<(), crate::SessionError> {
+    for chunk in model.columns.kind.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.start_x {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.start_x.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.start_y {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.start_y.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.start_z {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.start_z.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.end_x {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.end_x.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.end_y {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.end_y.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.end_z {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.end_z.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.delta_e {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.delta_e.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.feedrate_mm_per_second {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.feedrate_mm_per_second.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.width_mm {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.width_mm.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.height_mm {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.height_mm.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.mm3_per_mm {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.mm3_per_mm.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.volumetric_flow_mm3_per_second {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.volumetric_flow_mm3_per_second.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.fan_percent {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.fan_percent.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.hotend_temperature_c {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.hotend_temperature_c.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.layer {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.layer.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.role {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.role.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.tool {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.tool.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.filament {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.filament.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.source_line {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.source_line.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.source_start_offset {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.source_start_offset.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.source_end_offset {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.source_end_offset.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.command_line_number {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.command_line_number.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.path_kind {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.path_kind.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.path_point_offset {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.path_point_offset.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.path_point_count {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.path_point_count.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.arc_center_x {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.arc_center_x.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.columns.arc_center_y {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.columns.arc_center_y.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.path_points.x {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.path_points.x.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.path_points.y {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.path_points.y.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
-    for value in &model.path_points.z {
-        output.extend_from_slice(&value.to_le_bytes());
+    for chunk in model.path_points.z.chunks(4096) {
+        if cancel.is_cancelled() {
+            return Err(crate::SessionError::Cancelled);
+        }
+        for value in chunk {
+            output.extend_from_slice(&value.to_le_bytes());
+        }
     }
     while !output.len().is_multiple_of(4) {
         output.push(0);
     }
+    Ok(())
 }

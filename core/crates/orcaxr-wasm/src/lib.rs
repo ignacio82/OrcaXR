@@ -56,12 +56,15 @@ impl GcodeSession {
             .page(gcode_index(start)?, gcode_index(count)?)
             .map_err(gcode_error)
     }
-    pub fn window(&self, first: f64, last: f64) -> Result<Vec<u8>, JsValue> {
+    pub fn window(&mut self, first: f64, last: f64) -> Result<Vec<u8>, JsValue> {
         self.inner
             .window(gcode_index(first)?, gcode_index(last)?)
             .map_err(gcode_error)
     }
-    pub fn whole(&self) -> Result<Vec<u8>, JsValue> {
+    pub fn whole(&mut self) -> Result<Vec<u8>, JsValue> {
         self.inner.whole().map_err(gcode_error)
+    }
+    pub fn view(&mut self, request: &str) -> Result<Vec<u8>, JsValue> {
+        self.inner.view(request).map_err(gcode_error)
     }
 }

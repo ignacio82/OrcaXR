@@ -10,16 +10,18 @@ const schema = JSON.parse(await readFile(new URL('contracts/core-protocol.json',
 const workerSource = `
 import initialize, { core_info, evaluate, GcodeSession } from '/wasm/orcaxr_core.js';
 import { replayGcode } from '/gcode-replay.mjs';
+import { replayViews } from '/view-replay.mjs';
 const exports = await initialize({ module_or_path: new URL(self.location.href).searchParams.has('missing')
   ? '/missing.wasm' : '/wasm/orcaxr_core_bg.wasm' });
 self.onmessage = async ({data}) => {
   if (data.operation === 'gcode') {
     try {
       const metrics = await replayGcode(GcodeSession, exports.memory);
+      const views = await replayViews(GcodeSession);
       const session = new GcodeSession(1, 0, '{}');
       let packet;
       try { session.seal(); packet = session.whole(); } finally { session.free(); }
-      self.postMessage({result: {requestId: data.requestId, type: 'gcode-tested', metrics, packet}, memoryBytes: exports.memory.buffer.byteLength}, [packet.buffer]);
+      self.postMessage({result: {requestId: data.requestId, type: 'gcode-tested', metrics, views: views.metrics, viewPacket: views.owned, packet}, memoryBytes: exports.memory.buffer.byteLength}, [packet.buffer, views.owned.buffer]);
     } catch (error) {
       self.postMessage({result: {requestId: data.requestId, type: 'gcode-failed', message: String(error)}});
     }
@@ -36,8 +38,8 @@ const server = createServer(async (request, response) => {
     response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'");
     if (path === '/') { response.setHeader('Content-Type', 'text/html'); response.end('<!doctype html><title>OrcaXR core boundary tests</title>'); }
     else if (path === '/worker.mjs') { response.setHeader('Content-Type', 'text/javascript'); response.end(workerSource); }
-    else if (['/gcode-replay.mjs', '/gcode-vectors.json', '/gcode-buffer.json'].includes(path)) {
-      const file = path.endsWith('.mjs') ? 'tools/cross-platform/gcode-replay.mjs' : path === '/gcode-buffer.json' ? 'contracts/gcode-buffer.json' : 'testdata/cross-platform/gcode-vectors.json';
+    else if (['/gcode-replay.mjs', '/view-replay.mjs', '/gcode-vectors.json', '/view-vectors.json', '/gcode-buffer.json', '/gcode-view-buffer.json'].includes(path)) {
+      const file = path.endsWith('.mjs') ? 'tools/cross-platform'+path : path.endsWith('-buffer.json') ? 'contracts'+path : 'testdata/cross-platform'+path;
       response.setHeader('Content-Type', path.endsWith('.mjs') ? 'text/javascript' : 'application/json');
       response.end(await readFile(new URL(file,root)));
     }
@@ -138,6 +140,8 @@ try {
       const packet = gcode.result.packet;
       check(packet instanceof Uint8Array && packet.byteLength >= 24 && new DataView(packet.buffer,packet.byteOffset).getUint32(0,true) === 0x5047584f, 'G-code owned packet transfer failed');
       client.close();
+      const viewPacket = gcode.result.viewPacket;
+      check(viewPacket instanceof Uint8Array && viewPacket.byteLength >= 32 && new DataView(viewPacket.buffer,viewPacket.byteOffset).getUint32(0,true) === 0x5647584f, 'View packet transfer/disposal failed');
       for (let index = 0; index < 10; index++) {
         const repeated = await start();
         const cancelled = repeated.evaluate(large, 'cancel').then(() => false, () => true);
@@ -149,7 +153,7 @@ try {
       check(await start({missing: true}).then(client => {client.close(); return false;}, () => true), 'Missing WASM accepted');
       check(clients.size === 0, 'Worker owners retained');
       return {vectors: corpus.vectors.length, invalid: corpus.invalid.length, largePayloadRepeats: 40,
-        wasmLinearMemoryBytes: finalBytes, disposalCycles: 10, crossOriginIsolated, gcode: gcode.result.metrics};
+        wasmLinearMemoryBytes: finalBytes, disposalCycles: 10, crossOriginIsolated, gcode: gcode.result.metrics, views: gcode.result.views};
     } finally { for (const close of clients) close(); }
   }, {corpus, schema});
   assert.equal(result.vectors, corpus.vectors.length);

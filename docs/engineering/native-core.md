@@ -10,8 +10,9 @@ workflow is implemented yet.
 The shared G-code parser, index, bounded windows, and owned binary transport now
 run through both host bindings. They are development APIs; production browser
 preview still uses TypeScript, and the Android shell does not yet display G-code.
-The Rust preview projection is implemented and tested on the host, but is not yet
-exposed through WASM/JNI or used by either application's renderer.
+Preview projection, bounded inspection and playback are also exposed through
+source-owned session queries. Neither application's renderer consumes these
+development bindings yet.
 
 ## Build decisions
 
@@ -57,8 +58,11 @@ this build; do not substitute the historical engine script.
 request**. The generator emits Rust request deserialization/validation, TypeScript
 types/validation, and Kotlin request types/validation. Regeneration must be clean.
 It is a deliberately limited schema subset; unsupported schema constructs must
-fail generation. The full session, command/result/error, cancellation, projection,
-and direct-buffer schemas in Phase 1/4 remain to be implemented.
+fail generation. The full project session, command/result/error and cancellation
+schemas in Phase 1/4 remain to be implemented. The G-code packet layouts below are
+generated; their development leaf request validation is implemented in Rust.
+Complete generated host request/result validators and production adapters remain
+open.
 
 The core parses bounded JSON into UTF-16 strings and sorts keys by code units.
 It preserves escaped lone surrogates, resolves duplicate keys like `JSON.parse`,
@@ -123,11 +127,14 @@ task workers; ordinary transferred ArrayBuffers work without cross-origin isolat
 
 This transport is not zero-copy: JNI/WASM copies each source chunk into Rust, Rust
 accumulates it, sealing currently copies into an immutable Arc allocation, packing
-copies columns, and the final packet copies into host-owned memory. Previous
-windows are not retained by the session. Packing and metadata encoding are bounded
-but do not yet have intermediate cancellation checks. Renderer consumers, preview
-projection bindings, inspection, full generated request/result validators, production worker
-selection, offline packaging, and device latency/memory budgets remain open.
+copies columns, and the final packet copies into host-owned memory. The session
+retains at most one parsed window: a repeated selector reuses it, and switching
+selectors releases the old columns before parsing the replacement. An explicit
+selector on every view query prevents accidental use of the last loaded window.
+Packed outputs are independent allocations. Metadata encoding checks cancellation
+on writes; column serialization checks every 4,096 elements and before publishing.
+Renderer consumers, search, full generated request/result validators, production
+worker selection, offline packaging, and device latency/memory budgets remain open.
 
 The internal Rust projection implements all 12 display modes, composable
 role/tool/event/layer/record/value filters, numeric ranges, accessible legends,
@@ -146,8 +153,59 @@ Float32 columns stored as raw bits and source-derived text as UTF-16 units.
 The corpus includes extreme finite Float32 layer times: platform libc `exp` changed
 an accessible legend label by one binary64 ULP. The pinned pure-Rust `libm`
 implementation resolves that observed difference in debug and optimized host
-tests. This is corpus evidence, not proof for every float or every browser engine;
-actual projection replay on WASM/JNI remains required before switching consumers.
+tests. The source-owned binding corpus also includes those 128 extreme cases.
+This is corpus evidence, not proof for every float, browser engine or physical
+device; production consumer integration has its own remaining gates.
+
+## Development view queries
+
+`Session.view` / WASM `GcodeSession.view` / Kotlin `GcodeSession.view` accept bounded
+JSON with required `version: 1`, `operation`, `window` and `request` fields. `window`
+is `[]` for the bounded whole-source parse or `[firstEntry, lastEntry]` for an
+inclusive index-entry range. It is never implicit, nullable or a substitute source.
+Requests over 8 MiB UTF-8, malformed/unknown fields, invalid selectors and unknown
+versions are refused. JNI checks Java string length before copying, then Rust
+checks UTF-8 bytes. Raw wasm-bindgen glue copies strings before entering Rust;
+the future production host validator must enforce the bound before that copy.
+
+| Operation | Request payload | Output kind |
+| --- | --- | --- |
+| `preview` | Mode, masks, ranges, projection cap and optional authoritative layer times | 1: projection columns and legend/diagnostic metadata |
+| `inspection` | Layer/move selection, record visibility, cursor, tool-marker and source-context options | 2: record/layer/tick columns and bounded inspection metadata |
+| `playback` | Inspection options plus required `playback` options (direction, wrap, includeCurrent, maxFrames) | 3: ordered original record IDs |
+
+Inspection/playback optionally take envelope `includeSource: true`. Source context
+then borrows the sealed session source during computation; requests cannot supply
+`gcodeSource`. Default false avoids scanning source text for callers that do not
+display it. Context is at most 50 lines before/after the cursor (101 total), with
+at most 4,096 UTF-16 units per line and explicit truncation. Inspection permits
+at most 100,000 event ticks; playback permits at most 100,000 frames. Neither
+truncates a cap violation into a successful partial response. Layer labels use
+print Z, avoiding travel-hop heights, and preserve original semantic record IDs.
+
+Preview `layerTimes` uses `secondsByLayerBits: u32[]` and `provenance: u16[]`.
+Raw bits preserve Float32 NaN/Infinity so missing authoritative durations remain
+explicitly unsupported rather than becoming JSON null or zero. Preview indices
+are local to the selected model's columns; inspection/playback IDs include its
+original record offset. Callers must keep that distinction when rendering.
+
+`contracts/gcode-view-buffer.json` generates all three platform descriptors for
+the `OXGV` version-1 little-endian packet. Its eight-u32 header is magic, version,
+kind, metadata byte length, record count, layer count, tick count and total bytes.
+JSON metadata precedes four-byte-aligned typed columns, with an 8 MiB metadata
+limit and 32 MiB total limit. Tick labels are interned in metadata; kind, original
+record/layer IDs, Z and source spans are columns. A host reconstructs tick identity
+as `kind:record`. Unsupported preview results have metadata and zero column counts.
+These are refusal ceilings, not qualified application memory budgets.
+
+Java owns direct output buffers and exposes read-only views. Kotlin serializes
+prepare/copy, preserves the session after a computation rejection, and closes it
+on allocation/transfer failure. Every native prepare clears any pending packet,
+including when the new request fails. Close can independently cancel work; the
+Kotlin owner rejects any reply that races with close. WASM outputs are copied into
+host-owned Uint8Arrays and can be transferred after disposing the Rust session.
+The packet checks cover headers, column bounds, UTF-8, and Android tick references;
+complete generated metadata/result validation remains required for production.
 
 ## Repeatable checks
 
@@ -164,10 +222,13 @@ cargo +1.94.1 install cargo-audit --version 0.22.2 --locked --jobs 2
 node tools/cross-platform/generate-contracts.mjs
 node tools/cross-platform/generate-gcode-layout.mjs
 node tools/cross-platform/generate-preview-catalog.mjs
+node tools/cross-platform/generate-view-layout.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/view-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inventory.mjs
 ```
 
@@ -177,7 +238,7 @@ Run these in `core/` so the pinned Rust toolchain is selected:
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked --jobs 2 -- -D warnings
 cargo test --workspace --locked --jobs 2
-cargo test -p orcaxr-gcode --test preview --release --locked --jobs 2
+cargo test -p orcaxr-gcode --test preview --test inspection --test views --test session --release --locked --jobs 2
 cargo audit
 ```
 
@@ -265,18 +326,49 @@ Initial G-code verification on 2026-10-04 established:
   The native shell still passes three cold starts on the API 34 emulator.
 
 The parser port does not yet replace the production web preview. Stage B and the
-Phase 3 exit gate remain open until projections, inspection, production packaging,
-rollback selection, renderer integration, and device measurements are verified.
+Phase 3 exit gate remain open until production packaging, full host validators,
+search, rollback selection, renderer integration, and device measurements are
+verified.
 
-Initial host projection verification on 2026-10-04 establishes 1,567 reference
+Host projection verification on 2026-10-04 establishes 1,567 reference
 projections/rejections over 202 models, including all display modes, filter
 combinations, exact Float32 output bits, legends and labels, malformed models,
 missing-metadata diagnostics, UTF-16 provenance, nonzero window offsets, and
 128 logarithmic-duration cases spanning finite Float32 exponents. Additional
 tests verify cancellation settlement, cap refusals and output independence.
 The 300,002-record resource test now also projects each bounded window and checks
-that output capacities exactly match the selected counts. These are host tests;
-they establish neither platform projection bindings nor device performance.
+that output capacities exactly match the selected counts. Malformed model injection
+is confined to these host tests; the binding corpus below uses actual session
+sources and selectors.
+
+Host inspection verification covers 1,169 reference cases over 453 models,
+including source windows, lone surrogates, layer/move ranges, original record IDs,
+event ticks, cursor/marker/focus bounds, stepping, playback and explicit errors.
+Resource cases verify the 100,000-tick cap before allocating tick strings, the
+101-line/4,096-unit source limits, cancellation during a 16 Mi-unit source scan,
+and refusal of corrupted playback ordinals. Packing 100,000 pause events stays
+under 4 MiB with one interned label; the associated 100,000-frame playback remains
+bounded. Column packing also settles cancellation with a five-second watchdog;
+that watchdog is not a UI latency target.
+
+An additional independent corpus constructs 4,479 view queries over 100 immutable
+sources, including whole/window switches, ten rejections, all 12 preview modes,
+128 extreme logarithmic-duration cases, inspection/source context and playback.
+All cases agree on host Rust, actual browser WASM and Android x86_64 JNI. Successful
+browser results total 4,617,792 packet bytes. A transferred view packet remains
+valid after Rust session disposal and worker termination. Android checks rejected
+requests followed by valid work, buffer survival, malformed headers/UTF-8, and
+clearing a pending packet when a subsequent prepare fails. No test injects model
+columns into the production binding API.
+
+The current browser repeat test remains stable at 57,540,608 bytes of WASM linear
+memory for parser reopen cycles; canonicalization alone settles at 12,058,624
+bytes. These measurements exclude JavaScript/browser RSS, GPU storage and native
+Android residency. View-specific sustained memory/latency and physical-device
+qualification remain open. Debug/optimized host tests, strict Clippy, generated
+artifact checks, both Android ABIs, debug/release builds and lint pass. Ten JNI
+instrumentation tests and three shell cold starts pass on the API 34 x86_64
+emulator; this is not ARM64 or 16 KB-page runtime evidence.
 
 The projection compiles for WASM, Android ARM64 and Android x86_64. Debug and
 optimized host reference tests, strict Clippy, regeneration checks and Cargo audit
@@ -285,8 +377,8 @@ including 255 unit-test files, production browser/recovery/offline checks,
 accessibility, pseudo-localization, slicing and bundle budgets. The existing
 TypeScript preview benchmark records a 1.615 indexed/whole median ratio against
 its 2.5 ceiling; this does not measure the Rust projection. All three npm audits
-report zero vulnerabilities. The configured redacted secret scan covers 1,507
-text files plus six source files containing embedded NULs, with no findings.
+report zero vulnerabilities. The configured redacted secret scan covers 1,532
+UTF-8 source files, including six with embedded NULs, with no findings.
 The wave-settings gate now reconstructs the pinned source plus the tracked build
 patch in a temporary directory; an older local engine checkout no longer changes
 the test authority, and absent source never silently skips that check.

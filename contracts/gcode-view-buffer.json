@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "magic": "OXGV",
+  "byteOrder": "little",
+  "alignment": 4,
+  "header": ["magic", "version", "kind", "metadataBytes", "records", "layers", "ticks", "totalBytes"],
+  "maxMetadataBytes": 8388608,
+  "maxPacketBytes": 33554432,
+  "maxRequestBytes": 8388608,
+  "maxRecords": 240000,
+  "maxLayers": 240000,
+  "maxTicks": 100000,
+  "kinds": {
+    "preview": {
+      "id": 1,
+      "fields": [
+        ["recordIndices", "u32", "records", 1],
+        ["values", "f32", "records", 1],
+        ["valueValid", "u8", "records", 1],
+        ["colorsRgba", "f32", "records", 4]
+      ]
+    },
+    "inspection": {
+      "id": 2,
+      "fields": [
+        ["recordIndices", "u32", "records", 1],
+        ["layerIds", "u32", "layers", 1],
+        ["layerZMm", "f32", "layers", 1],
+        ["layerFirstRecord", "u32", "layers", 1],
+        ["layerLastRecord", "u32", "layers", 1],
+        ["tickKind", "u8", "ticks", 1],
+        ["tickRecord", "u32", "ticks", 1],
+        ["tickLayer", "u32", "ticks", 1],
+        ["tickZMm", "f32", "ticks", 1],
+        ["tickSourceLine", "u32", "ticks", 1],
+        ["tickStartOffset", "u32", "ticks", 1],
+        ["tickEndOffset", "u32", "ticks", 1],
+        ["tickLabel", "u32", "ticks", 1]
+      ]
+    },
+    "playback": {"id": 3, "fields": [["recordIndices", "u32", "records", 1]]}
+  },
+  "tickKinds": {"4": "tool-change", "5": "color-change", "6": "pause", "7": "custom"},
+  "textEncoding": "utf16-code-units"
+}

@@ -22,7 +22,7 @@ pub struct LayerTimes {
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PreviewRequest {
+pub struct PreviewRequest<T = LayerTimes> {
     pub mode: String,
     pub role_visibility: Option<Vec<u8>>,
     pub tool_visibility: Option<Vec<u8>>,
@@ -30,8 +30,23 @@ pub struct PreviewRequest {
     pub layer_range: Option<[f64; 2]>,
     pub record_range: Option<[f64; 2]>,
     pub value_range: Option<[f64; 2]>,
-    pub layer_times: Option<LayerTimes>,
+    pub layer_times: Option<T>,
     pub max_projected_records: Option<f64>,
+}
+impl<T> PreviewRequest<T> {
+    pub(crate) fn map_layer_times(self, convert: impl FnOnce(T) -> LayerTimes) -> PreviewRequest {
+        PreviewRequest {
+            mode: self.mode,
+            role_visibility: self.role_visibility,
+            tool_visibility: self.tool_visibility,
+            event_visibility: self.event_visibility,
+            layer_range: self.layer_range,
+            record_range: self.record_range,
+            value_range: self.value_range,
+            layer_times: self.layer_times.map(convert),
+            max_projected_records: self.max_projected_records,
+        }
+    }
 }
 #[derive(Debug, Serialize)]
 pub struct PreviewError {

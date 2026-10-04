@@ -74,3 +74,38 @@ fn packing_checks_column_lengths_before_allocating_the_packet() {
     model.path_points.count = 1;
     assert_eq!(pack(&model), Err(SessionError::InvalidState));
 }
+
+#[test]
+fn packing_cooperatively_cancels_without_returning_a_partial_transfer() {
+    use std::{
+        sync::{Arc, Barrier},
+        time::{Duration, Instant},
+    };
+    let source = format!("G91\n{}", "G1 X1\n".repeat(240_000))
+        .encode_utf16()
+        .collect::<Vec<_>>();
+    let model = parse(&source, &Options::default()).unwrap();
+    assert_eq!(model.columns.count, 240_000);
+    let cancellation = Cancellation::default();
+    let token = cancellation.clone();
+    let entered = Arc::new(Barrier::new(2));
+    let start = entered.clone();
+    let worker = std::thread::spawn(move || {
+        start.wait();
+        loop {
+            match pack_with_cancellation(&model, &token) {
+                Ok(packet) => assert!(packet.len() > 20_000_000),
+                Err(error) => return error,
+            }
+        }
+    });
+    entered.wait();
+    std::thread::sleep(Duration::from_millis(3));
+    let start = Instant::now();
+    cancellation.cancel();
+    assert_eq!(worker.join().unwrap(), SessionError::Cancelled);
+    assert!(
+        start.elapsed() < Duration::from_secs(5),
+        "packing cancellation watchdog"
+    );
+}

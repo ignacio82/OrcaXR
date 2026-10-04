@@ -213,6 +213,35 @@ pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_prepare(
     })
 }
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_prepareView(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> jint {
+    boundary(&mut env, |env| {
+        let owner = owner(handle)?;
+        let mut work = owner.work.lock().map_err(|_| "invalid_state")?;
+        // Every prepare supersedes the pending transfer, even when rejected.
+        work.packet = None;
+        let length = env
+            .call_method(&request, "length", "()I", &[])
+            .and_then(|v| v.i())
+            .map_err(|_| "invalid_request")?;
+        if length < 0 || length as usize > orcaxr_gcode::view_layout::MAX_REQUEST_BYTES {
+            return Err("resource_limit");
+        }
+        let request: String = env
+            .get_string(&request)
+            .map_err(|_| "invalid_request")?
+            .into();
+        let packet = work.session.view(&request).map_err(code)?;
+        let length = packet.len() as jint;
+        work.packet = Some(packet);
+        Ok(length)
+    })
+}
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_copy(
     mut env: JNIEnv<'_>,
     _: JClass<'_>,

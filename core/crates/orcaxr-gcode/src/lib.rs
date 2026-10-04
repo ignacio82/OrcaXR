@@ -2,6 +2,7 @@
 //! the production/reference implementation until cross-host qualification.
 mod arc;
 mod cancellation;
+pub mod inspection;
 pub mod layout;
 mod lexer;
 mod model;
@@ -11,10 +12,13 @@ mod path;
 pub mod preview;
 mod session;
 mod text;
+pub mod view_layout;
+mod view_packet;
+mod view_request;
 
 pub use cancellation::Cancellation;
 pub use model::*;
-pub use packet::pack;
+pub use packet::{pack, pack_with_cancellation};
 pub use parser::{
     index, index_with_cancellation, parse, parse_window, parse_window_with_cancellation,
     parse_with_cancellation,

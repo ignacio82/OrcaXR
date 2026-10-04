@@ -38,10 +38,13 @@ jobs:
           node tools/cross-platform/generate-contracts.mjs
           node tools/cross-platform/generate-gcode-layout.mjs
           node tools/cross-platform/generate-preview-catalog.mjs
+          node tools/cross-platform/generate-view-layout.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/view-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inventory.mjs
       - name: Rust contracts and dependency checks
         working-directory: core
@@ -49,7 +52,7 @@ jobs:
           cargo fmt --all --check
           cargo clippy --workspace --all-targets --locked --jobs 2 -- -D warnings
           cargo test --workspace --locked --jobs 2
-          cargo test -p orcaxr-gcode --test preview --release --locked --jobs 2
+          cargo test -p orcaxr-gcode --test preview --test inspection --test views --test session --release --locked --jobs 2
           cargo audit
       - name: Real browser worker and artifact checks
         run: |

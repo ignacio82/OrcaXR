@@ -22,9 +22,9 @@ rust += 'pub fn columns_bytes(records: usize, points: usize) -> Option<usize> { 
 for (const {group,type} of fields) rust += `total = total.checked_add(${group === 'columns' ? 'records' : 'points'}.checked_mul(${kinds[type][1]})?.checked_add(3)? & !3)?;\n`;
 rust += 'Some(total) }\npub fn valid_lengths(model: &crate::Model) -> bool {\n';
 rust += fields.map(({group,name}) => `model.${snake(group)}.${snake(name)}.len() == model.${snake(group)}.count`).join(' &&\n');
-rust += '\n}\npub fn write_columns(model: &crate::Model, output: &mut Vec<u8>) {\n';
-for (const {group,name} of fields) rust += `for value in &model.${snake(group)}.${snake(name)} { output.extend_from_slice(&value.to_le_bytes()); }\nwhile !output.len().is_multiple_of(4) {output.push(0);}\n`;
-rust += '}\n';
+rust += '\n}\npub fn write_columns(model: &crate::Model, output: &mut Vec<u8>, cancel: &crate::Cancellation) -> Result<(), crate::SessionError> {\n';
+for (const {group,name} of fields) rust += `for chunk in model.${snake(group)}.${snake(name)}.chunks(4096) { if cancel.is_cancelled() { return Err(crate::SessionError::Cancelled); } for value in chunk { output.extend_from_slice(&value.to_le_bytes()); } }\nwhile !output.len().is_multiple_of(4) {output.push(0);}\n`;
+rust += 'Ok(())}\n';
 const formatted = spawnSync('rustfmt',['+1.94.1','--edition','2024'],{input:rust,encoding:'utf8'});
 assert.equal(formatted.status,0,formatted.stderr);
 let ts = header + `export const GCODE_LAYOUT = ${JSON.stringify(schema,null,2)} as const;\n`;
