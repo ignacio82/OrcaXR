@@ -1,0 +1,1943 @@
+{
+  "schemaVersion": 1,
+  "reference": "web/src/project/domain/canonical.ts",
+  "referenceSha256": "51a1dc28f01a060ac792b3d3e3eb635c71cd174562a2504b53f3d95c40c18e38",
+  "provenance": "Synthetic JSON inputs generated for OrcaXR; no user models or credentials.",
+  "vectors": [
+    {
+      "id": "empty-object",
+      "input": "{}",
+      "canonical": "{}",
+      "semanticHash": "fnv1a64:08f44b07b5901a25",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "empty-array",
+      "input": "[]",
+      "canonical": "[]",
+      "semanticHash": "fnv1a64:09612b07b5ecb5a5",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "id": "null",
+      "input": "null",
+      "canonical": "null",
+      "semanticHash": "fnv1a64:5b9bc4ba528108e4",
+      "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    {
+      "id": "booleans",
+      "input": "[true,false]",
+      "canonical": "[true,false]",
+      "semanticHash": "fnv1a64:c5ebd42cb61edce8",
+      "sha256": "153c9dbcc7025ecd7e50ce6d83f1995233dfc636bc869098e3a8d84288fd938a"
+    },
+    {
+      "id": "key-order",
+      "input": "{\"z\":1,\"a\":2,\"10\":3,\"2\":4}",
+      "canonical": "{\"10\":3,\"2\":4,\"a\":2,\"z\":1}",
+      "semanticHash": "fnv1a64:56599b1ed8069a8f",
+      "sha256": "46a2ca2d5314602c259a739b15cac6b992b3b0bcf084b2fea13925cdd62eeadd"
+    },
+    {
+      "id": "duplicates",
+      "input": "{\"a\":1,\"a\":2}",
+      "canonical": "{\"a\":2}",
+      "semanticHash": "fnv1a64:9c3b82dd6fc8b2da",
+      "sha256": "7e8059f495589fcd981232cc11d00b00da3802c01d688fa1cf1f6bed6e5bb33c"
+    },
+    {
+      "id": "prototype-property",
+      "input": "{\"__proto__\":{\"name\":\"retained\"}}",
+      "canonical": "{\"__proto__\":{\"name\":\"retained\"}}",
+      "semanticHash": "fnv1a64:ac66a206d8e4dbf6",
+      "sha256": "1335af4a886032febb583dbb940c7054ffa376992fafdeaaa85fa0427aa38e5e"
+    },
+    {
+      "id": "surrogate-keys",
+      "input": "{\"\\ue000\":1,\"\\ud800\\udc00\":2,\"\\ud800\":3}",
+      "canonical": "{\"\\ud800\":3,\"𐀀\":2,\"\":1}",
+      "semanticHash": "fnv1a64:71e598cd3643c8aa",
+      "sha256": "23795729e82d168d32508e339c7dd4877346045d0d0d2c299e23c07af80d9ecf"
+    },
+    {
+      "id": "unpaired-surrogates",
+      "input": "\"\\ud800x\\udc00\"",
+      "canonical": "\"\\ud800x\\udc00\"",
+      "semanticHash": "fnv1a64:04140fbe758b3f96",
+      "sha256": "63bebe628357b983e27795dd65ce4d41f9a20ed2ed2279f6eba6b47c946e0b3a"
+    },
+    {
+      "id": "unicode",
+      "input": "\"🐳 café 漢字 \\u2028\\u2029\"",
+      "canonical": "\"🐳 café 漢字   \"",
+      "semanticHash": "fnv1a64:1d48e76e7bd22d15",
+      "sha256": "2fc6deaacfec1a9f71e18324f0c8b3c27cbe60fc5ed8595c847e8eb7eb754b2c"
+    },
+    {
+      "id": "escapes",
+      "input": "\"\\b\\f\\n\\r\\t\\u0000\\u001f\\\\\\\"\\/\"",
+      "canonical": "\"\\b\\f\\n\\r\\t\\u0000\\u001f\\\\\\\"/\"",
+      "semanticHash": "fnv1a64:95d7b0b0588f8449",
+      "sha256": "a4ec4f7c7bf5861ed7433baec8f5d5cf02b4c424b1c74a27c3f968249c44f124"
+    },
+    {
+      "id": "number-boundaries",
+      "input": "[-0,1e-7,1e-6,1e20,1e21,9007199254740993,5e-324,1.7976931348623157e308]",
+      "canonical": "[0,1e-7,0.000001,100000000000000000000,1e+21,9007199254740992,5e-324,1.7976931348623157e+308]",
+      "semanticHash": "fnv1a64:6ebb0517e49fdfa1",
+      "sha256": "404307f5765d4b2da1d08c99a429ff52ebd951645b8c497795ec77057be5c5fb"
+    },
+    {
+      "id": "nested",
+      "input": "{\"assets\":[{\"id\":\"mesh:0\",\"transform\":[1,0,0,0]}],\"name\":\"OrcaXR\"}",
+      "canonical": "{\"assets\":[{\"id\":\"mesh:0\",\"transform\":[1,0,0,0]}],\"name\":\"OrcaXR\"}",
+      "semanticHash": "fnv1a64:c2d570ee8e83227f",
+      "sha256": "ec6e71b0cc71db69348c0782f89528d981cd52d699c9e1008e704056e43d7f39"
+    },
+    {
+      "id": "f64-0",
+      "input": "8.454399101860021e-206",
+      "canonical": "8.454399101860021e-206",
+      "semanticHash": "fnv1a64:b0e118974fa10c20",
+      "sha256": "2a8903a905856c26235bbb5e4f51f8ce9571d846bcdaaae4e83d24467c7f91d0"
+    },
+    {
+      "id": "f64-1",
+      "input": "-1.8361213809386622e-300",
+      "canonical": "-1.8361213809386622e-300",
+      "semanticHash": "fnv1a64:4e8c872f06a8b5b4",
+      "sha256": "17a3e441f22bf1046d5995d97110294e258504ed810b769a763afca37f8f920a"
+    },
+    {
+      "id": "f64-2",
+      "input": "5.297752380244026e-108",
+      "canonical": "5.297752380244026e-108",
+      "semanticHash": "fnv1a64:83785b34eaa46ef2",
+      "sha256": "34ef595983305a79005e57d78d2fd326af862709ad1911ce602393f432e4038c"
+    },
+    {
+      "id": "f64-3",
+      "input": "-7.383611557302274e+24",
+      "canonical": "-7.383611557302274e+24",
+      "semanticHash": "fnv1a64:4b688b627b97a98e",
+      "sha256": "a4f69c191488cc9e5cfb2c67f66d716ce841c0f3744d2cc629768d67855b1153"
+    },
+    {
+      "id": "f64-4",
+      "input": "5.587747453101621e-26",
+      "canonical": "5.587747453101621e-26",
+      "semanticHash": "fnv1a64:32bafaf41bfe675d",
+      "sha256": "1e38f37703bc23a8f9162569a563734e73daae4ee44c47fa07e8b26c7b2b4f84"
+    },
+    {
+      "id": "f64-5",
+      "input": "1.0496963658561261e+68",
+      "canonical": "1.0496963658561261e+68",
+      "semanticHash": "fnv1a64:d5580e5459481261",
+      "sha256": "1342e85a677643ae8e68da317d85a136dc5e25d57d7ff3461b6b896dfe1a3ad7"
+    },
+    {
+      "id": "f64-6",
+      "input": "1.8303759254801324e-51",
+      "canonical": "1.8303759254801324e-51",
+      "semanticHash": "fnv1a64:746a018e9560f8d6",
+      "sha256": "b803290e91d9e6257c1338f3cd60cb96af4d607ab50ad0d1410819a0589468cb"
+    },
+    {
+      "id": "f64-7",
+      "input": "-3.360157060668185e+264",
+      "canonical": "-3.360157060668185e+264",
+      "semanticHash": "fnv1a64:2efc968b2c4b9db1",
+      "sha256": "a7bace4dcda303e79e1e7b9730f4ab99ece3b80258fd141971cba836f575fbcd"
+    },
+    {
+      "id": "f64-8",
+      "input": "-6.162781426084988e+224",
+      "canonical": "-6.162781426084988e+224",
+      "semanticHash": "fnv1a64:6fdf4ee6464bc352",
+      "sha256": "cea3bda7b24305decd61293ca042bd2949cd7d521e69c461e7dc1a3c78ffff33"
+    },
+    {
+      "id": "f64-9",
+      "input": "10741.163322748516",
+      "canonical": "10741.163322748516",
+      "semanticHash": "fnv1a64:490b87a67ca147c2",
+      "sha256": "0e6742c5501fa1cad3b6935dcc82dfc268ff0fd24d69ef16994d2a8c2761f0cb"
+    },
+    {
+      "id": "f64-10",
+      "input": "-7.819782332928669e+206",
+      "canonical": "-7.819782332928669e+206",
+      "semanticHash": "fnv1a64:91b12f3b61c8867c",
+      "sha256": "07af88fb5ea22f4e87411d3df88c227256b70bb28c7addf5b3282a91ecfe0f99"
+    },
+    {
+      "id": "f64-11",
+      "input": "-9.774431996199794e+73",
+      "canonical": "-9.774431996199794e+73",
+      "semanticHash": "fnv1a64:9814111a87cc35fe",
+      "sha256": "0f35cb64e363261d21a84976b51169bbf915ab64f17d46682ddaae65c4a78d7f"
+    },
+    {
+      "id": "f64-12",
+      "input": "-1.811788759091528e+254",
+      "canonical": "-1.811788759091528e+254",
+      "semanticHash": "fnv1a64:4c1a29738677c48b",
+      "sha256": "0fb4e1b0d09f9e5c50c77950d123c8d4d2d5f0a575422cdba9a8a626c251b6e4"
+    },
+    {
+      "id": "f64-13",
+      "input": "-169215.20907219057",
+      "canonical": "-169215.20907219057",
+      "semanticHash": "fnv1a64:c9be425a7dd7d74c",
+      "sha256": "98106acbd5310398b9b9dc6eed10c5fb8846e16153944ffbb1821486b8bee064"
+    },
+    {
+      "id": "f64-14",
+      "input": "3.80617539756925e+62",
+      "canonical": "3.80617539756925e+62",
+      "semanticHash": "fnv1a64:68b4141438d33075",
+      "sha256": "4db4912791056a70ebbfe4b3d061e1cd36acaf1567654edbaaf4179ca4303e3a"
+    },
+    {
+      "id": "f64-15",
+      "input": "-1.308527801435708e+270",
+      "canonical": "-1.308527801435708e+270",
+      "semanticHash": "fnv1a64:3c2c6a205b8ee29f",
+      "sha256": "03887d76f2febf24b501a703b8cdb7edb18e3c809c3fee866cb6bf3c452049d1"
+    },
+    {
+      "id": "f64-16",
+      "input": "-3.144949495238857e+57",
+      "canonical": "-3.144949495238857e+57",
+      "semanticHash": "fnv1a64:8ed6474a187adf71",
+      "sha256": "e0980096c70742b4b9a0d5f01af5fa31a807fe7f53e30e61c457bfcd76966d25"
+    },
+    {
+      "id": "f64-17",
+      "input": "-7.957678442422959e-191",
+      "canonical": "-7.957678442422959e-191",
+      "semanticHash": "fnv1a64:f5d6a9f1371ee3ff",
+      "sha256": "6ab6a2b4467d1df0d9eea6b5662c328cef8d00c5c3183ca28f8e0f93af592b78"
+    },
+    {
+      "id": "f64-18",
+      "input": "-6.407034118256429e+73",
+      "canonical": "-6.407034118256429e+73",
+      "semanticHash": "fnv1a64:986254a3cf9b08c2",
+      "sha256": "37853cbce7f4fe392dfad280feb573727bd862da1ecf857e0e3c7b38c71fec28"
+    },
+    {
+      "id": "f64-19",
+      "input": "3.052565725255533e+281",
+      "canonical": "3.052565725255533e+281",
+      "semanticHash": "fnv1a64:139830b01d25a299",
+      "sha256": "6af8d00450a484fc7cd1196038c5d366874a6aa0f795427bc04089a4bd13bff2"
+    },
+    {
+      "id": "f64-20",
+      "input": "-3.533685574240327e+115",
+      "canonical": "-3.533685574240327e+115",
+      "semanticHash": "fnv1a64:e56529199a2e65ee",
+      "sha256": "1ca696269ab1a2f94d0204927b94c12ad3786ba7d76faa64d013b14c8b5163c2"
+    },
+    {
+      "id": "f64-21",
+      "input": "331180492681223140000",
+      "canonical": "331180492681223140000",
+      "semanticHash": "fnv1a64:3b23de30c629deb3",
+      "sha256": "b9e7eed8f7f3440680be9342e6ec5f57824857edd5970e1b9dfc46529cdc75c2"
+    },
+    {
+      "id": "f64-22",
+      "input": "2.440087741629325e-170",
+      "canonical": "2.440087741629325e-170",
+      "semanticHash": "fnv1a64:f2933a7dbdc7dab3",
+      "sha256": "a3ba9e641bd6eb6b459a909b49d94f803584143e4ebcbe513aebcda3794f99b1"
+    },
+    {
+      "id": "f64-23",
+      "input": "3.6100184450125187e-112",
+      "canonical": "3.6100184450125187e-112",
+      "semanticHash": "fnv1a64:63d1dcdfabec9481",
+      "sha256": "d7ecbf2e290ca88b058160ff160bf9c68981d5824bc17b79eb3bd308d38da08d"
+    },
+    {
+      "id": "f64-24",
+      "input": "9.324912797994249e-211",
+      "canonical": "9.324912797994249e-211",
+      "semanticHash": "fnv1a64:62ee79dd562c615f",
+      "sha256": "a8397d58fccffafd1f6e2eef02b00e6bb15b3689ea8fe606b6d33e5dcf2755b7"
+    },
+    {
+      "id": "f64-25",
+      "input": "-1.5293158648912859e-9",
+      "canonical": "-1.5293158648912859e-9",
+      "semanticHash": "fnv1a64:c78071b9a312149f",
+      "sha256": "c4bd0f409e7905daeadb6565e22528ca93ec72353b910cf5eeb1bfcd2cadd1cf"
+    },
+    {
+      "id": "f64-26",
+      "input": "8.179063658687484e+226",
+      "canonical": "8.179063658687484e+226",
+      "semanticHash": "fnv1a64:dd1fb8223f41bfcd",
+      "sha256": "1aa8b16438f372492d980afe2059911e4deda06ffbb16e79e7bb4313b27d91e7"
+    },
+    {
+      "id": "f64-27",
+      "input": "-7.809652690057923e+43",
+      "canonical": "-7.809652690057923e+43",
+      "semanticHash": "fnv1a64:5fb87e15c2950361",
+      "sha256": "acb802952ace54bf3a66c6ce7b15338d0469e323ea063b085d0cacd574b66806"
+    },
+    {
+      "id": "f64-28",
+      "input": "-1.0495093411036037e-9",
+      "canonical": "-1.0495093411036037e-9",
+      "semanticHash": "fnv1a64:025d91816046b2b3",
+      "sha256": "ea16c2728dd1ef5bd50b01ee2af0107daff11cfa08ca203f9e1e7310a30eb218"
+    },
+    {
+      "id": "f64-29",
+      "input": "2.517008238211823e+205",
+      "canonical": "2.517008238211823e+205",
+      "semanticHash": "fnv1a64:9d63b7623e210eb7",
+      "sha256": "ae1d0b17b43a25d5b6bdf14407531247c84a7e7dff49a029ae390474958711ab"
+    },
+    {
+      "id": "f64-30",
+      "input": "-1.236480646708459e-79",
+      "canonical": "-1.236480646708459e-79",
+      "semanticHash": "fnv1a64:e15a950e0e5dafe5",
+      "sha256": "db4b8e251f917222478e6a7371b1f309b1140e3f038e1be6ee3dec58a4f3ef34"
+    },
+    {
+      "id": "f64-31",
+      "input": "6.033248407929068e-241",
+      "canonical": "6.033248407929068e-241",
+      "semanticHash": "fnv1a64:c33175a955c7e86d",
+      "sha256": "5c5f767e2f18364512db3d78aaf07670d6cd1dfc5a77d88ded7a4c9d49914ccb"
+    },
+    {
+      "id": "f64-32",
+      "input": "3.69607267427926e+205",
+      "canonical": "3.69607267427926e+205",
+      "semanticHash": "fnv1a64:627ed98fb8915520",
+      "sha256": "efe18b02abf8e0ac02bb0f9a40d6788a00248451fd9a5efc573b490a437b7a8a"
+    },
+    {
+      "id": "f64-33",
+      "input": "-1.0397514215435919e-211",
+      "canonical": "-1.0397514215435919e-211",
+      "semanticHash": "fnv1a64:8f5c5703ee3c37e9",
+      "sha256": "2a95b40a498cd03131126bb3335aa3aa77943670921fb96ab0813e7ac31ffe0f"
+    },
+    {
+      "id": "f64-34",
+      "input": "-6.746349417649237e-279",
+      "canonical": "-6.746349417649237e-279",
+      "semanticHash": "fnv1a64:7c83d0d96db1b9ce",
+      "sha256": "9ea2bc1ca13b9652f394290a619abc1a62eb84694e0ba2480d9f39430c9edf78"
+    },
+    {
+      "id": "f64-35",
+      "input": "-1.8133248557812456e-204",
+      "canonical": "-1.8133248557812456e-204",
+      "semanticHash": "fnv1a64:752d89166a863cd7",
+      "sha256": "9ebb33d56ca08be8c898a4784bd54f790fdf571bec009fe9b1c0ea2829de9dee"
+    },
+    {
+      "id": "f64-36",
+      "input": "1.0776588700746521e+301",
+      "canonical": "1.0776588700746521e+301",
+      "semanticHash": "fnv1a64:113a4c263f037d5d",
+      "sha256": "66f213ca20f89e5ca200b8afd9abd20966748991f7f9e399c715db2fe33df066"
+    },
+    {
+      "id": "f64-37",
+      "input": "-2.8927922530183824e-226",
+      "canonical": "-2.8927922530183824e-226",
+      "semanticHash": "fnv1a64:db097e71ddb2a637",
+      "sha256": "15d4a49b9f168bd415f320c28a2f9237eba02f95b977e4d6aebb842a3b452562"
+    },
+    {
+      "id": "f64-38",
+      "input": "-1.0677910713179323e-238",
+      "canonical": "-1.0677910713179323e-238",
+      "semanticHash": "fnv1a64:6b993a8c471e42ca",
+      "sha256": "0d9625a96c807866bbdcd3ace438d54a3c788bb7909f86e0d3b0123113e432b1"
+    },
+    {
+      "id": "f64-39",
+      "input": "2.1034347013270355e-198",
+      "canonical": "2.1034347013270355e-198",
+      "semanticHash": "fnv1a64:af300992337d1c31",
+      "sha256": "9204048166a49a0e817d2be750376f750153a73b650ccbaf10b14f5276d13086"
+    },
+    {
+      "id": "f64-40",
+      "input": "-194344828327686.38",
+      "canonical": "-194344828327686.38",
+      "semanticHash": "fnv1a64:d0842c5b8f905f6a",
+      "sha256": "cf3919f52bc6572d8251fd4443cecf7588791d57473b97e3170c1b4fd7b15ce2"
+    },
+    {
+      "id": "f64-41",
+      "input": "-2.234526826534049e-202",
+      "canonical": "-2.234526826534049e-202",
+      "semanticHash": "fnv1a64:04d28508ef48164f",
+      "sha256": "76705a258ec4c81736ed9d36cb8de8e5eb9d08533c0190080ecbb60b3a7be418"
+    },
+    {
+      "id": "f64-42",
+      "input": "1.1998161600544296e+64",
+      "canonical": "1.1998161600544296e+64",
+      "semanticHash": "fnv1a64:af8c795c34141e43",
+      "sha256": "a6ed383097202a78b2ac6e86b8944b14248e486455746ee83df9c3c7c0081544"
+    },
+    {
+      "id": "f64-43",
+      "input": "1.2050843570158722e+69",
+      "canonical": "1.2050843570158722e+69",
+      "semanticHash": "fnv1a64:5f9b1461ae5dfa78",
+      "sha256": "36fee3adffd0e9ae26197ab1f39448274adc73ccd5cf721d570b98df8bae68a1"
+    },
+    {
+      "id": "f64-44",
+      "input": "-3.4116895382809795e+214",
+      "canonical": "-3.4116895382809795e+214",
+      "semanticHash": "fnv1a64:274bd8f0e70d6ac1",
+      "sha256": "aa18605377838b58d75d0f729910ef433d5f0dabc328b393014826054ad5e5e1"
+    },
+    {
+      "id": "f64-45",
+      "input": "1.1924966086253383e-261",
+      "canonical": "1.1924966086253383e-261",
+      "semanticHash": "fnv1a64:64ce7814a59e44b8",
+      "sha256": "63ba43a833321104eff4419ec6e9de46befe7ce4b51e23d33d2c0911e3cac490"
+    },
+    {
+      "id": "f64-46",
+      "input": "-2.3565380340398804e-287",
+      "canonical": "-2.3565380340398804e-287",
+      "semanticHash": "fnv1a64:9b863b63e458646c",
+      "sha256": "7d307c3fc339d79bd869dc5533ce84460d42d3a570d5fae688279f0278e6c442"
+    },
+    {
+      "id": "f64-47",
+      "input": "-1.035069159755751e+300",
+      "canonical": "-1.035069159755751e+300",
+      "semanticHash": "fnv1a64:752322b69552e146",
+      "sha256": "fb840db4c6142b08696c51dea51bb2850c5b1c1820b5461e1394b747b8447f0b"
+    },
+    {
+      "id": "f64-48",
+      "input": "-4.249285295065595e-154",
+      "canonical": "-4.249285295065595e-154",
+      "semanticHash": "fnv1a64:855dc19d7e8f0886",
+      "sha256": "ce1f465f29a3660f079cbd9389d41ff64802e5ccb09e54a583d02a3e4cb21e47"
+    },
+    {
+      "id": "f64-49",
+      "input": "-2.3283485136069558e+45",
+      "canonical": "-2.3283485136069558e+45",
+      "semanticHash": "fnv1a64:46bae970639c4ae1",
+      "sha256": "5ec4ef5331c85b1c4b07b6deb28fa096941c2459f8d45add9cc7a283486c2b8d"
+    },
+    {
+      "id": "f64-50",
+      "input": "4.95312249326089e-241",
+      "canonical": "4.95312249326089e-241",
+      "semanticHash": "fnv1a64:883ec9f05ea6bb4d",
+      "sha256": "ca7dbbf677f38b8769223f4f28bebb6bc23d4513ab0a07d7a3b7aaf6720ad8e9"
+    },
+    {
+      "id": "f64-51",
+      "input": "-3.7411126414843904e+142",
+      "canonical": "-3.7411126414843904e+142",
+      "semanticHash": "fnv1a64:eaa752c65b466eb1",
+      "sha256": "9bd580001b60da8bc024c72a7e1f46dd4e0f3001fc2fcb9ad47482717f80993d"
+    },
+    {
+      "id": "f64-52",
+      "input": "-1.1005719888102676e-171",
+      "canonical": "-1.1005719888102676e-171",
+      "semanticHash": "fnv1a64:9991ad04bec591e9",
+      "sha256": "9f6e1a171e7e7cd4db9812a89ace0a6861771a6f6b9f5b72316c12fcc4d03247"
+    },
+    {
+      "id": "f64-53",
+      "input": "4.587852351198151e+42",
+      "canonical": "4.587852351198151e+42",
+      "semanticHash": "fnv1a64:c458bc10eef4d864",
+      "sha256": "27b9e9964203a088a1ecac2e3eb622b68e7316a7424bbbf148b33f28ea0c8e88"
+    },
+    {
+      "id": "f64-54",
+      "input": "1.3583160249357695e-295",
+      "canonical": "1.3583160249357695e-295",
+      "semanticHash": "fnv1a64:4dc54ddc6369f2a0",
+      "sha256": "9c092cc47df203f5f259739a048cf244255bd28a970c84a303bfaa87294d127f"
+    },
+    {
+      "id": "f64-55",
+      "input": "-1.171327397771489e-247",
+      "canonical": "-1.171327397771489e-247",
+      "semanticHash": "fnv1a64:8b78ea310d8ac48a",
+      "sha256": "209a4e572ba67673e905e53230514c1338cbfb79072c79ebbe770cb7c44ceeb7"
+    },
+    {
+      "id": "f64-56",
+      "input": "-2.9400232845377038e+35",
+      "canonical": "-2.9400232845377038e+35",
+      "semanticHash": "fnv1a64:98766324c26e2005",
+      "sha256": "6306af174a91bf6690650c81ee5dfac0cad773d6fe1757e171506dbf4f09083e"
+    },
+    {
+      "id": "f64-57",
+      "input": "-4.73985711722203e-306",
+      "canonical": "-4.73985711722203e-306",
+      "semanticHash": "fnv1a64:ccfe9ea5c88fa120",
+      "sha256": "76ab2cd688236916e8fd205ecd4ee479a60074fbed37266731189bdcbbdc5413"
+    },
+    {
+      "id": "f64-58",
+      "input": "1.6528482449490535e-205",
+      "canonical": "1.6528482449490535e-205",
+      "semanticHash": "fnv1a64:6098e7452587d627",
+      "sha256": "179d280a8099ddad1212e1fb732c822136b017d28f2d6d7174192448ec4be195"
+    },
+    {
+      "id": "f64-59",
+      "input": "-4.0588899053985953e+36",
+      "canonical": "-4.0588899053985953e+36",
+      "semanticHash": "fnv1a64:18b0812266be9e39",
+      "sha256": "7d0a8a4ef47b7dc0df6ba107be1f4b8c57b32ae4085cb9a903d1bb87e08c8b81"
+    },
+    {
+      "id": "f64-60",
+      "input": "-6.244901000894843e-75",
+      "canonical": "-6.244901000894843e-75",
+      "semanticHash": "fnv1a64:556c4b5b4730850e",
+      "sha256": "7ff13b07b85850e664d5e1af27e5f2acea9b456c58504bf94de5fe020877d446"
+    },
+    {
+      "id": "f64-61",
+      "input": "-5.153654626080488e+70",
+      "canonical": "-5.153654626080488e+70",
+      "semanticHash": "fnv1a64:d50235f514b17c06",
+      "sha256": "d9198846aab5584eaa5abcae68949a1246fec3aa4fb8f031557877276df94589"
+    },
+    {
+      "id": "f64-62",
+      "input": "8.703828522571472e+184",
+      "canonical": "8.703828522571472e+184",
+      "semanticHash": "fnv1a64:08c9990be7dc6593",
+      "sha256": "389cf783113e1e53707d8f6762de6bd29899584e8882921339ac61eef3a50f04"
+    },
+    {
+      "id": "f64-63",
+      "input": "-1.4170200301723545e+265",
+      "canonical": "-1.4170200301723545e+265",
+      "semanticHash": "fnv1a64:6ddf4d7da3fc8644",
+      "sha256": "c53103d5cefea2117f8ad892630edfb77ce57bb54e973d30b1be10ea6f7c46d7"
+    },
+    {
+      "id": "f64-64",
+      "input": "-2.3070453379787914e+30",
+      "canonical": "-2.3070453379787914e+30",
+      "semanticHash": "fnv1a64:105dac63a3b6c9bc",
+      "sha256": "39e6449883bd2827a888919e8f3c9d49f220092c94ea5c39555ae1c27d9f48cf"
+    },
+    {
+      "id": "f64-65",
+      "input": "-1.2117137033873445e-210",
+      "canonical": "-1.2117137033873445e-210",
+      "semanticHash": "fnv1a64:1293601c29ed96c3",
+      "sha256": "fe72f5bb9ca0ea8025e274b96eb3ff444c61f6364b88cbb89dc42217da7fdf8e"
+    },
+    {
+      "id": "f64-66",
+      "input": "-1.5103144325999833e+178",
+      "canonical": "-1.5103144325999833e+178",
+      "semanticHash": "fnv1a64:973262e60ee5234c",
+      "sha256": "699088bb2f7835028b9d18c619826552fed09079600e96e916077ee57127dafd"
+    },
+    {
+      "id": "f64-67",
+      "input": "-2.929052486409607e-51",
+      "canonical": "-2.929052486409607e-51",
+      "semanticHash": "fnv1a64:91df4796c6aa1a4b",
+      "sha256": "68190b56a1b99dff3a822cd35c2298597799efc0a9faee15c7d51fbb0d4443c6"
+    },
+    {
+      "id": "f64-68",
+      "input": "3.3821643188326852e+193",
+      "canonical": "3.3821643188326852e+193",
+      "semanticHash": "fnv1a64:4828328997b09def",
+      "sha256": "5bbaa1c40bab9cb46657a5c765d2a9bbe51c36ad0a1864e4f69db4069bca73e7"
+    },
+    {
+      "id": "f64-69",
+      "input": "-3.0956823576926774e+31",
+      "canonical": "-3.0956823576926774e+31",
+      "semanticHash": "fnv1a64:4a915ab59b2c8c1d",
+      "sha256": "b624107accccedf6a77c7618821fdd4aeaf85f97f5c3540f35c9dfff83bda6bb"
+    },
+    {
+      "id": "f64-70",
+      "input": "5.836205473640856e+86",
+      "canonical": "5.836205473640856e+86",
+      "semanticHash": "fnv1a64:4896790d3b092a0d",
+      "sha256": "83f54cb5b1359272781b930812f03d5a0f452754acfef20f6f99cb69e57896b5"
+    },
+    {
+      "id": "f64-71",
+      "input": "-7.320039989077882e+81",
+      "canonical": "-7.320039989077882e+81",
+      "semanticHash": "fnv1a64:855fe3aa661a90ef",
+      "sha256": "b295c9a2dce8458562af29f9575aebe330ed6d662f89d15567f3c01f7880bc46"
+    },
+    {
+      "id": "f64-72",
+      "input": "2.490597206560548e-88",
+      "canonical": "2.490597206560548e-88",
+      "semanticHash": "fnv1a64:f7099b6a21659691",
+      "sha256": "0f4a1165fe156eba37f19eabb68fc67a6aa93c787575fdb59d9006a60a78d893"
+    },
+    {
+      "id": "f64-73",
+      "input": "-1.3904680405546773e+190",
+      "canonical": "-1.3904680405546773e+190",
+      "semanticHash": "fnv1a64:d05d7c6fce5f6580",
+      "sha256": "f34e6e872fc85c346783019fab0b3a69acc77b067b2c1ba89b2780d466df5e08"
+    },
+    {
+      "id": "f64-74",
+      "input": "3.865447959919789e+146",
+      "canonical": "3.865447959919789e+146",
+      "semanticHash": "fnv1a64:4776dcbe51eb390b",
+      "sha256": "7fe2db887ebb00e773aa266f46df521776b830eb32c158d68d115c8c74347dca"
+    },
+    {
+      "id": "f64-75",
+      "input": "-1.4345059777663346e-125",
+      "canonical": "-1.4345059777663346e-125",
+      "semanticHash": "fnv1a64:f23cc765ae4f24b4",
+      "sha256": "039d9ea0cee672c7a22a108ed14be728a6b0156d106bf25aa33369aad2f3be58"
+    },
+    {
+      "id": "f64-76",
+      "input": "9.45927361276386e+250",
+      "canonical": "9.45927361276386e+250",
+      "semanticHash": "fnv1a64:bff6516449e1124e",
+      "sha256": "5f9356f456397db065300a96d7e777fd7a026252000ad765835785a5353caf6b"
+    },
+    {
+      "id": "f64-77",
+      "input": "-5.738807860064571e-271",
+      "canonical": "-5.738807860064571e-271",
+      "semanticHash": "fnv1a64:44b606a0b0a08045",
+      "sha256": "b318a123c66afb0a18b5d3f54fdc24cca99bab664ee04d0c35240e8a65fd8445"
+    },
+    {
+      "id": "f64-78",
+      "input": "3.621859903250964e-156",
+      "canonical": "3.621859903250964e-156",
+      "semanticHash": "fnv1a64:751d30c938f80d4b",
+      "sha256": "fc8a43ec33ebbd23ed6189e788a79a08fe391dca69f6592d7d8ad8f81eb95b0f"
+    },
+    {
+      "id": "f64-79",
+      "input": "-4.416123321371117e-65",
+      "canonical": "-4.416123321371117e-65",
+      "semanticHash": "fnv1a64:aa8dc73d87492c76",
+      "sha256": "bce98a67869a193fb4ad487e568c29195be95f0e66dc31801affc9be31236675"
+    },
+    {
+      "id": "f64-80",
+      "input": "-2.4441455605901315e+121",
+      "canonical": "-2.4441455605901315e+121",
+      "semanticHash": "fnv1a64:283f1bbc0e6b1d33",
+      "sha256": "fae898a9bec0c0046a54c4d8be9609604fc9227b1ed3059d62191efa29fcb058"
+    },
+    {
+      "id": "f64-81",
+      "input": "-1.8111115820054287e+69",
+      "canonical": "-1.8111115820054287e+69",
+      "semanticHash": "fnv1a64:0f71dd9faad6c26a",
+      "sha256": "d7c5049f387ddb7784cb96e3d427282b257206a07f07530a49ddabb685ad7c24"
+    },
+    {
+      "id": "f64-82",
+      "input": "-1.8712627202021895e+32",
+      "canonical": "-1.8712627202021895e+32",
+      "semanticHash": "fnv1a64:aea9b98ce5af43ca",
+      "sha256": "a908366e24d4aeb7f3e3f7112a2222184bc95b26a5ee7c9a7187758bf2c34794"
+    },
+    {
+      "id": "f64-83",
+      "input": "-1.0481360716344068e-154",
+      "canonical": "-1.0481360716344068e-154",
+      "semanticHash": "fnv1a64:a5f37e158564355a",
+      "sha256": "8e386734bf4a17c4260ead13764637911e6dadb82c73649183341a33d9915660"
+    },
+    {
+      "id": "f64-84",
+      "input": "-1.993259624726284e-175",
+      "canonical": "-1.993259624726284e-175",
+      "semanticHash": "fnv1a64:9c25ed8abf42addc",
+      "sha256": "0b648df274a8622e52ee124fe52228737c88f1fcd123924177bd30eda26214a1"
+    },
+    {
+      "id": "f64-85",
+      "input": "3.1795750831906023e-145",
+      "canonical": "3.1795750831906023e-145",
+      "semanticHash": "fnv1a64:1ab150e31ba28ba8",
+      "sha256": "5e8b9d7f394d185d5650e7cd95b3f93982cb992a649d9432e687af1b46e6dfc3"
+    },
+    {
+      "id": "f64-86",
+      "input": "2.8361367855335042e-266",
+      "canonical": "2.8361367855335042e-266",
+      "semanticHash": "fnv1a64:5cfae373a4217c28",
+      "sha256": "115e98178e6d84a4698999d70ca03837e48bdfad1a6d85a25bfa0dd94ed11938"
+    },
+    {
+      "id": "f64-87",
+      "input": "2.9591129120062573e+101",
+      "canonical": "2.9591129120062573e+101",
+      "semanticHash": "fnv1a64:567ac3874a1f9785",
+      "sha256": "5294f5de9b2e11e182487efb3fbbebe4dfdd94f084cdc043402c749e7df961a5"
+    },
+    {
+      "id": "f64-88",
+      "input": "1.7341089222030858e+119",
+      "canonical": "1.7341089222030858e+119",
+      "semanticHash": "fnv1a64:05dbd74b31067ad1",
+      "sha256": "89f27a1d0574618682f08d2dbfc977b59bce81baa9e4fda8cce73f102ada9e57"
+    },
+    {
+      "id": "f64-89",
+      "input": "6.837557818945314e+288",
+      "canonical": "6.837557818945314e+288",
+      "semanticHash": "fnv1a64:fe3fba9b78ac500d",
+      "sha256": "55550bed4f3a9acdbe840146ae6e214602f6cc0c06697ed59fe15588540528a0"
+    },
+    {
+      "id": "f64-90",
+      "input": "9.33545093493224e+96",
+      "canonical": "9.33545093493224e+96",
+      "semanticHash": "fnv1a64:39cf98d526fda967",
+      "sha256": "ab7211a57b095c033e56b0cac3788d0c9187768d24e022c5ce875fb97c116924"
+    },
+    {
+      "id": "f64-91",
+      "input": "1.8210568468387212e-283",
+      "canonical": "1.8210568468387212e-283",
+      "semanticHash": "fnv1a64:0c3f2b37860d0cfa",
+      "sha256": "b63f5a278c50cdbb4c564e95a415eb3bb002e9208ff802037c48627f4e6dc5ed"
+    },
+    {
+      "id": "f64-92",
+      "input": "1.3372334374848897e+115",
+      "canonical": "1.3372334374848897e+115",
+      "semanticHash": "fnv1a64:c8953cc9efe66a1a",
+      "sha256": "ab5414fd41e0af3de24ec76906f9527d779baae6108f96b5da19fdcf23407250"
+    },
+    {
+      "id": "f64-93",
+      "input": "-1.2409528194652398e-284",
+      "canonical": "-1.2409528194652398e-284",
+      "semanticHash": "fnv1a64:11876c0e36167c2c",
+      "sha256": "57537fd228bce4df8e963a4f2a614c53d437380cf255089026bd82e6f941a601"
+    },
+    {
+      "id": "f64-94",
+      "input": "-1.0381929517132538e+86",
+      "canonical": "-1.0381929517132538e+86",
+      "semanticHash": "fnv1a64:bbfd131d7ad9b510",
+      "sha256": "957f1aa9cca4e06f00e096fcd7d74a6b1dbe76c48845fc057e0a5338ff6c7d48"
+    },
+    {
+      "id": "f64-95",
+      "input": "1.857202314674233e+81",
+      "canonical": "1.857202314674233e+81",
+      "semanticHash": "fnv1a64:7c1da8b456bb8ba2",
+      "sha256": "e4127ca34cb6b8fe83ba7258627eaddf031dcc1c5b7343a4504588a8e5e4f21a"
+    },
+    {
+      "id": "f64-96",
+      "input": "-4.979657940258192e+235",
+      "canonical": "-4.979657940258192e+235",
+      "semanticHash": "fnv1a64:ae70e287f94542e5",
+      "sha256": "1e8a5867946e31ab79c67fcb40f69fe532e19c372f9f1a61aea972a640db7ea8"
+    },
+    {
+      "id": "f64-97",
+      "input": "-6.799872526369977e-181",
+      "canonical": "-6.799872526369977e-181",
+      "semanticHash": "fnv1a64:2a37c26522aa417c",
+      "sha256": "53f443a3cab9fe0794ff8a945ec822902f40db90a02911ae156a7942283df29d"
+    },
+    {
+      "id": "f64-98",
+      "input": "6.6778064145447534e-307",
+      "canonical": "6.6778064145447534e-307",
+      "semanticHash": "fnv1a64:c522ce1e8eb60e3e",
+      "sha256": "b7d37b1647e4063e69c0e6a4a2f77a24467fe57b232c6aa8c71ed418cb1f44d4"
+    },
+    {
+      "id": "f64-99",
+      "input": "-1.2018914007483446e-222",
+      "canonical": "-1.2018914007483446e-222",
+      "semanticHash": "fnv1a64:45cd83f96f76468a",
+      "sha256": "b106cf8e6bf611b6ef2ba53e0d4cab7b14619df6e2cb8af850e21b2b42220576"
+    },
+    {
+      "id": "f64-100",
+      "input": "-1.9594968070409073e-40",
+      "canonical": "-1.9594968070409073e-40",
+      "semanticHash": "fnv1a64:e569becb85baa185",
+      "sha256": "16d0f50dd4d03b021501d629834b046ac02f2ed0d82ce6812b3a5f4e2cc624e9"
+    },
+    {
+      "id": "f64-101",
+      "input": "2.1874922521063813e+82",
+      "canonical": "2.1874922521063813e+82",
+      "semanticHash": "fnv1a64:d0a13542a520802b",
+      "sha256": "57c71eb9c18ae2cf862d07abb45408c57998a88ad1abcb82dae99c0f47f95e03"
+    },
+    {
+      "id": "f64-102",
+      "input": "5.541987361392706e-259",
+      "canonical": "5.541987361392706e-259",
+      "semanticHash": "fnv1a64:523317f839f36d01",
+      "sha256": "fdbe6d014fd020e99bcfbfa3aa885244e2d96fc6b8369d74942f0eb8db05857c"
+    },
+    {
+      "id": "f64-103",
+      "input": "-3.25047853164186e-296",
+      "canonical": "-3.25047853164186e-296",
+      "semanticHash": "fnv1a64:a630410116eac7d8",
+      "sha256": "25d9612852f54702ce826d5a5917a6212beaddf5ee678c04444af4d02fbb609f"
+    },
+    {
+      "id": "f64-104",
+      "input": "9.509858115981836e+117",
+      "canonical": "9.509858115981836e+117",
+      "semanticHash": "fnv1a64:e178c1fdf0344358",
+      "sha256": "bc3be52b9150cd07c55f454cd4b6c686c40a583b04d281469a29731b8333f9d8"
+    },
+    {
+      "id": "f64-105",
+      "input": "-3.5346806830989186e+63",
+      "canonical": "-3.5346806830989186e+63",
+      "semanticHash": "fnv1a64:f27bf3bf6cc678e0",
+      "sha256": "83af7b5762af1300b528e0f9752df52681697f2faf9aae2830d85dae165795cf"
+    },
+    {
+      "id": "f64-106",
+      "input": "1.2020527953835622e+216",
+      "canonical": "1.2020527953835622e+216",
+      "semanticHash": "fnv1a64:2690224d864e6c7c",
+      "sha256": "0f98832c06e4a4f7a8cdcc3d781d32c7017ed4fdfdaadd8584ca3aea6bea83a4"
+    },
+    {
+      "id": "f64-107",
+      "input": "5.3267426839444645e+303",
+      "canonical": "5.3267426839444645e+303",
+      "semanticHash": "fnv1a64:0a859ba02644b8eb",
+      "sha256": "341b0099e334e9f8615505da5d77c7f2aabe102c84e59d0ec7f7180f17ff8a09"
+    },
+    {
+      "id": "f64-108",
+      "input": "-4.417369238931679e-88",
+      "canonical": "-4.417369238931679e-88",
+      "semanticHash": "fnv1a64:32a5e9435d5ada72",
+      "sha256": "30ad3436a532a2555d1c7a7653564eb606741b18e1dac26f0bade2f1c888d0ea"
+    },
+    {
+      "id": "f64-109",
+      "input": "-4.337796023594429e-111",
+      "canonical": "-4.337796023594429e-111",
+      "semanticHash": "fnv1a64:4bc5a5b38393812e",
+      "sha256": "c1a57778855870d1aa083376151c1824f100fc4a1f8ac3b8b0c1c1e245454122"
+    },
+    {
+      "id": "f64-110",
+      "input": "-4.392642830893699e-110",
+      "canonical": "-4.392642830893699e-110",
+      "semanticHash": "fnv1a64:63a9e848c38be111",
+      "sha256": "a371213a97536ebc3234f71d05bdcc2c75582da1a98041d60214e6fed4dfed1e"
+    },
+    {
+      "id": "f64-111",
+      "input": "-7.096401318950439e+89",
+      "canonical": "-7.096401318950439e+89",
+      "semanticHash": "fnv1a64:90aae323a2c94734",
+      "sha256": "218d63cf4081bfceb6fbfdd9fa78ddad8fe5840f54e2e99dc60dd69eee0b2c6a"
+    },
+    {
+      "id": "f64-112",
+      "input": "-5.163343931666598e+32",
+      "canonical": "-5.163343931666598e+32",
+      "semanticHash": "fnv1a64:111d6e82a6559313",
+      "sha256": "2a8e13396ba7e30decf45dd5a616c18c365a5162c80c499214199564bb9a68df"
+    },
+    {
+      "id": "f64-113",
+      "input": "5.394678789267058e-221",
+      "canonical": "5.394678789267058e-221",
+      "semanticHash": "fnv1a64:d4503e92ee7f086a",
+      "sha256": "7174c59d3ed5a04d53eb363875ba55dd3f47917c8634997c241ebb926e450ff8"
+    },
+    {
+      "id": "f64-114",
+      "input": "3.694308939744269e-237",
+      "canonical": "3.694308939744269e-237",
+      "semanticHash": "fnv1a64:02a1bc20ff500be3",
+      "sha256": "3ac8ee7070cafeac4f4dc54d966f628645f8de281a60c3da2b5899d23d1ea271"
+    },
+    {
+      "id": "f64-115",
+      "input": "2.4685991844535416e-159",
+      "canonical": "2.4685991844535416e-159",
+      "semanticHash": "fnv1a64:f822e152bf004394",
+      "sha256": "8be40d3ce1ca48321c48b42ccdcacf5f84e0ccc6adcabcce85d6912c84e0c5d2"
+    },
+    {
+      "id": "f64-116",
+      "input": "-2.889483185165086e-201",
+      "canonical": "-2.889483185165086e-201",
+      "semanticHash": "fnv1a64:74ac83b743f4898f",
+      "sha256": "c0f0f9d7725e2e746ae6892a23d222f353db3354348d2a035d6152b5cc246fb9"
+    },
+    {
+      "id": "f64-117",
+      "input": "-6.438847440110981e-144",
+      "canonical": "-6.438847440110981e-144",
+      "semanticHash": "fnv1a64:b5efaec0e8072117",
+      "sha256": "80c07baa10de12698e721b8c327d65508e30e99dd7ca76abb1d0536ad7ffba11"
+    },
+    {
+      "id": "f64-118",
+      "input": "-8.356671082340043e+214",
+      "canonical": "-8.356671082340043e+214",
+      "semanticHash": "fnv1a64:2f0d414352224d95",
+      "sha256": "36dd8e7856df3b2ca7e0058e9332080f07a7c6b196bfbce24c11428a501a76b1"
+    },
+    {
+      "id": "f64-119",
+      "input": "1.1757831794619677e+81",
+      "canonical": "1.1757831794619677e+81",
+      "semanticHash": "fnv1a64:cdfa91c5bcf21da5",
+      "sha256": "f6d5bcabb1ce8eb40098215c0c82f0fcb0eee5612680f2c97995567038a2a31d"
+    },
+    {
+      "id": "f64-120",
+      "input": "41539.82502550319",
+      "canonical": "41539.82502550319",
+      "semanticHash": "fnv1a64:3386eba8bb4da1f9",
+      "sha256": "e59d1e4e354a08f8731c0317d2c368eed66c51b7e93a778c06128bf4568c3288"
+    },
+    {
+      "id": "f64-121",
+      "input": "1.406915409912875e+69",
+      "canonical": "1.406915409912875e+69",
+      "semanticHash": "fnv1a64:e92f2525860ccfb1",
+      "sha256": "72649ebab7d2ac03f989eeac1def769a14d70c448d12a6cd13dd0a321c6bcaa6"
+    },
+    {
+      "id": "f64-122",
+      "input": "-4.271143211293582e-146",
+      "canonical": "-4.271143211293582e-146",
+      "semanticHash": "fnv1a64:1a0c0c90e5100840",
+      "sha256": "b7ae87bee4fd25713adf137f8194617de09dfd69d46bd03894fc9d12699d70b3"
+    },
+    {
+      "id": "f64-123",
+      "input": "2.399532074348919e-76",
+      "canonical": "2.399532074348919e-76",
+      "semanticHash": "fnv1a64:9705492690b38fc0",
+      "sha256": "a3b089959aab117ff8e20dedad976002326d3c5fa1da9fa13e65deac2e8f67dc"
+    },
+    {
+      "id": "f64-124",
+      "input": "4.6540357954688546e-219",
+      "canonical": "4.6540357954688546e-219",
+      "semanticHash": "fnv1a64:55f589dc588cf216",
+      "sha256": "84cca42b85f8268ab18babdd14b35c5b138997d6b1b4ac39a608bc80aefbbeaa"
+    },
+    {
+      "id": "f64-125",
+      "input": "3.754045946732952e+220",
+      "canonical": "3.754045946732952e+220",
+      "semanticHash": "fnv1a64:ac5841f09ae1bb10",
+      "sha256": "f92d0bc67b9d58c2acf0c067e596a9bf36ecc17e882731e5a4f381927b66f612"
+    },
+    {
+      "id": "f64-126",
+      "input": "-3.2621115531884194e+269",
+      "canonical": "-3.2621115531884194e+269",
+      "semanticHash": "fnv1a64:dd56203d84e0f52d",
+      "sha256": "99730f92bf48613e84fa7bada0fd4f8be8bdd113157ea5357059227ea076f861"
+    },
+    {
+      "id": "f64-127",
+      "input": "6.029227449179332e-258",
+      "canonical": "6.029227449179332e-258",
+      "semanticHash": "fnv1a64:4e4c42e54758def8",
+      "sha256": "55e478ca649d97a5237df72dea748598b81e7a3cd4454d7de2527c0daf01aad8"
+    },
+    {
+      "id": "f64-128",
+      "input": "1.6976854520142876e+287",
+      "canonical": "1.6976854520142876e+287",
+      "semanticHash": "fnv1a64:5aabcd0fef4082bd",
+      "sha256": "3347887091d43c8b248f3af723f684e0495f112cd70c494d72a0e42f031c0eff"
+    },
+    {
+      "id": "f64-129",
+      "input": "-4.2678781342045103e-107",
+      "canonical": "-4.2678781342045103e-107",
+      "semanticHash": "fnv1a64:d52e04d618d8fef1",
+      "sha256": "ff8e80464b518eadff2a8fea713eb2fe7a6f8407963eda16c156decd4a584e76"
+    },
+    {
+      "id": "f64-130",
+      "input": "4.166067051532415e+180",
+      "canonical": "4.166067051532415e+180",
+      "semanticHash": "fnv1a64:940d731ba9985c34",
+      "sha256": "f30e855d6f19b2813397e2bb7419f8c61a0d6663f79edc89744d21689c6f1819"
+    },
+    {
+      "id": "f64-131",
+      "input": "3.351913682309882e-130",
+      "canonical": "3.351913682309882e-130",
+      "semanticHash": "fnv1a64:9a06d23e2542f2f4",
+      "sha256": "38b4b1a49aab10e4e483d75be5bf88cf829c23a4693cc5974de613d7123853ae"
+    },
+    {
+      "id": "f64-132",
+      "input": "1.2524171722597945e+248",
+      "canonical": "1.2524171722597945e+248",
+      "semanticHash": "fnv1a64:d941d9a9a4189a6a",
+      "sha256": "21809966c854dfeb6a11cbb165b6bc417891ec8a811898b8f21929b2db66160f"
+    },
+    {
+      "id": "f64-133",
+      "input": "1.5002148261797785e-170",
+      "canonical": "1.5002148261797785e-170",
+      "semanticHash": "fnv1a64:8f77d55bfad9e54c",
+      "sha256": "0318c96d9987fe7862fa88ef03b378302eba34205785009f6d6152fbce18aca8"
+    },
+    {
+      "id": "f64-134",
+      "input": "-6.250843621331154e-237",
+      "canonical": "-6.250843621331154e-237",
+      "semanticHash": "fnv1a64:52f2446348e219b0",
+      "sha256": "439f0263fba6e4a6dcd4f33cb8a9c6f74ea4a73238fc4046565a240704a6cf14"
+    },
+    {
+      "id": "f64-135",
+      "input": "2.3513302114657723e-85",
+      "canonical": "2.3513302114657723e-85",
+      "semanticHash": "fnv1a64:60c48093a841a9a7",
+      "sha256": "f4353038428843d4af52f068ea1e8168e64323ae1ba783a9d4d30af4d34956cb"
+    },
+    {
+      "id": "f64-136",
+      "input": "-1.8962045046095977e+307",
+      "canonical": "-1.8962045046095977e+307",
+      "semanticHash": "fnv1a64:e72853716cd0321c",
+      "sha256": "2e7c658b4a9f46b766fa1ee55a652a518a3888e9396b82482f49ff9c4ad98ada"
+    },
+    {
+      "id": "f64-137",
+      "input": "6.032037063889454e-191",
+      "canonical": "6.032037063889454e-191",
+      "semanticHash": "fnv1a64:74e8a7b492ec8f56",
+      "sha256": "8c7fd2eefeca0ae79da460d45b9bc891f2e998030bc9a3aa0c574ba7c5d013c4"
+    },
+    {
+      "id": "f64-138",
+      "input": "2.9255195654383136e-262",
+      "canonical": "2.9255195654383136e-262",
+      "semanticHash": "fnv1a64:ece3888bf57cc5c6",
+      "sha256": "9ca1a83de879d3d61545b93f9371da54d43d7d5abd8ae5568763c8fd741d562d"
+    },
+    {
+      "id": "f64-139",
+      "input": "-2.6059630600973354e+216",
+      "canonical": "-2.6059630600973354e+216",
+      "semanticHash": "fnv1a64:34797894a816c233",
+      "sha256": "bd185b9e072a2fc981e90ae3eceb2dbb2122a9ecb71440e3e300dcd983cdfc89"
+    },
+    {
+      "id": "f64-140",
+      "input": "-2.82869780598663e+88",
+      "canonical": "-2.82869780598663e+88",
+      "semanticHash": "fnv1a64:037999088931a24b",
+      "sha256": "393f55daacc2d9903ffa314a3a8d99c2c5e337dadf3c3628e59017c57cc32eea"
+    },
+    {
+      "id": "f64-141",
+      "input": "1.3741339438674667e-65",
+      "canonical": "1.3741339438674667e-65",
+      "semanticHash": "fnv1a64:6ac0798cc494be72",
+      "sha256": "c7b8c45cd80f984d57af414d47250077cf7bb407a49c0c8a34c60f00798fd145"
+    },
+    {
+      "id": "f64-142",
+      "input": "-2.219788345989189e-269",
+      "canonical": "-2.219788345989189e-269",
+      "semanticHash": "fnv1a64:0e35338623f03dba",
+      "sha256": "d19246ef2aa5bd844dfb1ad9e5164b9b265a80c8183cc6a54794e6af1f1ce00f"
+    },
+    {
+      "id": "f64-143",
+      "input": "1.065992810762007e+55",
+      "canonical": "1.065992810762007e+55",
+      "semanticHash": "fnv1a64:0d716f2b2684090a",
+      "sha256": "a8daf7ea38c3a86d766220c917d6527ebc7c8a46fabf7392269ed80ba9201066"
+    },
+    {
+      "id": "f64-144",
+      "input": "1.5697665009106824e-157",
+      "canonical": "1.5697665009106824e-157",
+      "semanticHash": "fnv1a64:c3d140b1f46cb9cb",
+      "sha256": "ab1212ed2faa6370a3eb6e29add44fa845c960778f78acfaa2126fa24499d604"
+    },
+    {
+      "id": "f64-145",
+      "input": "3.764948511030058e-61",
+      "canonical": "3.764948511030058e-61",
+      "semanticHash": "fnv1a64:5e25968084700424",
+      "sha256": "9b81f3b12b78381f616204bbc142f54e882bae0613ea4797b76afb87945e13c2"
+    },
+    {
+      "id": "f64-146",
+      "input": "8.961563196336734e+29",
+      "canonical": "8.961563196336734e+29",
+      "semanticHash": "fnv1a64:79aa5c6d6ac1d95c",
+      "sha256": "3986aa7751a76fbb3252f1c107d43245f24e2a2fbba3f89405fc27dbd27ef51f"
+    },
+    {
+      "id": "f64-147",
+      "input": "-0.045764898421398754",
+      "canonical": "-0.045764898421398754",
+      "semanticHash": "fnv1a64:28e6b92674718bfe",
+      "sha256": "8235cfa5c21a208872b94b9b8cc13c6fcddd1104afba3a52d59569b439a4ae3b"
+    },
+    {
+      "id": "f64-148",
+      "input": "91416007.87139194",
+      "canonical": "91416007.87139194",
+      "semanticHash": "fnv1a64:faecf085e049ada1",
+      "sha256": "0053fcc1d9925d7ab8a61b2514ae712bb05145a541c2748c3f4e1e639633cc9e"
+    },
+    {
+      "id": "f64-149",
+      "input": "2.2320138837031856e+295",
+      "canonical": "2.2320138837031856e+295",
+      "semanticHash": "fnv1a64:cf25b82be0d6811b",
+      "sha256": "0deac35e353fff31cfdc0ba350a00f9171da772cb7950ca9dc7c81af388bcff7"
+    },
+    {
+      "id": "f64-150",
+      "input": "-1.1586330881170544e-40",
+      "canonical": "-1.1586330881170544e-40",
+      "semanticHash": "fnv1a64:2b873eca48ed9983",
+      "sha256": "aad8295921808e035407c19d0a4b99136cd8e1b3804c5f1b033dd4189fb30d0a"
+    },
+    {
+      "id": "f64-151",
+      "input": "1.0724245209427498e-287",
+      "canonical": "1.0724245209427498e-287",
+      "semanticHash": "fnv1a64:b9a901a546f8e6d8",
+      "sha256": "2b2a16988a91d27f4a47b61d086ebdaf38a20033f2147fb7d751e0cbf2cf4fc8"
+    },
+    {
+      "id": "f64-152",
+      "input": "-1.49617084090321e-138",
+      "canonical": "-1.49617084090321e-138",
+      "semanticHash": "fnv1a64:38ec549215e243bd",
+      "sha256": "eff08c34cb47dab59bac1d9d4a5e3bb446f66ea5f5f8118ac80bdeeb55a133dd"
+    },
+    {
+      "id": "f64-153",
+      "input": "1.7491091480585644e+295",
+      "canonical": "1.7491091480585644e+295",
+      "semanticHash": "fnv1a64:70a3b096326f2efd",
+      "sha256": "385eac4de2af895b789d35770f241e7a6553effe6e182d73678c3ad643c443ea"
+    },
+    {
+      "id": "f64-154",
+      "input": "-2.2934094300301983e+111",
+      "canonical": "-2.2934094300301983e+111",
+      "semanticHash": "fnv1a64:8775bd26959dea75",
+      "sha256": "af00f383205d2dd645c6f2d0dc15cb00ce209fd61d3300f84452426df79e24a1"
+    },
+    {
+      "id": "f64-155",
+      "input": "-9.443984061554738e+35",
+      "canonical": "-9.443984061554738e+35",
+      "semanticHash": "fnv1a64:d860026e088282cc",
+      "sha256": "17bc61cc9c9e0555b833889e5fbfdb571788e04fe710765ea0f39102f201e73a"
+    },
+    {
+      "id": "f64-156",
+      "input": "6.220176141557672e+92",
+      "canonical": "6.220176141557672e+92",
+      "semanticHash": "fnv1a64:07dd6a9fcff12450",
+      "sha256": "cdbe6df41e0c1ad85032a91b0911bfec6602e42988974789837097fb3f941462"
+    },
+    {
+      "id": "f64-157",
+      "input": "1.233455873914578e+85",
+      "canonical": "1.233455873914578e+85",
+      "semanticHash": "fnv1a64:4904b51d6d3477ef",
+      "sha256": "404f5c3ca5fe31d8652f292239ecc8d65fb7e3b1fc85ea2331576711ab43994e"
+    },
+    {
+      "id": "f64-158",
+      "input": "-2.9925229321392094e+97",
+      "canonical": "-2.9925229321392094e+97",
+      "semanticHash": "fnv1a64:81ff57465b771099",
+      "sha256": "2c3efb837416c6575bff5941ca010efdbd8e5315a1ae03685242012b89b0f4df"
+    },
+    {
+      "id": "f64-159",
+      "input": "-1.2147100807056905e+38",
+      "canonical": "-1.2147100807056905e+38",
+      "semanticHash": "fnv1a64:9e853d13c7d58bd1",
+      "sha256": "bb5708ee494ef58ba67f5165912093d2bdca9ffffbdbe2813eee5fb1456ebae8"
+    },
+    {
+      "id": "f64-160",
+      "input": "-2.366231300197444e+117",
+      "canonical": "-2.366231300197444e+117",
+      "semanticHash": "fnv1a64:bf0edb9882761776",
+      "sha256": "8b64527619daed598ac64abd65312195e441aa707fe895cda334edd446ae954a"
+    },
+    {
+      "id": "f64-161",
+      "input": "-1.5517785678919712e-111",
+      "canonical": "-1.5517785678919712e-111",
+      "semanticHash": "fnv1a64:43c7af9bfb6887c2",
+      "sha256": "61e2796425cee9ced9c590b26b4dfb5caadfed78039e05279cf18d01ecafa212"
+    },
+    {
+      "id": "f64-162",
+      "input": "3.338329482328162e+205",
+      "canonical": "3.338329482328162e+205",
+      "semanticHash": "fnv1a64:e565fc2205d82aef",
+      "sha256": "403d793b7e4a5d4c6df5f3c00216d56c59544c72507609f3c8bb5f9f5f9dcb9f"
+    },
+    {
+      "id": "f64-163",
+      "input": "-2.593178283054865e-48",
+      "canonical": "-2.593178283054865e-48",
+      "semanticHash": "fnv1a64:31e7c4210ec920c0",
+      "sha256": "797da845932553e86f6bedbbf467fa062a37ecc2f1bc70b990cde6a0945abf0b"
+    },
+    {
+      "id": "f64-164",
+      "input": "-3.32153754378729e-145",
+      "canonical": "-3.32153754378729e-145",
+      "semanticHash": "fnv1a64:92d490a5597dee23",
+      "sha256": "63c656b740fe2f92ad7a282e8aecd8adc9e3596d07fe9a6fbaee67add89d1c49"
+    },
+    {
+      "id": "f64-165",
+      "input": "6.474715846788361e-15",
+      "canonical": "6.474715846788361e-15",
+      "semanticHash": "fnv1a64:c86415df1b95a178",
+      "sha256": "7b6ec37b8c31c67644a57faf6428aaef8b7ed41c17219540f973cb6ff9c49e7b"
+    },
+    {
+      "id": "f64-166",
+      "input": "-4.4816244687430376e+161",
+      "canonical": "-4.4816244687430376e+161",
+      "semanticHash": "fnv1a64:5b6571d683b7df5d",
+      "sha256": "3b425f5979949b20ff3a0eed83713376020b8071f4588270dd581f4d8c4970b2"
+    },
+    {
+      "id": "f64-167",
+      "input": "4.361935190638415e+99",
+      "canonical": "4.361935190638415e+99",
+      "semanticHash": "fnv1a64:329eb6812a19c371",
+      "sha256": "9ecc5e57c1fceeded006020c3e9b91a26665f4594c891c0d8075413443f2e8ad"
+    },
+    {
+      "id": "f64-168",
+      "input": "-2.1591398941051434e-188",
+      "canonical": "-2.1591398941051434e-188",
+      "semanticHash": "fnv1a64:2993c5ed616ff4a6",
+      "sha256": "efb98b06e5360a431e4ce2337acf73e8e5bcfff715df6b1638c1ee572a04f03a"
+    },
+    {
+      "id": "f64-169",
+      "input": "1.5107806772349725e+255",
+      "canonical": "1.5107806772349725e+255",
+      "semanticHash": "fnv1a64:51b93dbf86d2a50b",
+      "sha256": "8e688f78dc5f785c4675328102e3fb97bcb3610e975cfc4476c2b421089543ac"
+    },
+    {
+      "id": "f64-170",
+      "input": "-1.2030302486359044e-148",
+      "canonical": "-1.2030302486359044e-148",
+      "semanticHash": "fnv1a64:a71a1e6c7e03f94d",
+      "sha256": "11afc8a61da397a9d2e8aae361fd39133366aa6e950044aa42e2f1c9d33b55ec"
+    },
+    {
+      "id": "f64-171",
+      "input": "-1.5888990208790084e+294",
+      "canonical": "-1.5888990208790084e+294",
+      "semanticHash": "fnv1a64:82f773a4dd3119b5",
+      "sha256": "a68d2df0c14c53ec143fe1625b01acb75a25a8f208e22b0590c9e857e1bfa886"
+    },
+    {
+      "id": "f64-172",
+      "input": "-6.065586023892615e+55",
+      "canonical": "-6.065586023892615e+55",
+      "semanticHash": "fnv1a64:f7b6d30fbe8173da",
+      "sha256": "523a1a406b389b7e6cad19180e80bf5a5b380b4de129019b16877b81670dea23"
+    },
+    {
+      "id": "f64-173",
+      "input": "-1.4526079151286273e-116",
+      "canonical": "-1.4526079151286273e-116",
+      "semanticHash": "fnv1a64:d50f9bcfc3aaa161",
+      "sha256": "c74bc6a0f7b5034112b7bdd399e68a7ac3feeecdb08fc880234a0e7ba062dafa"
+    },
+    {
+      "id": "f64-174",
+      "input": "-3.370794635763421e-132",
+      "canonical": "-3.370794635763421e-132",
+      "semanticHash": "fnv1a64:fa13ffcdbe39a598",
+      "sha256": "2b4c71d1abe2d5a4e66619a2e971df6e4e3ed922393f673968b5d668709ccd23"
+    },
+    {
+      "id": "f64-175",
+      "input": "6.788505406091083e-168",
+      "canonical": "6.788505406091083e-168",
+      "semanticHash": "fnv1a64:f68a101d5816d87e",
+      "sha256": "ab9328e941721b5024e38504e6fd6b5d07579be46df92af3c879a1c56fb2d5e8"
+    },
+    {
+      "id": "f64-176",
+      "input": "3.378727958436776e-80",
+      "canonical": "3.378727958436776e-80",
+      "semanticHash": "fnv1a64:69be25f92bfd6127",
+      "sha256": "a2ab207ab1a9f62773ae9430f9478dd6a6f030b5c1e4b596c1c8359e97b8ecad"
+    },
+    {
+      "id": "f64-177",
+      "input": "1.0520572618180896e+151",
+      "canonical": "1.0520572618180896e+151",
+      "semanticHash": "fnv1a64:b1913f5d572dbb69",
+      "sha256": "bfa7c0f17d0971bf5656e98918bc7e3abc5423154e7bee94828dac79ee1870ab"
+    },
+    {
+      "id": "f64-178",
+      "input": "-4.465375336757033e+59",
+      "canonical": "-4.465375336757033e+59",
+      "semanticHash": "fnv1a64:e4058492ffb9b45b",
+      "sha256": "36e30c11f86edad725655b4cb1537bbeeb69522984b883ef4049cd74dc7cff9d"
+    },
+    {
+      "id": "f64-179",
+      "input": "-5.778385693369846e+172",
+      "canonical": "-5.778385693369846e+172",
+      "semanticHash": "fnv1a64:0fa7d1bb5c13415d",
+      "sha256": "bfc164873d49f9b5fb0082a5fc6aa0d2723387c5d1b330e322120abf0f93bc99"
+    },
+    {
+      "id": "f64-180",
+      "input": "6.976687118696204e+301",
+      "canonical": "6.976687118696204e+301",
+      "semanticHash": "fnv1a64:08e2e793d81f63b3",
+      "sha256": "0d6a6b35f422c83288c2dcc8ebeef372f09bb06785feeaf29fc2313a8e43acd7"
+    },
+    {
+      "id": "f64-181",
+      "input": "-1.0338770957156545e-302",
+      "canonical": "-1.0338770957156545e-302",
+      "semanticHash": "fnv1a64:6c9183045cc6f511",
+      "sha256": "9095b512bb372e8f9227c579b4d5f71952cd23a6c055129b33f56922ffb96a65"
+    },
+    {
+      "id": "f64-182",
+      "input": "1.7329305806082663e+130",
+      "canonical": "1.7329305806082663e+130",
+      "semanticHash": "fnv1a64:2e6fd4f0dec8ee2a",
+      "sha256": "9f198d30656397d3cc7ea354ae25905d59377e089510acd16a446091c9a2914e"
+    },
+    {
+      "id": "f64-183",
+      "input": "2.0990661345280428e-98",
+      "canonical": "2.0990661345280428e-98",
+      "semanticHash": "fnv1a64:9d6981ec864610b3",
+      "sha256": "0a71eb5064df4b17b7b3e7c0b50f9b10192554aa953e263c3192bb506526cc9d"
+    },
+    {
+      "id": "f64-184",
+      "input": "1.971073013514607e-83",
+      "canonical": "1.971073013514607e-83",
+      "semanticHash": "fnv1a64:7665c0d2cd78d085",
+      "sha256": "7531aaaaeedab3523c3306650a0fa6a656fcba778f10d9f0aa5e2caa1bdb71c0"
+    },
+    {
+      "id": "f64-185",
+      "input": "-9.69771554784967e-266",
+      "canonical": "-9.69771554784967e-266",
+      "semanticHash": "fnv1a64:e0a1e407ee624354",
+      "sha256": "35868b55f50221248adcaf9afd217f70310ac3ced174d042e82519638c1f1e93"
+    },
+    {
+      "id": "f64-186",
+      "input": "1.9501525866626136e+297",
+      "canonical": "1.9501525866626136e+297",
+      "semanticHash": "fnv1a64:b3c4a14de8b62769",
+      "sha256": "26679d2140073b6a150e79c76e3fc48609404ff6689957336c79fedc53274921"
+    },
+    {
+      "id": "f64-187",
+      "input": "-7.704175713864967e+159",
+      "canonical": "-7.704175713864967e+159",
+      "semanticHash": "fnv1a64:7c612a575671de25",
+      "sha256": "d06a2b5bceb70e42a75397c2819ae4310fa4a949eaa3a7ae4495e20148ca36bb"
+    },
+    {
+      "id": "f64-188",
+      "input": "6.840617769215814e-43",
+      "canonical": "6.840617769215814e-43",
+      "semanticHash": "fnv1a64:a327fa95885e38f7",
+      "sha256": "4e8057a5ce87fcc828b96b8ef7b70d203b084c09c3dbcee13cdb3581219224ff"
+    },
+    {
+      "id": "f64-189",
+      "input": "1.7529527294181204e-50",
+      "canonical": "1.7529527294181204e-50",
+      "semanticHash": "fnv1a64:0cad7ca6647db81d",
+      "sha256": "450f905f6f105e18eb9809c657e719793ba3cb14044c96c2f03c191a3084262b"
+    },
+    {
+      "id": "f64-190",
+      "input": "7.769695214384661e-233",
+      "canonical": "7.769695214384661e-233",
+      "semanticHash": "fnv1a64:d3dec86e0965a07f",
+      "sha256": "111cc010681ad5c94207af761edb6295c60b8889b01c2cb54555d40f3ca19049"
+    },
+    {
+      "id": "f64-191",
+      "input": "244195664.54976836",
+      "canonical": "244195664.54976836",
+      "semanticHash": "fnv1a64:d2cc9d4ccc2e1ede",
+      "sha256": "e34083f474182828ef68d3418756f30fccbf272ba0b5b9da03a234bba441e4c9"
+    },
+    {
+      "id": "f64-192",
+      "input": "2.574846493085395e+285",
+      "canonical": "2.574846493085395e+285",
+      "semanticHash": "fnv1a64:beacfa7a0f1ba85c",
+      "sha256": "01dedd5c3625cd090c7f13452f9c1c09eb9f19ca4e1a1d6a5f18cc9b20c63385"
+    },
+    {
+      "id": "f64-193",
+      "input": "-1.3533735360562186e+182",
+      "canonical": "-1.3533735360562186e+182",
+      "semanticHash": "fnv1a64:44ea404e77c2979e",
+      "sha256": "b5026e911b3346cf90a31ff7cdcd5440a77a54362ac2bb5ebf507b491a434647"
+    },
+    {
+      "id": "f64-194",
+      "input": "6.308812930424338e-220",
+      "canonical": "6.308812930424338e-220",
+      "semanticHash": "fnv1a64:5cc1817cceaffc5b",
+      "sha256": "89273aabfbfaf82ed179b290886a698e1e9a8c8eeac500d8be854ce08568e15d"
+    },
+    {
+      "id": "f64-195",
+      "input": "5.712939103867343e-28",
+      "canonical": "5.712939103867343e-28",
+      "semanticHash": "fnv1a64:7ace4fe634e13186",
+      "sha256": "71e22be2bb7df5918020662595ec158bea0df3582c5867713c8911ccda55f86c"
+    },
+    {
+      "id": "f64-196",
+      "input": "-4.0906302888382823e+149",
+      "canonical": "-4.0906302888382823e+149",
+      "semanticHash": "fnv1a64:cc42df36ff93b424",
+      "sha256": "d0da956b041bfde3446d53d15fc9a79656c8d1e47174e2b648c9e2422d72a2e0"
+    },
+    {
+      "id": "f64-197",
+      "input": "1.223817711722144e+91",
+      "canonical": "1.223817711722144e+91",
+      "semanticHash": "fnv1a64:521f13dd4b63a87a",
+      "sha256": "d4604d82bafe7fd6ba7da88073e4a1b428bb11ac9b0c3e25f8b344283592daad"
+    },
+    {
+      "id": "f64-198",
+      "input": "-5.2462105625374266e+122",
+      "canonical": "-5.2462105625374266e+122",
+      "semanticHash": "fnv1a64:68479816cb42a329",
+      "sha256": "d98abf091f1ecfaa1d7c396caf02727af1720b344cb0a9793ace44525e435b91"
+    },
+    {
+      "id": "f64-199",
+      "input": "4.239307104767855e-259",
+      "canonical": "4.239307104767855e-259",
+      "semanticHash": "fnv1a64:c757cd505d843416",
+      "sha256": "e0d498832dd58a833d84cfe8008a9cea5c02745b1b7ec13da7044324572601ff"
+    },
+    {
+      "id": "f64-200",
+      "input": "1.4788761282919594e-286",
+      "canonical": "1.4788761282919594e-286",
+      "semanticHash": "fnv1a64:1ef55693cf7a532c",
+      "sha256": "95490d79cbe138cc6586972a99cd620d866fa1a0e2262cc05080c2eab5bf53b2"
+    },
+    {
+      "id": "f64-201",
+      "input": "1.1005596981363415e-70",
+      "canonical": "1.1005596981363415e-70",
+      "semanticHash": "fnv1a64:b5a9ab2cbda2eeb1",
+      "sha256": "42ab4c52db5036ac984b16d073fe2031ddb31f379fb132f8daf3b8743a2a2cf6"
+    },
+    {
+      "id": "f64-202",
+      "input": "1.3579728750317672e+184",
+      "canonical": "1.3579728750317672e+184",
+      "semanticHash": "fnv1a64:c4ffd44b776365b6",
+      "sha256": "a4a2499400af0c4bcc6f9685d67390bd0fce73e68b4a8a8396d2290403166d1b"
+    },
+    {
+      "id": "f64-203",
+      "input": "5.331852355177703e-164",
+      "canonical": "5.331852355177703e-164",
+      "semanticHash": "fnv1a64:ea679d5bf0d8be21",
+      "sha256": "844c521505e6000bccf0a1531df0f9587d71d9d4634c49972f163d3ddcf1cc68"
+    },
+    {
+      "id": "f64-204",
+      "input": "-1.1544715780662989e+304",
+      "canonical": "-1.1544715780662989e+304",
+      "semanticHash": "fnv1a64:aa00484962602310",
+      "sha256": "b15afb5c2b4476a120e8c5352201a66755aa8d53158c16ddc7afbc2e46a9614d"
+    },
+    {
+      "id": "f64-205",
+      "input": "7.761876480714097e-259",
+      "canonical": "7.761876480714097e-259",
+      "semanticHash": "fnv1a64:e1705dbc640a7207",
+      "sha256": "2ed933b4e2c0636100fd8c1fe7a5e06be33a20f41ea3487d4e953a87b4d1e631"
+    },
+    {
+      "id": "f64-206",
+      "input": "1.2006789508134095e-287",
+      "canonical": "1.2006789508134095e-287",
+      "semanticHash": "fnv1a64:2226246c8c73f17e",
+      "sha256": "40f83d5cfa9752d35c63f7dc44401c8b288bf3f8fea74d65e6733aff3f3529f1"
+    },
+    {
+      "id": "f64-207",
+      "input": "-1.5786218413515634e+158",
+      "canonical": "-1.5786218413515634e+158",
+      "semanticHash": "fnv1a64:04a1ac7bc36a8208",
+      "sha256": "9f58ae8e2f452cc243cff3835ffa63c1094a9372f8435015e9be8e7f9016d907"
+    },
+    {
+      "id": "f64-208",
+      "input": "-5.18784770219065e+244",
+      "canonical": "-5.18784770219065e+244",
+      "semanticHash": "fnv1a64:e80003eeb1c20f40",
+      "sha256": "e919bd2a78e2bedde510b40bec929aca8a7555d4f333ba33649817c1798b8685"
+    },
+    {
+      "id": "f64-209",
+      "input": "1.1313741341089766e+71",
+      "canonical": "1.1313741341089766e+71",
+      "semanticHash": "fnv1a64:879aa2eb523fb372",
+      "sha256": "57db12bfb3174ce3890a5a88fa9310d54da5e596b542952103754c77be3d0b40"
+    },
+    {
+      "id": "f64-210",
+      "input": "-1.079663075835314e+270",
+      "canonical": "-1.079663075835314e+270",
+      "semanticHash": "fnv1a64:35140b4c8b5633e7",
+      "sha256": "abd0e0bdacf96d9ff4a412e2f63a9959ab60a4e3f721d8e37b386890bf0b8abc"
+    },
+    {
+      "id": "f64-211",
+      "input": "-3.2074924988556114e+232",
+      "canonical": "-3.2074924988556114e+232",
+      "semanticHash": "fnv1a64:9686989e4c822bc5",
+      "sha256": "96246ab5b9adaaed772bb052de186fd67025b926f47b28081d6066c87f0edb24"
+    },
+    {
+      "id": "f64-212",
+      "input": "-8.544813939598198e-104",
+      "canonical": "-8.544813939598198e-104",
+      "semanticHash": "fnv1a64:7f1606fb89a5b8bb",
+      "sha256": "67e3574ff0ad78c6f4ee3b78f4b5c468f32ce8f3f4ad660a984c314fe4750cca"
+    },
+    {
+      "id": "f64-213",
+      "input": "3.3026633162089574e-251",
+      "canonical": "3.3026633162089574e-251",
+      "semanticHash": "fnv1a64:a9ae98f034d005e5",
+      "sha256": "5253d15c55dad8d548a93cd0b9a97b8e6fb6a67f10a545580006e25abe2b3136"
+    },
+    {
+      "id": "f64-214",
+      "input": "-8.802749304869227e+191",
+      "canonical": "-8.802749304869227e+191",
+      "semanticHash": "fnv1a64:b828018cce2dd5be",
+      "sha256": "8c913078595a84026398aa7e808d1fcd3c6021009135a57897718970a9dc5e57"
+    },
+    {
+      "id": "f64-215",
+      "input": "2.3171688650225957e+137",
+      "canonical": "2.3171688650225957e+137",
+      "semanticHash": "fnv1a64:dbdef3e137e0409b",
+      "sha256": "54117d96ceee4dea302d3ddad124e64f5bfb954a46bddfb978d1f62ac6d1d3ff"
+    },
+    {
+      "id": "f64-216",
+      "input": "-7.647112442136773e-99",
+      "canonical": "-7.647112442136773e-99",
+      "semanticHash": "fnv1a64:caa6fd338adb099f",
+      "sha256": "56f191a021eb59ddf580b4631582290833e6e24aa725e25c1103eb5f0f80f015"
+    },
+    {
+      "id": "f64-217",
+      "input": "1.1637938142645149e+139",
+      "canonical": "1.1637938142645149e+139",
+      "semanticHash": "fnv1a64:cdd4047a71279db8",
+      "sha256": "5af3371ac34b1ec675d8d18c2f8accb676e9c4eba24249cde9e160e6c40c004b"
+    },
+    {
+      "id": "f64-218",
+      "input": "4.83208806402692e-275",
+      "canonical": "4.83208806402692e-275",
+      "semanticHash": "fnv1a64:911896f7430c434f",
+      "sha256": "a9d2c98073e325752ba9038134df64bf7a826f5495000ce4e6cafa1244477543"
+    },
+    {
+      "id": "f64-219",
+      "input": "1.0557182228519055e+223",
+      "canonical": "1.0557182228519055e+223",
+      "semanticHash": "fnv1a64:ab12179bda6e57fc",
+      "sha256": "f4464ab21062ba6d48f1d07063bafd153a70ed7f6919a853b83ba4d3636db888"
+    },
+    {
+      "id": "f64-220",
+      "input": "1.9370076011026958e+142",
+      "canonical": "1.9370076011026958e+142",
+      "semanticHash": "fnv1a64:1721dc5cfcf8f20f",
+      "sha256": "c4d7bc698d985bb74d9ec7515c52e802838e58ae2e3984429005ca6b94d044af"
+    },
+    {
+      "id": "f64-221",
+      "input": "-8.149170742712778e-197",
+      "canonical": "-8.149170742712778e-197",
+      "semanticHash": "fnv1a64:a7ae12eae680e0b6",
+      "sha256": "65f0109601b2c5e25bcc11b3c3979c6cf51c7a5d12fb7bca42798b3701b7da72"
+    },
+    {
+      "id": "f64-222",
+      "input": "9.318389762197346e+282",
+      "canonical": "9.318389762197346e+282",
+      "semanticHash": "fnv1a64:0c78229e97270489",
+      "sha256": "9a5ab314df1afaa1357a860b50dd0ae071ffc36bb3355dd3a4d6638feb7c1d76"
+    },
+    {
+      "id": "f64-223",
+      "input": "3.1773871885221013e-273",
+      "canonical": "3.1773871885221013e-273",
+      "semanticHash": "fnv1a64:e2aaf5ee377eeede",
+      "sha256": "7df5c4b669581df37fca1dff764e9a22e28e4daa7308c60728e025fa5839eab1"
+    },
+    {
+      "id": "f64-224",
+      "input": "-3.2744353019822825e-230",
+      "canonical": "-3.2744353019822825e-230",
+      "semanticHash": "fnv1a64:e831f3723bd05601",
+      "sha256": "1f3a1b8036f8063a55565f82ae2c1795877d019a89925786a30b4ac018df89c1"
+    },
+    {
+      "id": "f64-225",
+      "input": "-4.811037795601486e+102",
+      "canonical": "-4.811037795601486e+102",
+      "semanticHash": "fnv1a64:cd14b9f666f8ea01",
+      "sha256": "d22ec4f8964922226b8b572f60024e2c62dacc9de125d6685a3d2fa6e03c3789"
+    },
+    {
+      "id": "f64-226",
+      "input": "1.6658751889084893e+145",
+      "canonical": "1.6658751889084893e+145",
+      "semanticHash": "fnv1a64:5b0c940575ea1223",
+      "sha256": "153a395a11273cafde8871f720b5b663419d96e62e03de1ecae971bc6b7768ea"
+    },
+    {
+      "id": "f64-227",
+      "input": "-4.442519567477686e+249",
+      "canonical": "-4.442519567477686e+249",
+      "semanticHash": "fnv1a64:ea32f3d6119ed14a",
+      "sha256": "74174740fb60b2055871a0ebb9b87187fc915c0b0eccdd3407cb245212671e84"
+    },
+    {
+      "id": "f64-228",
+      "input": "-5.174192583925497e+297",
+      "canonical": "-5.174192583925497e+297",
+      "semanticHash": "fnv1a64:535ecbd3cbc28621",
+      "sha256": "f8cbf719c1ef1df33e6887fb88f91b605adc802e7b33fab3ffb0eb528d042055"
+    },
+    {
+      "id": "f64-229",
+      "input": "6.188122348362776e+116",
+      "canonical": "6.188122348362776e+116",
+      "semanticHash": "fnv1a64:e04836304acdf35d",
+      "sha256": "8429b09dddbfc68338d7c6de9c559f992fb66789c456a7a0a81a29a8540477e9"
+    },
+    {
+      "id": "f64-230",
+      "input": "-2.556838513112559e-134",
+      "canonical": "-2.556838513112559e-134",
+      "semanticHash": "fnv1a64:80b476510dfea14b",
+      "sha256": "e03b1bcf4322fee5ef7464eacc56c73b014766c56a0f3da40fc2a1a389976e60"
+    },
+    {
+      "id": "f64-231",
+      "input": "-1.1758667266450557e+137",
+      "canonical": "-1.1758667266450557e+137",
+      "semanticHash": "fnv1a64:184fa7dce9ac9e60",
+      "sha256": "077ff726ce4be975fa0b7ead4231cdb195299dc6eb02de3ae7d6785153f8a34e"
+    },
+    {
+      "id": "f64-232",
+      "input": "4.345340754532442e-253",
+      "canonical": "4.345340754532442e-253",
+      "semanticHash": "fnv1a64:7018b9ed60f80ca4",
+      "sha256": "5917dc15e49edac06a9b6069bfaaa8a731aa68fffc6a2f71ed83e5892e391b3a"
+    },
+    {
+      "id": "f64-233",
+      "input": "1.9352287307394503e-277",
+      "canonical": "1.9352287307394503e-277",
+      "semanticHash": "fnv1a64:3ab44200466912c4",
+      "sha256": "09aef8b3697bbf64233dcf13edce26d83d766a3d97c89831644d4d44bc032fa8"
+    },
+    {
+      "id": "f64-234",
+      "input": "3.1754251975090192e+50",
+      "canonical": "3.1754251975090192e+50",
+      "semanticHash": "fnv1a64:7ba14702a0097b0c",
+      "sha256": "aa2817a0d3ff118987aac73cdcd61d475d3c1b19f417f5f8af7d5b3e731efe19"
+    },
+    {
+      "id": "f64-235",
+      "input": "-1.3524116887481185e-270",
+      "canonical": "-1.3524116887481185e-270",
+      "semanticHash": "fnv1a64:493c80fa057a9a88",
+      "sha256": "574854e73fab8803bb125327141b67f9b107af6915d7cd4bab7005cdf8c336f2"
+    },
+    {
+      "id": "f64-236",
+      "input": "-3.662020293005409e+57",
+      "canonical": "-3.662020293005409e+57",
+      "semanticHash": "fnv1a64:6f995ab46b32453b",
+      "sha256": "776f85f50c8b48a4e82e96c3de43651a04ecd03d45c12ae7db22393b97b2f83c"
+    },
+    {
+      "id": "f64-237",
+      "input": "2.1308852787644934e+39",
+      "canonical": "2.1308852787644934e+39",
+      "semanticHash": "fnv1a64:98ded4c4a9221442",
+      "sha256": "b4203df47ba1ab869bf0f805dd0289f9bcca14e7538a51fbdbc1da17bc40b9ba"
+    },
+    {
+      "id": "f64-238",
+      "input": "-8.96400067474434e+112",
+      "canonical": "-8.96400067474434e+112",
+      "semanticHash": "fnv1a64:fbb6780d71b79224",
+      "sha256": "fd9137d2d4946b38140fd50a0930ad774e1e522dbd92746272bd3cc3087ca542"
+    },
+    {
+      "id": "f64-239",
+      "input": "-2.0234514648604024e-37",
+      "canonical": "-2.0234514648604024e-37",
+      "semanticHash": "fnv1a64:ebc592503dad7de9",
+      "sha256": "d3a829c47e969fc41a7743e0ac560543fd4d76944996281e79ad038a28317068"
+    },
+    {
+      "id": "f64-240",
+      "input": "-2.568285979225194e+199",
+      "canonical": "-2.568285979225194e+199",
+      "semanticHash": "fnv1a64:4d1d995c9edfae83",
+      "sha256": "a0fd3556dff05b51b08d15d6c0cc34b8c92208cc99496302709337bfdc11789d"
+    },
+    {
+      "id": "f64-241",
+      "input": "1.6599429807042196e-80",
+      "canonical": "1.6599429807042196e-80",
+      "semanticHash": "fnv1a64:cebf07235984900b",
+      "sha256": "176569b9e22464c3d27ead509430042b25c2814c25804b818915d8ad0bb17177"
+    },
+    {
+      "id": "f64-242",
+      "input": "1.8985023581292705e+109",
+      "canonical": "1.8985023581292705e+109",
+      "semanticHash": "fnv1a64:72623a3035841986",
+      "sha256": "e9aa97d304bd8ec0d0a6bbe0afb6886595268075a74956e7d8399c2945c91c37"
+    },
+    {
+      "id": "f64-243",
+      "input": "-7.768424326120313e-94",
+      "canonical": "-7.768424326120313e-94",
+      "semanticHash": "fnv1a64:f8388746d6091272",
+      "sha256": "75733586650da3339e76765823ca66ac67dc13adf201d233e4ffe414efc66047"
+    },
+    {
+      "id": "f64-244",
+      "input": "-4.895515263616831e-24",
+      "canonical": "-4.895515263616831e-24",
+      "semanticHash": "fnv1a64:f304e5af1b027b29",
+      "sha256": "5af049d40bfc395ca59301bcfc03617bc51d3981f82739bbfbff797525c3172d"
+    },
+    {
+      "id": "f64-245",
+      "input": "3.40739034861957e-83",
+      "canonical": "3.40739034861957e-83",
+      "semanticHash": "fnv1a64:56dddf983d8aa73f",
+      "sha256": "bfe86afa1963e43ad67e2fda204721af8c65a5ca9acf12252d3b3ec0dda5f063"
+    },
+    {
+      "id": "f64-246",
+      "input": "1.4230883432984271e-287",
+      "canonical": "1.4230883432984271e-287",
+      "semanticHash": "fnv1a64:c87b3f82d6d9467f",
+      "sha256": "50cb6f8bb95793a16fb417dd95eea7aa658e42add10498c43ebe7ad0d51908bd"
+    },
+    {
+      "id": "f64-247",
+      "input": "-2.764984702032868e-94",
+      "canonical": "-2.764984702032868e-94",
+      "semanticHash": "fnv1a64:3576b84f5bc959d7",
+      "sha256": "3834a0a53000dfad8c3fec33bbe4ea7bbfdb2fc8e7adf03c99c72cd0d942fa10"
+    },
+    {
+      "id": "f64-248",
+      "input": "4.154330955370698e-57",
+      "canonical": "4.154330955370698e-57",
+      "semanticHash": "fnv1a64:3ea4ca54b02ab3e3",
+      "sha256": "31ea64f8d3c04f6e9b2f7579bae710f9b6a60a497762e2c1967e6df3c7aeedc7"
+    },
+    {
+      "id": "f64-249",
+      "input": "3.702717303169468e+55",
+      "canonical": "3.702717303169468e+55",
+      "semanticHash": "fnv1a64:b862849f6ccd9bee",
+      "sha256": "0a44125edd8dca2fab382ca243e3c9462743afff0782c8096b373aa085d87b16"
+    },
+    {
+      "id": "f64-250",
+      "input": "5.730450301584112e-291",
+      "canonical": "5.730450301584112e-291",
+      "semanticHash": "fnv1a64:d64e238e2c49927a",
+      "sha256": "649e50c295324441343ddef1357697228b7256858bbd25e66a3e44894b864b64"
+    },
+    {
+      "id": "f64-251",
+      "input": "6.0296891894585416e-235",
+      "canonical": "6.0296891894585416e-235",
+      "semanticHash": "fnv1a64:916c3c351b1e71ac",
+      "sha256": "2720bcb6b3a457804a2bc61360e782c2c329967657a6dfe8ae25efe125abf7f7"
+    },
+    {
+      "id": "f64-252",
+      "input": "4.9851455983780487e+269",
+      "canonical": "4.9851455983780487e+269",
+      "semanticHash": "fnv1a64:859675ad829aed01",
+      "sha256": "d46736e11823a320c4621b0fd2543ac2e41a0bf42ac491447c0d73781c090a58"
+    },
+    {
+      "id": "f64-253",
+      "input": "3.648458823906946e+247",
+      "canonical": "3.648458823906946e+247",
+      "semanticHash": "fnv1a64:29625d57353d2773",
+      "sha256": "bf3f3e239b5aa8c20c85f711d0dc8fd0652724541108abe722f4b4bc46120400"
+    },
+    {
+      "id": "f64-254",
+      "input": "5.588463060974727e+139",
+      "canonical": "5.588463060974727e+139",
+      "semanticHash": "fnv1a64:fea6e805947251d7",
+      "sha256": "30f465730688dad8dfb1b8f01b834a38bbe1ad331026738a1428de77d28ef060"
+    },
+    {
+      "id": "f64-255",
+      "input": "1.4729495827110188e+61",
+      "canonical": "1.4729495827110188e+61",
+      "semanticHash": "fnv1a64:0536665630c3546f",
+      "sha256": "d82abd0f228f175b5c8008a8c53186b1d8389bba4f62342375a0eb8d8856af0e"
+    }
+  ],
+  "invalid": [
+    {
+      "id": "invalid-0",
+      "input": "",
+      "code": "invalid_json"
+    },
+    {
+      "id": "invalid-1",
+      "input": "01",
+      "code": "invalid_json"
+    },
+    {
+      "id": "invalid-2",
+      "input": "1.",
+      "code": "invalid_json"
+    },
+    {
+      "id": "invalid-3",
+      "input": "-.1",
+      "code": "invalid_json"
+    },
+    {
+      "id": "invalid-4",
+      "input": "[1,]",
+      "code": "invalid_json"
+    },
+    {
+      "id": "invalid-5",
+      "input": "{\"a\":1,}",
+      "code": "invalid_json"
+    },
+    {
+      "id": "invalid-6",
+      "input": "[",
+      "code": "invalid_json"
+    },
+    {
+      "id": "invalid-7",
+      "input": "true false",
+      "code": "invalid_json"
+    },
+    {
+      "id": "invalid-8",
+      "input": "\"\\uZZZZ\"",
+      "code": "invalid_json"
+    },
+    {
+      "id": "invalid-9",
+      "input": "1e400",
+      "code": "non_finite_number"
+    }
+  ]
+}

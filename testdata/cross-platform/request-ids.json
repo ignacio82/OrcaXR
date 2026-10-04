@@ -1,0 +1,4 @@
+{
+  "valid": ["a", "project:mesh.0_-", "1234"],
+  "invalid": ["", "id\n", "id\r", "id\r\n", "id\u2028", "id\u2029", "id\u0000", "id space", "é", "🐳"]
+}

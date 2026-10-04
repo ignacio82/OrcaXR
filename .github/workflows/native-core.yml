@@ -1,0 +1,93 @@
+name: Native Android and shared core
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm --prefix web ci
+      - name: Install locked Rust and binding tools
+        run: |
+          rustup toolchain install 1.94.1 --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
+          cargo +1.94.1 install wasm-bindgen-cli --version 0.2.129 --locked --jobs 2
+          cargo +1.94.1 install cargo-audit --version 0.22.2 --locked --jobs 2
+      - name: Verify generated contracts and source inventory
+        run: |
+          node tools/cross-platform/generate-contracts.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inventory.mjs
+      - name: Rust contracts and dependency checks
+        working-directory: core
+        run: |
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets --locked --jobs 2 -- -D warnings
+          cargo test --workspace --locked --jobs 2
+          cargo audit
+      - name: Real browser worker and artifact checks
+        run: |
+          python3 tools/cross-platform/build-wasm.py
+          python3 tools/cross-platform/verify-artifacts.py --wasm
+          node tools/cross-platform/wasm-smoke.mjs
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: core-browser-evidence
+          path: tools/cross-platform/results/
+          retention-days: 7
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21.0.12'
+      - name: Install locked native toolchain and emulator image
+        run: |
+          rustup toolchain install 1.94.1 --profile minimal --target aarch64-linux-android,x86_64-linux-android
+          sdkmanager 'platforms;android-37' 'build-tools;37.0.0' 'ndk;29.0.14206865' 'system-images;android-34;google_apis;x86_64' 'emulator'
+      - name: Build both ABIs, shrink release, verify Gradle dependencies, lint and test JVM boundary
+        run: ./android/gradlew -p android :app:assembleDebug :app:assembleRelease :core-bridge:assembleDebugAndroidTest :core-bridge:testDebugUnitTest :app:lintDebug --dependency-verification strict --no-daemon --console=plain
+      - name: Verify every packaged ELF and APK alignment
+        run: |
+          python3 tools/cross-platform/verify-artifacts.py --apk android/app/build/outputs/apk/debug/app-debug.apk
+          python3 tools/cross-platform/verify-artifacts.py --apk android/app/build/outputs/apk/release/app-release-unsigned.apk
+      - name: Run real JNI and non-XR startup on an owned emulator
+        run: |
+          sudo chmod a+rw /dev/kvm
+          python3 tools/cross-platform/emulator-smoke.py
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: native-core-evidence
+          path: |
+            tools/cross-platform/results/
+            android/app/build/reports/
+            android/core-bridge/build/reports/
+            android/core-bridge/build/generated/core-native-manifest.json
+          retention-days: 7

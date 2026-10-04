@@ -3,6 +3,15 @@
 This tracks implementation of [`plan.md`](../plan.md). It does not replace or
 reduce that plan, and it does not claim completion of the separate parity backlog.
 
+The separate [native Android/Rust migration](android-native-rust-plan.md) now has
+Stage A build infrastructure. [Native-core evidence](engineering/native-core.md)
+records the exact verification scope: Rust and generated-binding checks, real
+browser WASM vectors, Android debug/release builds, JVM/JNI tests, non-XR emulator
+startup, and native artifact alignment. Rust and all three npm development audits
+pass; the configured redacted source scan finds no leaks. These checks do not
+close project editing, native slicing, XR, physical-device, or existing supervised
+printer/security/credential gates.
+
 ## Current implementation
 
 | Plan area | State | Evidence / work remaining |

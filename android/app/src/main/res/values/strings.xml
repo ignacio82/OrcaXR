@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">OrcaXR</string>
+    <string name="workspace_loading">Opening workspace…</string>
+    <string name="workspace_development">Workspace preview — editing is not available yet.</string>
+    <string name="workspace_unavailable">Unable to open this workspace. Please reinstall the application.</string>
+</resources>

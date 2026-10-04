@@ -57,7 +57,13 @@ engine (`libslic3r` via WASM) as the computational core.
 - **Target printers:** Snapmaker U1 (4-head toolchanger), Elegoo Centauri
   Carbon. Both are Klipper + Moonraker; this codebase has *no* serial,
   USB, or vendor-cloud printer support.
-- **Not currently targeted:** native Android, native PCVR.
+- **Current release:** no native Android application; native PCVR is not targeted.
+- **Under development:** native Android for phones, tablets,
+  Googlebook and Android XR, with selective shared Rust migration. See the
+  [native Android and Rust plan](docs/android-native-rust-plan.md). The initial
+  Compose shell and Rust canonicalization bindings are development infrastructure,
+  not a usable native slicer. Current release support is unchanged; native PCVR
+  remains outside scope.
 
 ## Stack
 
@@ -81,11 +87,13 @@ the same commit when behavior changes; do not append a second source of truth.
 | Browser startup, persistence, printers, external slicing, server and deployment | [Runtime and deployment](docs/engineering/runtime-and-deployment.md) |
 | Mesh storage/import/export, preview, memory, responsiveness | [Large-model contracts](docs/engineering/large-models.md) |
 | WASM/native engine changes and build gotchas | [Current slicing constraints](docs/engineering/slicing.md), [Snapmaker build notes](wasm/patches/README-snapmaker.md) |
+| Native Android and shared Rust implementation | [Native Android and Rust plan](docs/android-native-rust-plan.md), [native-core build and evidence](docs/engineering/native-core.md) |
 | Retired Android/JNI implementation only | [Historical Android notes](docs/historical/android-slicer-notes.md) |
 
 The Android notes preserve old patches and investigations. They are not the
-production engine or profile authority. Native Android and native PCVR remain
-out of scope unless the user explicitly changes the target.
+production engine or profile authority. Native Android development follows
+the linked plan; it does not revive the retired app or its engine/profile
+baseline. Native PCVR remains out of scope unless the user changes the target.
 
 ## Source pins and generated evidence
 
