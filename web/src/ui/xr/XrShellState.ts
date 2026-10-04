@@ -48,6 +48,9 @@ export interface XrEntrySession {
   readonly integer?: boolean;
 }
 
+/** Which surface changed; overlay gestures must not rebuild the cockpit. */
+export type XrShellChange = 'all' | 'overlay' | 'inspector' | 'scrubber';
+
 export class XrShellState {
   private overlaySnapshot: XrOverlay = { kind: 'none' };
   private entrySession: XrEntrySession | null = null;
@@ -61,7 +64,7 @@ export class XrShellState {
   private settingsSearchText = '';
   private paletteQueryText = '';
 
-  constructor(private readonly onChange: () => void = () => {}) {}
+  constructor(private readonly onChange: (change: XrShellChange) => void = () => {}) {}
 
   get overlay(): XrOverlay {
     return this.overlaySnapshot;
@@ -99,7 +102,7 @@ export class XrShellState {
   togglePinned(id: XrSurfaceId): void {
     if (this.pinnedIds.has(id)) this.pinnedIds.delete(id);
     else this.pinnedIds.add(id);
-    this.onChange();
+    this.onChange(id === 'inspector' ? 'inspector' : id === 'scrubber' ? 'scrubber' : 'all');
   }
 
   /** The surfaces a recentre may move: everything the operator has not pinned. */
@@ -110,7 +113,7 @@ export class XrShellState {
   setWorkspaceMode(mode: XrWorkspaceMode): void {
     if (this.mode === mode) return;
     this.mode = mode;
-    this.onChange();
+    this.onChange('all');
   }
 
   /** Open a menu section, or close it if it is the one already open. */
@@ -120,26 +123,26 @@ export class XrShellState {
         ? { kind: 'none' }
         : { kind: 'menu', sectionId };
     this.entrySession = null;
-    this.onChange();
+    this.onChange('overlay');
   }
 
   openPalette(): void {
     this.overlaySnapshot = { kind: 'palette' };
     this.entrySession = null;
-    this.onChange();
+    this.onChange('overlay');
   }
 
   openContextMenu(): void {
     this.overlaySnapshot = { kind: 'context' };
     this.entrySession = null;
-    this.onChange();
+    this.onChange('overlay');
   }
 
   closeOverlay(): void {
     if (this.overlaySnapshot.kind === 'none' && this.entrySession === null) return;
     this.overlaySnapshot = { kind: 'none' };
     this.entrySession = null;
-    this.onChange();
+    this.onChange('overlay');
   }
 
   /**
@@ -153,7 +156,7 @@ export class XrShellState {
   beginEntry(session: XrEntrySession): void {
     this.entrySession = session;
     this.overlaySnapshot = { kind: 'entry' };
-    this.onChange();
+    this.onChange('overlay');
   }
 
   /** Apply an entry to whatever asked for it. Returns what the shell must do. */
@@ -178,7 +181,9 @@ export class XrShellState {
         break;
     }
     this.entrySession = null;
-    this.onChange();
+    this.onChange(
+      session.target.kind === 'objects-filter' || session.target.kind === 'settings-search' ? 'inspector' : 'overlay',
+    );
     return session.target;
   }
 
@@ -187,7 +192,7 @@ export class XrShellState {
     const returning = this.entrySession.target.kind === 'palette-query';
     this.entrySession = null;
     this.overlaySnapshot = returning ? { kind: 'palette' } : { kind: 'none' };
-    this.onChange();
+    this.onChange('overlay');
   }
 
   /** Open a panel in the inspector and make it the visible one. */
@@ -197,13 +202,13 @@ export class XrShellState {
     // Opening a panel is the answer to the directory that was open; leaving the
     // directory up would hide the panel it just opened.
     this.overlaySnapshot = { kind: 'none' };
-    this.onChange();
+    this.onChange('inspector');
   }
 
   selectPanel(id: XrPanelId): void {
     if (!this.panels.includes(id) || this.active === id) return;
     this.active = id;
-    this.onChange();
+    this.onChange('inspector');
   }
 
   closePanel(id: XrPanelId): void {
@@ -211,13 +216,13 @@ export class XrShellState {
     if (index < 0) return;
     this.panels = this.panels.filter((panel) => panel !== id);
     if (this.active === id) this.active = this.panels[Math.min(index, this.panels.length - 1)] ?? null;
-    this.onChange();
+    this.onChange('inspector');
   }
 
   toggleExpanded(key: string): void {
     if (this.expanded.has(key)) this.expanded.delete(key);
     else this.expanded.add(key);
-    this.onChange();
+    this.onChange('inspector');
   }
 
   /**

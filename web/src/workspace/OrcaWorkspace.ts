@@ -7098,6 +7098,10 @@ export class OrcaWorkspace extends xb.Script {
             ]
           : [],
     });
+    // XRBlocks' recursive raycaster does not check Object3D.visible. A hidden
+    // menu must prune its children, otherwise it can still consume a trigger.
+    card.raycast = () => (card.visible ? undefined : false);
+    card.setProperties({ display: 'none' });
     card.visible = false;
     const content = new UIPanel({
       width: '100%',
@@ -7109,8 +7113,16 @@ export class OrcaWorkspace extends xb.Script {
     this.xrCardObjects.set(id, card);
     return {
       content,
-      show: () => card.show(),
-      hide: () => card.hide(),
+      show: () => {
+        card.setProperties({ display: 'flex' });
+        card.show();
+      },
+      hide: () => {
+        // Hide through UIKit too, so child shader layers do not remain active
+        // for hand-touch bounds work while their Three ancestor is invisible.
+        card.setProperties({ display: 'none' });
+        card.hide();
+      },
       reset: () => {
         for (const child of [...content.children]) {
           try {

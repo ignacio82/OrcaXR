@@ -18,7 +18,7 @@ reduce that plan, and it does not claim completion of the separate parity backlo
 | G: controllers and snapshots | Implemented; automated qualification passes | Printer/session/submission ownership and feature initialization lifetimes are implemented. Opaque copy-on-write asset rollback and import history pass focused regressions and the full web gate. Persistence and DOM/XR surface lifetime ownership are integrated; surface regressions and the full web gate pass. |
 | H: persistence | Implemented; automated qualification passes | Live worker serialization, guarded manual checkpoints, atomic per-session IndexedDB retention, DOM/XR recovery/import decisions, Save/Discard/Cancel, beforeunload and coordinated PWA updates. Focused lifecycle/storage/browser tests and the complete web quality gate pass. Broader device qualification remains pending. |
 | I: large-project performance | Implemented; automated qualification passes | Worker indexing before rich allocation, record/path checkpoints within oversized layers, DOM/XR move-window controls, cancellation, typed import traversal and cached save/slice fingerprints pass the complete web gate and supported-deployment checks. |
-| Release qualification | Software checks pass; operational and human evidence pending | Native build, supported HTTP/HTTPS deployment checks and report regeneration pass. Credential revocation, supervised U1/CC/Galaxy XR procedures, calibration and independent review/security signoff remain pending. The running deployment has not been replaced. |
+| Release qualification | Prior software qualification passes; Galaxy XR input regression under repair | The October 1 native build, supported HTTP/HTTPS deployment checks and report regeneration pass. An October 4 Galaxy XR run reports unresponsive File-menu interaction even with an empty plate; the deployed build identity is unverified and the candidate fix needs full qualification and a headset retest. Credential revocation, supervised U1/CC procedures, calibration and independent review/security signoff remain pending. The running deployment has not been replaced. |
 
 ## Reproduced regressions and verification (2026-10-01)
 
@@ -504,3 +504,45 @@ clearing recovery data. This prepares the release sequence; it does not claim it
 has been performed. Credential revocation, supervised U1/CC/Galaxy XR qualification,
 calibration and independent review/security signoff still require operator evidence.
 No deployment, remote push or real-printer mutation occurred during this audit.
+
+## Galaxy XR File-menu regression (2026-10-04)
+
+The operator tested `https://orcaxr.martinez.fyi/slicer` in Chrome on Galaxy XR,
+with controllers, hands and gaze available. They report unresponsive interaction
+immediately after entering XR, including on an empty plate: attempting to open
+File with hands freezes/moves the UI without a visible menu, and controller
+activation has no visible result. Hover highlighting is present. The exact
+browser/firmware versions and deployed source revision are not yet recorded;
+this is a failed initial hardware check, not qualification of a known build.
+
+A regression using the installed XRBlocks/UIBlocks components and select-event
+dispatch reproduces a detached File-title anchor. Opening a menu rebuilt the
+whole cockpit before reading that title's world pose, causing an origin-relative
+dropdown placement (behind the operator at the default pose). The local empty
+shell reproduction took approximately 190 ms for that rebuild; this is a host
+measurement, not a headset frame-time result. A second regression shows that
+closed cards still traversed their children during XR raycasts.
+
+The candidate retains the menu bar, resolves dropdown anchors from the live
+title, and limits overlay gestures to overlay updates. Inspector and scrubber
+changes have their own invalidation paths. Hidden cards prune ray traversal and
+also use UIKit display state to hide their shader children. The regression
+covers both controller releases, a held second pointer, repeated toggles, live
+anchors after canonical refresh, and session hide/show. Hardware performance and
+interaction remain unqualified until the candidate is deployed and retested.
+
+Candidate validation: the production-component regression, all 13 XR test files,
+formatting, lint, TypeScript and architecture/direction checks pass. The production
+build and offline/size contracts pass: main JavaScript is 2,321,656 bytes and total
+JavaScript is 10,551,798 bytes, within unchanged limits. Repeating the initial
+headless empty-shell probe keeps the File anchor at its original world pose and
+places the menu in front; opening takes about 60 ms and closing about 1.3 ms on
+this host. These timings are diagnostic observations, not a device budget claim.
+
+The full `npm --prefix web run quality` attempt could not complete in the current
+sandbox: local server creation fails with `listen EPERM`, and checks that invoke
+Git from Node fail with `spawnSync git EPERM`. The run was stopped after those
+failures. A separate parity report check encounters the same Git restriction;
+the existing generated report is unchanged. Browser/end-to-end verification and
+headset retesting are still required. The local investigation did not deploy or
+issue real-printer commands.

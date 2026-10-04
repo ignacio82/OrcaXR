@@ -38,7 +38,7 @@ import { renderXrObjectsPanel } from './XrObjectsPanel';
 import { renderXrPanelHost } from './XrPanelHost';
 import { xrGroupPanelId, xrInspectorPanels, xrPanelGroup, type XrPanelDescriptor, type XrPanelId } from './XrPanels';
 import { renderXrSettingsPanel } from './XrSettingsPanel';
-import { XrShellState, type XrEntrySession } from './XrShellState';
+import { XrShellState, type XrEntrySession, type XrShellChange } from './XrShellState';
 import {
   renderXrToolRail,
   type XrRailStepper,
@@ -130,11 +130,10 @@ type Surfaces<PanelNode> = Readonly<Record<XrSurfaceId, XrCardHandle<PanelNode>>
 export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
   readonly state: XrShellState;
   private drawing = false;
-  private pendingDraw = false;
-  /** The section title a popover is currently hanging from. */
-  private menuAnchor: unknown = null;
+  private readonly pendingDraw = new Set<XrShellChange>();
   private deskLoadButton: PanelNode | null = null;
   private menuBar: XrMenuBarRender<PanelNode> | null = null;
+  private menuBarSections = '';
   private toolRail: XrToolRailRender<PanelNode> | null = null;
   private desk: XrDeskRender<PanelNode> | null = null;
   private previewScrubber: {
@@ -158,7 +157,7 @@ export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
       },
     ) => { refresh(state: GcodePreviewPanelState): void },
   ) {
-    this.state = new XrShellState(() => this.draw());
+    this.state = new XrShellState((change) => this.draw(change));
   }
 
   /** The node `load_model_from_path` drew, which the ray probe watches. */
@@ -172,29 +171,29 @@ export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
   }
 
   /**
-   * Redraw everything.
-   *
-   * Whole surfaces are rebuilt rather than diffed. A spatial panel is a few
-   * dozen nodes and a redraw happens on a press or a canonical change, never
-   * per frame; the alternative — a hand-written diff per panel — is what let
-   * the old shell get out of step with the state it was drawn from.
+   * Canonical changes refresh the whole shell; local gestures redraw only the
+   * affected surfaces. Retain the menu bar and its live pointer/anchor nodes.
    */
-  draw(): void {
-    if (this.drawing) {
-      this.pendingDraw = true;
-      return;
-    }
+  draw(change: XrShellChange = 'all'): void {
+    this.pendingDraw.add(change);
+    if (this.drawing) return;
     this.drawing = true;
     try {
       do {
-        this.pendingDraw = false;
-        this.drawMenuBar();
-        this.drawToolRail();
-        this.drawInspector();
-        this.drawDesk();
-        this.drawScrubber();
-        this.drawOverlays();
-      } while (this.pendingDraw);
+        const changes = new Set(this.pendingDraw);
+        this.pendingDraw.clear();
+        const all = changes.has('all');
+        if (all) {
+          this.drawMenuBar();
+          this.drawToolRail();
+          this.drawDesk();
+        } else {
+          this.menuBar?.refresh(this.menuBarContext());
+        }
+        if (all || changes.has('inspector')) this.drawInspector();
+        if (all || changes.has('scrubber')) this.drawScrubber();
+        if (all || changes.has('overlay') || changes.has('inspector')) this.drawOverlays();
+      } while (this.pendingDraw.size > 0);
     } finally {
       this.drawing = false;
     }
@@ -231,9 +230,16 @@ export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
   // ---- Cockpit -----------------------------------------------------------
 
   private drawMenuBar(): void {
+    const context = this.menuBarContext();
+    const sections = JSON.stringify(context.sections);
+    if (this.menuBar && this.menuBarSections === sections) {
+      this.menuBar.refresh(context);
+      return;
+    }
     const card = this.surfaces.menubar;
     card.reset();
-    this.menuBar = renderXrMenuBar(this.ui, card.content, this.menuBarContext());
+    this.menuBar = renderXrMenuBar(this.ui, card.content, context);
+    this.menuBarSections = sections;
   }
 
   private menuBarContext(): XrMenuBarContext {
@@ -247,10 +253,7 @@ export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
       canRedo: this.uiState()?.canRedo === true,
       isDirty: this.uiState()?.dirty === true,
       printer: this.host.printerStatus(),
-      onOpenSection: (id, anchor) => {
-        this.menuAnchor = anchor;
-        this.state.toggleMenu(id);
-      },
+      onOpenSection: (id) => this.state.toggleMenu(id),
       onOpenPalette: () => this.state.openPalette(),
       onSelectMode: (mode) => this.host.setWorkspaceMode(mode),
       onSave: () => this.run('file_save_project', 'xr-menu'),
@@ -494,7 +497,9 @@ export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
         },
         onOpenPanel: (id) => this.state.openPanel(id),
       });
-      card.place(this.menuAnchor);
+      // Resolve the currently mounted title, including after locale/catalogue
+      // changes. A previously detached button reports a pose near the origin.
+      card.place(this.menuBar?.sectionAnchors.get(overlay.sectionId) ?? null);
       card.show();
       return;
     }

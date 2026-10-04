@@ -131,7 +131,16 @@ disposed and must never manipulate the scene. Its idempotent `dispose()` also
 removes the sole capability subscription, window/canvas/XR listeners, controls,
 cards, and owned GPU resources. A gesture starting beneath any `UICard` stays
 suppressed through release for that controller; controllers remain independent.
-Hidden scripts need a measured detach/pause lifecycle, not `visible = false`.
+XRBlocks' recursive raycaster does not honor `Object3D.visible`: each application
+card prunes ray traversal while hidden, and uses UIKit `display: 'none'` so child
+shader layers also stop participating in hand-touch bounds work. Hidden scripts
+still need measured update costs; visibility alone does not unregister them.
+Menu and keyboard transitions redraw their overlay, preserving the cockpit's
+nodes and any other controller's held target. The menu bar remains mounted across
+canonical refreshes unless its section labels change. Dropdown placement resolves
+the current title node: a detached title reports an origin-relative pose and can
+put the menu behind the operator. Inspector changes redraw the inspector and
+overlay; ordinary status changes update existing nodes.
 P10.10 still requires counters, repeated lifecycle leak checks, and Galaxy XR qualification.
 
 
