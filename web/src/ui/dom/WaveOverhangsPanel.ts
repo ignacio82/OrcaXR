@@ -1,69 +1,95 @@
 import { t } from '../../l10n/t';
+import { applyIcon } from '../icons';
+import {
+  WAVE_MASTER_KEY,
+  WAVE_OPTION_GROUPS,
+  WAVE_OVERHANGS_UPSTREAM,
+  resolveWaveSettings,
+  waveChoiceLabel,
+  waveGroupLabel,
+  waveNotices,
+  waveOptionNotes,
+  waveOptionText,
+  waveSourceLabel,
+  waveValueProblem,
+  withWaveNoticeFix,
+  withWaveValue,
+  withoutWaveOverrides,
+  withoutWaveValue,
+  type WaveNote,
+  type WaveOptionGroupId,
+  type WaveOptionState,
+  type WaveOptionValue,
+  type WaveOverhangsPort,
+  type WaveOverhangsProjectSnapshot,
+  type WaveSettingsState,
+} from '../../settings/waveOverhangs';
 
-export interface WaveOverhangsSettings {
-  readonly enabled: boolean;
-  readonly algorithm: 'andersons' | 'kaiser';
-  readonly printSpeedMmS: number;
-  readonly travelSpeedMmS: number;
-  readonly fanSpeedPercent: number;
-  readonly auxFanSpeedPercent: number;
-  readonly floorUseHilbert: boolean;
-  readonly floorLayers: number;
-  readonly floorHilbertDensity: number;
-  readonly floorPrintSpeedMmS: number;
-  readonly floorFanSpeedPercent: number;
-  readonly supportRemainingAreas: boolean;
-  readonly ringOverlap: number;
-  readonly minWaveTimeS: number;
-  readonly endRetractMm: number;
-  readonly debugGCode: boolean;
-}
+/**
+ * The Wave overhangs card: every option the engine's wave-overhang port defines,
+ * laid out as upstream's own page and drawn from the shared table in
+ * `settings/waveOverhangs`.
+ *
+ * What it shows is what the slice will use. Each row says whether its value is
+ * set by this project, inherited from the profile or an imported project, or the
+ * engine's own default — the card this replaced filled unset keys with numbers
+ * of its own (35 mm/s, three Hilbert floor layers) that the engine never saw.
+ * It ships no presets: upstream deliberately has none yet, because what works
+ * depends on printer, material and geometry, and its guidance is stated where it
+ * applies instead (the speed range on the speed row, nozzle-matched flow on the
+ * flow row). Settings outside this card that silently stop waves being generated
+ * are named, with the one-press fix where there is one.
+ */
+export type WaveOverhangsPanelState = WaveOverhangsProjectSnapshot;
+export type WaveOverhangsPanelAdapter = WaveOverhangsPort;
 
-export const DEFAULT_WAVE_OVERHANGS_SETTINGS: WaveOverhangsSettings = Object.freeze({
-  enabled: false,
-  algorithm: 'andersons',
-  printSpeedMmS: 35,
-  travelSpeedMmS: 80,
-  fanSpeedPercent: 90,
-  auxFanSpeedPercent: 50,
-  floorUseHilbert: true,
-  floorLayers: 3,
-  floorHilbertDensity: 100,
-  floorPrintSpeedMmS: 40,
-  floorFanSpeedPercent: 85,
-  supportRemainingAreas: true,
-  ringOverlap: 0.4,
-  minWaveTimeS: 0,
-  endRetractMm: 0,
-  debugGCode: true,
-});
-
-export interface WaveOverhangsPanelState {
-  readonly settings: WaveOverhangsSettings;
-  readonly hasOverrides: boolean;
-  readonly busy?: boolean;
-}
-
-export interface WaveOverhangsPanelAdapter {
-  getState(): WaveOverhangsPanelState;
-  subscribe?(listener: () => void): () => void;
-  onUpdate(settings: Partial<WaveOverhangsSettings>): void | Promise<void>;
-  onReset(): void | Promise<void>;
-  onError?(error: unknown): void;
-}
+/** Groups open on first render; the operator's own choice is kept after that. */
+const OPEN_BY_DEFAULT: ReadonlySet<WaveOptionGroupId> = new Set(['general', 'pattern', 'motion', 'cooling', 'floor']);
 
 let panelSeq = 0;
 
-/**
- * Intuitive Wave-Overhang controls panel.
- * Exposes algorithm selection with detailed guidance, anti-warping Hilbert floor
- * parameters, speed & cooling overrides, and support material subtraction.
- */
+const STYLE = {
+  root: 'display:flex;min-width:0;flex-direction:column;gap:8px;color:var(--oxr-color-text);font:12.5px/1.4 var(--font-sans);',
+  head: 'display:flex;align-items:center;justify-content:space-between;gap:8px;',
+  title: 'margin:0;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;',
+  badge:
+    'font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:var(--oxr-radius-pill);' +
+    'background:var(--oxr-color-warn-surface);color:var(--oxr-color-text);',
+  textButton:
+    'padding:2px 8px;font-size:11px;border-radius:var(--oxr-radius-sm);border:1px solid var(--oxr-color-stroke);' +
+    'background:transparent;color:var(--oxr-color-text);cursor:pointer;',
+  notice:
+    'display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:6px 8px;font-size:11.5px;line-height:1.35;' +
+    'border-radius:var(--oxr-radius-sm);background:var(--oxr-color-warn-surface);color:var(--oxr-color-text);' +
+    'border-inline-start:3px solid var(--oxr-color-warn);',
+  group: 'border-block-start:1px solid var(--oxr-color-stroke);padding-block-start:4px;',
+  summary: 'cursor:pointer;font-weight:600;font-size:12px;padding:4px 0;',
+  rows: 'display:flex;flex-direction:column;gap:6px;padding:4px 0 6px;',
+  row: 'display:flex;flex-direction:column;gap:2px;',
+  number: 'flex:0 1 90px;min-width:64px;text-align:end;',
+  select: 'flex:1 1 120px;min-width:0;',
+  source: 'flex:0 0 auto;font-size:10.5px;color:var(--oxr-color-text-muted);',
+  note: 'margin:0;font-size:11px;line-height:1.35;color:var(--oxr-color-text-muted);',
+  warnNote: 'margin:0;font-size:11px;line-height:1.35;color:var(--oxr-color-text);',
+  error: 'margin:0;font-size:11px;line-height:1.35;color:var(--oxr-color-danger);',
+  iconButton:
+    'flex:0 0 auto;width:22px;height:22px;padding:0;border:none;border-radius:var(--oxr-radius-sm);' +
+    'background:transparent;color:var(--oxr-color-text-muted);cursor:pointer;',
+  about: 'font-size:11.5px;',
+  list: 'margin:4px 0;padding-inline-start:18px;display:flex;flex-direction:column;gap:3px;',
+} as const;
+
 export class WaveOverhangsPanel {
   private readonly instanceId = ++panelSeq;
   private root?: HTMLElement;
   private unsubscribe?: () => void;
   private state?: WaveOverhangsPanelState;
+  private readonly openGroups = new Set<WaveOptionGroupId>(OPEN_BY_DEFAULT);
+  private aboutOpen = false;
+  /** Per-key refusals from the last edit, shown until that key changes. */
+  private readonly errors = new Map<string, string>();
+  /** The text a refused number field held, kept so the operator can correct it rather than retype it. */
+  private readonly drafts = new Map<string, string>();
 
   constructor(
     private readonly container: HTMLElement,
@@ -72,13 +98,10 @@ export class WaveOverhangsPanel {
 
   mount(): void {
     if (this.root) return;
-    const document = this.container.ownerDocument;
-    const root = document.createElement('section');
+    const root = this.container.ownerDocument.createElement('section');
     root.dataset.waveOverhangsPanel = 'true';
     root.setAttribute('aria-labelledby', `oxr-wave-heading-${this.instanceId}`);
-    root.style.cssText =
-      'display:flex;min-width:0;flex-direction:column;gap:10px;color:var(--oxr-color-text);' +
-      'font:12.5px/1.4 var(--font-sans,system-ui,sans-serif);';
+    root.style.cssText = STYLE.root;
     this.container.replaceChildren(root);
     this.root = root;
     this.unsubscribe = this.adapter.subscribe?.(() => this.refresh());
@@ -98,522 +121,336 @@ export class WaveOverhangsPanel {
     this.root = undefined;
   }
 
+  // ---- commits ----------------------------------------------------------------
+
+  private commit(next: Record<string, unknown>, clearErrors: readonly string[] = []): void {
+    const basis = this.state;
+    if (!basis) return;
+    for (const key of clearErrors) {
+      this.errors.delete(key);
+      this.drafts.delete(key);
+    }
+    try {
+      const result = this.adapter.apply(next, basis);
+      if (result instanceof Promise) result.catch((error: unknown) => this.adapter.onError?.(error));
+    } catch (error) {
+      this.adapter.onError?.(error);
+    }
+  }
+
+  private setValue(key: string, value: WaveOptionValue): void {
+    if (!this.state) return;
+    try {
+      this.commit(withWaveValue(this.state.overrides, key, value), [key]);
+    } catch (error) {
+      this.errors.set(key, error instanceof Error ? error.message : String(error));
+      this.render();
+    }
+  }
+
+  private clearValue(key: string): void {
+    if (!this.state) return;
+    this.commit(withoutWaveValue(this.state.overrides, key), [key]);
+  }
+
+  // ---- rendering --------------------------------------------------------------
+
+  private el<K extends keyof HTMLElementTagNameMap>(tag: K, css?: string, text?: string): HTMLElementTagNameMap[K] {
+    const node = this.container.ownerDocument.createElement(tag);
+    if (css) node.style.cssText = css;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
   private render(): void {
     const root = this.root;
     const state = this.state;
     if (!root || !state) return;
-    const document = root.ownerDocument;
+    const resolved = resolveWaveSettings(state);
     root.replaceChildren();
+    root.append(this.renderHead(resolved, state));
+    root.append(this.renderMaster(resolved, state));
+    for (const notice of this.renderNotices(resolved, state)) root.append(notice);
+    if (resolved.enabled) {
+      for (const group of WAVE_OPTION_GROUPS) {
+        const section = this.renderGroup(group, resolved, state);
+        if (section) root.append(section);
+      }
+    }
+    root.append(this.renderAbout());
+  }
 
-    const { settings, hasOverrides, busy } = state;
-
-    // Header bar with status and reset button
-    const headRow = document.createElement('div');
-    headRow.style.cssText =
-      'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-block-end:2px;';
-
-    const heading = document.createElement('h3');
+  private renderHead(resolved: WaveSettingsState, state: WaveOverhangsPanelState): HTMLElement {
+    const head = this.el('div', STYLE.head);
+    const heading = this.el('h3', STYLE.title, t('ui.waveOverhangs.title', 'Wave overhangs'));
     heading.id = `oxr-wave-heading-${this.instanceId}`;
-    heading.textContent = t('ui.waveOverhangs.title', 'Wave overhang printing');
-    heading.style.cssText = 'margin:0;font-size:13px;font-weight:600;';
-    headRow.appendChild(heading);
-
-    if (hasOverrides) {
-      const resetBtn = document.createElement('button');
-      resetBtn.type = 'button';
-      resetBtn.dataset.waveAction = 'reset';
-      resetBtn.textContent = t('ui.waveOverhangs.resetOverrides', 'Reset overrides');
-      resetBtn.title = t(
-        'ui.waveOverhangs.resetOverridesHint',
-        'Reset all wave overhang settings back to process defaults',
+    heading.append(this.el('span', STYLE.badge, t('ui.waveOverhangs.experimental', 'Experimental')));
+    head.append(heading);
+    if (resolved.hasOverrides) {
+      const reset = this.el('button', STYLE.textButton, t('ui.waveOverhangs.reset', 'Reset'));
+      reset.type = 'button';
+      reset.dataset.waveAction = 'reset';
+      reset.title = t(
+        'ui.waveOverhangs.resetHint',
+        'Remove every wave-overhang setting this project sets, so the profile and engine defaults apply',
       );
-      resetBtn.style.cssText =
-        'padding:2px 8px;font-size:11px;border-radius:var(--radius-sm,4px);' +
-        'border:1px solid var(--oxr-border,rgba(128,128,128,0.3));background:transparent;' +
-        'color:var(--oxr-color-text-muted);cursor:pointer;';
-      resetBtn.onclick = () => void this.adapter.onReset();
-      headRow.appendChild(resetBtn);
+      reset.disabled = !!state.busy;
+      reset.onclick = () =>
+        this.commit(withoutWaveOverrides(state.overrides), [...this.errors.keys(), ...this.drafts.keys()]);
+      head.append(reset);
     }
-    root.appendChild(headRow);
+    return head;
+  }
 
-    // Primary Enable Toggle
-    const enableLabel = document.createElement('label');
-    enableLabel.className = 'check-row';
-    enableLabel.style.cssText =
-      'display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-weight:500;' +
-      'padding:6px 8px;border-radius:var(--radius-sm,4px);background:var(--oxr-bg-card,rgba(128,128,128,0.08));';
+  private renderMaster(resolved: WaveSettingsState, state: WaveOverhangsPanelState): HTMLElement {
+    const master = resolved.options.find((entry) => entry.option.key === WAVE_MASTER_KEY)!;
+    const text = waveOptionText(WAVE_MASTER_KEY);
+    const wrap = this.el('div', STYLE.row);
+    const label = this.el('label');
+    label.className = 'check-row';
+    const input = this.el('input');
+    input.type = 'checkbox';
+    input.dataset.waveEnable = 'true';
+    input.checked = resolved.enabled;
+    input.disabled = !!state.busy;
+    input.onchange = () => this.setValue(WAVE_MASTER_KEY, input.checked);
+    label.append(input, this.el('span', 'font-weight:500;', text.label));
+    wrap.append(label);
+    const description = this.el('p', STYLE.note, text.tooltip);
+    description.id = `oxr-wave-desc-${this.instanceId}`;
+    input.setAttribute('aria-describedby', description.id);
+    wrap.append(description);
+    if (master.source !== 'default') wrap.append(this.el('p', STYLE.note, waveSourceLabel(master.source)));
+    return wrap;
+  }
 
-    const enableChk = document.createElement('input');
-    enableChk.type = 'checkbox';
-    enableChk.dataset.waveEnable = 'true';
-    enableChk.checked = settings.enabled;
-    enableChk.disabled = !!busy;
-    enableChk.style.cssText = 'margin-block-start:2px;cursor:pointer;';
-    enableChk.onchange = () => {
-      void this.adapter.onUpdate({ enabled: enableChk.checked });
-    };
+  private renderNotices(resolved: WaveSettingsState, state: WaveOverhangsPanelState): HTMLElement[] {
+    return waveNotices(resolved, state).map((entry) => {
+      const notice = this.el('div', STYLE.notice);
+      notice.dataset.waveNotice = entry.kind;
+      notice.setAttribute('role', 'note');
+      notice.append(this.el('span', undefined, entry.text));
+      const fix = entry.fix;
+      if (fix) {
+        const button = this.el('button', STYLE.textButton, fix.label);
+        button.type = 'button';
+        button.dataset.waveAction = fix.id;
+        button.disabled = !!state.busy;
+        button.onclick = () => this.commit(withWaveNoticeFix(state.overrides, fix.id));
+        notice.append(button);
+      }
+      return notice;
+    });
+  }
 
-    const enableTextWrap = document.createElement('div');
-    enableTextWrap.style.cssText = 'display:flex;flex-direction:column;gap:2px;';
-
-    const enableTitle = document.createElement('span');
-    enableTitle.textContent = t('ui.waveOverhangs.enableLabel', 'Enable wave overhangs');
-    enableTitle.style.cssText = 'font-size:12.5px;color:var(--oxr-color-text);';
-
-    const enableDesc = document.createElement('span');
-    enableDesc.textContent = t(
-      'ui.waveOverhangs.enableDesc',
-      'Replace straight cantilever overhang bridging with curved wave toolpaths that anchor into walls without supports.',
+  private renderGroup(
+    group: WaveOptionGroupId,
+    resolved: WaveSettingsState,
+    state: WaveOverhangsPanelState,
+  ): HTMLElement | null {
+    const entries = resolved.options.filter(
+      (entry) => entry.option.group === group && entry.option.key !== WAVE_MASTER_KEY && entry.applies,
     );
-    enableDesc.style.cssText = 'font-size:11px;color:var(--oxr-color-text-muted);line-height:1.3;';
+    if (entries.length === 0) return null;
+    const details = this.el('details', STYLE.group);
+    details.dataset.waveGroup = group;
+    details.open = this.openGroups.has(group);
+    details.addEventListener('toggle', () => {
+      if (details.open) this.openGroups.add(group);
+      else this.openGroups.delete(group);
+    });
+    details.append(this.el('summary', STYLE.summary, waveGroupLabel(group)));
+    const rows = this.el('div', STYLE.rows);
+    for (const entry of entries) rows.append(this.renderRow(entry, resolved, state));
+    details.append(rows);
+    return details;
+  }
 
-    enableTextWrap.appendChild(enableTitle);
-    enableTextWrap.appendChild(enableDesc);
-    enableLabel.appendChild(enableChk);
-    enableLabel.appendChild(enableTextWrap);
-    root.appendChild(enableLabel);
+  private renderRow(entry: WaveOptionState, resolved: WaveSettingsState, state: WaveOverhangsPanelState): HTMLElement {
+    const { option, value } = entry;
+    const text = waveOptionText(option.key);
+    const wrap = this.el('div', STYLE.row);
+    wrap.dataset.waveKey = option.key;
+    wrap.dataset.waveSource = entry.source;
+    const row = this.el('div');
+    row.className = 'field-row';
+    const labelId = `oxr-wave-${option.key}-${this.instanceId}`;
+    const label = this.el('span', undefined, text.label);
+    label.className = 'field-label';
+    label.id = labelId;
+    label.title = text.tooltip;
+    row.append(label);
 
-    // Sub-settings container (dimmed if disabled)
-    const body = document.createElement('div');
-    body.dataset.waveBody = 'true';
-    body.style.cssText = `display:flex;flex-direction:column;gap:10px;margin-block-start:4px;${
-      settings.enabled ? '' : 'opacity:0.5;pointer-events:none;'
-    }`;
-
-    // Algorithm Selection & Decision Guidance
-    const algoGroup = document.createElement('div');
-    algoGroup.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
-
-    const algoId = `oxr-wave-algo-${this.instanceId}`;
-    const algoLabel = document.createElement('label');
-    algoLabel.htmlFor = algoId;
-    algoLabel.textContent = t('ui.waveOverhangs.algorithmLabel', 'Wave generation algorithm:');
-    algoLabel.style.cssText = 'font-weight:600;font-size:12px;';
-    algoGroup.appendChild(algoLabel);
-
-    const algoSelect = document.createElement('select');
-    algoSelect.id = algoId;
-    algoSelect.dataset.waveAlgorithm = 'true';
-    algoSelect.className = 'field-control text-input';
-    algoSelect.style.cssText =
-      'padding:5px 8px;font-size:12px;border-radius:var(--radius-sm,4px);' +
-      'border:1px solid var(--oxr-border,rgba(128,128,128,0.3));background:var(--oxr-surface,transparent);' +
-      'color:var(--oxr-color-text);cursor:pointer;';
-
-    const optAndersons = document.createElement('option');
-    optAndersons.value = 'andersons';
-    optAndersons.textContent = t(
-      'ui.waveOverhangs.algoAndersonsOpt',
-      'Andersons (Concentric Wavefront) — Recommended Default',
-    );
-    algoSelect.appendChild(optAndersons);
-
-    const optKaiser = document.createElement('option');
-    optKaiser.value = 'kaiser';
-    optKaiser.textContent = t('ui.waveOverhangs.algoKaiserOpt', 'Kaiser LaSO (Lateral Seed-Curve Offsetting)');
-    algoSelect.appendChild(optKaiser);
-
-    algoSelect.value = settings.algorithm;
-    algoSelect.disabled = !settings.enabled || !!busy;
-    algoSelect.onchange = () => {
-      void this.adapter.onUpdate({ algorithm: algoSelect.value as 'andersons' | 'kaiser' });
-    };
-    algoGroup.appendChild(algoSelect);
-
-    // Interactive Guidance Card
-    const guideCard = document.createElement('div');
-    guideCard.dataset.waveAlgorithmGuide = 'true';
-    guideCard.style.cssText =
-      'padding:8px 10px;border-radius:var(--radius-sm,4px);background:var(--oxr-bg-card,rgba(128,128,128,0.06));' +
-      'border-inline-start:3px solid var(--oxr-accent,#ff9800);font-size:11.5px;line-height:1.35;color:var(--oxr-color-text);';
-
-    if (settings.algorithm === 'andersons') {
-      guideCard.innerHTML = `
-        <div style="font-weight:600;margin-block-end:3px;color:var(--oxr-color-text);">
-          ${t('ui.waveOverhangs.guideAndersonsTitle', 'Janis A. Andersons Wavefront Propagation (Default)')}
-        </div>
-        <div style="color:var(--oxr-color-text-muted);">
-          ${t(
-            'ui.waveOverhangs.guideAndersonsText',
-            'Propagates concentric wavefront paths outward from supported perimeters. Best for mechanical models, flat/steep cantilevers, and parts with clear wall boundaries. Provides high structural stiffness with uniform layer adhesion.',
-          )}
-        </div>
-      `;
+    const disabled = !!state.busy || option.inert === true;
+    if (option.kind === 'bool') {
+      const input = this.el('input');
+      input.type = 'checkbox';
+      input.checked = value === true;
+      input.disabled = disabled;
+      input.setAttribute('aria-labelledby', labelId);
+      input.onchange = () => this.setValue(option.key, input.checked);
+      row.append(input);
+    } else if (option.kind === 'enum') {
+      const select = this.el('select', STYLE.select);
+      select.className = 'field-control text-input';
+      for (const choice of option.choices ?? []) {
+        const item = this.el('option', undefined, waveChoiceLabel(option.key, choice));
+        item.value = choice;
+        select.append(item);
+      }
+      select.value = String(value);
+      select.disabled = disabled;
+      select.setAttribute('aria-labelledby', labelId);
+      select.onchange = () => this.setValue(option.key, select.value);
+      row.append(select);
     } else {
-      guideCard.innerHTML = `
-        <div style="font-weight:600;margin-block-end:3px;color:var(--oxr-color-text);">
-          ${t('ui.waveOverhangs.guideKaiserTitle', 'Kaiser Lateral Seed-Curve Offsetting (LaSO)')}
-        </div>
-        <div style="color:var(--oxr-color-text-muted);">
-          ${t(
-            'ui.waveOverhangs.guideKaiserText',
-            'Offsets lateral seed-curves along the overhang slope with tunable ring overlap. Best for organic shapes, curved figurines, and continuous tapering surfaces where toolpaths following natural contour lines prevent drooping.',
-          )}
-        </div>
-      `;
+      const input = this.el('input', STYLE.number);
+      input.type = 'number';
+      input.className = 'field-control text-input';
+      input.inputMode = option.kind === 'int' ? 'numeric' : 'decimal';
+      if (option.min !== undefined) input.min = String(option.min);
+      if (option.max !== undefined) input.max = String(option.max);
+      input.step = String(option.step);
+      input.value = this.drafts.get(option.key) ?? String(value);
+      input.disabled = disabled;
+      input.setAttribute('aria-labelledby', labelId);
+      if (this.errors.has(option.key)) input.setAttribute('aria-invalid', 'true');
+      input.onchange = () => {
+        const raw = input.value.trim();
+        const parsed = raw === '' ? NaN : Number(raw);
+        const problem = waveValueProblem(option, parsed);
+        if (problem) {
+          this.errors.set(option.key, problem);
+          this.drafts.set(option.key, input.value);
+          this.render();
+          return;
+        }
+        this.setValue(option.key, parsed);
+      };
+      row.append(input);
     }
-    algoGroup.appendChild(guideCard);
-    body.appendChild(algoGroup);
+    if (option.unit) row.append(this.unitElement(option.unit));
+    const source = this.el('span', STYLE.source, waveSourceLabel(entry.source));
+    source.dataset.waveSourceLabel = entry.source;
+    row.append(source);
+    if (entry.source === 'override') {
+      const clear = this.el('button', STYLE.iconButton);
+      clear.type = 'button';
+      clear.dataset.waveClear = option.key;
+      clear.title = t('ui.waveOverhangs.clear', 'Stop setting this here and use the inherited value');
+      clear.setAttribute('aria-label', clear.title);
+      clear.disabled = !!state.busy;
+      const glyph = this.el('span');
+      glyph.setAttribute('aria-hidden', 'true');
+      glyph.style.cssText = 'display:inline-block;width:14px;height:14px;';
+      applyIcon(glyph, 'undo');
+      clear.append(glyph);
+      clear.onclick = () => this.clearValue(option.key);
+      row.append(clear);
+    }
+    wrap.append(row);
 
-    // Quick Tuning Presets
-    const presetsGroup = document.createElement('div');
-    presetsGroup.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
-    const presetsLabel = document.createElement('span');
-    presetsLabel.textContent = t('ui.waveOverhangs.presetsLabel', 'Quick tuning profiles:');
-    presetsLabel.style.cssText = 'font-size:11px;font-weight:600;color:var(--oxr-color-text-muted);';
-    presetsGroup.appendChild(presetsLabel);
+    const notes = this.rowNotes(entry, resolved, state);
+    if (notes.length > 0) {
+      const ids: string[] = [];
+      notes.forEach((note, index) => {
+        note.id = `${labelId}-note-${index}`;
+        ids.push(note.id);
+        wrap.append(note);
+      });
+      wrap.querySelector('input, select')?.setAttribute('aria-describedby', ids.join(' '));
+    }
+    return wrap;
+  }
 
-    const presetsRow = document.createElement('div');
-    presetsRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
+  private unitElement(unit: string): HTMLElement {
+    const span = this.el('span', undefined, unit);
+    span.className = 'field-unit';
+    return span;
+  }
 
-    const btnPresetBalanced = this.createPresetButton(
-      t('ui.waveOverhangs.presetBalanced', 'Balanced (Default)'),
-      t('ui.waveOverhangs.presetBalancedHint', 'Andersons algorithm, 35 mm/s speed, 90% fan, 3 Hilbert floor layers'),
-      () => {
-        void this.adapter.onUpdate({
-          algorithm: 'andersons',
-          printSpeedMmS: 35,
-          fanSpeedPercent: 90,
-          floorUseHilbert: true,
-          floorLayers: 3,
-          supportRemainingAreas: true,
-        });
-      },
-    );
+  /** The row's refusal from the last edit, then the shared guidance for its value. */
+  private rowNotes(entry: WaveOptionState, resolved: WaveSettingsState, state: WaveOverhangsPanelState): HTMLElement[] {
+    const notes: HTMLElement[] = [];
+    const error = this.errors.get(entry.option.key);
+    if (error) notes.push(this.el('p', STYLE.error, error));
+    for (const note of waveOptionNotes(entry, resolved, state.effectiveConfig)) {
+      notes.push(this.noteElement(entry.option.key, note, state));
+    }
+    return notes;
+  }
 
-    const btnPresetHighSpeed = this.createPresetButton(
-      t('ui.waveOverhangs.presetHighSpeed', 'Fast / Rigid'),
-      t('ui.waveOverhangs.presetHighSpeedHint', 'Andersons algorithm, 50 mm/s speed, 100% fan, 2 floor layers'),
-      () => {
-        void this.adapter.onUpdate({
-          algorithm: 'andersons',
-          printSpeedMmS: 50,
-          fanSpeedPercent: 100,
-          floorUseHilbert: true,
-          floorLayers: 2,
-          supportRemainingAreas: true,
-        });
-      },
-    );
+  private noteElement(key: string, note: WaveNote, state: WaveOverhangsPanelState): HTMLElement {
+    const line = this.el('p', note.tone === 'warn' ? STYLE.warnNote : STYLE.note, note.text);
+    const fix = note.fix;
+    if (fix) {
+      const button = this.el('button', STYLE.textButton, fix.label);
+      button.type = 'button';
+      button.dataset.waveAction = fix.id;
+      button.disabled = !!state.busy;
+      button.style.marginInlineStart = '6px';
+      button.onclick = () => this.setValue(key, fix.value);
+      line.append(button);
+    }
+    return line;
+  }
 
-    const btnPresetOrganic = this.createPresetButton(
-      t('ui.waveOverhangs.presetOrganic', 'Organic / Smooth'),
+  private renderAbout(): HTMLElement {
+    const details = this.el('details', STYLE.about);
+    details.dataset.waveAbout = 'true';
+    details.open = this.aboutOpen;
+    details.addEventListener('toggle', () => {
+      this.aboutOpen = details.open;
+    });
+    details.append(this.el('summary', STYLE.summary, t('ui.waveOverhangs.about', 'About wave overhangs')));
+    const list = this.el('ul', STYLE.list);
+    for (const line of [
       t(
-        'ui.waveOverhangs.presetOrganicHint',
-        'Kaiser LaSO algorithm, 30 mm/s speed, 100% fan, 40% ring overlap, 3 floor layers',
+        'ui.waveOverhangs.about.how',
+        'Rings start at the supported edge and spread outward; each one hangs on the ring before it, so the overhang needs nothing underneath.',
       ),
-      () => {
-        void this.adapter.onUpdate({
-          algorithm: 'kaiser',
-          printSpeedMmS: 30,
-          fanSpeedPercent: 100,
-          ringOverlap: 0.4,
-          floorUseHilbert: true,
-          floorLayers: 3,
-          supportRemainingAreas: true,
-        });
-      },
-    );
-
-    presetsRow.appendChild(btnPresetBalanced);
-    presetsRow.appendChild(btnPresetHighSpeed);
-    presetsRow.appendChild(btnPresetOrganic);
-    presetsGroup.appendChild(presetsRow);
-    body.appendChild(presetsGroup);
-
-    // Anti-Warping Hilbert Floor Section
-    const floorSection = document.createElement('div');
-    floorSection.style.cssText =
-      'display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:var(--radius-sm,4px);' +
-      'background:var(--oxr-bg-card,rgba(128,128,128,0.04));border:1px solid var(--oxr-border,rgba(128,128,128,0.2));';
-
-    const floorTitle = document.createElement('div');
-    floorTitle.style.cssText = 'font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px;';
-    floorTitle.textContent = t('ui.waveOverhangs.floorSectionTitle', 'Thermal stress & floor layers:');
-    floorSection.appendChild(floorTitle);
-
-    const hilbertLabel = document.createElement('label');
-    hilbertLabel.className = 'check-row';
-    hilbertLabel.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;';
-
-    const hilbertChk = document.createElement('input');
-    hilbertChk.type = 'checkbox';
-    hilbertChk.dataset.waveHilbert = 'true';
-    hilbertChk.checked = settings.floorUseHilbert;
-    hilbertChk.disabled = !settings.enabled || !!busy;
-    hilbertChk.onchange = () => {
-      void this.adapter.onUpdate({ floorUseHilbert: hilbertChk.checked });
-    };
-
-    const hilbertText = document.createElement('span');
-    hilbertText.textContent = t('ui.waveOverhangs.useHilbertFloor', 'Enforce Hilbert curve solid floor infill');
-    hilbertLabel.appendChild(hilbertChk);
-    hilbertLabel.appendChild(hilbertText);
-    floorSection.appendChild(hilbertLabel);
-
-    const floorLayersId = `oxr-wave-floor-layers-${this.instanceId}`;
-    const floorLayersRow = document.createElement('div');
-    floorLayersRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
-
-    const floorLayersLabel = document.createElement('label');
-    floorLayersLabel.htmlFor = floorLayersId;
-    floorLayersLabel.textContent = t('ui.waveOverhangs.floorLayersCount', 'Floor layers count:');
-    floorLayersLabel.style.cssText = 'font-size:11.5px;color:var(--oxr-color-text-muted);cursor:pointer;';
-
-    const floorLayersInput = document.createElement('input');
-    floorLayersInput.id = floorLayersId;
-    floorLayersInput.type = 'number';
-    floorLayersInput.dataset.waveFloorLayers = 'true';
-    floorLayersInput.className = 'field-control text-input';
-    floorLayersInput.min = '1';
-    floorLayersInput.max = '10';
-    floorLayersInput.step = '1';
-    floorLayersInput.value = String(settings.floorLayers);
-    floorLayersInput.style.cssText = 'width:60px;padding:3px 6px;font-size:12px;text-align:end;';
-    floorLayersInput.disabled = !settings.enabled || !settings.floorUseHilbert || !!busy;
-    floorLayersInput.onchange = () => {
-      const val = parseInt(floorLayersInput.value, 10);
-      if (Number.isFinite(val) && val >= 1) void this.adapter.onUpdate({ floorLayers: val });
-    };
-
-    floorLayersRow.appendChild(floorLayersLabel);
-    floorLayersRow.appendChild(floorLayersInput);
-    floorSection.appendChild(floorLayersRow);
-
-    const floorHint = document.createElement('span');
-    floorHint.textContent = t(
-      'ui.waveOverhangs.floorHint',
-      'Fractal Hilbert scan paths eliminate directional shrinking stress, keeping overhang floors flat and preventing warping.',
-    );
-    floorHint.style.cssText = 'font-size:11px;color:var(--oxr-color-text-muted);line-height:1.3;';
-    floorSection.appendChild(floorHint);
-
-    body.appendChild(floorSection);
-
-    // Speeds & Cooling Overrides
-    const speedsSection = document.createElement('div');
-    speedsSection.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
-
-    const speedsTitle = document.createElement('span');
-    speedsTitle.textContent = t('ui.waveOverhangs.speedCoolingTitle', 'Speeds & cooling overrides:');
-    speedsTitle.style.cssText = 'font-weight:600;font-size:12px;';
-    speedsSection.appendChild(speedsTitle);
-
-    // Wave print speed
-    speedsSection.appendChild(
-      this.createNumberRow(
-        t('ui.waveOverhangs.waveSpeed', 'Wave print speed (mm/s):'),
-        settings.printSpeedMmS,
-        'wavePrintSpeed',
-        5,
-        200,
-        1,
-        (val) => this.adapter.onUpdate({ printSpeedMmS: val }),
-        !settings.enabled || !!busy,
+      t(
+        'ui.waveOverhangs.about.material',
+        'PLA with full part cooling works best; PETG, ABS and PC are much more likely to warp or delaminate.',
       ),
-    );
-
-    // Wave fan speed
-    speedsSection.appendChild(
-      this.createNumberRow(
-        t('ui.waveOverhangs.waveFan', 'Part cooling fan (%):'),
-        settings.fanSpeedPercent,
-        'waveFanSpeed',
-        0,
-        100,
-        1,
-        (val) => this.adapter.onUpdate({ fanSpeedPercent: val }),
-        !settings.enabled || !!busy,
+      t(
+        'ui.waveOverhangs.about.span',
+        'Warping grows with span. Use waves for smaller, self-contained overhangs; spans beyond a few centimetres may still need supports.',
       ),
-    );
-
-    // Aux fan speed
-    speedsSection.appendChild(
-      this.createNumberRow(
-        t('ui.waveOverhangs.auxFan', 'Auxiliary fan (%):'),
-        settings.auxFanSpeedPercent,
-        'waveAuxFanSpeed',
-        0,
-        100,
-        1,
-        (val) => this.adapter.onUpdate({ auxFanSpeedPercent: val }),
-        !settings.enabled || !!busy,
+      t(
+        'ui.waveOverhangs.about.floor',
+        'The first one to three layers above the wave often do most of the pulling; slower speed, less flow or more cooling there can make a visible difference.',
       ),
-    );
-
-    body.appendChild(speedsSection);
-
-    // Support Material Subtraction
-    const supportLabel = document.createElement('label');
-    supportLabel.className = 'check-row';
-    supportLabel.style.cssText =
-      'display:flex;align-items:flex-start;gap:6px;cursor:pointer;font-size:12px;' +
-      'padding:6px;border-radius:var(--radius-sm,4px);background:var(--oxr-bg-card,rgba(128,128,128,0.04));';
-
-    const supportChk = document.createElement('input');
-    supportChk.type = 'checkbox';
-    supportChk.dataset.waveSupportSubtract = 'true';
-    supportChk.checked = settings.supportRemainingAreas;
-    supportChk.disabled = !settings.enabled || !!busy;
-    supportChk.style.cssText = 'margin-block-start:2px;cursor:pointer;';
-    supportChk.onchange = () => {
-      void this.adapter.onUpdate({ supportRemainingAreas: supportChk.checked });
-    };
-
-    const supportTextWrap = document.createElement('div');
-    supportTextWrap.style.cssText = 'display:flex;flex-direction:column;gap:2px;';
-
-    const supportTitle = document.createElement('span');
-    supportTitle.textContent = t('ui.waveOverhangs.supportSubtract', 'Subtract wave coverage from supports');
-    supportTitle.style.cssText = 'font-weight:500;color:var(--oxr-color-text);';
-
-    const supportDesc = document.createElement('span');
-    supportDesc.textContent = t(
-      'ui.waveOverhangs.supportSubtractDesc',
-      'Automatically disables normal and tree supports underneath overhang areas successfully printed with wave paths.',
-    );
-    supportDesc.style.cssText = 'font-size:11px;color:var(--oxr-color-text-muted);line-height:1.3;';
-
-    supportTextWrap.appendChild(supportTitle);
-    supportTextWrap.appendChild(supportDesc);
-    supportLabel.appendChild(supportChk);
-    supportLabel.appendChild(supportTextWrap);
-    body.appendChild(supportLabel);
-
-    // Advanced Tunables Disclosure
-    const advDetails = document.createElement('details');
-    advDetails.style.cssText = 'font-size:11.5px;';
-    const advSummary = document.createElement('summary');
-    advSummary.textContent = t('ui.waveOverhangs.advancedSettings', 'Advanced wave tunables');
-    advSummary.style.cssText = 'cursor:pointer;font-weight:600;color:var(--oxr-color-text-muted);padding:4px 0;';
-    advDetails.appendChild(advSummary);
-
-    const advContent = document.createElement('div');
-    advContent.style.cssText = 'display:flex;flex-direction:column;gap:6px;padding:6px 0;margin-block-start:4px;';
-
-    if (settings.algorithm === 'kaiser') {
-      advContent.appendChild(
-        this.createNumberRow(
-          t('ui.waveOverhangs.ringOverlap', 'Kaiser ring overlap (0-1):'),
-          settings.ringOverlap,
-          'waveRingOverlap',
-          0,
-          1,
-          0.05,
-          (val) => this.adapter.onUpdate({ ringOverlap: val }),
-          !settings.enabled || !!busy,
-        ),
-      );
+      t(
+        'ui.waveOverhangs.about.detection',
+        'Which walls count as overhangs is decided by Detect overhang walls and Overhang reverse threshold; there is no angle setting.',
+      ),
+    ]) {
+      list.append(this.el('li', undefined, line));
     }
-
-    advContent.appendChild(
-      this.createNumberRow(
-        t('ui.waveOverhangs.minWaveTime', 'Min wave dwell time (s):'),
-        settings.minWaveTimeS,
-        'waveMinTime',
-        0,
-        10,
-        0.1,
-        (val) => this.adapter.onUpdate({ minWaveTimeS: val }),
-        !settings.enabled || !!busy,
+    details.append(list);
+    const credits = this.el(
+      'p',
+      STYLE.note,
+      t(
+        'ui.waveOverhangs.about.credits',
+        'Engine port of OrcaSlicer-WaveOverhangs {release}. Algorithm: Janis A. Andersons; arc-overhang and PrusaSlicer integration: Steven McCulloch; OrcaSlicer port: Dennis Klappe.',
+        { release: WAVE_OVERHANGS_UPSTREAM.release },
       ),
     );
-
-    advContent.appendChild(
-      this.createNumberRow(
-        t('ui.waveOverhangs.endRetract', 'End-of-line retract (mm):'),
-        settings.endRetractMm,
-        'waveEndRetract',
-        0,
-        10,
-        0.1,
-        (val) => this.adapter.onUpdate({ endRetractMm: val }),
-        !settings.enabled || !!busy,
-      ),
-    );
-
-    const debugLabel = document.createElement('label');
-    debugLabel.className = 'check-row';
-    debugLabel.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;';
-    const debugChk = document.createElement('input');
-    debugChk.type = 'checkbox';
-    debugChk.dataset.waveDebug = 'true';
-    debugChk.checked = settings.debugGCode;
-    debugChk.disabled = !settings.enabled || !!busy;
-    debugChk.onchange = () => {
-      void this.adapter.onUpdate({ debugGCode: debugChk.checked });
-    };
-    const debugText = document.createElement('span');
-    debugText.textContent = t('ui.waveOverhangs.debugGcode', 'Emit structured debug comments in G-code');
-    debugLabel.appendChild(debugChk);
-    debugLabel.appendChild(debugText);
-    advContent.appendChild(debugLabel);
-
-    advDetails.appendChild(advContent);
-    body.appendChild(advDetails);
-
-    root.appendChild(body);
-  }
-
-  private createPresetButton(label: string, hint: string, onClick: () => void): HTMLButtonElement {
-    const document = this.container.ownerDocument;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn-preset';
-    btn.textContent = label;
-    btn.title = hint;
-    btn.style.cssText =
-      'flex:1 1 auto;padding:4px 8px;font-size:11px;font-weight:500;border-radius:var(--radius-sm,4px);' +
-      'border:1px solid var(--oxr-border,rgba(128,128,128,0.25));background:var(--oxr-surface,transparent);' +
-      'color:var(--oxr-color-text);cursor:pointer;text-align:center;';
-    btn.onclick = onClick;
-    return btn;
-  }
-
-  private createNumberRow(
-    labelText: string,
-    value: number,
-    datasetKey: string,
-    min: number,
-    max: number,
-    step: number,
-    onChange: (val: number) => void,
-    disabled: boolean,
-  ): HTMLElement {
-    const document = this.container.ownerDocument;
-    const inputId = `oxr-wave-num-${datasetKey}-${this.instanceId}`;
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
-
-    const lbl = document.createElement('label');
-    lbl.htmlFor = inputId;
-    lbl.textContent = labelText;
-    lbl.style.cssText = 'font-size:11.5px;color:var(--oxr-color-text-muted);cursor:pointer;';
-
-    const input = document.createElement('input');
-    input.id = inputId;
-    input.type = 'number';
-    input.dataset[datasetKey] = 'true';
-    input.className = 'field-control text-input';
-    input.min = String(min);
-    input.max = String(max);
-    input.step = String(step);
-    input.value = String(value);
-    input.disabled = disabled;
-    input.style.cssText = 'width:60px;padding:3px 6px;font-size:12px;text-align:end;';
-    input.onchange = () => {
-      const parsed = parseFloat(input.value);
-      if (Number.isFinite(parsed)) onChange(parsed);
-    };
-
-    row.appendChild(lbl);
-    row.appendChild(input);
-    return row;
+    details.append(credits);
+    const link = this.el('a', undefined, t('ui.waveOverhangs.about.link', 'Settings reference and limitations'));
+    link.href = `${WAVE_OVERHANGS_UPSTREAM.repository}/blob/main/docs/WAVE_OVERHANG_SETTINGS.md`;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    const linkLine = this.el('p', STYLE.note);
+    linkLine.append(link);
+    details.append(linkLine);
+    return details;
   }
 }
 
-export interface MountWaveOverhangsPanelOptions {
-  container: HTMLElement;
+export interface WaveOverhangsAdapterOptions {
   workspace: {
     getProjectSettingsOverrideSnapshot(): {
       effectiveConfig: Record<string, unknown>;
@@ -632,175 +469,39 @@ export interface MountWaveOverhangsPanelOptions {
   onErrorMessage?: (message: string) => void;
 }
 
-export function mountWaveOverhangsPanel(options: MountWaveOverhangsPanelOptions): () => void {
-  const { container, workspace, registry, actionCtx, getUiState, onErrorMessage } = options;
-
-  const WAVE_KEYS = [
-    'wave_overhangs',
-    'wave_overhang_algorithm',
-    'wave_overhang_print_speed',
-    'wave_overhang_travel_speed',
-    'wave_overhang_fan_speed',
-    'wave_overhang_aux_fan_speed',
-    'wave_overhang_floor_use_hilbert',
-    'wave_overhang_floor_layers',
-    'wave_overhang_floor_hilbert_density',
-    'wave_overhang_floor_print_speed',
-    'wave_overhang_floor_fan_speed',
-    'support_remaining_areas_after_wave_overhangs',
-    'wave_overhang_ring_overlap',
-    'wave_overhang_min_wave_time',
-    'wave_overhang_end_retract_length',
-    'wave_overhang_debug_gcode',
-  ] as const;
-
-  const readWaveSettings = (): WaveOverhangsPanelState => {
-    const snap = workspace.getProjectSettingsOverrideSnapshot();
-    const eff = snap.effectiveConfig;
-    const ov = snap.overrides;
-    const hasOverrides = WAVE_KEYS.some((k) => Object.prototype.hasOwnProperty.call(ov, k));
-
-    const enabled = eff.wave_overhangs === true || eff.wave_overhangs === 1 || eff.wave_overhangs === '1';
-    const algorithm: 'andersons' | 'kaiser' = eff.wave_overhang_algorithm === 'kaiser' ? 'kaiser' : 'andersons';
-    const printSpeedMmS =
-      typeof eff.wave_overhang_print_speed === 'number'
-        ? eff.wave_overhang_print_speed
-        : Number(eff.wave_overhang_print_speed) || DEFAULT_WAVE_OVERHANGS_SETTINGS.printSpeedMmS;
-    const travelSpeedMmS =
-      typeof eff.wave_overhang_travel_speed === 'number'
-        ? eff.wave_overhang_travel_speed
-        : Number(eff.wave_overhang_travel_speed) || DEFAULT_WAVE_OVERHANGS_SETTINGS.travelSpeedMmS;
-    const fanSpeedPercent =
-      typeof eff.wave_overhang_fan_speed === 'number'
-        ? eff.wave_overhang_fan_speed
-        : Number(eff.wave_overhang_fan_speed) || DEFAULT_WAVE_OVERHANGS_SETTINGS.fanSpeedPercent;
-    const auxFanSpeedPercent =
-      typeof eff.wave_overhang_aux_fan_speed === 'number'
-        ? eff.wave_overhang_aux_fan_speed
-        : Number(eff.wave_overhang_aux_fan_speed) || DEFAULT_WAVE_OVERHANGS_SETTINGS.auxFanSpeedPercent;
-    const floorUseHilbert =
-      eff.wave_overhang_floor_use_hilbert === false ||
-      eff.wave_overhang_floor_use_hilbert === 0 ||
-      eff.wave_overhang_floor_use_hilbert === '0'
-        ? false
-        : true;
-    const floorLayers =
-      typeof eff.wave_overhang_floor_layers === 'number'
-        ? eff.wave_overhang_floor_layers
-        : Number(eff.wave_overhang_floor_layers) || DEFAULT_WAVE_OVERHANGS_SETTINGS.floorLayers;
-    const floorHilbertDensity =
-      typeof eff.wave_overhang_floor_hilbert_density === 'number'
-        ? eff.wave_overhang_floor_hilbert_density
-        : Number(eff.wave_overhang_floor_hilbert_density) || DEFAULT_WAVE_OVERHANGS_SETTINGS.floorHilbertDensity;
-    const floorPrintSpeedMmS =
-      typeof eff.wave_overhang_floor_print_speed === 'number'
-        ? eff.wave_overhang_floor_print_speed
-        : Number(eff.wave_overhang_floor_print_speed) || DEFAULT_WAVE_OVERHANGS_SETTINGS.floorPrintSpeedMmS;
-    const floorFanSpeedPercent =
-      typeof eff.wave_overhang_floor_fan_speed === 'number'
-        ? eff.wave_overhang_floor_fan_speed
-        : Number(eff.wave_overhang_floor_fan_speed) || DEFAULT_WAVE_OVERHANGS_SETTINGS.floorFanSpeedPercent;
-    const supportRemainingAreas =
-      eff.support_remaining_areas_after_wave_overhangs === false ||
-      eff.support_remaining_areas_after_wave_overhangs === 0 ||
-      eff.support_remaining_areas_after_wave_overhangs === '0'
-        ? false
-        : true;
-    const ringOverlap =
-      typeof eff.wave_overhang_ring_overlap === 'number'
-        ? eff.wave_overhang_ring_overlap
-        : Number(eff.wave_overhang_ring_overlap) || DEFAULT_WAVE_OVERHANGS_SETTINGS.ringOverlap;
-    const minWaveTimeS =
-      typeof eff.wave_overhang_min_wave_time === 'number'
-        ? eff.wave_overhang_min_wave_time
-        : Number(eff.wave_overhang_min_wave_time) || DEFAULT_WAVE_OVERHANGS_SETTINGS.minWaveTimeS;
-    const endRetractMm =
-      typeof eff.wave_overhang_end_retract_length === 'number'
-        ? eff.wave_overhang_end_retract_length
-        : Number(eff.wave_overhang_end_retract_length) || DEFAULT_WAVE_OVERHANGS_SETTINGS.endRetractMm;
-    const debugGCode =
-      eff.wave_overhang_debug_gcode === false ||
-      eff.wave_overhang_debug_gcode === 0 ||
-      eff.wave_overhang_debug_gcode === '0'
-        ? false
-        : true;
-
-    return {
-      settings: {
-        enabled,
-        algorithm,
-        printSpeedMmS,
-        travelSpeedMmS,
-        fanSpeedPercent,
-        auxFanSpeedPercent,
-        floorUseHilbert,
-        floorLayers,
-        floorHilbertDensity,
-        floorPrintSpeedMmS,
-        floorFanSpeedPercent,
-        supportRemainingAreas,
-        ringOverlap,
-        minWaveTimeS,
-        endRetractMm,
-        debugGCode,
-      },
-      hasOverrides,
-    };
-  };
-
-  const panel = new WaveOverhangsPanel(container, {
-    getState: () => readWaveSettings(),
-    subscribe: (listener) => workspace.subscribeCanonicalState(listener),
-    onUpdate: async (patch) => {
-      const snap = workspace.getProjectSettingsOverrideSnapshot();
-      const nextOverrides: Record<string, unknown> = { ...snap.overrides };
-
-      if (patch.enabled !== undefined) nextOverrides.wave_overhangs = patch.enabled ? '1' : '0';
-      if (patch.algorithm !== undefined) nextOverrides.wave_overhang_algorithm = patch.algorithm;
-      if (patch.printSpeedMmS !== undefined) nextOverrides.wave_overhang_print_speed = String(patch.printSpeedMmS);
-      if (patch.travelSpeedMmS !== undefined) nextOverrides.wave_overhang_travel_speed = String(patch.travelSpeedMmS);
-      if (patch.fanSpeedPercent !== undefined) nextOverrides.wave_overhang_fan_speed = String(patch.fanSpeedPercent);
-      if (patch.auxFanSpeedPercent !== undefined)
-        nextOverrides.wave_overhang_aux_fan_speed = String(patch.auxFanSpeedPercent);
-      if (patch.floorUseHilbert !== undefined)
-        nextOverrides.wave_overhang_floor_use_hilbert = patch.floorUseHilbert ? '1' : '0';
-      if (patch.floorLayers !== undefined) nextOverrides.wave_overhang_floor_layers = String(patch.floorLayers);
-      if (patch.floorHilbertDensity !== undefined)
-        nextOverrides.wave_overhang_floor_hilbert_density = String(patch.floorHilbertDensity);
-      if (patch.floorPrintSpeedMmS !== undefined)
-        nextOverrides.wave_overhang_floor_print_speed = String(patch.floorPrintSpeedMmS);
-      if (patch.floorFanSpeedPercent !== undefined)
-        nextOverrides.wave_overhang_floor_fan_speed = String(patch.floorFanSpeedPercent);
-      if (patch.supportRemainingAreas !== undefined)
-        nextOverrides.support_remaining_areas_after_wave_overhangs = patch.supportRemainingAreas ? '1' : '0';
-      if (patch.ringOverlap !== undefined) nextOverrides.wave_overhang_ring_overlap = String(patch.ringOverlap);
-      if (patch.minWaveTimeS !== undefined) nextOverrides.wave_overhang_min_wave_time = String(patch.minWaveTimeS);
-      if (patch.endRetractMm !== undefined) nextOverrides.wave_overhang_end_retract_length = String(patch.endRetractMm);
-      if (patch.debugGCode !== undefined) nextOverrides.wave_overhang_debug_gcode = patch.debugGCode ? '1' : '0';
-
-      await registry.invoke('settings_apply_project', 'dom-inspector', actionCtx, getUiState(), {
-        projectSettingsApply: {
-          inheritedConfig: snap.inheritedConfig as unknown as any,
-          overrides: nextOverrides as unknown as any,
-          sourceRevision: snap.sourceRevision,
-          sourceHash: snap.sourceHash,
-        },
-      });
+/**
+ * The project's wave settings as a {@link WaveOverhangsPort}, committing through
+ * the canonical `settings_apply_project` action — the flat card and the headset
+ * both use this one.
+ */
+export function createWaveOverhangsPort(options: WaveOverhangsAdapterOptions): WaveOverhangsPort {
+  const { workspace, registry, actionCtx, getUiState, onErrorMessage } = options;
+  return {
+    getState: () => {
+      const snapshot = workspace.getProjectSettingsOverrideSnapshot();
+      return {
+        inheritedConfig: snapshot.inheritedConfig,
+        overrides: snapshot.overrides,
+        effectiveConfig: snapshot.effectiveConfig,
+        guard: { sourceRevision: snapshot.sourceRevision, sourceHash: snapshot.sourceHash },
+      };
     },
-    onReset: async () => {
-      const snap = workspace.getProjectSettingsOverrideSnapshot();
-      const nextOverrides: Record<string, unknown> = { ...snap.overrides };
-      for (const k of WAVE_KEYS) {
-        delete nextOverrides[k];
-      }
-      await registry.invoke('settings_apply_project', 'dom-inspector', actionCtx, getUiState(), {
+    subscribe: (listener) => workspace.subscribeCanonicalState(listener),
+    apply: async (next, basis) => {
+      const guard = basis.guard ?? workspace.getProjectSettingsOverrideSnapshot();
+      const invoked = await registry.invoke('settings_apply_project', 'dom-inspector', actionCtx, getUiState(), {
         projectSettingsApply: {
-          inheritedConfig: snap.inheritedConfig as unknown as any,
-          overrides: nextOverrides as unknown as any,
-          sourceRevision: snap.sourceRevision,
-          sourceHash: snap.sourceHash,
+          inheritedConfig: basis.inheritedConfig,
+          overrides: next,
+          sourceRevision: guard.sourceRevision,
+          sourceHash: guard.sourceHash,
         },
       });
+      if (!invoked) {
+        throw new Error(
+          t('ui.waveOverhangs.applyUnavailable', 'Project settings cannot be changed in the current workspace state.'),
+        );
+      }
     },
     onError: (error) => {
       onErrorMessage?.(
@@ -809,8 +510,17 @@ export function mountWaveOverhangsPanel(options: MountWaveOverhangsPanelOptions)
         }),
       );
     },
-  });
+  };
+}
 
+export interface MountWaveOverhangsPanelOptions extends WaveOverhangsAdapterOptions {
+  container: HTMLElement;
+  /** Share an existing port (the headset's) instead of creating one. */
+  port?: WaveOverhangsPort;
+}
+
+export function mountWaveOverhangsPanel(options: MountWaveOverhangsPanelOptions): () => void {
+  const panel = new WaveOverhangsPanel(options.container, options.port ?? createWaveOverhangsPort(options));
   panel.mount();
   const dispose = () => panel.dispose();
   window.addEventListener('pagehide', dispose, { once: true });

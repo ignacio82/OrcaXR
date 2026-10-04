@@ -24,7 +24,7 @@ export const PINNED_ENGINE_PROVENANCE = Object.freeze({
   cliVersion: '2.3.4',
   artifacts: Object.freeze({
     'slic3r.mjs': 'b90d06ccfeb526a4d0d7e08a56ebb5401175f7337f7d9b35c039bd738448f03e',
-    'slic3r.wasm': 'daa8eba6cf79d209252ba3e537f633891e2def25e11822fc3489bd17041c9d01',
+    'slic3r.wasm': '8e9b05f710dd5c6621eaff315477cbe8520a3778f2d31a27e6275b051e0d5cdc',
   }),
   /** `server/patches/`, by name and digest, in the order they are applied. */
   cliPatches: Object.freeze({
@@ -34,4 +34,23 @@ export const PINNED_ENGINE_PROVENANCE = Object.freeze({
     '0003-gcodeprocessor-fullspectrum-oob.patch': '73402637904ff1500e04e1ca60fe287df74d8d6b930e5b7889737c729f7d9a7a',
     '0004-cli-safe-plate-name-texture.patch': '8d6df350cba4a0d3ec4b18cc71ba790129d0c00c0a3e5eb1c4a430f323ca1646',
   }),
+  /**
+   * Features each attested engine carries beyond stock Snapmaker Orca. The
+   * wave-overhang port is in the WASM build only (`wasm/patches/`); none of the
+   * CLI patches above add it, so a CLI server reads no wave key and prints those
+   * overhangs as though the switch were off. Attestation pins each engine to an
+   * exact build, which is what makes this list knowable; change it in the same
+   * commit that changes either patch set.
+   */
+  features: Object.freeze({
+    wasm: Object.freeze(['wave-overhangs'] as const),
+    cli: Object.freeze([] as const),
+  }),
 });
+
+export type EngineKind = keyof typeof PINNED_ENGINE_PROVENANCE.features;
+export type EngineFeature = (typeof PINNED_ENGINE_PROVENANCE.features)[EngineKind][number];
+
+export function engineSupports(engine: EngineKind, feature: EngineFeature): boolean {
+  return (PINNED_ENGINE_PROVENANCE.features[engine] as readonly EngineFeature[]).includes(feature);
+}

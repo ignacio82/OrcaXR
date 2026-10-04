@@ -53,6 +53,7 @@ const ICONS: Record<string, IconGlyph> = {
   output: { xr: 'print', dom: '🖨' },
   advanced: { xr: 'tune', dom: '⚙' },
   system: { xr: 'settings', dom: '⋯' },
+  wave_overhangs: { xr: 'waves', dom: '≋' },
   search: { xr: 'search', dom: '⌕' },
   file: { xr: 'folder', dom: '🗀' },
   edit: { xr: 'edit', dom: '✎' },

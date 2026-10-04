@@ -133,6 +133,8 @@ jobs:
         working-directory: wasm
       - run: npm run test:fullspectrum
         working-directory: wasm
+      - run: npm run test:wave
+        working-directory: wasm
       - run: npm audit --include=dev --audit-level=moderate
         working-directory: wasm
 

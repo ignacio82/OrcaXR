@@ -1,10 +1,16 @@
 import { normalizeHttpEndpoint } from '../net/LocalNetworkAccess';
-import { PINNED_ENGINE_PROVENANCE } from './pinnedEngineProvenance';
+import { PINNED_ENGINE_PROVENANCE, type EngineKind } from './pinnedEngineProvenance';
 
 export type EngineAttestation =
   { readonly attested: true; readonly commit: string } | { readonly attested: false; readonly reason: string };
 export type VerifiedEngineAttestation =
-  | { readonly attested: true; readonly commit: string; readonly artifactHash: string }
+  | {
+      readonly attested: true;
+      readonly commit: string;
+      readonly artifactHash: string;
+      /** Which build was proven, and so which features the route has (`PINNED_ENGINE_PROVENANCE.features`). */
+      readonly engine: EngineKind;
+    }
   | { readonly attested: false; readonly reason: string };
 export type ExternalEngineFetcher = (
   url: string,
@@ -75,7 +81,12 @@ export async function attestExternalEndpoint(
   if (typeof digest !== 'string' || !/^[a-f0-9]{64}$/.test(digest)) {
     return { attested: false, reason: 'The external slicer reported no complete engine artifact digest.' };
   }
-  return { attested: true, commit: PINNED_ENGINE_PROVENANCE.commit, artifactHash: `sha256:${digest}` };
+  return {
+    attested: true,
+    commit: PINNED_ENGINE_PROVENANCE.commit,
+    artifactHash: `sha256:${digest}`,
+    engine: record.engine,
+  };
 }
 
 export function canonicalExternalEndpoint(value: string): string {

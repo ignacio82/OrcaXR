@@ -9,6 +9,7 @@ import {
   type VerifiedEngineAttestation,
 } from './ExternalEngineAttestation';
 import type { SliceEngineMetadata } from '../project/slicing/types';
+import type { EngineKind } from './pinnedEngineProvenance';
 import { loadRememberedCredentials, saveRememberedCredentials } from '../settings/RememberedCredentials';
 import { SlicerClientCancellationError } from './SlicerClientCancellationError';
 import type { ExternalJobContext } from './ExternalSlicerJobs';
@@ -32,7 +33,13 @@ export type SlicerClientProjectRoute =
   | { readonly kind: 'external-server'; readonly endpoint: string; readonly connectionGeneration?: number };
 
 export type AttestedProjectRoute =
-  | { readonly attested: true; readonly route: SlicerClientProjectRoute; readonly externalEngine?: SliceEngineMetadata }
+  | {
+      readonly attested: true;
+      readonly route: SlicerClientProjectRoute;
+      /** The engine that will run the slice: the browser's own WASM build, or the attested server's. */
+      readonly engine: EngineKind;
+      readonly externalEngine?: SliceEngineMetadata;
+    }
   | { readonly attested: false; readonly reason: string };
 
 export interface SlicerClientProjectSliceOptions {
@@ -240,7 +247,7 @@ export class SlicerClient {
   ): Promise<AttestedProjectRoute> {
     const state = externalConnection.snapshot;
     if (state.configurationError) return { attested: false, reason: state.configurationError };
-    if (!state.enabled) return { attested: true, route: Object.freeze({ kind: 'browser-wasm' }) };
+    if (!state.enabled) return { attested: true, route: Object.freeze({ kind: 'browser-wasm' }), engine: 'wasm' };
     const changed = 'The external slicer changed while its engine was being checked.';
     const abort = new AbortController();
     const unsubscribe = externalConnection.subscribe((next) => {
@@ -264,6 +271,7 @@ export class SlicerClient {
           endpoint: state.endpoint,
           connectionGeneration: state.generation,
         }),
+        engine: proof.engine,
         externalEngine: Object.freeze({ commit: proof.commit, artifactHash: proof.artifactHash }),
       });
     } finally {

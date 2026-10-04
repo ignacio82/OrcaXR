@@ -17,6 +17,14 @@ Code paths below are relative to the repository root.
   `wasm/dist` and `web/public/slicer`. `npm --prefix wasm run verify:artifacts`
   fails on source/patch or copy drift. A hash match proves provenance consistency,
   not a clean source rebuild; the manual container source-build gate remains.
+- Build the engine with **Emscripten 6.0.2** exactly: the published `slic3r.mjs`
+  glue is byte-identical to its output, so a rebuild that leaves the glue unchanged
+  used the right toolchain. Commit engine edits in the fork and regenerate
+  `wasm/patches/snapmaker-fork-wasm-port.diff` commit-to-commit, never from the
+  worktree. A republished engine updates the canonical manifest, its adjacent
+  copies in `wasm/dist` and `web/public/slicer`, and the hash literal in
+  `web/src/slicer/pinnedEngineProvenance.ts` together (`security:check` fails on
+  a stale pin). Full recipe: `wasm/patches/README-snapmaker.md`.
 - The old upstream-v2.3.2 Android submodule/patch history in the linked archive is retained only
   for the retired native-Android implementation. It is not the web parity source
   and must not drive new browser/server behavior.

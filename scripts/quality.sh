@@ -28,6 +28,7 @@ npm --prefix wasm run test:project
 npm --prefix wasm run test:painted
 npm --prefix wasm run test:painted-prime-tower
 npm --prefix wasm run test:fullspectrum
+npm --prefix wasm run test:wave
 
 python3 -m unittest scripts/test_maintenance_security.py
 npm --prefix web audit --include=dev --audit-level=moderate

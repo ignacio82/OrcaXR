@@ -29,7 +29,7 @@
       "count": 4,
       "entries": [
         {
-          "blob": "4cc096b74f748c4353394477682b90f3fcffcc7c",
+          "blob": "90f64eb891c3556f1c8fb3ffe144798d13b55d52",
           "path": "web/public/slicer/artifact-provenance.json"
         },
         {
@@ -41,7 +41,7 @@
           "path": "web/public/slicer/slic3r.mjs"
         },
         {
-          "blob": "ec1e63214cfa96a6fe8e33f0e61cdfdab731fea3",
+          "blob": "8ac07ac636c01640325d6868e434391703f5099e",
           "path": "web/public/slicer/slic3r.wasm"
         }
       ]

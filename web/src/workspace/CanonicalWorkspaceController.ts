@@ -273,6 +273,7 @@ import {
   type ThreePrinterSpaceMapping,
   type ThreeProjectProjectionStatus,
 } from '../project/surfaces/ThreeProjectSurface';
+import { projectUsesWaveOverhangs } from '../settings/waveOverhangsProject';
 
 const STAGING_ASSET_ID = entityId<'asset'>('import:orcaxr:canonical-workspace-staging');
 const MAX_UI_NAME_LENGTH = 160;
@@ -2239,6 +2240,15 @@ export class CanonicalWorkspaceController {
       }
     }
     return facets;
+  }
+
+  /**
+   * Whether any object slices with wave overhangs on, resolving each object's
+   * project → plate → object → part/height-range chain the way the engine does.
+   */
+  usesWaveOverhangs(): boolean {
+    this.assertActive();
+    return projectUsesWaveOverhangs(this.session.project.getSnapshot().state);
   }
 
   /** Return a caller-safe snapshot without exposing the canonical ProjectState. */

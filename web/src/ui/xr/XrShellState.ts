@@ -35,7 +35,8 @@ export type XrEntryTarget =
   | { readonly kind: 'palette-query' }
   | { readonly kind: 'objects-filter' }
   | { readonly kind: 'settings-search' }
-  | { readonly kind: 'setting'; readonly fieldId: string };
+  | { readonly kind: 'setting'; readonly fieldId: string }
+  | { readonly kind: 'wave-setting'; readonly key: string };
 
 export interface XrEntrySession {
   readonly target: XrEntryTarget;
@@ -177,6 +178,7 @@ export class XrShellState {
         this.overlaySnapshot = { kind: 'none' };
         break;
       case 'setting':
+      case 'wave-setting':
         this.overlaySnapshot = { kind: 'none' };
         break;
     }

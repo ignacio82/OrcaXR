@@ -220,6 +220,8 @@ import {
 import { FilamentPalette } from './FilamentPalette';
 import { bedSizeFromProfile, ProfileCatalog, type SlicerProfile } from '../slicer/ProfileLoader';
 import { SlicerClient, type AttestedProjectRoute } from '../slicer/SlicerClient';
+import { engineSupports } from '../slicer/pinnedEngineProvenance';
+import type { WaveOverhangsPort, WaveOverhangsProjectSnapshot } from '../settings/waveOverhangs';
 import {
   filamentPresetAgreesWithSlot,
   matchFilamentPreset,
@@ -7222,6 +7224,16 @@ export class OrcaWorkspace extends xb.Script {
       cycleSettingsTarget: (direction) => this.scopedSettingsPort?.cycleTarget(direction),
       stepSetting: (fieldId, direction) => this.scopedSettingsPort?.step(fieldId, direction),
       setSettingValue: (fieldId, raw) => this.scopedSettingsPort?.setValue(fieldId, raw),
+      waveOverhangs: () => {
+        try {
+          return this.waveOverhangsPort?.getState() ?? null;
+        } catch {
+          // Like the Objects tree: a shell that draws before a canonical
+          // project exists says "no project" rather than taking the app down.
+          return null;
+        }
+      },
+      applyWaveOverhangs: (next, basis) => this.applyXrWaveOverhangs(next, basis),
       contextTarget: () => (this.canonicalProject.getSummary().selectedInstanceIds.length > 0 ? 'object' : 'plate'),
       contextLabel: () => this.xrContextLabel(),
       previewState: () => this.getPreviewState() as unknown as GcodePreviewPanelState,
@@ -7517,6 +7529,51 @@ export class OrcaWorkspace extends xb.Script {
       });
     }
     return swatches;
+  }
+
+  /**
+   * The wave-overhang card's read and commit path; installed by the composition
+   * root, which hands the flat card the same port, so a press in the headset is
+   * the same canonical command a click is on the screen.
+   */
+  private waveOverhangsPort: WaveOverhangsPort | null = null;
+  private unsubscribeWaveOverhangs: (() => void) | null = null;
+
+  public setWaveOverhangsPort(port: WaveOverhangsPort | null): void {
+    this.unsubscribeWaveOverhangs?.();
+    this.waveOverhangsPort = port;
+    // An edit from the flat card has to show in an open headset panel; nothing
+    // else redraws it, and a panel showing a value the project no longer holds
+    // is worse than a hitch.
+    this.unsubscribeWaveOverhangs = port?.subscribe?.(() => this.redrawXrWaveOverhangs()) ?? null;
+    this.redrawXrWaveOverhangs();
+  }
+
+  /** Rebuild the inspector only while it shows the wave panel; nothing else on it changed. */
+  private redrawXrWaveOverhangs(): void {
+    if (this.xrShell?.state.activePanel === 'wave-overhangs') this.xrShell.draw('inspector');
+  }
+
+  private applyXrWaveOverhangs(next: Record<string, unknown>, basis: WaveOverhangsProjectSnapshot): void {
+    const port = this.waveOverhangsPort;
+    if (!port) return;
+    // A commit changes the canonical project, and the subscription installed
+    // with the port redraws the panel. A refused one changes nothing, so the
+    // panel is redrawn here to show the value the project still holds.
+    const refused = (error: unknown) => {
+      port.onError?.(error);
+      this.redrawXrWaveOverhangs();
+    };
+    const committed = () => {
+      if (!port.subscribe) this.redrawXrWaveOverhangs();
+    };
+    try {
+      const result = port.apply(next, basis);
+      if (result instanceof Promise) void result.then(committed, refused);
+      else committed();
+    } catch (error) {
+      refused(error);
+    }
   }
 
   /** The scoped-settings engine; installed by the shell that owns the catalog. */
@@ -9612,7 +9669,28 @@ export class OrcaWorkspace extends xb.Script {
       );
       return null;
     }
+    if (!this.attestedEngineCanSliceProject(attestation)) return null;
     return attestation;
+  }
+
+  /**
+   * Refuse a route whose engine would silently ignore part of the project.
+   *
+   * Attestation proves which build an external server runs, and so what it can
+   * do: the native CLI build carries no wave-overhang port, so it would accept a
+   * project with waves on, read none of the wave keys, and return G-code that
+   * prints those overhangs as if the switch were off. Better to say so before
+   * anything leaves the browser than to hand back a print that fails on the bed.
+   */
+  private attestedEngineCanSliceProject(route: Extract<AttestedProjectRoute, { attested: true }>): boolean {
+    if (engineSupports(route.engine, 'wave-overhangs') || !this.canonicalProject.usesWaveOverhangs()) return true;
+    this.setStatus(
+      t(
+        'workspace.orcaWorkspace.engineLacksWaveOverhangs',
+        'slice failed: wave overhangs are on, but the external slicer runs the native Snapmaker Orca CLI, which has no wave-overhang support and would print those overhangs as if they were off. Disable the external slicer to slice in the browser engine, or turn wave overhangs off.',
+      ),
+    );
+    return false;
   }
 
   public async sliceNow() {

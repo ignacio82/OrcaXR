@@ -4111,24 +4111,31 @@ function setupDomUI(
     if (!settingsHost) throw new Error('The settings surface is missing. Reload the application.');
     await mountSettingsEditors({ workspace, registry, actionCtx, uiState, settingsHost, statusText }, scope);
   });
+  // One port serves the flat card and the headset panel: the same read, the
+  // same canonical commit, the same error line. The headset needs it even
+  // where the flat card has no host.
   const wavePanelHost = document.getElementById('wave-overhangs-panel-host');
-  if (wavePanelHost)
-    void initialization.mount('wave-overhangs', 'Wave overhang controls', async (scope) => {
-      surfaces.attach(scope);
-      const { mountWaveOverhangsPanel } = await scope.import(import('./ui/dom/WaveOverhangsPanel'));
-      scope.defer(
-        mountWaveOverhangsPanel({
-          container: wavePanelHost,
-          workspace,
-          registry,
-          actionCtx,
-          getUiState: () => uiState.get(),
-          onErrorMessage: (msg) => {
-            statusText.textContent = msg;
-          },
-        }),
-      );
-    });
+  void initialization.mount('wave-overhangs', 'Wave overhang controls', async (scope) => {
+    surfaces.attach(scope);
+    const { createWaveOverhangsPort, mountWaveOverhangsPanel } = await scope.import(
+      import('./ui/dom/WaveOverhangsPanel'),
+    );
+    const waveOptions = {
+      workspace,
+      registry,
+      actionCtx,
+      getUiState: () => uiState.get(),
+      onErrorMessage: (msg: string) => {
+        statusText.textContent = msg;
+      },
+    };
+    const wavePort = createWaveOverhangsPort(waveOptions);
+    workspace.setWaveOverhangsPort(wavePort);
+    scope.defer(() => workspace.setWaveOverhangsPort(null));
+    if (wavePanelHost) {
+      scope.defer(mountWaveOverhangsPanel({ ...waveOptions, container: wavePanelHost, port: wavePort }));
+    }
+  });
 
   // Filament palette: color swatches that drive paint + 3MF display + slice.
   const swatchWrap = document.getElementById('filament-swatches') as HTMLDivElement;

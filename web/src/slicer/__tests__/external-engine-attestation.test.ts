@@ -106,6 +106,8 @@ await test('canonical route capture binds the endpoint and exact attested engine
       commit: PINNED_ENGINE_PROVENANCE.commit,
       artifactHash: `sha256:${payload.engine === 'wasm' ? attested.artifacts['slic3r.wasm'] : attestedCli.artifacts['snapmaker-orca']}`,
     });
+    // Which build was proven decides what the route can slice: only WASM carries the wave-overhang port.
+    assert.equal(result.engine, payload.engine);
     assert.ok(Object.isFrozen(result.route));
     assert.ok(Object.isFrozen(result.externalEngine));
   }
@@ -179,7 +181,7 @@ await test('local canonical slicing does not probe any external endpoint', async
     await SlicerClient.attestCapturedProjectRoute(async () => {
       throw new Error('A browser route must not probe');
     }),
-    { attested: true, route: { kind: 'browser-wasm' } },
+    { attested: true, route: { kind: 'browser-wasm' }, engine: 'wasm' },
   );
 });
 

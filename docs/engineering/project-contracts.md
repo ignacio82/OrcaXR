@@ -293,17 +293,32 @@ are fixture-specific evidence, not device-independent performance guarantees.
   worktree — a checkout left on another branch must not be able to make a
   provenance check pass. Traces that could not reach upstream say so on the
   result line rather than printing a bare tick.
-- Wave-overhang slicing is integrated in `libslic3r` (`src/libslic3r/WaveOverhangs/`)
-  supporting pluggable algorithms: Janis A. Andersons wavefront propagation
-  (`AndersonsGenerator`) and Kaiser LaSO lateral seed-curve offsetting (`KaiserGenerator`),
-  dispatched via `wave_overhang_algorithm`. Wave toolpaths replace cantilever overhangs,
-  clip inner perimeters in the overhang zone, carve fill surfaces, and record floor/shadow
-  polygons. Floor layers enforce Hilbert-curve solid infill (`wave_overhang_floor_use_hilbert`)
-  to minimize thermal warping stress, while speed, fan, nozzle temperature, and end-of-line
-  retraction overrides apply during G-code generation with structured debug markers
-  (`; WAVE_OVERHANG_BUILD`, `; WAVE_OVERHANG_CONFIG`, `;_WAVE_OVERHANG_FAN_START/END`). Both
-  standard and tree support generator stages subtract wave-covered polygons when
-  `support_remaining_areas_after_wave_overhangs` is active.
+- **Wave overhangs are a port of dennisklappe/OrcaSlicer-WaveOverhangs v0.4.0 (`f6a901d5`),
+  in the WASM engine only.** One generator (Andersons wavefront propagation; upstream deleted
+  Kaiser LaSO and `wave_overhang_algorithm` in v0.4.0), 38 `PrintRegionConfig` keys, floor
+  layers that *replace* bottom shells over the wave shadow. The port deliberately differs from
+  upstream in five ways, each pinned by `wasm/test_slice_wave_overhang.mjs` (`npm --prefix wasm
+  run test:wave`, in CI) and listed in `wasm/patches/README-snapmaker.md`: fill carve / wall clip
+  / support masks claim only the overhang components the waves *filled* (upstream claimed the
+  whole zone and erased bridges it left alone); fan and nozzle-temperature overrides are scoped
+  to a run of wave paths and restore the *active* tool's temperature (upstream toggled them
+  around every line and restored filament 1); `apply_extra_perimeters` is told which `loops`
+  entry is the island's (upstream's `.back()` trapped wasm32 on wall-less islands); tree
+  supports subtract wave coverage instead of clearing every overhang; the BUILD line names
+  `v0.4.0`. With waves off the G-code must stay byte-identical to the pre-wave engine apart from
+  the 38 CONFIG_BLOCK keys. The keys are absent from the generated settings schema (it is built
+  from pinned upstream), so `web/src/settings/waveOverhangs.ts` is their only description:
+  engine defaults and bounds (the WASM test and a settings test check them against the engine),
+  upstream page order and gating, labels, guidance, and which keys are inert (`min_angle`,
+  `seam_mode`, `spacing_mode` — nothing reads them). The flat card (`ui/dom/WaveOverhangsPanel`)
+  and the headset panel (`ui/xr/XrWaveOverhangsPanel`) both draw from it and commit through one
+  `WaveOverhangsPort` (`settings_apply_project`); never show a number the engine will not use.
+  `SAFE_KEYS` must list exactly the table's keys. The native CLI server has no wave port, so
+  `PINNED_ENGINE_PROVENANCE.features` says so, attested routes carry the proven engine kind,
+  and `resolveCanonicalSliceRoute` refuses a CLI route for a project whose resolved
+  project → plate → object → part/range chain turns waves on. That check lives in the
+  text-free `settings/waveOverhangsProject.ts`: main-bundle code importing `waveOverhangs.ts`
+  drags every label and tooltip into the main chunk and fails `size:check`.
 - **Localization has one seam, and canonical code may not touch it (P10.4).** User-facing text
   resolves through `src/l10n/`, and it is attached to the *action registry*
   (`ActionRegistry.useTextSource`), not to a shell: every surface already reads
@@ -399,8 +414,10 @@ are fixture-specific evidence, not device-independent performance guarantees.
 - Canonical work may leave the browser only for an **attested** engine. The
   server's `GET /engine` hashes the artifacts it will actually load and reports
   the pinned commit; the client compares both against
-  `slicer/pinnedEngineProvenance.ts`, generated from
-  `wasm/artifact-provenance.json`. Both engines can prove themselves, and they
+  `slicer/pinnedEngineProvenance.ts`, a hand-kept literal that `security:check`
+  and Docker assembly hold to `wasm/artifact-provenance.json`. The proof also
+  names the engine kind, which decides the features a route has
+  (`PINNED_ENGINE_PROVENANCE.features`). Both engines can prove themselves, and they
   prove different things: a WASM server must match the exact artifact digests
   the client verified for itself, while the native CLI has no WASM artifacts to
   compare and instead proves its upstream commit plus the exact

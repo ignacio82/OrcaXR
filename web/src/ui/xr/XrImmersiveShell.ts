@@ -18,6 +18,12 @@ import { XR_PANELS_SECTION_ID, MENU_SECTIONS } from '../../actions/ActionRegistr
 import { INITIAL_UI_STATE, type UiStateShape } from '../../actions/UiState';
 import type { ObjectTreeEntityRef, ObjectTreeProjection, ObjectTreeSelectionSnapshot } from '../../project/objects';
 import type { ScopedStepperRow, ScopedStepperView } from '../../settings/editor/scopedStepper';
+import {
+  waveOptionText,
+  withWaveValue,
+  type WaveOverhangOption,
+  type WaveOverhangsProjectSnapshot,
+} from '../../settings/waveOverhangs';
 import type { GcodePreviewViewPatch } from '../../slicer/GcodePreviewSession';
 import type { GcodePreviewPanelState } from '../dom/GcodePreviewPanel';
 import { t } from '../../l10n/t';
@@ -38,6 +44,7 @@ import { renderXrObjectsPanel } from './XrObjectsPanel';
 import { renderXrPanelHost } from './XrPanelHost';
 import { xrGroupPanelId, xrInspectorPanels, xrPanelGroup, type XrPanelDescriptor, type XrPanelId } from './XrPanels';
 import { renderXrSettingsPanel } from './XrSettingsPanel';
+import { renderXrWaveOverhangsPanel } from './XrWaveOverhangsPanel';
 import { XrShellState, type XrEntrySession, type XrShellChange } from './XrShellState';
 import {
   renderXrToolRail,
@@ -106,6 +113,11 @@ export interface XrShellHost {
   cycleSettingsTarget(direction: 1 | -1): void;
   stepSetting(fieldId: string, direction: 1 | -1): void;
   setSettingValue(fieldId: string, raw: string): void;
+
+  /** The project's wave-overhang settings; `null` before a project exists. */
+  waveOverhangs(): WaveOverhangsProjectSnapshot | null;
+  /** Commit one complete next override map, computed from `basis`. */
+  applyWaveOverhangs(next: Record<string, unknown>, basis: WaveOverhangsProjectSnapshot): void;
 
   contextTarget(): ContextTarget;
   contextLabel(): string;
@@ -309,6 +321,7 @@ export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
   private drawPanelBody(body: PanelNode, id: XrPanelId | null): void {
     if (id === 'objects') return this.drawObjects(body);
     if (id === 'settings') return this.drawSettings(body);
+    if (id === 'wave-overhangs') return this.drawWaveOverhangs(body);
     const group = id === null ? undefined : xrPanelGroup(id);
     if (group === undefined) return;
     const state = this.uiState();
@@ -391,6 +404,17 @@ export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
       onStep: (fieldId, direction) => this.host.stepSetting(fieldId, direction),
       onSetValue: (fieldId, raw) => this.host.setSettingValue(fieldId, raw),
       onEditValue: (row) => this.state.beginEntry(entryForSetting(row)),
+    });
+  }
+
+  private drawWaveOverhangs(body: PanelNode): void {
+    const snapshot = this.host.waveOverhangs();
+    renderXrWaveOverhangsPanel(this.ui, body, {
+      snapshot,
+      onApply: (next) => {
+        if (snapshot) this.host.applyWaveOverhangs(next, snapshot);
+      },
+      onEditValue: (option, current) => this.state.beginEntry(entryForWaveOption(option, current)),
     });
   }
 
@@ -577,6 +601,21 @@ export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
     const session = this.state.entry;
     const target = this.state.commitEntry(value);
     if (target?.kind === 'setting' && session) this.host.setSettingValue(target.fieldId, value);
+    if (target?.kind === 'wave-setting') {
+      // Read fresh: the keypad was open long enough for the project to move on,
+      // and the guard must be the revision this value is applied over.
+      const snapshot = this.host.waveOverhangs();
+      const number = Number(value);
+      if (!snapshot || value.trim() === '' || !Number.isFinite(number)) return;
+      let next: Record<string, unknown>;
+      try {
+        next = withWaveValue(snapshot.overrides, target.key, number);
+      } catch {
+        // The keypad already refuses out-of-range input; anything else is not a value.
+        return;
+      }
+      this.host.applyWaveOverhangs(next, snapshot);
+    }
   }
 
   private run(actionId: string, surface: ActionSurface): void {
@@ -597,6 +636,20 @@ function overlayCard(kind: string, layout: 'keypad' | 'keyboard' | undefined): X
 function sectionTitle(sectionId: string): string {
   if (sectionId === XR_PANELS_SECTION_ID) return t('ui.xrImmersiveShell.panels', 'Panels');
   return MENU_SECTIONS.find((section) => String(section.id) === sectionId)?.label ?? sectionId;
+}
+
+/** The keypad a numeric wave-overhang option asks for: its engine bounds, unit, and integer-ness. */
+export function entryForWaveOption(option: WaveOverhangOption, current: number): XrEntrySession {
+  return {
+    target: { kind: 'wave-setting', key: option.key },
+    layout: 'keypad',
+    title: waveOptionText(option.key).label,
+    initial: String(current),
+    ...(option.unit ? { unit: option.unit } : {}),
+    ...(option.min === undefined ? {} : { minimum: option.min }),
+    ...(option.max === undefined ? {} : { maximum: option.max }),
+    integer: option.kind === 'int',
+  };
 }
 
 /** The entry a settings row asks for, given what kind of value it holds. */
