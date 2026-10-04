@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import { SAFE_KEYS } from '../../slicer/profileKeys';
 import { projectUsesWaveOverhangs, type WaveProjectShape } from '../waveOverhangsProject';
@@ -88,24 +89,15 @@ test('the defaults match the engine port, not the invented numbers the old panel
   assert.equal(option('wave_overhang_flow_mm3_per_mm').engineDefault, 0.15);
 });
 
-test('the defaults agree with the engine source the WASM build compiles, when that checkout is present', () => {
-  // The WASM slice test compares the defaults with what the built engine writes;
-  // this checks the same table against the patched PrintConfig.cpp when a fork
-  // checkout is available, so a hand edit to either side is caught without a slice.
-  let source: string;
-  try {
-    source = readFileSync(
-      new URL('../../../../third_party/SnapmakerOrca/src/libslic3r/PrintConfig.cpp', import.meta.url),
-      'utf8',
-    );
-  } catch {
-    console.log('    (skipped: no third_party/SnapmakerOrca checkout)');
-    return;
-  }
-  if (!source.includes('"wave_overhangs"')) {
-    console.log('    (skipped: the checkout carries no wave-overhang port)');
-    return;
-  }
+test('the bounds agree with the pinned engine source plus the tracked build patch', () => {
+  // A developer checkout may contain a different port. Read the exact pinned
+  // Git blob and apply the build patch in an owned temporary directory instead.
+  // Missing source/failed patch application fails this gate; it never skips.
+  const source = execFileSync(
+    process.execPath,
+    [fileURLToPath(new URL('../../../../tools/parity/wave-config.mjs', import.meta.url))],
+    { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 },
+  );
   for (const entry of WAVE_OVERHANG_OPTIONS) {
     const start = source.indexOf(`def = this->add("${entry.key}"`);
     assert.ok(start >= 0, `${entry.key} is defined in PrintConfig.cpp`);
