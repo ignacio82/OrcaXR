@@ -120,3 +120,4 @@ server/wasm-artifacts/
 /tools/cross-platform/__pycache__/
 
 /tools/renderer/results/
+/tools/native-engine/results/

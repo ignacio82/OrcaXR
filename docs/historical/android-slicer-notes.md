@@ -1,7 +1,8 @@
 # Historical native Android slicer notes
 
-Archived implementation history from GEMINI.md. Native Android is no longer
-a target. These upstream-v2.3.2/JNI/Gradle/profile notes describe the retired
+Archived implementation history from GEMINI.md. Current native Android work
+follows the [new implementation plan](../android-native-rust-plan.md). These
+upstream-v2.3.2/JNI/Gradle/profile notes describe the retired
 implementation, including experiments and superseded behavior. They do not
 authorize changing the current Snapmaker v2.3.4 web/server pin or overriding
 [current engine constraints](../engineering/slicing.md). Historical local

@@ -19,6 +19,11 @@ with SDK validation tests and non-XR startup checks. Spatial rendering and updat
 latency remain unverified; the Linux/SwiftShader XR-image diagnostic did not boot.
 The SceneCore comparison, physical-device qualification and current-engine Android
 slice remain open. Neither candidate closes a Phase 2 checklist item or exit.
+The [native engine dependency probe](engineering/slicing.md#native-android-dependency-feasibility)
+now builds the current pin's TBB runtime for both ABIs, verifies its packaged
+dependency closure and ELF alignment, and executes allocator/task checks on an
+x86_64 Android emulator. It does not establish a libslic3r build, an arm64 runtime
+result, or a valid native slice.
 
 The first Phase 3 computation implementation now includes the Rust rich G-code
 parser, immutable source/index ownership, bounded windows, cooperative native

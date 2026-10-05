@@ -71,6 +71,9 @@ engine (`libslic3r` via WASM) as the computational core.
   bounded immutable chunk replacement for sample paint. SDK contract and
   non-XR startup checks do not qualify its spatial rendering; see native-core
   evidence before selecting an XR renderer.
+  Current-engine Android feasibility tooling builds the pinned TBB dependency
+  and allocator/task probes in isolated worktrees. It does not build or qualify
+  libslic3r yet; see the native dependency evidence in the slicing document.
   Production native rendering, search and physical-device qualification remain open. Native PCVR
   remains outside scope.
 

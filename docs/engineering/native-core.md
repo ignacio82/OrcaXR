@@ -54,7 +54,10 @@ AGP 9.2.1's typed `android.sourceSets` access produced a runtime cast failure in
 this build. Generated JNI directories are registered through
 `androidComponents.onVariants` and `addGeneratedSourceDirectory`, which also
 establish the Rust task dependency. The native engine is deliberately absent from
-this build; do not substitute the historical engine script.
+this application build; do not substitute the historical engine script. The
+separate [current-engine dependency probes](slicing.md#native-android-dependency-feasibility)
+now provide a clean TBB build and x86_64 runtime checks. They do not provide a
+native engine or a slicing route.
 
 ## Flat renderer experiment
 

@@ -42,6 +42,15 @@ clipping, toolpaths, nonuniform/mirrored transforms, spatial lifecycle and
 performance remain open, alongside native engine/project workflows and physical
 qualification. No migration phase exit is closed by these candidate checks.
 
+The [current-engine dependency proof](engineering/slicing.md#native-android-dependency-feasibility)
+now builds the pinned recipe's TBB 2021.5.0 archive with a tracked Android CMake
+port for arm64 and x86_64 using NDK 29/Clang 21. Eight ELF files pass ABI/alignment and dependency
+closure checks. Seven mutation tests reject invalid packages; three x86_64
+emulator runs exercise real allocation and task scheduling. This is not a
+libslic3r build or slice, and does not retire historical arm64 painting/allocator
+concerns. The complete dependency graph, engine adapter, output comparison and
+physical qualification remain open.
+
 The Rust preview projection now passes 1,567 host reference cases covering all
 12 modes, filters, legends, exact Float32 outputs, malformed inputs and unsupported
 metadata. Resource tests add bounded-window projection, cancellation and independent
