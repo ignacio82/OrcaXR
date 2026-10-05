@@ -86,8 +86,11 @@ allocation evidence are linked below. Lossless schema-1 typed candidates, immuta
 graph ownership, streamed full-state fingerprints, empty-project construction and
 basic graph/filament selectors now exist too. Eleven TypeScript-derived states,
 record/literal drift checks and an allocation probe cover this model boundary.
-Semantic graph validation, settings resolution, commands, history policy and
-native session execution remain open; these libraries do not enable Android editing.
+Rust settings scope eligibility, strict layered resolution, import sanitization,
+explanations and project configuration selectors now use the same pinned engine
+table as the browser, with independent TypeScript comparisons. Semantic graph and
+option/profile validation, commands, history policy and native session execution
+remain open; these libraries do not enable Android editing.
 
 Build an adaptive native Android application for phones, tablets, Googlebook,
 and Android XR while preserving the web application. Introduce Rust as a shared
@@ -602,14 +605,21 @@ and replay coverage for the complete current command inventory.
   graph lookup, topology comparison and filament inheritance selectors. Independent
   references cover 33 record layouts, 11 literal domains, 11 full states, four
   factories and five direct candidate edits. These are not command traces.
-  Semantic graph validation, settings resolution, remaining selectors, history
-  policy and session execution remain open.
+  Project configuration selectors now also preserve engine precedence, ignored
+  settings and local/inherited/source projections through the shared scope table.
+  Semantic graph validation, bounded projections, history policy and session
+  execution remain open.
 - [ ] Port commands and transaction/history semantics by family, preserving
   rollback revision behavior, coalescing, checkpoint acknowledgement, selection,
   and history retention accounting. Test every command's failed and stale cases.
 - [ ] Port settings resolution, physical/mixed filament identities, profile
   selection semantics, and canonical slice preflight. Consume the generated
   pinned schema/catalog rather than reconstructing defaults in Kotlin.
+  Rust scope eligibility, strict layer validation/resolution, explanations,
+  explicit import sanitization and project config selectors now exist. The table
+  comes from the browser's pinned extractor; 3,439 layer cases and 100 graph
+  queries compare reference results/errors. This is scope-policy computation,
+  not option-value/profile validation, native settings commands or preflight.
 - [ ] Provide bounded object-tree, inspector, capability, selection, and renderer
   projections. Subscribe to revisioned deltas; do not send the complete project
   or all geometry to every panel after each edit.

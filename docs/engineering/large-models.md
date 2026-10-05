@@ -36,6 +36,16 @@ are fixture-specific evidence, not device-independent performance guarantees.
   metadata ownership, not mesh import, history policy, Android memory or device
   latency. Full hashing still visits every field; this is not incremental hashing.
 
+- Rust settings resolution, explanations, sanitization and project config
+  projections borrow immutable JSON values. Resolved maps also borrow their keys;
+  diagnostic messages own their text. Creating or cloning a view
+  copies map entries, not configuration payloads. A synthetic 8 MiB UTF-16 notes
+  string survives 200 combined resolution cycles with zero payload-sized
+  allocations; largest measured internal allocation is 368 bytes. The explicit
+  public-export positive control makes one 8 MiB copy. Pointer checks verify that
+  effective and inherited values refer to the original payload. This is host
+  allocation evidence, not a device budget or a native settings-panel benchmark.
+
 Measured on `~/Downloads/narwhal.3mf` — 1,897,256 facets, 629k of them painted,
 stored as 161 MB of mesh XML inside a 28 MB archive. Every number below is from
 that project on a desktop; a Galaxy XR is several times slower, so these are

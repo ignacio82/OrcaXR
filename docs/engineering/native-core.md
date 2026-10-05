@@ -467,8 +467,8 @@ it. Typed decoding checks required fields, literal domains and tuple lengths.
 
 `ProjectData` owns an immutable candidate and its cached full-state FNV fingerprint.
 It does **not** prove semantic validity: tests deliberately construct candidates
-with invalid timestamps and dangling references. Native graph validation, settings
-resolution, history, commands and session execution are still required. The
+with invalid timestamps and dangling references. Native graph validation, option
+and profile validation, history, commands and session execution are still required. The
 TypeScript validator's `Date.parse` acceptance and layer-event `toFixed(4)`
 collision keys need compatibility work before they can be replaced. No JNI/WASM
 model endpoint or Android editing route is introduced by this library.
@@ -525,6 +525,70 @@ accessibility and localization, HTTP/HTTPS server deployment and real slicing
 fixtures. All three full npm audits report zero vulnerabilities. Main-entry size
 remains 2,101,384 bytes and total JavaScript 10,436,886 bytes, within unchanged
 budgets. These checks preserve the current web release; Phase 4 remains open.
+
+Rust settings policy now reuses the browser's pinned scope extractor, including
+its four exact engine blobs and table digest. The generated table has 527 project,
+eight plate, 242 object, 123 part and 124 height-range keys (532 unique keys).
+Generation first checks the browser table against that same extraction. Native
+lookup compares lossless UTF-16 keys with the sorted ASCII engine keys; it neither
+normalizes imported names nor invents settings defaults.
+
+The library implements scope eligibility, narrowest scope, strict layer validation,
+stable precedence resolution, winner/shadowed explanations, canonical output and
+explicit import sanitization. Unknown textual scopes and duplicate node layers
+retain ordered diagnostics; non-text/invalid JSON belongs to host shape decoding.
+Sanitization takes a typed recognized scope and preserves the original map while
+returning a filtered view plus every removal. The separate project selector checks
+plate/object/volume/range parent relationships and returns effective, inherited,
+local, source-by-key and ignored projections. Read-only results borrow immutable
+values; explicit public exports copy. Errors keep source text in typed UI messages
+without exposing it in routine Debug/Display output.
+
+During this port a failing browser regression showed that an ignored plate value
+could hide an inherited value in the project configuration projection: project `wall_loops=2`
+plus stored plate `wall_loops=99` correctly resolved to 2, but incorrectly exposed
+99 as local and omitted inherited 2. Both implementations now exclude that ignored
+local entry and retain the inherited value. The stored foreign field remains 99
+for lossless export. Ignored diagnostics also use canonical UTF-16 key order;
+numeric-looking keys and insertion order no longer change the result after a
+canonical save/reopen. Existing effective engine values and scope eligibility are
+unchanged by these corrections.
+The current production caller consumes the effective plate configuration for
+slice preflight; this fix does not establish a new inspector or native UI flow.
+
+The independently executed TypeScript corpus covers **544 known/foreign keys,
+3,439 layer cases, 15 sanitizers and 100 graph queries**. It binds reference source
+hashes and the engine table provenance. Five Rust integration tests compare exact
+canonical results, ordered issues, aggregate error messages, winner/shadowed
+sources and invalid parent requests. Cases cover every engine key at all five
+scopes, reversed precedence, stable ties, duplicate omitted/empty/NUL IDs, unknown
+scope names, Unicode keys/IDs, explicit null values and own prototype properties.
+Both browser projection regressions pass with the existing scoped-setting tests.
+The allocation probe performs 200 combined resolution/explanation/sanitization/
+graph-query cycles over an **8,388,608-byte** configuration string with **zero
+payload-sized allocations**, largest internal allocation **368 bytes**. An explicit
+public export makes one measured payload copy; pointer checks confirm sharing.
+These are scope-policy and host ownership results, not option-value validation,
+profile compatibility, settings commands, slice preflight, native UI execution or
+physical-device qualification. CI regenerates the table and corpus and runs the
+tests and probe; Phase 4 stays open.
+
+For this settings-library update, strict workspace Clippy/tests, release project
+tests, Cargo audit and compilation for wasm32 and both Android targets pass.
+The browser set `46e2fdbafc9e` binds 81 source inputs and retains the byte-identical
+556,646-byte WASM executable. Android debug/release assembly, core JVM tests,
+lint, both APK provenance/alignment checks and browser WASM smoke pass. The owned
+API 34 x86_64 emulator passes 24 core tests, three cold starts, three renderer
+tests and non-XR SceneCore startup. Those platform tests execute existing bindings;
+the new settings module is executed by the host differential tests and allocation
+probe, and has no JNI/WASM session endpoint yet. The redacted source scan covers
+1,693 UTF-8 files (six NUL-normalized) with no findings; actionlint passes.
+The complete repository gate passes with 267 web unit-test files, 97 project
+test files, both preview adapters, startup/offline/recovery, accessibility and
+localization, HTTP/HTTPS server deployment and real slicing fixtures. All three
+full npm audits report zero vulnerabilities. Main-entry size is 2,101,441 bytes
+and total JavaScript 10,436,944 bytes, within unchanged budgets. No physical
+device or hosted-CI qualification was performed for this update.
 
 The browser now has a transitional `AsyncEditorSession` over its TypeScript
 authority. Undo/Redo and plate lifecycle actions await acknowledgements; guarded queued execution,
@@ -1016,6 +1080,7 @@ node tools/cross-platform/generate-gcode-metadata.mjs
 node tools/cross-platform/generate-gcode-requests.mjs
 node tools/cross-platform/test-request-generator.mjs
 node tools/cross-platform/generate-project-intents.mjs
+node tools/cross-platform/generate-setting-scopes.mjs
 node tools/cross-platform/test-project-intent-generator.mjs
 node tools/cross-platform/project-intent-vectors.mjs
 node tools/cross-platform/package-browser-core.mjs
@@ -1026,6 +1091,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/projec
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/asset-repository-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-refinement-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-model-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-resolution-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
@@ -1046,6 +1112,7 @@ cargo test -p orcaxr-project --release --locked --jobs 2
 cargo run -p orcaxr-project --example asset_repository_benchmark --release --locked --jobs 2
 cargo run -p orcaxr-project --example facet_sparsity_benchmark --release --locked --jobs 2
 cargo run -p orcaxr-project --example project_model_benchmark --release --locked --jobs 2
+cargo run -p orcaxr-project --example settings_resolution_benchmark --release --locked --jobs 2
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target wasm32-unknown-unknown
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target aarch64-linux-android
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target x86_64-linux-android

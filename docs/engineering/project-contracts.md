@@ -75,14 +75,37 @@ are fixture-specific evidence, not device-independent performance guarantees.
   cannot shadow any known field, even an absent optional one.
   Empty-project construction consumes injected IDs in browser order and accepts
   host timestamps. Graph lookups preserve traversal order; topology comparison
-  and filament inheritance match the reference. These APIs do not resolve settings
-  or enforce cross-references, mesh layouts, timestamps, topology guards, commands
+  and filament inheritance match the reference. The separate settings library
+  below resolves configuration. These candidates do not enforce cross-references,
+  mesh layouts, timestamps, topology guards, commands
   or session/history policy. Future semantic validation must preserve the current
   `Date.parse` acceptance and layer-event `toFixed(4)` collision behavior; strict
   ISO parsing or ordinary Rust formatting cannot silently replace them.
   Unknown annotation/refinement fields stay intact in the candidate, while the
   separate facet computation view owns its existing semantic checks. Persisted
   values do not inherit the stateless canonicalization request's parser limits.
+
+- Rust settings policy uses a generated projection of the same pinned scope
+  extractor as the browser. Project/plate/object/part/height-range precedence and
+  eligibility cannot be hand-maintained independently. Strict layer validation
+  reports unknown scope names, duplicate node layers and every out-of-scope key
+  in caller-layer/canonical-key order. Omitted and empty node IDs have the same
+  duplicate identity. Resolution sorts stably by scope, preserving caller order
+  among distinct nodes at the same scope. Explanations identify the winner and
+  losing layers in reverse precedence. Import sanitization returns kept values
+  and removal diagnostics; it never mutates the original map. Authoring uses the
+  strict path. Values, including unknown base metadata and own `__proto__` data,
+  remain lossless UTF-16 JSON. Native views borrow immutable values; explicit
+  mutable exports copy.
+  Project configuration selectors verify parent relationships, layer the allowed
+  keys, retain imported foreign data in the graph and report ignored keys using
+  canonical UTF-16 ordering within each scope. A stored local key that the engine
+  ignores must not appear in `local` or remove the actual value from `inherited`,
+  even when an ancestor contributes the same key. This projection correction is
+  covered in both browser and native reference tests. These APIs establish scope
+  policy, not option value/type/range validation, profile compatibility, commands,
+  preflight or a native session endpoint. Diagnostic UI text can contain source
+  IDs/keys; native Debug/Display output keeps those values redacted.
 
 - `AsyncEditorSession` orders local queries and mutations over the existing
   TypeScript session. It captures project/revision/semantic/asset identity plus

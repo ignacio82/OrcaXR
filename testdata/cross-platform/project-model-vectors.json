@@ -15,7 +15,7 @@
     },
     {
       "path": "web/src/project/domain/selectors.ts",
-      "sha256": "c6d41720e94a36e04f276c5c8207c4c42ec2bc68d45bedfeb0207015fa892407"
+      "sha256": "b91b551fd5509bd7c858d0b654d73d8b21cd4ec719be84fae8b4bf034e925341"
     },
     {
       "path": "web/src/project/domain/validation.ts",

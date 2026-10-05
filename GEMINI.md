@@ -135,6 +135,11 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Generate settings and scope tables from pinned definitions. Engine precedence
   is object, then part, then height range; the last wins. Reject authoring at
   unsupported scopes while preserving imported values for lossless round trips.
+  Rust scope eligibility, layered resolution and project config selectors use
+  the same pinned extractor. Resolved views borrow immutable values. Ignored
+  local keys must not hide inherited values, and ignored-setting diagnostics use
+  canonical UTF-16 key order so save/reopen preserves them. These library APIs
+  do not yet validate option values/profiles or execute native settings commands.
 - The web profile corpus is a pinned overlay: registered vendor leaves are exact
   mirrors; local target adaptations are SHA-256 locked. Add complete compatible
   nozzle families. Never hand-edit a mirrored leaf or generated catalog.

@@ -205,7 +205,7 @@ debug/release tests. The 300,000-assignment probe retains 20 edits with no copie
 of its 9,600,000-byte paint-index array; largest internal allocation is 552 bytes,
 and public export makes one measured payload copy. These are host library results,
 not command/history replay or device qualification. Semantic graph validation,
-settings resolution, native commands/history/session execution and Android editing
+option/profile validation, native commands/history/session execution and Android editing
 remain unimplemented. CI checks model fixture drift and the allocation probe.
 Strict workspace Clippy/tests, Cargo audit, three target checks, Android
 debug/release builds, JVM tests/lint, both APK provenance/alignment checks and
@@ -216,6 +216,29 @@ gate passes with 267 web unit-test files, 97 project files, browser recovery/off
 and accessibility checks, HTTP/HTTPS deployment and real slicing. All three full
 npm audits are clean; the redacted source scan covers 1,685 UTF-8 files with no
 findings. Physical-device and hosted-CI qualification remain open.
+
+Rust settings scope policy and project config selectors now use the same pinned
+engine extraction as the browser. Eligibility, strict layering, explanations,
+import sanitization and parent-reference checks compare against 544 known/foreign
+keys, 3,439 layer cases, 15 sanitizers and 100 graph queries. Five Rust tests cover
+complete results and errors, UTF-16 data, stable precedence and public-copy
+isolation. The port exposed a browser selector defect: an ignored local key could
+hide its inherited value. Regression tests now preserve that inherited projection
+and keep ignored diagnostics deterministic across canonical save/reopen, without
+removing foreign stored data. Native read-only views share immutable payloads;
+200 resolution cycles over 8 MiB of notes allocate no payload copies, while an
+explicit export makes one. Largest measured internal allocation is 368 bytes.
+Option/profile validation, command/session integration, native editing and physical
+qualification remain open; this library does not close Phase 4.
+Strict Clippy, workspace/release tests, Cargo audit, three target checks,
+Android builds/JVM tests/lint, APK provenance/alignment, browser WASM smoke and
+the owned-emulator suite pass. Those platform bindings do not execute the new
+settings library; its runtime evidence is the host reference tests and allocation
+probe. The complete repository gate passes, including all 267 web and 97 project
+test files, production browser/recovery/accessibility journeys, HTTP/HTTPS
+deployment and real slicing. All three full npm audits report zero vulnerabilities;
+the redacted source scan covers 1,693 UTF-8 files with no findings. Hosted CI and
+physical-device qualification remain open.
 
 Prepared plate commands now use one versioned schema generating TypeScript,
 Rust and Kotlin types, strict decoding and bounded encoding. All seven production

@@ -10,6 +10,7 @@ import type {
 } from './model';
 import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from './ids';
 import { scopesForSetting, settingScopeAllows, type SettingScope } from './settingScopes';
+import { compareCanonicalText } from './canonical';
 
 export function findPlate(state: ProjectState, id: PlateId): ProjectPlate | undefined {
   return state.plates.find((plate) => plate.id === id);
@@ -147,7 +148,10 @@ export function resolveConfig(state: ProjectState, request: ConfigResolutionRequ
   const ignored: IgnoredScopedSetting[] = [];
   for (const scope of scopes) {
     const settingScope = SCOPE_REF_TO_SETTING_SCOPE[scope.ref.kind];
-    for (const [key, value] of Object.entries(scope.config)) {
+    // Diagnostics must survive canonical save/reopen and native decoding without
+    // depending on a JavaScript object's insertion order (including numeric keys).
+    for (const key of Object.keys(scope.config).sort(compareCanonicalText)) {
+      const value = scope.config[key];
       // Storing a key where the engine will not read it is not a weaker form of
       // setting it — it does nothing at all, so layering it here would make
       // every reader disagree with the slice.
@@ -160,9 +164,10 @@ export function resolveConfig(state: ProjectState, request: ConfigResolutionRequ
     }
   }
   const stored = scopes.at(-1)?.config ?? {};
+  const localScope = SCOPE_REF_TO_SETTING_SCOPE[scopes.at(-1)!.ref.kind];
   const local: ConfigMap = {};
   for (const [key, value] of Object.entries(stored)) {
-    if (Object.prototype.hasOwnProperty.call(effective, key)) local[key] = value;
+    if (settingScopeAllows(localScope, key) && Object.prototype.hasOwnProperty.call(effective, key)) local[key] = value;
   }
   const inherited: ConfigMap = {};
   for (const [key, value] of Object.entries(effective)) {

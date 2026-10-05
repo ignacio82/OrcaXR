@@ -162,6 +162,43 @@ test('reports a stored key the engine never reads rather than layering it', () =
   assert.match(resolved.ignored[0].reason, /not from the plate scope/);
 });
 
+test('keeps an ignored local value from hiding the inherited value', () => {
+  const { state } = createProjectFixture();
+  state.config.wall_loops = 2;
+  state.plates[0].config = { wall_loops: 99, print_sequence: 'by object' };
+  const resolved = resolveConfig(state, { plateId: state.activePlateId });
+  assert.equal(resolved.effective.wall_loops, 2);
+  assert.equal(resolved.inherited.wall_loops, 2);
+  assert.deepEqual(resolved.local, { print_sequence: 'by object' });
+  assert.deepEqual(resolved.sourceByKey.wall_loops, { kind: 'project' });
+  assert.deepEqual(
+    resolved.ignored.map((entry) => entry.key),
+    ['wall_loops'],
+  );
+  assert.equal(state.plates[0].config.wall_loops, 99, 'foreign data remains stored for lossless export');
+});
+
+test('keeps ignored-setting diagnostics stable through canonical serialization', () => {
+  const { state } = createProjectFixture();
+  state.plates[0].config = Object.fromEntries([
+    ['z_foreign', true],
+    ['10', 10],
+    ['2', 2],
+    ['__proto__', { own: true }],
+    ['\ud800', 'lone surrogate'],
+    ['a_foreign', false],
+  ]);
+  const request = { plateId: state.activePlateId };
+  const first = resolveConfig(state, request);
+  const restored = resolveConfig(JSON.parse(canonicalStringify(state)), request);
+  assert.deepEqual(first, restored);
+  assert.deepEqual(
+    first.ignored.map((entry) => entry.key),
+    ['10', '2', '__proto__', 'a_foreign', 'z_foreign', '\ud800'],
+  );
+  assert.ok(Object.hasOwn(state.plates[0].config, '__proto__'));
+});
+
 test('shows one node its own overrides, its chain, and what the chain resolves to', () => {
   const { fixture, project } = harness();
   const target: ScopedOverrideTarget = { scope: 'part', volumeId: fixture.object.volumes[0].id };

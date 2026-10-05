@@ -5,3 +5,4 @@ pub mod assets;
 pub mod facets;
 pub mod ids;
 pub mod model;
+pub mod settings;
