@@ -161,6 +161,20 @@ That identifier-only update retained byte-identical WASM/JNI executables;
 both APK artifact checks and the complete repository gate passed. Its configured
 redacted source scan covered 1,646 UTF-8 files with no findings.
 
+Rust now also implements immutable asset ownership: shared records, read-only
+leases, opaque owner-bound rollback snapshots, transactional public restores and
+cached streaming bundle fingerprints. Thirteen synthetic payloads and 222
+TypeScript reference operations agree on outputs, errors, record/version identity
+and fingerprints, including insertion-versus-canonical ordering, surrogate/NUL
+metadata, duplicate IDs/digests, copy isolation and failed restoration. The browser
+clone regression for own `__proto__` JSON keys is fixed; imported fields retain
+their data and do not change object prototypes. An 8 MiB allocation probe reports
+zero mesh-sized allocations across 200 internal history cycles and initial
+fingerprinting, with one measured 8 MiB allocation for a public copy. Rust asset
+integration/lifetime and compile-fail checks pass with the existing ID tests,
+strict Clippy/audit and three target checks. This is library/host evidence: native
+project commands, graph validation and session execution are still unimplemented.
+
 Prepared plate commands now use one versioned schema generating TypeScript,
 Rust and Kotlin types, strict decoding and bounded encoding. All seven production
 browser plate operations and Undo/Redo exchange generated session strings with
@@ -185,8 +199,8 @@ module graph with a separate worker entry and complete offline dependency cachin
 reducing duplicate JavaScript without increasing budgets. The complete repository
 gate passes with 267 web unit-test files, 97 project test files, production browser,
 offline/recovery/accessibility checks, HTTP/HTTPS deployment, real slicing and all
-three npm audits. The redacted source scan covers 1,667 UTF-8 files with no findings.
-Main-entry size is 2,101,384 bytes and total JavaScript is 10,436,780 bytes, within
+three npm audits. The redacted source scan covers 1,672 UTF-8 files with no findings.
+Main-entry size is 2,101,384 bytes and total JavaScript is 10,436,886 bytes, within
 unchanged limits. Generation checks and workflow actionlint pass; hosted CI is
 still unqualified.
 Other editing workflows, revisioned remote projections, worker/JNI execution,

@@ -20,7 +20,13 @@ export function cloneJson<T>(value: T): T {
   if (value === null || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map((item) => cloneJson(item)) as T;
   const clone: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(value)) clone[key] = cloneJson(child);
+  for (const [key, child] of Object.entries(value)) {
+    const owned = cloneJson(child);
+    // Imported JSON keys are data, including Object.prototype's legacy setter.
+    if (key === '__proto__')
+      Object.defineProperty(clone, key, { value: owned, enumerable: true, writable: true, configurable: true });
+    else clone[key] = owned;
+  }
   return clone as T;
 }
 

@@ -278,4 +278,23 @@ test('initial and restored bundle fingerprints avoid payload copies and preserve
   );
 });
 
+// Imported metadata keys are JSON data, including JavaScript's legacy setter name.
+// Cloning must neither lose that own property nor make it an inherited object.
+test('asset descriptor copies retain prototype-named JSON keys without changing their prototype', () => {
+  const { fixture, assets } = harness(36);
+  const descriptor = JSON.parse(JSON.stringify(fixture.asset.descriptor)) as typeof fixture.asset.descriptor & {
+    metadata: Record<string, unknown>;
+  };
+  descriptor.metadata = JSON.parse('{"__proto__":{"privateValue":7},"constructor":"data","nested":{"__proto__":null}}');
+  const expected = canonicalStringify(descriptor);
+  assets.restore({ entries: [{ descriptor, bytes: fixture.asset.bytes }] });
+  const stored = assets.peek(fixture.ids.asset)!.descriptor as typeof descriptor;
+  assert.equal(canonicalStringify(stored), expected);
+  assert.equal(Object.getPrototypeOf(stored.metadata), Object.prototype);
+  assert.ok(Object.hasOwn(stored.metadata, '__proto__'));
+  assert.equal(Object.hasOwn(stored.metadata, 'privateValue'), false);
+  assert.equal(canonicalStringify(assets.get(fixture.ids.asset)!.descriptor), expected);
+  assert.equal(assets.bundleFingerprint(), assetBundleFingerprint([{ descriptor, bytes: fixture.asset.bytes }]));
+});
+
 console.log(`\n${passed} asset rollback tests passed.`);

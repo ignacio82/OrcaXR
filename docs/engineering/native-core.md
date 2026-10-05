@@ -345,8 +345,8 @@ integration tests plus a compile-fail brand check pass in debug/release; strict
 workspace Clippy/tests and Cargo audit pass. The library checks for wasm32 and
 both Android targets without platform dependencies. These are host execution
 and target compilation evidence, not a JNI/WASM session implementation or
-native editing qualification. The graph, assets, history and session port remain
-open. The native-core workflow now checks fixture drift and these targets.
+native editing qualification. The full graph, history and session port remain
+open; the asset repository library is described below. The native-core workflow now checks fixture drift and these targets.
 The identifier-only update added the project crate to shared-core provenance.
 Its browser set `255e6ce1f2dc` and JNI manifests retained byte-identical executables;
 both APKs verified against those inputs with all libraries 16 KB aligned.
@@ -356,6 +356,49 @@ accessibility checks, server HTTP/HTTPS deployment, real slicing and all three
 npm audits. The redacted source scan covers 1,646 UTF-8 files with no findings;
 workflow actionlint passes. Hosted CI and device execution of the new identifier
 crate were not run.
+
+The Rust asset repository now preserves the browser's immutable ownership model.
+Canonical descriptors retain complete JSON metadata, UTF-16 keys/text, unknown
+fields and binary64 number semantics. The repository checks stable IDs, finite
+canonical metadata, byte lengths and lowercase FNV content claims before storing
+owned copies. Other declared digest schemes remain opaque, while actual bytes
+always determine the canonical bundle fingerprint. Graph-level descriptor/layout
+and reference validation is still unimplemented; this is a library for canonical
+inputs, not an asset transport or an unchecked JavaScript-object emulator.
+
+Internal history captures share immutable versions and records. Opaque handles
+reject foreign repositories and restore cached fingerprints with the original
+record identity. Read-only leases preserve renderer identity and keep bytes alive
+until their last owner releases them; the repository holds no snapshot cycle.
+Public mutable reads/imports copy. Restores validate all entries before publishing,
+and equal public restores create fresh versions/records. No-op puts and absent
+removals preserve identity. Digest lookup follows insertion order, while list and
+fingerprint ordering follow UTF-16 IDs; the trace suite distinguishes those orders.
+Fingerprinting streams canonical metadata and cached byte digests directly into
+FNV without materializing a complete JSON string or copying payloads.
+
+The TypeScript-derived corpus contains **13 payloads and 222 operations**, comparing
+every result/error, sorted descriptor/byte payload, record/version identity and
+fingerprint. It covers multiple history branches, duplicate digest order, failed
+and duplicate-ID restores, immutable conflicts, public-copy isolation, empty
+payloads, byte extremes, NULs, surrogate halves, supplementary characters,
+unknown nested metadata and extreme finite numbers. During this port a failing
+regression proved that browser `cloneJson` dropped own `__proto__` fields and
+changed the copy's prototype. It now defines that key as an ordinary own property,
+including nested copies; the trace corpus binds the corrected reference hashes.
+Canonical encoding and ordinary project bytes are unchanged.
+
+Four asset integration tests and a cache/lifetime unit test pass in debug/release,
+along with read-only lease and existing ID brand compile-fail checks. The synthetic
+allocation probe uses an 8 MiB asset: 200 capture/remove/restore cycles and first
+fingerprint computation allocate no mesh-sized buffer; its positive control public
+read allocates exactly one 8 MiB copy. Pointer/lease tests and source review verify
+shared payload ownership. The allocation result is host evidence, not an Android
+latency/memory ceiling. The existing browser asset benchmark also retains zero
+copied bytes across 20 transform/undo pairs on its 8 MiB fixture. Full workspace tests, strict Clippy, Cargo audit and checks
+for wasm32 and both Android targets pass with Rust 1.94.1. CI now regenerates the
+asset corpus and runs the allocation probe. Rust project execution through JNI or
+WASM remains unimplemented, and no Phase 4 exit is closed by these library tests.
 
 The browser now has a transitional `AsyncEditorSession` over its TypeScript
 authority. Undo/Redo and plate lifecycle actions await acknowledgements; guarded queued execution,
@@ -431,8 +474,8 @@ cold starts, three renderer pixel/lifecycle tests and the separate non-XR startu
 This is 4,096-byte-page software-emulator evidence, not ARM64 or physical XR
 execution. The Rust intent/session codecs have no worker/JNI project-session entry point.
 
-The refreshed browser set `2858e9b9a359` contains 556,646 WASM bytes and binds
-64 core source inputs. Actual browser WASM reruns all 269 canonical vectors,
+The refreshed browser set `9fdb6e51878b` contains 556,646 WASM bytes and binds
+67 core source inputs. Actual browser WASM reruns all 269 canonical vectors,
 10 malformed inputs, 48 canonical envelopes, 98 G-code sources/358 windows,
 4,554 view queries and 30 G-code request cases. Both APKs verify matching source
 and output identity with every native library 16 KB ELF/ZIP aligned. The command/session
@@ -442,14 +485,14 @@ The archive worker now shares its pure codec modules with the app build, with a
 strict entry signature preserving context startup and independently owned worker
 instances. The offline graph includes archive dependencies and the static cache
 moves to shell-v4. This removes duplicate codec code without relaxing bundle
-budgets. The final redacted source scan covers 1,667 UTF-8 files (six normalized
+budgets. The final redacted source scan covers 1,672 UTF-8 files (six normalized
 for embedded NULs), with no findings. Workflow actionlint, generated binding and
 fixture checks pass; hosted CI remains unqualified. The complete repository gate
 passes against the final source/artifact set: 267 web unit-test files, 97 project
 test files, browser/offline/recovery/accessibility and pseudo-localization checks,
 HTTP/HTTPS server deployment fixtures, real slicing, artifact verification and all
 three full npm audits. Main-entry size is 2,101,384 bytes; total JavaScript is
-10,436,780 bytes under the unchanged 10,600,000-byte ceiling. These checks qualify
+10,436,886 bytes under the unchanged 10,600,000-byte ceiling. These checks qualify
 the local TypeScript transport and codecs, not native project execution or XR
 hardware behavior.
 
@@ -854,6 +897,7 @@ node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts g
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-id-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/asset-repository-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
@@ -861,7 +905,9 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/view-v
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inventory.mjs
 ```
 
-Run these in `core/` so the pinned Rust toolchain is selected:
+Run these in `core/` so the pinned Rust toolchain is selected. From the repository
+root use `cargo +1.94.1`; `--manifest-path` alone does not select the toolchain or
+its installed cross targets, even if another alias reports the same compiler version:
 
 ```sh
 cargo fmt --all --check
@@ -869,6 +915,7 @@ cargo clippy --workspace --all-targets --locked --jobs 2 -- -D warnings
 cargo test --workspace --locked --jobs 2
 cargo test -p orcaxr-contracts --test project_intents --release --locked --jobs 2
 cargo test -p orcaxr-project --release --locked --jobs 2
+cargo run -p orcaxr-project --example asset_repository_benchmark --release --locked --jobs 2
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target wasm32-unknown-unknown
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target aarch64-linux-android
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target x86_64-linux-android

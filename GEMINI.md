@@ -188,6 +188,9 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - SHA-256 identifies artifacts/project/config outputs. Canonical FNV-1a64
   identifies source assets and semantic snapshots where explicitly defined.
   Never substitute one for the other or infer engine statistics from observations.
+- Canonical JSON cloning preserves own `__proto__` properties as data without
+  changing object prototypes. Imported descriptor/config keys must not disappear
+  or become inherited properties during a defensive copy.
 - Standard BBS projection and the canonical envelope have different roles.
   Consumed metadata is not also retained as an opaque blob. OPC relationships
   may only target members actually present in the package.
@@ -296,6 +299,10 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Rollback uses opaque repository-owned handles sharing immutable asset records
   and cached fingerprints. Public mutable reads and untrusted imports still copy
   and validate. Production `peek()` consumers must never mutate descriptors/bytes.
+  The Rust repository shares immutable records through owner-bound snapshots and
+  read-only leases. Digest lookup follows insertion order; lists/fingerprints use
+  UTF-16 ID order. Public restore validates before publishing and creates fresh
+  record identities even for equal content. Native project execution is still open.
 - Preserve the measured zero-payload-copy command path and bounded worker lifetimes.
   Read the detailed large-model document before changing mesh parsing/serialization,
   painting, preview or history. Do not commit private real-world qualification models.

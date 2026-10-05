@@ -76,6 +76,12 @@ projection subscriptions are still local. Actual worker/JNI project execution,
 revisioned projections, crash recovery and remaining workflows are still required. See
 [project contracts](engineering/project-contracts.md).
 
+The Rust project crate now also owns immutable asset records, read-only leases,
+opaque rollback versions, transactional public restore and streaming bundle
+fingerprints. Independent TypeScript traces and an allocation probe cover this
+library boundary. Full graph/schema validation, commands, history policy and
+native session execution remain open; this does not enable Android editing.
+
 Build an adaptive native Android application for phones, tablets, Googlebook,
 and Android XR while preserving the web application. Introduce Rust as a shared
 implementation of selected computation and, subsequently, the canonical project
@@ -577,8 +583,11 @@ and replay coverage for the complete current command inventory.
   immutable asset repository, selectors, and session lifecycle into Rust.
   Use immutable shared asset ownership and bounded history; transform/undo must
   not copy mesh payloads. The Rust project crate now ports stable UTF-16 IDs,
-  branded entity families and injected UUID generation with independent TypeScript
-  fixtures. The full graph, repository, validation and session remain open.
+  branded entity families, injected UUID generation and immutable asset ownership
+  with independent TypeScript fixtures. Asset traces compare public/internal
+  restoration, metadata/content fingerprints, record/version identity and failures;
+  an allocation probe verifies mesh bytes are shared through history snapshots.
+  The full graph, validation, selectors, history policy and session remain open.
 - [ ] Port commands and transaction/history semantics by family, preserving
   rollback revision behavior, coalescing, checkpoint acknowledgement, selection,
   and history retention accounting. Test every command's failed and stale cases.

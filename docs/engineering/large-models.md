@@ -17,6 +17,12 @@ are fixture-specific evidence, not device-independent performance guarantees.
   decode into new position/index arrays and must never mutate shared bytes.
   `npm --prefix web run bench:assets` enforces zero payload copies for twenty
   transform/undo pairs over an 8 MiB generated asset; timing is informational.
+  The Rust repository library follows the same ownership rule with immutable
+  records, read-only leases and opaque repository-owned versions. Its synthetic
+  8 MiB probe records zero mesh-sized allocations over 200 capture/remove/restore
+  cycles plus initial fingerprint computation; an owned public read makes one
+  measured 8 MiB allocation. Native command/history execution and device memory
+  ceilings remain unqualified. See the native-core document for the trace corpus.
 
 Measured on `~/Downloads/narwhal.3mf` — 1,897,256 facets, 629k of them painted,
 stored as 161 MB of mesh XML inside a 28 MB archive. Every number below is from

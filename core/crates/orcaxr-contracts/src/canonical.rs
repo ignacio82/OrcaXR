@@ -8,7 +8,7 @@ use crate::CoreError;
 const MAX_DEPTH: usize = 64;
 const MAX_NODES: usize = 100_000;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Null,
     Bool(bool),

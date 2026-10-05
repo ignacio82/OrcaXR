@@ -18,6 +18,29 @@ are fixture-specific evidence, not device-independent performance guarantees.
   fixtures and production entropy belongs to the host. This port introduces no
   new persisted encoding, wire protocol, project authority or application route.
 
+- The Rust asset repository owns canonical descriptor values and immutable bytes.
+  Stored metadata retains unknown fields and lossless UTF-16 strings/keys. Stable
+  IDs, finite canonical metadata, declared byte length and lowercase `fnv1a64:`
+  digests are checked before publication. Other digest labels retain the existing
+  opaque behavior; actual-byte FNV digests still determine bundle identity. Mesh
+  layout, media type, source kind and project references belong to graph validation,
+  which has not been ported. This library boundary does not accept malformed IDs
+  or noncanonical values merely because an unchecked JavaScript call could.
+  Identical puts and absent removals preserve version/record identity. Conflicting
+  metadata or bytes reject; failed public restores publish nothing. Internal
+  snapshots are opaque and reject another repository's owner. History retains
+  shared record allocations and cached fingerprints; a read-only lease can outlive
+  repository disposal. No unsafe mutable byte access is exposed. Public get/list/
+  capture/find return owned copies, and public restore creates fresh records.
+  Find-by-digest uses insertion order, whereas list/bundle identity use UTF-16 ID
+  order. Restoring a sorted public capture can therefore change which duplicate
+  digest is found first without changing the bundle hash. Fingerprints stream
+  canonical metadata and cached content digests without building a whole bundle.
+  Imported JSON keys such as `__proto__` remain own properties through TypeScript
+  cloning; they never invoke the legacy prototype setter. The native trace corpus
+  includes that regression and binds the TypeScript reference source hashes.
+  This port is not connected to a native project/session executor yet.
+
 - `AsyncEditorSession` orders local queries and mutations over the existing
   TypeScript session. It captures project/revision/semantic/asset identity plus
   history revision at submission (or accepts a guard captured before preparation).
