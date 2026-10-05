@@ -3,6 +3,7 @@ use super::project_intents::{InvalidIntent, fields, integer, list, whole_number}
 use serde::Serialize;
 use serde_json::Value;
 pub const VERSION: usize = 1;
+pub const SESSION_VERSION: usize = 1;
 pub const MAX_BYTES: usize = 1048576;
 pub const MAX_NODES: usize = 131072;
 pub const MAX_DEPTH: usize = 12;
@@ -248,6 +249,405 @@ fn read_batch(v: &Value) -> Result<Batch, InvalidIntent> {
         commands: read_commands(&object["commands"])?,
     })
 }
+pub type Counter = u64;
+fn read_counter(v: &Value) -> Result<Counter, InvalidIntent> {
+    Ok(integer(v, 0, 9007199254740991)? as Counter)
+}
+pub type RequestId = u64;
+fn read_request_id(v: &Value) -> Result<RequestId, InvalidIntent> {
+    Ok(integer(v, 1, 9007199254740991)? as RequestId)
+}
+pub type Word = u64;
+fn read_word(v: &Value) -> Result<Word, InvalidIntent> {
+    Ok(integer(v, 0, 4294967295)? as Word)
+}
+pub type Generation = Vec<Word>;
+fn read_generation(v: &Value) -> Result<Generation, InvalidIntent> {
+    list(v, 4, 4)?.iter().map(read_word).collect()
+}
+pub type Fingerprint = Vec<Unit>;
+fn read_fingerprint(v: &Value) -> Result<Fingerprint, InvalidIntent> {
+    list(v, 1, 128)?.iter().map(read_unit).collect()
+}
+pub type DisplayText = Vec<Unit>;
+fn read_display_text(v: &Value) -> Result<DisplayText, InvalidIntent> {
+    list(v, 0, 256)?.iter().map(read_unit).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DisplayLabel {
+    pub text: DisplayText,
+    pub present: Flag,
+    pub truncated: Flag,
+}
+fn read_display_label(v: &Value) -> Result<DisplayLabel, InvalidIntent> {
+    let object = fields(v, &["text", "present", "truncated"], false)?;
+    Ok(DisplayLabel {
+        text: read_display_text(&object["text"])?,
+        present: read_flag(&object["present"])?,
+        truncated: read_flag(&object["truncated"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DirtyCategory {
+    ProjectData,
+    Presets,
+    PrinterDevice,
+}
+fn read_dirty_category(v: &Value) -> Result<DirtyCategory, InvalidIntent> {
+    match v.as_str() {
+        Some("projectData") => Ok(DirtyCategory::ProjectData),
+        Some("presets") => Ok(DirtyCategory::Presets),
+        Some("printerDevice") => Ok(DirtyCategory::PrinterDevice),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type DirtyCategories = Vec<DirtyCategory>;
+fn read_dirty_categories(v: &Value) -> Result<DirtyCategories, InvalidIntent> {
+    list(v, 0, 3)?.iter().map(read_dirty_category).collect()
+}
+pub type SessionVersion = u16;
+fn read_session_version(v: &Value) -> Result<SessionVersion, InvalidIntent> {
+    Ok(integer(v, 1, 1)? as SessionVersion)
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionGuard {
+    pub project_id: Id,
+    pub revision: Counter,
+    pub semantic_hash: Fingerprint,
+    pub asset_fingerprint: Fingerprint,
+    pub history_revision: Counter,
+}
+fn read_session_guard(v: &Value) -> Result<SessionGuard, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "projectId",
+            "revision",
+            "semanticHash",
+            "assetFingerprint",
+            "historyRevision",
+        ],
+        false,
+    )?;
+    Ok(SessionGuard {
+        project_id: read_id(&object["projectId"])?,
+        revision: read_counter(&object["revision"])?,
+        semantic_hash: read_fingerprint(&object["semanticHash"])?,
+        asset_fingerprint: read_fingerprint(&object["assetFingerprint"])?,
+        history_revision: read_counter(&object["historyRevision"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionHistory {
+    pub undo_count: Counter,
+    pub redo_count: Counter,
+    pub undo_label: DisplayLabel,
+    pub redo_label: DisplayLabel,
+    pub dirty_categories: DirtyCategories,
+}
+fn read_session_history(v: &Value) -> Result<SessionHistory, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "undoCount",
+            "redoCount",
+            "undoLabel",
+            "redoLabel",
+            "dirtyCategories",
+        ],
+        false,
+    )?;
+    Ok(SessionHistory {
+        undo_count: read_counter(&object["undoCount"])?,
+        redo_count: read_counter(&object["redoCount"])?,
+        undo_label: read_display_label(&object["undoLabel"])?,
+        redo_label: read_display_label(&object["redoLabel"])?,
+        dirty_categories: read_dirty_categories(&object["dirtyCategories"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Empty {}
+fn read_empty(v: &Value) -> Result<Empty, InvalidIntent> {
+    let _object = fields(v, &[], false)?;
+    Ok(Empty {})
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuardedIntent {
+    pub guard: SessionGuard,
+    pub intent: Intent,
+}
+fn read_guarded_intent(v: &Value) -> Result<GuardedIntent, InvalidIntent> {
+    let object = fields(v, &["guard", "intent"], false)?;
+    Ok(GuardedIntent {
+        guard: read_session_guard(&object["guard"])?,
+        intent: read_intent(&object["intent"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuardedBatch {
+    pub guard: SessionGuard,
+    pub batch: Batch,
+}
+fn read_guarded_batch(v: &Value) -> Result<GuardedBatch, InvalidIntent> {
+    let object = fields(v, &["guard", "batch"], false)?;
+    Ok(GuardedBatch {
+        guard: read_session_guard(&object["guard"])?,
+        batch: read_batch(&object["batch"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Hello {
+    pub min_protocol_version: Counter,
+    pub max_protocol_version: Counter,
+    pub project_schema_version: Counter,
+    pub intent_version: Counter,
+}
+fn read_hello(v: &Value) -> Result<Hello, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "minProtocolVersion",
+            "maxProtocolVersion",
+            "projectSchemaVersion",
+            "intentVersion",
+        ],
+        false,
+    )?;
+    Ok(Hello {
+        min_protocol_version: read_counter(&object["minProtocolVersion"])?,
+        max_protocol_version: read_counter(&object["maxProtocolVersion"])?,
+        project_schema_version: read_counter(&object["projectSchemaVersion"])?,
+        intent_version: read_counter(&object["intentVersion"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Cancel {
+    pub target_request_id: RequestId,
+}
+fn read_cancel(v: &Value) -> Result<Cancel, InvalidIntent> {
+    let object = fields(v, &["targetRequestId"], false)?;
+    Ok(Cancel {
+        target_request_id: read_request_id(&object["targetRequestId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionOperation {
+    Hello(Hello),
+    Execute(GuardedIntent),
+    Transaction(GuardedBatch),
+    Undo(SessionGuard),
+    Redo(SessionGuard),
+    Query(Empty),
+    Cancel(Cancel),
+    Close(Empty),
+}
+fn read_session_operation(v: &Value) -> Result<SessionOperation, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "hello",
+            "execute",
+            "transaction",
+            "undo",
+            "redo",
+            "query",
+            "cancel",
+            "close",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "hello" => Ok(SessionOperation::Hello(read_hello(value)?)),
+        "execute" => Ok(SessionOperation::Execute(read_guarded_intent(value)?)),
+        "transaction" => Ok(SessionOperation::Transaction(read_guarded_batch(value)?)),
+        "undo" => Ok(SessionOperation::Undo(read_session_guard(value)?)),
+        "redo" => Ok(SessionOperation::Redo(read_session_guard(value)?)),
+        "query" => Ok(SessionOperation::Query(read_empty(value)?)),
+        "cancel" => Ok(SessionOperation::Cancel(read_cancel(value)?)),
+        "close" => Ok(SessionOperation::Close(read_empty(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionRequest {
+    pub protocol_version: Counter,
+    pub generation: Generation,
+    pub request_id: RequestId,
+    pub operation: SessionOperation,
+}
+fn read_session_request(v: &Value) -> Result<SessionRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &["protocolVersion", "generation", "requestId", "operation"],
+        false,
+    )?;
+    Ok(SessionRequest {
+        protocol_version: read_counter(&object["protocolVersion"])?,
+        generation: read_generation(&object["generation"])?,
+        request_id: read_request_id(&object["requestId"])?,
+        operation: read_session_operation(&object["operation"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionAcknowledgement {
+    pub guard: SessionGuard,
+    pub history: SessionHistory,
+    pub changed: Flag,
+}
+fn read_session_acknowledgement(v: &Value) -> Result<SessionAcknowledgement, InvalidIntent> {
+    let object = fields(v, &["guard", "history", "changed"], false)?;
+    Ok(SessionAcknowledgement {
+        guard: read_session_guard(&object["guard"])?,
+        history: read_session_history(&object["history"])?,
+        changed: read_flag(&object["changed"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Welcome {
+    pub protocol_version: SessionVersion,
+    pub project_schema_version: Counter,
+    pub intent_version: Version,
+    pub max_pending: Counter,
+    pub max_bytes: Counter,
+    pub max_nodes: Counter,
+}
+fn read_welcome(v: &Value) -> Result<Welcome, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "protocolVersion",
+            "projectSchemaVersion",
+            "intentVersion",
+            "maxPending",
+            "maxBytes",
+            "maxNodes",
+        ],
+        false,
+    )?;
+    Ok(Welcome {
+        protocol_version: read_session_version(&object["protocolVersion"])?,
+        project_schema_version: read_counter(&object["projectSchemaVersion"])?,
+        intent_version: read_version(&object["intentVersion"])?,
+        max_pending: read_counter(&object["maxPending"])?,
+        max_bytes: read_counter(&object["maxBytes"])?,
+        max_nodes: read_counter(&object["maxNodes"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CancelStatus {
+    Requested,
+    NotPending,
+}
+fn read_cancel_status(v: &Value) -> Result<CancelStatus, InvalidIntent> {
+    match v.as_str() {
+        Some("requested") => Ok(CancelStatus::Requested),
+        Some("notPending") => Ok(CancelStatus::NotPending),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionError {
+    InvalidRequest,
+    UnsupportedVersion,
+    WrongSession,
+    NotReady,
+    DuplicateRequest,
+    Stale,
+    Cancelled,
+    Busy,
+    Disposed,
+    CommandFailed,
+    ResourceLimit,
+}
+fn read_session_error(v: &Value) -> Result<SessionError, InvalidIntent> {
+    match v.as_str() {
+        Some("invalidRequest") => Ok(SessionError::InvalidRequest),
+        Some("unsupportedVersion") => Ok(SessionError::UnsupportedVersion),
+        Some("wrongSession") => Ok(SessionError::WrongSession),
+        Some("notReady") => Ok(SessionError::NotReady),
+        Some("duplicateRequest") => Ok(SessionError::DuplicateRequest),
+        Some("stale") => Ok(SessionError::Stale),
+        Some("cancelled") => Ok(SessionError::Cancelled),
+        Some("busy") => Ok(SessionError::Busy),
+        Some("disposed") => Ok(SessionError::Disposed),
+        Some("commandFailed") => Ok(SessionError::CommandFailed),
+        Some("resourceLimit") => Ok(SessionError::ResourceLimit),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionResult {
+    Acknowledged(SessionAcknowledgement),
+    Welcome(Welcome),
+    Cancelled(CancelStatus),
+    Closed(Empty),
+    Error(SessionError),
+    ReceiptUnavailable(Flag),
+}
+fn read_session_result(v: &Value) -> Result<SessionResult, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "acknowledged",
+            "welcome",
+            "cancelled",
+            "closed",
+            "error",
+            "receiptUnavailable",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "acknowledged" => Ok(SessionResult::Acknowledged(read_session_acknowledgement(
+            value,
+        )?)),
+        "welcome" => Ok(SessionResult::Welcome(read_welcome(value)?)),
+        "cancelled" => Ok(SessionResult::Cancelled(read_cancel_status(value)?)),
+        "closed" => Ok(SessionResult::Closed(read_empty(value)?)),
+        "error" => Ok(SessionResult::Error(read_session_error(value)?)),
+        "receiptUnavailable" => Ok(SessionResult::ReceiptUnavailable(read_flag(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionReply {
+    pub protocol_version: SessionVersion,
+    pub generation: Generation,
+    pub request_id: Counter,
+    pub result: SessionResult,
+}
+fn read_session_reply(v: &Value) -> Result<SessionReply, InvalidIntent> {
+    let object = fields(
+        v,
+        &["protocolVersion", "generation", "requestId", "result"],
+        false,
+    )?;
+    Ok(SessionReply {
+        protocol_version: read_session_version(&object["protocolVersion"])?,
+        generation: read_generation(&object["generation"])?,
+        request_id: read_counter(&object["requestId"])?,
+        result: read_session_result(&object["result"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -262,5 +662,21 @@ pub fn decode_batch(text: &str) -> Result<Batch, InvalidIntent> {
 pub fn encode_batch(value: &Batch) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_batch(&text)?;
+    Ok(text)
+}
+pub fn decode_session_request(text: &str) -> Result<SessionRequest, InvalidIntent> {
+    read_session_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_session_request(value: &SessionRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_session_request(&text)?;
+    Ok(text)
+}
+pub fn decode_session_reply(text: &str) -> Result<SessionReply, InvalidIntent> {
+    read_session_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_session_reply(value: &SessionReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_session_reply(&text)?;
     Ok(text)
 }

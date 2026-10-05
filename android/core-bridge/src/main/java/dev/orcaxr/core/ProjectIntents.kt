@@ -5,6 +5,7 @@ import org.json.JSONObject
 
 object ProjectIntents {
     const val VERSION = 1
+    const val SESSION_VERSION = 1
     const val MAX_BYTES = 1048576
     const val MAX_NODES = 131072
     const val MAX_DEPTH = 12
@@ -236,8 +237,299 @@ object ProjectIntents {
             w.field("commands") { writeCommands(w, v.commands) }
         }
     }
+    private fun readCounter(v: Any): Long {
+        return ProjectIntentJson.integer(v, 0L, 9007199254740991L)
+    }
+    private fun writeCounter(w: ProjectIntentWriter, v: Long) {
+        w.integer(v.toLong(), 0L, 9007199254740991L)
+    }
+    private fun readRequestId(v: Any): Long {
+        return ProjectIntentJson.integer(v, 1L, 9007199254740991L)
+    }
+    private fun writeRequestId(w: ProjectIntentWriter, v: Long) {
+        w.integer(v.toLong(), 1L, 9007199254740991L)
+    }
+    private fun readWord(v: Any): Long {
+        return ProjectIntentJson.integer(v, 0L, 4294967295L)
+    }
+    private fun writeWord(w: ProjectIntentWriter, v: Long) {
+        w.integer(v.toLong(), 0L, 4294967295L)
+    }
+    private fun readGeneration(v: Any): List<Long> {
+        val array = ProjectIntentJson.list(v, 4, 4)
+        return List(array.length()) { readWord(array.get(it)) }
+    }
+    private fun writeGeneration(w: ProjectIntentWriter, v: List<Long>) {
+        w.array(v, 4, 4) { writeWord(w, it) }
+    }
+    private fun readFingerprint(v: Any): List<Int> {
+        val array = ProjectIntentJson.list(v, 1, 128)
+        return List(array.length()) { readUnit(array.get(it)) }
+    }
+    private fun writeFingerprint(w: ProjectIntentWriter, v: List<Int>) {
+        w.array(v, 1, 128) { writeUnit(w, it) }
+    }
+    private fun readDisplayText(v: Any): List<Int> {
+        val array = ProjectIntentJson.list(v, 0, 256)
+        return List(array.length()) { readUnit(array.get(it)) }
+    }
+    private fun writeDisplayText(w: ProjectIntentWriter, v: List<Int>) {
+        w.array(v, 0, 256) { writeUnit(w, it) }
+    }
+    data class DisplayLabel(val text: List<Int>, val present: Boolean, val truncated: Boolean)
+    private fun readDisplayLabel(v: Any): DisplayLabel {
+        val obj = ProjectIntentJson.fields(v, setOf("text", "present", "truncated"), false)
+        return DisplayLabel(readDisplayText(obj.get("text")), readFlag(obj.get("present")), readFlag(obj.get("truncated")))
+    }
+    private fun writeDisplayLabel(w: ProjectIntentWriter, v: DisplayLabel) {
+        w.obj {
+            w.field("text") { writeDisplayText(w, v.text) }
+            w.field("present") { writeFlag(w, v.present) }
+            w.field("truncated") { writeFlag(w, v.truncated) }
+        }
+    }
+    enum class DirtyCategory {ProjectData,Presets,PrinterDevice}
+    private fun readDirtyCategory(v: Any): DirtyCategory {
+        return when(v) {"projectData" -> DirtyCategory.ProjectData;"presets" -> DirtyCategory.Presets;"printerDevice" -> DirtyCategory.PrinterDevice; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeDirtyCategory(w: ProjectIntentWriter, v: DirtyCategory) {
+        w.literal(when(v) {DirtyCategory.ProjectData -> "projectData";DirtyCategory.Presets -> "presets";DirtyCategory.PrinterDevice -> "printerDevice";})
+    }
+    private fun readDirtyCategories(v: Any): List<DirtyCategory> {
+        val array = ProjectIntentJson.list(v, 0, 3)
+        return List(array.length()) { readDirtyCategory(array.get(it)) }
+    }
+    private fun writeDirtyCategories(w: ProjectIntentWriter, v: List<DirtyCategory>) {
+        w.array(v, 0, 3) { writeDirtyCategory(w, it) }
+    }
+    private fun readSessionVersion(v: Any): Int {
+        return ProjectIntentJson.integer(v, 1L, 1L).toInt()
+    }
+    private fun writeSessionVersion(w: ProjectIntentWriter, v: Int) {
+        w.integer(v.toLong(), 1L, 1L)
+    }
+    data class SessionGuard(val projectId: List<Int>, val revision: Long, val semanticHash: List<Int>, val assetFingerprint: List<Int>, val historyRevision: Long)
+    private fun readSessionGuard(v: Any): SessionGuard {
+        val obj = ProjectIntentJson.fields(v, setOf("projectId", "revision", "semanticHash", "assetFingerprint", "historyRevision"), false)
+        return SessionGuard(readId(obj.get("projectId")), readCounter(obj.get("revision")), readFingerprint(obj.get("semanticHash")), readFingerprint(obj.get("assetFingerprint")), readCounter(obj.get("historyRevision")))
+    }
+    private fun writeSessionGuard(w: ProjectIntentWriter, v: SessionGuard) {
+        w.obj {
+            w.field("projectId") { writeId(w, v.projectId) }
+            w.field("revision") { writeCounter(w, v.revision) }
+            w.field("semanticHash") { writeFingerprint(w, v.semanticHash) }
+            w.field("assetFingerprint") { writeFingerprint(w, v.assetFingerprint) }
+            w.field("historyRevision") { writeCounter(w, v.historyRevision) }
+        }
+    }
+    data class SessionHistory(val undoCount: Long, val redoCount: Long, val undoLabel: DisplayLabel, val redoLabel: DisplayLabel, val dirtyCategories: List<DirtyCategory>)
+    private fun readSessionHistory(v: Any): SessionHistory {
+        val obj = ProjectIntentJson.fields(v, setOf("undoCount", "redoCount", "undoLabel", "redoLabel", "dirtyCategories"), false)
+        return SessionHistory(readCounter(obj.get("undoCount")), readCounter(obj.get("redoCount")), readDisplayLabel(obj.get("undoLabel")), readDisplayLabel(obj.get("redoLabel")), readDirtyCategories(obj.get("dirtyCategories")))
+    }
+    private fun writeSessionHistory(w: ProjectIntentWriter, v: SessionHistory) {
+        w.obj {
+            w.field("undoCount") { writeCounter(w, v.undoCount) }
+            w.field("redoCount") { writeCounter(w, v.redoCount) }
+            w.field("undoLabel") { writeDisplayLabel(w, v.undoLabel) }
+            w.field("redoLabel") { writeDisplayLabel(w, v.redoLabel) }
+            w.field("dirtyCategories") { writeDirtyCategories(w, v.dirtyCategories) }
+        }
+    }
+    data object Empty
+    private fun readEmpty(v: Any): Empty {
+        val obj = ProjectIntentJson.fields(v, setOf(), false)
+        return Empty
+    }
+    private fun writeEmpty(w: ProjectIntentWriter, v: Empty) {
+        w.obj {
+
+        }
+    }
+    data class GuardedIntent(val guard: SessionGuard, val intent: Intent)
+    private fun readGuardedIntent(v: Any): GuardedIntent {
+        val obj = ProjectIntentJson.fields(v, setOf("guard", "intent"), false)
+        return GuardedIntent(readSessionGuard(obj.get("guard")), readIntent(obj.get("intent")))
+    }
+    private fun writeGuardedIntent(w: ProjectIntentWriter, v: GuardedIntent) {
+        w.obj {
+            w.field("guard") { writeSessionGuard(w, v.guard) }
+            w.field("intent") { writeIntent(w, v.intent) }
+        }
+    }
+    data class GuardedBatch(val guard: SessionGuard, val batch: Batch)
+    private fun readGuardedBatch(v: Any): GuardedBatch {
+        val obj = ProjectIntentJson.fields(v, setOf("guard", "batch"), false)
+        return GuardedBatch(readSessionGuard(obj.get("guard")), readBatch(obj.get("batch")))
+    }
+    private fun writeGuardedBatch(w: ProjectIntentWriter, v: GuardedBatch) {
+        w.obj {
+            w.field("guard") { writeSessionGuard(w, v.guard) }
+            w.field("batch") { writeBatch(w, v.batch) }
+        }
+    }
+    data class Hello(val minProtocolVersion: Long, val maxProtocolVersion: Long, val projectSchemaVersion: Long, val intentVersion: Long)
+    private fun readHello(v: Any): Hello {
+        val obj = ProjectIntentJson.fields(v, setOf("minProtocolVersion", "maxProtocolVersion", "projectSchemaVersion", "intentVersion"), false)
+        return Hello(readCounter(obj.get("minProtocolVersion")), readCounter(obj.get("maxProtocolVersion")), readCounter(obj.get("projectSchemaVersion")), readCounter(obj.get("intentVersion")))
+    }
+    private fun writeHello(w: ProjectIntentWriter, v: Hello) {
+        w.obj {
+            w.field("minProtocolVersion") { writeCounter(w, v.minProtocolVersion) }
+            w.field("maxProtocolVersion") { writeCounter(w, v.maxProtocolVersion) }
+            w.field("projectSchemaVersion") { writeCounter(w, v.projectSchemaVersion) }
+            w.field("intentVersion") { writeCounter(w, v.intentVersion) }
+        }
+    }
+    data class Cancel(val targetRequestId: Long)
+    private fun readCancel(v: Any): Cancel {
+        val obj = ProjectIntentJson.fields(v, setOf("targetRequestId"), false)
+        return Cancel(readRequestId(obj.get("targetRequestId")))
+    }
+    private fun writeCancel(w: ProjectIntentWriter, v: Cancel) {
+        w.obj {
+            w.field("targetRequestId") { writeRequestId(w, v.targetRequestId) }
+        }
+    }
+    sealed interface SessionOperation {
+        data class Hello(val value: ProjectIntents.Hello) : SessionOperation
+        data class Execute(val value: ProjectIntents.GuardedIntent) : SessionOperation
+        data class Transaction(val value: ProjectIntents.GuardedBatch) : SessionOperation
+        data class Undo(val value: ProjectIntents.SessionGuard) : SessionOperation
+        data class Redo(val value: ProjectIntents.SessionGuard) : SessionOperation
+        data class Query(val value: ProjectIntents.Empty) : SessionOperation
+        data class Cancel(val value: ProjectIntents.Cancel) : SessionOperation
+        data class Close(val value: ProjectIntents.Empty) : SessionOperation
+    }
+    private fun readSessionOperation(v: Any): SessionOperation {
+        val obj = ProjectIntentJson.fields(v, setOf("hello", "execute", "transaction", "undo", "redo", "query", "cancel", "close"), true)
+        return when(val key = obj.keys().next()) {
+            "hello" -> SessionOperation.Hello(readHello(obj.get(key)))
+            "execute" -> SessionOperation.Execute(readGuardedIntent(obj.get(key)))
+            "transaction" -> SessionOperation.Transaction(readGuardedBatch(obj.get(key)))
+            "undo" -> SessionOperation.Undo(readSessionGuard(obj.get(key)))
+            "redo" -> SessionOperation.Redo(readSessionGuard(obj.get(key)))
+            "query" -> SessionOperation.Query(readEmpty(obj.get(key)))
+            "cancel" -> SessionOperation.Cancel(readCancel(obj.get(key)))
+            "close" -> SessionOperation.Close(readEmpty(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeSessionOperation(w: ProjectIntentWriter, v: SessionOperation) {
+        w.obj { when(v) {
+            is SessionOperation.Hello -> w.field("hello") { writeHello(w, v.value) }
+            is SessionOperation.Execute -> w.field("execute") { writeGuardedIntent(w, v.value) }
+            is SessionOperation.Transaction -> w.field("transaction") { writeGuardedBatch(w, v.value) }
+            is SessionOperation.Undo -> w.field("undo") { writeSessionGuard(w, v.value) }
+            is SessionOperation.Redo -> w.field("redo") { writeSessionGuard(w, v.value) }
+            is SessionOperation.Query -> w.field("query") { writeEmpty(w, v.value) }
+            is SessionOperation.Cancel -> w.field("cancel") { writeCancel(w, v.value) }
+            is SessionOperation.Close -> w.field("close") { writeEmpty(w, v.value) }
+        } }
+    }
+    data class SessionRequest(val protocolVersion: Long, val generation: List<Long>, val requestId: Long, val operation: SessionOperation)
+    private fun readSessionRequest(v: Any): SessionRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("protocolVersion", "generation", "requestId", "operation"), false)
+        return SessionRequest(readCounter(obj.get("protocolVersion")), readGeneration(obj.get("generation")), readRequestId(obj.get("requestId")), readSessionOperation(obj.get("operation")))
+    }
+    private fun writeSessionRequest(w: ProjectIntentWriter, v: SessionRequest) {
+        w.obj {
+            w.field("protocolVersion") { writeCounter(w, v.protocolVersion) }
+            w.field("generation") { writeGeneration(w, v.generation) }
+            w.field("requestId") { writeRequestId(w, v.requestId) }
+            w.field("operation") { writeSessionOperation(w, v.operation) }
+        }
+    }
+    data class SessionAcknowledgement(val guard: SessionGuard, val history: SessionHistory, val changed: Boolean)
+    private fun readSessionAcknowledgement(v: Any): SessionAcknowledgement {
+        val obj = ProjectIntentJson.fields(v, setOf("guard", "history", "changed"), false)
+        return SessionAcknowledgement(readSessionGuard(obj.get("guard")), readSessionHistory(obj.get("history")), readFlag(obj.get("changed")))
+    }
+    private fun writeSessionAcknowledgement(w: ProjectIntentWriter, v: SessionAcknowledgement) {
+        w.obj {
+            w.field("guard") { writeSessionGuard(w, v.guard) }
+            w.field("history") { writeSessionHistory(w, v.history) }
+            w.field("changed") { writeFlag(w, v.changed) }
+        }
+    }
+    data class Welcome(val protocolVersion: Int, val projectSchemaVersion: Long, val intentVersion: Int, val maxPending: Long, val maxBytes: Long, val maxNodes: Long)
+    private fun readWelcome(v: Any): Welcome {
+        val obj = ProjectIntentJson.fields(v, setOf("protocolVersion", "projectSchemaVersion", "intentVersion", "maxPending", "maxBytes", "maxNodes"), false)
+        return Welcome(readSessionVersion(obj.get("protocolVersion")), readCounter(obj.get("projectSchemaVersion")), readVersion(obj.get("intentVersion")), readCounter(obj.get("maxPending")), readCounter(obj.get("maxBytes")), readCounter(obj.get("maxNodes")))
+    }
+    private fun writeWelcome(w: ProjectIntentWriter, v: Welcome) {
+        w.obj {
+            w.field("protocolVersion") { writeSessionVersion(w, v.protocolVersion) }
+            w.field("projectSchemaVersion") { writeCounter(w, v.projectSchemaVersion) }
+            w.field("intentVersion") { writeVersion(w, v.intentVersion) }
+            w.field("maxPending") { writeCounter(w, v.maxPending) }
+            w.field("maxBytes") { writeCounter(w, v.maxBytes) }
+            w.field("maxNodes") { writeCounter(w, v.maxNodes) }
+        }
+    }
+    enum class CancelStatus {Requested,NotPending}
+    private fun readCancelStatus(v: Any): CancelStatus {
+        return when(v) {"requested" -> CancelStatus.Requested;"notPending" -> CancelStatus.NotPending; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeCancelStatus(w: ProjectIntentWriter, v: CancelStatus) {
+        w.literal(when(v) {CancelStatus.Requested -> "requested";CancelStatus.NotPending -> "notPending";})
+    }
+    enum class SessionError {InvalidRequest,UnsupportedVersion,WrongSession,NotReady,DuplicateRequest,Stale,Cancelled,Busy,Disposed,CommandFailed,ResourceLimit}
+    private fun readSessionError(v: Any): SessionError {
+        return when(v) {"invalidRequest" -> SessionError.InvalidRequest;"unsupportedVersion" -> SessionError.UnsupportedVersion;"wrongSession" -> SessionError.WrongSession;"notReady" -> SessionError.NotReady;"duplicateRequest" -> SessionError.DuplicateRequest;"stale" -> SessionError.Stale;"cancelled" -> SessionError.Cancelled;"busy" -> SessionError.Busy;"disposed" -> SessionError.Disposed;"commandFailed" -> SessionError.CommandFailed;"resourceLimit" -> SessionError.ResourceLimit; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeSessionError(w: ProjectIntentWriter, v: SessionError) {
+        w.literal(when(v) {SessionError.InvalidRequest -> "invalidRequest";SessionError.UnsupportedVersion -> "unsupportedVersion";SessionError.WrongSession -> "wrongSession";SessionError.NotReady -> "notReady";SessionError.DuplicateRequest -> "duplicateRequest";SessionError.Stale -> "stale";SessionError.Cancelled -> "cancelled";SessionError.Busy -> "busy";SessionError.Disposed -> "disposed";SessionError.CommandFailed -> "commandFailed";SessionError.ResourceLimit -> "resourceLimit";})
+    }
+    sealed interface SessionResult {
+        data class Acknowledged(val value: ProjectIntents.SessionAcknowledgement) : SessionResult
+        data class Welcome(val value: ProjectIntents.Welcome) : SessionResult
+        data class Cancelled(val value: ProjectIntents.CancelStatus) : SessionResult
+        data class Closed(val value: ProjectIntents.Empty) : SessionResult
+        data class Error(val value: ProjectIntents.SessionError) : SessionResult
+        data class ReceiptUnavailable(val value: Boolean) : SessionResult
+    }
+    private fun readSessionResult(v: Any): SessionResult {
+        val obj = ProjectIntentJson.fields(v, setOf("acknowledged", "welcome", "cancelled", "closed", "error", "receiptUnavailable"), true)
+        return when(val key = obj.keys().next()) {
+            "acknowledged" -> SessionResult.Acknowledged(readSessionAcknowledgement(obj.get(key)))
+            "welcome" -> SessionResult.Welcome(readWelcome(obj.get(key)))
+            "cancelled" -> SessionResult.Cancelled(readCancelStatus(obj.get(key)))
+            "closed" -> SessionResult.Closed(readEmpty(obj.get(key)))
+            "error" -> SessionResult.Error(readSessionError(obj.get(key)))
+            "receiptUnavailable" -> SessionResult.ReceiptUnavailable(readFlag(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeSessionResult(w: ProjectIntentWriter, v: SessionResult) {
+        w.obj { when(v) {
+            is SessionResult.Acknowledged -> w.field("acknowledged") { writeSessionAcknowledgement(w, v.value) }
+            is SessionResult.Welcome -> w.field("welcome") { writeWelcome(w, v.value) }
+            is SessionResult.Cancelled -> w.field("cancelled") { writeCancelStatus(w, v.value) }
+            is SessionResult.Closed -> w.field("closed") { writeEmpty(w, v.value) }
+            is SessionResult.Error -> w.field("error") { writeSessionError(w, v.value) }
+            is SessionResult.ReceiptUnavailable -> w.field("receiptUnavailable") { writeFlag(w, v.value) }
+        } }
+    }
+    data class SessionReply(val protocolVersion: Int, val generation: List<Long>, val requestId: Long, val result: SessionResult)
+    private fun readSessionReply(v: Any): SessionReply {
+        val obj = ProjectIntentJson.fields(v, setOf("protocolVersion", "generation", "requestId", "result"), false)
+        return SessionReply(readSessionVersion(obj.get("protocolVersion")), readGeneration(obj.get("generation")), readCounter(obj.get("requestId")), readSessionResult(obj.get("result")))
+    }
+    private fun writeSessionReply(w: ProjectIntentWriter, v: SessionReply) {
+        w.obj {
+            w.field("protocolVersion") { writeSessionVersion(w, v.protocolVersion) }
+            w.field("generation") { writeGeneration(w, v.generation) }
+            w.field("requestId") { writeCounter(w, v.requestId) }
+            w.field("result") { writeSessionResult(w, v.result) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
     fun encodeBatch(value: Batch): String = ProjectIntentWriter().also { writeBatch(it, value) }.finish()
+    fun decodeSessionRequest(text: String): SessionRequest = readSessionRequest(ProjectIntentJson.parse(text))
+    fun encodeSessionRequest(value: SessionRequest): String = ProjectIntentWriter().also { writeSessionRequest(it, value) }.finish()
+    fun decodeSessionReply(text: String): SessionReply = readSessionReply(ProjectIntentJson.parse(text))
+    fun encodeSessionReply(value: SessionReply): String = ProjectIntentWriter().also { writeSessionReply(it, value) }.finish()
 }

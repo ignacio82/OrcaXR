@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   captureProjectIntent,
+  decodeProjectSessionRequest,
+  encodeProjectSessionRequest,
+  decodeProjectSessionReply,
+  encodeProjectSessionReply,
   decodeProjectIntent,
   decodeProjectBatch,
   encodeProjectIntent,
@@ -19,9 +23,13 @@ const fixture = JSON.parse(
 );
 for (const row of fixture.cases) {
   const decode =
-    row.kind === 'Batch'
-      ? (raw: string) => JSON.parse(encodeProjectBatch(decodeProjectBatch(raw)))
-      : (raw: string) => JSON.parse(encodeProjectIntent(decodeProjectIntent(raw)));
+    row.kind === 'SessionRequest'
+      ? (raw: string) => JSON.parse(encodeProjectSessionRequest(decodeProjectSessionRequest(raw)))
+      : row.kind === 'SessionReply'
+        ? (raw: string) => JSON.parse(encodeProjectSessionReply(decodeProjectSessionReply(raw)))
+        : row.kind === 'Batch'
+          ? (raw: string) => JSON.parse(encodeProjectBatch(decodeProjectBatch(raw)))
+          : (raw: string) => JSON.parse(encodeProjectIntent(decodeProjectIntent(raw)));
   if (row.expected === null) assert.throws(() => decode(row.input), InvalidProjectIntent, row.label);
   else assert.deepEqual(decode(row.input), row.expected, row.label);
 }

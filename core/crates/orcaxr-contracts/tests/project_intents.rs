@@ -9,7 +9,11 @@ fn decodes_and_reencodes_shared_corpus() {
     .unwrap();
     for case in fixture["cases"].as_array().unwrap() {
         let raw = case["input"].as_str().unwrap();
-        let decoded = if case["kind"] == "Batch" {
+        let decoded = if case["kind"] == "SessionRequest" {
+            decode_session_request(raw).and_then(|value| encode_session_request(&value))
+        } else if case["kind"] == "SessionReply" {
+            decode_session_reply(raw).and_then(|value| encode_session_reply(&value))
+        } else if case["kind"] == "Batch" {
             decode_batch(raw).and_then(|value| encode_batch(&value))
         } else {
             decode_intent(raw).and_then(|value| encode_intent(&value))

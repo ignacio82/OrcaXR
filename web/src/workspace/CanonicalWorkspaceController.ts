@@ -1,3 +1,4 @@
+import { LocalProjectSessionTransport } from '../project/LocalProjectSessionTransport';
 import { PROJECT_INTENT_VERSION } from '../../../contracts/generated/project-intents';
 import { createIntentTextEncoder } from '../project/PreparedProjectCommands';
 import * as THREE from 'three';
@@ -831,6 +832,7 @@ export class CanonicalWorkspaceController {
   private readonly assets: InMemoryAssetRepository;
   private readonly session: EditorSession;
   private readonly asyncSession: AsyncEditorSession;
+  private readonly sessionTransport: LocalProjectSessionTransport;
   private readonly subscribers = new Set<CanonicalWorkspaceSubscriber>();
   private readonly sourceUnsubscribers: Array<() => void> = [];
   private readonly importCoordinator: ProjectImportCoordinator;
@@ -874,6 +876,7 @@ export class CanonicalWorkspaceController {
     if (options.initialProjectConfig) initialState.config = cloneJson(options.initialProjectConfig);
     const reconciledInitialState = this.withReconciledAutoPairs(initialState);
     const serializer = this.reconcilingSerializer(options.projectSerializer ?? new Bbs3mfProjectSerializer());
+    const sessionGeneration = Array.from(crypto.getRandomValues(new Uint32Array(4)));
     this.assets = new InMemoryAssetRepository();
     this.session = new EditorSession({
       initialState: reconciledInitialState,
@@ -882,6 +885,11 @@ export class CanonicalWorkspaceController {
       history: options.history,
     });
     this.asyncSession = new AsyncEditorSession(this.session);
+    this.sessionTransport = new LocalProjectSessionTransport(
+      this.asyncSession,
+      sessionGeneration,
+      reconciledInitialState.schemaVersion,
+    );
     const parser = options.projectImportParser ?? new BbsProjectImportWorkerClient();
     this.importCoordinator = new ProjectImportCoordinator({
       parser: {
@@ -908,6 +916,7 @@ export class CanonicalWorkspaceController {
         this.session.subscribeProjectionHealth(() => this.scheduleChange('projection-health')),
       );
     } catch (error) {
+      this.sessionTransport.dispose();
       this.asyncSession.dispose();
       this.session.dispose();
       throw error;
@@ -1539,7 +1548,7 @@ export class CanonicalWorkspaceController {
       ),
     );
     const order = Math.max(-1, ...state.plates.map((plate) => plate.order)) + 1;
-    await this.asyncSession.executeIntent(
+    await this.sessionTransport.executeIntent(
       {
         version: PROJECT_INTENT_VERSION,
         command: {
@@ -1959,7 +1968,7 @@ export class CanonicalWorkspaceController {
     const source = findPlate(state, sourcePlateId);
     if (!source) throw new Error(`Unknown plate ${sourcePlateId}`);
     const plateId = this.options.idSource.next('plate');
-    await this.asyncSession.executeIntent(
+    await this.sessionTransport.executeIntent(
       {
         version: PROJECT_INTENT_VERSION,
         command: {
@@ -1994,7 +2003,7 @@ export class CanonicalWorkspaceController {
     const state = this.session.project.getSnapshot().state;
     if (!findPlate(state, plateId)) throw new Error(`Unknown plate ${plateId}`);
     if (state.plates.length <= 1) throw new Error('Cannot delete the last plate');
-    await this.asyncSession.executeIntent(
+    await this.sessionTransport.executeIntent(
       { version: PROJECT_INTENT_VERSION, command: { deletePlate: { plateId: intentText(plateId) } } },
       { guard },
     );
@@ -2007,7 +2016,7 @@ export class CanonicalWorkspaceController {
     const intentText = createIntentTextEncoder();
     const state = this.session.project.getSnapshot().state;
     if (!findPlate(state, plateId)) throw new Error(`Unknown plate ${plateId}`);
-    return this.asyncSession.executeIntent(
+    return this.sessionTransport.executeIntent(
       { version: PROJECT_INTENT_VERSION, command: { activatePlate: { plateId: intentText(plateId) } } },
       { guard },
     );
@@ -2019,7 +2028,7 @@ export class CanonicalWorkspaceController {
     const guard = this.asyncSession.captureGuard();
     const intentText = createIntentTextEncoder();
     if (!findPlate(this.session.project.getSnapshot().state, plateId)) throw new Error(`Unknown plate ${plateId}`);
-    await this.asyncSession.executeIntent(
+    await this.sessionTransport.executeIntent(
       {
         version: PROJECT_INTENT_VERSION,
         command: {
@@ -2038,7 +2047,7 @@ export class CanonicalWorkspaceController {
     this.assertPlateMutationRevision(expectedRevision);
     const guard = this.asyncSession.captureGuard();
     const intentText = createIntentTextEncoder();
-    await this.asyncSession.executeIntent(
+    await this.sessionTransport.executeIntent(
       { version: PROJECT_INTENT_VERSION, command: { reorderPlates: { plateIds: orderedPlateIds.map(intentText) } } },
       { guard },
     );
@@ -2050,7 +2059,7 @@ export class CanonicalWorkspaceController {
     const guard = this.asyncSession.captureGuard();
     const intentText = createIntentTextEncoder();
     if (!findPlate(this.session.project.getSnapshot().state, plateId)) throw new Error(`Unknown plate ${plateId}`);
-    await this.asyncSession.executeIntent(
+    await this.sessionTransport.executeIntent(
       { version: PROJECT_INTENT_VERSION, command: { setPlatePrintable: { plateId: intentText(plateId), printable } } },
       { guard },
     );
@@ -3828,7 +3837,7 @@ export class CanonicalWorkspaceController {
   /** Production action gateway; the synchronous method remains a migration reference. */
   async undoAsync(): Promise<boolean> {
     this.assertActive();
-    return (await this.asyncSession.undo()).value;
+    return (await this.sessionTransport.undo()).value;
   }
 
   redo(): boolean {
@@ -3838,7 +3847,7 @@ export class CanonicalWorkspaceController {
 
   async redoAsync(): Promise<boolean> {
     this.assertActive();
-    return (await this.asyncSession.redo()).value;
+    return (await this.sessionTransport.redo()).value;
   }
 
   /** Merge exact canonical instances into a caller-owned binary STL artifact. */
@@ -4149,6 +4158,7 @@ export class CanonicalWorkspaceController {
     for (const unsubscribe of this.sourceUnsubscribers.splice(0)) unsubscribe();
     this.pendingChangeSources.clear();
     this.subscribers.clear();
+    this.sessionTransport.dispose();
     this.asyncSession.dispose();
     this.session.dispose();
   }

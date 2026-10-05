@@ -6,6 +6,7 @@ export type IntentShape =
       readonly max: number;
     }
   | { readonly kind: "boolean" }
+  | { readonly kind: "enum"; readonly values: readonly string[] }
   | {
       readonly kind: "array";
       readonly items: string;
@@ -65,6 +66,10 @@ export function captureIntent(
           fail();
         charge(JSON.stringify(input).length);
         return input === 0 ? 0 : input;
+      case "enum":
+        if (typeof input !== "string" || !shape.values.includes(input)) fail();
+        charge(input.length + 2);
+        return input;
       case "boolean":
         if (typeof input !== "boolean") fail();
         charge(input ? 4 : 5);

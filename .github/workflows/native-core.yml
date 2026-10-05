@@ -104,7 +104,7 @@ jobs:
           node tools/cross-platform/test-project-intent-generator.mjs
           node tools/cross-platform/project-intent-vectors.mjs
           node tools/cross-platform/package-browser-core.mjs
-          node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts project-intents.test.ts
+          node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts project-intents.test.ts project-session-transport.test.ts
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-id-vectors.mjs

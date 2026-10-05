@@ -4,7 +4,7 @@
   "maxBytes": 1048576,
   "maxNodes": 131072,
   "maxDepth": 12,
-  "description": "Prepared plate commands. Text is lossless UTF-16 units; entity semantics are validated by the project executor. This is not the session envelope or persisted project schema.",
+  "description": "Prepared project commands and session messages. Text is lossless UTF-16 units. Project transport, command format and persisted schema versions are distinct.",
   "definitions": {
     "Unit": {
       "kind": "integer",
@@ -158,10 +158,210 @@
         "label": "Label",
         "commands": "Commands"
       }
+    },
+    "Counter": {
+      "kind": "integer",
+      "min": 0,
+      "max": 9007199254740991
+    },
+    "RequestId": {
+      "kind": "integer",
+      "min": 1,
+      "max": 9007199254740991
+    },
+    "Word": {
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    "Generation": {
+      "kind": "array",
+      "items": "Word",
+      "min": 4,
+      "max": 4
+    },
+    "Fingerprint": {
+      "kind": "array",
+      "items": "Unit",
+      "min": 1,
+      "max": 128
+    },
+    "DisplayText": {
+      "kind": "array",
+      "items": "Unit",
+      "min": 0,
+      "max": 256
+    },
+    "DisplayLabel": {
+      "kind": "object",
+      "fields": {
+        "text": "DisplayText",
+        "present": "Flag",
+        "truncated": "Flag"
+      }
+    },
+    "DirtyCategory": {
+      "kind": "enum",
+      "values": [
+        "projectData",
+        "presets",
+        "printerDevice"
+      ]
+    },
+    "DirtyCategories": {
+      "kind": "array",
+      "items": "DirtyCategory",
+      "min": 0,
+      "max": 3
+    },
+    "SessionVersion": {
+      "kind": "integer",
+      "min": 1,
+      "max": 1
+    },
+    "SessionGuard": {
+      "kind": "object",
+      "fields": {
+        "projectId": "Id",
+        "revision": "Counter",
+        "semanticHash": "Fingerprint",
+        "assetFingerprint": "Fingerprint",
+        "historyRevision": "Counter"
+      }
+    },
+    "SessionHistory": {
+      "kind": "object",
+      "fields": {
+        "undoCount": "Counter",
+        "redoCount": "Counter",
+        "undoLabel": "DisplayLabel",
+        "redoLabel": "DisplayLabel",
+        "dirtyCategories": "DirtyCategories"
+      }
+    },
+    "Empty": {
+      "kind": "object",
+      "fields": {}
+    },
+    "GuardedIntent": {
+      "kind": "object",
+      "fields": {
+        "guard": "SessionGuard",
+        "intent": "Intent"
+      }
+    },
+    "GuardedBatch": {
+      "kind": "object",
+      "fields": {
+        "guard": "SessionGuard",
+        "batch": "Batch"
+      }
+    },
+    "Hello": {
+      "kind": "object",
+      "fields": {
+        "minProtocolVersion": "Counter",
+        "maxProtocolVersion": "Counter",
+        "projectSchemaVersion": "Counter",
+        "intentVersion": "Counter"
+      }
+    },
+    "Cancel": {
+      "kind": "object",
+      "fields": {
+        "targetRequestId": "RequestId"
+      }
+    },
+    "SessionOperation": {
+      "kind": "union",
+      "variants": {
+        "hello": "Hello",
+        "execute": "GuardedIntent",
+        "transaction": "GuardedBatch",
+        "undo": "SessionGuard",
+        "redo": "SessionGuard",
+        "query": "Empty",
+        "cancel": "Cancel",
+        "close": "Empty"
+      }
+    },
+    "SessionRequest": {
+      "kind": "object",
+      "fields": {
+        "protocolVersion": "Counter",
+        "generation": "Generation",
+        "requestId": "RequestId",
+        "operation": "SessionOperation"
+      }
+    },
+    "SessionAcknowledgement": {
+      "kind": "object",
+      "fields": {
+        "guard": "SessionGuard",
+        "history": "SessionHistory",
+        "changed": "Flag"
+      }
+    },
+    "Welcome": {
+      "kind": "object",
+      "fields": {
+        "protocolVersion": "SessionVersion",
+        "projectSchemaVersion": "Counter",
+        "intentVersion": "Version",
+        "maxPending": "Counter",
+        "maxBytes": "Counter",
+        "maxNodes": "Counter"
+      }
+    },
+    "CancelStatus": {
+      "kind": "enum",
+      "values": [
+        "requested",
+        "notPending"
+      ]
+    },
+    "SessionError": {
+      "kind": "enum",
+      "values": [
+        "invalidRequest",
+        "unsupportedVersion",
+        "wrongSession",
+        "notReady",
+        "duplicateRequest",
+        "stale",
+        "cancelled",
+        "busy",
+        "disposed",
+        "commandFailed",
+        "resourceLimit"
+      ]
+    },
+    "SessionResult": {
+      "kind": "union",
+      "variants": {
+        "acknowledged": "SessionAcknowledgement",
+        "welcome": "Welcome",
+        "cancelled": "CancelStatus",
+        "closed": "Empty",
+        "error": "SessionError",
+        "receiptUnavailable": "Flag"
+      }
+    },
+    "SessionReply": {
+      "kind": "object",
+      "fields": {
+        "protocolVersion": "SessionVersion",
+        "generation": "Generation",
+        "requestId": "Counter",
+        "result": "SessionResult"
+      }
     }
   },
   "roots": [
     "Intent",
-    "Batch"
-  ]
+    "Batch",
+    "SessionRequest",
+    "SessionReply"
+  ],
+  "sessionVersion": 1
 }

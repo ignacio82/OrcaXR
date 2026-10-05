@@ -88,6 +88,26 @@ changes.push(
     s.definitions.Order.min = -1;
   },
 );
+changes.push(
+  (s) => {
+    s.sessionVersion = 0;
+  },
+  (s) => {
+    s.definitions.SessionVersion.max = 2;
+  },
+  (s) => {
+    s.definitions.SessionError.values = [];
+  },
+  (s) => {
+    s.definitions.SessionError.values.push("stale");
+  },
+  (s) => {
+    s.definitions.SessionError.values.push("invalid-value");
+  },
+  (s) => {
+    s.definitions.SessionError.optional = true;
+  },
+);
 const directory = mkdtempSync(join(tmpdir(), "orcaxr-intent-generator-"));
 try {
   mkdirSync(join(directory, "tools/cross-platform"), { recursive: true });

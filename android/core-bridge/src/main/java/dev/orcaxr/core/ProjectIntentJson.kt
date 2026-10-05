@@ -119,4 +119,5 @@ internal class ProjectIntentWriter {
         node(); if (value !in min..max) throw InvalidProjectIntent(); add(value.toString())
     }
     fun boolean(value: Boolean) { node(); add(value.toString()) }
+    fun literal(value: String) { node(); add("\"$value\"") }
 }

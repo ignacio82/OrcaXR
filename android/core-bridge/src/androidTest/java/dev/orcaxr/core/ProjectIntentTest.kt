@@ -17,7 +17,9 @@ class ProjectIntentTest {
             val label = case.getString("label")
             val expected = case.get("expected")
             try {
-                val output = if (case.getString("kind") == "Batch") ProjectIntents.encodeBatch(ProjectIntents.decodeBatch(input))
+                val output = if (case.getString("kind") == "SessionRequest") ProjectIntents.encodeSessionRequest(ProjectIntents.decodeSessionRequest(input))
+                    else if (case.getString("kind") == "SessionReply") ProjectIntents.encodeSessionReply(ProjectIntents.decodeSessionReply(input))
+                    else if (case.getString("kind") == "Batch") ProjectIntents.encodeBatch(ProjectIntents.decodeBatch(input))
                     else ProjectIntents.encodeIntent(ProjectIntents.decodeIntent(input))
                 assertNotEquals(label, JSONObject.NULL, expected)
                 equivalent(expected, JSONObject(output), label)

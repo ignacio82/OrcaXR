@@ -23,13 +23,18 @@ for (const file of iconFiles) {
   assert(generated.includes(`icons/material/${file}`), `${file} must be available offline`);
 }
 assert.match(staticWorker, /SLICER_CACHE/);
-assert.match(staticWorker, /shell-v3/, 'Rust preview requires the v3 static shell/runtime cache contract');
-assert.doesNotMatch(staticWorker, /shell-v[12]/, 'old static shell caches must be retired');
+assert.match(
+  staticWorker,
+  /shell-v4/,
+  'Shared archive/preview chunks require the v4 static shell/runtime cache contract',
+);
+assert.doesNotMatch(staticWorker, /shell-v[123]/, 'old static shell caches must be retired');
 assert.match(staticWorker, /SKIP_WAITING/, 'static updates must use the unsaved-work guard');
 assert.doesNotMatch(staticWorker, /precacheShell\(\)\.then/, 'install must not activate an update automatically');
 const preview = JSON.parse(await readFile(join(root, 'dist', 'core-preview-assets.json'), 'utf8'));
 assert.equal(preview.schemaVersion, 1);
 assert.equal(preview.workerProtocol, 2);
+assert.ok(preview.assets.some((asset) => /projectArchive\.worker-.*\.js$/.test(asset)));
 assert.ok(preview.assets.some((asset) => /gcodePreview\.worker-.*\.js$/.test(asset)));
 assert.ok(preview.assets.some((asset) => /WorkerGcodePreviewSession-.*\.js$/.test(asset)));
 assert.ok(preview.assets.includes(`core/${preview.coreSet}/orcaxr_core_bg.wasm`));

@@ -27,13 +27,13 @@ them so the page origin can obtain/use Local Network Access permission for HTTP
 or HTTPS targets. Do not restore a hand-written subnet allowlist; Chrome's
 classification includes details that application code should not duplicate.
 For same-origin requests it precaches the deploy app shell, bundled XR icons and
-the generated preview host/worker graph with its exact Rust manifest/WASM pair,
+the generated preview/archive host/worker graph with its exact Rust manifest/WASM pair,
 uses NetworkFirst at runtime, keeps the large slicer artifacts in a separate
 four-entry cache, supplies the offline navigation fallback, and restores COOP/
 COEP headers. Update its cache version and offline contract whenever deploy
 assets or worker/schema compatibility changes.
 
-The static shell cache is now `shell-v3`. Installation leaves updates waiting;
+The static shell cache is now `shell-v4`. Installation leaves updates waiting;
 the existing persistence Save/Discard/Cancel flow sends `SKIP_WAITING` only after
 the navigation guard succeeds. First installation still claims the page to
 establish isolation. The production PWA likewise precaches the versioned Rust
@@ -179,8 +179,12 @@ remains the cross-browser and remote-network fallback.
   explicit saves priority and coalesces recovery requests. Recovery never falls
   back onto the UI thread; a failed worker pauses it visibly. Explicit manual
   export can retry/fall back. Cancellation/disposal settles callers and rejects
-  late results. Import and export workers share one emitted archive-codec bundle,
-  but have independent instances and lifetimes.
+  late results. Import and export workers share one emitted archive entry, but
+  have independent instances and lifetimes. The production build emits that entry
+  in the app graph with a strict entry signature: pure codecs are shared chunks,
+  while worker message handlers remain isolated from browser startup. Both worker
+  dependency graphs are included in the offline manifest; code sharing must never
+  make import cancellation terminate an export or move serialization onto the UI.
 - Recovery captures after five idle seconds, at most thirty seconds into
   continuous editing. IndexedDB keeps up to three snapshots per project/editing
   session; sequence allocation, insertion and pruning are one transaction.

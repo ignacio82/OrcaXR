@@ -151,11 +151,15 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   printability await the local asynchronous session facade through ActionRegistry.
   Queued mutations bind both project/asset identity and a monotonic history revision; equal-looking history replacement can still invalidate them.
   Plate payloads are generated, bounded serializable intents; the TypeScript bus
-  remains the executor. Session guards and acknowledgements still use local
-  ownership, so this is not yet a worker/JNI session protocol. Plate UI success follows acknowledgement; canonical subscriptions
+  remains the executor. Generated string messages now carry session generations,
+  guards, handshake, acknowledgements, cancellation and close through a local
+  transport adapter. The host-generated connection nonce never consumes the
+  injected project ID source. Lost/malformed replies fail the client closed without
+  retry; a committed operation whose summary exceeds the wire budget reports a
+  distinct completed outcome. Plate UI success follows acknowledgement; canonical subscriptions
   own selection and projection updates. Objects reveal checks the activation
   receipt and current selection before applying late camera/selection work.
-  Other command families and generated session/result bindings remain migration work.
+  Other command families, remote projections and actual worker/JNI project execution remain migration work.
 - Prepared plate intents use ASCII JSON with UTF-16 unit arrays for all text.
   The shared schema generates TypeScript, Rust and Kotlin types and converters.
   Reject duplicate/unknown/missing fields, positional objects, unsupported versions

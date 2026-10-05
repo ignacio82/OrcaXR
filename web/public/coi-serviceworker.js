@@ -45,7 +45,7 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof window === 'undefined') {
   // ---------- service worker context ----------
   const CACHE_PREFIX = 'orcaxr-coi-';
-  const SHELL_CACHE = `${CACHE_PREFIX}shell-v3`;
+  const SHELL_CACHE = `${CACHE_PREFIX}shell-v4`;
   const SLICER_CACHE = `${CACHE_PREFIX}slicer-v1`;
 
   const withIsolationHeaders = (res) => {

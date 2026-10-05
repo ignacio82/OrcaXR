@@ -94,7 +94,7 @@ export class AsyncEditorSession {
     return this.mutate(() => this.session.execute(command, { coalesce }), options);
   }
 
-  /** Serializable prepared command; ownership guards remain local until the session transport lands. */
+  /** Prepared command after boundary capture; the endpoint translates wire ownership into this local guard. */
   executeIntent(
     intent: ProjectIntentWire,
     options: AsyncSessionRequestOptions = {},

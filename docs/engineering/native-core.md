@@ -362,23 +362,39 @@ authority. Undo/Redo and plate lifecycle actions await acknowledgements; guarded
 bounded callback-free batches and ordered summary queries are available for
 incremental migration. Project, asset and history guards prevent stale work from
 silently applying to a newer edit. Plate payloads now use the generated intent
-contract below; the TypeScript command bus remains authoritative. Owner tokens
-and acknowledgement guards remain local. The remaining action/import/save/slice
-migration, session/result/error bindings and Rust project implementation remain
+contract below; the TypeScript command bus remains authoritative. Generated
+session messages now serve plate/history operations through an in-process string
+adapter. Remaining action/import/save/slice migration, remote projection contracts,
+actual worker/JNI execution, crash recovery and Rust project implementation remain
 Phase 1/4 work. The maintained details live in
 [project contracts](project-contracts.md).
 
 `contracts/project-intents.json` now defines seven prepared plate operations and
-batches of up to 64 operations. `generate-project-intents.mjs` emits TypeScript
+batches of up to 64 operations, plus versioned session requests and replies.
+`generate-project-intents.mjs` emits TypeScript
 readonly types with immutable capture, Rust owned types/converters and Kotlin
 sealed types/encoders/decoders. The restricted schema rejects unsupported features
 rather than ignoring them. ASCII JSON carries all user text as UTF-16 integer
 arrays; existing project encoding and semantic hashes do not change. Structural
 validation is distinct from stable-ID and project validation in the executor.
 The browser production plate path now submits these intents through the existing
-asynchronous facade. A captured batch maps to the original atomic transaction.
-The guards, acknowledgements, ordered queries and Undo/Redo still use local
-ownership; this leaf format does not establish a complete session transport.
+asynchronous facade through serialized request/reply envelopes. A captured batch
+maps to the original atomic transaction. The connection negotiates protocol,
+project schema and intent versions, binds a separate 128-bit generation nonce,
+rejects duplicate/out-of-order request IDs, and carries exact project/asset/history
+guards. Ordered queries, acknowledgements, bounded error enums, cancellation and
+close are shared message types. Both ends bound pending operations; close/cancel
+have a control lane. Local owner tokens are checked before conversion and never
+cross the string boundary. No transport nonce consumes project ID entropy.
+
+History display labels include explicit truncation flags; the canonical bus keeps
+full labels. An undo that restores a project ID beyond the message budget reports
+an explicit completed-but-summary-unavailable outcome, never a rejection implying
+rollback. Lost/malformed/foreign replies fail the client closed without retrying
+an uncertain edit. After-commit cancellation or close cannot retract a valid
+acknowledgement. The host still owns reconciliation and transport liveness.
+Selection, capabilities and rendering remain canonical local subscriptions;
+this adapter is not a production worker or JNI project executor.
 
 All three decoders bound input bytes, value nodes and nesting, reject duplicate,
 unknown and missing fields, and require objects rather than positional arrays.
@@ -397,12 +413,15 @@ intents and G-code metadata now apply a shared lexical check for number, keyword
 and escape syntax before the existing bounded structural parser. Unicode
 metadata strings and cancellation callbacks retain their existing behavior.
 
-The intent corpus now contains **188 independently authored raw cases**, replayed
+The command/session corpus now contains **673 independently authored raw cases**, replayed
 by TypeScript, host Rust in debug/release, and compiled Kotlin on the API 34 x86_64
 emulator. Separate checks round-trip all 65,536 UTF-16 units, reject node/byte/depth
-exhaustion and malformed typed output, and reject 23 unsupported schema mutations.
-Production-controller regressions include distinct add/rename name limits; a
-session regression preserves plate order above the safe-integer range. A failed
+exhaustion and malformed typed output, and reject 29 unsupported schema mutations.
+Nineteen transport regressions cover negotiation, request replay, immutable
+payloads, stale guards, cancellation/close races, lost/corrupt replies, backpressure,
+bounded history, completed outcomes without summaries and owner isolation.
+The 40 production-controller plate regressions retain distinct add/rename limits;
+a session regression preserves plate order above the safe-integer range. A failed
 prepared batch restores project/selection/history/assets, while later valid work
 and empty batches retain the original behavior. Workspace Rust tests, format,
 strict Clippy and Cargo audit pass. Both Android ABIs rebuild; debug/release APKs,
@@ -410,23 +429,29 @@ strict dependency verification, unit tests and lint pass. The owned emulator
 passes 24 core instrumentation tests (including three Kotlin intent tests), three
 cold starts, three renderer pixel/lifecycle tests and the separate non-XR startup.
 This is 4,096-byte-page software-emulator evidence, not ARM64 or physical XR
-execution. The Rust intent decoder has no worker/JNI project-session entry point.
+execution. The Rust intent/session codecs have no worker/JNI project-session entry point.
 
-The refreshed browser set `bc747ccd136e` contains 556,646 WASM bytes and binds
+The refreshed browser set `2858e9b9a359` contains 556,646 WASM bytes and binds
 64 core source inputs. Actual browser WASM reruns all 269 canonical vectors,
 10 malformed inputs, 48 canonical envelopes, 98 G-code sources/358 windows,
 4,554 view queries and 30 G-code request cases. Both APKs verify matching source
-and output identity with every native library 16 KB ELF/ZIP aligned. The new
-intent corpus exercises host TypeScript/Rust and Android Kotlin; it does not
+and output identity with every native library 16 KB ELF/ZIP aligned. The command/session
+corpus exercises host TypeScript/Rust and Android Kotlin; it does not
 claim Rust project execution through those existing WASM/JNI computation APIs.
-The redacted source scan covers 1,663 UTF-8 files, including six normalized for
-embedded NULs, with no findings. Workflow actionlint and generation checks pass;
-GitHub-hosted execution remains unqualified. The complete `scripts/quality.sh`
-gate passes against the final artifact set: 266 web unit-test files, 96 project
-test files, production browser/offline/recovery/accessibility checks, server
-HTTP/HTTPS deployment, real slicing and all three full npm audits. Bundle budgets
-pass with 2,274,624 main-entry bytes and 10,592,216 total JavaScript bytes under
-unchanged limits.
+The archive worker now shares its pure codec modules with the app build, with a
+strict entry signature preserving context startup and independently owned worker
+instances. The offline graph includes archive dependencies and the static cache
+moves to shell-v4. This removes duplicate codec code without relaxing bundle
+budgets. The final redacted source scan covers 1,667 UTF-8 files (six normalized
+for embedded NULs), with no findings. Workflow actionlint, generated binding and
+fixture checks pass; hosted CI remains unqualified. The complete repository gate
+passes against the final source/artifact set: 267 web unit-test files, 97 project
+test files, browser/offline/recovery/accessibility and pseudo-localization checks,
+HTTP/HTTPS server deployment fixtures, real slicing, artifact verification and all
+three full npm audits. Main-entry size is 2,101,384 bytes; total JavaScript is
+10,436,780 bytes under the unchanged 10,600,000-byte ceiling. These checks qualify
+the local TypeScript transport and codecs, not native project execution or XR
+hardware behavior.
 
 The migration inventory binds action source files to an existing Git commit.
 Commit an action-source change before regenerating it with `inventory.mjs --write`.
@@ -454,8 +479,9 @@ objects. All four named fields must occur exactly once; unknown fields are rejec
 Protocol versions retain numeric value semantics, including `1.0` and `1e0`.
 This envelope rule is separate from the inner JSON input's last-key-wins semantics.
 It is a deliberately limited schema subset; unsupported schema constructs must
-fail generation. The full project session, command/result/error and cancellation
-schemas in Phase 1/4 remain to be implemented. The G-code packet layouts below are
+fail generation. The prepared project/session schemas above cover the initial
+plate/history boundary; remaining commands, projection deltas and actual
+worker/JNI project execution in Phase 1/4 are still unimplemented. The G-code packet layouts below are
 generated. `contracts/gcode-requests.json` now owns six source/view request types
 and all three operation envelopes. It generates Rust types/object decoders,
 TypeScript types/guards/field catalogs, and Kotlin types/encoders/shape tables.
@@ -824,7 +850,7 @@ node tools/cross-platform/generate-project-intents.mjs
 node tools/cross-platform/test-project-intent-generator.mjs
 node tools/cross-platform/project-intent-vectors.mjs
 node tools/cross-platform/package-browser-core.mjs
-node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts rust-gcode-loading.test.ts project-intents.test.ts
+node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts rust-gcode-loading.test.ts project-intents.test.ts project-session-transport.test.ts
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-id-vectors.mjs

@@ -31,11 +31,10 @@ are fixture-specific evidence, not device-independent performance guarantees.
   original bus retains atomic rollback, monotonic project revisions, selection,
   coalescing and checkpoints without copying asset payloads. Empty batches do not
   change history revision. Acknowledgements freeze identity/history; queued queries
-  return summaries rather than project or mesh copies. These are trusted local
-  acknowledgements with an opaque owner token, not the future generated session
-  envelope.
+  return summaries rather than project or mesh copies. This internal facade keeps
+  its opaque owner token; the endpoint translates validated wire guards into it.
   Production Undo/Redo and all seven plate lifecycle operations await this facade
-  through the workspace and registry. Plate requests capture their guard before
+  through the generated string transport, workspace and registry. Plate requests capture their guard before
   preparation/ID allocation; exact activation/rename/order/printability no-ops keep
   selection, revision, history and checkpoints. UI success follows acknowledgement,
   while canonical subscriptions own selection/projection updates. Deletion does
@@ -65,9 +64,41 @@ are fixture-specific evidence, not device-independent performance guarantees.
   freezes owned copies before queueing. Per-request text conversion budgets reject
   excessive aggregate UTF-16 allocation during preparation. Batches preserve
   empty/no-op behavior,
-  atomic rollback, selection and asset sharing. The full session generation,
-  expected identity, result/error, handshake and cancellation envelopes remain
-  separate Phase 1/4 work; Rust/Kotlin decoding does not execute a native project.
+  atomic rollback, selection and asset sharing.
+- The same schema now generates session request/reply envelopes. Protocol version,
+  persisted project schema version and prepared-intent version are negotiated
+  separately; the existing computation ABI handshake remains independent. A
+  connection has a host-injected 128-bit generation (four unsigned words), distinct
+  from project IDs and their injected ID source. A reliable ordered connection
+  uses increasing safe-integer request IDs; the endpoint rejects replay/out-of-order
+  requests with a high-water mark, without retaining an unbounded response cache.
+  Guards carry project/revision/semantic/asset and history identity. The browser
+  bridge also checks the original local owner before dropping its Symbol; equal
+  project identities from another facade never become a valid owner.
+  Requests are captured before waiting for negotiation. Both client and endpoint
+  limit pending operations to 32. Cancellation and close use separate control
+  messages; a cancellation reply means requested/not pending, while the operation
+  reply determines whether it actually committed. Closing invalidates queued work
+  but never turns an already committed edit into a cancellation or disposes the
+  separately owned assets. Ordered queries report summaries and changed=false.
+  Replies carry bounded typed errors without private command diagnostics. History
+  display labels keep at most 256 UTF-16 units with explicit present/truncated
+  flags; canonical history remains complete. Whole envelopes share the leaf
+  byte/node/depth budgets, so framing consumes capacity too. Undo can restore an
+  arbitrarily large imported ID after committing: if its reply cannot fit, the
+  endpoint returns receiptUnavailable with the known changed value. The client
+  retains that completed outcome, and the local adapter raises a distinct
+  completed-operation diagnostic. It must never automatically retry that edit.
+  A lost, malformed, mismatched or semantically inconsistent reply fails the client
+  closed with an unknown outcome. The host must reconcile the authoritative
+  session before opening another connection; no retry or recovery-from-optimism
+  is implemented. Post-commit replies remain valid after close on their original
+  connection; existing UI guard checks prevent their use in a newer workspace.
+  Production currently exchanges strings in-process with the TypeScript authority.
+  Selection/capability/projection subscriptions remain local. Actual worker/JNI
+  project execution, crash recovery, remaining command families and complete
+  revisioned projection transport remain Phase 1/4 work. Rust/Kotlin codecs alone
+  do not execute a native project.
 - `EditorSession.open` binds its source project/revision/semantic/asset identity
   and owns a single current open operation. Newer opens supersede older reads,
   even if the newer read fails. Reset, disposal, cancellation and source drift

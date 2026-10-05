@@ -240,6 +240,207 @@ invalid(
   '{"version":1,"label":[65],"callback":"execute()","commands":[]}',
   "Batch",
 );
+
+// Session expectations are authored here, independently of generated converters.
+const generation = [0, 1, 2147483648, 4294967295];
+const guard = {
+  projectId: id,
+  revision: 9007199254740991,
+  semanticHash: units("fnv1a64:0123456789abcdef"),
+  assetFingerprint: units("fnv1a64:fedcba9876543210"),
+  historyRevision: 4,
+};
+const label = {
+  text: units("History \\ud800"),
+  present: true,
+  truncated: false,
+};
+const history = {
+  undoCount: 1,
+  redoCount: 0,
+  undoLabel: label,
+  redoLabel: { text: [], present: false, truncated: false },
+  dirtyCategories: ["projectData", "presets", "printerDevice"],
+};
+const operations = [
+  {
+    hello: {
+      minProtocolVersion: 1,
+      maxProtocolVersion: 1,
+      projectSchemaVersion: 1,
+      intentVersion: 1,
+    },
+  },
+  { execute: { guard, intent: add } },
+  { transaction: { guard, batch } },
+  { undo: guard },
+  { redo: guard },
+  { query: {} },
+  { cancel: { targetRequestId: 2 } },
+  { close: {} },
+];
+const results = [
+  { acknowledged: { guard, history, changed: true } },
+  {
+    welcome: {
+      protocolVersion: 1,
+      projectSchemaVersion: 1,
+      intentVersion: 1,
+      maxPending: 32,
+      maxBytes: 1048576,
+      maxNodes: 131072,
+    },
+  },
+  { cancelled: "requested" },
+  { cancelled: "notPending" },
+  { closed: {} },
+  { receiptUnavailable: true },
+  { receiptUnavailable: false },
+  ...[
+    "invalidRequest",
+    "unsupportedVersion",
+    "wrongSession",
+    "notReady",
+    "duplicateRequest",
+    "stale",
+    "cancelled",
+    "busy",
+    "disposed",
+    "commandFailed",
+    "resourceLimit",
+  ].map((error) => ({ error })),
+];
+for (const [kind, values] of [
+  [
+    "SessionRequest",
+    operations.map((operation) => ({
+      protocolVersion: 1,
+      generation,
+      requestId: 2,
+      operation,
+    })),
+  ],
+  [
+    "SessionReply",
+    results.map((result) => ({
+      protocolVersion: 1,
+      generation,
+      requestId: 2,
+      result,
+    })),
+  ],
+]) {
+  for (const [index, value] of values.entries()) {
+    valid(`${kind}:${index}`, value, undefined, kind);
+    // Walk named objects at every nesting level, including the required {}.
+    function walk(object, path = []) {
+      if (!object || typeof object !== "object" || Array.isArray(object))
+        return;
+      for (const mode of ["extra", "positional", "null"]) {
+        let mutated = structuredClone(value);
+        const replacement =
+          mode === "extra"
+            ? { ...object, unknown: false }
+            : mode === "positional"
+              ? Object.values(object)
+              : null;
+        if (!path.length) mutated = replacement;
+        else {
+          let parent = mutated;
+          for (const step of path.slice(0, -1)) parent = parent[step];
+          parent[path.at(-1)] = replacement;
+        }
+        invalid(
+          `${kind}:${index}:${path.join(".")}:${mode}`,
+          JSON.stringify(mutated),
+          kind,
+        );
+      }
+      for (const key of Object.keys(object)) {
+        const missing = structuredClone(value);
+        let parent = missing;
+        for (const step of path) parent = parent[step];
+        delete parent[key];
+        invalid(
+          `${kind}:${index}:${path.join(".")}:missing:${key}`,
+          JSON.stringify(missing),
+          kind,
+        );
+        walk(object[key], [...path, key]);
+      }
+    }
+    walk(value);
+    const raw = JSON.stringify(value);
+    invalid(
+      `${kind}:${index}:duplicate`,
+      raw.replace('"requestId":2', '"requestId":2,"requestId":2'),
+      kind,
+    );
+  }
+}
+for (const [field, values] of [
+  [
+    "generation",
+    [
+      [],
+      [0, 1, 2],
+      [0, 1, 2, 3, 4],
+      [0, 0, 0, -1],
+      [0, 0, 0, 4294967296],
+      [0, 0, 0, "1"],
+    ],
+  ],
+  ["requestId", [0, -1, 0.5, 9007199254740992]],
+  ["protocolVersion", [-1, 0.5, "1"]],
+]) {
+  for (const value of values)
+    invalid(
+      `SessionRequest:${field}:${JSON.stringify(value)}`,
+      JSON.stringify({
+        protocolVersion: 1,
+        generation,
+        requestId: 2,
+        operation: { query: {} },
+        [field]: value,
+      }),
+      "SessionRequest",
+    );
+}
+valid(
+  "unrecognized request protocol reaches negotiation",
+  { protocolVersion: 2, generation, requestId: 1, operation: operations[0] },
+  undefined,
+  "SessionRequest",
+);
+invalid(
+  "unsupported reply protocol",
+  JSON.stringify({
+    protocolVersion: 2,
+    generation,
+    requestId: 1,
+    result: { closed: {} },
+  }),
+  "SessionReply",
+);
+for (const result of [
+  { error: "UNKNOWN" },
+  { error: 1 },
+  { cancelled: "cancelled" },
+  { cancelled: 0 },
+  {
+    acknowledged: {
+      guard,
+      history: { ...history, dirtyCategories: ["unknown"] },
+      changed: false,
+    },
+  },
+])
+  invalid(
+    "unknown result enum " + JSON.stringify(result),
+    JSON.stringify({ protocolVersion: 1, generation, requestId: 1, result }),
+    "SessionReply",
+  );
+
 const payload = JSON.stringify({ schemaVersion: 1, cases }, null, 2) + "\n";
 const path = new URL(
   "testdata/cross-platform/project-intent-vectors.json",
