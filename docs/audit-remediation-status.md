@@ -19,8 +19,20 @@ source/session lifecycle, and cancellation. Projection, bounded inspection and
 playback also run through development session bindings. Generated browser metadata
 guards, packet checks and the bounded source owner now replay actual WASM outputs.
 Native production integration, search, generated request contracts, complete Kotlin host
-validators, native rendering, and physical-device performance
+validators, production native rendering, and physical-device performance
 remain migration work; these bindings do not change release support.
+
+The debug Android flat viewport now has generated mesh/toolpath fixtures with
+bounded Filament uploads, original-facet picking and display paint ranges.
+The [renderer evidence](engineering/native-core.md#emulator-evidence-on-2026-10-05)
+records six JVM tests, ten JNI tests, three shell cold starts and three real-pixel/
+lifecycle app tests. Two two-million-facet opens retain a 983,040-byte staging
+peak and request 120,008,000 GPU buffer bytes including the toolpath; those
+counters do not measure driver allocation or total process memory. Release
+excludes the workbench and Filament. Both APKs pass native alignment checks;
+strict dependency verification, lint, audits and the redacted source scan pass.
+SceneCore, native engine/project workflows and physical-device qualification
+remain open; no migration phase exit is closed by this emulator experiment.
 
 The Rust preview projection now passes 1,567 host reference cases covering all
 12 modes, filters, legends, exact Float32 outputs, malformed inputs and unsupported

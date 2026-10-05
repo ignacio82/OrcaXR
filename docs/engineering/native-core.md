@@ -4,12 +4,14 @@ This document records Stage A and the initial Phase 3 computation port of the
 [migration plan](../android-native-rust-plan.md). The production web project and
 current C++ engine remain authoritative. The Android application is a development
 shell: it checks the JNI handshake and explicitly reports that editing is not
-available. No native project, renderer, slicing service, printer operation, or XR
+available. Debug builds additionally expose a flat viewport experiment with
+synthetic fixtures. No native project, slicing service, printer operation, or XR
 workflow is implemented yet.
 
 The shared G-code parser, index, bounded windows, and owned binary transport now
 run through both host bindings. Production browser preview now uses the Rust
-adapter, and the Android shell does not yet display G-code.
+adapter. The debug viewport consumes a synthetic G-code projection through JNI;
+native document import and production preview remain unimplemented.
 Preview projection, bounded inspection and playback are also exposed through
 source-owned session queries. The browser renderer consumes the checked model,
 projection and inspection packets through its existing worker session interface.
@@ -53,6 +55,172 @@ this build. Generated JNI directories are registered through
 `androidComponents.onVariants` and `addGeneratedSourceDirectory`, which also
 establish the Rust task dependency. The native engine is deliberately absent from
 this build; do not substitute the historical engine script.
+
+## Flat renderer experiment
+
+The debug launcher opens a separate Compose/SurfaceView workbench. Release builds
+exclude its Activity, renderer dependencies and compiled materials. Opening the
+normal shell never initializes Filament. The workbench uses generated fixtures
+only; selecting/painting modifies display projections, with no canonical project,
+file import, network, slicer or XR session.
+
+`renderer-api` owns immutable indexed geometry, packing, transform conversion,
+picking and toolpath projection. `renderer-filament` is the first flat candidate,
+not a final flat/spatial renderer selection. Filament **1.77.1** is the published
+Maven runtime used here, with its exact Linux `matc` from the
+[matching release](https://github.com/google/filament/releases/tag/v1.77.1).
+The Maven AAR agrees with that release's SHA-256
+`575134fe58edd4a01b03d9f48cce07f6ddb54322d8db1ceba7184b4e36cbd932`.
+GitHub 1.77.2 existed when selected, but its Maven POM returned 404; do not mix a
+newer compiler with this runtime. The dependency adds annotation 1.10.0 and Kotlin
+stdlib 2.4.0; Gradle verifies their exact metadata/artifacts too.
+
+Two offline unlit materials provide facet colors, world-height clipping and
+transparency. The build checks runtime version, compiler/archive/script identity,
+compiler arguments, sources and generated output hashes. Regenerate with
+`python3 tools/renderer/build-materials.py`, optionally passing `--matc` for an
+already downloaded compiler with the required hash. Normal builds verify tracked
+outputs without downloading the compiler. These materials do not yet establish
+production lighting, normals, color-management or transparent-sort fidelity.
+Clipping must use `getUserWorldPosition()`: Filament's `getWorldPosition()` is
+an internal world frame, not the API-level coordinates used by CPU picking.
+Using it initially left pixels visible after the CPU correctly rejected hits.
+The [pinned material API](https://github.com/google/filament/blob/v1.77.1/docs/Materials.md.html)
+documents this distinction.
+
+The one basis conversion is millimetres `(x,y,z)` to metres `(x,z,-y)/1000`, with
+positive determinant. Affine transforms use the conjugated basis; inverse rays
+preserve their world-distance parameter through nonuniform and mirrored scale.
+Normal conversion uses the inverse transpose. Picking uses a cancellable median
+BVH with original facet ordinals; its sorted index never changes geometry.
+Ray-aligned edge tests follow the shared-edge approach described in
+[PBRT's intersection discussion](https://pbr-book.org/4ed/Shapes/Triangle_Meshes#IntersectionTests),
+with conservative Double slab exits. A plain barycentric test missed the exact
+shared center vertex on the emulator despite passing the initial JVM fixture.
+Clipping filters intersections in world coordinates, including transformed copies.
+
+The grid has 128 or 1,000 cells per side (32,768 or 2,000,000 facets). Indexed
+positions, indices and facet colors remain immutable. The renderer expands at
+most **16,384 facets per chunk**, yielding separate position/color/index buffers
+and stable original-facet ranges. Mesh upload costs 60 bytes per facet, including
+indices. A two-million-facet mesh therefore requests **120,000,000 GPU buffer
+bytes** before driver overhead. This experiment intentionally measures that cost;
+it does not claim native rendering inherently saves memory.
+
+A single worker builds source/BVH and packs chunks. Admission waits for all native
+copy-completion callbacks before packing another chunk, keeping mesh staging at
+most **983,040 bytes**. Replacing a load cancels its generation and admits the
+replacement only after the old worker and upload settle. Java buffers remain
+owned until Filament's callbacks run. The CPU counter covers retained source,
+BVH arrays and toolpath record IDs; it excludes object headers, temporary build
+allocations, ART, driver memory and process RSS. The GPU counter estimates buffer
+payloads, not measured GPU allocation. Callback completion is copy-consumption
+evidence, not a displayed-frame timestamp.
+
+Two draw instances share each chunk's vertex/index buffers. Transforms, selection,
+clipping and opacity update transforms/materials without resending geometry.
+Painting updates only the color bytes for at most 4,096 original facets per call;
+a range can cross chunk boundaries. It affects the shared display geometry of
+both instances and does not implement authored per-instance paint state.
+
+Toolpaths consume JNI model/projection packets, copy Rust's Float32 RGBA colors
+exactly and retain original semantic record IDs. Arc path kinds are **0 (direct),
+2 (G2), 3 (G3)**. Every sidecar edge and final arc edge retains its one source ID,
+including a zero-length final edge. An omitted whole-source `recordOffset` means
+zero; explicit window offsets remain authoritative. Path bounds, dense offsets,
+finite positions/colors and increasing selection indices are checked before
+packing. These renderer checks do not replace the pending complete Kotlin
+metadata/request validators. The workbench never accepts untrusted documents.
+
+Only visible, dirty viewports request frames. The Activity closes the renderer
+and cancels its JNI fixture owner on pause, and constructs a fresh owner on
+resume/recreation. Surface detachment flushes swap-chain destruction before
+Android releases the Surface. Close destroys owned entities, buffers, materials,
+views and the engine; generation checks reject late worker/copy callbacks. The
+current experiment deliberately rebuilds fixtures on resume. It has no dirty
+project state to recover. True device/driver context loss and production project
+restoration still need dedicated qualification.
+
+Current SceneCore API inspection remains a separate feasibility input:
+[MeshBuffer.create](https://developer.android.com/reference/androidx/xr/scenecore/MeshBuffer)
+copies its provided buffers immediately and exposes no public in-place update;
+[CustomMesh](https://developer.android.com/reference/androidx/xr/scenecore/CustomMesh)
+also has no public vertex-update method. This is API evidence, not a measurement
+of mesh replacement or spatial editing latency. The
+[SceneCore release notes](https://developer.android.com/jetpack/androidx/releases/xr-scenecore)
+list 1.0.0-rc01 on 2026-09-09; no XR dependencies are selected by this flat build.
+The same-fixture SceneCore candidate, real-device traces, continuous paint/input,
+Home/Full Space transitions and the pinned-engine Android slice remain open.
+
+Run the experiment checks after the foundation builds:
+
+```sh
+./android/gradlew -p android :app:assembleDebug :app:assembleDebugAndroidTest \
+  :app:assembleRelease :core-bridge:assembleDebugAndroidTest \
+  :renderer-api:testDebugUnitTest :app:lintDebug \
+  --dependency-verification strict --no-daemon --console=plain
+python3 tools/cross-platform/verify-artifacts.py --apk android/app/build/outputs/apk/debug/app-debug.apk
+python3 tools/cross-platform/verify-artifacts.py --apk android/app/build/outputs/apk/release/app-release-unsigned.apk
+python3 tools/renderer/emulator-smoke.py
+```
+
+The final command owns a fresh API 34 x86_64 emulator on port 5582 and refuses an
+occupied port. It first runs the existing real JNI corpus and three cold starts,
+then actual PixelCopy assertions, a Rust toolpath fixture, bounded paint uploads,
+picking/clipping, hidden-frame suspension, cancellation, recreation and repeated
+large-mesh teardown. Machine-specific reports stay ignored under
+`tools/renderer/results/`. Frame CPU submission time, buffer counters and observed
+load durations are diagnostic observations, not frame-pacing or device budgets.
+
+### Emulator evidence on 2026-10-05
+
+Six JVM geometry tests pass, including 854 oblique shared-vertex rays, independent
+grid-cell facet expectations, basis/winding/normal checks and mirrored/nonuniform
+transforms. All ten existing real JNI tests and three normal-shell cold starts
+pass on the owned API 34 x86_64, two-core SwiftShader emulator (4 KB pages).
+Three additional app instrumentation tests pass in 77.277 seconds. They check
+real SurfaceView pixels, the cross-chunk 4,096-facet paint update (49,152 bytes,
+two buffer uploads), original facet picking, complete clipping to background,
+shared-instance/transparency changes without geometry uploads, hidden-frame
+suspension, cancellation, Activity recreation, pause/resume and repeated teardown.
+The JNI toolpath test preserves Float32 colors, arc source IDs and buffer validity
+after native close, and refuses a segment-budget overflow.
+
+The final two large-fixture observations were:
+
+| Observation | First open | Second open |
+| --- | ---: | ---: |
+| Facets | 2,000,000 | 2,000,000 |
+| Load through readiness and pixel capture | 36,149.57 ms | 28,583.28 ms |
+| Retained mesh/BVH/toolpath-ID array bytes | 57,267,352 | 57,267,352 |
+| GPU buffer payload estimate, including 125 line segments | 120,008,000 bytes | 120,008,000 bytes |
+| Peak pending upload bytes | 983,040 | 983,040 |
+| Submitted frames over this viewport lifetime | 324 | 294 |
+| Maximum observed frame CPU submission | 28.41 ms | 31.09 ms |
+
+These are two observations on a busy shared host with a software GPU, including
+source generation, BVH construction and progressive uploads. They are not a
+statistical benchmark, total-memory accounting, GPU frame times or target-device
+acceptance. The successful app APK SHA-256 is
+`2de95ef99bfc2b602c7d4237a5f360652ca2a3c98e0ffa672258c7c41bdf6513`;
+test APK SHA-256 is
+`2a61757e9fbdec3059cf4a3d9f11e40f4b3a0ca8264e029f304d497dd56ff4a1`.
+The ignored report binds these APKs and emulator settings to the observations.
+
+Strict Gradle verification, debug/release builds, lint and all six JVM tests pass.
+Only the pre-existing newer-version lint warnings remain. The debug APK's six
+native libraries and release APK's four pass both-ABI ELF/ZIP 16 KB alignment;
+this remains packaging evidence, not 16 KB-device loading. Release contains no
+Filament library or material asset. Cargo audit, all three npm development audits
+and the configured redacted UTF-8 source scan pass. CI now runs the renderer suite
+with the foundation checks; a clean hosted-runner result is still unverified.
+
+The first emulator attempts exposed two corrected consumer mistakes: arc path
+kinds were treated as a contiguous 0–2 range, and clipping used Filament's internal
+world frame. Shared-vertex picking also needed the ray-aligned edge test described
+above. The large fixture test now selects through the Activity's own intent so a
+pause/resume preserves its requested size. No assertion, resource ceiling or test
+timeout was relaxed to obtain the passing run.
 
 ## Contracts and scope
 

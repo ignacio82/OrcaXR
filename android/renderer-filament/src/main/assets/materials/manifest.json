@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "filamentVersion": "1.77.1",
+  "compilerSha256": "3cc22d4ef3d84f561f88c80035658940c3ac2ead56aedf95e54d6c35191a47c6",
+  "archiveSha256": "ec0f5287a3a2fb801a93fd7b0ffd80c894aac980716d6f91ec48e5370d2d0674",
+  "buildScriptSha256": "bcdbcc191cdfb085d9995624a69704888f7bdf8b160d9b38a08895933205e5e8",
+  "arguments": [
+    "-p",
+    "mobile",
+    "-a",
+    "opengl",
+    "-a",
+    "vulkan"
+  ],
+  "inputs": {
+    "opaque.mat": "bd92d162c50d21b6138ed5b3c00b8c0f0308466b29a4fdbd0ff71031f3a4f326",
+    "transparent.mat": "f96bfe810858df605e55e159d3afae6b468f2fce612ac5d969506581cfa1014b"
+  },
+  "outputs": {
+    "opaque.filamat": "8f395fc82dbd09eca71ca87560fdf47f80811c3e89247073d54de24762a11609",
+    "transparent.filamat": "f79b26ec198ee244c370cc48d0a3e442db64a730ade90d4aafc52d955b820125"
+  }
+}

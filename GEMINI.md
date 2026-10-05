@@ -65,8 +65,9 @@ engine (`libslic3r` via WASM) as the computational core.
   development infrastructure, not a usable native slicer. Current release support
   remains unchanged. The production browser preview worker now uses Rust parsing,
   projection and inspection behind the existing session interface, with an
-  explicit TypeScript startup rollback. Native rendering, search and physical-device
-  qualification remain open. Native PCVR
+  explicit TypeScript startup rollback. Debug Android builds include a flat
+  Filament fixture workbench; it has no canonical editing or document import.
+  Production native rendering, search and physical-device qualification remain open. Native PCVR
   remains outside scope.
 
 ## Stack

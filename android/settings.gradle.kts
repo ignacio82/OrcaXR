@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 rootProject.name = "OrcaXR"
 include(":app")
 include(":core-bridge")
+include(":renderer-api")
+include(":renderer-filament")

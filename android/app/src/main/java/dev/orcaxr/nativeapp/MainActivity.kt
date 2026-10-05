@@ -1,5 +1,6 @@
 package dev.orcaxr.nativeapp
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -49,6 +51,11 @@ class MainActivity : ComponentActivity() {
                         horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
                         Text(stringResource(state), style = MaterialTheme.typography.bodyLarge)
+                        if (state == R.string.workspace_development && resources.getBoolean(R.bool.viewport_experiment_enabled)) {
+                            TextButton(onClick = {
+                                startActivity(Intent().setClassName(this@MainActivity, "$packageName.ViewportExperimentActivity"))
+                            }) { Text(stringResource(R.string.open_viewport_experiment)) }
+                        }
                     }
                 }
             }

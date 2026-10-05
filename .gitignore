@@ -118,3 +118,5 @@ server/wasm-artifacts/
 /core/dist/
 /tools/cross-platform/results/
 /tools/cross-platform/__pycache__/
+
+/tools/renderer/results/

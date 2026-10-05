@@ -1,0 +1,21 @@
+material {
+    name : OrcaXRTransparentFacet,
+    shadingModel : unlit,
+    blending : transparent,
+    depthWrite : false,
+    doubleSided : true,
+    requires : [color],
+    parameters : [
+        { type : float, name : clipHeight },
+        { type : float, name : opacity },
+        { type : float4, name : tint }
+    ]
+}
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        if (getUserWorldPosition().y > materialParams.clipHeight) discard;
+        material.baseColor = getColor() * materialParams.tint;
+        material.baseColor.a *= materialParams.opacity;
+    }
+}

@@ -1,0 +1,4 @@
+<resources>
+    <bool name="viewport_experiment_enabled">false</bool>
+    <string name="open_viewport_experiment">Open viewport experiment</string>
+</resources>
