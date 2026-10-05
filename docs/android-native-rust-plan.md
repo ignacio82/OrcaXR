@@ -91,8 +91,11 @@ explanations and project configuration selectors now use the same pinned engine
 table as the browser, with independent TypeScript comparisons. Compatibility
 helpers now preserve pinned V8 timestamp parsing and exact layer-event rounding;
 Node/Chromium reference corpora cover both V8 integer profiles and host timezone
-conversion boundaries. Native timezone adapters, semantic graph and
-option/profile validation, commands, history policy and native session execution
+conversion boundaries. Semantic graph validation now covers declared layouts,
+references, settings-base consistency, mixed recipes, transforms, topology/paint,
+layer events and extension references/paths. `ValidatedProject` retains the proof
+on immutable candidates; 622 TypeScript-derived states compare ordered diagnostics.
+Native timezone adapters, option/profile validation, commands, history policy and native session execution
 remain open; these libraries do not enable Android editing.
 
 Build an adaptive native Android application for phones, tablets, Googlebook,
@@ -610,8 +613,11 @@ and replay coverage for the complete current command inventory.
   factories and five direct candidate edits. These are not command traces.
   Project configuration selectors now also preserve engine precedence, ignored
   settings and local/inherited/source projections through the shared scope table.
-  Semantic graph validation, bounded projections, history policy and session
-  execution remain open.
+  Semantic graph validation and a separate immutable admission type now exist,
+  with 622 independent reference states, explicit host timestamp policy and a
+  sparse allocation probe. The browser's unknown-channel and shared-range
+  diagnostics now survive save/reopen. A native store, bounded projections,
+  history policy and session execution remain open.
 - [ ] Port commands and transaction/history semantics by family, preserving
   rollback revision behavior, coalescing, checkpoint acknowledgement, selection,
   and history retention accounting. Test every command's failed and stale cases.

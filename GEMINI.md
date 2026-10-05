@@ -194,15 +194,20 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   optional-field absence and complete UTF-16 text. Immutable child collections,
   configurations and sparse paint payloads are shared across candidate edits;
   full-state FNV hashing streams without copying them. `ProjectData` is a typed
-  candidate with a cached fingerprint, not a semantically validated store. Native
-  reference/settings/topology validation, history and session execution remain open.
+  candidate with a cached fingerprint. `ValidatedProject` separately admits that
+  immutable candidate after graph/reference/layout, settings-base consistency,
+  mixed-recipe, topology and paint checks. Reusing it retains the validation proof;
+  it owns no store revision, asset-byte attestation, command bus or history.
   Do not substitute strict ISO parsing or Rust rounding for the existing graph
   validator's `Date.parse` and layer-event `toFixed(4)` compatibility requirements.
   The Rust compatibility helpers now reproduce pinned V8 timestamp syntax and
   exact four-decimal collision keys. Legacy timezone overflow needs an explicit
   V8 integer profile; timezone-less dates need a host resolver with matching DST
   and historical rules. Resolver failure must propagate, never default to UTC
-  or become an invalid-data diagnostic. These helpers are not yet a graph validator.
+  or become an invalid-data diagnostic. Graph admission uses that explicit policy.
+  Unknown paint-channel diagnostics use canonical UTF-16 ordering; layer-range
+  diagnostics retain original array positions, including repeated shared records.
+  Both must survive save/reopen. Native store/session execution remains open.
 - SHA-256 identifies artifacts/project/config outputs. Canonical FNV-1a64
   identifies source assets and semantic snapshots where explicitly defined.
   Never substitute one for the other or infer engine statistics from observations.
@@ -223,7 +228,8 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   Normalize/remap the assignments and split trees together so collapsed paint
   survives. Native dense expansion requires an explicit host root budget; the
   stateless canonicalizer's parser limits are not persisted project limits.
-  This library does not yet own graph topology guards or execute project commands.
+  Graph validation now checks annotation/source topology consistency; revision
+  guards for gestures and command execution still belong to the future session.
 - Smart Paint is a validated, bounded proposal plus operator correction and one
   canonical transaction. Check per-provider/payload consent before sending data.
 - Wipe towers reserve their complete printed footprint against the printable

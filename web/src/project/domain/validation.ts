@@ -308,9 +308,10 @@ function computeProjectStateIssues(state: ProjectState): ValidationIssue[] {
         }
       });
 
-      const ranges = [...object.layerRanges].sort((a, b) => a.minZMm - b.minZMm);
-      ranges.forEach((range, rangeIndex) => {
-        const originalIndex = object.layerRanges.indexOf(range);
+      const ranges = object.layerRanges
+        .map((range, originalIndex) => ({ range, originalIndex }))
+        .sort((a, b) => a.range.minZMm - b.range.minZMm);
+      ranges.forEach(({ range, originalIndex }, rangeIndex) => {
         const rangePath = `${objectPath}.layerRanges[${originalIndex}]`;
         id(range.id, `${rangePath}.id`);
         if (
@@ -321,7 +322,7 @@ function computeProjectStateIssues(state: ProjectState): ValidationIssue[] {
         ) {
           add('invalid-layer-range', rangePath, 'Layer range must have 0 <= minZMm < maxZMm');
         }
-        if (rangeIndex > 0 && range.minZMm < ranges[rangeIndex - 1].maxZMm) {
+        if (rangeIndex > 0 && range.minZMm < ranges[rangeIndex - 1].range.maxZMm) {
           add('overlapping-layer-range', rangePath, 'Layer ranges on an object may not overlap');
         }
         validateConfig(range.config, `${rangePath}.config`, add);
@@ -752,7 +753,9 @@ function validateAnnotations(
       );
       return;
     }
-    const refinementKeys = Object.keys(refinement);
+    // Persisted JSON has no insertion-order contract. Match canonical UTF-16
+    // order so validation diagnostics survive save/reopen and native decoding.
+    const refinementKeys = Object.keys(refinement).sort();
     const knownChannels = new Set(channels.map(([name]) => name));
     if (refinementKeys.length === 0) {
       add('empty-facet-refinements', `${path}.annotations.refinement`, 'Empty facet refinements must be omitted');

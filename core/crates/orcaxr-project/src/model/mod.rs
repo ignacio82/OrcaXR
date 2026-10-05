@@ -1,6 +1,7 @@
 //! Lossless schema-1 project candidates. Decoding proves typed structure, stable
 //! IDs and finite JSON, not cross-references, topology, settings, timestamps or
-//! command eligibility. A future validated store must enforce those semantics.
+//! command eligibility. validation::ValidatedProject proves graph semantics;
+//! the future store/session must still enforce command, revision and history policy.
 //! Records preserve unknown fields; clones share immutable child collections,
 //! configurations and annotation payloads. Public serialization deliberately
 //! makes an owned copy; canonical writing streams directly to a caller's sink.

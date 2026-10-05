@@ -1,5 +1,11 @@
-//! Compatibility values for the future semantic graph validator. These helpers
-//! do not make a typed project candidate semantically valid or publish a store.
+//! Semantic validation of canonical typed candidates. Timestamp interpretation
+//! belongs to an explicit host policy; no native store or session is published.
+mod annotations;
+mod graph;
+mod mixed;
+mod report;
+pub use graph::validate_project;
+pub use report::*;
 pub mod timestamp;
 
 use crate::model::Number;

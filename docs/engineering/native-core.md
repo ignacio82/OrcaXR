@@ -345,8 +345,8 @@ integration tests plus a compile-fail brand check pass in debug/release; strict
 workspace Clippy/tests and Cargo audit pass. The library checks for wasm32 and
 both Android targets without platform dependencies. These are host execution
 and target compilation evidence, not a JNI/WASM session implementation or
-native editing qualification. Semantic graph validation, history and session
-execution remain open; the model and asset libraries are described below. The
+native editing qualification. Graph admission, model and asset libraries are
+described below; native store/history/session execution remains open. The
 native-core workflow now checks fixture drift and these targets.
 The identifier-only update added the project crate to shared-core provenance.
 Its browser set `255e6ce1f2dc` and JNI manifests retained byte-identical executables;
@@ -363,9 +363,9 @@ Canonical descriptors retain complete JSON metadata, UTF-16 keys/text, unknown
 fields and binary64 number semantics. The repository checks stable IDs, finite
 canonical metadata, byte lengths and lowercase FNV content claims before storing
 owned copies. Other declared digest schemes remain opaque, while actual bytes
-always determine the canonical bundle fingerprint. Graph-level descriptor/layout
-and reference validation is still unimplemented; this is a library for canonical
-inputs, not an asset transport or an unchecked JavaScript-object emulator.
+always determine the canonical bundle fingerprint. Declared graph-level layouts
+and references are checked by the separate graph validator described below; this
+repository is not an asset transport or an unchecked JavaScript-object emulator.
 
 Internal history captures share immutable versions and records. Opaque handles
 reject foreign repositories and restore cached fingerprints with the original
@@ -418,8 +418,9 @@ without routing them through that unrelated parser. Triangle numbers preserve
 binary64 integer semantics, including large imported counts. Dense materialization
 requires an explicit host maximum, rejects unaddressable sizes and uses checked
 root allocation. The library is a computation view, not a full annotation/project
-codec; the typed candidate below retains surrounding graph data, while topology
-guards remain the future validated store's responsibility. No new JNI/WASM project
+codec; the typed candidate below retains surrounding graph data. Graph admission
+checks topology consistency; source-revision guards remain the future session's
+responsibility. No new JNI/WASM project
 endpoint is introduced.
 
 Independent TypeScript fixtures now contain **273 refinement cases, 80 whole-facet
@@ -467,11 +468,12 @@ it. Typed decoding checks required fields, literal domains and tuple lengths.
 
 `ProjectData` owns an immutable candidate and its cached full-state FNV fingerprint.
 It does **not** prove semantic validity: tests deliberately construct candidates
-with invalid timestamps and dangling references. Native graph validation, option
-and profile validation, history, commands and session execution are still required. The
+with invalid timestamps and dangling references. The separate graph validator
+described below now admits valid candidates. Option/profile validation, a native
+store, history, commands and session execution are still required. The
 TypeScript validator's `Date.parse` acceptance and layer-event `toFixed(4)`
-collision keys now have separate compatibility helpers, described below; they
-are not yet integrated into native graph validation. No JNI/WASM
+collision keys now have separate compatibility helpers used by graph admission.
+No JNI/WASM
 model endpoint or Android editing route is introduced by this library.
 
 Child collections/records and configuration/annotation/extension payloads use
@@ -627,8 +629,9 @@ inputs/comments beyond transport budgets. A **6,291,484-byte** synthetic input
 with over a million nested comment pairs takes **zero heap allocations**
 over twenty parses; an explicit copy positive control makes one full allocation.
 CI regenerates both engine oracles and runs the tests and allocation probe.
-These are compatibility primitives, not the semantic graph validator, a validated
-store, or a JNI/WASM project-session endpoint; no Phase 4 exit is closed.
+These compatibility primitives are now used by the graph validator below. They
+do not provide a native timezone adapter or JNI/WASM project-session endpoint;
+no Phase 4 exit is closed.
 
 For this compatibility update, strict workspace Clippy/tests, release project
 tests, Cargo audit and compilation for wasm32 and both Android targets pass.
@@ -645,6 +648,76 @@ HTTP/HTTPS deployment and real slicing fixtures. All three full npm audits repor
 zero vulnerabilities. Main-entry JavaScript is 2,101,441 bytes and total JavaScript
 10,436,944 bytes, within the existing budgets. Physical-device and hosted-CI
 qualification remain outside this local evidence.
+
+Rust semantic graph validation now covers canonical typed candidates. It reports
+duplicate IDs, declared layout/count/bounds failures, missing references,
+inherited-settings inconsistencies, physical/mixed filament rules and cycles,
+FullSpectrum recipe constraints, transforms, height ranges, topology and all five
+paint channels, layer-event rules/collisions, thumbnails and extension references/
+paths. It preserves traversal order, complete UTF-16 diagnostic text and ordinary
+binary64 integer rules. Only fields that require safe integers use that narrower
+check. Unknown imported settings stay intact; this is not option/profile
+eligibility or actual mesh-byte/slicing attestation.
+
+`validate_project` borrows `ProjectData`, whose typed model and canonical encoding
+have already excluded malformed shapes, IDs and non-finite JSON. It accepts an
+explicit timestamp policy: a host can provide its actual Date.parse behavior or
+use `V8Timestamps` with the pinned grammar and local-time resolver. Service failure
+returns separately from an invalid-data report. `ValidatedProject` admits only a
+report without errors, retains the immutable candidate and cached fingerprint,
+and shares that proof across clones. Editing a candidate does not change the
+admitted original; the edited candidate needs new admission. Public UI messages
+retain the browser text, while Debug/Display omit private imported data. This
+type owns no revision, asset repository, command bus, subscriber list or history.
+
+Two browser diagnostic corrections accompany the port. Unknown refinement-channel
+issues now use canonical UTF-16 key order, including numeric-looking keys and lone
+surrogates, so save/reopen cannot reorder them. Sorted layer-range validation now
+carries original array positions; it no longer repeatedly searches by object
+identity or misattributes a repeated shared record to its first occurrence.
+Both have browser regression tests and native differential cases. Mixed-cycle
+validation uses iterative DFS with the same last-duplicate-ID lookup and ordered
+cycle paths; a 10,000-entry native graph does not exhaust the call stack.
+
+The independent `project-validation-vectors.mjs` corpus contains **622 states**
+and **81 diagnostic codes**, comparing complete ordered issues, error text and
+full-state fingerprints. It checks each state again after canonical save/reopen,
+covers compound failures, existing full-schema/UTF-16 fixtures, mixed cycles,
+numeric boundaries, all five sparse-paint channels and malformed refinement
+encodings. A source-code inventory requires coverage of every graph diagnostic;
+**12** source codes are separately documented as already excluded by typed
+decoding. Seven Rust integration tests pass in debug/release, including immutable
+proof reuse, timestamp-policy selection, timezone failures, TimeClip after host
+conversion, private diagnostics and deep mixed graphs. CI regenerates the corpus.
+
+The graph allocation probe declares **1,897,256** source triangles with **100,000**
+assigned facets and compares separately owned equal **8,388,608-byte** settings
+strings plus wide metadata arrays. Admission allocates **1,971,034 bytes** in
+total, with a largest allocation of **640 bytes** and no payload copy or dense
+mesh roots. Two hundred proof clones/reads allocate nothing and do not validate
+again; the public-export positive control copies the 8 MiB string once. Equality
+uses depth-sized iterator frames and paint paths are formatted only on failures.
+This is host metadata ownership evidence, not a device performance budget.
+Native store/history/session execution, platform timezone adapters and JNI/WASM
+project endpoints remain open; the Phase 4 exit is not closed.
+
+For this graph-validation update, Rust workspace tests, optimized project tests,
+strict Clippy, format, Cargo audit and compilation for wasm32 and both Android
+targets pass. Browser set `23fa38479ab7` binds 91 source inputs and retains the
+byte-identical 556,646-byte WASM executable. Browser WASM smoke, Android
+debug/release assembly, JVM tests, lint and both APK provenance/16 KB alignment
+checks pass. The owned API 34 x86_64 emulator passes 24 core tests, three shell
+cold starts, three renderer tests and one non-XR SceneCore startup test. These
+platform tests exercise the existing bindings; they do not execute the new
+graph-validation library through JNI or WASM. Physical-device and hosted-CI
+qualification remain outside this local evidence.
+The complete repository gate passes with 267 web unit-test files, 97 project
+test files, production browser/offline/recovery/accessibility checks, both
+preview adapters, HTTP/HTTPS deployment and the published-engine slicing
+regressions. All three full npm audits report zero vulnerabilities. Main-entry
+JavaScript remains 2,101,441 bytes; total JavaScript is 10,437,001 bytes, within
+unchanged budgets. Actionlint passes, and the configured redacted source scan
+covers 1,708 UTF-8 files (six NUL-normalized) with no findings.
 
 The browser now has a transitional `AsyncEditorSession` over its TypeScript
 authority. Undo/Redo and plate lifecycle actions await acknowledgements; guarded queued execution,
@@ -1149,6 +1222,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-model-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-resolution-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-validation-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
@@ -1171,6 +1245,7 @@ cargo run -p orcaxr-project --example facet_sparsity_benchmark --release --locke
 cargo run -p orcaxr-project --example project_model_benchmark --release --locked --jobs 2
 cargo run -p orcaxr-project --example settings_resolution_benchmark --release --locked --jobs 2
 cargo run -p orcaxr-project --example validation_values_benchmark --release --locked --jobs 2
+cargo run -p orcaxr-project --example project_validation_benchmark --release --locked --jobs 2
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target wasm32-unknown-unknown
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target aarch64-linux-android
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target x86_64-linux-android

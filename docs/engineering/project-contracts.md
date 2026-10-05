@@ -23,8 +23,9 @@ are fixture-specific evidence, not device-independent performance guarantees.
   IDs, finite canonical metadata, declared byte length and lowercase `fnv1a64:`
   digests are checked before publication. Other digest labels retain the existing
   opaque behavior; actual-byte FNV digests still determine bundle identity. Mesh
-  layout, media type, source kind and project references belong to graph validation,
-  which has not been ported. This library boundary does not accept malformed IDs
+  declared layouts, source kind and project references belong to the separate
+  graph validator. Neither layer attests that mesh bytes satisfy every geometry
+  or slicer constraint. This library boundary does not accept malformed IDs
   or noncanonical values merely because an unchecked JavaScript call could.
   Identical puts and absent removals preserve version/record identity. Conflicting
   metadata or bytes reject; failed public restores publish nothing. Internal
@@ -57,8 +58,8 @@ are fixture-specific evidence, not device-independent performance guarantees.
   values. Malformed assignment containers return errors rather than unchecked
   JavaScript TypeErrors. The computation view is not a complete annotation or
   project codec and does not discard unknown fields from a stored graph. Typed
-  candidates retain those fields; the future validated store must enforce
-  topology/session guards.
+  candidates retain those fields. The graph validator checks annotation/source
+  topology consistency; future store/session code must enforce revision guards.
   This library is not wired to browser or Android project execution yet.
 
 - Rust schema-1 candidates preserve every modeled field and unknown properties
@@ -84,11 +85,33 @@ are fixture-specific evidence, not device-independent performance guarantees.
   Timestamp parsing preserves UTF-16, NUL termination, legacy forms, overflow days
   and the V8 build's explicit tagged-integer profile. Local dates require a host
   resolver with matching DST/historical rules and TimeClip after conversion.
-  Resolver failure remains distinct from invalid project data. These helpers
-  are not a native graph validator or a platform timezone implementation.
+  Resolver failure remains distinct from invalid project data. Graph admission
+  now uses this explicit policy; platform timezone adapters remain unimplemented.
   Unknown annotation/refinement fields stay intact in the candidate, while the
   separate facet computation view owns its existing semantic checks. Persisted
   values do not inherit the stateless canonicalization request's parser limits.
+
+- Rust graph validation operates on canonical typed `ProjectData` and reports
+  all reachable graph errors in browser traversal order. Structural errors
+  already excluded by typed decoding are not emulated as unchecked JavaScript.
+  It checks duplicate IDs, declared asset layouts/bounds, references, inherited
+  settings consistency, mixed recipes/cycles, transforms, ranges, topology/paint,
+  layer events, thumbnails and extension paths. Imported foreign configuration
+  remains legal; option/profile eligibility and actual mesh bytes have separate
+  authorities. `ValidatedProject` admits only a report without errors and retains
+  the immutable state, fingerprint and proof across clones. Creating an edited
+  candidate does not change that proof; admitting the edit validates again.
+  Host timestamp-service failure cannot produce a partially accepted candidate
+  or an invalid-data report. There is no native store revision/history/session yet.
+  User-facing paths/messages retain UTF-16, including lone surrogates and NULs;
+  Debug/Display redact source content. Unknown refinement-channel diagnostics use
+  canonical UTF-16 order. Sorted range validation carries original array indices
+  instead of searching by object identity, so repeated shared records get the
+  correct path and save/reopen preserves diagnostics. Mixed-cycle traversal uses
+  iterative DFS with the reference's last-duplicate-ID lookup and issue order.
+  Valid paint indices allocate no diagnostic strings; only assigned indices are
+  indexed. Effective-settings equality borrows values and uses a depth-sized
+  iterator stack, avoiding JSON copies and one stack entry per scalar.
 
 - Rust settings policy uses a generated projection of the same pinned scope
   extractor as the browser. Project/plate/object/part/height-range precedence and

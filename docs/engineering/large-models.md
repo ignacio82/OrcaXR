@@ -53,6 +53,17 @@ are fixture-specific evidence, not device-independent performance guarantees.
   to persisted metadata and does not recurse through comments. This qualifies
   parser ownership only; the host timezone adapter remains separate work.
 
+- Rust graph admission indexes assigned paint indices, not the entire declared
+  mesh. It borrows config values for inherited-settings consistency and uses
+  depth-sized equality iterators; valid paint indices allocate no issue paths.
+  A synthetic graph with 1,897,256 declared triangles, 100,000 assigned facets,
+  two separately owned equal 8,388,608-byte settings strings and wide metadata
+  arrays allocates 1,971,034 bytes during validation, with a largest allocation
+  of 640 bytes and no payload copy. Two hundred clones/reads of its immutable
+  `ValidatedProject` reuse the proof with zero allocations or revalidation.
+  A public config export makes one measured 8 MiB copy. This is graph metadata
+  ownership evidence, not actual mesh loading, history, Android memory or latency.
+
 Measured on `~/Downloads/narwhal.3mf` — 1,897,256 facets, 629k of them painted,
 stored as 161 MB of mesh XML inside a 28 MB archive. Every number below is from
 that project on a desktop; a Galaxy XR is several times slower, so these are

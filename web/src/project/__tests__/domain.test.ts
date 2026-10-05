@@ -181,6 +181,32 @@ test('rejects runtime values that cannot round-trip through canonical JSON', () 
   assert.ok(validateProjectState(broken).some((issue) => issue.code === 'non-serializable-state'));
 });
 
+test('unknown paint-channel diagnostics keep canonical UTF-16 order after save and reopen', () => {
+  const { state } = createProjectFixture();
+  const annotations = state.plates[0].objects[0].volumes[0].annotations;
+  const keys = ['zeta', '10', '2', 'alpha', '\ue000', '\ud800', '\ud800\udc00'];
+  (annotations as unknown as { refinement: Record<string, unknown> }).refinement = Object.fromEntries(
+    keys.map((key) => [key, null]),
+  );
+  const issues = validateProjectState(state);
+  assert.deepEqual(
+    issues.filter((issue) => issue.code === 'unknown-facet-refinement-channel').map((issue) => issue.message),
+    [...keys].sort().map((key) => `Unknown facet refinement channel ${key}`),
+  );
+  assert.deepEqual(validateProjectState(JSON.parse(canonicalStringify(state))), issues);
+});
+
+test('layer-range diagnostics preserve actual array positions, including shared range records', () => {
+  const { state } = createProjectFixture();
+  const object = state.plates[0].objects[0];
+  const range = object.layerRanges[0];
+  object.layerRanges = [range, range];
+  const issues = validateProjectState(state);
+  assert.ok(issues.some((issue) => issue.code === 'duplicate-id' && issue.path.endsWith('layerRanges[1].id')));
+  assert.ok(issues.some((issue) => issue.code === 'overlapping-layer-range' && issue.path.endsWith('layerRanges[1]')));
+  assert.deepEqual(validateProjectState(JSON.parse(canonicalStringify(state))), issues);
+});
+
 test('canonical serialization is deterministic across key insertion order and generated graphs', () => {
   const fixture = createProjectFixture().state;
   const reordered = cloneProjectState(fixture);
