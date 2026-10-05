@@ -7,7 +7,9 @@ import org.json.JSONObject
 
 /** Owns Java storage, with read-only columns that survive session disposal.
  * Metadata is bounded JSON; source-derived text contains UTF-16 code units. */
-class GcodeViewPacket internal constructor(source: ByteBuffer, active: () -> Unit = {}) {
+class GcodeViewPacket internal constructor(source: ByteBuffer, model: GcodePacket, expectedKind: Int,
+                                           active: () -> Unit = {}) {
+    private val modelIdentity = model.identity
     private val bytes = source.asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN)
     val kind: Int
     val recordCount: Int
@@ -21,6 +23,7 @@ class GcodeViewPacket internal constructor(source: ByteBuffer, active: () -> Uni
         require(bytes.capacity() in 32..GcodeViewLayout.MAX_PACKET_BYTES)
         require(bytes.getInt(0) == 0x5647584f && bytes.getInt(4) == GcodeViewLayout.VERSION)
         kind = bytes.getInt(8)
+        require(kind == expectedKind)
         val fields = requireNotNull(GcodeViewLayout.fields[kind])
         val metadataBytes = bytes.getInt(12)
         recordCount = bytes.getInt(16)
@@ -51,19 +54,10 @@ class GcodeViewPacket internal constructor(source: ByteBuffer, active: () -> Uni
             else -> GcodeMetadata.Kind.Playback
         }
         GcodeMetadata.validate(shape, checkedMetadata, active)
-        if (kind == 2) {
-            val labels = checkedMetadata.getJSONArray("tickLabels")
-            require(labels.length() <= tickCount)
-            for (i in 0 until labels.length()) require(labels.get(i) is String)
-            val indices = column("tickLabel").asIntBuffer()
-            val kinds = column("tickKind")
-            repeat(tickCount) {
-                if (it and 4095 == 0) active()
-                require(indices[it] in 0 until labels.length())
-                require((kinds[it].toInt() and 255) in GcodeViewLayout.tickKinds)
-            }
-        }
+        GcodeViewChecks.validate(this, model, active)
         active()
     }
+    /** An opaque identity retains no model columns or native session. */
+    fun belongsTo(model: GcodePacket): Boolean = modelIdentity === model.identity
     fun column(name: String): ByteBuffer = requireNotNull(columns[name]).duplicate().order(ByteOrder.LITTLE_ENDIAN)
 }

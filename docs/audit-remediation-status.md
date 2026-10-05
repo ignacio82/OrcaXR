@@ -19,13 +19,15 @@ source/session lifecycle, and cancellation. Projection, bounded inspection and
 playback also run through development session bindings. Generated browser metadata
 guards, packet checks and the bounded source owner now replay actual WASM outputs.
 Android now has generated metadata guards, strict bounded JSON parsing and
-model/index relational checks. Native production integration, search, generated
-request contracts, Kotlin view-to-source validation, production native rendering,
+model/index relational checks. Views require an explicit captured model and
+validate source/window, record, layer, cursor, tick and projection relations;
+the renderer rejects a different capture identity. Native production integration,
+search, generated request contracts, production native rendering,
 and physical-device performance
 remain migration work; these bindings do not change release support.
-The [Android boundary evidence](engineering/native-core.md) now records 14 passing
-JNI tests, including actual-packet mutation and cancellation cases, plus three
-shell cold starts and three renderer lifecycle tests. Builds, lint, artifact
+The [Android boundary evidence](engineering/native-core.md) now records 17 passing
+JNI tests, including actual-packet mutation, capture/window binding and cancellation
+cases, plus three shell cold starts and three renderer lifecycle tests. Builds, lint, artifact
 alignment, audits and the configured redacted source scan pass. Browser generated
 metadata and published Rust artifacts remain unchanged.
 

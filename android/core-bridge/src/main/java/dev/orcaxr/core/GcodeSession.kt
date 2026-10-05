@@ -61,16 +61,44 @@ class GcodeSession(private val sourceUnits: Int, options: String = "{}") : AutoC
         return packet(first, last)
     }
     fun whole(): GcodePacket = packet(-1, -1)
-    /** Versioned development leaf request; see native-core.md. Computation is
-     * serialized with parser work; close can cancel without acquiring gate. */
-    fun view(request: String): GcodeViewPacket = work { current ->
+    /** Bind output to an already captured model from this immutable source and
+     * the request's exact window. The host never loads an implicit extra model. */
+    fun view(model: GcodePacket, request: String): GcodeViewPacket = work { current ->
         require(request.length <= GcodeViewLayout.MAX_REQUEST_BYTES) { "resource_limit" }
+        val captured = model.sourceWindow
+        check(captured != null && captured.owner == current) { "foreign_model" }
+        // Native code remains the authority for the complete development leaf
+        // request. The host checks selector/kind binding before computation.
+        val envelope = try { GcodeJson.objectValue(request) { active(current) } }
+            catch (_: IllegalArgumentException) { error("invalid_request") }
+        val window = envelope.opt("window") as? JSONArray ?: error("invalid_request")
+        val first: Long
+        val last: Long
+        when (window.length()) {
+            0 -> { first = -1; last = -1 }
+            2 -> {
+                fun entry(index: Int): Long {
+                    val value = window.get(index) as? Number ?: error("invalid_request")
+                    val number = value.toDouble()
+                    check(number.isFinite() && number % 1.0 == 0.0 && number in 0.0..4294967295.0) { "invalid_request" }
+                    return number.toLong()
+                }
+                first = entry(0); last = entry(1)
+                check(first <= last) { "invalid_request" }
+            }
+            else -> error("invalid_request")
+        }
+        check(first == captured.first.toLong() && last == captured.last.toLong()) { "model_window_mismatch" }
+        val expectedKind = when (envelope.opt("operation")) {
+            "preview" -> 1; "inspection" -> 2; "playback" -> 3
+            else -> error("invalid_request")
+        }
         val size = NativeGcode.prepareView(current, request)
         try {
             check(size in 32..GcodeViewLayout.MAX_PACKET_BYTES) { "invalid_buffer" }
             val buffer = ByteBuffer.allocateDirect(size)
             NativeGcode.copy(current, buffer)
-            GcodeViewPacket(buffer) { active(current) }
+            GcodeViewPacket(buffer, model, expectedKind) { active(current) }
         } catch (error: Throwable) {
             close()
             throw error
@@ -82,7 +110,7 @@ class GcodeSession(private val sourceUnits: Int, options: String = "{}") : AutoC
             check(size in 24..GcodeLayout.MAX_PACKET_BYTES) { "invalid_buffer" }
             val buffer = ByteBuffer.allocateDirect(size)
             NativeGcode.copy(current, buffer)
-            GcodePacket(buffer) { active(current) }
+            GcodePacket(buffer, GcodeSourceWindow(current, first, last)) { active(current) }
         } catch (error: Throwable) {
             close()
             throw error

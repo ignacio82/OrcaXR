@@ -139,7 +139,8 @@ class ViewportExperimentActivity : ComponentActivity() {
                         // Recheck after publication so pause cannot miss cancellation.
                         if (Thread.currentThread().isInterrupted) return@execute
                         owner.append(0, source.toCharArray()); owner.seal()
-                        prepared = ToolpathGeometry.from(owner.whole(), owner.view(PreviewFixture.request))
+                        val model = owner.whole()
+                        prepared = ToolpathGeometry.from(model, owner.view(model, PreviewFixture.request))
                     } catch (_: Exception) { failed = true }
                     finally { session.compareAndSet(owner, null); owner.close() }
                     handler.post {

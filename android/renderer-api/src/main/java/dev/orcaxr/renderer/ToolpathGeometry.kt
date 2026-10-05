@@ -14,6 +14,7 @@ data class ToolpathGeometry(val positions: ByteBuffer, val colors: ByteBuffer,
          * never reclassifies extrusion roles or changes semantic arc identity. */
         fun from(model: GcodePacket, view: GcodeViewPacket, segmentBudget: Int=240_000): ToolpathGeometry {
             require(segmentBudget in 1..4_000_000 && view.kind==1)
+            require(view.belongsTo(model)) { "Preview belongs to a different model capture" }
             require(view.metadata.getString("status")=="ready") { "Preview mode is unavailable" }
             require(view.metadata.getInt("sourceRecordCount")==model.recordCount)
             val selected=view.column("recordIndices").asIntBuffer()

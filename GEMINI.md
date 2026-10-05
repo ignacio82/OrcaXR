@@ -276,6 +276,9 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Rich G-code preview preserves semantic record IDs, tool/modal state, source spans,
   arc interpolation and explicit incomplete-prefix diagnostics. Rendering consumes
   projected colors/filtering and reports unsupported metadata honestly.
+- Android G-code views require an explicit captured model from the same session
+  and exact requested window. Validate output relations before rendering and keep
+  the capture identity; matching dimensions alone cannot associate two packets.
 - A pinned G2/G3 arc remains one semantic source record; no partial arc is published
   on parser cap failure. Preserve Float32 operation order and bounded path-point data.
 - Never instantiate slicing-engine WASM to warm the cache: each instance commits a 256 MiB shared

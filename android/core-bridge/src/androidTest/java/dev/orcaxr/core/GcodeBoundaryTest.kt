@@ -110,7 +110,8 @@ class GcodeBoundaryTest {
 
     @Test fun actualNativeViewRejectsUnknownMissingAndCoercedFields() {
         val bytes = packet(view = true)
-        val original = GcodeViewPacket(bytes)
+        val model = GcodePacket(packet())
+        val original = GcodeViewPacket(bytes, model, 2)
         val mutations = listOf<(JSONObject) -> Unit>(
             { it.put("sourceRecordCount", "7") }, { it.put("unknown", false) },
             { it.remove("current") }, { it.put("tickLabels", JSONObject.NULL) },
@@ -118,11 +119,11 @@ class GcodeBoundaryTest {
             { it.getJSONObject("sourceWindow").getJSONArray("lines").getJSONObject(0).put("current", "false") }
         )
         for (mutation in mutations) assertThrows(IllegalArgumentException::class.java) {
-            GcodeViewPacket(replaceMetadata(bytes, view = true, change = mutation))
+            GcodeViewPacket(replaceMetadata(bytes, view = true, change = mutation), model, 2)
         }
         original.metadata.getJSONArray("tickLabels").put("changed")
         assertEquals(original.tickCount, original.metadata.getJSONArray("tickLabels").length())
-        assertThrows(IllegalArgumentException::class.java) { GcodeViewPacket(bytes.duplicate().apply { limit(capacity() - 1) }) }
+        assertThrows(IllegalArgumentException::class.java) { GcodeViewPacket(bytes.duplicate().apply { limit(capacity() - 1) }, model, 2) }
     }
 
     @Test fun indexPagesAndValidationWorkRemainBounded() {

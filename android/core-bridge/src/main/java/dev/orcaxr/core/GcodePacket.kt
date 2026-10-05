@@ -6,9 +6,13 @@ import java.nio.charset.CodingErrorAction
 import org.json.JSONArray
 import org.json.JSONObject
 
+internal data class GcodeSourceWindow(val owner: Long, val first: Int, val last: Int)
+
 /** Java owns the transfer buffer. Read-only views remain valid after native
  * close and can be retained until the renderer has completed its upload. */
-class GcodePacket internal constructor(source: ByteBuffer, active: () -> Unit = {}) {
+class GcodePacket internal constructor(source: ByteBuffer, internal val sourceWindow: GcodeSourceWindow? = null,
+                                       active: () -> Unit = {}) {
+    internal val identity = Any()
     private val bytes = source.asReadOnlyBuffer().order(ByteOrder.LITTLE_ENDIAN)
     val recordCount: Int
     val pathPointCount: Int

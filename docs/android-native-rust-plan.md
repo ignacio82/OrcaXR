@@ -39,14 +39,16 @@ session bindings and independently generated source/window expectations. Generat
 browser metadata validation and the bounded worker-side source owner now replay
 the actual WASM corpus. Production browser preview now uses the Rust worker
 adapter, with a fixed startup reference choice and verified offline asset pair; search,
-generated request contracts, Kotlin view-to-source validation, native
+generated request contracts, native
 rendering, native asset integration, and device budgets remain required to qualify
 Stage B fully. No phase exit is closed by the browser integration alone.
 
 The Android host now has validators generated from the same 26 metadata shapes,
 strict bounded JSON parsing, model/arc/source checks and index-page continuity
-checks. Complete projection/inspection/playback binding to the selected source
-window remains open; generated metadata checks alone do not close that gate.
+checks. Projection, inspection and playback now bind their columns and metadata
+to an explicit captured model from the same session and requested source window.
+The renderer checks the capture identity before consuming the view. These
+development bindings still require production integration and device qualification.
 
 Build an adaptive native Android application for phones, tablets, Googlebook,
 and Android XR while preserving the web application. Introduce Rust as a shared

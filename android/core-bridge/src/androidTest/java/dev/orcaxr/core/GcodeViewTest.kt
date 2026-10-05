@@ -83,14 +83,24 @@ class GcodeViewTest {
                 }
                 session.seal()
                 val views = vector.getJSONArray("views")
+                var selectedWindow: String? = null
+                var captured: GcodePacket? = null
                 for (j in 0 until views.length()) {
                     val view = views.getJSONObject(j)
                     val id = "${vector.getString("id")}:$j"
-                    val request = view.getJSONObject("request").toString()
+                    val envelope = view.getJSONObject("request")
+                    val window = envelope.getJSONArray("window")
+                    val selector = window.toString()
+                    if (selector != selectedWindow) {
+                        captured = if (window.length() == 0) session.whole() else session.window(window.getInt(0), window.getInt(1))
+                        selectedWindow = selector
+                    }
+                    val model = requireNotNull(captured)
+                    val request = envelope.toString()
                     if (view.has("error")) {
-                        val failure = assertThrows(id, IllegalStateException::class.java) { session.view(request) }
+                        val failure = assertThrows(id, IllegalStateException::class.java) { session.view(model, request) }
                         assertEquals(id, view.getString("error"), failure.message)
-                    } else equal(snapshot(session.view(request)), view.get("expected"), id)
+                    } else equal(snapshot(session.view(model, request)), view.get("expected"), id)
                     tested++
                 }
             }
@@ -102,16 +112,17 @@ class GcodeViewTest {
         val request = """{"version":1,"window":[],"operation":"inspection","includeSource":true,"request":{"showToolMarker":true}}"""
         val session = GcodeSession(source.length)
         session.append(0, source.toCharArray()); session.seal()
-        val packet = session.view(request)
+        val model = session.whole()
+        val packet = session.view(model, request)
         val expected = snapshot(packet)
         for (invalid in listOf("null", request.replace("\"version\":1", "\"version\":99"), request.replace("\"window\":[]", "\"window\":[1,0]"))) {
-            assertThrows(IllegalStateException::class.java) { session.view(invalid) }
+            assertThrows(IllegalStateException::class.java) { session.view(model, invalid) }
         }
-        equal(snapshot(session.view(request)), expected, "after rejection")
+        equal(snapshot(session.view(model, request)), expected, "after rejection")
         session.close(); session.close()
         equal(snapshot(packet), expected, "after close")
         assertTrue(packet.column("recordIndices").isReadOnly)
-        assertThrows(IllegalStateException::class.java) { session.view(request) }
+        assertThrows(IllegalStateException::class.java) { session.view(model, request) }
         val handle = NativeGcode.open(1, source.length, "{}")
         try {
             NativeGcode.append(handle, 0, source.toCharArray()); NativeGcode.seal(handle)
@@ -119,14 +130,14 @@ class GcodeViewTest {
             assertThrows(IllegalStateException::class.java) { NativeGcode.copy(handle, ByteBuffer.allocateDirect(size).asReadOnlyBuffer()) }
             val bytes = ByteBuffer.allocateDirect(size).order(ByteOrder.LITTLE_ENDIAN)
             NativeGcode.copy(handle, bytes)
-            equal(snapshot(GcodeViewPacket(bytes)), expected, "raw transfer")
+            equal(snapshot(GcodeViewPacket(bytes, model, 2)), expected, "raw transfer")
             for ((offset, bad) in listOf(0 to 0, 4 to 99, 8 to 99, 12 to -1, 16 to -1, 20 to Int.MAX_VALUE, 24 to 100001, 28 to size-1)) {
                 val saved = bytes.getInt(offset); bytes.putInt(offset, bad)
-                assertThrows(IllegalArgumentException::class.java) { GcodeViewPacket(bytes) }
+                assertThrows(IllegalArgumentException::class.java) { GcodeViewPacket(bytes, model, 2) }
                 bytes.putInt(offset, saved)
             }
             val saved = bytes.get(32); bytes.put(32, 0xff.toByte())
-            assertThrows(java.nio.charset.CharacterCodingException::class.java) { GcodeViewPacket(bytes) }
+            assertThrows(java.nio.charset.CharacterCodingException::class.java) { GcodeViewPacket(bytes, model, 2) }
             bytes.put(32, saved)
             // Failed prepare must clear the old pending packet, not let copy
             // accidentally publish a previous operation's result.

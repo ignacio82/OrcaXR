@@ -82,7 +82,7 @@ class ViewportExperimentTest {
         val projection: dev.orcaxr.core.GcodeViewPacket
         owner.use {
             it.append(0, source.toCharArray()); it.seal()
-            model = it.whole(); projection = it.view(PreviewFixture.request)
+            model = it.whole(); projection = it.view(model, PreviewFixture.request)
         }
         val geometry = ToolpathGeometry.from(model, projection)
         assertTrue(geometry.segments > model.recordCount)
@@ -120,6 +120,10 @@ class ViewportExperimentTest {
         assertEquals(geometry.segments, segment)
         assertEquals(geometry.segments * 68L, geometry.cpuBytes)
         assertThrows(IllegalArgumentException::class.java) { ToolpathGeometry.from(model, projection, 1) }
+        GcodeSession(source.length).use { other ->
+            other.append(0, source.toCharArray()); other.seal()
+            assertThrows(IllegalArgumentException::class.java) { ToolpathGeometry.from(other.whole(), projection) }
+        }
     }
 
     @Test fun actualPixelsPaintingPickingClippingAndLifecycle() {
