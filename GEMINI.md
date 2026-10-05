@@ -67,6 +67,10 @@ engine (`libslic3r` via WASM) as the computational core.
   projection and inspection behind the existing session interface, with an
   explicit TypeScript startup rollback. Debug Android builds include a flat
   Filament fixture workbench; it has no canonical editing or document import.
+  A separate SceneCore rc01 experiment APK uses the same packed mesh, with
+  bounded immutable chunk replacement for sample paint. SDK contract and
+  non-XR startup checks do not qualify its spatial rendering; see native-core
+  evidence before selecting an XR renderer.
   Production native rendering, search and physical-device qualification remain open. Native PCVR
   remains outside scope.
 

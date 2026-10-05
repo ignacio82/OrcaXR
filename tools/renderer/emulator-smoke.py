@@ -5,6 +5,7 @@ The output is software-renderer evidence, never physical-device qualification.
 Build app/core instrumentation APKs before running. No physical device is used.
 """
 import hashlib
+import argparse
 import json
 import os
 from pathlib import Path
@@ -17,9 +18,17 @@ ROOT = Path(__file__).resolve().parents[2]
 SDK = Path(os.environ["ANDROID_HOME"])
 OUTPUT = ROOT / "tools/renderer/results"
 SERIAL = "emulator-5582"
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--scenecore-only", action="store_true", help="Run only the separate candidate's non-XR startup test")
+arguments = parser.parse_args()
 OUTPUT.mkdir(parents=True, exist_ok=True)
 if SERIAL in subprocess.check_output(["adb", "devices"], text=True):
     raise SystemExit(f"{SERIAL} is already owned; refusing to reuse it")
+reports = ["scenecore-non-xr-instrumentation.txt", "scenecore-non-xr-report.json", "failure-logcat.txt"]
+if not arguments.scenecore_only:
+    reports += ["instrumentation.txt", "report.json"]
+for name in reports:
+    (OUTPUT / name).unlink(missing_ok=True)
 
 
 def adb(*arguments, timeout=120):
@@ -53,6 +62,24 @@ with tempfile.TemporaryDirectory(prefix="orcaxr-renderer-avd-") as directory:
             else:
                 raise RuntimeError("Owned emulator boot timed out")
             print("Owned renderer emulator ready", flush=True)
+            spatial_app = ROOT / "android/xr-experiment/build/outputs/apk/debug/xr-experiment-debug.apk"
+            spatial_tests = ROOT / "android/xr-experiment/build/outputs/apk/androidTest/debug/xr-experiment-debug-androidTest.apk"
+            adb("install", "-r", str(spatial_app))
+            adb("install", "-r", str(spatial_tests))
+            result = adb("shell", "am", "instrument", "-w", "-e", "class",
+                "dev.orcaxr.xrexperiment.NonXrStartupTest",
+                "dev.orcaxr.xrexperiment.test/androidx.test.runner.AndroidJUnitRunner", timeout=180)
+            (OUTPUT / "scenecore-non-xr-instrumentation.txt").write_text(result + "\n")
+            if not re.search(r"OK \(1 test\)", result) or "FAILURES" in result or "INSTRUMENTATION_FAILED" in result:
+                raise RuntimeError("SceneCore non-XR startup failed; see scenecore-non-xr-instrumentation.txt")
+            report = {"evidenceKind": "non-XR-startup-only", "appSha256": sha(spatial_app),
+                "testApkSha256": sha(spatial_tests), "api": adb("shell", "getprop", "ro.build.version.sdk"),
+                "abi": adb("shell", "getprop", "ro.product.cpu.abi"), "testsPassed": 1,
+                "spatialRenderingQualified": False}
+            (OUTPUT / "scenecore-non-xr-report.json").write_text(json.dumps(report, indent=2) + "\n")
+            print(json.dumps(report, indent=2), flush=True)
+            if arguments.scenecore_only:
+                raise SystemExit(0)  # finally still tears down our emulator.
             subprocess.run(["python3", "tools/cross-platform/android-smoke.py", "--serial", SERIAL], cwd=ROOT, check=True)
             app = ROOT / "android/app/build/outputs/apk/debug/app-debug.apk"
             tests = ROOT / "android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
@@ -68,7 +95,14 @@ with tempfile.TemporaryDirectory(prefix="orcaxr-renderer-avd-") as directory:
             (OUTPUT / "report.json").write_text(json.dumps(report, indent=2) + "\n")
             print(json.dumps(report, indent=2), flush=True)
         except Exception:
-            (OUTPUT / "failure-logcat.txt").write_text(adb("logcat", "-d", "-t", "5000", "-s", "AndroidRuntime", "Filament", "TestRunner", "LifecycleMonitor", "ActivityScenario", "ActivityTaskManager", "ActivityManager"))
+            # Diagnostics must not mask the original failure or delay cleanup if
+            # the emulator/ADB itself is unresponsive.
+            try:
+                diagnostics = adb("logcat", "-d", "-t", "5000", "-s", "AndroidRuntime", "Filament", "TestRunner",
+                    "LifecycleMonitor", "ActivityScenario", "ActivityTaskManager", "ActivityManager", timeout=20)
+            except subprocess.SubprocessError as error:
+                diagnostics = f"Logcat unavailable: {type(error).__name__}\n"
+            (OUTPUT / "failure-logcat.txt").write_text(diagnostics)
             raise
         finally:
             process.terminate()

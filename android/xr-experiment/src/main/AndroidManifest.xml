@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Optional so the experiment can verify its non-XR startup rejection. -->
+    <uses-feature android:name="android.software.xr.api.spatial" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <application android:allowBackup="false" android:label="OrcaXR SceneCore experiment"
+        android:dataExtractionRules="@xml/data_extraction_rules" android:icon="@android:drawable/ic_menu_view"
+        android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <property android:name="android.window.PROPERTY_XR_ACTIVITY_START_MODE"
+            android:value="XR_ACTIVITY_START_MODE_HOME_SPACE" />
+        <activity android:name=".SceneCoreExperimentActivity" android:exported="true"
+            android:resizeableActivity="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

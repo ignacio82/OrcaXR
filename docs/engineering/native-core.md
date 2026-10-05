@@ -141,15 +141,9 @@ current experiment deliberately rebuilds fixtures on resume. It has no dirty
 project state to recover. True device/driver context loss and production project
 restoration still need dedicated qualification.
 
-Current SceneCore API inspection remains a separate feasibility input:
-[MeshBuffer.create](https://developer.android.com/reference/androidx/xr/scenecore/MeshBuffer)
-copies its provided buffers immediately and exposes no public in-place update;
-[CustomMesh](https://developer.android.com/reference/androidx/xr/scenecore/CustomMesh)
-also has no public vertex-update method. This is API evidence, not a measurement
-of mesh replacement or spatial editing latency. The
-[SceneCore release notes](https://developer.android.com/jetpack/androidx/releases/xr-scenecore)
-list 1.0.0-rc01 on 2026-09-09; no XR dependencies are selected by this flat build.
-The same-fixture SceneCore candidate, real-device traces, continuous paint/input,
+The separate [SceneCore candidate](#scenecore-candidate) uses this same packed
+mesh fixture. The flat app still has no XR dependency or session initialization.
+Spatial runtime measurements, real-device traces, continuous paint/input,
 Home/Full Space transitions and the pinned-engine Android slice remain open.
 
 Run the experiment checks after the foundation builds:
@@ -158,14 +152,18 @@ Run the experiment checks after the foundation builds:
 ./android/gradlew -p android :app:assembleDebug :app:assembleDebugAndroidTest \
   :app:assembleRelease :core-bridge:assembleDebugAndroidTest \
   :renderer-api:testDebugUnitTest :app:lintDebug \
+  :xr-experiment:assembleDebug :xr-experiment:assembleDebugAndroidTest \
+  :renderer-scenecore:testDebugUnitTest :renderer-scenecore:lintDebug :xr-experiment:lintDebug \
   --dependency-verification strict --no-daemon --console=plain
 python3 tools/cross-platform/verify-artifacts.py --apk android/app/build/outputs/apk/debug/app-debug.apk
 python3 tools/cross-platform/verify-artifacts.py --apk android/app/build/outputs/apk/release/app-release-unsigned.apk
+python3 tools/cross-platform/verify-artifacts.py --apk android/xr-experiment/build/outputs/apk/debug/xr-experiment-debug.apk
 python3 tools/renderer/emulator-smoke.py
 ```
 
 The final command owns a fresh API 34 x86_64 emulator on port 5582 and refuses an
-occupied port. It first runs the existing real JNI corpus and three cold starts,
+occupied port. It first verifies non-XR startup/recreation of the separate
+SceneCore experiment, then runs the existing real JNI corpus and three cold starts,
 then actual PixelCopy assertions, a Rust toolpath fixture, bounded paint uploads,
 picking/clipping, hidden-frame suspension, cancellation, recreation and repeated
 large-mesh teardown. Machine-specific reports stay ignored under
@@ -178,7 +176,7 @@ Six JVM geometry tests pass, including 854 oblique shared-vertex rays, independe
 grid-cell facet expectations, basis/winding/normal checks and mirrored/nonuniform
 transforms. All ten existing real JNI tests and three normal-shell cold starts
 pass on the owned API 34 x86_64, two-core SwiftShader emulator (4 KB pages).
-Three additional app instrumentation tests pass in 77.277 seconds. They check
+Three additional app instrumentation tests pass in 70.907 seconds. They check
 real SurfaceView pixels, the cross-chunk 4,096-facet paint update (49,152 bytes,
 two buffer uploads), original facet picking, complete clipping to background,
 shared-instance/transparency changes without geometry uploads, hidden-frame
@@ -191,20 +189,20 @@ The final two large-fixture observations were:
 | Observation | First open | Second open |
 | --- | ---: | ---: |
 | Facets | 2,000,000 | 2,000,000 |
-| Load through readiness and pixel capture | 36,149.57 ms | 28,583.28 ms |
+| Load through readiness and pixel capture | 28,941.41 ms | 27,835.74 ms |
 | Retained mesh/BVH/toolpath-ID array bytes | 57,267,352 | 57,267,352 |
 | GPU buffer payload estimate, including 125 line segments | 120,008,000 bytes | 120,008,000 bytes |
 | Peak pending upload bytes | 983,040 | 983,040 |
-| Submitted frames over this viewport lifetime | 324 | 294 |
-| Maximum observed frame CPU submission | 28.41 ms | 31.09 ms |
+| Submitted frames over this viewport lifetime | 297 | 290 |
+| Maximum observed frame CPU submission | 34.14 ms | 19.24 ms |
 
 These are two observations on a busy shared host with a software GPU, including
 source generation, BVH construction and progressive uploads. They are not a
 statistical benchmark, total-memory accounting, GPU frame times or target-device
 acceptance. The successful app APK SHA-256 is
-`2de95ef99bfc2b602c7d4237a5f360652ca2a3c98e0ffa672258c7c41bdf6513`;
+`1a9a6eb2cafa3b5bcc2e02809a0448cf3cbbebfc92d1340280693af65399c8ab`;
 test APK SHA-256 is
-`2a61757e9fbdec3059cf4a3d9f11e40f4b3a0ca8264e029f304d497dd56ff4a1`.
+`9835c55cc3a73e093efef5dc37224d683e84bf2e758a559268859129b7704f09`.
 The ignored report binds these APKs and emulator settings to the observations.
 
 Strict Gradle verification, debug/release builds, lint and all six JVM tests pass.
@@ -212,7 +210,7 @@ Only the pre-existing newer-version lint warnings remain. The debug APK's six
 native libraries and release APK's four pass both-ABI ELF/ZIP 16 KB alignment;
 this remains packaging evidence, not 16 KB-device loading. Release contains no
 Filament library or material asset. Cargo audit, all three npm development audits
-and the configured redacted UTF-8 source scan pass. CI now runs the renderer suite
+and the configured redacted 1,582-file UTF-8 source scan pass. CI now runs the renderer suite
 with the foundation checks; a clean hosted-runner result is still unverified.
 
 The first emulator attempts exposed two corrected consumer mistakes: arc path
@@ -221,6 +219,104 @@ world frame. Shared-vertex picking also needed the ray-aligned edge test describ
 above. The large fixture test now selects through the Activity's own intent so a
 pause/resume preserves its requested size. No assertion, resource ceiling or test
 timeout was relaxed to obtain the passing run.
+The combined candidate/flat rerun first timed out during instrumentation while
+the host showed severe CPU, memory and I/O pressure; ADB diagnostics also timed
+out. After the owned emulator exited and builds finished, the fresh retry passed
+all suites with unchanged limits. The runner now clears stale reports before a
+run and preserves the original failure if log capture fails.
+
+## SceneCore candidate
+
+`android/renderer-scenecore` and the separate `dev.orcaxr.xrexperiment`
+application pin **SceneCore/runtime 1.0.0-rc01**. They are development experiments,
+not a release feature or a renderer selection. The regular Android app has no
+SceneCore dependency. The experiment initially opens a Compose control panel in
+Home Space and requests Full Space only through its explicit control. It checks
+`android.software.xr.api.spatial` before calling `Session.create`; ordinary
+Android must never fall through to the SDK's ARCore session path. Session
+creation uses the public named `context` overload on an I/O dispatcher. Passing
+an Activity positionally selects a library-restricted overload in rc01; lint
+must remain enabled rather than suppressing that diagnostic.
+
+The following constraints come from the exact Google Maven rc01 source jars
+and actual SDK validators, not examples for a different SDK version:
+
+| Requirement | rc01 public API and candidate behavior |
+| --- | --- |
+| Mesh and colors | Two vertex buffers: FLOAT3 positions and normalized UBYTE4 RGBA, plus UINT32 indices; directly consumes `MeshPacking` without GLB serialization |
+| Update paint | `MeshBuffer.create` copies input and exposes no update method; `CustomMesh` and the mesh attached to a `MeshEntity` are immutable. The candidate replaces affected chunks and their entities |
+| Paint sample cost | The fixed 4,096-facet projection spans two 16,384-facet chunks: 1,966,080 payload bytes replaced. The flat candidate's color-only update is 49,152 bytes. This 40× ratio is a payload calculation, not measured transfer traffic or latency |
+| Instancing | Two entities share each chunk's mesh/buffer. The second is translated and uniformly scaled; disabled second entities still occupy runtime resources |
+| Transforms | Public entity scale is nonnegative and uniform. The Vector3 nonuniform overload is restricted. Mirrors/nonuniform transforms are not implemented; skinning or geometry alternatives need separate investigation |
+| Selection and transparency | Material tint and OPAQUE/BLEND switching are implemented for the fixture; spatial visual correctness remains unverified |
+| Clipping and toolpaths | Not implemented. Public custom-mesh topologies are TRIANGLES/TRIANGLE_STRIP, and COLOR rejects FLOAT3/FLOAT4. The adapter must preserve projected toolpath float colors and semantic IDs; silent quantization or independent role classification is not an acceptable workaround |
+| Disposal | Public resource `close()` exists, but `Entity.dispose()` is restricted/deprecated. Detach entities and release references; zero application counters do not prove immediate runtime/GPU reclamation |
+
+The source fixture is the same 32,768- or 2,000,000-facet synthetic grid used by
+the flat workbench, with the same positive-determinant millimetre/basis conversion.
+Uploads use at most 16,384 facets/983,040 payload bytes per call. Packing runs off
+the UI thread; synchronous SceneCore creation runs on the main thread, with a
+yield between chunks. Generation jobs cancel on replacement, pause, capability
+loss and destruction; the Activity constructs a new viewport on resume or regain
+of 3D capability. The fixed sample paint changes only packed colors. It does not
+edit a canonical model, alter source topology, implement an input stroke, or
+provide picking. Close detaches entities and explicitly closes owned meshes,
+buffers and materials; Session lifetime remains owned by the Activity/SDK.
+
+Metrics distinguish source-array bytes, live requested buffer payload, largest
+individual upload chunk, cumulative bytes/calls, paint replacement bytes and
+maximum synchronous submission duration. They omit allocation headers, packing
+and cancellation overlap, GC retention, SDK copies, hidden entity/subspace cost,
+driver memory and process RSS. In the inspected SDK, each MeshEntity creates a
+split-engine subspace: 123 mesh chunks can allocate 246 entity/subspace pairs even
+with the second instance disabled. These counters are not GPU draw calls. Spatial
+performance, memory reclamation, shared-buffer close semantics and panel/space
+lifecycles still require runtime evidence.
+
+Local evidence on 2026-10-05:
+
+- Strict dependency verification builds the candidate app and instrumentation.
+  Four JVM tests execute actual SDK layout/region validation, confirm rejection of
+  float vertex colors, and verify the two-chunk paint range without mutating
+  positions, indices or source colors. Both candidate lint tasks pass.
+- The non-XR API 34 x86_64 emulator test launches and recreates the Activity three
+  times. It checks zero session attempts, no viewport/uploads, and no loaded XR,
+  Impress or ARCore native libraries in the process mappings. This is startup
+  isolation evidence only; it does not execute a SceneCore renderer. The test
+  passed in 6.719 seconds.
+  Verified candidate APK SHA-256: `4409761d35e7eb0843026dc9eb2d56ce71202ed40338bf06d86b7f996ee265e1`;
+  instrumentation APK: `16d316b8c6eb8a79a6f420a46352a459abf9fcbc971f64fab2392aa6858ea0d4`.
+- All 14 packaged native libraries across arm64-v8a and x86_64 pass ELF/ZIP
+  16 KB alignment and core identity verification. All 71 added dependency
+  artifact hashes were re-fetched from official Google Maven/Maven Central and
+  matched; existing verification hashes were unchanged. The transitive graph
+  includes Impress 1.0.0-beta03, ARCore 1.56.0 and Media3 1.10.0.
+- XR Preview API v4 image revision 3, API 34 x86_64, was installed for a diagnostic
+  on this Linux host (emulator 37.1.11, two cores, 4 GiB, SwiftShader). The emulator
+  reported unsupported Vulkan shader stages and hanging QEMU threads; ADB probes
+  timed out and the owned emulator process exited before a verified boot. No APK
+  was installed or spatial measurement taken. Official XR emulator requirements
+  list macOS/Windows; this diagnostic is not a supported-host qualification.
+
+Run only the non-XR candidate check after building its two APKs with
+`python3 tools/renderer/emulator-smoke.py --scenecore-only`. The default smoke
+command additionally runs the existing JNI, shell and flat-renderer suites.
+Reports remain ignored under `tools/renderer/results/`; CI publishes those reports
+and both candidate build/lint/test reports. Hosted CI has not been claimed run by
+these local checks. No app was installed on the physical XR device, and no
+physical XR journey was exercised.
+
+The spatial comparison and Phase 2 exit remain open. Next evidence must include
+actual same-fixture pixels, input/picking, clipping, toolpath fidelity, transform
+alternatives, repeated Home/Full Space and Activity lifetimes, frame pacing and
+memory. Compare a separate custom OpenXR/panel integration prototype if public
+SceneCore paths cannot satisfy these requirements; do not prematurely make this
+candidate the production spatial renderer.
+
+References: [SceneCore release notes](https://developer.android.com/jetpack/androidx/releases/xr-scenecore),
+[custom meshes](https://developer.android.com/reference/androidx/xr/scenecore/MeshBuffer),
+[XR manifest configuration](https://developer.android.com/develop/xr/jetpack-xr-sdk/build-immersive),
+[XR emulator requirements](https://developer.android.com/develop/xr/jetpack-xr-sdk/run/create-avds/xr-headsets-glasses).
 
 ## Contracts and scope
 

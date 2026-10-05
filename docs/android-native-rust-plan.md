@@ -14,8 +14,11 @@ No renderer, native slicing route, native project editing, or XR journey is
 qualified by these foundation tests. Phase 2 now has a debug-only flat Filament
 fixture workbench with bounded mesh uploads, picking, display paint ranges and
 a Rust toolpath projection; see the [experiment contract](engineering/native-core.md#flat-renderer-experiment).
+The separate SceneCore rc01 candidate now builds against the same mesh contract,
+with SDK validation tests and non-XR startup checks. Spatial rendering and update
+latency remain unverified; the Linux/SwiftShader XR-image diagnostic did not boot.
 The SceneCore comparison, physical-device qualification and current-engine Android
-slice remain open. The workbench does not close a Phase 2 checklist item or exit.
+slice remain open. Neither candidate closes a Phase 2 checklist item or exit.
 
 The first Phase 3 computation implementation now includes the Rust rich G-code
 parser, immutable source/index ownership, bounded windows, cooperative native

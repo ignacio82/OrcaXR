@@ -31,8 +31,16 @@ peak and request 120,008,000 GPU buffer bytes including the toolpath; those
 counters do not measure driver allocation or total process memory. Release
 excludes the workbench and Filament. Both APKs pass native alignment checks;
 strict dependency verification, lint, audits and the redacted source scan pass.
-SceneCore, native engine/project workflows and physical-device qualification
-remain open; no migration phase exit is closed by this emulator experiment.
+The [separate SceneCore rc01 candidate](engineering/native-core.md#scenecore-candidate)
+now builds against the same packed mesh and replaces bounded chunks for sample
+paint. Four JVM tests cover the actual SDK validators and unchanged source
+geometry; a non-XR emulator test checks zero session attempts and no loaded XR
+native libraries across Activity recreation. Its 14 packaged native libraries
+pass both-ABI alignment checks. Spatial execution remains unverified: the
+Linux/SwiftShader XR-image diagnostic did not reach a verified boot. Picking,
+clipping, toolpaths, nonuniform/mirrored transforms, spatial lifecycle and
+performance remain open, alongside native engine/project workflows and physical
+qualification. No migration phase exit is closed by these candidate checks.
 
 The Rust preview projection now passes 1,567 host reference cases covering all
 12 modes, filters, legends, exact Float32 outputs, malformed inputs and unsupported
