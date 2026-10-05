@@ -18,6 +18,24 @@ import { replayRequests } from '/request-replay.mjs';
 const exports = await initialize({ module_or_path: new URL(self.location.href).searchParams.has('missing')
   ? '/missing.wasm' : '/wasm/orcaxr_core_bg.wasm' });
 self.onmessage = async ({data}) => {
+  if (data.operation === 'canonical-requests') {
+    try {
+      const corpus = await (await fetch('/canonical-requests.json')).json();
+      for (const test of corpus.cases) {
+        const encoded = evaluate(test.request);
+        const reply = JSON.parse(encoded);
+        if (reply.type !== test.type || reply.requestId !== test.requestId ||
+            (test.type === 'canonicalized' ? reply.canonical !== test.canonical :
+             reply.error?.code !== test.code || encoded.includes('PRIVATE_MARKER'))) {
+          throw new Error('Canonical request mismatch: ' + test.id);
+        }
+      }
+      self.postMessage({result: {requestId: data.requestId, type: 'canonical-requests-tested', cases: corpus.cases.length}});
+    } catch (error) {
+      self.postMessage({result: {requestId: data.requestId, type: 'canonical-requests-failed', message: String(error)}});
+    }
+    return;
+  }
   if (data.operation === 'gcode') {
     try {
       const metrics = await replayGcode(GcodeSession, exports.memory);
@@ -45,7 +63,7 @@ const server = createServer(async (request, response) => {
     else if (path === '/worker.mjs') { response.setHeader('Content-Type', 'text/javascript'); response.end(workerSource); }
     else if (path === '/gcode-packets.mjs') { response.setHeader('Content-Type','text/javascript'); response.end(packets.outputFiles[0].text); }
     else if (path === '/gcode-source.mjs') { response.setHeader('Content-Type','text/javascript'); response.end(sourceOwner.outputFiles[0].text); }
-    else if (['/gcode-replay.mjs', '/view-replay.mjs', '/request-replay.mjs', '/packet-snapshot.mjs', '/gcode-vectors.json', '/view-vectors.json', '/request-vectors.json', '/gcode-buffer.json', '/gcode-view-buffer.json'].includes(path)) {
+    else if (['/gcode-replay.mjs', '/view-replay.mjs', '/request-replay.mjs', '/packet-snapshot.mjs', '/gcode-vectors.json', '/view-vectors.json', '/request-vectors.json', '/canonical-requests.json', '/gcode-buffer.json', '/gcode-view-buffer.json'].includes(path)) {
       const file = path.endsWith('.mjs') ? 'tools/cross-platform'+path : path.endsWith('-buffer.json') ? 'contracts'+path : 'testdata/cross-platform'+path;
       response.setHeader('Content-Type', path.endsWith('.mjs') ? 'text/javascript' : 'application/json');
       response.end(await readFile(new URL(file,root)));
@@ -105,6 +123,12 @@ try {
       finally { clearTimeout(timeout); rejectReady = undefined; }
       return {
         close,
+        canonicalRequests() {
+          return new Promise((resolve,reject) => {
+            pending.set('canonical-requests',{resolve,reject});
+            worker.postMessage({operation:'canonical-requests',requestId:'canonical-requests'});
+          });
+        },
         gcode() {
           return new Promise((resolve,reject) => {
             pending.set('gcode',{resolve,reject});
@@ -124,6 +148,8 @@ try {
     try {
       check(!crossOriginIsolated, 'Test must exercise non-isolated browser WASM');
       const client = await start();
+      const envelopes = await client.canonicalRequests();
+      check(envelopes.result.type === 'canonical-requests-tested', envelopes.result.message ?? 'Canonical request replay failed');
       for (const vector of corpus.vectors) {
         const {result} = await client.evaluate(vector.input, vector.id);
         check(result.type === 'canonicalized', `Wrong result type: ${vector.id}`);
@@ -159,7 +185,7 @@ try {
       check(await start({expectedVersion: 99}).then(client => {client.close(); return false;}, () => true), 'Mismatched binary accepted');
       check(await start({missing: true}).then(client => {client.close(); return false;}, () => true), 'Missing WASM accepted');
       check(clients.size === 0, 'Worker owners retained');
-      return {vectors: corpus.vectors.length, invalid: corpus.invalid.length, largePayloadRepeats: 40,
+      return {vectors: corpus.vectors.length, invalid: corpus.invalid.length, canonicalRequests: envelopes.result.cases, largePayloadRepeats: 40,
         wasmLinearMemoryBytes: finalBytes, disposalCycles: 10, crossOriginIsolated, gcode: gcode.result.metrics, views: gcode.result.views, requests: gcode.result.requests};
     } finally { for (const close of clients) close(); }
   }, {corpus, schema});

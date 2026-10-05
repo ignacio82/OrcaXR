@@ -25,7 +25,7 @@ the renderer rejects a different capture identity. Native production integration
 search, full project command contracts, production native rendering,
 and physical-device performance
 remain migration work; these bindings do not change release support.
-The [Android boundary evidence](engineering/native-core.md) now records 20 passing
+The [Android boundary evidence](engineering/native-core.md) now records 21 passing
 JNI tests, including actual-packet mutation, capture/window binding and cancellation
 cases, plus three shell cold starts and three renderer lifecycle tests. Builds, lint, artifact
 alignment, audits and the configured redacted source scan pass. Shared G-code
@@ -35,6 +35,11 @@ Rust browser/JNI artifacts were rebuilt. Metadata layouts and slicing-engine
 artifacts remain unchanged. Thirty independent request cases agree across host
 Rust, actual browser WASM, Android JNI and the generated host guards; typed
 encoders also preserve UInt32 bits/UTF-16 units and enforce bounded serialization.
+The canonicalization envelope now also requires named object fields: the previous
+Serde-derived decoder incorrectly accepted positional arrays. Forty-eight raw
+request cases agree across host Rust debug/release, browser WASM and Android JNI,
+including malformed/duplicate fields, numeric versions and sanitized errors.
+Only the inner JSON input retains canonical last-key-wins duplicate semantics.
 
 The debug Android flat viewport now has generated mesh/toolpath fixtures with
 bounded Filament uploads, original-facet picking and display paint ranges.

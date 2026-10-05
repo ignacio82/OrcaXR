@@ -93,6 +93,7 @@ jobs:
       - name: Verify generated contracts and source inventory
         run: |
           node tools/cross-platform/generate-contracts.mjs
+          node tools/cross-platform/canonical-requests.mjs
           node tools/cross-platform/generate-gcode-layout.mjs
           node tools/cross-platform/generate-preview-catalog.mjs
           node tools/cross-platform/generate-view-layout.mjs

@@ -11,6 +11,27 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class NativeCoreTest {
+    @Test fun rawRequestEnvelopesCrossTheRealJniBoundary() {
+        CoreCompatibility.verify()
+        val context = InstrumentationRegistry.getInstrumentation().context
+        val corpus = JSONObject(context.assets.open("canonical-requests.json").bufferedReader().use { it.readText() })
+        val cases = corpus.getJSONArray("cases")
+        for (index in 0 until cases.length()) {
+            val case = cases.getJSONObject(index)
+            val encoded = NativeCore.evaluate(case.getString("request"))
+            val response = JSONObject(encoded)
+            val id = case.getString("id")
+            assertEquals(id, case.getString("type"), response.getString("type"))
+            assertEquals(id, case.get("requestId"), response.get("requestId"))
+            if (case.getString("type") == "canonicalized") {
+                assertEquals(id, case.getString("canonical"), response.getString("canonical"))
+            } else {
+                assertEquals(id, case.getString("code"), response.getJSONObject("error").getString("code"))
+                assertTrue(id, !encoded.contains("PRIVATE_MARKER"))
+            }
+        }
+    }
+
     @Test fun canonicalVectorsCrossTheRealJniBoundary() {
         CoreCompatibility.verify()
         val context = InstrumentationRegistry.getInstrumentation().context

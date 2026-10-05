@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 1,
+  "description": "Raw canonical request envelope conformance. Duplicate keys inside the input JSON retain canonical last-key-wins behavior.",
+  "contractSha256": "63e7ed821d0da12f863004109a41f5dbfd00b73a2c29584ae2b3a3a6b1320f7a",
+  "cases": [
+    {
+      "id": "object",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "canonicalized",
+      "requestId": "probe",
+      "canonical": "null"
+    },
+    {
+      "id": "reordered",
+      "request": "{\"input\":\"null\",\"operation\":\"canonicalize\",\"requestId\":\"probe\",\"protocolVersion\":1}",
+      "type": "canonicalized",
+      "requestId": "probe",
+      "canonical": "null"
+    },
+    {
+      "id": "whitespace",
+      "request": " \n{\n  \"protocolVersion\": 1,\n  \"requestId\": \"probe\",\n  \"operation\": \"canonicalize\",\n  \"input\": \"null\"\n}\t\r\n",
+      "type": "canonicalized",
+      "requestId": "probe",
+      "canonical": "null"
+    },
+    {
+      "id": "decimal-version",
+      "request": "{\"protocolVersion\":1.0,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "canonicalized",
+      "requestId": "probe",
+      "canonical": "null"
+    },
+    {
+      "id": "exponent-version",
+      "request": "{\"protocolVersion\":1e0,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "canonicalized",
+      "requestId": "probe",
+      "canonical": "null"
+    },
+    {
+      "id": "escaped-field",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operat\\u0069on\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "canonicalized",
+      "requestId": "probe",
+      "canonical": "null"
+    },
+    {
+      "id": "input-array",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"[1,{\\\"z\\\":null}]\"}",
+      "type": "canonicalized",
+      "requestId": "probe",
+      "canonical": "[1,{\"z\":null}]"
+    },
+    {
+      "id": "input-duplicate-keeps-last",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"{\\\"a\\\":1,\\\"a\\\":2}\"}",
+      "type": "canonicalized",
+      "requestId": "probe",
+      "canonical": "{\"a\":2}"
+    },
+    {
+      "id": "positional-envelope",
+      "request": "[1,\"probe\",\"canonicalize\",\"null\"]",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "extra-positional-field",
+      "request": "[1,\"probe\",\"canonicalize\",\"null\",5]",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "short-positional-envelope",
+      "request": "[1,\"probe\",\"canonicalize\"]",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "invalid-empty",
+      "request": "",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "invalid-object",
+      "request": "{}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "invalid-array",
+      "request": "[]",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "invalid-null",
+      "request": "null",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "invalid-number",
+      "request": "1",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "invalid-boolean",
+      "request": "true",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "invalid-string",
+      "request": "\"value\"",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "invalid-truncated",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "invalid-trailing",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}{}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "missing-protocolVersion",
+      "request": "{\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "null-protocolVersion",
+      "request": "{\"protocolVersion\":null,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "duplicate-protocolVersion",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\",\"protocolVersion\":1}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "missing-requestId",
+      "request": "{\"protocolVersion\":1,\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "null-requestId",
+      "request": "{\"protocolVersion\":1,\"requestId\":null,\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "duplicate-requestId",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\",\"requestId\":\"probe\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "missing-operation",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "null-operation",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":null,\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "duplicate-operation",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\",\"operation\":\"canonicalize\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "missing-input",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "null-input",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":null}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "duplicate-input",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "escaped-duplicate",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\",\"operat\\u0069on\":\"canonicalize\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "unknown-field",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\",\"private\":\"PRIVATE_MARKER\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "prototype-field",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\",\"__proto__\":{}}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "object-input",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":{\"private\":\"PRIVATE_MARKER\"}}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "array-input",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":[\"PRIVATE_MARKER\"]}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "number-input",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":0}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "boolean-version",
+      "request": "{\"protocolVersion\":true,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "string-version",
+      "request": "{\"protocolVersion\":\"1\",\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "unsupported-version-0",
+      "request": "{\"protocolVersion\":0,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "unsupported_protocol"
+    },
+    {
+      "id": "unsupported-version-2",
+      "request": "{\"protocolVersion\":2,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "unsupported_protocol"
+    },
+    {
+      "id": "unsupported-version--1",
+      "request": "{\"protocolVersion\":-1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "unsupported_protocol"
+    },
+    {
+      "id": "unsupported-version-1.5",
+      "request": "{\"protocolVersion\":1.5,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "unsupported_protocol"
+    },
+    {
+      "id": "unsupported-operation",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"unknown\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "invalid-id",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"PRIVATE_MARKER with spaces\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "error",
+      "requestId": null,
+      "code": "invalid_request"
+    },
+    {
+      "id": "inner-json-error",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"{\\\"PRIVATE_MARKER\\\":\"}",
+      "type": "error",
+      "requestId": "probe",
+      "code": "invalid_json"
+    },
+    {
+      "id": "valid-after-rejections",
+      "request": "{\"protocolVersion\":1,\"requestId\":\"probe\",\"operation\":\"canonicalize\",\"input\":\"null\"}",
+      "type": "canonicalized",
+      "requestId": "probe",
+      "canonical": "null"
+    }
+  ]
+}

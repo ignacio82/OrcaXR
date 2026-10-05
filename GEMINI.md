@@ -288,10 +288,10 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Android G-code views require an explicit captured model from the same session
   and exact requested window. Validate output relations before rendering and keep
   the capture identity; matching dimensions alone cannot associate two packets.
-- G-code source/view transport types come from the shared request schema. Rust
-  decoding must require objects: ordinary Serde struct decoding also accepts
-  positional arrays. Reject duplicate request/option keys; the separate canonical
-  JSON operation intentionally keeps JavaScript's last-key-wins behavior.
+- Canonicalization and G-code transport types come from shared request schemas.
+  Rust decoding must require objects: ordinary Serde struct decoding also accepts
+  positional arrays. Reject duplicate envelope/option keys; only the inner JSON
+  being canonicalized keeps JavaScript's last-key-wins behavior.
 - A pinned G2/G3 arc remains one semantic source record; no partial arc is published
   on parser cap failure. Preserve Float32 operation order and bounded path-point data.
 - Never instantiate slicing-engine WASM to warm the cache: each instance commits a 256 MiB shared

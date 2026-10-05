@@ -351,6 +351,11 @@ are byte-identical, and the existing debug/release APKs verify against them.
 `contracts/core-protocol.json` owns the initial **stateless canonicalization
 request**. The generator emits Rust request deserialization/validation, TypeScript
 types/validation, and Kotlin request types/validation. Regeneration must be clean.
+Its Rust decoder explicitly requires a map: deriving Serde struct deserialization
+also accepted positional arrays even though the schema and host validators require
+objects. All four named fields must occur exactly once; unknown fields are rejected.
+Protocol versions retain numeric value semantics, including `1.0` and `1e0`.
+This envelope rule is separate from the inner JSON input's last-key-wins semantics.
 It is a deliberately limited schema subset; unsupported schema constructs must
 fail generation. The full project session, command/result/error and cancellation
 schemas in Phase 1/4 remain to be implemented. The G-code packet layouts below are
@@ -373,7 +378,8 @@ and lone surrogates. Kotlin uses `Long` for UInt32 fields. Generated Rust object
 visitors reject positional arrays, unknown fields and duplicate keys, including
 duplicates whose first value is null. Source options now decode directly into
 those types instead of first passing through a duplicate-collapsing JSON value.
-The independent canonicalization operation retains its existing duplicate semantics.
+Duplicate keys within the canonicalization request's inner input retain their
+existing last-key-wins semantics; its outer envelope rejects duplicates.
 
 Kotlin's typed source/view overloads encode bounded ASCII JSON before JNI. Raw
 JSON overloads use the same generated structural guards before source/window
@@ -564,7 +570,7 @@ and [JSONObject](https://developer.android.com/reference/org/json/JSONObject)
 contracts. These checks do not change the separate canonical JSON operation's
 intentional duplicate-key semantics.
 
-Local Android boundary evidence on 2026-10-05: **20 JNI instrumentation tests**
+Local Android boundary evidence on 2026-10-05: **21 JNI instrumentation tests**
 pass on the owned API 34 x86_64 emulator, including the existing parser/window
 corpus and 4,554 view requests with captured-model validation. Seven boundary tests
 mutate actual native packets and exercise coercion/null/missing/unknown fields,
@@ -710,6 +716,7 @@ rustup toolchain install 1.94.1 --profile minimal --component rustfmt --componen
 cargo +1.94.1 install wasm-bindgen-cli --version 0.2.129 --locked --jobs 2
 cargo +1.94.1 install cargo-audit --version 0.22.2 --locked --jobs 2
 node tools/cross-platform/generate-contracts.mjs
+node tools/cross-platform/canonical-requests.mjs
 node tools/cross-platform/generate-gcode-layout.mjs
 node tools/cross-platform/generate-preview-catalog.mjs
 node tools/cross-platform/generate-view-layout.mjs
@@ -798,6 +805,30 @@ Initial local verification on 2026-10-04 established:
 Full development-dependency audits for web, server, and engine tooling also report
 zero vulnerabilities. These foundation changes do not modify the web runtime or
 replace its existing quality and release gates.
+
+The canonical request correction on 2026-10-05 adds **48 raw envelope cases**.
+The positional-array case failed against the old generated decoder before the
+fix. Host Rust debug/release, actual browser WASM, and Android x86_64 JNI now agree
+on named-field decoding, missing/null/duplicate/unknown fields, escaped names,
+numeric version values, malformed roots and sanitized failures. An accepted
+request after all refusals verifies continued operation. Arrays and duplicate
+keys inside the inner input still canonicalize with the existing semantics.
+The browser rerun also passes all 269 canonical/hash vectors, 10 invalid inputs,
+98 G-code traces, 358 windows, 4,554 view queries and 30 G-code request cases.
+The refreshed browser set is `4d8246c8187f` with 558,264 WASM bytes. Both JNI ABIs
+were rebuilt; debug/release APKs pass source identity and 16 KB ELF/ZIP alignment.
+The owned API 34 x86_64 run passes all 21 JNI tests, three shell cold starts,
+three renderer pixel/lifecycle tests and the separate non-XR startup test.
+Two two-million-facet loads retain the 983,040-byte staging peak and the existing
+120,008,000-byte GPU-buffer estimate. These software-emulator observations do not
+qualify physical-device performance or ARM64 execution.
+The complete `scripts/quality.sh` gate passes with this packaged browser set,
+including production browser/offline/recovery checks, server integration and
+HTTP/HTTPS deployment, published-engine slicing regressions and all three full
+npm audits. Rust format, strict Clippy, debug/release tests and Cargo audit pass;
+the core workflow passes actionlint. The configured redacted source
+scan covers 1,637 UTF-8 files, including six normalized for embedded NULs, with
+no findings. Optional container image builds were not run for this boundary change.
 
 Initial G-code verification on 2026-10-04 established:
 

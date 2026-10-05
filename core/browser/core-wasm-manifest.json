@@ -16,9 +16,9 @@
     "core/crates/orcaxr-contracts/Cargo.toml": "1bb86d9047b047aae98f639e63af798f83700585002853e995b46e8f4ce1a2a8",
     "core/crates/orcaxr-contracts/src/bin/contract-runner.rs": "bdd4e0f6fb99a34a7e74acee307d34924fb4132292cdcae9e75946ae43f67343",
     "core/crates/orcaxr-contracts/src/canonical.rs": "7cac1d54d47a74755601ee47324947282ea9e0f742f0f8d0ce735b2a23b67209",
-    "core/crates/orcaxr-contracts/src/generated.rs": "df4cb4286e189fd28c703aa64d73e03167ea65175a8800db3753049191ef69ff",
+    "core/crates/orcaxr-contracts/src/generated.rs": "1ac386ce3c8dcd75256a822fa716e041815f892d38148a5144353a15330ea10b",
     "core/crates/orcaxr-contracts/src/lib.rs": "0f4bf4dce4cf77c0fe5f47b284ec79dcf38190ad57859505eb27948b1da72661",
-    "core/crates/orcaxr-contracts/tests/canonical_vectors.rs": "67a66d54cc093bb611865d3b51e42da035146c1ea563fd9b1700d0cb72cac95f",
+    "core/crates/orcaxr-contracts/tests/canonical_vectors.rs": "3c06a2f854c159d959981ec76cedafb3c113280eb13719355b959755709a4a63",
     "core/crates/orcaxr-gcode/Cargo.toml": "d240563bfd243008bf79f8e95f065791c0ac317c09c68c4912fc247796f7b31f",
     "core/crates/orcaxr-gcode/src/arc.rs": "fc7e62b6be6da68ebb40d77fc7b7a06387c4d33a0f94c33ca8c6ea76c9d47690",
     "core/crates/orcaxr-gcode/src/cancellation.rs": "4598538829cd8a0bfff78ce38a50093a1f2ebfe20bd9305071f5f37692db179d",
@@ -61,7 +61,7 @@
   "outputs": {
     "orcaxr_core.d.ts": "562f415013e9897368925ceaf74cab80c035d42dda79be0980b4965811a8db41",
     "orcaxr_core.js": "8ce938ccaa26957216197bffd79355d75434397574dab9edcdf58a9b2245202e",
-    "orcaxr_core_bg.wasm": "fa70c15f0f26810042ac11b6cdb02ee5cd42ad1d9f28c360fbf48661df8e320b",
+    "orcaxr_core_bg.wasm": "d167df60d1dc5b58b78409420b2281b14f65ab2c7f12f1e2da475cee0b95691b",
     "orcaxr_core_bg.wasm.d.ts": "a85cad8cf9b1420a0ae42d6358806cd5632f8f038f92c76e95ec53471baa5ca9"
   },
   "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",

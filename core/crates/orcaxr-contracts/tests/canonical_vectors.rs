@@ -2,6 +2,26 @@ use orcaxr_contracts::evaluate;
 use serde_json::{Value, json};
 
 #[test]
+fn raw_request_envelopes_match_the_shared_transport_corpus() {
+    let corpus: Value = serde_json::from_str(include_str!(
+        "../../../../testdata/cross-platform/canonical-requests.json"
+    ))
+    .unwrap();
+    for case in corpus["cases"].as_array().unwrap() {
+        let encoded = evaluate(case["request"].as_str().unwrap());
+        let result: Value = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(result["type"], case["type"], "{}", case["id"]);
+        assert_eq!(result["requestId"], case["requestId"], "{}", case["id"]);
+        if case["type"] == "canonicalized" {
+            assert_eq!(result["canonical"], case["canonical"], "{}", case["id"]);
+        } else {
+            assert_eq!(result["error"]["code"], case["code"], "{}", case["id"]);
+            assert!(!encoded.contains("PRIVATE_MARKER"));
+        }
+    }
+}
+
+#[test]
 fn matches_independent_typescript_vectors() {
     let corpus: Value = serde_json::from_str(include_str!(
         "../../../../testdata/cross-platform/canonical-vectors.json"

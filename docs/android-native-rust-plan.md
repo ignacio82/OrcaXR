@@ -8,7 +8,9 @@ current release supports.
 Initial Stage A evidence is maintained in [native-core build and evidence](engineering/native-core.md).
 The development shell, bounded Rust canonicalizer, generated request bindings,
 cross-language fixtures, migration inventory, artifact checks, and new CI workflow
-exist. Phases 0 and 1 remain open: physical baselines, complete transport/session
+exist. The canonicalization envelope requires named object fields and rejects
+positional arrays and duplicate keys independently of inner JSON semantics.
+Phases 0 and 1 remain open: physical baselines, complete transport/session
 contracts, native offline manifests, and clean-runner qualification are still required.
 No renderer, native slicing route, native project editing, or XR journey is
 qualified by these foundation tests. Phase 2 now has a debug-only flat Filament
