@@ -157,9 +157,30 @@ payloads, deterministic PRNG words and UUID streams. Debug/release tests, strict
 workspace Clippy/tests, Cargo audit and compilation checks for wasm32 and both
 Android targets pass. Immutable ID clones share their text allocation. This is
 an identifier port, not a Rust graph/session implementation or native editor.
-The refreshed source manifests retain byte-identical WASM/JNI executables;
-both APK artifact checks and the complete repository gate pass. The configured
-redacted source scan covers 1,646 UTF-8 files with no findings.
+That identifier-only update retained byte-identical WASM/JNI executables;
+both APK artifact checks and the complete repository gate passed. Its configured
+redacted source scan covered 1,646 UTF-8 files with no findings.
+
+Prepared plate commands now use one versioned schema generating TypeScript,
+Rust and Kotlin types, strict decoding and bounded encoding. All seven production
+browser plate operations submit captured intents to the existing asynchronous
+TypeScript authority; prepared batches use its original atomic transaction.
+The 188-case corpus agrees across host TypeScript/Rust and emulator Kotlin,
+including lossless UTF-16, numeric value semantics, distinct 160/120-unit
+add/rename limits, large finite plate order values and malformed envelopes.
+Additional checks cover every UTF-16 unit, resource limits, immutable queued
+payloads, cancellation and rollback; 23 schema mutation guards pass. Android's
+strict JsonReader was observed accepting `1.`; a shared lexical check now protects
+both intents and the existing G-code metadata decoder. All 24 core instrumentation
+tests, three cold starts, three renderer lifecycle/pixel tests and non-XR startup
+pass on the owned API 34 x86_64 emulator. Rust debug/release, Clippy/audit, Android
+builds/lint and native artifact checks pass; the 1,663-file redacted scan has no
+findings. The complete repository gate passes with 266 web unit-test files,
+96 project test files, browser/offline/recovery/accessibility checks, HTTP/HTTPS
+deployment, real slicing and all three npm audits. Bundle budgets pass unchanged.
+The full session generation/guard/result/error/cancellation protocol,
+other editing workflows, Rust project execution and physical qualification remain
+open. These leaf contracts do not close Phase 1/4 or enable native editing.
 
 ## Current implementation
 

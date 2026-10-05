@@ -1,6 +1,6 @@
 # Native Android and shared-core development
 
-This document records Stage A and the initial Phase 3 computation port of the
+This document records Stage A and the shared computation/project foundations of the
 [migration plan](../android-native-rust-plan.md). The production web project and
 current C++ engine remain authoritative. The Android application is a development
 shell: it checks the JNI handshake and explicitly reports that editing is not
@@ -347,10 +347,10 @@ both Android targets without platform dependencies. These are host execution
 and target compilation evidence, not a JNI/WASM session implementation or
 native editing qualification. The graph, assets, history and session port remain
 open. The native-core workflow now checks fixture drift and these targets.
-Shared-core provenance now includes the project crate. Browser set `255e6ce1f2dc`
-and the refreshed JNI manifests retain byte-identical executables; both existing
-APKs verify against these inputs with all packaged libraries 16 KB aligned.
-The complete repository quality gate passes with this asset set, including all
+The identifier-only update added the project crate to shared-core provenance.
+Its browser set `255e6ce1f2dc` and JNI manifests retained byte-identical executables;
+both APKs verified against those inputs with all libraries 16 KB aligned.
+The complete repository quality gate passed with that asset set, including all
 265 web unit-test files, 95 project test files, browser/offline/recovery and
 accessibility checks, server HTTP/HTTPS deployment, real slicing and all three
 npm audits. The redacted source scan covers 1,646 UTF-8 files with no findings;
@@ -361,11 +361,72 @@ The browser now has a transitional `AsyncEditorSession` over its TypeScript
 authority. Undo/Redo and plate lifecycle actions await acknowledgements; guarded queued execution,
 bounded callback-free batches and ordered summary queries are available for
 incremental migration. Project, asset and history guards prevent stale work from
-silently applying to a newer edit. This is an in-process facade using trusted
-command objects and an opaque owner token, not a generated project protocol or
-a Rust project implementation. The remaining action/import/save/slice migration
-and full command bindings remain Phase 1/4 work. The maintained details live in
+silently applying to a newer edit. Plate payloads now use the generated intent
+contract below; the TypeScript command bus remains authoritative. Owner tokens
+and acknowledgement guards remain local. The remaining action/import/save/slice
+migration, session/result/error bindings and Rust project implementation remain
+Phase 1/4 work. The maintained details live in
 [project contracts](project-contracts.md).
+
+`contracts/project-intents.json` now defines seven prepared plate operations and
+batches of up to 64 operations. `generate-project-intents.mjs` emits TypeScript
+readonly types with immutable capture, Rust owned types/converters and Kotlin
+sealed types/encoders/decoders. The restricted schema rejects unsupported features
+rather than ignoring them. ASCII JSON carries all user text as UTF-16 integer
+arrays; existing project encoding and semantic hashes do not change. Structural
+validation is distinct from stable-ID and project validation in the executor.
+The browser production plate path now submits these intents through the existing
+asynchronous facade. A captured batch maps to the original atomic transaction.
+The guards, acknowledgements, ordered queries and Undo/Redo still use local
+ownership; this leaf format does not establish a complete session transport.
+
+All three decoders bound input bytes, value nodes and nesting, reject duplicate,
+unknown and missing fields, and require objects rather than positional arrays.
+Numeric fields use binary64 value semantics, preserving accepted decimal/exponent
+spellings and normalizing negative zero. Added and renamed names retain their
+existing 160/120-unit limits; plate order retains large finite integral values
+above the safe-integer range. Local TypeScript capture rejects accessors,
+custom prototypes, symbols and non-dense/extended arrays without invoking getters.
+It freezes its owned copy before constructing commands; a preparation encoder
+bounds aggregate UTF-16 allocation before the completed request is captured. Neither a caller changing
+an intent nor a failed batch can redirect an accepted edit or change immutable
+asset ownership. The schema's resource limits are transport limits; larger
+persisted identifiers have not been redefined as invalid domain IDs. Android
+`JsonReader` strict mode was observed accepting `1.` on API 34. Both project
+intents and G-code metadata now apply a shared lexical check for number, keyword
+and escape syntax before the existing bounded structural parser. Unicode
+metadata strings and cancellation callbacks retain their existing behavior.
+
+The intent corpus now contains **188 independently authored raw cases**, replayed
+by TypeScript, host Rust in debug/release, and compiled Kotlin on the API 34 x86_64
+emulator. Separate checks round-trip all 65,536 UTF-16 units, reject node/byte/depth
+exhaustion and malformed typed output, and reject 23 unsupported schema mutations.
+Production-controller regressions include distinct add/rename name limits; a
+session regression preserves plate order above the safe-integer range. A failed
+prepared batch restores project/selection/history/assets, while later valid work
+and empty batches retain the original behavior. Workspace Rust tests, format,
+strict Clippy and Cargo audit pass. Both Android ABIs rebuild; debug/release APKs,
+strict dependency verification, unit tests and lint pass. The owned emulator
+passes 24 core instrumentation tests (including three Kotlin intent tests), three
+cold starts, three renderer pixel/lifecycle tests and the separate non-XR startup.
+This is 4,096-byte-page software-emulator evidence, not ARM64 or physical XR
+execution. The Rust intent decoder has no worker/JNI project-session entry point.
+
+The refreshed browser set `bc747ccd136e` contains 556,646 WASM bytes and binds
+64 core source inputs. Actual browser WASM reruns all 269 canonical vectors,
+10 malformed inputs, 48 canonical envelopes, 98 G-code sources/358 windows,
+4,554 view queries and 30 G-code request cases. Both APKs verify matching source
+and output identity with every native library 16 KB ELF/ZIP aligned. The new
+intent corpus exercises host TypeScript/Rust and Android Kotlin; it does not
+claim Rust project execution through those existing WASM/JNI computation APIs.
+The redacted source scan covers 1,663 UTF-8 files, including six normalized for
+embedded NULs, with no findings. Workflow actionlint and generation checks pass;
+GitHub-hosted execution remains unqualified. The complete `scripts/quality.sh`
+gate passes against the final artifact set: 266 web unit-test files, 96 project
+test files, production browser/offline/recovery/accessibility checks, server
+HTTP/HTTPS deployment, real slicing and all three full npm audits. Bundle budgets
+pass with 2,274,624 main-entry bytes and 10,592,216 total JavaScript bytes under
+unchanged limits.
 
 The migration inventory binds action source files to an existing Git commit.
 Commit an action-source change before regenerating it with `inventory.mjs --write`.
@@ -373,13 +434,13 @@ The inventory JSON is also an input to shared-core provenance, so refresh the
 WASM/JNI build manifests and packaged browser asset set through their normal
 build tools afterward. Byte-identical executables still need manifests that bind
 the updated input. The asynchronous history and plate updates preserve all 226
-action records and native capability states. The plate update binds source commit
-`ae4c6ab`; refreshed browser set `e8e625f7c1b2` contains the same 558,264-byte WASM.
-Rebuilt WASM/glue and both JNI binaries are byte-identical, and the existing
-debug/release APKs verify against the new input manifest with both ABIs and every
-packaged native library retaining 16 KB ELF/ZIP alignment. The refreshed asset set
-passes the production browser, startup, recovery, worker, offline and static-host
-preview suite; bundle budgets pass at 2,269,279 main bytes and 10,586,871 total JS
+action records and native capability states. The plate update bound source commit
+`ae4c6ab`; browser set `e8e625f7c1b2` contained the same 558,264-byte WASM.
+Rebuilt WASM/glue and both JNI binaries were byte-identical, and the
+debug/release APKs verified against that input manifest with both ABIs and every
+packaged native library retaining 16 KB ELF/ZIP alignment. That asset set
+passed the production browser, startup, recovery, worker, offline and static-host
+preview suite; bundle budgets passed at 2,269,279 main bytes and 10,586,871 total JS
 bytes. The source change passed the complete repository gate before this metadata
 refresh. No Android runtime behavior or physical-device qualification is inferred
 from the metadata checks.
@@ -759,8 +820,11 @@ node tools/cross-platform/generate-view-layout.mjs
 node tools/cross-platform/generate-gcode-metadata.mjs
 node tools/cross-platform/generate-gcode-requests.mjs
 node tools/cross-platform/test-request-generator.mjs
+node tools/cross-platform/generate-project-intents.mjs
+node tools/cross-platform/test-project-intent-generator.mjs
+node tools/cross-platform/project-intent-vectors.mjs
 node tools/cross-platform/package-browser-core.mjs
-node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts rust-gcode-loading.test.ts
+node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts rust-gcode-loading.test.ts project-intents.test.ts
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-id-vectors.mjs
@@ -777,6 +841,7 @@ Run these in `core/` so the pinned Rust toolchain is selected:
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked --jobs 2 -- -D warnings
 cargo test --workspace --locked --jobs 2
+cargo test -p orcaxr-contracts --test project_intents --release --locked --jobs 2
 cargo test -p orcaxr-project --release --locked --jobs 2
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target wasm32-unknown-unknown
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target aarch64-linux-android

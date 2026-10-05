@@ -1,3 +1,5 @@
+import type { ProjectIntentWire, ProjectBatchWire } from '../../../contracts/generated/project-intents';
+import { prepareProjectIntent, prepareProjectBatch } from './PreparedProjectCommands';
 import type { ProjectCommand } from './history/command';
 import type { CommandHistorySnapshot } from './history/commandBus';
 import type { CancellationToken, ProjectExportGuard } from './ports';
@@ -48,8 +50,8 @@ export interface AsyncSessionRequestOptions {
 
 /**
  * Transitional asynchronous facade over the existing TypeScript authority.
- * Commands remain trusted local objects until each family gets serializable
- * intents. No callback transaction crosses this boundary. Queries are ordered
+ * Prepared plate intents are captured through generated validation; other
+ * commands still use trusted local objects. No callback transaction crosses this boundary. Queries are ordered
  * with mutations, and queued mutations never silently rebase their guard.
  */
 export class AsyncEditorSession {
@@ -90,6 +92,33 @@ export class AsyncEditorSession {
   ): Promise<AsyncSessionAcknowledgement<void>> {
     const coalesce = options.coalesce;
     return this.mutate(() => this.session.execute(command, { coalesce }), options);
+  }
+
+  /** Serializable prepared command; ownership guards remain local until the session transport lands. */
+  executeIntent(
+    intent: ProjectIntentWire,
+    options: AsyncSessionRequestOptions = {},
+  ): Promise<AsyncSessionAcknowledgement<void>> {
+    try {
+      const guard = options.guard ?? this.captureGuard();
+      const prepared = prepareProjectIntent(intent);
+      return this.execute(prepared, { ...options, guard });
+    } catch (error) {
+      return Promise.reject(error instanceof AsyncSessionError ? error : new AsyncSessionError('invalid-request'));
+    }
+  }
+
+  transactionIntents(
+    batch: ProjectBatchWire,
+    options: AsyncSessionRequestOptions = {},
+  ): Promise<AsyncSessionAcknowledgement<void>> {
+    try {
+      const guard = options.guard ?? this.captureGuard();
+      const prepared = prepareProjectBatch(batch);
+      return this.transaction(prepared.label, prepared.commands, { ...options, guard });
+    } catch (error) {
+      return Promise.reject(error instanceof AsyncSessionError ? error : new AsyncSessionError('invalid-request'));
+    }
   }
 
   transaction(

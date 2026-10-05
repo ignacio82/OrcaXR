@@ -26,12 +26,14 @@ are fixture-specific evidence, not device-independent performance guarantees.
   reject before mutation; a failure does not poison the queue. A synchronous commit
   still receives an acknowledgement if an observer then cancels or disposes it.
   At most 32 operations may be pending, and transactions capture a list of at most
-  64 existing command objects instead of accepting an asynchronous callback. The
+  64 existing command objects on the legacy local path; prepared batches carry
+  up to 64 serializable intents instead of an asynchronous callback. The
   original bus retains atomic rollback, monotonic project revisions, selection,
   coalescing and checkpoints without copying asset payloads. Empty batches do not
   change history revision. Acknowledgements freeze identity/history; queued queries
   return summaries rather than project or mesh copies. These are trusted local
-  objects with an opaque owner token, not the future generated wire protocol.
+  acknowledgements with an opaque owner token, not the future generated session
+  envelope.
   Production Undo/Redo and all seven plate lifecycle operations await this facade
   through the workspace and registry. Plate requests capture their guard before
   preparation/ID allocation; exact activation/rename/order/printability no-ops keep
@@ -41,6 +43,31 @@ are fixture-specific evidence, not device-independent performance guarantees.
   checks its receipt plus the expected selection before selecting/framing a row;
   a superseded reveal leaves newer intent intact. Other editing, import, save and
   slice paths still require migration.
+- `contracts/project-intents.json` owns prepared payloads for plate add,
+  duplicate, delete, activation, rename, reorder and printability. It generates
+  TypeScript, Rust and Kotlin types and conversion checks. Production plate
+  actions capture these intents before queueing through `AsyncEditorSession`;
+  `transactionIntents` captures a bounded list and uses one existing bus transaction.
+  Preparation retains injected ID order and allocates no transport nonce from the
+  project ID source. The executor validates stable-ID semantics and constructs the
+  existing commands; it creates no shadow graph or replacement history model.
+  Names and IDs preserve UTF-16 units, including NULs and lone surrogates. Wire
+  JSON is ASCII (text uses numeric unit arrays); numeric fields have binary64
+  value semantics, including decimal/exponent integer spellings and negative zero.
+  The format rejects unknown/duplicate/missing keys, positional objects, invalid
+  versions and values outside schema bounds. Limits are 1 MiB, 131,072 value nodes,
+  depth 12, 64 batch commands, 36 reordered plates, 160-unit added names and
+  120-unit renamed names.
+  Plate order retains the domain’s finite nonnegative integer values, including
+  values above the safe-integer range. These are transport limits, not new persisted
+  graph limits. Local capture
+  rejects getters, custom prototypes, symbols, typed/sparse/extended arrays and
+  freezes owned copies before queueing. Per-request text conversion budgets reject
+  excessive aggregate UTF-16 allocation during preparation. Batches preserve
+  empty/no-op behavior,
+  atomic rollback, selection and asset sharing. The full session generation,
+  expected identity, result/error, handshake and cancellation envelopes remain
+  separate Phase 1/4 work; Rust/Kotlin decoding does not execute a native project.
 - `EditorSession.open` binds its source project/revision/semantic/asset identity
   and owns a single current open operation. Newer opens supersede older reads,
   even if the newer read fails. Reset, disposal, cancellation and source drift

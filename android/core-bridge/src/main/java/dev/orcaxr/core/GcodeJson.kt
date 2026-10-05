@@ -13,20 +13,7 @@ internal object GcodeJson {
     fun parse(text: String, active: () -> Unit = {}): Any {
         active()
         require(text.length in 2..GcodeLayout.MAX_METADATA_BYTES && !text.startsWith('\uFEFF'))
-        // Some platform JsonReader revisions accept literal controls inside
-        // quoted strings even with leniency disabled. Enforce JSON escaping.
-        var quoted = false
-        var escaped = false
-        for (index in text.indices) {
-            if (index and 4095 == 0) active()
-            val character = text[index]
-            if (character.code < 32) require(!quoted && character in "\t\r\n")
-            if (quoted) {
-                if (escaped) escaped = false
-                else if (character == '\\') escaped = true
-                else if (character == '"') quoted = false
-            } else if (character == '"') quoted = true
-        }
+        require(StrictJsonTokens.valid(text, active)) { "Invalid shared G-code metadata" }
         var remaining = GcodeMetadata.MAX_VALIDATION_NODES
         fun read(reader: JsonReader, depth: Int): Any {
             if (remaining and 4095 == 0) active()

@@ -150,11 +150,19 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Production Undo/Redo and plate add/duplicate/delete/activate/rename/reorder/
   printability await the local asynchronous session facade through ActionRegistry.
   Queued mutations bind both project/asset identity and a monotonic history revision; equal-looking history replacement can still invalidate them.
-  This facade retains trusted TypeScript command objects and is not a worker/JNI
-  protocol. Plate UI success follows acknowledgement; canonical subscriptions
+  Plate payloads are generated, bounded serializable intents; the TypeScript bus
+  remains the executor. Session guards and acknowledgements still use local
+  ownership, so this is not yet a worker/JNI session protocol. Plate UI success follows acknowledgement; canonical subscriptions
   own selection and projection updates. Objects reveal checks the activation
   receipt and current selection before applying late camera/selection work.
-  Other command families and generated project bindings remain migration work.
+  Other command families and generated session/result bindings remain migration work.
+- Prepared plate intents use ASCII JSON with UTF-16 unit arrays for all text.
+  The shared schema generates TypeScript, Rust and Kotlin types and converters.
+  Reject duplicate/unknown/missing fields, positional objects, unsupported versions
+  and exhausted byte/node/depth budgets before domain execution. Local submission
+  captures data properties without getters or mutable caller-owned descendants.
+  Android JsonReader strict mode still accepts tokens such as `1.`; shared lexical
+  validation is required for intent and G-code metadata decoding.
 - A pending `EditorSession.open` owns its source revision/asset guard and operation
   identity. Newer opens, reset and disposal invalidate it; a failed newer open
   cannot revive an older read. Cooperative cancellation never replaces the final

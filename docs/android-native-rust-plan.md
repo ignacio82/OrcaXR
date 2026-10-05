@@ -63,9 +63,12 @@ Phase 4 now has a local asynchronous facade over the existing TypeScript session
 with guarded FIFO mutation, ordered summary queries, bounded operation batches,
 and authoritative acknowledgements. Production Undo/Redo and the seven plate
 lifecycle operations await it through ActionRegistry. Plate controls retain their
-busy state until acknowledgement; stale requests reject without edits. It deliberately retains trusted command objects and an opaque
-local owner token; generated serializable project requests, Rust execution and
-the remaining workflow migration are still required. See
+busy state until acknowledgement; stale requests reject without edits. The seven
+plate payloads now use a versioned shared schema generating TypeScript,
+Rust and Kotlin types, bounded encoders/decoders and serializable command batches.
+The TypeScript bus still executes them; session generations, guards and
+acknowledgements remain local. Generated session/result/error envelopes, Rust
+execution and the remaining workflow migration are still required. See
 [project contracts](engineering/project-contracts.md).
 
 Build an adaptive native Android application for phones, tablets, Googlebook,

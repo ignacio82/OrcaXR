@@ -1,3 +1,5 @@
+import { PROJECT_INTENT_VERSION } from '../../../contracts/generated/project-intents';
+import { createIntentTextEncoder } from '../project/PreparedProjectCommands';
 import * as THREE from 'three';
 
 import { BbsProjectImportWorkerClient } from '../import/BbsProjectImportWorkerClient';
@@ -9,15 +11,8 @@ import {
 } from '../project/AsyncEditorSession';
 import {
   AddObjectWithAssetCommand,
-  AddPlateCommand,
-  DeletePlateCommand,
-  DuplicatePlateCommand,
-  RenamePlateCommand,
-  ReorderPlatesCommand,
   ReplaceProjectCommand,
-  SetActivePlateCommand,
   SetInstanceTransformCommand,
-  SetPlatePrintableCommand,
   SetPlateWipeTowerCommand,
 } from '../project/commands';
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../project/domain/canonical';
@@ -1533,6 +1528,7 @@ export class CanonicalWorkspaceController {
   async addPlate(name?: string, options: { activate?: boolean } = {}): Promise<PlateId> {
     this.assertActive();
     const guard = this.asyncSession.captureGuard();
+    const intentText = createIntentTextEncoder();
     const state = this.session.project.getSnapshot().state;
     const id = this.options.idSource.next('plate');
     const plateName = boundedName(
@@ -1543,18 +1539,18 @@ export class CanonicalWorkspaceController {
       ),
     );
     const order = Math.max(-1, ...state.plates.map((plate) => plate.order)) + 1;
-    await this.asyncSession.execute(
-      new AddPlateCommand(
-        {
-          id,
-          name: plateName,
-          order,
-          printable: true,
-          config: {},
-          objects: [],
+    await this.asyncSession.executeIntent(
+      {
+        version: PROJECT_INTENT_VERSION,
+        command: {
+          addPlate: {
+            plateId: intentText(id),
+            name: intentText(plateName),
+            order,
+            activate: options.activate ?? true,
+          },
         },
-        options.activate ?? true,
-      ),
+      },
       { guard },
     );
     return id;
@@ -1958,26 +1954,33 @@ export class CanonicalWorkspaceController {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
     const guard = this.asyncSession.captureGuard();
+    const intentText = createIntentTextEncoder();
     const state = this.session.project.getSnapshot().state;
     const source = findPlate(state, sourcePlateId);
     if (!source) throw new Error(`Unknown plate ${sourcePlateId}`);
     const plateId = this.options.idSource.next('plate');
-    await this.asyncSession.execute(
-      new DuplicatePlateCommand(sourcePlateId, {
-        plateId,
-        objects: source.objects.map((object) => ({
-          objectId: this.options.idSource.next('object'),
-          volumeIds: object.volumes.map(() => this.options.idSource.next('volume')),
-          instanceIds: object.instances.map(() => this.options.idSource.next('instance')),
-          layerRangeIds: object.layerRanges.map(() => this.options.idSource.next('layer-range')),
-        })),
-        customGcodeIds: state.customGcode
-          .filter((entry) => entry.scope === 'plate' && entry.plateId === sourcePlateId)
-          .map(() => this.options.idSource.next('custom-gcode')),
-        thumbnailIds: state.thumbnails
-          .filter((thumbnail) => thumbnail.plateId === sourcePlateId)
-          .map(() => this.options.idSource.next('thumbnail')),
-      }),
+    await this.asyncSession.executeIntent(
+      {
+        version: PROJECT_INTENT_VERSION,
+        command: {
+          duplicatePlate: {
+            sourcePlateId: intentText(sourcePlateId),
+            plateId: intentText(plateId),
+            objects: source.objects.map((object) => ({
+              objectId: intentText(this.options.idSource.next('object')),
+              volumeIds: object.volumes.map(() => intentText(this.options.idSource.next('volume'))),
+              instanceIds: object.instances.map(() => intentText(this.options.idSource.next('instance'))),
+              layerRangeIds: object.layerRanges.map(() => intentText(this.options.idSource.next('layer-range'))),
+            })),
+            customGcodeIds: state.customGcode
+              .filter((entry) => entry.scope === 'plate' && entry.plateId === sourcePlateId)
+              .map(() => intentText(this.options.idSource.next('custom-gcode'))),
+            thumbnailIds: state.thumbnails
+              .filter((thumbnail) => thumbnail.plateId === sourcePlateId)
+              .map(() => intentText(this.options.idSource.next('thumbnail'))),
+          },
+        },
+      },
       { guard },
     );
     return plateId;
@@ -1987,28 +1990,45 @@ export class CanonicalWorkspaceController {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
     const guard = this.asyncSession.captureGuard();
+    const intentText = createIntentTextEncoder();
     const state = this.session.project.getSnapshot().state;
     if (!findPlate(state, plateId)) throw new Error(`Unknown plate ${plateId}`);
     if (state.plates.length <= 1) throw new Error('Cannot delete the last plate');
-    await this.asyncSession.execute(new DeletePlateCommand(plateId), { guard });
+    await this.asyncSession.executeIntent(
+      { version: PROJECT_INTENT_VERSION, command: { deletePlate: { plateId: intentText(plateId) } } },
+      { guard },
+    );
   }
 
   async activatePlate(plateId: PlateId, expectedRevision?: number): Promise<AsyncSessionAcknowledgement<void>> {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
     const guard = this.asyncSession.captureGuard();
+    const intentText = createIntentTextEncoder();
     const state = this.session.project.getSnapshot().state;
     if (!findPlate(state, plateId)) throw new Error(`Unknown plate ${plateId}`);
-    return this.asyncSession.execute(new SetActivePlateCommand(plateId), { guard });
+    return this.asyncSession.executeIntent(
+      { version: PROJECT_INTENT_VERSION, command: { activatePlate: { plateId: intentText(plateId) } } },
+      { guard },
+    );
   }
 
   async renamePlate(plateId: PlateId, name: string, expectedRevision?: number): Promise<void> {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
     const guard = this.asyncSession.captureGuard();
+    const intentText = createIntentTextEncoder();
     if (!findPlate(this.session.project.getSnapshot().state, plateId)) throw new Error(`Unknown plate ${plateId}`);
-    await this.asyncSession.execute(
-      new RenamePlateCommand(plateId, requireBoundedText(name, 'Plate name', MAX_PLATE_NAME_LENGTH)),
+    await this.asyncSession.executeIntent(
+      {
+        version: PROJECT_INTENT_VERSION,
+        command: {
+          renamePlate: {
+            plateId: intentText(plateId),
+            name: intentText(requireBoundedText(name, 'Plate name', MAX_PLATE_NAME_LENGTH)),
+          },
+        },
+      },
       { guard },
     );
   }
@@ -2017,15 +2037,23 @@ export class CanonicalWorkspaceController {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
     const guard = this.asyncSession.captureGuard();
-    await this.asyncSession.execute(new ReorderPlatesCommand(orderedPlateIds), { guard });
+    const intentText = createIntentTextEncoder();
+    await this.asyncSession.executeIntent(
+      { version: PROJECT_INTENT_VERSION, command: { reorderPlates: { plateIds: orderedPlateIds.map(intentText) } } },
+      { guard },
+    );
   }
 
   async setPlatePrintable(plateId: PlateId, printable: boolean, expectedRevision?: number): Promise<void> {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
     const guard = this.asyncSession.captureGuard();
+    const intentText = createIntentTextEncoder();
     if (!findPlate(this.session.project.getSnapshot().state, plateId)) throw new Error(`Unknown plate ${plateId}`);
-    await this.asyncSession.execute(new SetPlatePrintableCommand(plateId, printable), { guard });
+    await this.asyncSession.executeIntent(
+      { version: PROJECT_INTENT_VERSION, command: { setPlatePrintable: { plateId: intentText(plateId), printable } } },
+      { guard },
+    );
   }
 
   /** Set or clear the wipe tower configuration on a plate as a single undoable command. */

@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "version": 1,
+  "maxBytes": 1048576,
+  "maxNodes": 131072,
+  "maxDepth": 12,
+  "description": "Prepared plate commands. Text is lossless UTF-16 units; entity semantics are validated by the project executor. This is not the session envelope or persisted project schema.",
+  "definitions": {
+    "Unit": {
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    },
+    "Order": {
+      "kind": "wholeNumber",
+      "min": 0,
+      "max": 1.7976931348623157e+308
+    },
+    "Version": {
+      "kind": "integer",
+      "min": 1,
+      "max": 1
+    },
+    "Flag": {
+      "kind": "boolean"
+    },
+    "Id": {
+      "kind": "array",
+      "items": "Unit",
+      "min": 1,
+      "max": 131072
+    },
+    "AddedName": {
+      "kind": "array",
+      "items": "Unit",
+      "min": 1,
+      "max": 160
+    },
+    "Name": {
+      "kind": "array",
+      "items": "Unit",
+      "min": 1,
+      "max": 120
+    },
+    "Label": {
+      "kind": "array",
+      "items": "Unit",
+      "min": 1,
+      "max": 256
+    },
+    "Ids": {
+      "kind": "array",
+      "items": "Id",
+      "min": 0,
+      "max": 131072
+    },
+    "PlateIds": {
+      "kind": "array",
+      "items": "Id",
+      "min": 1,
+      "max": 36
+    },
+    "DuplicateObject": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "volumeIds": "Ids",
+        "instanceIds": "Ids",
+        "layerRangeIds": "Ids"
+      }
+    },
+    "DuplicateObjects": {
+      "kind": "array",
+      "items": "DuplicateObject",
+      "min": 0,
+      "max": 131072
+    },
+    "AddPlate": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id",
+        "name": "AddedName",
+        "order": "Order",
+        "activate": "Flag"
+      }
+    },
+    "DuplicatePlate": {
+      "kind": "object",
+      "fields": {
+        "sourcePlateId": "Id",
+        "plateId": "Id",
+        "objects": "DuplicateObjects",
+        "customGcodeIds": "Ids",
+        "thumbnailIds": "Ids"
+      }
+    },
+    "DeletePlate": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id"
+      }
+    },
+    "ActivatePlate": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id"
+      }
+    },
+    "RenamePlate": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id",
+        "name": "Name"
+      }
+    },
+    "ReorderPlates": {
+      "kind": "object",
+      "fields": {
+        "plateIds": "PlateIds"
+      }
+    },
+    "SetPlatePrintable": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id",
+        "printable": "Flag"
+      }
+    },
+    "Command": {
+      "kind": "union",
+      "variants": {
+        "addPlate": "AddPlate",
+        "duplicatePlate": "DuplicatePlate",
+        "deletePlate": "DeletePlate",
+        "activatePlate": "ActivatePlate",
+        "renamePlate": "RenamePlate",
+        "reorderPlates": "ReorderPlates",
+        "setPlatePrintable": "SetPlatePrintable"
+      }
+    },
+    "Commands": {
+      "kind": "array",
+      "items": "Command",
+      "min": 0,
+      "max": 64
+    },
+    "Intent": {
+      "kind": "object",
+      "fields": {
+        "version": "Version",
+        "command": "Command"
+      }
+    },
+    "Batch": {
+      "kind": "object",
+      "fields": {
+        "version": "Version",
+        "label": "Label",
+        "commands": "Commands"
+      }
+    }
+  },
+  "roots": [
+    "Intent",
+    "Batch"
+  ]
+}

@@ -45,11 +45,15 @@ class GcodeBoundaryTest {
     }
 
     @Test fun strictJsonAndRawTypesRejectCoercionAndUnboundedNesting() {
-        for (bad in listOf("{'a':1}", "{a:1}", "{\"a\":1,}", "[1,]", "[01]", "[NaN]", "[1e999]",
+        for (bad in listOf("{'a':1}", "{a:1}", "{\"a\":1,}", "[1,]", "[01]", "[NaN]", "[1e999]", "[1.]", "[+1]", "[.1]", "[1e]", "[TRUE]", "[False]", "[NULL]", "[\"bad\\q\"]",
             "{}{}", "{\"a\":1,\"a\":2}", "[\"raw\nline\"]", "[\"raw\tline\"]", "\uFEFF{}",
             "[".repeat(18) + "0" + "]".repeat(18))) {
             assertThrows("Unexpected JSON accepted", IllegalArgumentException::class.java) { GcodeJson.parse(bad) }
         }
+        val exact = GcodeJson.arrayValue("[1.0,1e0,-0,\"Unicode 雪 \\ud800\\u0000\"]")
+        assertEquals(1.0, exact.getDouble(0), 0.0)
+        assertEquals(1.0, exact.getDouble(1), 0.0)
+        assertEquals("Unicode 雪 \ud800\u0000", exact.getString(3))
         val valid = GcodeJson.arrayValue("[0,65535,55296,56320]")
         assertEquals(charArrayOf(0.toChar(), 65535.toChar(), 55296.toChar(), 56320.toChar()).concatToString(), GcodePacket.text(valid))
         for (bad in listOf(JSONArray().put("65"), JSONArray().put(true), JSONArray().put(1.5),

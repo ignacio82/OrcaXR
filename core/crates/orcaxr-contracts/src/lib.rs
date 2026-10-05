@@ -1,5 +1,7 @@
 pub mod canonical;
 pub mod generated;
+pub mod project_intent_types;
+pub mod project_intents;
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};

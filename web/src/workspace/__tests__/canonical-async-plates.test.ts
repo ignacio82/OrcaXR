@@ -189,4 +189,19 @@ await test('activation receipts expire on history, edits, owner replacement and 
   }
 });
 
+await test('preserves the distinct existing add and rename name limits', async () => {
+  const controller = createController();
+  try {
+    const plate = await controller.addPlate('a'.repeat(160));
+    assert.equal(controller.getSummary().plates.find((item) => item.id === plate)?.name, 'a'.repeat(160));
+    await assert.rejects(controller.addPlate('b'.repeat(161)), /160/);
+    await controller.renamePlate(plate, 'r'.repeat(120));
+    await assert.rejects(controller.renamePlate(plate, 'r'.repeat(121)), /120/);
+    await controller.undoAsync();
+    assert.equal(controller.getSummary().plates.find((item) => item.id === plate)?.name, 'a'.repeat(160));
+  } finally {
+    controller.dispose();
+  }
+});
+
 console.log(`\nAsynchronous plate commands: ${passed} tests passed.`);
