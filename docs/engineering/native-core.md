@@ -339,6 +339,15 @@ a Rust project implementation. The remaining action/import/save/slice migration
 and full command bindings remain Phase 1/4 work. The maintained details live in
 [project contracts](project-contracts.md).
 
+The migration inventory binds action source files to an existing Git commit.
+Commit an action-source change before regenerating it with `inventory.mjs --write`.
+The inventory JSON is also an input to shared-core provenance, so refresh the
+WASM/JNI build manifests and packaged browser asset set through their normal
+build tools afterward. Byte-identical executables still need manifests that bind
+the updated input. The asynchronous history update preserves all 226 action
+records and native capability states; rebuilt WASM/glue and both JNI binaries
+are byte-identical, and the existing debug/release APKs verify against them.
+
 `contracts/core-protocol.json` owns the initial **stateless canonicalization
 request**. The generator emits Rust request deserialization/validation, TypeScript
 types/validation, and Kotlin request types/validation. Regeneration must be clean.

@@ -127,7 +127,7 @@ The complete `scripts/quality.sh` gate passes with 262 web unit-test files,
 95 project test files, production browser/offline/recovery and accessibility
 checks, real slicing, server and HTTP/HTTPS deployment checks, artifact verification
 and all three development-dependency audits. Bundle limits remain unchanged.
-The configured redacted scan of 1,633 UTF-8 source files reports no leaks.
+The configured redacted scan of 1,634 UTF-8 source files reports no leaks.
 These are TypeScript/browser boundaries, not generated project transport or
 native editing qualification. The Phase 4 checklist remains open.
 
