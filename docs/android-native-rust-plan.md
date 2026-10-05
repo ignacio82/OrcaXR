@@ -79,8 +79,12 @@ revisioned projections, crash recovery and remaining workflows are still require
 The Rust project crate now also owns immutable asset records, read-only leases,
 opaque rollback versions, transactional public restore and streaming bundle
 fingerprints. Independent TypeScript traces and an allocation probe cover this
-library boundary. Full graph/schema validation, commands, history policy and
-native session execution remain open; this does not enable Android editing.
+library boundary. The five-channel facet computation model now also validates
+sparse assignments and version-2 split trees, normalizes and remaps them together,
+and budgets temporary dense roots explicitly. Differential fixtures and sparse
+allocation evidence are linked below. Full graph/schema validation, commands,
+history policy and native session execution remain open; these libraries do not
+enable Android editing.
 
 Build an adaptive native Android application for phones, tablets, Googlebook,
 and Android XR while preserving the web application. Introduce Rust as a shared
@@ -587,7 +591,10 @@ and replay coverage for the complete current command inventory.
   with independent TypeScript fixtures. Asset traces compare public/internal
   restoration, metadata/content fingerprints, record/version identity and failures;
   an allocation probe verifies mesh bytes are shared through history snapshots.
-  The full graph, validation, selectors, history policy and session remain open.
+  Five-channel facet validation, split lookup/visitation, normalization and
+  paint-preserving remapping also exist in Rust, with independent TypeScript
+  traces and a sparse-allocation probe. The full graph/schema validation,
+  remaining selectors, history policy and session remain open.
 - [ ] Port commands and transaction/history semantics by family, preserving
   rollback revision behavior, coalescing, checkpoint acknowledgement, selection,
   and history retention accounting. Test every command's failed and stale cases.

@@ -109,6 +109,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-id-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/asset-repository-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-refinement-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
@@ -124,6 +125,7 @@ jobs:
           cargo test -p orcaxr-contracts --test project_intents --release --locked --jobs 2
           cargo test -p orcaxr-project --release --locked --jobs 2
           cargo run -p orcaxr-project --example asset_repository_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-project --example facet_sparsity_benchmark --release --locked --jobs 2
           cargo check -p orcaxr-project --lib --locked --jobs 2 --target wasm32-unknown-unknown
           cargo check -p orcaxr-project --lib --locked --jobs 2 --target aarch64-linux-android
           cargo check -p orcaxr-project --lib --locked --jobs 2 --target x86_64-linux-android

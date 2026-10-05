@@ -173,7 +173,26 @@ zero mesh-sized allocations across 200 internal history cycles and initial
 fingerprinting, with one measured 8 MiB allocation for a public copy. Rust asset
 integration/lifetime and compile-fail checks pass with the existing ID tests,
 strict Clippy/audit and three target checks. This is library/host evidence: native
-project commands, graph validation and session execution are still unimplemented.
+project commands, full graph validation and session execution are still unimplemented.
+
+The Rust facet computation library now preserves sparse whole-facet assignments
+and version-2 subdivision trees across all five paint channels. It validates and
+normalizes trees, remaps both halves without losing newly uniform paint, and
+requires an explicit budget for temporary dense roots. Independent TypeScript
+fixtures compare 273 refinement cases, 80 assignment cases, four depth boundaries
+and 160 editing traces. Seven debug/release tests also cover invalid constructors,
+atomic failures and aggregate expansion limits. The sparse allocation probe
+reports 4,038,946 allocated bytes across decode and five remaps for a synthetic
+1,897,256-triangle declaration with 10,000 assigned facets and one split; an
+explicit dense positive control allocates 75,890,240 bytes. These are host/library
+results. Full graph/schema validation, native commands/history/session execution
+and device qualification remain open. Strict workspace tests/Clippy, Cargo audit,
+three target checks, Android debug/release assembly, JVM tests and lint, APK
+source/alignment checks, browser WASM smoke and owned-emulator checks all pass.
+The complete repository gate passes after repairing its timing-based preview
+replacement test to observe actual worker submission and termination. Both preview
+adapters retain their cancellation assertions. The final redacted source scan
+covers 1,678 UTF-8 files with zero findings; all three full npm audits are clean.
 
 Prepared plate commands now use one versioned schema generating TypeScript,
 Rust and Kotlin types, strict decoding and bounded encoding. All seven production

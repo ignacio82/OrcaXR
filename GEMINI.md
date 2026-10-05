@@ -201,6 +201,11 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Paint stores stable physical/mixed filament IDs and sparse refined-facet
   version-2 state, not palette colors or one canonical object per triangle.
   Topology-changing operations must explicitly remap or reject dependent data.
+  Rust now has the five-channel sparse facet computation model and validator.
+  Normalize/remap the assignments and split trees together so collapsed paint
+  survives. Native dense expansion requires an explicit host root budget; the
+  stateless canonicalizer's parser limits are not persisted project limits.
+  This library does not yet own graph topology guards or execute project commands.
 - Smart Paint is a validated, bounded proposal plus operator correction and one
   canonical transaction. Check per-provider/payload consent before sending data.
 - Wipe towers reserve their complete printed footprint against the printable

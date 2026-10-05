@@ -41,6 +41,25 @@ are fixture-specific evidence, not device-independent performance guarantees.
   includes that regression and binds the TypeScript reference source hashes.
   This port is not connected to a native project/session executor yet.
 
+- Rust facet computation retains the version-2 sparse pair: whole-facet
+  assignments and only subdivided source facets. It covers color, support, seam,
+  fuzzy-skin and brim values, exact split fields/order/topology, filament
+  references, duplicate assignments, recursive homogeneous collapse and the
+  existing depth/expansion budgets. Remapping operates on both halves; a newly
+  uniform split becomes a whole-facet assignment. Typed trees are immutable,
+  acyclic and at most 64 split levels. Persisted triangle counts/indices retain
+  finite nonnegative binary64 integer semantics rather than introducing a
+  safe-integer or platform-pointer-width schema limit. Explicit dense expansion
+  checks a host-provided root budget and addressable allocation size first.
+  Canonical-value validation does not reuse the stateless JSON parser's smaller
+  byte/node/depth limits. Raw refinement validation preserves the reference issue
+  order; cyclic/shared JavaScript object identities cannot occur in owned Rust
+  values. Malformed assignment containers return errors rather than unchecked
+  JavaScript TypeErrors. The computation view is not a complete annotation or
+  project codec and does not discard unknown fields from a stored graph. A
+  future graph owner must retain those fields and enforce topology/session guards.
+  This library is not wired to browser or Android project execution yet.
+
 - `AsyncEditorSession` orders local queries and mutations over the existing
   TypeScript session. It captures project/revision/semantic/asset identity plus
   history revision at submission (or accepts a guard captured before preparation).

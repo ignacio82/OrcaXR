@@ -400,6 +400,59 @@ for wasm32 and both Android targets pass with Rust 1.94.1. CI now regenerates th
 asset corpus and runs the allocation probe. Rust project execution through JNI or
 WASM remains unimplemented, and no Phase 4 exit is closed by these library tests.
 
+The Rust project crate also implements the five-channel facet computation model.
+Validated sparse assignments and version-2 refinement trees preserve color,
+support, seam, fuzzy-skin and brim semantics. Tree normalization, combined
+assignment/refinement remapping, split lookup, visitation, assigned-leaf counts
+and whole-stroke split removal share the reference's outcomes. Homogeneous
+branches collapse recursively; their paint moves into whole-facet assignments.
+Canonical grouping sorts serialized keys by UTF-16 units, including surrogate
+halves and supplementary/BMP order, while serializing each distinct value once.
+
+Private tree construction enforces split topology and 64 levels; immutable owned
+trees cannot contain the JavaScript validator's shared/cyclic object identities.
+The existing expansion budget is retained. Canonical-value validation is independent
+of the stateless JSON parser's limits; tests construct 63/64/65/80-level inputs
+without routing them through that unrelated parser. Triangle numbers preserve
+binary64 integer semantics, including large imported counts. Dense materialization
+requires an explicit host maximum, rejects unaddressable sizes and uses checked
+root allocation. The library is a computation view, not a full annotation/project
+codec; unknown surrounding graph data and topology guards remain the future
+project owner's responsibility. No new JNI/WASM project endpoint is introduced.
+
+Independent TypeScript fixtures now contain **273 refinement cases, 80 whole-facet
+assignment cases, four depth cases and 160 editing traces**. They bind reference
+source hashes and compare complete ordered diagnostics, canonical sparse outputs,
+dense expansion, remapping, lookup, visitation and split removal. Cases cover all
+five channels and seven legal split orientations, bad/extra fields, source-index
+conflicts, unknown filament references, Unicode IDs and paint-preserving collapse.
+Seven Rust tests pass in debug/release, including atomic failure, explicit dense
+budgets and rejection of a 1,398,101-node expansion before normalization. The
+synthetic 1,897,256-triangle sparse probe decodes 10,000 whole assignments and one
+split, then remaps five times: **4,038,946 total allocated bytes**, largest
+allocation **131,072 bytes**. The explicit dense positive control allocates
+**75,890,240 bytes**. This verifies sparse allocation behavior, not device speed.
+The CI workflow regenerates the corpus and runs the allocation probe. Full graph,
+history, session execution, native editing and device qualification remain open.
+
+For this facet-library update, strict workspace Clippy/tests, release project tests,
+Cargo audit and compilation for wasm32/aarch64 Android/x86_64 Android pass. The
+rebuilt browser set `86d271e88698` binds 71 source inputs and retains the same
+556,646-byte WASM executable. Debug/release Android assembly, JVM tests, lint and
+both APK source/alignment checks pass. The owned API 34 x86_64 SwiftShader emulator
+passes 24 core instrumentation tests, three cold starts, three renderer tests and
+one non-XR SceneCore startup check. Actual browser WASM smoke tests also pass.
+The full repository run exposed a preview test's 20 ms worker-creation assumption;
+its replacement check now observes real `open` submission and verifies that
+specific worker's termination, keeping both adapter cancellation assertions.
+These existing bindings do not execute the new facet library; its execution
+evidence is the host differential tests and allocation probe. No physical device
+was installed or qualified. The complete repository gate subsequently passed,
+including 267 web unit-test files, 97 project test files, both preview adapters,
+startup/offline/recovery/accessibility checks, HTTP/HTTPS deployment, real slicing
+and all three full npm audits with no vulnerabilities. The final source scan
+covers 1,678 UTF-8 files (six NUL-normalized) with no findings; actionlint passes.
+
 The browser now has a transitional `AsyncEditorSession` over its TypeScript
 authority. Undo/Redo and plate lifecycle actions await acknowledgements; guarded queued execution,
 bounded callback-free batches and ordered summary queries are available for
@@ -898,6 +951,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindin
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-id-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/asset-repository-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-refinement-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
@@ -916,6 +970,7 @@ cargo test --workspace --locked --jobs 2
 cargo test -p orcaxr-contracts --test project_intents --release --locked --jobs 2
 cargo test -p orcaxr-project --release --locked --jobs 2
 cargo run -p orcaxr-project --example asset_repository_benchmark --release --locked --jobs 2
+cargo run -p orcaxr-project --example facet_sparsity_benchmark --release --locked --jobs 2
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target wasm32-unknown-unknown
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target aarch64-linux-android
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target x86_64-linux-android

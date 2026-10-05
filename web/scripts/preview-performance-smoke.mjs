@@ -17,15 +17,22 @@ try {
         constructor(url, options) {
           super(url, options);
           if (!String(url).includes('gcodePreview.worker')) return;
-          const record = { terminated: false, windows: [] };
+          const record = { terminated: false, windows: [], opens: [] };
           globalThis.__previewWorkers.push(record);
           const post = this.postMessage.bind(this);
+          const submit = (request, ...args) => {
+            post(request, ...args);
+            if (request.type === 'open') {
+              record.opens.push(request.source.name);
+              globalThis.__onPreviewOpenPosted?.(record, request.source.name);
+            }
+          };
           this.postMessage = (request, ...args) => {
             if (globalThis.__holdPreviewOpen && request.type === 'open') {
               globalThis.__heldPreviewOpens.push(() => {
-                if (!record.terminated) post(request, ...args);
+                if (!record.terminated) submit(request, ...args);
               });
-            } else post(request, ...args);
+            } else submit(request, ...args);
           };
           this.addEventListener('message', (event) => {
             if (event.data.type === 'ready')
@@ -103,14 +110,38 @@ try {
       const workspace = globalThis.window.workspace;
       const large =
         'G90\nM83\n;LAYER_CHANGE\nG1 Z0.2 F1200\n;TYPE:Outer wall\n' + 'G1 X1 E0.02\nG1 X2 E0.02\n'.repeat(500_000);
+      // Source preparation can exceed any small elapsed-time guess. Observe a
+      // real submission, then replace it in the same microtask turn before a
+      // worker response can be delivered to the host.
+      const posted = new Promise((resolve) => {
+        globalThis.__onPreviewOpenPosted = (record, name) => {
+          if (name === 'obsolete.gcode') resolve(record);
+        };
+      });
       const first = workspace.openGcodeForPreview(large, 'obsolete.gcode');
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      let deadline;
+      let obsoleteWorker;
+      try {
+        obsoleteWorker = await Promise.race([
+          posted,
+          first.then(() => {
+            throw new Error('Obsolete preview settled before submitting to its worker');
+          }),
+          new Promise((_, reject) => {
+            deadline = setTimeout(() => reject(new Error('Obsolete worker did not receive its source')), 60_000);
+          }),
+        ]);
+      } finally {
+        clearTimeout(deadline);
+        delete globalThis.__onPreviewOpenPosted;
+      }
       const second = workspace.openGcodeForPreview(
         'M83\n;LAYER_CHANGE\n;TYPE:Outer wall\nG1 X10 E1 F1200\n',
         'replacement.gcode',
       );
       return {
         outcomes: await Promise.all([first, second]),
+        obsoleteWorker,
         state: workspace.getPreviewState(),
         workers: globalThis.__previewWorkers,
       };
@@ -119,6 +150,8 @@ try {
     assert.equal(replacement.state.source.name, 'replacement.gcode');
     assert.equal(replacement.workers.filter((worker) => !worker.terminated).length, 1);
     assert.ok(replacement.workers.length >= 3, 'replacement cancels an actual running worker');
+    assert.deepEqual(replacement.obsoleteWorker.opens, ['obsolete.gcode']);
+    assert.equal(replacement.obsoleteWorker.terminated, true);
     assert.ok(replacement.workers.flatMap((worker) => worker.windows).every((window) => window.count <= 240_000));
 
     // An empty filter is still an open inspection session: keep its controls

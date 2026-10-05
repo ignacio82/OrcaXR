@@ -48,6 +48,18 @@ floors, not ceilings.
   a subdivided facet uniform; dropping the collapsed split without carrying its
   value across silently unpaints the facet. `remapFacetChannelValues` is the only
   correct way to remap one channel — it handles both halves together.
+- The Rust facet library preserves the same sparse pair. Validation indexes only
+  the subdivided facets when checking assignment conflicts; grouping serializes
+  one canonical key per distinct paint value, rather than per assigned triangle.
+  Temporary dense expansion requires a caller budget and checked allocation.
+  Its synthetic host probe declares 1,897,256 source triangles, 10,000 whole-facet
+  assignments and one split. Decode plus five remaps allocate 4,038,946 bytes in
+  total, with a largest allocation of 131,072 bytes. The positive control's
+  explicitly requested dense roots allocate 75,890,240 bytes in one array.
+  These are allocation observations on the host, not actual mesh import or
+  Android latency/memory qualification. The complete native graph/session and
+  gesture integration remain open.
+
 - **`fnv1a64` runs over hundreds of megabytes on import and save.** It is written
   with 16-bit limbs and `Math.imul` so a round costs no floating-point division;
   the naive `Math.floor(x / 2**32)` form ran at roughly 27 MB/s and dominated
@@ -218,6 +230,12 @@ floors, not ceilings.
   over the observed worst pair. This compares work on the same runtime/host,
   with no absolute device latency assertion. Earlier narwhal measurements remain historical;
   hardware/XR qualification of this implementation is still pending.
+
+  Worker-replacement qualification waits for the obsolete source's actual
+  `open` submission and replaces it before the next response task can run. A
+  fixed 20 ms delay sometimes cancelled source preparation before a worker
+  existed, so it could not establish worker-lifetime cancellation. The test
+  checks the specific submitted worker's termination on both computation adapters.
 
   The production regression now executes both adapters on the same generated
   300,002-record source, checks identical initial view state, DOM/XR window moves,
