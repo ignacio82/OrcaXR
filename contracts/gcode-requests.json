@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "description": "Structural G-code source/view transport contract. Computation validates semantic ranges, masks, modes and model-dependent limits and retains its existing error codes. Optional nullable fields match Rust Option; omitted default fields use the declared default. Text arrays preserve UTF-16 code units; Float32 duration arrays carry raw unsigned bits.",
+  "version": 1,
+  "maxViewBytes": 8388608,
+  "maxOptionsBytes": 65536,
+  "maxValidationNodes": 4194304,
+  "primitives": {
+    "number": { "type": "number" },
+    "u8": { "type": "number", "integer": true, "min": 0, "max": 255 },
+    "u16": { "type": "number", "integer": true, "min": 0, "max": 65535 },
+    "u32": { "type": "number", "integer": true, "min": 0, "max": 4294967295 },
+    "boolean": { "type": "boolean" },
+    "string": { "type": "string" },
+    "text": { "type": "array", "items": "u16" },
+    "range": { "type": "array", "items": "number", "length": 2 },
+    "window": {
+      "type": "array",
+      "items": "u32",
+      "lengths": [0, 2],
+      "ascending": true
+    }
+  },
+  "definitions": {
+    "RequestedLimits": {
+      "clone": true,
+      "default": true,
+      "fields": {
+        "inputCharacters": {
+          "type": "number",
+          "optional": true,
+          "nullable": true
+        },
+        "lines": { "type": "number", "optional": true, "nullable": true },
+        "records": { "type": "number", "optional": true, "nullable": true },
+        "pathPoints": { "type": "number", "optional": true, "nullable": true },
+        "warnings": { "type": "number", "optional": true, "nullable": true },
+        "lineCharacters": {
+          "type": "number",
+          "optional": true,
+          "nullable": true
+        },
+        "roles": { "type": "number", "optional": true, "nullable": true },
+        "filaments": { "type": "number", "optional": true, "nullable": true }
+      }
+    },
+    "Options": {
+      "clone": true,
+      "default": true,
+      "fields": {
+        "limits": { "type": "RequestedLimits", "default": {} },
+        "filamentDiametersMm": {
+          "type": "array",
+          "items": "number",
+          "default": []
+        },
+        "filamentColors": { "type": "array", "items": "text", "default": [] }
+      }
+    },
+    "LayerTimesBits": {
+      "fields": {
+        "secondsByLayerBits": { "type": "array", "items": "u32" },
+        "provenance": { "type": "text" }
+      }
+    },
+    "PreviewRequest": {
+      "rustGeneric": "T = crate::preview::LayerTimes",
+      "fields": {
+        "mode": { "type": "string" },
+        "roleVisibility": {
+          "type": "array",
+          "items": "u8",
+          "optional": true,
+          "nullable": true
+        },
+        "toolVisibility": {
+          "type": "array",
+          "items": "u8",
+          "optional": true,
+          "nullable": true
+        },
+        "eventVisibility": {
+          "type": "array",
+          "items": "u8",
+          "optional": true,
+          "nullable": true
+        },
+        "layerRange": { "type": "range", "optional": true, "nullable": true },
+        "recordRange": { "type": "range", "optional": true, "nullable": true },
+        "valueRange": { "type": "range", "optional": true, "nullable": true },
+        "layerTimes": {
+          "type": "LayerTimesBits",
+          "rustType": "T",
+          "optional": true,
+          "nullable": true
+        },
+        "maxProjectedRecords": {
+          "type": "number",
+          "optional": true,
+          "nullable": true
+        }
+      }
+    },
+    "InspectionRequest": {
+      "default": true,
+      "fields": {
+        "clampLayerRange": { "type": "boolean", "default": false },
+        "layerRange": { "type": "range", "optional": true, "nullable": true },
+        "singleLayer": { "type": "boolean", "default": false },
+        "recordVisibility": {
+          "type": "array",
+          "items": "u8",
+          "optional": true,
+          "nullable": true
+        },
+        "moveRange": { "type": "range", "optional": true, "nullable": true },
+        "currentRecord": {
+          "type": "number",
+          "optional": true,
+          "nullable": true
+        },
+        "showToolMarker": { "type": "boolean", "default": false },
+        "sourceContextLines": {
+          "type": "number",
+          "optional": true,
+          "nullable": true
+        }
+      }
+    },
+    "PlaybackOptions": {
+      "fields": {
+        "direction": { "type": "number" },
+        "wrap": { "type": "boolean", "default": false },
+        "includeCurrent": { "type": "boolean", "default": false },
+        "maxFrames": { "type": "number", "optional": true, "nullable": true }
+      }
+    }
+  },
+  "operations": {
+    "preview": { "request": "PreviewRequest", "kind": 1 },
+    "inspection": {
+      "request": "InspectionRequest",
+      "includeSource": false,
+      "kind": 2
+    },
+    "playback": {
+      "request": "InspectionRequest",
+      "includeSource": false,
+      "playback": "PlaybackOptions",
+      "kind": 3
+    }
+  }
+}

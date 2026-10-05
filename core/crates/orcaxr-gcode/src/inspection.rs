@@ -1,6 +1,6 @@
 //! Bounded inspection of immutable rich columns. Source offsets are UTF-16 units.
 use crate::{Cancellation, Limits, Model, Text, kind, layout, number, path};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::BTreeMap;
 
 pub const MAX_TICKS: usize = 100_000;
@@ -24,21 +24,7 @@ const KIND_NAMES: [&str; 14] = [
     "wipe-end",
 ];
 
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct InspectionRequest {
-    #[serde(default)]
-    pub clamp_layer_range: bool,
-    pub layer_range: Option<[f64; 2]>,
-    #[serde(default)]
-    pub single_layer: bool,
-    pub record_visibility: Option<Vec<u8>>,
-    pub move_range: Option<[f64; 2]>,
-    pub current_record: Option<f64>,
-    #[serde(default)]
-    pub show_tool_marker: bool,
-    pub source_context_lines: Option<f64>,
-}
+pub use crate::request_types::{InspectionRequest, PlaybackOptions};
 #[derive(Debug, Serialize)]
 pub struct InspectionError {
     pub code: &'static str,
@@ -886,16 +872,6 @@ fn format_mm(value: f64) -> String {
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PlaybackOptions {
-    pub direction: f64,
-    #[serde(default)]
-    pub wrap: bool,
-    #[serde(default)]
-    pub include_current: bool,
-    pub max_frames: Option<f64>,
-}
 // Public Rust outputs are owned and mutable. Reject corrupted selection metadata
 // if a caller modifies it before invoking stepping/playback.
 fn playback_selection(state: &Inspection) -> Result<Option<&MoveSelection>, InspectionError> {

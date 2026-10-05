@@ -137,8 +137,8 @@ zero; explicit window offsets remain authoritative. Path bounds, dense offsets,
 finite positions/colors and increasing selection indices are checked before
 packing. Kotlin also validates generated metadata, model/index relations and
 view references to the captured model. Renderer packing requires the same capture
-identity, even when another capture has identical geometry. Generated request
-contracts and production integration remain required. The workbench never accepts
+identity, even when another capture has identical geometry. The workbench uses
+generated typed requests; production integration remains required. It never accepts
 untrusted documents.
 
 Only visible, dirty viewports request frames. The Activity closes the renderer
@@ -335,12 +335,33 @@ types/validation, and Kotlin request types/validation. Regeneration must be clea
 It is a deliberately limited schema subset; unsupported schema constructs must
 fail generation. The full project session, command/result/error and cancellation
 schemas in Phase 1/4 remain to be implemented. The G-code packet layouts below are
-generated; their development leaf request validation is implemented in Rust.
+generated. `contracts/gcode-requests.json` now owns six source/view request types
+and all three operation envelopes. It generates Rust types/object decoders,
+TypeScript types/guards/field catalogs, and Kotlin types/encoders/shape tables.
 `contracts/gcode-metadata.json` generates 26 bounded metadata validators for
 TypeScript and Kotlin, plus TypeScript types. Browser request encoders also
 validate shapes and enforce bounds before entering WASM. Kotlin binds decoded
 views to the explicit source/window capture and validates their model relations.
-Generated request contracts remain open.
+The host adapters retain their platform-specific input conversion and bounded
+serialization; Rust computation owns semantic mode/mask/range checks and their
+existing error codes. This leaf contract is not the full project command protocol.
+
+Optional nullable transport fields match Rust `Option`; omitted boolean, list
+and source-limit defaults come from the schema. Unsigned integer fields use
+integer JSON tokens, and both host encoders emit their exact nonnegative values.
+Raw unsigned duration bits and UTF-16 text arrays preserve NaN/Infinity
+and lone surrogates. Kotlin uses `Long` for UInt32 fields. Generated Rust object
+visitors reject positional arrays, unknown fields and duplicate keys, including
+duplicates whose first value is null. Source options now decode directly into
+those types instead of first passing through a duplicate-collapsing JSON value.
+The independent canonicalization operation retains its existing duplicate semantics.
+
+Kotlin's typed source/view overloads encode bounded ASCII JSON before JNI. Raw
+JSON overloads use the same generated structural guards before source/window
+binding. Options retain the 64 KiB ceiling; views retain 8 MiB. Kotlin and browser
+shape traversal have a 4,194,304-node budget; Kotlin also polls cancellation.
+The writer charges bytes before appending, including escaping and numeric digits,
+and checks array counts before traversing their elements.
 
 The core parses bounded JSON into UTF-16 strings and sorts keys by code units.
 It preserves escaped lone surrogates, resolves duplicate keys like `JSON.parse`,
@@ -411,7 +432,7 @@ selectors releases the old columns before parsing the replacement. An explicit
 selector on every view query prevents accidental use of the last loaded window.
 Packed outputs are independent allocations. Metadata encoding checks cancellation
 on writes; column serialization checks every 4,096 elements and before publishing.
-Production native renderer consumers, search, generated request contracts, and
+Production native renderer consumers, search, and
 device latency/memory budgets remain open.
 
 The internal Rust projection implements all 12 display modes, composable
@@ -524,7 +545,7 @@ and [JSONObject](https://developer.android.com/reference/org/json/JSONObject)
 contracts. These checks do not change the separate canonical JSON operation's
 intentional duplicate-key semantics.
 
-Local Android boundary evidence on 2026-10-05: **17 JNI instrumentation tests**
+Local Android boundary evidence on 2026-10-05: **20 JNI instrumentation tests**
 pass on the owned API 34 x86_64 emulator, including the existing parser/window
 corpus and 4,554 view requests with captured-model validation. Seven boundary tests
 mutate actual native packets and exercise coercion/null/missing/unknown fields,
@@ -540,9 +561,26 @@ strict dependency verification, JVM tests and lint pass; the actual APKs retain
 both-ABI 16 KB ELF/ZIP alignment. The unchanged TypeScript decoder still passes
 its 456-model/window boundary corpus and the published browser-core set verifies.
 All three full npm audits and Cargo audit pass; the configured redacted scan
-covers 1,613 UTF-8 source files, including six normalized for embedded NULs, with
+covers 1,627 UTF-8 source files, including six normalized for embedded NULs, with
 no findings. These runs do not establish ARM64 execution, 16 KB runtime loading,
 production native workflows or physical-device performance.
+
+The request contract adds 30 independently authored shape/result cases, checked
+by generated host guards, debug/release Rust sessions, real browser WASM and
+Android JNI. They cover defaults/nullability, malformed object/array shapes,
+unknown fields, source substitution, UInt32 overflow, UTF-16 units and preserved
+semantic error codes. Additional tests reject duplicate keys, detached/shared
+typed inputs and property getters; Kotlin exercises typed requests for all three
+view kinds, UInt32/UTF-16 round trips, byte/node bounds and cancellation. The
+browser replay also verifies valid work after refusals. The generated definitions
+regenerate cleanly; eight mutation checks reject unsupported schema definitions
+before generation. Rust clippy passes, and the refreshed browser asset set is
+`84e14d0306ba` (560,666 WASM bytes). These are transport/correctness results, not
+physical-device performance qualification.
+The complete `scripts/quality.sh` gate passes for this change, including web
+quality/browser/offline checks, server integration/deployment checks, published
+slicer regressions and the three development-dependency audits. Regenerated
+parity reports remain unchanged and preserve the outstanding human gates.
 
 ## Browser host boundary
 
@@ -589,10 +627,11 @@ fields and substitute source/checkpoint options, and preserve Float32 duration
 bits and UTF-16 provenance/colors. They write bounded ASCII JSON directly, charging
 each byte before appending it, rather than materializing an unbounded typed-array
 copy and then checking its size. Parser options have a 64 KiB bound; view requests
-have an 8 MiB bound. Shared/resizable/detached typed inputs are refused. Rust still
-owns semantic computation checks. These encoders are currently hand-written;
-replay verifies their behavior, but does not replace the plan's generated request
-contract requirement.
+have an 8 MiB bound. Shared/resizable/detached typed inputs are refused. The
+adapter consumes generated field catalogs and validates the converted request
+against the shared schema before serialization. Rust owns semantic computation
+checks. Kotlin encoders and types are generated from the same definitions; full
+project command contracts remain a separate Phase 1/4 requirement.
 
 ## Production browser adapter and packaging
 
@@ -656,8 +695,10 @@ node tools/cross-platform/generate-gcode-layout.mjs
 node tools/cross-platform/generate-preview-catalog.mjs
 node tools/cross-platform/generate-view-layout.mjs
 node tools/cross-platform/generate-gcode-metadata.mjs
+node tools/cross-platform/generate-gcode-requests.mjs
+node tools/cross-platform/test-request-generator.mjs
 node tools/cross-platform/package-browser-core.mjs
-node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts rust-gcode-loading.test.ts
+node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts rust-gcode-loading.test.ts
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
@@ -673,7 +714,7 @@ Run these in `core/` so the pinned Rust toolchain is selected:
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked --jobs 2 -- -D warnings
 cargo test --workspace --locked --jobs 2
-cargo test -p orcaxr-gcode --test preview --test inspection --test views --test session --release --locked --jobs 2
+cargo test -p orcaxr-gcode --test preview --test inspection --test views --test session --test requests --release --locked --jobs 2
 cargo audit
 ```
 
@@ -762,7 +803,7 @@ Initial G-code verification on 2026-10-04 established:
 
 The parser now backs the production browser preview with verified packaging and
 a startup reference rollback. Stage B and the Phase 3 exit gate remain open for
-search, generated request contracts, production native renderer integration and device
+search, production native renderer integration and device
 measurements.
 
 Host projection verification on 2026-10-04 establishes 1,567 reference
@@ -833,7 +874,7 @@ gate observed 550.69 ms for Rust and 979.70 ms for TypeScript, including initial
 source conversion, indexing, parsing, host transfer and presentation. Those are
 single synthetic-host observations, not device acceptance measurements. The
 final JS entry is 2,264,048 bytes and all JS totals 10,574,850 bytes under unchanged
-limits. The Rust WASM adds 593,569 bytes outside that JS budget.
+limits. The current shared Rust WASM adds 560,666 bytes outside that JS budget.
 
 Loader tests cover bounded/compressed responses, strict handshake, missing and
 corrupt pairs, no silent fallback, fetch cancellation, explicit retry, and idle

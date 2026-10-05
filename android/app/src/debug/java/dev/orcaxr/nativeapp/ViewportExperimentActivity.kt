@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.orcaxr.core.GcodeSession
+import dev.orcaxr.core.GcodeRequests
 import dev.orcaxr.renderer.*
 import dev.orcaxr.renderer.filament.FilamentViewport
 import java.util.concurrent.Executors
@@ -186,7 +187,7 @@ class ViewportExperimentActivity : ComponentActivity() {
 }
 
 object PreviewFixture {
-    const val request = """{"version":1,"operation":"preview","window":[],"request":{"mode":"Feedrate"}}"""
+    val request = GcodeRequests.Preview(GcodeRequests.Window.Whole, GcodeRequests.PreviewRequest("Feedrate"))
     val source = buildString {
         append("G21\nG90\nM83\nG0 X-80 Y-80 Z60 F1200\n")
         for (row in 0..32) {

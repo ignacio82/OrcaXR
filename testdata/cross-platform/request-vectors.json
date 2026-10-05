@@ -1,0 +1,216 @@
+{
+  "version": 1,
+  "source": "M83\n;LAYER_CHANGE\nG1 Z0.2 F600\nG1 X1 E1\n; PAUSE_PRINTING\n",
+  "vectors": [
+    {
+      "id": "default-options",
+      "kind": "Options",
+      "json": "{}",
+      "shapeValid": true,
+      "result": "ok"
+    },
+    {
+      "id": "nullable-limit",
+      "kind": "Options",
+      "json": "{\"limits\":{\"records\":null}}",
+      "shapeValid": true,
+      "result": "ok"
+    },
+    {
+      "id": "utf16-color",
+      "kind": "Options",
+      "json": "{\"filamentColors\":[[55296,0,56320,65535]]}",
+      "shapeValid": true,
+      "result": "ok"
+    },
+    {
+      "id": "invalid-limit",
+      "kind": "Options",
+      "json": "{\"limits\":{\"records\":0}}",
+      "shapeValid": true,
+      "result": "invalid_options"
+    },
+    {
+      "id": "options-array",
+      "kind": "Options",
+      "json": "[]",
+      "shapeValid": false,
+      "result": "invalid_options"
+    },
+    {
+      "id": "limits-array",
+      "kind": "Options",
+      "json": "{\"limits\":[]}",
+      "shapeValid": false,
+      "result": "invalid_options"
+    },
+    {
+      "id": "null-limits",
+      "kind": "Options",
+      "json": "{\"limits\":null}",
+      "shapeValid": false,
+      "result": "invalid_options"
+    },
+    {
+      "id": "unknown-option",
+      "kind": "Options",
+      "json": "{\"range\":[0,1]}",
+      "shapeValid": false,
+      "result": "invalid_options"
+    },
+    {
+      "id": "coerced-limit",
+      "kind": "Options",
+      "json": "{\"limits\":{\"records\":\"4\"}}",
+      "shapeValid": false,
+      "result": "invalid_options"
+    },
+    {
+      "id": "invalid-code-unit",
+      "kind": "Options",
+      "json": "{\"filamentColors\":[[65536]]}",
+      "shapeValid": false,
+      "result": "invalid_options"
+    },
+    {
+      "id": "preview",
+      "kind": "Preview",
+      "json": "{\"version\":1,\"operation\":\"preview\",\"window\":[],\"request\":{\"mode\":\"Tool\"}}",
+      "shapeValid": true,
+      "result": "ok"
+    },
+    {
+      "id": "nullable-preview-range",
+      "kind": "Preview",
+      "json": "{\"version\":1,\"operation\":\"preview\",\"window\":[],\"request\":{\"mode\":\"Tool\",\"layerRange\":null}}",
+      "shapeValid": true,
+      "result": "ok"
+    },
+    {
+      "id": "unknown-mode",
+      "kind": "Preview",
+      "json": "{\"version\":1,\"operation\":\"preview\",\"window\":[],\"request\":{\"mode\":\"Unknown\"}}",
+      "shapeValid": true,
+      "result": "invalid-mode"
+    },
+    {
+      "id": "bad-range-order",
+      "kind": "Preview",
+      "json": "{\"version\":1,\"operation\":\"preview\",\"window\":[],\"request\":{\"mode\":\"Tool\",\"layerRange\":[2,1]}}",
+      "shapeValid": true,
+      "result": "invalid-range"
+    },
+    {
+      "id": "bad-range-shape",
+      "kind": "Preview",
+      "json": "{\"version\":1,\"operation\":\"preview\",\"window\":[],\"request\":{\"mode\":\"Tool\",\"layerRange\":[0]}}",
+      "shapeValid": false,
+      "result": "invalid_request"
+    },
+    {
+      "id": "unsigned-duration-bits",
+      "kind": "Preview",
+      "json": "{\"version\":1,\"operation\":\"preview\",\"window\":[],\"request\":{\"mode\":\"LayerTime\",\"layerTimes\":{\"secondsByLayerBits\":[4294967295,2139095040],\"provenance\":[55296,56320]}}}",
+      "shapeValid": true,
+      "result": "ok"
+    },
+    {
+      "id": "duration-bits-overflow",
+      "kind": "Preview",
+      "json": "{\"version\":1,\"operation\":\"preview\",\"window\":[],\"request\":{\"mode\":\"Tool\",\"layerTimes\":{\"secondsByLayerBits\":[4294967296],\"provenance\":[]}}}",
+      "shapeValid": false,
+      "result": "invalid_request"
+    },
+    {
+      "id": "extra-preview-field",
+      "kind": "Preview",
+      "json": "{\"version\":1,\"operation\":\"preview\",\"window\":[],\"includeSource\":false,\"request\":{\"mode\":\"Tool\"}}",
+      "shapeValid": false,
+      "result": "invalid_request"
+    },
+    {
+      "id": "inspection",
+      "kind": "Inspection",
+      "json": "{\"version\":1,\"operation\":\"inspection\",\"window\":[],\"request\":{}}",
+      "shapeValid": true,
+      "result": "ok"
+    },
+    {
+      "id": "nullable-cursor",
+      "kind": "Inspection",
+      "json": "{\"version\":1,\"operation\":\"inspection\",\"window\":[],\"request\":{\"currentRecord\":null}}",
+      "shapeValid": true,
+      "result": "ok"
+    },
+    {
+      "id": "positional-request",
+      "kind": "Inspection",
+      "json": "{\"version\":1,\"operation\":\"inspection\",\"window\":[],\"request\":[]}",
+      "shapeValid": false,
+      "result": "invalid_request"
+    },
+    {
+      "id": "null-boolean",
+      "kind": "Inspection",
+      "json": "{\"version\":1,\"operation\":\"inspection\",\"window\":[],\"request\":{\"singleLayer\":null}}",
+      "shapeValid": false,
+      "result": "invalid_request"
+    },
+    {
+      "id": "source-substitution",
+      "kind": "Inspection",
+      "json": "{\"version\":1,\"operation\":\"inspection\",\"window\":[],\"request\":{\"gcodeSource\":\"other\"}}",
+      "shapeValid": false,
+      "result": "invalid_request"
+    },
+    {
+      "id": "backwards-window",
+      "kind": "Inspection",
+      "json": "{\"version\":1,\"operation\":\"inspection\",\"window\":[1,0],\"request\":{}}",
+      "shapeValid": false,
+      "result": "invalid_request"
+    },
+    {
+      "id": "null-window",
+      "kind": "Inspection",
+      "json": "{\"version\":1,\"operation\":\"inspection\",\"window\":null,\"request\":{}}",
+      "shapeValid": false,
+      "result": "invalid_request"
+    },
+    {
+      "id": "unsupported-version",
+      "kind": "Inspection",
+      "json": "{\"version\":99,\"operation\":\"inspection\",\"window\":[],\"request\":{}}",
+      "shapeValid": true,
+      "result": "unsupported_protocol"
+    },
+    {
+      "id": "playback",
+      "kind": "Playback",
+      "json": "{\"version\":1,\"operation\":\"playback\",\"window\":[],\"request\":{},\"playback\":{\"direction\":-1}}",
+      "shapeValid": true,
+      "result": "ok"
+    },
+    {
+      "id": "bad-direction",
+      "kind": "Playback",
+      "json": "{\"version\":1,\"operation\":\"playback\",\"window\":[],\"request\":{},\"playback\":{\"direction\":0}}",
+      "shapeValid": true,
+      "result": "invalid-playback"
+    },
+    {
+      "id": "positional-playback",
+      "kind": "Playback",
+      "json": "{\"version\":1,\"operation\":\"playback\",\"window\":[],\"request\":{},\"playback\":[1]}",
+      "shapeValid": false,
+      "result": "invalid_request"
+    },
+    {
+      "id": "missing-playback",
+      "kind": "Playback",
+      "json": "{\"version\":1,\"operation\":\"playback\",\"window\":[],\"request\":{}}",
+      "shapeValid": false,
+      "result": "invalid_request"
+    }
+  ]
+}

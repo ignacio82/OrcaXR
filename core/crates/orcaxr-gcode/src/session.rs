@@ -62,16 +62,13 @@ impl Session {
         options: &str,
         cancellation: Cancellation,
     ) -> Result<Self, SessionError> {
-        if expected > Limits::default().input_characters || options.len() > 64 * 1024 {
+        if expected > Limits::default().input_characters
+            || options.len() > crate::request_types::MAX_OPTIONS_BYTES
+        {
             return Err(SessionError::ResourceLimit);
         }
-        let value: serde_json::Value =
-            serde_json::from_str(options).map_err(|_| SessionError::InvalidOptions)?;
-        if !value.is_object() || value.get("limits").is_some_and(|v| !v.is_object()) {
-            return Err(SessionError::InvalidOptions);
-        }
         let mut options: Options =
-            serde_json::from_value(value).map_err(|_| SessionError::InvalidOptions)?;
+            serde_json::from_str(options).map_err(|_| SessionError::InvalidOptions)?;
         let limit = options
             .limits
             .resolve()?

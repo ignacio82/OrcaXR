@@ -48,18 +48,7 @@ impl Default for Limits {
     }
 }
 
-#[derive(Debug, Default, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RequestedLimits {
-    pub input_characters: Option<f64>,
-    pub lines: Option<f64>,
-    pub records: Option<f64>,
-    pub path_points: Option<f64>,
-    pub warnings: Option<f64>,
-    pub line_characters: Option<f64>,
-    pub roles: Option<f64>,
-    pub filaments: Option<f64>,
-}
+pub use crate::request_types::{Options, RequestedLimits};
 impl RequestedLimits {
     pub fn resolve(&self) -> Result<Limits, ParseError> {
         let hard = Limits::default();
@@ -85,17 +74,6 @@ impl RequestedLimits {
             filaments: clamp(self.filaments, hard.filaments)?,
         })
     }
-}
-
-#[derive(Debug, Default, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Options {
-    #[serde(default)]
-    pub limits: RequestedLimits,
-    #[serde(default)]
-    pub filament_diameters_mm: Vec<f64>,
-    #[serde(default)]
-    pub filament_colors: Vec<Text>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

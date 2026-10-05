@@ -10,6 +10,7 @@ mod packet;
 mod parser;
 mod path;
 pub mod preview;
+pub mod request_types;
 mod session;
 mod text;
 pub mod view_layout;

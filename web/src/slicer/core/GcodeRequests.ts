@@ -1,8 +1,14 @@
 import { GCODE_LAYOUT } from '../../../../contracts/generated/gcode-layout';
-import { GCODE_VIEW_LAYOUT } from '../../../../contracts/generated/gcode-view-layout';
+import {
+  GCODE_REQUEST_FIELDS,
+  GCODE_REQUEST_VERSION,
+  GCODE_REQUEST_MAX_VIEW_BYTES,
+  GCODE_REQUEST_MAX_OPTIONS_BYTES,
+  validateGcodeRequest,
+} from '../../../../contracts/generated/gcode-requests';
 import { GCODE_PREVIEW_MODES, type GcodePreviewRequest } from '../GcodePreviewModel';
 import type { GcodeInspectionRequest, GcodePlaybackOptions } from '../GcodeInspectionModel';
-import { RICH_GCODE_HARD_CAPS, type RichGcodeParseOptions } from '../RichGcodeModel';
+import type { RichGcodeParseOptions } from '../RichGcodeModel';
 
 export type GcodeWindowSelector = readonly [] | readonly [number, number];
 export type GcodeSourceOptions = Omit<RichGcodeParseOptions, 'range' | 'resumeFrom'>;
@@ -107,6 +113,11 @@ function encode(value: Wire, maximum: number): string {
   return chunks.join('');
 }
 
+function encodeRequest(kind: 'Options' | 'Preview' | 'Inspection' | 'Playback', value: Wire, maximum: number): string {
+  validateGcodeRequest(kind, value);
+  return encode(value, maximum);
+}
+
 export function checkedGcodeWindow(value: GcodeWindowSelector, entryCount: number): GcodeWindowSelector {
   check(Array.isArray(value) && (value.length === 0 || value.length === 2));
   if (value.length) {
@@ -118,10 +129,10 @@ export function checkedGcodeWindow(value: GcodeWindowSelector, entryCount: numbe
 }
 
 export function encodeGcodeOptions(options: GcodeSourceOptions = {}): string {
-  object(options, ['limits', 'filamentDiametersMm', 'filamentColors']);
+  object(options, GCODE_REQUEST_FIELDS.Options);
   const output: Record<string, Wire> = {};
   if (options.limits !== undefined) {
-    object(options.limits, Object.keys(RICH_GCODE_HARD_CAPS));
+    object(options.limits, GCODE_REQUEST_FIELDS.RequestedLimits);
     const limits: Record<string, number> = {};
     for (const [key, value] of Object.entries(options.limits)) {
       if (value === undefined) continue;
@@ -150,22 +161,12 @@ export function encodeGcodeOptions(options: GcodeSourceOptions = {}): string {
     }
     output.filamentColors = options.filamentColors.map((color) => units(color, 32768));
   }
-  return encode(output, 64 * 1024);
+  return encodeRequest('Options', output, GCODE_REQUEST_MAX_OPTIONS_BYTES);
 }
 
 export function encodeGcodePreview(window: GcodeWindowSelector, request: GcodePreviewRequest): string {
   window = checkedGcodeWindow(window, 0x1_0000_0000);
-  object(request, [
-    'mode',
-    'roleVisibility',
-    'toolVisibility',
-    'eventVisibility',
-    'layerRange',
-    'recordRange',
-    'valueRange',
-    'layerTimes',
-    'maxProjectedRecords',
-  ]);
+  object(request, GCODE_REQUEST_FIELDS.PreviewRequest);
   check(GCODE_PREVIEW_MODES.some((mode) => mode.id === request.mode));
   const output: Record<string, Wire> = { mode: request.mode };
   for (const [key, count] of [
@@ -186,16 +187,17 @@ export function encodeGcodePreview(window: GcodeWindowSelector, request: GcodePr
   if (request.layerTimes !== undefined) {
     object(request.layerTimes, ['secondsByLayer', 'provenance']);
     const times = request.layerTimes.secondsByLayer;
-    check(times instanceof Float32Array && times.length <= GCODE_VIEW_LAYOUT.maxRequestBytes / 2);
+    check(times instanceof Float32Array && times.length <= GCODE_REQUEST_MAX_VIEW_BYTES / 2);
     ordinary(times);
     output.layerTimes = {
       secondsByLayerBits: new Uint32Array(times.buffer, times.byteOffset, times.length),
       provenance: units(request.layerTimes.provenance, 256),
     };
   }
-  return encode(
-    { version: GCODE_VIEW_LAYOUT.version, operation: 'preview', window, request: output },
-    GCODE_VIEW_LAYOUT.maxRequestBytes,
+  return encodeRequest(
+    'Preview',
+    { version: GCODE_REQUEST_VERSION, operation: 'preview', window, request: output },
+    GCODE_REQUEST_MAX_VIEW_BYTES,
   );
 }
 
@@ -206,16 +208,7 @@ export function encodeGcodeInspection(
   playback?: GcodePlaybackOptions,
 ): string {
   window = checkedGcodeWindow(window, 0x1_0000_0000);
-  object(request, [
-    'clampLayerRange',
-    'layerRange',
-    'singleLayer',
-    'recordVisibility',
-    'moveRange',
-    'currentRecord',
-    'showToolMarker',
-    'sourceContextLines',
-  ]);
+  object(request, GCODE_REQUEST_FIELDS.InspectionRequest);
   check(typeof includeSource === 'boolean');
   const output: Record<string, Wire> = {};
   for (const key of ['clampLayerRange', 'singleLayer', 'showToolMarker'] as const)
@@ -237,7 +230,7 @@ export function encodeGcodeInspection(
     output.recordVisibility = mask(request.recordVisibility, GCODE_LAYOUT.maxWindowRecords, false);
   let play: Record<string, Wire> | undefined;
   if (playback !== undefined) {
-    object(playback, ['direction', 'wrap', 'includeCurrent', 'maxFrames']);
+    object(playback, GCODE_REQUEST_FIELDS.PlaybackOptions);
     check(playback.direction === 1 || playback.direction === -1);
     play = { direction: playback.direction };
     for (const key of ['wrap', 'includeCurrent'] as const)
@@ -250,15 +243,16 @@ export function encodeGcodeInspection(
       play.maxFrames = playback.maxFrames;
     }
   }
-  return encode(
+  return encodeRequest(
+    play ? 'Playback' : 'Inspection',
     {
-      version: GCODE_VIEW_LAYOUT.version,
+      version: GCODE_REQUEST_VERSION,
       operation: play ? 'playback' : 'inspection',
       window,
       request: output,
       includeSource,
-      playback: play,
+      ...(play ? { playback: play } : {}),
     },
-    GCODE_VIEW_LAYOUT.maxRequestBytes,
+    GCODE_REQUEST_MAX_VIEW_BYTES,
   );
 }

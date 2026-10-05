@@ -97,8 +97,10 @@ jobs:
           node tools/cross-platform/generate-preview-catalog.mjs
           node tools/cross-platform/generate-view-layout.mjs
           node tools/cross-platform/generate-gcode-metadata.mjs
+          node tools/cross-platform/generate-gcode-requests.mjs
+          node tools/cross-platform/test-request-generator.mjs
           node tools/cross-platform/package-browser-core.mjs
-          node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts
+          node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
@@ -112,7 +114,7 @@ jobs:
           cargo fmt --all --check
           cargo clippy --workspace --all-targets --locked --jobs 2 -- -D warnings
           cargo test --workspace --locked --jobs 2
-          cargo test -p orcaxr-gcode --test preview --test inspection --test views --test session --release --locked --jobs 2
+          cargo test -p orcaxr-gcode --test preview --test inspection --test views --test session --test requests --release --locked --jobs 2
           cargo audit
       - name: Real browser worker and artifact checks
         run: |

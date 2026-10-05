@@ -20,19 +20,7 @@ pub struct LayerTimes {
     pub seconds_by_layer: Vec<f32>,
     pub provenance: Text,
 }
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PreviewRequest<T = LayerTimes> {
-    pub mode: String,
-    pub role_visibility: Option<Vec<u8>>,
-    pub tool_visibility: Option<Vec<u8>>,
-    pub event_visibility: Option<Vec<u8>>,
-    pub layer_range: Option<[f64; 2]>,
-    pub record_range: Option<[f64; 2]>,
-    pub value_range: Option<[f64; 2]>,
-    pub layer_times: Option<T>,
-    pub max_projected_records: Option<f64>,
-}
+pub use crate::request_types::PreviewRequest;
 impl<T> PreviewRequest<T> {
     pub(crate) fn map_layer_times(self, convert: impl FnOnce(T) -> LayerTimes) -> PreviewRequest {
         PreviewRequest {

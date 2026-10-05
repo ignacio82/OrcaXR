@@ -22,14 +22,19 @@ Android now has generated metadata guards, strict bounded JSON parsing and
 model/index relational checks. Views require an explicit captured model and
 validate source/window, record, layer, cursor, tick and projection relations;
 the renderer rejects a different capture identity. Native production integration,
-search, generated request contracts, production native rendering,
+search, full project command contracts, production native rendering,
 and physical-device performance
 remain migration work; these bindings do not change release support.
-The [Android boundary evidence](engineering/native-core.md) now records 17 passing
+The [Android boundary evidence](engineering/native-core.md) now records 20 passing
 JNI tests, including actual-packet mutation, capture/window binding and cancellation
 cases, plus three shell cold starts and three renderer lifecycle tests. Builds, lint, artifact
-alignment, audits and the configured redacted source scan pass. Browser generated
-metadata and published Rust artifacts remain unchanged.
+alignment, audits and the configured redacted source scan pass. Shared G-code
+source/view request types now generate from one schema across all three languages;
+the Rust decoder requires objects and rejects duplicate option keys. Matching
+Rust browser/JNI artifacts were rebuilt. Metadata layouts and slicing-engine
+artifacts remain unchanged. Thirty independent request cases agree across host
+Rust, actual browser WASM, Android JNI and the generated host guards; typed
+encoders also preserve UInt32 bits/UTF-16 units and enforce bounded serialization.
 
 The debug Android flat viewport now has generated mesh/toolpath fixtures with
 bounded Filament uploads, original-facet picking and display paint ranges.
