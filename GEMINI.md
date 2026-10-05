@@ -198,6 +198,11 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   reference/settings/topology validation, history and session execution remain open.
   Do not substitute strict ISO parsing or Rust rounding for the existing graph
   validator's `Date.parse` and layer-event `toFixed(4)` compatibility requirements.
+  The Rust compatibility helpers now reproduce pinned V8 timestamp syntax and
+  exact four-decimal collision keys. Legacy timezone overflow needs an explicit
+  V8 integer profile; timezone-less dates need a host resolver with matching DST
+  and historical rules. Resolver failure must propagate, never default to UTC
+  or become an invalid-data diagnostic. These helpers are not yet a graph validator.
 - SHA-256 identifies artifacts/project/config outputs. Canonical FNV-1a64
   identifies source assets and semantic snapshots where explicitly defined.
   Never substitute one for the other or infer engine statistics from observations.

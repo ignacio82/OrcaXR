@@ -46,6 +46,13 @@ are fixture-specific evidence, not device-independent performance guarantees.
   effective and inherited values refer to the original payload. This is host
   allocation evidence, not a device budget or a native settings-panel benchmark.
 
+- Rust timestamp syntax validation scans borrowed UTF-16 with constant memory.
+  A 6,291,484-byte synthetic input, including a million nested comment pairs,
+  takes zero heap allocations over twenty parses; a full-copy positive control
+  makes one allocation. The parser does not apply transport string/depth limits
+  to persisted metadata and does not recurse through comments. This qualifies
+  parser ownership only; the host timezone adapter remains separate work.
+
 Measured on `~/Downloads/narwhal.3mf` — 1,897,256 facets, 629k of them painted,
 stored as 161 MB of mesh XML inside a 28 MB archive. Every number below is from
 that project on a desktop; a Galaxy XR is several times slower, so these are

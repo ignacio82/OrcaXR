@@ -78,9 +78,14 @@ are fixture-specific evidence, not device-independent performance guarantees.
   and filament inheritance match the reference. The separate settings library
   below resolves configuration. These candidates do not enforce cross-references,
   mesh layouts, timestamps, topology guards, commands
-  or session/history policy. Future semantic validation must preserve the current
-  `Date.parse` acceptance and layer-event `toFixed(4)` collision behavior; strict
-  ISO parsing or ordinary Rust formatting cannot silently replace them.
+  or session/history policy. The separate Rust validation-value helpers retain
+  pinned V8 `Date.parse` syntax and layer-event `toFixed(4)` collision behavior;
+  strict ISO parsing or ordinary Rust formatting cannot silently replace them.
+  Timestamp parsing preserves UTF-16, NUL termination, legacy forms, overflow days
+  and the V8 build's explicit tagged-integer profile. Local dates require a host
+  resolver with matching DST/historical rules and TimeClip after conversion.
+  Resolver failure remains distinct from invalid project data. These helpers
+  are not a native graph validator or a platform timezone implementation.
   Unknown annotation/refinement fields stay intact in the candidate, while the
   separate facet computation view owns its existing semantic checks. Persisted
   values do not inherit the stateless canonicalization request's parser limits.

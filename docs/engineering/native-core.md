@@ -470,7 +470,8 @@ It does **not** prove semantic validity: tests deliberately construct candidates
 with invalid timestamps and dangling references. Native graph validation, option
 and profile validation, history, commands and session execution are still required. The
 TypeScript validator's `Date.parse` acceptance and layer-event `toFixed(4)`
-collision keys need compatibility work before they can be replaced. No JNI/WASM
+collision keys now have separate compatibility helpers, described below; they
+are not yet integrated into native graph validation. No JNI/WASM
 model endpoint or Android editing route is introduced by this library.
 
 Child collections/records and configuration/annotation/extension payloads use
@@ -589,6 +590,61 @@ localization, HTTP/HTTPS server deployment and real slicing fixtures. All three
 full npm audits report zero vulnerabilities. Main-entry size is 2,101,441 bytes
 and total JavaScript 10,436,944 bytes, within unchanged budgets. No physical
 device or hosted-CI qualification was performed for this update.
+
+The Rust validation-value library now preserves the two JavaScript behaviors
+that a strict ISO parser or normal Rust formatting would change. Timestamp syntax
+adapts the V8 parser in Node v22.21.0, with its BSD license and source attribution
+retained. It scans borrowed UTF-16 without allocation and preserves NUL behavior,
+legacy dates/month prefixes/comments, two-digit years, day overflow, fractional
+seconds and numeric timezone offsets. `Date.parse` allows implementation-specific
+legacy syntax: this is a pinned V8 compatibility profile, not a claim about every
+browser engine. V8 itself has a build-dependent legacy offset overflow check;
+callers explicitly choose Smi31 (the tested Chromium build) or Smi32 (the tested
+Node build). Rust pointer width never selects that policy.
+
+Timestamp parsing distinguishes explicit UTC offsets from local civil times.
+Local values require an injected host conversion with matching DST ambiguity,
+gap and historical timezone rules. The library checks the permitted range before
+conversion and applies TimeClip afterward. Host-service errors propagate
+separately from invalid input; there is no default UTC fallback. Native timezone
+adapters and their device qualification remain unimplemented. Layer-event keys
+compute the exact binary64 rational rounded to four decimals, with ECMAScript
+ties and signed-zero behavior, then use the shared JavaScript number formatter
+at magnitudes of at least 10^21. Invalid but finite authored heights still get
+the same collision key. Non-finite values are already excluded by typed candidates.
+
+`validation-value-vectors.mjs` independently executes Node Date.parse/toFixed,
+the actual TypeScript graph validator and installed Chromium. Its source-bound
+corpus covers **6,137** timestamp strings in UTC, UTC-12 and UTC+14, **48** local
+conversions across New York, Lord Howe, Apia and Kathmandu, **10,942** exact
+binary64 rounding inputs and **247** project layer-event collision checks.
+The measured oracles are Node 22.21.0 and Chromium 150.0.7871.24. Six Rust tests
+pass in debug and release for both integer profiles. Fixed-zone comparisons
+resolve the actual parsed civil value; DST/history tests check that value and
+preserve an oracle-backed host result. They do not implement or qualify a Rust
+timezone database. Other tests cover resolver failure, TimeClip boundaries and
+inputs/comments beyond transport budgets. A **6,291,484-byte** synthetic input
+with over a million nested comment pairs takes **zero heap allocations**
+over twenty parses; an explicit copy positive control makes one full allocation.
+CI regenerates both engine oracles and runs the tests and allocation probe.
+These are compatibility primitives, not the semantic graph validator, a validated
+store, or a JNI/WASM project-session endpoint; no Phase 4 exit is closed.
+
+For this compatibility update, strict workspace Clippy/tests, release project
+tests, Cargo audit and compilation for wasm32 and both Android targets pass.
+Browser set `336e838e5106` binds 85 source inputs; its 556,646-byte WASM executable
+is byte-identical. Android debug/release assembly, JVM tests, lint, both APK
+provenance/alignment checks and browser WASM smoke pass. An owned API 34 x86_64
+emulator passes 24 core tests, three cold starts, three renderer tests and one
+non-XR SceneCore startup test. These platform checks exercise the existing
+bindings, not the new validation-value library. The redacted source scan covers
+1,700 UTF-8 files (six NUL-normalized) with no findings; actionlint passes.
+The complete repository gate also passes: 267 web unit-test files, 97 project
+test files, both preview adapters, browser/offline/recovery/accessibility checks,
+HTTP/HTTPS deployment and real slicing fixtures. All three full npm audits report
+zero vulnerabilities. Main-entry JavaScript is 2,101,441 bytes and total JavaScript
+10,436,944 bytes, within the existing budgets. Physical-device and hosted-CI
+qualification remain outside this local evidence.
 
 The browser now has a transitional `AsyncEditorSession` over its TypeScript
 authority. Undo/Redo and plate lifecycle actions await acknowledgements; guarded queued execution,
@@ -1092,6 +1148,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/asset-
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-refinement-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-model-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-resolution-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
@@ -1113,6 +1170,7 @@ cargo run -p orcaxr-project --example asset_repository_benchmark --release --loc
 cargo run -p orcaxr-project --example facet_sparsity_benchmark --release --locked --jobs 2
 cargo run -p orcaxr-project --example project_model_benchmark --release --locked --jobs 2
 cargo run -p orcaxr-project --example settings_resolution_benchmark --release --locked --jobs 2
+cargo run -p orcaxr-project --example validation_values_benchmark --release --locked --jobs 2
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target wasm32-unknown-unknown
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target aarch64-linux-android
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target x86_64-linux-android

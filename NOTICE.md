@@ -100,6 +100,21 @@ Android's stock `HttpURLConnection` proved unreliable against
 Mainsail's nginx-fronted Moonraker on the headset's WiFi (see
 Phase 3 commit log).
 
+## V8 timestamp parser
+
+`core/crates/orcaxr-project/src/validation/timestamp.rs` adapts the V8 date
+parser from Node **v22.21.0**, including its tokenizer, date/time composers,
+legacy grammar and explicit UTC-offset overflow behavior. Sources:
+[`dateparser-inl.h`](https://github.com/nodejs/node/blob/v22.21.0/deps/v8/src/date/dateparser-inl.h),
+[`dateparser.h`](https://github.com/nodejs/node/blob/v22.21.0/deps/v8/src/date/dateparser.h),
+[`dateparser.cc`](https://github.com/nodejs/node/blob/v22.21.0/deps/v8/src/date/dateparser.cc),
+[`builtins-date.cc`](https://github.com/nodejs/node/blob/v22.21.0/deps/v8/src/builtins/builtins-date.cc).
+
+Copyright 2011 the V8 project authors. License: **BSD-3-Clause**, retained in
+[`core/licenses/V8-BSD.txt`](core/licenses/V8-BSD.txt). Distributions containing
+this parser must include that notice, license and disclaimer. The Rust library
+does not embed a JavaScript engine or a timezone database.
+
 ## Bundled assets
 
 `app/src/main/assets/cube_20mm.stl` is a 20 mm calibration cube. It's

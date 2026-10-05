@@ -88,7 +88,10 @@ basic graph/filament selectors now exist too. Eleven TypeScript-derived states,
 record/literal drift checks and an allocation probe cover this model boundary.
 Rust settings scope eligibility, strict layered resolution, import sanitization,
 explanations and project configuration selectors now use the same pinned engine
-table as the browser, with independent TypeScript comparisons. Semantic graph and
+table as the browser, with independent TypeScript comparisons. Compatibility
+helpers now preserve pinned V8 timestamp parsing and exact layer-event rounding;
+Node/Chromium reference corpora cover both V8 integer profiles and host timezone
+conversion boundaries. Native timezone adapters, semantic graph and
 option/profile validation, commands, history policy and native session execution
 remain open; these libraries do not enable Android editing.
 
