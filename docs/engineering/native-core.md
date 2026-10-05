@@ -348,9 +348,17 @@ Commit an action-source change before regenerating it with `inventory.mjs --writ
 The inventory JSON is also an input to shared-core provenance, so refresh the
 WASM/JNI build manifests and packaged browser asset set through their normal
 build tools afterward. Byte-identical executables still need manifests that bind
-the updated input. The asynchronous history update preserves all 226 action
-records and native capability states; rebuilt WASM/glue and both JNI binaries
-are byte-identical, and the existing debug/release APKs verify against them.
+the updated input. The asynchronous history and plate updates preserve all 226
+action records and native capability states. The plate update binds source commit
+`ae4c6ab`; refreshed browser set `e8e625f7c1b2` contains the same 558,264-byte WASM.
+Rebuilt WASM/glue and both JNI binaries are byte-identical, and the existing
+debug/release APKs verify against the new input manifest with both ABIs and every
+packaged native library retaining 16 KB ELF/ZIP alignment. The refreshed asset set
+passes the production browser, startup, recovery, worker, offline and static-host
+preview suite; bundle budgets pass at 2,269,279 main bytes and 10,586,871 total JS
+bytes. The source change passed the complete repository gate before this metadata
+refresh. No Android runtime behavior or physical-device qualification is inferred
+from the metadata checks.
 
 `contracts/core-protocol.json` owns the initial **stateless canonicalization
 request**. The generator emits Rust request deserialization/validation, TypeScript
