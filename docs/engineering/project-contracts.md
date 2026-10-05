@@ -7,6 +7,22 @@ are fixture-specific evidence, not device-independent performance guarantees.
 
 ## Parity implementation invariants
 
+- `AsyncEditorSession` orders local queries and mutations over the existing
+  TypeScript session. It captures project/revision/semantic/asset identity plus
+  history revision at submission (or accepts a guard captured before preparation).
+  A later request does not silently rebase onto an earlier queued edit. Cancellation,
+  source drift, history/checkpoint replacement, another owner, reset and disposal
+  reject before mutation; a failure does not poison the queue. A synchronous commit
+  still receives an acknowledgement if an observer then cancels or disposes it.
+  At most 32 operations may be pending, and transactions capture a list of at most
+  64 existing command objects instead of accepting an asynchronous callback. The
+  original bus retains atomic rollback, monotonic project revisions, selection,
+  coalescing and checkpoints without copying asset payloads. Empty batches do not
+  change history revision. Acknowledgements freeze identity/history; queued queries
+  return summaries rather than project or mesh copies. These are trusted local
+  objects with an opaque owner token, not the future generated wire protocol.
+  Production Undo/Redo now awaits this facade through the workspace and registry;
+  other editing, import, save and slice paths still require migration.
 - `EditorSession.open` binds its source project/revision/semantic/asset identity
   and owns a single current open operation. Newer opens supersede older reads,
   even if the newer read fails. Reset, disposal, cancellation and source drift
@@ -475,4 +491,3 @@ are fixture-specific evidence, not device-independent performance guarantees.
 - `./scripts/quality.sh` is the clean-clone repository gate. Web-only changes
   must at minimum pass `npm --prefix web run quality`; do not weaken a failing
   check or claim broad parity before P12.6 is independently verified.
-

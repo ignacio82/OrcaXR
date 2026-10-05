@@ -64,12 +64,12 @@ export class ActionContext {
     return this.workspace.palette;
   }
 
-  undo(): void {
-    this.workspace.undo();
+  async undo(): Promise<void> {
+    await this.workspace.undo();
   }
 
-  redo(): void {
-    this.workspace.redo();
+  async redo(): Promise<void> {
+    await this.workspace.redo();
   }
 
   // ---- Scene ----------------------------------------------------------

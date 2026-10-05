@@ -8653,9 +8653,9 @@ export class OrcaWorkspace extends xb.Script {
     panel.add(addBtn);
   }
 
-  public undo(): boolean {
-    const changed = this.canonicalProject.undo();
-    if (changed) {
+  public async undo(): Promise<boolean> {
+    const changed = await this.canonicalProject.undoAsync();
+    if (changed && !this.disposed) {
       this.syncTransformProxy();
       this.revalidatePublishedGcode();
       this.setStatus(t('workspace.orcaWorkspace.undidTheLastProjectEdit', 'Undid the last project edit.'));
@@ -8663,9 +8663,9 @@ export class OrcaWorkspace extends xb.Script {
     return changed;
   }
 
-  public redo(): boolean {
-    const changed = this.canonicalProject.redo();
-    if (changed) {
+  public async redo(): Promise<boolean> {
+    const changed = await this.canonicalProject.redoAsync();
+    if (changed && !this.disposed) {
       this.syncTransformProxy();
       this.revalidatePublishedGcode();
       this.setStatus(t('workspace.orcaWorkspace.redidTheProjectEdit', 'Redid the project edit.'));

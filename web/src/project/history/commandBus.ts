@@ -59,6 +59,7 @@ interface ActiveTransaction {
 
 /** Bounded command history with checkpoints, coalescing, and atomic rollback. */
 export class CommandBus implements CommandBusPort {
+  private historyRevision = 0;
   private readonly maxEntries: number;
   private readonly maxEstimatedBytes: number;
   private undoEntries: HistoryEntry[] = [];
@@ -198,7 +199,7 @@ export class CommandBus implements CommandBusPort {
       }
       this.commitTransaction(transaction);
       this.activeTransaction = undefined;
-      this.emitHistory(historyBefore);
+      this.emitHistory(historyBefore, transaction.commands.length > 0);
       return result;
     } catch (error) {
       this.rollbackTransaction(transaction);
@@ -240,6 +241,11 @@ export class CommandBus implements CommandBusPort {
       redoLabel: this.redoEntries.at(-1)?.command.label,
       dirtyCategories: this.dirtyCategories(),
     };
+  }
+
+  /** Also changes when equal-looking history entries or checkpoints are replaced. */
+  getHistoryRevision(): number {
+    return this.historyRevision;
   }
 
   subscribeHistory(subscriber: CommandHistorySubscriber): () => void {
@@ -303,9 +309,11 @@ export class CommandBus implements CommandBusPort {
     this.context.selection.restore(snapshot.selection);
   }
 
-  private emitHistory(previous: CommandHistorySnapshot): void {
+  private emitHistory(previous: CommandHistorySnapshot, invalidateGuard = true): void {
     const current = this.getHistorySnapshot();
-    if (historySnapshotsEqual(current, previous)) return;
+    const changed = !historySnapshotsEqual(current, previous);
+    if (invalidateGuard || changed) this.historyRevision += 1;
+    if (!changed) return;
     for (const subscriber of [...this.historySubscribers]) {
       try {
         subscriber(current, previous);

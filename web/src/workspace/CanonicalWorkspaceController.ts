@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import { BbsProjectImportWorkerClient } from '../import/BbsProjectImportWorkerClient';
 import { InMemoryAssetRepository, type AssetPayload, type AssetRepositorySnapshot } from '../project/assets';
+import { AsyncEditorSession } from '../project/AsyncEditorSession';
 import {
   AddObjectWithAssetCommand,
   AddPlateCommand,
@@ -830,6 +831,7 @@ export class CanonicalWorkspaceController {
 
   private readonly assets: InMemoryAssetRepository;
   private readonly session: EditorSession;
+  private readonly asyncSession: AsyncEditorSession;
   private readonly subscribers = new Set<CanonicalWorkspaceSubscriber>();
   private readonly sourceUnsubscribers: Array<() => void> = [];
   private readonly importCoordinator: ProjectImportCoordinator;
@@ -880,6 +882,7 @@ export class CanonicalWorkspaceController {
       serializer,
       history: options.history,
     });
+    this.asyncSession = new AsyncEditorSession(this.session);
     const parser = options.projectImportParser ?? new BbsProjectImportWorkerClient();
     this.importCoordinator = new ProjectImportCoordinator({
       parser: {
@@ -906,6 +909,7 @@ export class CanonicalWorkspaceController {
         this.session.subscribeProjectionHealth(() => this.scheduleChange('projection-health')),
       );
     } catch (error) {
+      this.asyncSession.dispose();
       this.session.dispose();
       throw error;
     }
@@ -3780,9 +3784,20 @@ export class CanonicalWorkspaceController {
     return this.session.undo();
   }
 
+  /** Production action gateway; the synchronous method remains a migration reference. */
+  async undoAsync(): Promise<boolean> {
+    this.assertActive();
+    return (await this.asyncSession.undo()).value;
+  }
+
   redo(): boolean {
     this.assertActive();
     return this.session.redo();
+  }
+
+  async redoAsync(): Promise<boolean> {
+    this.assertActive();
+    return (await this.asyncSession.redo()).value;
   }
 
   /** Merge exact canonical instances into a caller-owned binary STL artifact. */
@@ -4089,6 +4104,7 @@ export class CanonicalWorkspaceController {
     for (const unsubscribe of this.sourceUnsubscribers.splice(0)) unsubscribe();
     this.pendingChangeSources.clear();
     this.subscribers.clear();
+    this.asyncSession.dispose();
     this.session.dispose();
   }
 

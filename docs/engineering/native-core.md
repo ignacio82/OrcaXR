@@ -329,6 +329,16 @@ References: [SceneCore release notes](https://developer.android.com/jetpack/andr
 
 ## Contracts and scope
 
+The browser now has a transitional `AsyncEditorSession` over its TypeScript
+authority. Undo/Redo actions await acknowledgements; guarded queued execution,
+bounded callback-free batches and ordered summary queries are available for
+incremental migration. Project, asset and history guards prevent stale work from
+silently applying to a newer edit. This is an in-process facade using trusted
+command objects and an opaque owner token, not a generated project protocol or
+a Rust project implementation. The remaining action/import/save/slice migration
+and full command bindings remain Phase 1/4 work. The maintained details live in
+[project contracts](project-contracts.md).
+
 `contracts/core-protocol.json` owns the initial **stateless canonicalization
 request**. The generator emits Rust request deserialization/validation, TypeScript
 types/validation, and Kotlin request types/validation. Regeneration must be clean.

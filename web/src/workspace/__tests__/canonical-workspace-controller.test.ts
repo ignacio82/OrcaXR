@@ -1621,4 +1621,26 @@ function semanticFootprint(controller: CanonicalWorkspaceController) {
   };
 }
 
+await test('acknowledges asynchronous history and refuses stale or disposed action work', async () => {
+  const controller = createController();
+  const initial = controller.getSummary();
+  controller.addPlate();
+  const before = controller.getSummary();
+  const pending = controller.undoAsync();
+  assert.deepEqual(controller.getSummary(), before, 'history must not mutate before acknowledgement work runs');
+  assert.equal(await pending, true);
+  assert.equal(controller.getSummary().plates.length, initial.plates.length);
+  assert.equal(await controller.redoAsync(), true);
+  assert.equal(controller.getSummary().plates.length, before.plates.length);
+
+  const stale = controller.undoAsync();
+  controller.addPlate();
+  const edited = controller.getSummary();
+  await assert.rejects(stale, /project or its history changed/);
+  assert.deepEqual(controller.getSummary(), edited);
+  const disposed = controller.undoAsync();
+  controller.dispose();
+  await assert.rejects(disposed, /session is closed/);
+});
+
 console.log(`\n${passed} canonical workspace controller tests passed.`);

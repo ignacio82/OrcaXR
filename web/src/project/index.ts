@@ -1,4 +1,5 @@
 export * from './assets';
+export * from './AsyncEditorSession';
 export * from './annotations';
 export * from './calibration';
 export * from './commands';

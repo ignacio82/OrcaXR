@@ -53,6 +53,14 @@ generates Rust decoders, TypeScript types/guards and Kotlin types/encoders/guard
 This covers the G-code computation transport; the full project session,
 command/result/error and cancellation contracts in Phases 1/4 remain open.
 
+Phase 4 now has a local asynchronous facade over the existing TypeScript session,
+with guarded FIFO mutation, ordered summary queries, bounded operation batches,
+and authoritative acknowledgements. Production Undo/Redo awaits it through
+ActionRegistry. It deliberately retains trusted command objects and an opaque
+local owner token; generated serializable project requests, Rust execution and
+the remaining workflow migration are still required. See
+[project contracts](engineering/project-contracts.md).
+
 Build an adaptive native Android application for phones, tablets, Googlebook,
 and Android XR while preserving the web application. Introduce Rust as a shared
 implementation of selected computation and, subsequently, the canonical project
@@ -545,6 +553,8 @@ and replay coverage for the complete current command inventory.
   implementation. Update action handlers, drag/stroke completion, imports,
   settings commits, undo/redo, autosave, and slice capture to await authoritative
   results. Keep all mutations behind ActionRegistry's invocation boundary.
+  The local facade and production Undo/Redo route exist; the remaining workflows
+  and serializable command payloads are not migrated yet.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,
   immutable asset repository, selectors, and session lifecycle into Rust.
   Use immutable shared asset ownership and bounded history; transform/undo must
