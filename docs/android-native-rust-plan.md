@@ -24,6 +24,11 @@ now builds the current pin's TBB runtime for both ABIs, verifies its packaged
 dependency closure and ELF alignment, and executes allocator/task checks on an
 x86_64 Android emulator. It does not establish a libslic3r build, an arm64 runtime
 result, or a valid native slice.
+The [canonical slice reference corpus](engineering/native-slice-fixtures.md)
+now verifies eleven real archive slices through the published WASM engine, covering
+physical/mixed paint, scoped settings, support and wave paths. Its captured
+inputs and output summaries are ready for native comparison; Android execution
+and the application capture/preflight workflow remain unqualified.
 
 The first Phase 3 computation implementation now includes the Rust rich G-code
 parser, immutable source/index ownership, bounded windows, cooperative native

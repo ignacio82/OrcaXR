@@ -74,6 +74,9 @@ engine (`libslic3r` via WASM) as the computational core.
   Current-engine Android feasibility tooling builds the pinned TBB dependency
   and allocator/task probes in isolated worktrees. It does not build or qualify
   libslic3r yet; see the native dependency evidence in the slicing document.
+  [Canonical slice reference fixtures](docs/engineering/native-slice-fixtures.md)
+  now exercise eleven authored archive cases through the published browser engine;
+  they provide comparison inputs, not Android slicing evidence.
   Production native rendering, search and physical-device qualification remain open. Native PCVR
   remains outside scope.
 

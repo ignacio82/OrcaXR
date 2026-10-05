@@ -50,6 +50,11 @@ emulator runs exercise real allocation and task scheduling. This is not a
 libslic3r build or slice, and does not retire historical arm64 painting/allocator
 concerns. The complete dependency graph, engine adapter, output comparison and
 physical qualification remain open.
+The [canonical slice reference corpus](engineering/native-slice-fixtures.md)
+now passes eleven real archive slices on the published WASM engine and seven input
+guard cases. Physical/mixed paint, scoped settings, manual support and actual
+wave extrusion are observable in the outputs. This is browser reference
+evidence for the native comparison, not Android slicing qualification.
 
 The Rust preview projection now passes 1,567 host reference cases covering all
 12 modes, filters, legends, exact Float32 outputs, malformed inputs and unsupported

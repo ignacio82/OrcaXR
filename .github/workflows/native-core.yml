@@ -15,6 +15,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  engine-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm --prefix web ci
+      - name: Capture canonical slice inputs and verify published-engine references
+        run: |
+          npm --prefix wasm run verify:artifacts
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/native-engine/generate-slice-fixtures.mjs
+          manifests=(tools/native-engine/build/fixtures/*/manifest.json)
+          test "${#manifests[@]}" -eq 1
+          node tools/native-engine/test-reference-inputs.mjs "${manifests[0]}"
+          nice -n 10 node tools/native-engine/slice-reference.mjs "${manifests[0]}"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: canonical-native-slice-reference-evidence
+          path: |
+            tools/native-engine/build/fixtures/
+            tools/native-engine/build/references/
+          retention-days: 7
+
   engine-dependencies:
     runs-on: ubuntu-latest
     timeout-minutes: 30

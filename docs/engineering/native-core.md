@@ -58,6 +58,9 @@ this application build; do not substitute the historical engine script. The
 separate [current-engine dependency probes](slicing.md#native-android-dependency-feasibility)
 now provide a clean TBB build and x86_64 runtime checks. They do not provide a
 native engine or a slicing route.
+The [canonical reference corpus](native-slice-fixtures.md) now provides eleven
+published-WASM archive outputs and input guard checks for eventual Android
+comparison. These results do not establish native slicing or application preflight.
 
 ## Flat renderer experiment
 
