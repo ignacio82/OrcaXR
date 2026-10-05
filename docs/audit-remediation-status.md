@@ -103,6 +103,19 @@ Clippy, cross-target compilation, dependency audits and the configured redacted
 source scan pass. The wave-settings source test uses pinned Git content plus the
 tracked build patch rather than a mutable developer checkout.
 
+The TypeScript session lifecycle was verified on 2026-10-05 before further
+asynchronous command migration. Archive completion now binds the source project,
+revision, semantic/asset identities and current open operation. Eleven regressions
+cover cancellation, edit/undo, asset-only drift, reset/disposal, both completion
+orders for overlapping opens, a failed newer request, invalid assets, cooperative
+serializer rejection and cancelled legacy slice results. Rejection preserves the
+immutable asset version, selection, dirty state and history. The complete
+`scripts/quality.sh` gate passes, including 260 web unit-test files, production
+browser/offline checks, slicing, server and HTTP/HTTPS deployment tests, artifact
+verification and all three dependency audits. The redacted 1,630-file source scan
+reports no leaks. This closes a session lifecycle defect, not the planned
+asynchronous command facade or Rust project migration.
+
 ## Current implementation
 
 | Plan area | State | Evidence / work remaining |

@@ -77,6 +77,7 @@ export class EditorSession {
   private readonly unsubscribeHistory: () => void;
   private nextSurfaceId = 1;
   private disposed = false;
+  private openOperation?: symbol;
 
   constructor(private readonly options: EditorSessionOptions) {
     this.project = new ProjectStore(options.initialState);
@@ -229,22 +230,61 @@ export class EditorSession {
 
   async open(bytes: Uint8Array, cancellation?: CancellationToken): Promise<string[]> {
     this.assertActive();
-    const parsed = await this.options.serializer.deserialize(bytes, cancellation);
-    assertValidProjectState(parsed.state);
-    const nextAssets: AssetRepositorySnapshot = { entries: parsed.assets };
-    // Validate the whole bundle in a temporary immutable repository before commit.
-    const staged = new InMemoryAssetRepository();
-    staged.restore(nextAssets);
-    assertBundleAssets(parsed.state, staged.list());
+    if (cancellation?.aborted) throw new Error(cancellation.reason ?? 'Open cancelled');
+    const guard = this.captureExportGuard();
+    const operation = Symbol('open-project');
+    this.openOperation = operation;
+    const current = () => this.openOperation === operation && this.isExportCurrent(guard);
+    const assertCurrent = () => {
+      this.assertActive();
+      if (cancellation?.aborted) throw new Error(cancellation.reason ?? 'Open cancelled');
+      if (!current()) throw new StaleProjectResultError('Open');
+    };
+    const isDisposed = () => this.disposed;
+    const ownedCancellation: CancellationToken = {
+      get aborted() {
+        return Boolean(cancellation?.aborted) || !current();
+      },
+      get reason() {
+        if (isDisposed()) return 'EditorSession is disposed';
+        if (cancellation?.aborted) return cancellation.reason ?? 'Open cancelled';
+        if (!current()) return 'Open superseded or its source project changed';
+        return undefined;
+      },
+    };
+    try {
+      let parsed: Awaited<ReturnType<ProjectSerializerPort['deserialize']>>;
+      try {
+        parsed = await this.options.serializer.deserialize(bytes, ownedCancellation);
+      } catch (error) {
+        // Preserve the session's lifecycle/staleness classification even if a
+        // cooperative serializer reports its own cancellation error first.
+        assertCurrent();
+        throw error;
+      }
+      assertCurrent();
+      assertValidProjectState(parsed.state);
+      const nextAssets: AssetRepositorySnapshot = { entries: parsed.assets };
+      // Validate the whole bundle before commit. Capturing the live guard used
+      // its cached fingerprint, without copying current mesh payloads.
+      const staged = new InMemoryAssetRepository();
+      staged.restore(nextAssets);
+      assertBundleAssets(parsed.state, staged.list());
+      const warnings = [...parsed.warnings];
+      assertCurrent();
 
-    this.assets.restore(nextAssets);
-    this.project.replaceState(parsed.state, {
-      reason: 'open-project',
-      dirtyCategories: [],
-    });
-    this.selection.clear();
-    this.commands.clearHistory({ markCheckpoint: true });
-    return [...parsed.warnings];
+      this.assets.restore(nextAssets);
+      this.project.replaceState(parsed.state, {
+        reason: 'open-project',
+        dirtyCategories: [],
+      });
+      this.selection.clear();
+      this.commands.clearHistory({ markCheckpoint: true });
+      return warnings;
+    } finally {
+      // A late completion must not clear ownership of a newer open request.
+      if (this.openOperation === operation) this.openOperation = undefined;
+    }
   }
 
   /**
@@ -258,6 +298,7 @@ export class EditorSession {
     staged.restore(assets);
     assertBundleAssets(state, staged.list());
 
+    this.openOperation = undefined;
     this.assets.restore(assets);
     this.project.replaceState(state, {
       reason: 'reset-project',
@@ -272,6 +313,7 @@ export class EditorSession {
     cancellation?: CancellationToken,
   ): Promise<SliceResult> {
     this.assertActive();
+    if (cancellation?.aborted) throw new Error(cancellation.reason ?? 'Slice cancelled');
     this.assertProjectProjectionHealthy('slice');
     const slicer = this.options.slicer;
     if (!slicer) {
@@ -282,6 +324,7 @@ export class EditorSession {
     if (!findPlate(request.state, plateId)) throw new Error(`Unknown plate ${plateId}`);
     const result = await slicer.slice({ ...request, plateId, cancellation });
     this.assertActive();
+    if (cancellation?.aborted) throw new Error(cancellation.reason ?? 'Slice cancelled');
     if (
       result.plateId !== plateId ||
       result.sourceRevision !== request.sourceRevision ||
@@ -301,6 +344,7 @@ export class EditorSession {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.openOperation = undefined;
     this.unsubscribeProject();
     this.unsubscribeSelection();
     this.unsubscribeHistory();

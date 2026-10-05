@@ -146,6 +146,10 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Legacy live state is a migration source, never a second canonical model.
   Mutations use commands and stable IDs; imports stage, validate, preview and
   commit transactionally. Cancel, failure and stale confirmation preserve state.
+- A pending `EditorSession.open` owns its source revision/asset guard and operation
+  identity. Newer opens, reset and disposal invalidate it; a failed newer open
+  cannot revive an older read. Cooperative cancellation never replaces the final
+  owner/identity check before commit.
 - `ActionRegistry` is the sole invocation/availability gateway for DOM, XR,
   menus, shortcuts, command palette and contextual Objects actions. A capability
   marked implemented needs a real handler and evidence. A DOM-only dialog must

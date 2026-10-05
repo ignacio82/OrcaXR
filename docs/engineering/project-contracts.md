@@ -7,6 +7,14 @@ are fixture-specific evidence, not device-independent performance guarantees.
 
 ## Parity implementation invariants
 
+- `EditorSession.open` binds its source project/revision/semantic/asset identity
+  and owns a single current open operation. Newer opens supersede older reads,
+  even if the newer read fails. Reset, disposal, cancellation and source drift
+  reach the serializer through its cancellation token and are checked again
+  before staging and commit. A late or invalid read preserves state, immutable
+  asset ownership, selection, history and checkpoints. The legacy session slice
+  helper also checks cancellation before copying assets and after its adapter
+  returns; production slicing still uses the canonical job coordinator.
 - `docs/parity.md` is the canonical phased plan/evidence policy. The generated
   `docs/parity/snapmaker-v2.3.4.json` currently maps 1,622 upstream leaves in
   13 families to a task/adaptation using 17 exact Git blobs. Generate/check it
