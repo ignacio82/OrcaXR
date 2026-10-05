@@ -87,7 +87,7 @@ jobs:
       - run: npm --prefix web ci
       - name: Install locked Rust and binding tools
         run: |
-          rustup toolchain install 1.94.1 --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown
+          rustup toolchain install 1.94.1 --profile minimal --component rustfmt --component clippy --target wasm32-unknown-unknown,aarch64-linux-android,x86_64-linux-android
           cargo +1.94.1 install wasm-bindgen-cli --version 0.2.129 --locked --jobs 2
           cargo +1.94.1 install cargo-audit --version 0.22.2 --locked --jobs 2
       - name: Verify generated contracts and source inventory
@@ -104,6 +104,7 @@ jobs:
           node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-id-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
@@ -116,6 +117,10 @@ jobs:
           cargo clippy --workspace --all-targets --locked --jobs 2 -- -D warnings
           cargo test --workspace --locked --jobs 2
           cargo test -p orcaxr-gcode --test preview --test inspection --test views --test session --test requests --release --locked --jobs 2
+          cargo test -p orcaxr-project --release --locked --jobs 2
+          cargo check -p orcaxr-project --lib --locked --jobs 2 --target wasm32-unknown-unknown
+          cargo check -p orcaxr-project --lib --locked --jobs 2 --target aarch64-linux-android
+          cargo check -p orcaxr-project --lib --locked --jobs 2 --target x86_64-linux-android
           cargo audit
       - name: Real browser worker and artifact checks
         run: |

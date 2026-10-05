@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/orcaxr-contracts", "crates/orcaxr-gcode", "crates/orcaxr-wasm", "crates/orcaxr-android"]
+members = ["crates/orcaxr-contracts", "crates/orcaxr-project", "crates/orcaxr-gcode", "crates/orcaxr-wasm", "crates/orcaxr-android"]
 resolver = "3"
 
 [workspace.package]

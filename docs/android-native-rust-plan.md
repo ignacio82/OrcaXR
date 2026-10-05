@@ -194,8 +194,8 @@ core/
   Cargo.lock
   rust-toolchain.toml
   crates/
-    orcaxr-contracts/       # IDs, protocol types, errors, capabilities
-    orcaxr-project/         # Graph, history, settings, guards, sessions
+    orcaxr-contracts/       # Protocol types, errors, capabilities
+    orcaxr-project/         # Stable IDs, graph, history, settings, guards, sessions
     orcaxr-archive/         # Model import, canonical and BBS 3MF codecs
     orcaxr-geometry/        # Mesh representation, picking, paint computation
     orcaxr-gcode/           # Parser, index, bounded preview projections
@@ -566,7 +566,9 @@ and replay coverage for the complete current command inventory.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,
   immutable asset repository, selectors, and session lifecycle into Rust.
   Use immutable shared asset ownership and bounded history; transform/undo must
-  not copy mesh payloads.
+  not copy mesh payloads. The Rust project crate now ports stable UTF-16 IDs,
+  branded entity families and injected UUID generation with independent TypeScript
+  fixtures. The full graph, repository, validation and session remain open.
 - [ ] Port commands and transaction/history semantics by family, preserving
   rollback revision behavior, coalescing, checkpoint acknowledgement, selection,
   and history retention accounting. Test every command's failed and stale cases.

@@ -169,6 +169,10 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Published G-code binds exact project/revision/config/asset/engine identities.
   Preview, download and send reject drift. Keep output hashing and authoritative
   sidecar provenance intact; missing information remains unavailable.
+- Native project IDs preserve UTF-16 code units, including lone surrogates and
+  imported NULs. Match ECMAScript whitespace and ASCII namespace/UUID rules;
+  do not normalize case or substitute Rust Unicode whitespace/lossy strings.
+  Project IDs belong to the domain; transport request/session handles are separate.
 - SHA-256 identifies artifacts/project/config outputs. Canonical FNV-1a64
   identifies source assets and semantic snapshots where explicitly defined.
   Never substitute one for the other or infer engine statistics from observations.

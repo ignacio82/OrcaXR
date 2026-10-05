@@ -194,6 +194,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "orcaxr-project"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "orcaxr-wasm"
 version = "0.1.0"
 dependencies = [

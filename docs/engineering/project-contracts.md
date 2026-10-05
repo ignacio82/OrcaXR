@@ -7,6 +7,17 @@ are fixture-specific evidence, not device-independent performance guarantees.
 
 ## Parity implementation invariants
 
+- The Rust project-domain identifier port retains immutable UTF-16 units, exact
+  case and code-unit ordering. Imported IDs may include lone surrogates and NULs;
+  ordinary Rust strings cannot represent the whole accepted domain. Namespace
+  syntax and whitespace follow the existing JavaScript validator, without
+  trimming or Unicode normalization. Typed entity families prevent mixing plate,
+  object, volume and other references. Clones and physical/mixed-to-filament
+  widening share the immutable text allocation. UUID generation consumes sixteen
+  injected numeric words with JavaScript wrapping; the deterministic PRNG is for
+  fixtures and production entropy belongs to the host. This port introduces no
+  new persisted encoding, wire protocol, project authority or application route.
+
 - `AsyncEditorSession` orders local queries and mutations over the existing
   TypeScript session. It captures project/revision/semantic/asset identity plus
   history revision at submission (or accepts a guard captured before preparation).

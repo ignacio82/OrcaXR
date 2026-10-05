@@ -149,6 +149,18 @@ holds delivery of a real rename acknowledgement to check busy and success timing
 These are TypeScript/browser boundaries, not generated project transport or
 native editing qualification. The Phase 4 checklist remains open.
 
+The Rust project-domain foundation now ports stable identifiers without changing
+the existing TypeScript authority. UTF-16 units preserve surrogate halves, NULs,
+case and imported namespaces; typed entity families prevent cross-kind references.
+Independent fixtures exercise 150 explicit IDs, 2,555,904 grammar probes, long
+payloads, deterministic PRNG words and UUID streams. Debug/release tests, strict
+workspace Clippy/tests, Cargo audit and compilation checks for wasm32 and both
+Android targets pass. Immutable ID clones share their text allocation. This is
+an identifier port, not a Rust graph/session implementation or native editor.
+The refreshed source manifests retain byte-identical WASM/JNI executables;
+both APK artifact checks and the complete repository gate pass. The configured
+redacted source scan covers 1,646 UTF-8 files with no findings.
+
 ## Current implementation
 
 | Plan area | State | Evidence / work remaining |

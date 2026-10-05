@@ -333,6 +333,30 @@ References: [SceneCore release notes](https://developer.android.com/jetpack/andr
 
 ## Contracts and scope
 
+`orcaxr-project` now implements the stable-identifier foundation of Phase 4.
+Domain IDs retain immutable UTF-16 units and their entity-family type; protocol
+request IDs and session generations remain separate contracts. The unchanged
+TypeScript authority generates 150 explicit identifier cases, exhaustive tests
+of 2,555,904 UTF-16 grammar positions, a 65,536-unit imported payload, 20 PRNG
+streams (1,280 exact floating-point words and 320 UUIDs), and four injected UUID
+streams. Cases include surrogate halves, NULs, Unicode whitespace differences,
+case preservation, negative/non-finite random inputs and seed wrapping. Five
+integration tests plus a compile-fail brand check pass in debug/release; strict
+workspace Clippy/tests and Cargo audit pass. The library checks for wasm32 and
+both Android targets without platform dependencies. These are host execution
+and target compilation evidence, not a JNI/WASM session implementation or
+native editing qualification. The graph, assets, history and session port remain
+open. The native-core workflow now checks fixture drift and these targets.
+Shared-core provenance now includes the project crate. Browser set `255e6ce1f2dc`
+and the refreshed JNI manifests retain byte-identical executables; both existing
+APKs verify against these inputs with all packaged libraries 16 KB aligned.
+The complete repository quality gate passes with this asset set, including all
+265 web unit-test files, 95 project test files, browser/offline/recovery and
+accessibility checks, server HTTP/HTTPS deployment, real slicing and all three
+npm audits. The redacted source scan covers 1,646 UTF-8 files with no findings;
+workflow actionlint passes. Hosted CI and device execution of the new identifier
+crate were not run.
+
 The browser now has a transitional `AsyncEditorSession` over its TypeScript
 authority. Undo/Redo and plate lifecycle actions await acknowledgements; guarded queued execution,
 bounded callback-free batches and ordered summary queries are available for
@@ -739,6 +763,7 @@ node tools/cross-platform/package-browser-core.mjs
 node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts rust-gcode-loading.test.ts
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-id-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
@@ -752,6 +777,10 @@ Run these in `core/` so the pinned Rust toolchain is selected:
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked --jobs 2 -- -D warnings
 cargo test --workspace --locked --jobs 2
+cargo test -p orcaxr-project --release --locked --jobs 2
+cargo check -p orcaxr-project --lib --locked --jobs 2 --target wasm32-unknown-unknown
+cargo check -p orcaxr-project --lib --locked --jobs 2 --target aarch64-linux-android
+cargo check -p orcaxr-project --lib --locked --jobs 2 --target x86_64-linux-android
 cargo test -p orcaxr-gcode --test preview --test inspection --test views --test session --test requests --release --locked --jobs 2
 cargo audit
 ```
