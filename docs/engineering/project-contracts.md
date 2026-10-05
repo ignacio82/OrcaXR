@@ -56,9 +56,33 @@ are fixture-specific evidence, not device-independent performance guarantees.
   order; cyclic/shared JavaScript object identities cannot occur in owned Rust
   values. Malformed assignment containers return errors rather than unchecked
   JavaScript TypeErrors. The computation view is not a complete annotation or
-  project codec and does not discard unknown fields from a stored graph. A
-  future graph owner must retain those fields and enforce topology/session guards.
+  project codec and does not discard unknown fields from a stored graph. Typed
+  candidates retain those fields; the future validated store must enforce
+  topology/session guards.
   This library is not wired to browser or Android project execution yet.
+
+- Rust schema-1 candidates preserve every modeled field and unknown properties
+  at each record boundary, including own `__proto__` data, UTF-16 keys/text/IDs,
+  finite binary64 numbers and array order. Optional absence remains distinct from
+  explicit null; required fields, enum domains and tuple lengths are checked.
+  This is a typed structure boundary, not semantic graph validation or an emulator
+  of unchecked JavaScript objects. `ProjectData` caches an immutable candidate's
+  full canonical FNV identity, including timestamps and unknown fields. Child
+  records/collections, configurations, sparse assignment payloads and extension
+  data share immutable ownership. Candidate edits copy the changed path; public
+  `to_value` exports make owned copies. Streaming serialization does not construct
+  a second graph or clone large metadata keys. Extras moved between record types
+  cannot shadow any known field, even an absent optional one.
+  Empty-project construction consumes injected IDs in browser order and accepts
+  host timestamps. Graph lookups preserve traversal order; topology comparison
+  and filament inheritance match the reference. These APIs do not resolve settings
+  or enforce cross-references, mesh layouts, timestamps, topology guards, commands
+  or session/history policy. Future semantic validation must preserve the current
+  `Date.parse` acceptance and layer-event `toFixed(4)` collision behavior; strict
+  ISO parsing or ordinary Rust formatting cannot silently replace them.
+  Unknown annotation/refinement fields stay intact in the candidate, while the
+  separate facet computation view owns its existing semantic checks. Persisted
+  values do not inherit the stateless canonicalization request's parser limits.
 
 - `AsyncEditorSession` orders local queries and mutations over the existing
   TypeScript session. It captures project/revision/semantic/asset identity plus

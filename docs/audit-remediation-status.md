@@ -194,6 +194,29 @@ replacement test to observe actual worker submission and termination. Both previ
 adapters retain their cancellation assertions. The final redacted source scan
 covers 1,678 UTF-8 files with zero findings; all three full npm audits are clean.
 
+Rust schema-1 typed project candidates now preserve modeled fields, unknown
+record metadata, UTF-16 identities/text and optional presence. Immutable child,
+configuration and paint ownership supports edits without copying untouched
+payloads; full-state canonical fingerprints stream and are cached by the candidate
+owner. Empty-project factories and graph/filament selectors match independently
+executed TypeScript references. Eleven complete states, four factories, five
+direct edit steps, 33 record layouts and 11 literal domains are covered by ten
+debug/release tests. The 300,000-assignment probe retains 20 edits with no copies
+of its 9,600,000-byte paint-index array; largest internal allocation is 552 bytes,
+and public export makes one measured payload copy. These are host library results,
+not command/history replay or device qualification. Semantic graph validation,
+settings resolution, native commands/history/session execution and Android editing
+remain unimplemented. CI checks model fixture drift and the allocation probe.
+Strict workspace Clippy/tests, Cargo audit, three target checks, Android
+debug/release builds, JVM tests/lint, both APK provenance/alignment checks and
+the rebuilt browser WASM smoke pass. The owned emulator passes 24 core tests,
+three cold starts, three renderer tests and non-XR startup. These platform checks
+exercise existing bindings, not a native model endpoint. The complete repository
+gate passes with 267 web unit-test files, 97 project files, browser recovery/offline
+and accessibility checks, HTTP/HTTPS deployment and real slicing. All three full
+npm audits are clean; the redacted source scan covers 1,685 UTF-8 files with no
+findings. Physical-device and hosted-CI qualification remain open.
+
 Prepared plate commands now use one versioned schema generating TypeScript,
 Rust and Kotlin types, strict decoding and bounded encoding. All seven production
 browser plate operations and Undo/Redo exchange generated session strings with

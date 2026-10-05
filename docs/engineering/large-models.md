@@ -24,6 +24,18 @@ are fixture-specific evidence, not device-independent performance guarantees.
   measured 8 MiB allocation. Native command/history execution and device memory
   ceilings remain unqualified. See the native-core document for the trace corpus.
 
+- Rust typed project candidates also share immutable graph children, configuration,
+  extension data and sparse paint payloads. A transform edit copies the changed
+  graph path; creating its cached FNV fingerprint streams all canonical fields
+  without constructing JSON text or copying the paint-index array. The synthetic
+  300,000-assignment probe retains 20 edited candidates and recomputes each hash:
+  no allocation reaches the 9,600,000-byte index payload, and the largest internal
+  allocation is 552 bytes on the measured host. An explicit public export makes
+  exactly one payload-sized copy, proving the counter sees that cost. The initial
+  resource fingerprint agrees with the TypeScript authority. This measures graph
+  metadata ownership, not mesh import, history policy, Android memory or device
+  latency. Full hashing still visits every field; this is not incremental hashing.
+
 Measured on `~/Downloads/narwhal.3mf` — 1,897,256 facets, 629k of them painted,
 stored as 161 MB of mesh XML inside a 28 MB archive. Every number below is from
 that project on a desktop; a Galaxy XR is several times slower, so these are

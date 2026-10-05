@@ -185,6 +185,14 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   imported NULs. Match ECMAScript whitespace and ASCII namespace/UUID rules;
   do not normalize case or substitute Rust Unicode whitespace/lossy strings.
   Project IDs belong to the domain; transport request/session handles are separate.
+- Rust schema-1 project candidates retain unknown fields at every record boundary,
+  optional-field absence and complete UTF-16 text. Immutable child collections,
+  configurations and sparse paint payloads are shared across candidate edits;
+  full-state FNV hashing streams without copying them. `ProjectData` is a typed
+  candidate with a cached fingerprint, not a semantically validated store. Native
+  reference/settings/topology validation, history and session execution remain open.
+  Do not substitute strict ISO parsing or Rust rounding for the existing graph
+  validator's `Date.parse` and layer-event `toFixed(4)` compatibility requirements.
 - SHA-256 identifies artifacts/project/config outputs. Canonical FNV-1a64
   identifies source assets and semantic snapshots where explicitly defined.
   Never substitute one for the other or infer engine statistics from observations.

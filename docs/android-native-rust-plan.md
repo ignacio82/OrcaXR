@@ -82,9 +82,12 @@ fingerprints. Independent TypeScript traces and an allocation probe cover this
 library boundary. The five-channel facet computation model now also validates
 sparse assignments and version-2 split trees, normalizes and remaps them together,
 and budgets temporary dense roots explicitly. Differential fixtures and sparse
-allocation evidence are linked below. Full graph/schema validation, commands,
-history policy and native session execution remain open; these libraries do not
-enable Android editing.
+allocation evidence are linked below. Lossless schema-1 typed candidates, immutable
+graph ownership, streamed full-state fingerprints, empty-project construction and
+basic graph/filament selectors now exist too. Eleven TypeScript-derived states,
+record/literal drift checks and an allocation probe cover this model boundary.
+Semantic graph validation, settings resolution, commands, history policy and
+native session execution remain open; these libraries do not enable Android editing.
 
 Build an adaptive native Android application for phones, tablets, Googlebook,
 and Android XR while preserving the web application. Introduce Rust as a shared
@@ -593,8 +596,14 @@ and replay coverage for the complete current command inventory.
   an allocation probe verifies mesh bytes are shared through history snapshots.
   Five-channel facet validation, split lookup/visitation, normalization and
   paint-preserving remapping also exist in Rust, with independent TypeScript
-  traces and a sparse-allocation probe. The full graph/schema validation,
-  remaining selectors, history policy and session remain open.
+  traces and a sparse-allocation probe. Typed schema-1 candidates now retain every
+  modeled field and unknown metadata, share immutable child/paint allocations,
+  stream full-state fingerprints and provide empty-project construction plus
+  graph lookup, topology comparison and filament inheritance selectors. Independent
+  references cover 33 record layouts, 11 literal domains, 11 full states, four
+  factories and five direct candidate edits. These are not command traces.
+  Semantic graph validation, settings resolution, remaining selectors, history
+  policy and session execution remain open.
 - [ ] Port commands and transaction/history semantics by family, preserving
   rollback revision behavior, coalescing, checkpoint acknowledgement, selection,
   and history retention accounting. Test every command's failed and stale cases.

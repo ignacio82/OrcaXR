@@ -345,8 +345,9 @@ integration tests plus a compile-fail brand check pass in debug/release; strict
 workspace Clippy/tests and Cargo audit pass. The library checks for wasm32 and
 both Android targets without platform dependencies. These are host execution
 and target compilation evidence, not a JNI/WASM session implementation or
-native editing qualification. The full graph, history and session port remain
-open; the asset repository library is described below. The native-core workflow now checks fixture drift and these targets.
+native editing qualification. Semantic graph validation, history and session
+execution remain open; the model and asset libraries are described below. The
+native-core workflow now checks fixture drift and these targets.
 The identifier-only update added the project crate to shared-core provenance.
 Its browser set `255e6ce1f2dc` and JNI manifests retained byte-identical executables;
 both APKs verified against those inputs with all libraries 16 KB aligned.
@@ -417,8 +418,9 @@ without routing them through that unrelated parser. Triangle numbers preserve
 binary64 integer semantics, including large imported counts. Dense materialization
 requires an explicit host maximum, rejects unaddressable sizes and uses checked
 root allocation. The library is a computation view, not a full annotation/project
-codec; unknown surrounding graph data and topology guards remain the future
-project owner's responsibility. No new JNI/WASM project endpoint is introduced.
+codec; the typed candidate below retains surrounding graph data, while topology
+guards remain the future validated store's responsibility. No new JNI/WASM project
+endpoint is introduced.
 
 Independent TypeScript fixtures now contain **273 refinement cases, 80 whole-facet
 assignment cases, four depth cases and 160 editing traces**. They bind reference
@@ -452,6 +454,77 @@ including 267 web unit-test files, 97 project test files, both preview adapters,
 startup/offline/recovery/accessibility checks, HTTP/HTTPS deployment, real slicing
 and all three full npm audits with no vulnerabilities. The final source scan
 covers 1,678 UTF-8 files (six NUL-normalized) with no findings; actionlint passes.
+
+The Rust project crate now has a lossless typed schema-1 model and immutable
+candidate owner. Records cover plates, objects, volumes, instances, layer ranges,
+mesh/asset descriptors, all five paint channels, physical/mixed filaments and
+FullSpectrum recipes, emboss metadata, custom G-code, thumbnails and extensions.
+Every record retains unknown fields, including own `__proto__` data. Text and IDs
+preserve complete UTF-16; number fields retain finite binary64 values without
+imposing pointer-width or safe-integer limits. Missing optional fields remain
+omitted, while explicit null is rejected where the declared type does not permit
+it. Typed decoding checks required fields, literal domains and tuple lengths.
+
+`ProjectData` owns an immutable candidate and its cached full-state FNV fingerprint.
+It does **not** prove semantic validity: tests deliberately construct candidates
+with invalid timestamps and dangling references. Native graph validation, settings
+resolution, history, commands and session execution are still required. The
+TypeScript validator's `Date.parse` acceptance and layer-event `toFixed(4)`
+collision keys need compatibility work before they can be replaced. No JNI/WASM
+model endpoint or Android editing route is introduced by this library.
+
+Child collections/records and configuration/annotation/extension payloads use
+shared immutable ownership. Copy-on-write edits detach only their changed path;
+retained candidates keep their original state and hash. Generic sparse assignment
+arrays preserve original grouping, order and extras without allocating a second
+typed object for every triangle. Refinement metadata stays intact for the separate
+facet validator. Streaming canonical writing reuses the shared string encoder,
+sorts keys by UTF-16 units and borrows imported keys. It includes all metadata,
+timestamps and array order. Public exports intentionally copy; moving extras to
+another record cannot shadow a known field, even when that optional field is absent.
+Metadata validation uses a depth-proportional iterator stack, without applying
+the unrelated stateless parser's request caps to persisted candidates.
+
+The TypeScript generator validates every source fixture with the existing graph
+validator and records source hashes, complete canonical states, fingerprints and
+selector results. It covers **11 full states, four deterministic factories and
+five direct candidate edits**, plus AST-derived **33 record layouts and 11 literal
+domains**. Cases include all modeled fields and distribution variants, unknown
+metadata at record boundaries, own prototype keys, large finite integers and
+UTF-16 identities/references throughout a complete graph. Ten Rust integration
+tests pass in debug/release: round trips, hashes, factory ID consumption, graph
+lookups, topology comparisons, filament inheritance, schema drift, private error
+diagnostics, failed decoding, copy isolation, sharing and metadata beyond the
+stateless parser's node/depth budgets. These direct edits are not command/history
+replay qualification.
+
+The synthetic model allocation probe independently reconstructs a TypeScript-valid
+300,000-painted-triangle metadata fixture and verifies its reference fingerprint.
+Initial fingerprinting plus 20 retained transform edits with fresh fingerprints
+make **zero 9,600,000-byte payload allocations**; the largest internal allocation
+is **552 bytes**. A public-export positive control makes exactly one payload-sized
+copy. This is host graph-metadata evidence, not native mesh loading, undo policy,
+device performance or incremental hashing. CI now regenerates the model corpus
+and runs the model tests and allocation probe.
+
+For this model-library update, strict workspace Clippy/tests, release project
+tests, Cargo audit and compilation for wasm32 and both Android targets pass.
+The rebuilt browser set `80d66d932254` binds 76 source inputs and a 556,646-byte
+WASM executable. Android debug/release assembly, core JVM tests, app lint and
+both APK provenance/alignment checks pass. Browser WASM smoke passes against the
+rebuilt pair. The owned API 34 x86_64 emulator passes 24 core tests, three cold
+starts, three renderer tests and the non-XR SceneCore startup test. These bindings
+exercise the existing canonicalization/G-code/intent APIs, not the new model:
+model execution evidence comes from the host differential tests and allocation
+probe. No native model endpoint, physical-device or hosted-CI qualification is
+claimed. The redacted source scan covers 1,685 UTF-8 files (six NUL-normalized)
+with no findings; workflow actionlint passes.
+The complete repository gate passes with this asset set: 267 web unit-test files,
+97 project test files, both preview adapters, startup/offline/recovery,
+accessibility and localization, HTTP/HTTPS server deployment and real slicing
+fixtures. All three full npm audits report zero vulnerabilities. Main-entry size
+remains 2,101,384 bytes and total JavaScript 10,436,886 bytes, within unchanged
+budgets. These checks preserve the current web release; Phase 4 remains open.
 
 The browser now has a transitional `AsyncEditorSession` over its TypeScript
 authority. Undo/Redo and plate lifecycle actions await acknowledgements; guarded queued execution,
@@ -952,6 +1025,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canoni
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-id-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/asset-repository-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-refinement-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-model-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
@@ -971,6 +1045,7 @@ cargo test -p orcaxr-contracts --test project_intents --release --locked --jobs 
 cargo test -p orcaxr-project --release --locked --jobs 2
 cargo run -p orcaxr-project --example asset_repository_benchmark --release --locked --jobs 2
 cargo run -p orcaxr-project --example facet_sparsity_benchmark --release --locked --jobs 2
+cargo run -p orcaxr-project --example project_model_benchmark --release --locked --jobs 2
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target wasm32-unknown-unknown
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target aarch64-linux-android
 cargo check -p orcaxr-project --lib --locked --jobs 2 --target x86_64-linux-android

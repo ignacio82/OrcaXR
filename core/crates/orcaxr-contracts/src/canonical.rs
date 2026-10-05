@@ -82,7 +82,8 @@ impl Value {
     }
 }
 
-fn write_string(value: &[u16], out: &mut impl Write) -> io::Result<()> {
+/// Writes one canonical JSON string while retaining every UTF-16 code unit.
+pub fn write_string(value: &[u16], out: &mut impl Write) -> io::Result<()> {
     out.write_all(b"\"")?;
     for decoded in char::decode_utf16(value.iter().copied()) {
         match decoded {
