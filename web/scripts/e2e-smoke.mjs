@@ -4435,6 +4435,23 @@ try {
     {},
     addedPlateId,
   );
+  await page.evaluate(() => {
+    const controller = globalThis.window.workspace.canonicalProject;
+    const original = controller.renamePlate.bind(controller);
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    controller.renamePlate = async (...args) => {
+      await original(...args);
+      await held;
+    };
+    globalThis.__releasePlateAcknowledgement = () => {
+      controller.renamePlate = original;
+      release();
+      delete globalThis.__releasePlateAcknowledgement;
+    };
+  });
   await page.evaluate((plateId) => {
     const input = [...globalThis.document.querySelectorAll('[data-plate-control="rename-input"]')].find(
       (candidate) => candidate.dataset.plateId === plateId,
@@ -4453,6 +4470,19 @@ try {
     },
     {},
     { plateId: addedPlateId, undoCount: platesBefore.undoCount },
+  );
+
+  const pendingPlateUi = await page.evaluate(() => ({
+    busy: globalThis.document.querySelector('[data-plate-manager]')?.getAttribute('aria-busy'),
+    status: globalThis.window.__orcaUi.get().status,
+  }));
+  assert.equal(pendingPlateUi.busy, 'true', 'plate controls must stay busy while acknowledgement is held');
+  assert.doesNotMatch(pendingPlateUi.status, /Renamed build plate to E2E scratch plate/);
+  await page.evaluate(() => globalThis.__releasePlateAcknowledgement());
+  await page.waitForFunction(
+    () =>
+      globalThis.document.querySelector('[data-plate-manager]')?.getAttribute('aria-busy') === 'false' &&
+      /Renamed build plate to E2E scratch plate/.test(globalThis.window.__orcaUi.get().status),
   );
 
   const sourcePlateId = platesBefore.plates.find((plate) => plate.name === 'Alpha').id;
@@ -4649,7 +4679,7 @@ try {
     const workspace = globalThis.window.workspace;
     const plates = [];
     for (const plate of workspace.getPlates()) {
-      workspace.setActivePlate(plate.id);
+      await workspace.setActivePlate(plate.id);
       await new Promise((resolve) => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(resolve)));
       const geometries = workspace.printerGeometries();
       const bounds = {

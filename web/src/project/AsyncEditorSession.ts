@@ -66,6 +66,20 @@ export class AsyncEditorSession {
     return this.snapshot().guard;
   }
 
+  /** Whether a local acknowledgement still describes this live authority. */
+  isCurrent(guard: AsyncSessionGuard): boolean {
+    try {
+      this.assertActive();
+      return (
+        guard.generation === this.generation &&
+        this.session.isExportCurrent(guard.project) &&
+        this.session.commands.getHistoryRevision() === guard.historyRevision
+      );
+    } catch {
+      return false;
+    }
+  }
+
   query(cancellation?: CancellationToken): Promise<AsyncSessionAcknowledgement<void>> {
     return this.enqueue(() => undefined, undefined, cancellation);
   }

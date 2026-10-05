@@ -127,18 +127,25 @@ verification and all three dependency audits. The redacted 1,630-file source sca
 reports no leaks. This closes a session lifecycle defect, not the planned
 asynchronous command facade or Rust project migration.
 
-The first asynchronous project facade now routes production Undo/Redo through
-authoritative acknowledgements, while other workflows remain synchronous.
+The asynchronous project facade routes production Undo/Redo and the seven plate
+lifecycle operations through authoritative acknowledgements. Other command
+families, import/save and slice capture remain migration work.
 Fifteen focused session cases cover queued ownership, revision/asset/history
 drift, cancellation, reset/disposal, rollback, coalescing, immutable replies,
 capacity and zero asset payload copies. Twelve action cases verify acknowledgement
 and rejection propagation through DOM, keyboard and XR registry routes; the
 workspace test exercises real queued undo/redo and stale/disposed rejection.
-The complete `scripts/quality.sh` gate passes with 262 web unit-test files,
+The complete `scripts/quality.sh` gate passes with 265 web unit-test files,
 95 project test files, production browser/offline/recovery and accessibility
 checks, real slicing, server and HTTP/HTTPS deployment checks, artifact verification
 and all three development-dependency audits. Bundle limits remain unchanged.
-The configured redacted scan of 1,634 UTF-8 source files reports no leaks.
+The configured redacted scan of 1,640 UTF-8 source files reports no leaks.
+Plate-specific regressions add 39 controller cases, 64 registry cases across every
+declared surface, and 15 real workspace presentation cases. They cover deferred
+commit, exact undo/redo/no-ops, immutable assets, stale ownership/history/revision,
+rejection propagation, late disposal and newer selection preservation. The XR desk
+composition also checks captured-revision registry routing. The browser plate flow
+holds delivery of a real rename acknowledgement to check busy and success timing.
 These are TypeScript/browser boundaries, not generated project transport or
 native editing qualification. The Phase 4 checklist remains open.
 

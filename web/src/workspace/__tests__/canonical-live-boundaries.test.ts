@@ -119,7 +119,7 @@ await test('blocks canonical save and slice before serialization when the live p
   workspace.importBufferGeometry(geometry, { name: 'Projection guard source' });
 
   workspace.surface.dispose();
-  workspace.addPlate('Projection failure trigger', { activate: false });
+  await workspace.addPlate('Projection failure trigger', { activate: false });
   assert.equal(workspace.getSummary().projectionHealth.healthy, false);
   await assert.rejects(workspace.saveCanonical3mf(), (error: unknown) => {
     assert.ok(error instanceof UnhealthyProjectProjectionError);

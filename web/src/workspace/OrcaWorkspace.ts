@@ -1,3 +1,4 @@
+import { selectionEqual } from '../project/selection';
 import type { FeatureInitializationRegistry } from '../startup/FeatureInitialization';
 import type { ProjectSerializerPort, ProjectRecoveryProof } from '../project/ports';
 import type { UnsavedProjectDecision } from '../ui/UnsavedProjectDecision';
@@ -1332,7 +1333,7 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Select, activate the owning plate, and frame an Objects row in the DOM scene. */
-  public revealObjectsTreeEntity(entity: ObjectTreeEntityRef): void {
+  public async revealObjectsTreeEntity(entity: ObjectTreeEntityRef): Promise<void> {
     const tree = this.canonicalProject.getObjectsTree().projection;
     const rowKey = tree.entityRowKeys.get(`${entity.kind}:${entity.id}`);
     let row = rowKey ? tree.rowsByKey.get(rowKey) : undefined;
@@ -1344,7 +1345,20 @@ export class OrcaWorkspace extends xb.Script {
       row = row.parentKey ? tree.rowsByKey.get(row.parentKey) : undefined;
     }
     if (!plateId) throw new Error(`Objects row ${entity.kind}:${entity.id} has no owning plate`);
-    if (this.canonicalProject.getSummary().activePlateId !== plateId) this.canonicalProject.activatePlate(plateId);
+    const wasActive = this.canonicalProject.getSummary().activePlateId === plateId;
+    const expectedSelection = wasActive
+      ? this.canonicalProject.getObjectsTree().selection
+      : { refs: [{ kind: 'plate' as const, id: plateId }], primary: { kind: 'plate' as const, id: plateId } };
+    const acknowledgement = await this.canonicalProject.activatePlate(plateId);
+    // Activation may have committed while a newer edit or selection superseded
+    // this reveal. Its late presentation must not replace that newer intent.
+    if (
+      this.disposed ||
+      !this.canonicalProject.isSessionGuardCurrent(acknowledgement.guard) ||
+      this.canonicalProject.getSummary().activePlateId !== plateId ||
+      !selectionEqual(this.canonicalProject.getObjectsTree().selection, expectedSelection)
+    )
+      return;
     this.canonicalProject.setObjectsTreeSelection([entity], entity);
 
     const targets: THREE.Object3D[] = [];
@@ -1764,7 +1778,14 @@ export class OrcaWorkspace extends xb.Script {
 
   private syncTransformProxy(): void {
     const selection = this.captureSelectedInstanceOrigins();
-    if (!selection) return;
+    if (!selection) {
+      if (this.transformControls) {
+        this.transformControls.detach();
+        this.transformControls.getHelper().visible = false;
+        this.remove(this.transformControls.getHelper());
+      }
+      return;
+    }
     if (selection.origins.length > 1) {
       const bounds = this.canonicalProject.getInstanceBounds(selection.origins.map((origin) => origin.instanceId));
       this.transformProxy.position.set(
@@ -6103,76 +6124,66 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Create a new empty plate and switch to it. */
-  public addPlate() {
-    const id = this.canonicalProject.addPlate();
-    this.setStatus(`Added ${this.canonicalProject.getSummary().plates.find((plate) => plate.id === id)?.name}.`);
+  public async addPlate(): Promise<PlateId> {
+    const id = await this.canonicalProject.addPlate();
+    if (!this.disposed) {
+      this.setStatus(
+        `Added ${this.canonicalProject.getSummary().plates.find((plate) => plate.id === id)?.name ?? 'build plate'}.`,
+      );
+    }
     return id;
   }
 
   /** Duplicate one complete canonical plate graph and activate the copy. */
-  public duplicatePlate(id: PlateId = this.activePlateId, expectedRevision?: number): PlateId {
-    const duplicateId = this.canonicalProject.duplicatePlate(id, expectedRevision);
-    this.revalidatePublishedGcode();
-    this.onSelectionChanged?.(false);
-    this.onPlatesChanged?.();
-    const duplicate = this.canonicalProject.getSummary().plates.find((plate) => plate.id === duplicateId);
-    this.setStatus(`Duplicated ${duplicate?.name ?? 'build plate'}.`);
+  public async duplicatePlate(id: PlateId = this.activePlateId, expectedRevision?: number): Promise<PlateId> {
+    const duplicateId = await this.canonicalProject.duplicatePlate(id, expectedRevision);
+    if (!this.disposed) {
+      const duplicate = this.canonicalProject.getSummary().plates.find((plate) => plate.id === duplicateId);
+      this.setStatus(`Duplicated ${duplicate?.name ?? 'build plate'}.`);
+    }
     return duplicateId;
   }
 
   /** @deprecated Use duplicatePlate() with the displayed canonical revision. */
-  public duplicateCurrentPlate(): PlateId {
+  public duplicateCurrentPlate(): Promise<PlateId> {
     return this.duplicatePlate();
   }
 
   /** Switch the active plate; inactive plates' models are hidden, not removed. */
-  public setActivePlate(id: PlateId, expectedRevision?: number) {
-    const target = this.canonicalProject.getSummary().plates.find((plate) => plate.id === id);
-    if (id === this.activePlateId) {
-      this.canonicalProject.activatePlate(id, expectedRevision);
-      this.onPlatesChanged?.();
-      return;
-    }
-    this.canonicalProject.activatePlate(id, expectedRevision);
-    this.setStatus(`Switched to ${target?.name ?? 'build plate'}.`);
-    this.onSelectionChanged?.(false);
-    this.onPlatesChanged?.();
+  public async setActivePlate(id: PlateId, expectedRevision?: number): Promise<void> {
+    const before = this.canonicalProject.getSummary();
+    const target = before.plates.find((plate) => plate.id === id);
+    await this.canonicalProject.activatePlate(id, expectedRevision);
+    if (!this.disposed && id !== before.activePlateId) this.setStatus(`Switched to ${target?.name ?? 'build plate'}.`);
   }
 
   /** Delete a plate (defaults to the active one); refuses the last plate. */
-  public deletePlate(id: PlateId = this.activePlateId, expectedRevision?: number) {
-    const before = this.canonicalProject.getSummary();
-    const wasActive = id === before.activePlateId;
-    this.canonicalProject.deletePlate(id, expectedRevision);
-    this.revalidatePublishedGcode();
+  public async deletePlate(id: PlateId = this.activePlateId, expectedRevision?: number): Promise<void> {
+    const wasActive = id === this.canonicalProject.getSummary().activePlateId;
+    await this.canonicalProject.deletePlate(id, expectedRevision);
+    if (this.disposed) return;
     if (wasActive) {
-      this.unselectModel();
-      const next = this.canonicalProject.getSummary().plates.find((plate) => plate.active)!;
-      this.onSelectionChanged?.(false);
-      this.setStatus(`Deleted plate; switched to ${next.name}.`);
+      const next = this.canonicalProject.getSummary().plates.find((plate) => plate.active);
+      this.setStatus(`Deleted plate; switched to ${next?.name ?? 'build plate'}.`);
     } else {
       this.setStatus(t('workspace.orcaWorkspace.plateDeleted', 'Plate deleted.'));
     }
-    this.onPlatesChanged?.();
   }
 
-  public renamePlate(id: PlateId, name: string, expectedRevision?: number): void {
-    this.canonicalProject.renamePlate(id, name, expectedRevision);
-    this.setStatus(`Renamed build plate to ${name.trim()}.`);
-    this.onPlatesChanged?.();
+  public async renamePlate(id: PlateId, name: string, expectedRevision?: number): Promise<void> {
+    await this.canonicalProject.renamePlate(id, name, expectedRevision);
+    if (!this.disposed) this.setStatus(`Renamed build plate to ${name.trim()}.`);
   }
 
-  public reorderPlates(ids: readonly PlateId[], expectedRevision?: number): void {
-    this.canonicalProject.reorderPlates(ids, expectedRevision);
-    this.setStatus(t('workspace.orcaWorkspace.reorderedBuildPlates', 'Reordered build plates.'));
-    this.onPlatesChanged?.();
+  public async reorderPlates(ids: readonly PlateId[], expectedRevision?: number): Promise<void> {
+    await this.canonicalProject.reorderPlates(ids, expectedRevision);
+    if (!this.disposed) this.setStatus(t('workspace.orcaWorkspace.reorderedBuildPlates', 'Reordered build plates.'));
   }
 
-  public setPlatePrintable(id: PlateId, printable: boolean, expectedRevision?: number): void {
-    this.canonicalProject.setPlatePrintable(id, printable, expectedRevision);
-    this.revalidatePublishedGcode();
-    this.setStatus(printable ? 'Included build plate in print output.' : 'Excluded build plate from print output.');
-    this.onPlatesChanged?.();
+  public async setPlatePrintable(id: PlateId, printable: boolean, expectedRevision?: number): Promise<void> {
+    await this.canonicalProject.setPlatePrintable(id, printable, expectedRevision);
+    if (!this.disposed)
+      this.setStatus(printable ? 'Included build plate in print output.' : 'Excluded build plate from print output.');
   }
 
   // --- Simplify preview (P5.3.5) --------------------------------------
@@ -7185,7 +7196,11 @@ export class OrcaWorkspace extends xb.Script {
       actionState: () => this.actionContext?.ui.get() ?? null,
       invoke: (action, surface, invocation) => {
         if (!this.actionContext) return;
-        void this.actionRegistry.invoke(action, surface, this.actionContext, this.actionContext.ui.get(), invocation);
+        void this.actionRegistry
+          .invoke(action, surface, this.actionContext, this.actionContext.ui.get(), invocation)
+          .catch((error: unknown) => {
+            if (!this.disposed) this.setStatus(xrSafeText(error instanceof Error ? error.message : String(error)));
+          });
       },
       workspaceMode: () => this.xrMode,
       setWorkspaceMode: (mode) => this.setXrMode(mode),
@@ -7199,7 +7214,6 @@ export class OrcaWorkspace extends xb.Script {
         void xb.core.renderer.xr.getSession()?.end();
       },
       plates: () => this.xrPlates(),
-      selectPlate: (plateId) => this.setActivePlate(plateId as PlateId),
       statusLine: () => xrSafeText(this.lastStatusText),
       progress: () => (this.lastStatusPercent === undefined ? null : this.lastStatusPercent / 100),
       objects: () => {
@@ -7300,7 +7314,8 @@ export class OrcaWorkspace extends xb.Script {
     try {
       const summary = this.canonicalProject.getSummary();
       return summary.plates.map((plate) => ({
-        id: String(plate.id),
+        id: plate.id,
+        sourceRevision: summary.revision,
         label: plate.name,
         modelCount: plate.instanceCount,
         active: plate.id === summary.activePlateId,

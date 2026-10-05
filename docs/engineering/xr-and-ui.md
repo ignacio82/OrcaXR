@@ -5,6 +5,14 @@ when changing the corresponding area; update it in the same commit as behavior.
 Code paths below are relative to the repository root. Historical measurements
 are fixture-specific evidence, not device-independent performance guarantees.
 
+Plate controls preserve the asynchronous workspace/registry result so busy and
+error feedback follows authoritative acknowledgement. XR desk plate rows capture
+the displayed revision and invoke `activate_plate` through the registry; the add
+button uses the action's declared XR menu route. Rejected XR invocations report a
+bounded status and do not produce an unhandled promise rejection. Canonical
+selection removal detaches the transform helper, without a second selection edit
+from a late plate acknowledgement.
+
 ## XRBlocks spatial UI contract (load-bearing)
 
 OrcaXR exact-pins **XRBlocks 0.17.0** and **`@pmndrs/uikit` 1.0.74** in

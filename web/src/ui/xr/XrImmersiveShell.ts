@@ -100,7 +100,6 @@ export interface XrShellHost {
   exitSession(): void;
 
   plates(): readonly XrDeskPlate[];
-  selectPlate(plateId: string): void;
   statusLine(): string;
   progress(): number | null;
 
@@ -440,8 +439,14 @@ export class XrImmersiveShell<PanelNode, ImageNode, TextNode> {
         const action = this.host.registry.get('help_startup_recovery');
         if (action) this.host.invoke(action, 'xr-inspector', { startupFeatureId: featureId });
       },
-      onSelectPlate: (plateId) => this.host.selectPlate(plateId),
-      onAddPlate: () => this.run('add_plate', 'xr-primary'),
+      onSelectPlate: (plate) => {
+        const action = this.host.registry.get('activate_plate');
+        if (action)
+          this.host.invoke(action, 'xr-inspector', {
+            plateTarget: { plateId: plate.id, sourceRevision: plate.sourceRevision },
+          });
+      },
+      onAddPlate: () => this.run('add_plate', 'xr-menu'),
       // Renaming, reordering and un-printing a plate are `scene` inspector
       // actions, so "Manage…" opens the panel that holds them rather than a
       // menu that happens to be nearby.

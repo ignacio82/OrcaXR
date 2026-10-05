@@ -454,7 +454,7 @@ export const sceneActions: Action[] = [
         ctx.reportCapabilityUnavailable('Activate build plate', 'Choose a plate from the plate bar.');
         return;
       }
-      ctx.activatePlate(plateId, request?.sourceRevision);
+      return ctx.activatePlate(plateId, request?.sourceRevision);
     },
   },
   {
@@ -484,7 +484,7 @@ export const sceneActions: Action[] = [
         ctx.reportCapabilityUnavailable('Rename build plate', 'Choose a plate and enter its new name.');
         return;
       }
-      ctx.renamePlate(request.plateId, request.nextName, request.sourceRevision);
+      return ctx.renamePlate(request.plateId, request.nextName, request.sourceRevision);
     },
   },
   {
@@ -500,7 +500,7 @@ export const sceneActions: Action[] = [
         ctx.reportCapabilityUnavailable('Reorder build plates', 'Choose a complete plate order.');
         return;
       }
-      ctx.reorderPlates(request.orderedPlateIds, request.sourceRevision);
+      return ctx.reorderPlates(request.orderedPlateIds, request.sourceRevision);
     },
   },
   {
@@ -516,7 +516,7 @@ export const sceneActions: Action[] = [
         ctx.reportCapabilityUnavailable('Include build plate in printing', 'Choose a build plate.');
         return;
       }
-      ctx.setPlatePrintable(request.plateId, request.printable, request.sourceRevision);
+      return ctx.setPlatePrintable(request.plateId, request.printable, request.sourceRevision);
     },
   },
   {

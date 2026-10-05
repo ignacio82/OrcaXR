@@ -633,10 +633,10 @@ await test('replaces resolved slicing configuration atomically with clones, vali
   controller.dispose();
 });
 
-await test('routes plate operations through exact history and leaves failed imports untouched', () => {
+await test('routes plate operations through exact history and leaves failed imports untouched', async () => {
   const controller = createController();
   const initial = controller.getSummary();
-  const secondPlate = controller.addPlate(undefined, { activate: false });
+  const secondPlate = await controller.addPlate(undefined, { activate: false });
   assert.equal(controller.getSummary().activePlateId, initial.activePlateId);
   assert.deepEqual(
     controller.getSummary().plates.map((plate) => [plate.id, plate.order]),
@@ -646,7 +646,7 @@ await test('routes plate operations through exact history and leaves failed impo
     ],
   );
 
-  controller.activatePlate(secondPlate);
+  await controller.activatePlate(secondPlate);
   const model = controller.importBufferGeometry(
     new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(0, 0, 0),
@@ -657,7 +657,7 @@ await test('routes plate operations through exact history and leaves failed impo
   );
   assert.equal(model.plateId, secondPlate);
   const beforeDelete = controller.getSummary();
-  controller.deletePlate(secondPlate);
+  await controller.deletePlate(secondPlate);
   assert.equal(controller.getSummary().plates.length, 1);
   assert.equal(controller.getSummary().activePlateId, initial.activePlateId);
   assert.equal(controller.undo(), true);
@@ -673,7 +673,7 @@ await test('routes plate operations through exact history and leaves failed impo
   malformed.setAttribute('position', new THREE.Float32BufferAttribute([Number.NaN, 0, 0, 1, 0, 0, 0, 1, 0], 3));
   assert.throws(() => controller.importBufferGeometry(malformed), /finite/);
   assert.deepEqual(controller.getSummary(), beforeFailure);
-  assert.throws(() => controller.deletePlate(initial.activePlateId), /last plate/);
+  await assert.rejects(controller.deletePlate(initial.activePlateId), /last plate/);
   assert.deepEqual(controller.getSummary(), beforeFailure);
   controller.dispose();
 });
@@ -746,7 +746,7 @@ await test('previews worker-compatible project replacement and commits it as one
 
 await test('round-trips a populated second plate only with authoritative project printable area', async () => {
   const missingArea = createController();
-  const missingAreaPlate = missingArea.addPlate();
+  const missingAreaPlate = await missingArea.addPlate();
   const missingAreaGeometry = new THREE.TetrahedronGeometry(4);
   missingArea.importBufferGeometry(missingAreaGeometry, { plateId: missingAreaPlate });
   await assert.rejects(missingArea.saveCanonical3mf(), /printable_area/i);
@@ -764,7 +764,7 @@ await test('round-trips a populated second plate only with authoritative project
     fullSpectrumAutoPairPreferences: { enabled: true },
   });
   const firstPlate = source.getSummary().activePlateId;
-  const secondPlate = source.addPlate();
+  const secondPlate = await source.addPlate();
   const geometry = new THREE.TetrahedronGeometry(8);
   const imported = source.importBufferGeometry(geometry, {
     plateId: secondPlate,
@@ -832,7 +832,7 @@ await test('publishes one immutable summary per command boundary and releases ob
   assert.deepEqual(changes[2].sources, ['project', 'history']);
 
   controller.surface.dispose();
-  controller.addPlate(undefined, { activate: false });
+  await controller.addPlate(undefined, { activate: false });
   await Promise.resolve();
   assert.equal(changes.length, 4);
   assert.deepEqual(changes[3].sources, ['projection-health', 'project', 'history']);
@@ -1624,7 +1624,7 @@ function semanticFootprint(controller: CanonicalWorkspaceController) {
 await test('acknowledges asynchronous history and refuses stale or disposed action work', async () => {
   const controller = createController();
   const initial = controller.getSummary();
-  controller.addPlate();
+  await controller.addPlate();
   const before = controller.getSummary();
   const pending = controller.undoAsync();
   assert.deepEqual(controller.getSummary(), before, 'history must not mutate before acknowledgement work runs');
@@ -1634,7 +1634,7 @@ await test('acknowledges asynchronous history and refuses stale or disposed acti
   assert.equal(controller.getSummary().plates.length, before.plates.length);
 
   const stale = controller.undoAsync();
-  controller.addPlate();
+  controller.setProjectConfig({ async_history_probe: 'newer' });
   const edited = controller.getSummary();
   await assert.rejects(stale, /project or its history changed/);
   assert.deepEqual(controller.getSummary(), edited);

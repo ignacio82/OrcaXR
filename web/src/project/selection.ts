@@ -141,7 +141,10 @@ function cloneSelection(snapshot: SelectionSnapshot): SelectionSnapshot {
   return clone;
 }
 
-function selectionEqual(left: SelectionSnapshot, right: SelectionSnapshot): boolean {
+export function selectionEqual(
+  left: { readonly refs: readonly SelectionRef[]; readonly primary?: SelectionRef },
+  right: { readonly refs: readonly SelectionRef[]; readonly primary?: SelectionRef },
+): boolean {
   if (left.refs.length !== right.refs.length) return false;
   if (left.refs.some((ref, index) => selectionKey(ref) !== selectionKey(right.refs[index]))) return false;
   return (

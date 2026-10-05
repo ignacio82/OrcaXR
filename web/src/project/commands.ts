@@ -314,6 +314,10 @@ export class SetActivePlateCommand extends ProjectDataCommand {
     super();
   }
 
+  isNoop(context: CommandContext): boolean {
+    return context.project.getSnapshot().state.activePlateId === this.plateId;
+  }
+
   apply(context: CommandContext): void {
     const state = cloneProjectState(context.project.getSnapshot().state);
     if (!state.plates.some((plate) => plate.id === this.plateId)) {

@@ -334,7 +334,7 @@ References: [SceneCore release notes](https://developer.android.com/jetpack/andr
 ## Contracts and scope
 
 The browser now has a transitional `AsyncEditorSession` over its TypeScript
-authority. Undo/Redo actions await acknowledgements; guarded queued execution,
+authority. Undo/Redo and plate lifecycle actions await acknowledgements; guarded queued execution,
 bounded callback-free batches and ordered summary queries are available for
 incremental migration. Project, asset and history guards prevent stale work from
 silently applying to a newer edit. This is an in-process facade using trusted

@@ -1,3 +1,4 @@
+import { entityId } from '../../../project/domain/ids';
 /**
  * The immersive shell's reachability claims, asserted without a headset.
  *
@@ -13,7 +14,9 @@ import { MENU_SECTIONS, XR_PANELS_SECTION_ID, type Action } from '../../../actio
 import type { UiStateShape } from '../../../actions/UiState';
 import { renderXrCommandPalette, xrPaletteMatches } from '../XrCommandPalette';
 import { renderXrContextMenu } from '../XrContextMenu';
-import { renderXrDesk } from '../XrDesk';
+import { renderXrDesk, type XrDeskContext } from '../XrDesk';
+import { XrImmersiveShell } from '../XrImmersiveShell';
+import type { ActionInvocation, ActionSurface } from '../../../actions/ActionRegistry';
 import { renderXrMenuBar, xrMenuBarSections } from '../XrMenuBar';
 import { renderXrMenuPopover } from '../XrMenuPopover';
 import { renderXrPanelHost } from '../XrPanelHost';
@@ -522,8 +525,8 @@ function deskContext() {
     registry,
     state: STATE,
     plates: [
-      { id: 'p1', label: 'Plate 1', modelCount: 3, active: true },
-      { id: 'p2', label: 'Plate 2', modelCount: 2, active: false },
+      { id: entityId<'plate'>('import:xr:p1'), sourceRevision: 7, label: 'Plate 1', modelCount: 3, active: true },
+      { id: entityId<'plate'>('import:xr:p2'), sourceRevision: 7, label: 'Plate 2', modelCount: 2, active: false },
     ],
     status: 'Slicing plate 1 — perimeters',
     progress: 0.62,
@@ -533,5 +536,48 @@ function deskContext() {
     onManagePlates: () => {},
   };
 }
+
+test('desk plate buttons use the registry with the revision displayed by the clicked row', () => {
+  const root = host();
+  const displayed = deskContext().plates;
+  const calls: { id: string; surface: ActionSurface; invocation?: ActionInvocation }[] = [];
+  const shell = new XrImmersiveShell(
+    ui,
+    {} as never,
+    {
+      registry,
+      plates: () => displayed,
+      statusLine: () => '',
+      progress: () => null,
+      invoke: (action: Action, surface: ActionSurface, invocation?: ActionInvocation) => {
+        calls.push({ id: action.id, surface, invocation });
+      },
+      actionState: () => STATE,
+    } as never,
+    () => ({ refresh() {} }),
+  );
+  const composition = shell as unknown as { deskContext(state: Readonly<UiStateShape>): XrDeskContext };
+  const render = renderXrDesk(ui, root, composition.deskContext(STATE));
+  root.findButton('Plate 2  2')!.click();
+  assert.deepEqual(calls, [
+    {
+      id: 'activate_plate',
+      surface: 'xr-inspector',
+      invocation: {
+        plateTarget: { plateId: displayed[1].id, sourceRevision: 7 },
+      },
+    },
+  ]);
+  render.refresh({
+    ...composition.deskContext(STATE),
+    plates: displayed.map((plate) => ({ ...plate, sourceRevision: 9 })),
+  });
+  root.findButton('Plate 1  3')!.click();
+  assert.equal(calls[1].invocation?.plateTarget?.sourceRevision, 9);
+  // The existing add action is declared on the XR menu surface.
+  composition.deskContext(STATE).onAddPlate();
+  assert.equal(calls[2].id, 'add_plate');
+  assert.equal(calls[2].surface, 'xr-menu');
+});
 
 console.log(`\nXR immersive shell: ${passed} tests passed.`);

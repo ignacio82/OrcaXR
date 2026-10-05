@@ -1,3 +1,4 @@
+import type { PlateId } from '../../project/domain/ids';
 import { initializationFeatureLabel } from '../../startup/labels';
 /**
  * XrDesk — the primary bar and the plate strip, below the work.
@@ -33,7 +34,8 @@ import type { XrUiAdapter } from './XrUiAdapter';
 const C = tokens.color;
 
 export interface XrDeskPlate {
-  readonly id: string;
+  readonly id: PlateId;
+  readonly sourceRevision: number;
   readonly label: string;
   readonly modelCount: number;
   readonly active: boolean;
@@ -48,7 +50,7 @@ export interface XrDeskContext {
   /** `null` when nothing is running. */
   readonly progress: number | null;
   onRun(action: Action): void;
-  onSelectPlate(plateId: string): void;
+  onSelectPlate(plate: XrDeskPlate): void;
   onAddPlate(): void;
   onManagePlates(): void;
   onRecoverStartup?(featureId: string): void;
@@ -187,7 +189,7 @@ export function renderXrDesk<PanelNode, ImageNode, TextNode>(
         height: 32,
         paddingX: 10,
         selected: plate.active,
-        onClick: () => ctx.onSelectPlate(plate.id),
+        onClick: () => ctx.onSelectPlate(plate),
       });
       ui.appendChild(plateRow, chip.root);
     }

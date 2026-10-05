@@ -115,8 +115,8 @@ export class ActionContext {
   renameObjectsTreeEntity(entity: Extract<ObjectTreeEntityRef, { kind: 'object' | 'volume' }>, name: string): void {
     this.workspace.renameObjectsTreeEntity(entity, name);
   }
-  revealObjectsTreeEntity(entity: ObjectTreeEntityRef): void {
-    this.workspace.revealObjectsTreeEntity(entity);
+  async revealObjectsTreeEntity(entity: ObjectTreeEntityRef): Promise<void> {
+    await this.workspace.revealObjectsTreeEntity(entity);
   }
   assignObjectsTreeFilament(
     entities: readonly CanonicalFilamentAssignableEntityRef[],
@@ -275,23 +275,23 @@ export class ActionContext {
   ): void {
     this.workspace.addCalibration(kind);
   }
-  addPlate(): void {
-    this.workspace.addPlate();
+  async addPlate(): Promise<void> {
+    await this.workspace.addPlate();
   }
-  activatePlate(id: PlateId, expectedRevision?: number): void {
-    this.workspace.setActivePlate(id, expectedRevision);
+  async activatePlate(id: PlateId, expectedRevision?: number): Promise<void> {
+    await this.workspace.setActivePlate(id, expectedRevision);
   }
-  deletePlate(id?: PlateId, expectedRevision?: number): void {
-    this.workspace.deletePlate(id, expectedRevision);
+  async deletePlate(id?: PlateId, expectedRevision?: number): Promise<void> {
+    await this.workspace.deletePlate(id, expectedRevision);
   }
-  renamePlate(id: PlateId, name: string, expectedRevision: number): void {
-    this.workspace.renamePlate(id, name, expectedRevision);
+  async renamePlate(id: PlateId, name: string, expectedRevision: number): Promise<void> {
+    await this.workspace.renamePlate(id, name, expectedRevision);
   }
-  reorderPlates(ids: readonly PlateId[], expectedRevision: number): void {
-    this.workspace.reorderPlates(ids, expectedRevision);
+  async reorderPlates(ids: readonly PlateId[], expectedRevision: number): Promise<void> {
+    await this.workspace.reorderPlates(ids, expectedRevision);
   }
-  setPlatePrintable(id: PlateId, printable: boolean, expectedRevision: number): void {
-    this.workspace.setPlatePrintable(id, printable, expectedRevision);
+  async setPlatePrintable(id: PlateId, printable: boolean, expectedRevision: number): Promise<void> {
+    await this.workspace.setPlatePrintable(id, printable, expectedRevision);
   }
   async newProject(): Promise<void> {
     const created = await this.workspace.newProject();
@@ -363,8 +363,8 @@ export class ActionContext {
   arrangePlate(): void {
     this.workspace.arrangePlate();
   }
-  duplicatePlate(id?: PlateId, expectedRevision?: number): void {
-    this.workspace.duplicatePlate(id, expectedRevision);
+  async duplicatePlate(id?: PlateId, expectedRevision?: number): Promise<void> {
+    await this.workspace.duplicatePlate(id, expectedRevision);
   }
   async splitToObjects(): Promise<void> {
     await this.workspace.splitSelectedToObjects();

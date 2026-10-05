@@ -97,8 +97,8 @@ await test('starts a saveable clean project with fresh IDs while retaining only 
   const geometry = new THREE.BoxGeometry(10, 12, 14);
   const imported = controller.importBufferGeometry(geometry, { name: 'Reset me' });
   controller.selectInstance(imported.instanceId);
-  controller.renamePlate(controller.getSummary().activePlateId, 'Dirty plate');
-  controller.addPlate('Transient plate');
+  await controller.renamePlate(controller.getSummary().activePlateId, 'Dirty plate');
+  await controller.addPlate('Transient plate');
   assert.equal(controller.undo(), true);
 
   const before = controller.getSummary();

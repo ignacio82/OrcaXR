@@ -46,7 +46,7 @@ export const objectsActions: Action[] = [
         ctx.reportCapabilityUnavailable('Reveal object in scene', 'Choose Reveal on an Objects row.');
         return;
       }
-      ctx.revealObjectsTreeEntity(invocation.objectsReveal);
+      return ctx.revealObjectsTreeEntity(invocation.objectsReveal);
     },
   },
   {

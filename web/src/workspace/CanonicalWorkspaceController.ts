@@ -2,7 +2,11 @@ import * as THREE from 'three';
 
 import { BbsProjectImportWorkerClient } from '../import/BbsProjectImportWorkerClient';
 import { InMemoryAssetRepository, type AssetPayload, type AssetRepositorySnapshot } from '../project/assets';
-import { AsyncEditorSession } from '../project/AsyncEditorSession';
+import {
+  AsyncEditorSession,
+  type AsyncSessionAcknowledgement,
+  type AsyncSessionGuard,
+} from '../project/AsyncEditorSession';
 import {
   AddObjectWithAssetCommand,
   AddPlateCommand,
@@ -1526,8 +1530,9 @@ export class CanonicalWorkspaceController {
     return { outcome: 'removed', dependencyPaths: Object.freeze([]) };
   }
 
-  addPlate(name?: string, options: { activate?: boolean } = {}): PlateId {
+  async addPlate(name?: string, options: { activate?: boolean } = {}): Promise<PlateId> {
     this.assertActive();
+    const guard = this.asyncSession.captureGuard();
     const state = this.session.project.getSnapshot().state;
     const id = this.options.idSource.next('plate');
     const plateName = boundedName(
@@ -1538,7 +1543,7 @@ export class CanonicalWorkspaceController {
       ),
     );
     const order = Math.max(-1, ...state.plates.map((plate) => plate.order)) + 1;
-    this.session.execute(
+    await this.asyncSession.execute(
       new AddPlateCommand(
         {
           id,
@@ -1550,6 +1555,7 @@ export class CanonicalWorkspaceController {
         },
         options.activate ?? true,
       ),
+      { guard },
     );
     return id;
   }
@@ -1948,14 +1954,15 @@ export class CanonicalWorkspaceController {
    * Immutable assets remain shared while every independently editable entity
    * and every plate-scoped metadata row receives a freshly injected ID.
    */
-  duplicatePlate(sourcePlateId: PlateId, expectedRevision?: number): PlateId {
+  async duplicatePlate(sourcePlateId: PlateId, expectedRevision?: number): Promise<PlateId> {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
+    const guard = this.asyncSession.captureGuard();
     const state = this.session.project.getSnapshot().state;
     const source = findPlate(state, sourcePlateId);
     if (!source) throw new Error(`Unknown plate ${sourcePlateId}`);
     const plateId = this.options.idSource.next('plate');
-    this.session.execute(
+    await this.asyncSession.execute(
       new DuplicatePlateCommand(sourcePlateId, {
         plateId,
         objects: source.objects.map((object) => ({
@@ -1971,48 +1978,54 @@ export class CanonicalWorkspaceController {
           .filter((thumbnail) => thumbnail.plateId === sourcePlateId)
           .map(() => this.options.idSource.next('thumbnail')),
       }),
+      { guard },
     );
     return plateId;
   }
 
-  deletePlate(plateId: PlateId, expectedRevision?: number): void {
+  async deletePlate(plateId: PlateId, expectedRevision?: number): Promise<void> {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
+    const guard = this.asyncSession.captureGuard();
     const state = this.session.project.getSnapshot().state;
     if (!findPlate(state, plateId)) throw new Error(`Unknown plate ${plateId}`);
     if (state.plates.length <= 1) throw new Error('Cannot delete the last plate');
-    this.session.execute(new DeletePlateCommand(plateId));
+    await this.asyncSession.execute(new DeletePlateCommand(plateId), { guard });
   }
 
-  activatePlate(plateId: PlateId, expectedRevision?: number): void {
+  async activatePlate(plateId: PlateId, expectedRevision?: number): Promise<AsyncSessionAcknowledgement<void>> {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
+    const guard = this.asyncSession.captureGuard();
     const state = this.session.project.getSnapshot().state;
     if (!findPlate(state, plateId)) throw new Error(`Unknown plate ${plateId}`);
-    if (state.activePlateId === plateId) return;
-    this.session.execute(new SetActivePlateCommand(plateId));
+    return this.asyncSession.execute(new SetActivePlateCommand(plateId), { guard });
   }
 
-  renamePlate(plateId: PlateId, name: string, expectedRevision?: number): void {
+  async renamePlate(plateId: PlateId, name: string, expectedRevision?: number): Promise<void> {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
+    const guard = this.asyncSession.captureGuard();
     if (!findPlate(this.session.project.getSnapshot().state, plateId)) throw new Error(`Unknown plate ${plateId}`);
-    this.session.execute(
+    await this.asyncSession.execute(
       new RenamePlateCommand(plateId, requireBoundedText(name, 'Plate name', MAX_PLATE_NAME_LENGTH)),
+      { guard },
     );
   }
 
-  reorderPlates(orderedPlateIds: readonly PlateId[], expectedRevision?: number): void {
+  async reorderPlates(orderedPlateIds: readonly PlateId[], expectedRevision?: number): Promise<void> {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
-    this.session.execute(new ReorderPlatesCommand(orderedPlateIds));
+    const guard = this.asyncSession.captureGuard();
+    await this.asyncSession.execute(new ReorderPlatesCommand(orderedPlateIds), { guard });
   }
 
-  setPlatePrintable(plateId: PlateId, printable: boolean, expectedRevision?: number): void {
+  async setPlatePrintable(plateId: PlateId, printable: boolean, expectedRevision?: number): Promise<void> {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
+    const guard = this.asyncSession.captureGuard();
     if (!findPlate(this.session.project.getSnapshot().state, plateId)) throw new Error(`Unknown plate ${plateId}`);
-    this.session.execute(new SetPlatePrintableCommand(plateId, printable));
+    await this.asyncSession.execute(new SetPlatePrintableCommand(plateId, printable), { guard });
   }
 
   /** Set or clear the wipe tower configuration on a plate as a single undoable command. */
@@ -3910,6 +3923,10 @@ export class CanonicalWorkspaceController {
   saveCanonical3mf(cancellation?: CancellationToken): Promise<SerializedProject> {
     this.assertActive();
     return this.session.save(cancellation);
+  }
+
+  isSessionGuardCurrent(guard: AsyncSessionGuard): boolean {
+    return !this.disposed && this.asyncSession.isCurrent(guard);
   }
 
   captureProjectExportGuard(): ProjectExportGuard {

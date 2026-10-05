@@ -21,8 +21,15 @@ are fixture-specific evidence, not device-independent performance guarantees.
   change history revision. Acknowledgements freeze identity/history; queued queries
   return summaries rather than project or mesh copies. These are trusted local
   objects with an opaque owner token, not the future generated wire protocol.
-  Production Undo/Redo now awaits this facade through the workspace and registry;
-  other editing, import, save and slice paths still require migration.
+  Production Undo/Redo and all seven plate lifecycle operations await this facade
+  through the workspace and registry. Plate requests capture their guard before
+  preparation/ID allocation; exact activation/rename/order/printability no-ops keep
+  selection, revision, history and checkpoints. UI success follows acknowledgement,
+  while canonical subscriptions own selection/projection updates. Deletion does
+  not clear a newer selection after delivery. Objects reveal awaits activation and
+  checks its receipt plus the expected selection before selecting/framing a row;
+  a superseded reveal leaves newer intent intact. Other editing, import, save and
+  slice paths still require migration.
 - `EditorSession.open` binds its source project/revision/semantic/asset identity
   and owns a single current open operation. Newer opens supersede older reads,
   even if the newer read fails. Reset, disposal, cancellation and source drift

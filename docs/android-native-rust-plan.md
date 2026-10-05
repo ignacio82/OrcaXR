@@ -61,8 +61,9 @@ command/result/error and cancellation contracts in Phases 1/4 remain open.
 
 Phase 4 now has a local asynchronous facade over the existing TypeScript session,
 with guarded FIFO mutation, ordered summary queries, bounded operation batches,
-and authoritative acknowledgements. Production Undo/Redo awaits it through
-ActionRegistry. It deliberately retains trusted command objects and an opaque
+and authoritative acknowledgements. Production Undo/Redo and the seven plate
+lifecycle operations await it through ActionRegistry. Plate controls retain their
+busy state until acknowledgement; stale requests reject without edits. It deliberately retains trusted command objects and an opaque
 local owner token; generated serializable project requests, Rust execution and
 the remaining workflow migration are still required. See
 [project contracts](engineering/project-contracts.md).
@@ -559,8 +560,9 @@ and replay coverage for the complete current command inventory.
   implementation. Update action handlers, drag/stroke completion, imports,
   settings commits, undo/redo, autosave, and slice capture to await authoritative
   results. Keep all mutations behind ActionRegistry's invocation boundary.
-  The local facade and production Undo/Redo route exist; the remaining workflows
-  and serializable command payloads are not migrated yet.
+  The local facade, production Undo/Redo and seven plate lifecycle routes exist,
+  including acknowledgement-aware UI and guarded Objects reveal. The remaining
+  workflows and serializable command payloads are not migrated yet.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,
   immutable asset repository, selectors, and session lifecycle into Rust.
   Use immutable shared asset ownership and bounded history; transform/undo must

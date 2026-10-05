@@ -147,11 +147,14 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Legacy live state is a migration source, never a second canonical model.
   Mutations use commands and stable IDs; imports stage, validate, preview and
   commit transactionally. Cancel, failure and stale confirmation preserve state.
-- Production Undo/Redo awaits the local asynchronous session facade through
-  ActionRegistry. Queued mutations bind both project/asset identity and a monotonic
-  history revision; equal-looking history replacement can still invalidate them.
+- Production Undo/Redo and plate add/duplicate/delete/activate/rename/reorder/
+  printability await the local asynchronous session facade through ActionRegistry.
+  Queued mutations bind both project/asset identity and a monotonic history revision; equal-looking history replacement can still invalidate them.
   This facade retains trusted TypeScript command objects and is not a worker/JNI
-  protocol. Other command families and generated project bindings remain migration work.
+  protocol. Plate UI success follows acknowledgement; canonical subscriptions
+  own selection and projection updates. Objects reveal checks the activation
+  receipt and current selection before applying late camera/selection work.
+  Other command families and generated project bindings remain migration work.
 - A pending `EditorSession.open` owns its source revision/asset guard and operation
   identity. Newer opens, reset and disposal invalidate it; a failed newer open
   cannot revive an older read. Cooperative cancellation never replaces the final
