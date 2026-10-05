@@ -19,18 +19,22 @@ a Rust toolpath projection; see the [experiment contract](engineering/native-cor
 The separate SceneCore rc01 candidate now builds against the same mesh contract,
 with SDK validation tests and non-XR startup checks. Spatial rendering and update
 latency remain unverified; the Linux/SwiftShader XR-image diagnostic did not boot.
-The SceneCore comparison, physical-device qualification and current-engine Android
-slice remain open. Neither candidate closes a Phase 2 checklist item or exit.
+The SceneCore comparison, physical-device qualification and production Android
+slicing route remain open. Neither renderer candidate closes a Phase 2 checklist item or exit.
 The [native engine dependency probe](engineering/slicing.md#native-android-dependency-feasibility)
 now builds the current pin's TBB runtime for both ABIs, verifies its packaged
 dependency closure and ELF alignment, and executes allocator/task checks on an
-x86_64 Android emulator. It does not establish a libslic3r build, an arm64 runtime
-result, or a valid native slice.
+x86_64 Android emulator. The full-engine port now passes clean builds for both
+ABIs, ELF alignment/dependency checks and seven package mutation tests per ABI.
+After fixing result transport and import staging, the final clean x86_64 package
+passes actual constructor checks and all eleven native/reference comparisons
+with unchanged oracle tolerances. There is no ARM64 execution or application
+slicing route yet.
 The [canonical slice reference corpus](engineering/native-slice-fixtures.md)
 now verifies eleven real archive slices through the published WASM engine, covering
 physical/mixed paint, scoped settings, support and wave paths. Its captured
-inputs and output summaries are ready for native comparison; Android execution
-and the application capture/preflight workflow remain unqualified.
+inputs and output summaries now have matching x86_64 emulator slice comparisons;
+ARM64 execution and the application capture/preflight workflow remain unqualified.
 
 The first Phase 3 computation implementation now includes the Rust rich G-code
 parser, immutable source/index ownership, bounded windows, cooperative native

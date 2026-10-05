@@ -1,0 +1,94 @@
+name: Native engine source and fixture proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/native-engine.yml'
+      - 'tools/native-engine/**'
+      - 'tools/parity-oracles/**'
+      - 'wasm/patches/**'
+      - 'wasm/artifact-provenance.json'
+      - 'server/patches/0003-gcodeprocessor-fullspectrum-oob.patch'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/native-engine.yml'
+      - 'tools/native-engine/**'
+      - 'tools/parity-oracles/**'
+      - 'wasm/patches/**'
+      - 'wasm/artifact-provenance.json'
+      - 'server/patches/0003-gcodeprocessor-fullspectrum-oob.patch'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-engine-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, x86_64]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21.0.12'
+      - name: Install pinned build tools and NDK
+        run: |
+          python3 -m venv "$RUNNER_TEMP/native-engine-tools"
+          "$RUNNER_TEMP/native-engine-tools/bin/pip" install --only-binary=:all: --require-hashes -r tools/native-engine/host-requirements.txt
+          echo "$RUNNER_TEMP/native-engine-tools/bin" >> "$GITHUB_PATH"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential autoconf automake libtool pkg-config
+          sdkmanager 'ndk;29.0.14206865' 'platform-tools'
+      - name: Build the complete pinned recipe from clean source
+        run: |
+          cmake --version
+          ninja --version
+          python3 tools/native-engine/build-engine.py --abi '${{ matrix.abi }}' --jobs 1
+          python3 tools/native-engine/build-geometry-deps.py --abi '${{ matrix.abi }}' --verify-only
+          python3 tools/native-engine/build-engine.py --abi '${{ matrix.abi }}' --verify-only
+          python3 tools/native-engine/test-geometry-inputs.py
+          python3 tools/native-engine/test-engine-package.py --abi '${{ matrix.abi }}'
+      - uses: actions/setup-node@v6
+        if: matrix.abi == 'x86_64'
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Compare authored archives with the published browser engine
+        if: matrix.abi == 'x86_64'
+        run: |
+          npm --prefix web ci
+          sdkmanager 'system-images;android-34;google_apis;x86_64' 'emulator'
+          sudo chmod a+rw /dev/kvm
+          npm --prefix wasm run verify:artifacts
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/native-engine/generate-slice-fixtures.mjs
+          fixtures=(tools/native-engine/build/fixtures/*/manifest.json)
+          test "${#fixtures[@]}" -eq 1
+          node tools/native-engine/test-reference-inputs.mjs "${fixtures[0]}"
+          nice -n 10 node tools/native-engine/slice-reference.mjs "${fixtures[0]}"
+          references=(tools/native-engine/build/references/*/manifest.json)
+          test "${#references[@]}" -eq 1
+          python3 tools/native-engine/test-slice-runner.py "${fixtures[0]}" "${references[0]}"
+          python3 tools/native-engine/emulator-slices.py "${fixtures[0]}" "${references[0]}"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: native-engine-${{ matrix.abi }}-evidence
+          path: |
+            tools/native-engine/build/geometry/*/*/manifest.json
+            tools/native-engine/build/engine/*/*/package/manifest.json
+            tools/native-engine/build/fixtures/
+            tools/native-engine/build/references/
+            tools/native-engine/results/
+          retention-days: 7

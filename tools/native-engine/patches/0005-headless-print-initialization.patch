@@ -1,0 +1,67 @@
+Initialize headless print state independently of allocator contents.
+
+The current pinned fork defaults Print's constructor but leaves printer mode,
+plate origin and FakeWipeTower scalar/Eigen members uninitialized. Android's
+standalone adapter has no GUI setup pass; these values select the wipe-tower
+algorithm and enter geometry calculations. Fresh prints must start as non-Bambu
+with a zero plate origin and an empty tower, with explicit setters still taking
+precedence. Eigen default construction does not zero its coefficients.
+
+This is an Android runtime fix with its own recorded patch identity. It does
+not republish or alter the browser/server engine. It was audited against the
+current source, not copied from the retired v2.3.2 patch set. The retired tower
+layer-counter change is unnecessary on this pin: generate() sets it before
+active reads; the earlier save_on_last_wipe() call is under #if 0.
+
+Retire this patch when the selected upstream initializes these fields itself.
+The internal defaults probe constructs actual engine objects over several
+nonzero byte patterns and checks defaults plus explicit setter behavior.
+
+---
+diff --git a/src/libslic3r/Print.hpp b/src/libslic3r/Print.hpp
+--- a/src/libslic3r/Print.hpp
++++ b/src/libslic3r/Print.hpp
+@@ -643,16 +643,16 @@
+ struct FakeWipeTower
+ {
+     // generate fake extrusion
+-    Vec2f pos;
+-    float width;
+-    float height;
+-    float layer_height;
+-    float depth;
++    Vec2f pos {Vec2f::Zero()};
++    float width {0.f};
++    float height {0.f};
++    float layer_height {0.f};
++    float depth {0.f};
+     std::vector<std::pair<float, float>> z_and_depth_pairs;
+-    float brim_width;
+-    float rotation_angle;
+-    float cone_angle;
+-    Vec2d plate_origin;
++    float brim_width {0.f};
++    float rotation_angle {0.f};
++    float cone_angle {0.f};
++    Vec2d plate_origin {Vec2d::Zero()};
+ 
+     void set_fake_extrusion_data(Vec2f p, float w, float h, float lh, float d, float bd, Vec2d o)
+     {
+@@ -1110,7 +1110,7 @@
+     PrintRegionPtrs                         m_print_regions;
+     
+     //SoftFever
+-    bool m_isBBLPrinter;
++    bool m_isBBLPrinter {false};
+ 
+     // Ordered collections of extrusion paths to build skirt loops and brim.
+     ExtrusionEntityCollection               m_skirt;
+@@ -1134,7 +1134,7 @@
+     bool                                    m_support_used {false};
+ 
+     //BBS: plate's origin
+-    Vec3d   m_origin;
++    Vec3d   m_origin {Vec3d::Zero()};
+     //BBS: modified_count
+     int     m_modified_count {0};
+     //BBS

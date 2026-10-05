@@ -71,9 +71,10 @@ engine (`libslic3r` via WASM) as the computational core.
   bounded immutable chunk replacement for sample paint. SDK contract and
   non-XR startup checks do not qualify its spatial rendering; see native-core
   evidence before selecting an XR renderer.
-  Current-engine Android feasibility tooling builds the pinned TBB dependency
-  and allocator/task probes in isolated worktrees. It does not build or qualify
-  libslic3r yet; see the native dependency evidence in the slicing document.
+  Current-engine Android feasibility tooling has verified TBB allocator/task
+  probes, clean libslic3r builds for both ABIs, and eleven passing x86_64 native
+  fixture comparisons against the published browser engine. No application
+  slicing route or ARM64 execution is qualified. See the slicing document.
   [Canonical slice reference fixtures](docs/engineering/native-slice-fixtures.md)
   now exercise eleven authored archive cases through the published browser engine;
   they provide comparison inputs, not Android slicing evidence.
@@ -301,6 +302,13 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   an earlier production/preview visit can control the same origin's dev server.
 - PrintConfig `coStrings` vectors use semicolons; other vectors use commas. BBS JSON
   values are strings/string arrays, with complete physical-filament vector lengths.
+- The native BBS loader stages embedded configuration in `Model`'s backup path
+  even without `LoadAuxiliary`. Set an owned, writable job directory before load;
+  mesh-load success alone does not prove configuration loaded. Never fall back
+  to generic settings after a staging failure.
+- Engine static initialization can log before `main()`. Internal native fixture
+  results use an exclusive private file, accepted only after exit zero and bounded
+  regular-file validation; stdout is diagnostic data, not the result protocol.
 - On wasm32, cast vector size to signed before subtracting one for signed loops.
   Unsigned `size() - 1` otherwise zero-extends into a huge signed 64-bit index.
 - The native CLI needs typed machine/process/filament preset inputs and

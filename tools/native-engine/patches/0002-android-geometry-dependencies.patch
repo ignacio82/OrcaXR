@@ -1,0 +1,203 @@
+Configure Android geometry dependencies with the target toolchain.
+
+Autotools does not read CMake's NDK toolchain. Explicitly forward the selected
+compiler/API triple and LLVM binutils to GMP and MPFR, and cap their make jobs.
+Archive patches get their own Git root so they cannot resolve against the
+engine's enclosing worktree. Enable the pinned OpenVDB Clang-syntax patch that its recipe omitted.
+Disable OpenCV Android sample APKs alongside the existing examples flag.
+Versions and algorithms remain unchanged.
+
+Retire these branches when the pinned engine recipes forward an Android
+Autotools toolchain, bound make concurrency and isolate archive patch roots.
+
+---
+diff --git a/deps/CGAL/CGAL.cmake b/deps/CGAL/CGAL.cmake
+index ff8ea1f..839c0fd 100644
+--- a/deps/CGAL/CGAL.cmake
++++ b/deps/CGAL/CGAL.cmake
+@@ -2,6 +2,14 @@ if (IN_GIT_REPO)
+     set(CGAL_DIRECTORY_FLAG --directory ${BINARY_DIR_REL}/dep_CGAL-prefix/src/dep_CGAL)
+ endif ()
+ 
++# Archive patches must use the dependency root, not an enclosing worktree.
++set(_orcaxr_CGAL_patch git apply ${CGAL_DIRECTORY_FLAG} --verbose --ignore-space-change --whitespace=fix ${CMAKE_CURRENT_LIST_DIR}/0001-clang19.patch)
++if (ANDROID)
++    set(_orcaxr_CGAL_patch ${GIT_EXECUTABLE} init COMMAND ${GIT_EXECUTABLE} apply --verbose --ignore-space-change --whitespace=fix
++        ${CMAKE_CURRENT_LIST_DIR}/0001-clang19.patch
++    )
++endif()
++
+ Snapmaker_Orca_add_cmake_project(
+     CGAL
+     # GIT_REPOSITORY https://github.com/CGAL/cgal.git
+@@ -9,7 +17,7 @@ Snapmaker_Orca_add_cmake_project(
+     # For whatever reason, this keeps downloading forever (repeats downloads if finished)
+     URL      https://github.com/CGAL/cgal/archive/refs/tags/v5.4.zip
+     URL_HASH SHA256=d7605e0a5a5ca17da7547592f6f6e4a59430a0bc861948974254d0de43eab4c0
+-    PATCH_COMMAND git apply ${CGAL_DIRECTORY_FLAG} --verbose --ignore-space-change --whitespace=fix ${CMAKE_CURRENT_LIST_DIR}/0001-clang19.patch
++    PATCH_COMMAND ${_orcaxr_CGAL_patch}
+     DEPENDS dep_Boost dep_GMP dep_MPFR
+ )
+ 
+diff --git a/deps/GMP/GMP.cmake b/deps/GMP/GMP.cmake
+index 623f01a..9d44a99 100644
+--- a/deps/GMP/GMP.cmake
++++ b/deps/GMP/GMP.cmake
+@@ -59,14 +59,26 @@ else ()
+         set(_cross_compile_arg --host=${TOOLCHAIN_PREFIX})
+     endif ()
+ 
++    set(_gmp_make_jobs -j)
++    set(_gmp_patch ${CMAKE_CURRENT_LIST_DIR}/0001-GMP_GCC15.patch)
++    set(_gmp_patch_command git apply ${GMP_DIRECTORY_FLAG} --verbose ${_gmp_patch})
++    if (ANDROID)
++        set(_cross_compile_arg --host=${CMAKE_LIBRARY_ARCHITECTURE})
++        set(_gmp_build_tgt "")
++        set(_gmp_make_jobs -j${ORCAXR_BUILD_JOBS})
++        # The extracted dependency is outside the engine worktree. Give git
++        # apply its own root instead of interpreting paths in the outer repo.
++        set(_gmp_patch_command ${GIT_EXECUTABLE} init COMMAND ${GIT_EXECUTABLE} apply --verbose ${_gmp_patch})
++    endif()
++
+     ExternalProject_Add(dep_GMP
+         URL https://github.com/SoftFever/OrcaSlicer_deps/releases/download/gmp-6.2.1/gmp-6.2.1.tar.bz2
+         URL_HASH SHA256=eae9326beb4158c386e39a356818031bd28f3124cf915f8c5b1dc4c7a36b4d7c
+         DOWNLOAD_DIR ${DEP_DOWNLOAD_DIR}/GMP
+-        PATCH_COMMAND git apply ${GMP_DIRECTORY_FLAG} --verbose ${CMAKE_CURRENT_LIST_DIR}/0001-GMP_GCC15.patch
++        PATCH_COMMAND ${_gmp_patch_command}
+         BUILD_IN_SOURCE ON
+-        CONFIGURE_COMMAND  env "CFLAGS=${_gmp_ccflags}" "CXXFLAGS=${_gmp_ccflags}" ./configure ${_cross_compile_arg} --enable-shared=no --enable-cxx=yes --enable-static=yes "--prefix=${DESTDIR}" ${_gmp_build_tgt}
+-        BUILD_COMMAND     make -j
++        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${ORCAXR_AUTOTOOLS_ENV} "CFLAGS=${_gmp_ccflags}" "CXXFLAGS=${_gmp_ccflags}" ./configure ${_cross_compile_arg} --enable-shared=no --enable-cxx=yes --enable-static=yes "--prefix=${DESTDIR}" ${_gmp_build_tgt}
++        BUILD_COMMAND     make ${_gmp_make_jobs}
+         INSTALL_COMMAND   make install
+     )
+ endif ()
+diff --git a/deps/MPFR/MPFR.cmake b/deps/MPFR/MPFR.cmake
+index dc45aad..1acb302 100644
+--- a/deps/MPFR/MPFR.cmake
++++ b/deps/MPFR/MPFR.cmake
+@@ -24,14 +24,20 @@ else ()
+         set(_cross_compile_arg --host=${TOOLCHAIN_PREFIX})
+     endif ()
+ 
++    set(_mpfr_make_jobs -j)
++    if (ANDROID)
++        set(_cross_compile_arg --host=${CMAKE_LIBRARY_ARCHITECTURE})
++        set(_mpfr_make_jobs -j${ORCAXR_BUILD_JOBS})
++    endif()
++
+     ExternalProject_Add(dep_MPFR
+         URL https://www.mpfr.org/mpfr-4.2.2/mpfr-4.2.2.tar.bz2
+         URL_HASH SHA256=9ad62c7dc910303cd384ff8f1f4767a655124980bb6d8650fe62c815a231bb7b
+         DOWNLOAD_DIR ${DEP_DOWNLOAD_DIR}/MPFR
+         BUILD_IN_SOURCE ON
+-        CONFIGURE_COMMAND autoreconf -f -i && 
+-                          env "CFLAGS=${_gmp_ccflags}" "CXXFLAGS=${_gmp_ccflags}" ./configure ${_cross_compile_arg} --prefix=${DESTDIR} --enable-shared=no --enable-static=yes --with-gmp=${DESTDIR} ${_gmp_build_tgt}
+-        BUILD_COMMAND make -j
++        CONFIGURE_COMMAND autoreconf -f -i
++                  COMMAND ${CMAKE_COMMAND} -E env ${ORCAXR_AUTOTOOLS_ENV} "CFLAGS=${_gmp_ccflags}" "CXXFLAGS=${_gmp_ccflags}" ./configure ${_cross_compile_arg} --prefix=${DESTDIR} --enable-shared=no --enable-static=yes --with-gmp=${DESTDIR} ${_gmp_build_tgt}
++        BUILD_COMMAND make ${_mpfr_make_jobs}
+         INSTALL_COMMAND make install
+         DEPENDS dep_GMP
+     )
+diff --git a/deps/OCCT/OCCT.cmake b/deps/OCCT/OCCT.cmake
+index 915585a..f724cf3 100644
+--- a/deps/OCCT/OCCT.cmake
++++ b/deps/OCCT/OCCT.cmake
+@@ -8,11 +8,19 @@ if (IN_GIT_REPO)
+     set(OCCT_DIRECTORY_FLAG --directory ${BINARY_DIR_REL}/dep_OCCT-prefix/src/dep_OCCT)
+ endif ()
+ 
++# Archive patches must use the dependency root, not an enclosing worktree.
++set(_orcaxr_OCCT_patch git apply ${OCCT_DIRECTORY_FLAG} --verbose --ignore-space-change --whitespace=fix ${CMAKE_CURRENT_LIST_DIR}/0001-OCCT-fix.patch)
++if (ANDROID)
++    set(_orcaxr_OCCT_patch ${GIT_EXECUTABLE} init COMMAND ${GIT_EXECUTABLE} apply --verbose --ignore-space-change --whitespace=fix
++        ${CMAKE_CURRENT_LIST_DIR}/0001-OCCT-fix.patch
++    )
++endif()
++
+ Snapmaker_Orca_add_cmake_project(OCCT
+     URL https://github.com/Open-Cascade-SAS/OCCT/archive/refs/tags/V7_6_0.zip
+     URL_HASH SHA256=28334f0e98f1b1629799783e9b4d21e05349d89e695809d7e6dfa45ea43e1dbc
+     #PATCH_COMMAND ${PATCH_CMD} ${CMAKE_CURRENT_LIST_DIR}/0001-OCCT-fix.patch
+-    PATCH_COMMAND git apply ${OCCT_DIRECTORY_FLAG} --verbose --ignore-space-change --whitespace=fix ${CMAKE_CURRENT_LIST_DIR}/0001-OCCT-fix.patch
++    PATCH_COMMAND ${_orcaxr_OCCT_patch}
+     #DEPENDS dep_Boost
+     DEPENDS ${FREETYPE_PKG}
+     CMAKE_ARGS
+diff --git a/deps/OpenCV/OpenCV.cmake b/deps/OpenCV/OpenCV.cmake
+index 537fd43..da845a9 100644
+--- a/deps/OpenCV/OpenCV.cmake
++++ b/deps/OpenCV/OpenCV.cmake
+@@ -8,16 +8,27 @@ if (IN_GIT_REPO)
+     set(OpenCV_DIRECTORY_FLAG --directory ${BINARY_DIR_REL}/dep_OpenCV-prefix/src/dep_OpenCV)
+ endif ()
+ 
++# Archive patches must use the dependency root, not an enclosing worktree.
++set(_orcaxr_OpenCV_patch git apply ${OpenCV_DIRECTORY_FLAG} --verbose --ignore-space-change --whitespace=fix ${CMAKE_CURRENT_LIST_DIR}/0001-vs2022.patch  ${CMAKE_CURRENT_LIST_DIR}/0002-clang19-macos.patch)
++if (ANDROID)
++    set(_orcaxr_OpenCV_patch ${GIT_EXECUTABLE} init COMMAND ${GIT_EXECUTABLE} apply --verbose --ignore-space-change --whitespace=fix
++        ${CMAKE_CURRENT_LIST_DIR}/0001-vs2022.patch
++        ${CMAKE_CURRENT_LIST_DIR}/0002-clang19-macos.patch
++    )
++endif()
++
+ Snapmaker_Orca_add_cmake_project(OpenCV
+     URL https://github.com/opencv/opencv/archive/refs/tags/4.6.0.tar.gz
+     URL_HASH SHA256=1ec1cba65f9f20fe5a41fda1586e01c70ea0c9a6d7b67c9e13edf0cfe2239277
+-    PATCH_COMMAND git apply ${OpenCV_DIRECTORY_FLAG} --verbose --ignore-space-change --whitespace=fix ${CMAKE_CURRENT_LIST_DIR}/0001-vs2022.patch  ${CMAKE_CURRENT_LIST_DIR}/0002-clang19-macos.patch
++    PATCH_COMMAND ${_orcaxr_OpenCV_patch}
+     CMAKE_ARGS
+     -DBUILD_SHARED_LIBS=0
+        -DBUILD_PERE_TESTS=OFF
+        -DBUILD_TESTS=OFF
+        -DBUILD_opencv_python_tests=OFF
+        -DBUILD_EXAMPLES=OFF
++       -DBUILD_ANDROID_PROJECTS=OFF
++       -DBUILD_ANDROID_EXAMPLES=OFF
+        -DBUILD_JASPER=OFF
+        -DBUILD_JAVA=OFF
+        -DBUILD_JPEG=ON
+diff --git a/deps/OpenVDB/OpenVDB.cmake b/deps/OpenVDB/OpenVDB.cmake
+index 911867a..cd68b67 100644
+--- a/deps/OpenVDB/OpenVDB.cmake
++++ b/deps/OpenVDB/OpenVDB.cmake
+@@ -10,10 +10,19 @@ if (IN_GIT_REPO)
+     set(OPENVDB_DIRECTORY_FLAG --directory ${BINARY_DIR_REL}/dep_OpenVDB-prefix/src/dep_OpenVDB)
+ endif ()
+ 
++# The pinned tree already carries the modern-Clang template syntax fix, but
++# its desktop recipe does not apply it. NDK 29's Clang 21 requires it.
++set(_orcaxr_openvdb_patch "")
++if (ANDROID)
++    set(_orcaxr_openvdb_patch ${GIT_EXECUTABLE} init COMMAND ${GIT_EXECUTABLE} apply
++        --verbose ${CMAKE_CURRENT_LIST_DIR}/0001-clang19.patch)
++endif()
++
+ Snapmaker_Orca_add_cmake_project(OpenVDB
+     #  support vs2022, update to 8.2
+     URL https://github.com/tamasmeszaros/openvdb/archive/a68fd58d0e2b85f01adeb8b13d7555183ab10aa5.zip 
+     URL_HASH SHA256=f353e7b99bd0cbfc27ac9082de51acf32a8bc0b3e21ff9661ecca6f205ec1d81
++    PATCH_COMMAND ${_orcaxr_openvdb_patch}
+     DEPENDS dep_TBB dep_Blosc dep_OpenEXR dep_Boost
+     CMAKE_ARGS
+         -DCMAKE_POSITION_INDEPENDENT_CODE=ON 
+diff --git a/deps/deps-android.cmake b/deps/deps-android.cmake
+index e72f9ea..e240138 100644
+--- a/deps/deps-android.cmake
++++ b/deps/deps-android.cmake
+@@ -8,3 +8,13 @@ set(DEP_CMAKE_OPTS
+     -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+     -DCMAKE_FIND_ROOT_PATH=${DESTDIR}
+ )
++
++# Autotools does not consume a CMake toolchain. Forward the same NDK compiler,
++# API target and binutils explicitly; never let configure choose host GCC.
++set(ORCAXR_AUTOTOOLS_ENV
++    "CC=${CMAKE_C_COMPILER} --target=${CMAKE_C_COMPILER_TARGET}"
++    "CXX=${CMAKE_CXX_COMPILER} --target=${CMAKE_CXX_COMPILER_TARGET}"
++    "AR=${CMAKE_AR}"
++    "RANLIB=${CMAKE_RANLIB}"
++    "STRIP=${CMAKE_STRIP}"
++)

@@ -45,9 +45,10 @@ recipes get separate source/build directories. The shared archive cache validate
 SHA-256 before use, refuses corrupt entries, and bounds new downloads. A file lock
 serializes builds and protects readers from incomplete packages.
 
-**This harness currently builds TBB and dependency probes only.** It does not
-compile libslic3r, implement a native slicing adapter, revive the retired Android
-engine, or change browser/server engine provenance. Do not run
+**The dependency harness builds TBB and allocator/task probes.** The separate
+full-engine candidate below passes clean builds for both ABIs and eleven x86_64
+fixture comparisons against the published browser engine. Neither harness revives the retired
+Android engine or changes browser/server engine provenance. Do not run
 `scripts/build_native.sh` for this target: that script resets and patches the
 retired upstream-v2.3.2 checkout. The new engine must preserve the current
 configuration, project and output identities through its eventual adapter.
@@ -81,15 +82,13 @@ The clean build established these required port changes:
   enforced. The glibc-specific malloc-interposition proxy is excluded on Android;
   libslic3r's dependency contract links the allocator explicitly.
 
-The engine's other dependencies are **not qualified by this patch**. In
-particular, GMP/MPFR still need an audited Android autotools compiler/host setup,
-Boost/CGAL/OpenVDB/OpenCV/OCCT need actual cross-build and runtime evidence, and
-the old OpenSSL/curl recipes need a deliberate dependency/support review before
-packaging. The current libslic3r sources include OpenSSL MD5 support; network I/O
-belongs in platform adapters, so do not blindly bring the old desktop curl/TLS
-stack into the native engine. Do not invoke the entire upstream `deps` target and
-assume these unported recipes honor the CMake job cap: some use independent
-unbounded `make -j` commands. The new harness explicitly builds `dep_TBB`.
+The engine's other dependencies are **not qualified by this probe**. The separate
+geometry dependency build described below covers the full selected graph. Current libslic3r
+sources include OpenSSL MD5 support; network I/O belongs in platform adapters, so
+do not blindly bring the old desktop curl/TLS stack into the native engine. Do not
+invoke the entire upstream `deps` target and assume every recipe honors the CMake
+job cap: unported recipes use independent `make -j` commands. The probe harness
+explicitly builds `dep_TBB`.
 
 Run with `ANDROID_HOME` set:
 
@@ -147,11 +146,180 @@ relaxed to work around the fetch delay.
 
 The native CI workflow now includes these dependency builds, package mutation
 tests and emulator checks as a separate job, with manifests/reports retained as
-artifacts. Local results do not claim a completed hosted CI run. Complete native
-engine compilation, the JNI/process adapter, canonical fixture slices, output
-comparison, arm64 execution, 16 KB device loading and supervised XR/printer
-qualification remain open. None of Phase 2's engine checklist or exit is closed
-by a dependency probe.
+artifacts. Local results do not claim a completed hosted CI run. The full-engine
+build and fixture comparison have separate evidence below. The JNI/process
+adapter, ARM64 execution, 16 KB device loading and supervised XR/printer
+qualification remain open. A dependency probe alone cannot close Phase 2.
+
+### Geometry dependency port in progress
+
+`tools/native-engine/build-geometry-deps.py` extends source assembly with the
+tracked geometry and Android crypto patches. It computes the expected source
+tree from the pin and patches in an independent Git index, rejecting both
+unstaged and staged changes or unexpected source files. The intended build
+report binds the selected target subset, ABI/API/compiler, source tree, recipe,
+installed-file digest and native-library identities. Static archives are checked
+member by member for the target ABI; shared libraries use the existing ELF checks.
+This is development tooling, not an engine artifact or APK. Complete clean builds
+now pass for x86_64 and ARM64; the separate fixture harness supplies x86_64 engine
+execution evidence. Production and physical-device qualification remain pending.
+
+Initial isolated arm64 builds on 2026-10-05 completed GMP, MPFR, Boost, CGAL,
+ZLIB, Cereal, Qhull, NLopt, libnoise, Expat, PNG, JPEG, FreeType, TBB, Blosc and
+OpenEXR. OpenVDB then compiled after enabling the Clang syntax patch already in
+the pinned source tree. OpenCV configuration required disabling both Android
+sample-project and sample-example targets; its compilation, OCCT and OpenSSL
+also completed. The installed tree contains 98 checked libraries with 8,206
+target object members. These exploratory results are not a clean rebuild of the
+final versioned recipe, x86_64 evidence or a native slice.
+
+The GMP/MPFR port forwards Clang's exact Android API target and LLVM binutils to
+Autotools, selects the Android host triple and bounds `make` concurrency. Archive
+patches use their own Git root instead of resolving paths against an enclosing
+engine worktree. The port preserves these dependencies' pinned versions and
+algorithms. Six source/archive guard tests use a real engine worktree and NDK
+object, including staged source drift, mixed-ABI archives and escaping symlinks.
+
+The Android-only crypto recipe selects OpenSSL **3.5.9**, from the supported
+3.5 LTS line, using its official Android Configure target and API 31. The release
+archive's published SHA-256 is
+`603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a`;
+the downloaded archive agrees, and the initial arm64 build passes. Runtime
+validation remains pending. The NDK legacy toolchain sets `CMAKE_SYSTEM_VERSION`
+to **1**, not the Android API. Passing it to OpenSSL selected a nonexistent
+API-1 compiler. The corrected recipe uses `ANDROID_PLATFORM_LEVEL`, checked
+against Clang's target, and the actual configure/build uses API **31**. The
+recipe installs static development libraries without apps or loadable modules;
+the eventual engine must link only needed libcrypto objects. It changes no
+browser/server dependency. Sources: [current OpenSSL releases](https://openssl-library.org/source/)
+and [3.5.9 Android build notes](https://github.com/openssl/openssl/blob/openssl-3.5.9/NOTES-ANDROID.md).
+
+### Native fixture adapter in progress
+
+The separate `build-engine.py` candidate selects the existing shared libslic3r
+C++ patch, the current server's FullSpectrum statistics guard and a tracked
+Android CMake patch. Its shared-patch filter excludes the WASM CMake changes
+before including the remaining libslic3r files; Git applies the first matching
+filter. The native build keeps real geometry/image/CAD dependencies, the wave
+sources and the tested TBB runtime. It excludes the desktop executable, GUI,
+MQTT and curl. Clean compilation and linking complete all 245 build steps for
+each ABI. Both packages pass ABI, 16 KB load-alignment, absence-of-RPATH and
+dependency-closure checks. ARM64 execution remains unverified. The versioned
+packager retains the original build artifact and strips unneeded symbols from
+the executable copied to a device, then hashes and verifies that actual copy.
+
+OpenVDB discovery initially tried to execute the Android `vdb_print` binary on
+the Linux host and then inferred an ABI. The Android patch now reads the exact
+ABI from its installed generated `openvdb/version.h` instead. It must not use a
+host executable or silently guess an incompatible dependency ABI.
+
+The current-source initialization audit found that `Print` leaves its printer
+mode and Eigen plate origin uninitialized, as does `FakeWipeTower` for its
+scalars and Eigen vectors. A separate Android runtime patch supplies explicit
+non-Bambu/zero defaults, keeping setters authoritative. The internal constructor
+probe uses actual engine types over four initial byte patterns; the final clean
+x86_64 Android package passes all four. The retired wipe-tower layer-counter patch is not
+reused: the active current path assigns the counter before reading it, and the
+earlier planning call is compiled out. The retired nullable multi-extruder helper
+is absent from this pin. Patch order, filters and dependency/build/runtime roles
+are recorded separately from published browser/server provenance.
+
+The internal CLI consumes the same BBS loading entry point and full-config
+normalization as the published project route, with owned imported metadata and
+bounded stage/progress errors. The BBS loader stages embedded configuration in
+`Model`'s backup directory even without `LoadAuxiliary`; Android's unwritable
+default temporary path initially left the mesh loaded with generic settings.
+The adapter now binds that staging directory to the owned job and refuses an
+empty loaded configuration. It passes a warning object to engine validation,
+whose current implementation has paths that dereference it.
+
+Static print-config initialization logs before `main()`. Redirecting stdout
+inside `main()` therefore cannot isolate a JSON protocol. The adapter creates
+an exclusive, non-symlink private result file and flushes it only after the
+print has been destroyed. The runner accepts it only after successful process
+exit, regular-file and 4 KiB length checks. It retains at most 64 KiB per local
+diagnostic stream, separately from the result, including on parsing or process
+failure. It rejects post-processing commands. Output
+remains a private fixture file; this is not a JNI adapter, application service,
+statistics publisher or editable project model. Package verification binds
+engine/source/dependency identities, every ELF and its dependency closure, and
+resources copied from the exact prepared source.
+
+`emulator-slices.py` is the execution harness. It validates the
+[eleven canonical references](native-slice-fixtures.md), verifies an x86_64
+package and hashes of device copies, owns a fresh API 34 emulator, and compares
+actual G-code with the existing independent oracle's unchanged tolerances.
+Its metadata preflight and nine reference/process/protocol guard tests pass,
+including changed reference bytes, recipe identities, bounded noisy output,
+malformed JSON, indirect/oversized result files, forced termination and a
+surviving child after its process-group leader exits. Its emulator evidence
+must remain distinct from APK,
+arm64, 16 KB loading, large-painted-model and physical-device qualification.
+
+Local development evidence on 2026-10-05:
+
+- The x86_64 clean geometry recipe completes all 20 dependency targets. Its
+  installed tree has 27,835 entries, 97 checked libraries and 8,246 target
+  object members. Tree SHA-256 is
+  `2041e9c2aa1766223d6b362395db74da79326fbe6ed3d5fd5df0f5ee712f4bec`.
+- The ARM64 clean geometry recipe also completes all 20 targets. Its installed
+  tree has 27,836 entries, 98 checked libraries and 8,206 target object members.
+  Tree SHA-256 is
+  `a09da139c3bb78cb7f2b53d708a40c8b4a273bd54d9cff66e30814d4f4b576a7`.
+  Captured recipe inputs still match after the build. Verified cleanup of completed
+  x86_64 dependency intermediates reclaimed 4,725,417,463 bytes while preserving
+  the source, installed tree, manifest and downloads.
+- After the adapter fixes, the final clean recipe completes all 245 engine
+  steps for each ABI. Source and recipe hashes remain unchanged throughout both
+  builds and the subsequent qualification run. Recipe identity is
+  `4afd1b587aed07d77e9094eb38d2bb95b123ee8998400a70b16674848737ad8b`;
+  prepared source tree is `a829c939769b5636851beafcf0f96da3b556a61a`.
+  Dependency reuse verifies the full installed tree and source identity, allowing
+  obsolete compiler objects to be removed without accepting an incomplete installation.
+- Seven package mutation tests pass independently for each ABI, rejecting changed
+  executable bytes, resource drift even with an updated hash, symlinks, missing or
+  extra libraries, unresolved runtime dependencies and false provenance/qualification.
+  The packaged x86_64 executable is 13,211,024 bytes; ARM64 is 11,972,304 bytes.
+  Package-manifest SHA-256 values are
+  `103d5b8ebed81300184c8c7bfaa09a2a1792a20b3e34e1756463a54a355ae939` (x86_64) and
+  `99a5ef8c615bc9f3a94a6a35bb36d2296449ce7251adf395280214243cecc910` (ARM64).
+- The official runner executes the clean x86_64 package on an owned API 34
+  emulator with 4,096-byte pages. All four constructor patterns and all eleven
+  fixture comparisons pass using the original oracle and unchanged tolerances.
+  G-code outputs total 5,707,502 bytes. The final report is
+  `tools/native-engine/results/slices-206a7fd52b994d5788dc720a0dfc2dec/manifest.json`,
+  SHA-256 `a4fc76dc65727549d8050ac879149d54310cf278c9ef6895843402c1b4cc9ada`.
+  Evidence is published only after the owned emulator and its jobs have stopped.
+  This supersedes the earlier incremental diagnostic for this fixture corpus;
+  ARM64 execution and application slicing are still unverified.
+
+Reproduce after creating the [fixture and reference manifests](native-slice-fixtures.md):
+
+```sh
+python3 tools/native-engine/build-engine.py --abi x86_64 --abi arm64-v8a --jobs 1
+python3 tools/native-engine/build-engine.py --abi x86_64 --abi arm64-v8a --verify-only
+python3 tools/native-engine/test-geometry-inputs.py
+python3 tools/native-engine/test-engine-package.py --abi x86_64
+python3 tools/native-engine/test-engine-package.py --abi arm64-v8a
+python3 tools/native-engine/test-slice-runner.py "$fixture_manifest" "$reference_manifest"
+python3 tools/native-engine/emulator-slices.py "$fixture_manifest" "$reference_manifest"
+```
+
+Set both manifest variables to the generated files for the same captured corpus.
+The runner checks their identities and source inputs; a directory name alone is
+not sufficient evidence. Build products and private comparison logs remain ignored.
+
+The separate `native-engine.yml` workflow declares fresh builds for both ABIs,
+geometry/package guard tests and an x86_64 emulator comparison against newly
+captured published-engine references. Its Linux build-tool wheels are version-
+and SHA-256-pinned. It runs on relevant engine/recipe changes or explicit dispatch;
+the existing faster native/core gates remain. A workflow declaration is not a
+completed hosted CI run.
+
+The application JNI/process adapter, complete capture/preflight workflow, broader
+engine capability and large-model corpus, ARM64 execution, 16 KB runtime loading,
+dependency security/support review and physical-device qualification remain
+required. The fixture comparison does not close the engine or release exit gates.
 
 
 8. **3MF loader dispatch is BBS-leaning and breaks on Prusa / MakerWorld files.** Use `Model::read_from_archive` which sniffs Prusa-vs-BBS. In browser imports, official BBS multi-plate membership lives in `Metadata/model_settings.config` as `(object_id, instance_id)` pairs; core `<build>` transforms use the global 1.2×-bed plate grid, so resolve exact membership and `printable_area` or fail closed, then subtract the source origin. Canonical transforms stay plate-local; only standard BBS export re-adds that virtual origin. Never guess from thumbnails or spatial clusters. Production-extension `p:path` IDs are model-part-local: key references by normalized package path plus ID, permit external paths only from the root model, recursively compose same-part child components including repeats, and reject missing/conflicting paths or IDs, traversal, cycles, depth over 64, and expansion over 16,384 nodes. Do not preserve original split `.model` members: the generated flattened core absorbs them, so keeping them stores the geometry twice and leaves a stale copy behind (see the large-model section). Remove `p:path` from that generated core, and let the relationship projection drop the now-dangling targets. A read-only `MarbleRunTube_V7.3mf` smoke resolved 26 external parts into 5 plates/28 objects/29 volumes/28 instances and passed in-memory canonical save/reopen; this is headless evidence, not official GUI qualification. Do not add a blanket affine-shear rejection: that real Orca archive contains such build matrices, while arbitrary shear remains an explicit residual of the canonical TRS projection.

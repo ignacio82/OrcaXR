@@ -1,0 +1,62 @@
+Use a supported OpenSSL LTS for the Android engine's file-format hashing.
+
+The pinned desktop recipe builds OpenSSL 1.1.1w with a guessed cross prefix.
+Android instead selects the upstream Android Configure target, exact API and
+NDK binutils, with bounded make concurrency. Pin OpenSSL 3.5.9 and its published
+archive digest. Build static development libraries; no OpenSSL apps or loadable
+modules are installed. The eventual engine must link only required libcrypto
+objects and keep platform networking outside this dependency.
+
+Retire when the pinned engine has an equivalent supported Android recipe.
+The non-Android recipe and published browser/server artifacts are unchanged.
+
+---
+diff --git a/deps/OpenSSL/OpenSSL.cmake b/deps/OpenSSL/OpenSSL.cmake
+index 45f82ec..15a12ba 100644
+--- a/deps/OpenSSL/OpenSSL.cmake
++++ b/deps/OpenSSL/OpenSSL.cmake
+@@ -1,3 +1,44 @@
++# The Android engine consumes libcrypto for existing file-format MD5 calls.
++# Use the supported LTS release; do not import the desktop 1.1.1 TLS stack.
++if (ANDROID)
++    # The NDK legacy toolchain deliberately sets CMAKE_SYSTEM_VERSION to 1.
++    # Its resolved platform level, checked against Clang's target, is the API.
++    if (NOT ANDROID_PLATFORM_LEVEL MATCHES "^[0-9]+$" OR
++        NOT CMAKE_C_COMPILER_TARGET MATCHES "android${ANDROID_PLATFORM_LEVEL}$")
++        message(FATAL_ERROR "OpenSSL requires the resolved NDK Android API target")
++    endif()
++    if (ANDROID_ABI STREQUAL "arm64-v8a")
++        set(_openssl_android_target android-arm64)
++    elseif (ANDROID_ABI STREQUAL "x86_64")
++        set(_openssl_android_target android-x86_64)
++    else()
++        message(FATAL_ERROR "Unsupported Android engine ABI for OpenSSL")
++    endif()
++    get_filename_component(_openssl_ndk_bin "${CMAKE_C_COMPILER}" DIRECTORY)
++    set(_openssl_android_env
++        "ANDROID_NDK_ROOT=${CMAKE_ANDROID_NDK}"
++        "PATH=${_openssl_ndk_bin}:$ENV{PATH}"
++        "AR=${CMAKE_AR}"
++        "RANLIB=${CMAKE_RANLIB}"
++    )
++    ExternalProject_Add(dep_OpenSSL
++        EXCLUDE_FROM_ALL ON
++        URL https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz
++        URL_HASH SHA256=603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a
++        DOWNLOAD_DIR ${DEP_DOWNLOAD_DIR}/OpenSSL
++        BUILD_IN_SOURCE ON
++        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${_openssl_android_env}
++            ./Configure ${_openssl_android_target} -D__ANDROID_API__=${ANDROID_PLATFORM_LEVEL}
++            --prefix=${DESTDIR} --libdir=lib --openssldir=${DESTDIR}/ssl
++            no-shared no-tests no-apps no-module -fPIC
++        BUILD_COMMAND ${CMAKE_COMMAND} -E env ${_openssl_android_env}
++            make -j${ORCAXR_BUILD_JOBS} build_libs
++        INSTALL_COMMAND ${CMAKE_COMMAND} -E env ${_openssl_android_env}
++            make -j${ORCAXR_BUILD_JOBS} install_dev
++    )
++    return()
++endif()
++
+ 
+ include(ProcessorCount)
+ ProcessorCount(NPROC)

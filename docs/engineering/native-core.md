@@ -56,11 +56,15 @@ this build. Generated JNI directories are registered through
 establish the Rust task dependency. The native engine is deliberately absent from
 this application build; do not substitute the historical engine script. The
 separate [current-engine dependency probes](slicing.md#native-android-dependency-feasibility)
-now provide a clean TBB build and x86_64 runtime checks. They do not provide a
-native engine or a slicing route.
-The [canonical reference corpus](native-slice-fixtures.md) now provides eleven
-published-WASM archive outputs and input guard checks for eventual Android
-comparison. These results do not establish native slicing or application preflight.
+now provide a clean TBB build and x86_64 runtime checks. The separate full-engine
+port passes clean builds for both ABIs, ELF/dependency verification and seven
+package mutation tests per ABI. Its final x86_64 package passes actual constructor
+checks and eleven comparisons against published-WASM archive outputs. These
+fixture artifacts do not provide an application slicing route or ARM64 runtime
+qualification.
+The [canonical reference corpus](native-slice-fixtures.md) provides eleven
+published-WASM archive outputs and input guard checks for that comparison.
+Application capture/preflight and production native slicing remain unimplemented.
 
 ## Flat renderer experiment
 
@@ -153,7 +157,7 @@ restoration still need dedicated qualification.
 The separate [SceneCore candidate](#scenecore-candidate) uses this same packed
 mesh fixture. The flat app still has no XR dependency or session initialization.
 Spatial runtime measurements, real-device traces, continuous paint/input,
-Home/Full Space transitions and the pinned-engine Android slice remain open.
+Home/Full Space transitions and the application slicing route remain open.
 
 Run the experiment checks after the foundation builds:
 

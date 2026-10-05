@@ -65,10 +65,16 @@ The [current-engine dependency proof](engineering/slicing.md#native-android-depe
 now builds the pinned recipe's TBB 2021.5.0 archive with a tracked Android CMake
 port for arm64 and x86_64 using NDK 29/Clang 21. Eight ELF files pass ABI/alignment and dependency
 closure checks. Seven mutation tests reject invalid packages; three x86_64
-emulator runs exercise real allocation and task scheduling. This is not a
-libslic3r build or slice, and does not retire historical arm64 painting/allocator
-concerns. The complete dependency graph, engine adapter, output comparison and
-physical qualification remain open.
+emulator runs exercise real allocation and task scheduling. The full-engine port
+now passes clean libslic3r/fixture-adapter builds for both ABIs, ELF alignment
+and dependency checks, and seven package mutation tests per ABI. Runtime
+inspection found pre-main logging
+corrupting stdout protocol and an unwritable default import-staging path. The
+adapter now uses an exclusive result file and an owned import directory; nine
+runner guards pass. The final clean x86_64 package passes four initialization
+patterns and all eleven native/reference comparisons with unchanged tolerances.
+ARM64 execution, an application route, historical painting/allocator qualification and physical
+device evidence remain open.
 The [canonical slice reference corpus](engineering/native-slice-fixtures.md)
 now passes eleven real archive slices on the published WASM engine and seven input
 guard cases. Physical/mixed paint, scoped settings, manual support and actual

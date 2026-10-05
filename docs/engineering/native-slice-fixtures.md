@@ -71,6 +71,8 @@ use to 848.28 mm. Repeated generation can record a
 new host commit or engine timestamp; compare the captured identities and print
 semantics, not an assumed byte-identical output across separate runs.
 
-Native compilation, identical-input Android slicing, output comparison,
-arm64/16 KB runtime checks and physical-device qualification remain open. No
-migration phase exit is closed by these browser reference results.
+The separate [native adapter evidence](slicing.md#native-fixture-adapter-in-progress)
+now includes clean builds for both ABIs and eleven passing identical-input x86_64
+Android comparisons from the final clean package. The application route,
+ARM64/16 KB runtime checks and physical-device qualification remain open.
+No migration phase exit is closed by these browser reference results.
