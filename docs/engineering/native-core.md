@@ -135,8 +135,9 @@ exactly and retain original semantic record IDs. Arc path kinds are **0 (direct)
 including a zero-length final edge. An omitted whole-source `recordOffset` means
 zero; explicit window offsets remain authoritative. Path bounds, dense offsets,
 finite positions/colors and increasing selection indices are checked before
-packing. These renderer checks do not replace the pending complete Kotlin
-metadata/request validators. The workbench never accepts untrusted documents.
+packing. Kotlin now also validates generated metadata and model/index relations.
+View-to-source binding and generated request contracts remain required before
+production use. The workbench never accepts untrusted documents.
 
 Only visible, dirty viewports request frames. The Activity closes the renderer
 and cancels its JNI fixture owner on pause, and constructs a fresh owner on
@@ -333,10 +334,10 @@ It is a deliberately limited schema subset; unsupported schema constructs must
 fail generation. The full project session, command/result/error and cancellation
 schemas in Phase 1/4 remain to be implemented. The G-code packet layouts below are
 generated; their development leaf request validation is implemented in Rust.
-`contracts/gcode-metadata.json` now generates 26 bounded TypeScript metadata
-types/validators. Browser request encoders also validate shapes and enforce bounds
-before entering WASM. Generated request contracts, the corresponding Kotlin
-metadata validation remain open.
+`contracts/gcode-metadata.json` generates 26 bounded metadata validators for
+TypeScript and Kotlin, plus TypeScript types. Browser request encoders also
+validate shapes and enforce bounds before entering WASM. Generated request
+contracts and Kotlin view-to-source relational validation remain open.
 
 The core parses bounded JSON into UTF-16 strings and sorts keys by code units.
 It preserves escaped lone surrogates, resolves duplicate keys like `JSON.parse`,
@@ -407,9 +408,8 @@ selectors releases the old columns before parsing the replacement. An explicit
 selector on every view query prevents accidental use of the last loaded window.
 Packed outputs are independent allocations. Metadata encoding checks cancellation
 on writes; column serialization checks every 4,096 elements and before publishing.
-Native renderer consumers, search, generated request contracts, complete Kotlin result
-validation, and device
-latency/memory budgets remain open.
+Native renderer consumers, search, generated request contracts, Kotlin view-to-source
+validation, and device latency/memory budgets remain open.
 
 The internal Rust projection implements all 12 display modes, composable
 role/tool/event/layer/record/value filters, numeric ranges, accessible legends,
@@ -479,10 +479,45 @@ on allocation/transfer failure. Every native prepare clears any pending packet,
 including when the new request fails. Close can independently cancel work; the
 Kotlin owner rejects any reply that races with close. WASM outputs are copied into
 host-owned Uint8Arrays and can be transferred after disposing the Rust session.
-The packet checks cover headers, column bounds, UTF-8, and Android tick references.
-The browser decoder additionally validates generated metadata and relational
-source/column references as described below; equivalent complete Kotlin validation
-remains required for production.
+Both hosts check headers, complete buffers, zero alignment padding, column bounds,
+strict UTF-8 and generated metadata. Kotlin additionally validates model kinds,
+tool/filament/role references, source spans, coordinates, dense arc ranges and
+arc extrusion semantics. Index metadata binds the source length; pages bind the
+declared counts and neighboring entry ranges. Public metadata access returns a
+snapshot, so caller mutation cannot change the validated packet or index bounds.
+View-to-model checks for projection, inspection and playback still require the
+Kotlin source-owner integration; Android tick-label checks alone do not prove
+those relationships.
+
+Android metadata uses strict `JsonReader` parsing before calling any typed
+`JSONObject` getter, which otherwise permits numeric/string coercion. Parsing
+rejects duplicate keys, trailing input, non-finite numbers, raw control characters
+and nesting beyond 16 levels. Parsing and generated shape validation each have
+the schema's 4,194,304-node ceiling; fields retain their own smaller bounds.
+UTF-16 source-text arrays preserve lone surrogates and reject coerced values.
+Long JSON, generated-validator and model/arc loops check session cancellation
+every 4,096 characters, nodes or records/points. Constructor checks use the
+current handle and retain no callback in the completed packet; closing an owner
+can stop host validation as well as Rust work.
+See the platform [JsonReader](https://developer.android.com/reference/android/util/JsonReader)
+and [JSONObject](https://developer.android.com/reference/org/json/JSONObject)
+contracts. These checks do not change the separate canonical JSON operation's
+intentional duplicate-key semantics.
+
+Local Android boundary evidence on 2026-10-05: **14 JNI instrumentation tests**
+pass on the owned API 34 x86_64 emulator, including the existing parser/window
+corpus and 4,554 view requests. Four new tests mutate actual native packets,
+exercise coercion/null/missing/unknown fields, malformed JSON, dense paths,
+padding, immutable metadata snapshots, index continuity, traversal limits and
+cooperative cancellation. Three shell cold starts, three renderer pixel/lifecycle
+tests and the separate non-XR startup test also pass. Debug/release builds,
+strict dependency verification, JVM tests and lint pass; the actual APKs retain
+both-ABI 16 KB ELF/ZIP alignment. The unchanged TypeScript decoder still passes
+its 456-model/window boundary corpus and the published browser-core set verifies.
+All three full npm audits and Cargo audit pass; the configured redacted scan
+covers 1,610 UTF-8 source files, including six normalized for embedded NULs, with
+no findings. These runs do not establish ARM64 execution, 16 KB runtime loading,
+view-to-source binding or physical-device performance.
 
 ## Browser host boundary
 
@@ -702,7 +737,7 @@ Initial G-code verification on 2026-10-04 established:
 
 The parser now backs the production browser preview with verified packaging and
 a startup reference rollback. Stage B and the Phase 3 exit gate remain open for
-complete Kotlin host validators, search, native renderer integration and device
+Kotlin view-to-source validators, search, native renderer integration and device
 measurements.
 
 Host projection verification on 2026-10-04 establishes 1,567 reference

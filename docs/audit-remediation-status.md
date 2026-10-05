@@ -18,9 +18,16 @@ browser WASM, and Android JNI, bounded packed columns, UTF-16 preservation,
 source/session lifecycle, and cancellation. Projection, bounded inspection and
 playback also run through development session bindings. Generated browser metadata
 guards, packet checks and the bounded source owner now replay actual WASM outputs.
-Native production integration, search, generated request contracts, complete Kotlin host
-validators, production native rendering, and physical-device performance
+Android now has generated metadata guards, strict bounded JSON parsing and
+model/index relational checks. Native production integration, search, generated
+request contracts, Kotlin view-to-source validation, production native rendering,
+and physical-device performance
 remain migration work; these bindings do not change release support.
+The [Android boundary evidence](engineering/native-core.md) now records 14 passing
+JNI tests, including actual-packet mutation and cancellation cases, plus three
+shell cold starts and three renderer lifecycle tests. Builds, lint, artifact
+alignment, audits and the configured redacted source scan pass. Browser generated
+metadata and published Rust artifacts remain unchanged.
 
 The debug Android flat viewport now has generated mesh/toolpath fixtures with
 bounded Filament uploads, original-facet picking and display paint ranges.

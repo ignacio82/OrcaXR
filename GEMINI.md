@@ -322,8 +322,9 @@ npm --prefix server run test:native:container
 
 - Run full development-dependency audits at moderate severity for web, server and
   wasm. Run the configured source secret scan with redaction; do not weaken rules
-  or expose findings in logs. Maintenance SSH verifies known hosts and uses keys/
-  agent or an explicit terminal password prompt.
+  or expose findings in logs. Run directory scans from the source snapshot root;
+  absolute scan roots bypass the anchored schema-key allowlists. Maintenance SSH
+  verifies known hosts and uses keys/agent or an explicit terminal password prompt.
 - Release qualification includes Compose validation, fresh native source/container
   assembly, supported HTTP/HTTPS browser checks, process reaping, real slicing and
   artifact verification. Keep builds at conservative priority/concurrency on the
