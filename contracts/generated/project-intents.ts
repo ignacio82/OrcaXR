@@ -983,6 +983,56 @@ const shapes = {
       "label": "OptionalText"
     }
   },
+  "RenameProject": {
+    "kind": "object",
+    "fields": {
+      "name": "EditText"
+    }
+  },
+  "PlanarPosition": {
+    "kind": "array",
+    "items": "Finite",
+    "min": 2,
+    "max": 2
+  },
+  "WipeTowerInput": {
+    "kind": "object",
+    "fields": {
+      "enabled": "Flag",
+      "positionMm": "PlanarPosition",
+      "rotationDeg": "Finite",
+      "filamentId": "OptionalId"
+    }
+  },
+  "OptionalWipeTower": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "WipeTowerInput"
+    }
+  },
+  "SetPlateWipeTower": {
+    "kind": "object",
+    "fields": {
+      "plateId": "Id",
+      "wipeTower": "OptionalWipeTower",
+      "label": "OptionalText"
+    }
+  },
+  "MixedFilamentInputs": {
+    "kind": "array",
+    "items": "MixedFilamentInput",
+    "min": 0,
+    "max": 4096
+  },
+  "ReconcileAutoPairs": {
+    "kind": "object",
+    "fields": {
+      "guard": "SettingsGuard",
+      "filaments": "MixedFilamentInputs",
+      "label": "OptionalText"
+    }
+  },
   "Command": {
     "kind": "union",
     "variants": {
@@ -1037,7 +1087,10 @@ const shapes = {
       "setProjectSettingsOverrides": "SetProjectSettingsOverrides",
       "setScopedOverrides": "SetScopedOverrides",
       "convertVolumeRole": "ConvertVolumeRole",
-      "facetStroke": "FacetStroke"
+      "facetStroke": "FacetStroke",
+      "renameProject": "RenameProject",
+      "setPlateWipeTower": "SetPlateWipeTower",
+      "reconcileAutoPairs": "ReconcileAutoPairs"
     }
   },
   "Commands": {
@@ -1396,7 +1449,14 @@ export interface ProjectFacetEraseStrokeWire {readonly ranges: ProjectTriangleRa
 export type ProjectFacetStrokeOperationInputWire = {readonly paint:ProjectFacetPaintStrokeWire} | {readonly erase:ProjectFacetEraseStrokeWire} | {readonly reset:ProjectEmptyWire};
 export interface ProjectFacetGuardWire {readonly revision: ProjectSourceRevisionWire;readonly hash: ProjectSourceHashWire;readonly volumeId: ProjectIdWire;readonly topologyRevision: ProjectTriangleIndexWire;readonly triangleCount: ProjectTriangleIndexWire;}
 export interface ProjectFacetStrokeWire {readonly guard: ProjectFacetGuardWire;readonly channel: ProjectFacetChannelNameWire;readonly operation: ProjectFacetStrokeOperationInputWire;readonly label: ProjectOptionalTextWire;}
-export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire} | {readonly addLayerEvent:ProjectAddLayerEventWire} | {readonly editLayerEvent:ProjectEditLayerEventWire} | {readonly deleteLayerEvent:ProjectDeleteLayerEventWire} | {readonly addBrimEar:ProjectAddBrimEarWire} | {readonly addBrimEars:ProjectAddBrimEarsWire} | {readonly removeBrimEar:ProjectRemoveBrimEarWire} | {readonly clearBrimEars:ProjectClearBrimEarsWire} | {readonly adjustLayerHeightProfile:ProjectAdjustLayerHeightProfileWire} | {readonly smoothLayerHeightProfile:ProjectSmoothLayerHeightProfileWire} | {readonly adaptiveLayerHeightProfile:ProjectAdaptiveLayerHeightProfileWire} | {readonly resetLayerHeightProfile:ProjectResetLayerHeightProfileWire} | {readonly setFilamentAssignments:ProjectSetFilamentAssignmentsWire} | {readonly setObjectFilament:ProjectSetObjectFilamentWire} | {readonly setVolumeFilament:ProjectSetVolumeFilamentWire} | {readonly setLayerRangeFilament:ProjectSetLayerRangeFilamentWire} | {readonly remapFilaments:ProjectRemapFilamentsWire} | {readonly setFilamentEnabled:ProjectSetFilamentEnabledWire} | {readonly syncPhysicalFilaments:ProjectSyncPhysicalFilamentsWire} | {readonly addMixedFilament:ProjectAddMixedFilamentWire} | {readonly editMixedFilament:ProjectEditMixedFilamentWire} | {readonly duplicateMixedFilament:ProjectDuplicateMixedFilamentWire} | {readonly setMixedFilamentEnabled:ProjectSetMixedFilamentEnabledWire} | {readonly tombstoneMixedFilament:ProjectTombstoneMixedFilamentWire} | {readonly removeMixedFilament:ProjectRemoveMixedFilamentWire} | {readonly setProjectSettingsOverrides:ProjectSetProjectSettingsOverridesWire} | {readonly setScopedOverrides:ProjectSetScopedOverridesWire} | {readonly convertVolumeRole:ProjectConvertVolumeRoleWire} | {readonly facetStroke:ProjectFacetStrokeWire};
+export interface ProjectRenameProjectWire {readonly name: ProjectEditTextWire;}
+export type ProjectPlanarPositionWire = readonly ProjectFiniteWire[];
+export interface ProjectWipeTowerInputWire {readonly enabled: ProjectFlagWire;readonly positionMm: ProjectPlanarPositionWire;readonly rotationDeg: ProjectFiniteWire;readonly filamentId: ProjectOptionalIdWire;}
+export type ProjectOptionalWipeTowerWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectWipeTowerInputWire};
+export interface ProjectSetPlateWipeTowerWire {readonly plateId: ProjectIdWire;readonly wipeTower: ProjectOptionalWipeTowerWire;readonly label: ProjectOptionalTextWire;}
+export type ProjectMixedFilamentInputsWire = readonly ProjectMixedFilamentInputWire[];
+export interface ProjectReconcileAutoPairsWire {readonly guard: ProjectSettingsGuardWire;readonly filaments: ProjectMixedFilamentInputsWire;readonly label: ProjectOptionalTextWire;}
+export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire} | {readonly addLayerEvent:ProjectAddLayerEventWire} | {readonly editLayerEvent:ProjectEditLayerEventWire} | {readonly deleteLayerEvent:ProjectDeleteLayerEventWire} | {readonly addBrimEar:ProjectAddBrimEarWire} | {readonly addBrimEars:ProjectAddBrimEarsWire} | {readonly removeBrimEar:ProjectRemoveBrimEarWire} | {readonly clearBrimEars:ProjectClearBrimEarsWire} | {readonly adjustLayerHeightProfile:ProjectAdjustLayerHeightProfileWire} | {readonly smoothLayerHeightProfile:ProjectSmoothLayerHeightProfileWire} | {readonly adaptiveLayerHeightProfile:ProjectAdaptiveLayerHeightProfileWire} | {readonly resetLayerHeightProfile:ProjectResetLayerHeightProfileWire} | {readonly setFilamentAssignments:ProjectSetFilamentAssignmentsWire} | {readonly setObjectFilament:ProjectSetObjectFilamentWire} | {readonly setVolumeFilament:ProjectSetVolumeFilamentWire} | {readonly setLayerRangeFilament:ProjectSetLayerRangeFilamentWire} | {readonly remapFilaments:ProjectRemapFilamentsWire} | {readonly setFilamentEnabled:ProjectSetFilamentEnabledWire} | {readonly syncPhysicalFilaments:ProjectSyncPhysicalFilamentsWire} | {readonly addMixedFilament:ProjectAddMixedFilamentWire} | {readonly editMixedFilament:ProjectEditMixedFilamentWire} | {readonly duplicateMixedFilament:ProjectDuplicateMixedFilamentWire} | {readonly setMixedFilamentEnabled:ProjectSetMixedFilamentEnabledWire} | {readonly tombstoneMixedFilament:ProjectTombstoneMixedFilamentWire} | {readonly removeMixedFilament:ProjectRemoveMixedFilamentWire} | {readonly setProjectSettingsOverrides:ProjectSetProjectSettingsOverridesWire} | {readonly setScopedOverrides:ProjectSetScopedOverridesWire} | {readonly convertVolumeRole:ProjectConvertVolumeRoleWire} | {readonly facetStroke:ProjectFacetStrokeWire} | {readonly renameProject:ProjectRenameProjectWire} | {readonly setPlateWipeTower:ProjectSetPlateWipeTowerWire} | {readonly reconcileAutoPairs:ProjectReconcileAutoPairsWire};
 export type ProjectCommandsWire = readonly ProjectCommandWire[];
 export interface ProjectIntentWire {readonly version: ProjectVersionWire;readonly command: ProjectCommandWire;}
 export interface ProjectBatchWire {readonly version: ProjectVersionWire;readonly label: ProjectLabelWire;readonly commands: ProjectCommandsWire;}

@@ -208,27 +208,33 @@ fn decode<T: Decode>(value: Value) -> Result<T, PreparationError> {
     T::from_value(value).map_err(|_| PreparationError::InvalidIntent)
 }
 
+/// A complete recipe from its typed intent input.
+pub(super) fn mixed_filament(
+    f: wire::MixedFilamentInput,
+) -> Result<MixedFilament, PreparationError> {
+    let id: MixedFilamentId = id(f.mixed_filament_id)?;
+    let mut fields = vec![
+        field("id", Value::String(id.as_utf16().to_vec())),
+        field("name", Value::String(f.name)),
+        field("displayColor", Value::String(f.display_color)),
+        field("components", components_value(f.components)?),
+        field("distribution", distribution_value(f.distribution)),
+        field("enabled", Value::Bool(f.enabled)),
+    ];
+    if let wire::OptionalFullSpectrum::Value(fs) = f.full_spectrum {
+        fields.push(field("fullSpectrum", full_spectrum_value(fs)?));
+    }
+    fields.push(field("config", json_object(f.config_json)?.into_value()));
+    if let wire::OptionalJsonText::Value(text) = f.extension_data_json {
+        fields.push(field("extensionData", json_object(text)?.into_value()));
+    }
+    decode(object(fields))
+}
+
 impl MixedOp {
     pub(super) fn add(v: wire::AddMixedFilament) -> Result<(Self, Text), PreparationError> {
-        let f = v.filament;
-        let id: MixedFilamentId = id(f.mixed_filament_id)?;
-        let label = Text::new([&u("Add ")[..], &f.name].concat());
-        let mut fields = vec![
-            field("id", Value::String(id.as_utf16().to_vec())),
-            field("name", Value::String(f.name)),
-            field("displayColor", Value::String(f.display_color)),
-            field("components", components_value(f.components)?),
-            field("distribution", distribution_value(f.distribution)),
-            field("enabled", Value::Bool(f.enabled)),
-        ];
-        if let wire::OptionalFullSpectrum::Value(fs) = f.full_spectrum {
-            fields.push(field("fullSpectrum", full_spectrum_value(fs)?));
-        }
-        fields.push(field("config", json_object(f.config_json)?.into_value()));
-        if let wire::OptionalJsonText::Value(text) = f.extension_data_json {
-            fields.push(field("extensionData", json_object(text)?.into_value()));
-        }
-        Ok((Self::Add(Box::new(decode(object(fields))?)), label))
+        let label = Text::new([&u("Add ")[..], &v.filament.name].concat());
+        Ok((Self::Add(Box::new(mixed_filament(v.filament)?)), label))
     }
     pub(super) fn edit(v: wire::EditMixedFilament) -> Result<Self, PreparationError> {
         // The browser maps every field (invalid intents) before its

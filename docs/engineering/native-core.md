@@ -2743,6 +2743,17 @@ every covered facet; remaining splits that collapse to one leaf are dropped, as
 Dense refined-root commits (`commitFacetRefinement`) can exceed intent limits on
 real meshes and will move to the staged path with the asset-bearing commands.
 
+### Project rename, wipe towers and auto-pair reconciliation
+
+`renameProject`, `setPlateWipeTower` and `reconcileAutoPairs` are native.
+Renaming refuses a blank name and, like the browser, has no no-op check.
+Wipe-tower placement replaces or removes one plate's tower, is a no-op when
+nothing changes, and keeps its default labels (`Auto-place wipe tower` for an
+enabled tower, `Update wipe tower` otherwise) and fixed 128-byte estimate.
+Auto-pair reconciliation replaces the whole mixed-filament list with typed
+recipes under a revision/hash guard; redo refuses if the list moved. The list
+is validated as a whole, so dropping a referenced recipe is refused.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

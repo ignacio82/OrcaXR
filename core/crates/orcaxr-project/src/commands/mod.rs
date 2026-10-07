@@ -11,6 +11,7 @@ mod layer_ranges;
 mod lifecycle;
 mod mixed;
 mod objects;
+mod project_plate;
 mod settings_overrides;
 pub mod staged;
 mod transforms;
@@ -100,6 +101,9 @@ enum Kind {
     ScopedSettings(Box<settings_overrides::Scoped>),
     VolumeRole(Box<volume_roles::ConvertVolumeRole>),
     FacetStroke(Box<facet_stroke::FacetStroke>),
+    RenameProject(Box<project_plate::RenameProject>),
+    WipeTower(Box<project_plate::PlateWipeTower>),
+    ReconcileAutoPairs(Box<project_plate::ReconcileAutoPairs>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -241,6 +245,18 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
             id(v.object_id)?,
             id(v.layer_range_id)?,
         )),
+        wire::Command::RenameProject(v) => {
+            let command = project_plate::RenameProject::new(v)?;
+            (command.label(), Kind::RenameProject(Box::new(command)))
+        }
+        wire::Command::SetPlateWipeTower(v) => {
+            let command = project_plate::PlateWipeTower::new(v)?;
+            (command.label(), Kind::WipeTower(Box::new(command)))
+        }
+        wire::Command::ReconcileAutoPairs(v) => {
+            let command = project_plate::ReconcileAutoPairs::new(v)?;
+            (command.label(), Kind::ReconcileAutoPairs(Box::new(command)))
+        }
         wire::Command::FacetStroke(v) => {
             let command = facet_stroke::FacetStroke::new(v)?;
             (command.label(), Kind::FacetStroke(Box::new(command)))
@@ -579,6 +595,9 @@ impl PreparedCommand {
             Kind::ScopedSettings(_) => "set-scoped-overrides",
             Kind::VolumeRole(_) => "convert-volume-role",
             Kind::FacetStroke(_) => "facet-annotation-stroke",
+            Kind::RenameProject(_) => "rename-project",
+            Kind::WipeTower(_) => "set-plate-wipe-tower",
+            Kind::ReconcileAutoPairs(_) => "reconcile-full-spectrum-auto-pairs",
         }
     }
 }
@@ -606,8 +625,10 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::LayerRange(c) => c.is_noop(state)?,
             Kind::LayerEvent(c) => c.is_noop(state)?,
             Kind::VolumeRole(c) => c.is_noop(state)?,
+            Kind::WipeTower(c) => c.is_noop(state)?,
             Kind::ProjectSettings(c) => return c.is_noop(context),
             Kind::FacetStroke(c) => return c.is_noop(context),
+            Kind::ReconcileAutoPairs(c) => return c.is_noop(context),
             Kind::ScopedSettings(c) => return c.is_noop(context),
             Kind::Activate { id, .. } => &state.active_plate_id == id,
             Kind::Rename { id, name, .. } => &plate(state, id)?.name == name,
@@ -640,6 +661,9 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::ScopedSettings(c) => c.apply(context, reason)?,
             Kind::VolumeRole(c) => c.apply(context, reason)?,
             Kind::FacetStroke(c) => c.apply(context, reason)?,
+            Kind::RenameProject(c) => c.apply(context, reason)?,
+            Kind::WipeTower(c) => c.apply(context, reason)?,
+            Kind::ReconcileAutoPairs(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
                 activate,
@@ -779,6 +803,9 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::ScopedSettings(c) => return c.revert(context, reason),
             Kind::VolumeRole(c) => return c.revert(context, reason),
             Kind::FacetStroke(c) => return c.revert(context, reason),
+            Kind::RenameProject(c) => return c.revert(context, reason),
+            Kind::WipeTower(c) => return c.revert(context, reason),
+            Kind::ReconcileAutoPairs(c) => return c.revert(context, reason),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()
@@ -860,6 +887,8 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::ScopedSettings(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::VolumeRole(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::FacetStroke(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::WipeTower(_) => Ok(128),
+            Kind::ReconcileAutoPairs(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),

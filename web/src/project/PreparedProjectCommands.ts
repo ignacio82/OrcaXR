@@ -10,8 +10,10 @@ import {
   DeletePlateCommand,
   DuplicatePlateCommand,
   RenamePlateCommand,
+  RenameProjectCommand,
   ReorderPlatesCommand,
   SetActivePlateCommand,
+  SetPlateWipeTowerCommand,
   SetPlatePrintableCommand,
   SetInstanceTransformCommand,
   MoveObjectToPlateCommand,
@@ -73,6 +75,7 @@ import {
   TombstoneMixedFilamentCommand,
   type EditMixedFilamentPatch,
 } from './filaments/mixedCommands';
+import { ReconcileFullSpectrumAutoPairsCommand } from './filaments/autoPairReconciliation';
 import { assertCanonicalSerializable } from './domain/canonical';
 import { SetProjectSettingsOverridesCommand } from './settingsOverrides';
 import { ConvertVolumeRoleCommand } from './objects/semanticVolumeCommands';
@@ -90,8 +93,10 @@ import type {
   MixedDistribution,
   MixedFilament,
   Transform,
+  WipeTowerState,
 } from './domain/model';
 import type {
+  ProjectWipeTowerInputWire,
   ProjectFacetStrokeOperationInputWire,
   ProjectVolumeRoleNameWire,
   ProjectScopedTargetWire,
@@ -270,6 +275,23 @@ function command(value: ProjectCommandWire): ProjectCommand {
   }
   if ('deleteLayerEvent' in value)
     return new DeleteLayerEventCommand(id<'custom-gcode'>(value.deleteLayerEvent.customGcodeId));
+  if ('reconcileAutoPairs' in value) {
+    const input = value.reconcileAutoPairs;
+    return new ReconcileFullSpectrumAutoPairsCommand(
+      { expectedRevision: input.guard.sourceRevision, sourceHash: text(input.guard.sourceHash) },
+      input.filaments.map(mixedFilament),
+      ...('value' in input.label ? [text(input.label.value)] : []),
+    );
+  }
+  if ('renameProject' in value) return new RenameProjectCommand(text(value.renameProject.name));
+  if ('setPlateWipeTower' in value) {
+    const input = value.setPlateWipeTower;
+    return new SetPlateWipeTowerCommand(
+      id<'plate'>(input.plateId),
+      'value' in input.wipeTower ? wipeTower(input.wipeTower.value) : undefined,
+      'value' in input.label ? text(input.label.value) : undefined,
+    );
+  }
   if ('facetStroke' in value) {
     const input = value.facetStroke;
     return new FacetStrokeRequestCommand({
@@ -521,6 +543,14 @@ function jsonObject(units: readonly number[]): ConfigMap {
   if (jsonDepth(parsed) > JSON_TEXT_MAX_DEPTH) throw new InvalidProjectIntent();
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new InvalidProjectIntent();
   return parsed as ConfigMap;
+}
+function wipeTower(value: ProjectWipeTowerInputWire): WipeTowerState {
+  return {
+    enabled: value.enabled,
+    positionMm: [value.positionMm[0], value.positionMm[1]],
+    rotationDeg: value.rotationDeg,
+    ...('value' in value.filamentId ? { filamentId: filament(value.filamentId.value) } : {}),
+  };
 }
 /** Paint values travel untyped; the stroke's validation refuses one its channel cannot hold. */
 function facetStrokeOperation(value: ProjectFacetStrokeOperationInputWire): FacetStrokeOperation<FacetAnnotationChannel> {

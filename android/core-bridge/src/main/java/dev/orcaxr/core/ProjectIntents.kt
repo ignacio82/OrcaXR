@@ -1534,6 +1534,85 @@ object ProjectIntents {
             w.field("label") { writeOptionalText(w, v.label) }
         }
     }
+    data class RenameProject(val name: List<Int>)
+    private fun readRenameProject(v: Any): RenameProject {
+        val obj = ProjectIntentJson.fields(v, setOf("name"), false)
+        return RenameProject(readEditText(obj.get("name")))
+    }
+    private fun writeRenameProject(w: ProjectIntentWriter, v: RenameProject) {
+        w.obj {
+            w.field("name") { writeEditText(w, v.name) }
+        }
+    }
+    private fun readPlanarPosition(v: Any): List<Double> {
+        val array = ProjectIntentJson.list(v, 2, 2)
+        return List(array.length()) { readFinite(array.get(it)) }
+    }
+    private fun writePlanarPosition(w: ProjectIntentWriter, v: List<Double>) {
+        w.array(v, 2, 2) { writeFinite(w, it) }
+    }
+    data class WipeTowerInput(val enabled: Boolean, val positionMm: List<Double>, val rotationDeg: Double, val filamentId: OptionalId)
+    private fun readWipeTowerInput(v: Any): WipeTowerInput {
+        val obj = ProjectIntentJson.fields(v, setOf("enabled", "positionMm", "rotationDeg", "filamentId"), false)
+        return WipeTowerInput(readFlag(obj.get("enabled")), readPlanarPosition(obj.get("positionMm")), readFinite(obj.get("rotationDeg")), readOptionalId(obj.get("filamentId")))
+    }
+    private fun writeWipeTowerInput(w: ProjectIntentWriter, v: WipeTowerInput) {
+        w.obj {
+            w.field("enabled") { writeFlag(w, v.enabled) }
+            w.field("positionMm") { writePlanarPosition(w, v.positionMm) }
+            w.field("rotationDeg") { writeFinite(w, v.rotationDeg) }
+            w.field("filamentId") { writeOptionalId(w, v.filamentId) }
+        }
+    }
+    sealed interface OptionalWipeTower {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalWipeTower
+        data class Value(val value: ProjectIntents.WipeTowerInput) : OptionalWipeTower
+    }
+    private fun readOptionalWipeTower(v: Any): OptionalWipeTower {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalWipeTower.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalWipeTower.Value(readWipeTowerInput(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalWipeTower(w: ProjectIntentWriter, v: OptionalWipeTower) {
+        w.obj { when(v) {
+            is OptionalWipeTower.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalWipeTower.Value -> w.field("value") { writeWipeTowerInput(w, v.value) }
+        } }
+    }
+    data class SetPlateWipeTower(val plateId: List<Int>, val wipeTower: OptionalWipeTower, val label: OptionalText)
+    private fun readSetPlateWipeTower(v: Any): SetPlateWipeTower {
+        val obj = ProjectIntentJson.fields(v, setOf("plateId", "wipeTower", "label"), false)
+        return SetPlateWipeTower(readId(obj.get("plateId")), readOptionalWipeTower(obj.get("wipeTower")), readOptionalText(obj.get("label")))
+    }
+    private fun writeSetPlateWipeTower(w: ProjectIntentWriter, v: SetPlateWipeTower) {
+        w.obj {
+            w.field("plateId") { writeId(w, v.plateId) }
+            w.field("wipeTower") { writeOptionalWipeTower(w, v.wipeTower) }
+            w.field("label") { writeOptionalText(w, v.label) }
+        }
+    }
+    private fun readMixedFilamentInputs(v: Any): List<MixedFilamentInput> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readMixedFilamentInput(array.get(it)) }
+    }
+    private fun writeMixedFilamentInputs(w: ProjectIntentWriter, v: List<MixedFilamentInput>) {
+        w.array(v, 0, 4096) { writeMixedFilamentInput(w, it) }
+    }
+    data class ReconcileAutoPairs(val guard: SettingsGuard, val filaments: List<MixedFilamentInput>, val label: OptionalText)
+    private fun readReconcileAutoPairs(v: Any): ReconcileAutoPairs {
+        val obj = ProjectIntentJson.fields(v, setOf("guard", "filaments", "label"), false)
+        return ReconcileAutoPairs(readSettingsGuard(obj.get("guard")), readMixedFilamentInputs(obj.get("filaments")), readOptionalText(obj.get("label")))
+    }
+    private fun writeReconcileAutoPairs(w: ProjectIntentWriter, v: ReconcileAutoPairs) {
+        w.obj {
+            w.field("guard") { writeSettingsGuard(w, v.guard) }
+            w.field("filaments") { writeMixedFilamentInputs(w, v.filaments) }
+            w.field("label") { writeOptionalText(w, v.label) }
+        }
+    }
     sealed interface Command {
         data class AddPlate(val value: ProjectIntents.AddPlate) : Command
         data class DuplicatePlate(val value: ProjectIntents.DuplicatePlate) : Command
@@ -1587,9 +1666,12 @@ object ProjectIntents {
         data class SetScopedOverrides(val value: ProjectIntents.SetScopedOverrides) : Command
         data class ConvertVolumeRole(val value: ProjectIntents.ConvertVolumeRole) : Command
         data class FacetStroke(val value: ProjectIntents.FacetStroke) : Command
+        data class RenameProject(val value: ProjectIntents.RenameProject) : Command
+        data class SetPlateWipeTower(val value: ProjectIntents.SetPlateWipeTower) : Command
+        data class ReconcileAutoPairs(val value: ProjectIntents.ReconcileAutoPairs) : Command
     }
     private fun readCommand(v: Any): Command {
-        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments", "addMixedFilament", "editMixedFilament", "duplicateMixedFilament", "setMixedFilamentEnabled", "tombstoneMixedFilament", "removeMixedFilament", "setProjectSettingsOverrides", "setScopedOverrides", "convertVolumeRole", "facetStroke"), true)
+        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments", "addMixedFilament", "editMixedFilament", "duplicateMixedFilament", "setMixedFilamentEnabled", "tombstoneMixedFilament", "removeMixedFilament", "setProjectSettingsOverrides", "setScopedOverrides", "convertVolumeRole", "facetStroke", "renameProject", "setPlateWipeTower", "reconcileAutoPairs"), true)
         return when(val key = obj.keys().next()) {
             "addPlate" -> Command.AddPlate(readAddPlate(obj.get(key)))
             "duplicatePlate" -> Command.DuplicatePlate(readDuplicatePlate(obj.get(key)))
@@ -1643,6 +1725,9 @@ object ProjectIntents {
             "setScopedOverrides" -> Command.SetScopedOverrides(readSetScopedOverrides(obj.get(key)))
             "convertVolumeRole" -> Command.ConvertVolumeRole(readConvertVolumeRole(obj.get(key)))
             "facetStroke" -> Command.FacetStroke(readFacetStroke(obj.get(key)))
+            "renameProject" -> Command.RenameProject(readRenameProject(obj.get(key)))
+            "setPlateWipeTower" -> Command.SetPlateWipeTower(readSetPlateWipeTower(obj.get(key)))
+            "reconcileAutoPairs" -> Command.ReconcileAutoPairs(readReconcileAutoPairs(obj.get(key)))
             else -> throw InvalidProjectIntent()
         }
     }
@@ -1700,6 +1785,9 @@ object ProjectIntents {
             is Command.SetScopedOverrides -> w.field("setScopedOverrides") { writeSetScopedOverrides(w, v.value) }
             is Command.ConvertVolumeRole -> w.field("convertVolumeRole") { writeConvertVolumeRole(w, v.value) }
             is Command.FacetStroke -> w.field("facetStroke") { writeFacetStroke(w, v.value) }
+            is Command.RenameProject -> w.field("renameProject") { writeRenameProject(w, v.value) }
+            is Command.SetPlateWipeTower -> w.field("setPlateWipeTower") { writeSetPlateWipeTower(w, v.value) }
+            is Command.ReconcileAutoPairs -> w.field("reconcileAutoPairs") { writeReconcileAutoPairs(w, v.value) }
         } }
     }
     private fun readCommands(v: Any): List<Command> {

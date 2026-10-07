@@ -1868,6 +1868,94 @@ fn read_facet_stroke(v: &Value) -> Result<FacetStroke, InvalidIntent> {
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RenameProject {
+    pub name: EditText,
+}
+fn read_rename_project(v: &Value) -> Result<RenameProject, InvalidIntent> {
+    let object = fields(v, &["name"], false)?;
+    Ok(RenameProject {
+        name: read_edit_text(&object["name"])?,
+    })
+}
+pub type PlanarPosition = Vec<Finite>;
+fn read_planar_position(v: &Value) -> Result<PlanarPosition, InvalidIntent> {
+    list(v, 2, 2)?.iter().map(read_finite).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WipeTowerInput {
+    pub enabled: Flag,
+    pub position_mm: PlanarPosition,
+    pub rotation_deg: Finite,
+    pub filament_id: OptionalId,
+}
+fn read_wipe_tower_input(v: &Value) -> Result<WipeTowerInput, InvalidIntent> {
+    let object = fields(
+        v,
+        &["enabled", "positionMm", "rotationDeg", "filamentId"],
+        false,
+    )?;
+    Ok(WipeTowerInput {
+        enabled: read_flag(&object["enabled"])?,
+        position_mm: read_planar_position(&object["positionMm"])?,
+        rotation_deg: read_finite(&object["rotationDeg"])?,
+        filament_id: read_optional_id(&object["filamentId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalWipeTower {
+    Absent(Empty),
+    Value(WipeTowerInput),
+}
+fn read_optional_wipe_tower(v: &Value) -> Result<OptionalWipeTower, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalWipeTower::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalWipeTower::Value(read_wipe_tower_input(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetPlateWipeTower {
+    pub plate_id: Id,
+    pub wipe_tower: OptionalWipeTower,
+    pub label: OptionalText,
+}
+fn read_set_plate_wipe_tower(v: &Value) -> Result<SetPlateWipeTower, InvalidIntent> {
+    let object = fields(v, &["plateId", "wipeTower", "label"], false)?;
+    Ok(SetPlateWipeTower {
+        plate_id: read_id(&object["plateId"])?,
+        wipe_tower: read_optional_wipe_tower(&object["wipeTower"])?,
+        label: read_optional_text(&object["label"])?,
+    })
+}
+pub type MixedFilamentInputs = Vec<MixedFilamentInput>;
+fn read_mixed_filament_inputs(v: &Value) -> Result<MixedFilamentInputs, InvalidIntent> {
+    list(v, 0, 4096)?
+        .iter()
+        .map(read_mixed_filament_input)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconcileAutoPairs {
+    pub guard: SettingsGuard,
+    pub filaments: MixedFilamentInputs,
+    pub label: OptionalText,
+}
+fn read_reconcile_auto_pairs(v: &Value) -> Result<ReconcileAutoPairs, InvalidIntent> {
+    let object = fields(v, &["guard", "filaments", "label"], false)?;
+    Ok(ReconcileAutoPairs {
+        guard: read_settings_guard(&object["guard"])?,
+        filaments: read_mixed_filament_inputs(&object["filaments"])?,
+        label: read_optional_text(&object["label"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Command {
     AddPlate(AddPlate),
     DuplicatePlate(DuplicatePlate),
@@ -1921,6 +2009,9 @@ pub enum Command {
     SetScopedOverrides(SetScopedOverrides),
     ConvertVolumeRole(ConvertVolumeRole),
     FacetStroke(FacetStroke),
+    RenameProject(RenameProject),
+    SetPlateWipeTower(SetPlateWipeTower),
+    ReconcileAutoPairs(ReconcileAutoPairs),
 }
 fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
     let object = fields(
@@ -1978,6 +2069,9 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             "setScopedOverrides",
             "convertVolumeRole",
             "facetStroke",
+            "renameProject",
+            "setPlateWipeTower",
+            "reconcileAutoPairs",
         ],
         true,
     )?;
@@ -2077,6 +2171,13 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
         )?)),
         "convertVolumeRole" => Ok(Command::ConvertVolumeRole(read_convert_volume_role(value)?)),
         "facetStroke" => Ok(Command::FacetStroke(read_facet_stroke(value)?)),
+        "renameProject" => Ok(Command::RenameProject(read_rename_project(value)?)),
+        "setPlateWipeTower" => Ok(Command::SetPlateWipeTower(read_set_plate_wipe_tower(
+            value,
+        )?)),
+        "reconcileAutoPairs" => Ok(Command::ReconcileAutoPairs(read_reconcile_auto_pairs(
+            value,
+        )?)),
         _ => Err(InvalidIntent),
     }
 }

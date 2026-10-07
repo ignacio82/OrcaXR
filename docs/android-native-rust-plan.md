@@ -146,9 +146,9 @@ undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
 actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
 Layer ranges, layer events, brim ears, layer-height profiles, physical and
 mixed filaments, project/scoped setting overrides, volume-role conversion and
-whole-facet paint strokes are ported (about 60 of the browser's 78 command
-classes are now native). Next families, in order: project rename, plate wipe
-tower and auto-pair reconciliation, model-colour recreation (intent-only), then the asset-bearing commands, which need new
+whole-facet paint strokes, project rename, plate wipe towers and auto-pair
+reconciliation are ported (about 63 of the browser's 78 command classes are now
+native). Next families, in order: model-colour recreation (intent-only), then the asset-bearing commands, which need new
 captured (staged) command types for their mesh payloads: add volume, mesh
 topology replacement, split and split-to-objects, SVG and emboss volumes, and
 mesh booleans. Each family adds intent variants to
@@ -1115,6 +1115,11 @@ and replay coverage for the complete current command inventory.
     corpus (1,569 steps, 32 new) covers every channel, invalid values and
     ranges, stale guards and topology, non-model volumes and transactions.
     Dense refined-root commits will use the staged path.
+  - [x] Port `renameProject`, `setPlateWipeTower` and `reconcileAutoPairs`
+    (a revision/hash-guarded replacement of the mixed-filament list with typed
+    recipes). The corpus (1,598 steps, 29 new) keeps the browser's quirks: a
+    rename to the same name is still an entry, and the wipe tower's history
+    estimate is a fixed 128.
   - [ ] Port and replay every remaining command family before session cutover
     (
     settings/scoped overrides, SVG/emboss/semantic volumes, split/boolean,

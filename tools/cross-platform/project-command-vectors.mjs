@@ -962,7 +962,44 @@ scenario("facet-strokes", {}, (s, f) => {
   run({ kind: "undo" }); run({ kind: "redo" });
 });
 
-const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/annotations/FacetAnnotationStrokeCommand.ts", "web/src/project/annotations/sparse.ts", "web/src/project/annotations/types.ts", "web/src/project/objects/semanticVolumeCommands.ts", "web/src/project/settingsOverrides.ts", "web/src/project/scopedOverrides.ts", "web/src/project/domain/settingScopes.ts", "web/src/project/filaments/commands.ts", "web/src/project/filaments/mixedCommands.ts", "web/src/project/filaments/fullSpectrumRecipe.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
+const renameProject = name => ({ renameProject: { name: units(name) } });
+const wipeTowerInput = (enabled, positionMm, rotationDeg, filamentId) => ({ enabled, positionMm, rotationDeg, filamentId: filamentId === undefined ? { absent: {} } : { value: units(filamentId) } });
+const setWipeTower = (plateId, tower, label) => ({ setPlateWipeTower: { plateId: units(plateId), wipeTower: tower === undefined ? { absent: {} } : { value: tower }, label: optionalValue(label, units) } });
+const reconcile = (guard, filaments, label) => ({ reconcileAutoPairs: { guard, filaments: filaments.map(f => mixedInput(f)), label: optionalValue(label, units) } });
+scenario("project-plate-reconcile", {}, noop, ({ execute, batch, run, ids, state, snapshot }) => {
+  const [p0, p1] = state().filaments.physical.map(p => p.id);
+  execute(renameProject("Workshop build 😀"));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(renameProject("Workshop build 😀"));
+  execute(renameProject("  "));
+  execute(setWipeTower(ids.plate, wipeTowerInput(true, [120, 80], 15, p0)));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(setWipeTower(ids.plate, wipeTowerInput(true, [120, 80], 15, p0)));
+  execute(setWipeTower(ids.plate, wipeTowerInput(false, [10, -5.5], 0)));
+  execute(setWipeTower(ids.plate, wipeTowerInput(true, [1, 2], 90, p1), "Move the tower"));
+  execute(setWipeTower(ids.plate, undefined));
+  run({ kind: "undo" });
+  for (const bad of [setWipeTower("import:plate:missing", undefined), setWipeTower("bad", undefined),
+    setWipeTower(ids.plate, wipeTowerInput(true, [0, 0], 0, "bad")), setWipeTower(ids.plate, wipeTowerInput(true, [0, 0], 0, "import:filament:missing"))])
+    execute(bad);
+  const current = () => settingsGuard(snapshot());
+  const auto = createFullSpectrumMixedFilament("import:mixed:auto", state().filaments.physical, { mode: "ratio", name: "Auto pair", displayColor: "#7F007F",
+    componentFilamentIds: [p0, p1], mixBPercent: 50 });
+  const existing = () => state().filaments.mixed;
+  execute(reconcile(current(), [...existing(), auto]));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(reconcile(current(), existing()));
+  execute(reconcile(current(), [auto], "Drop manual pairs"));
+  const stale = settingsGuard(snapshot());
+  execute(renameProject("Moved on"));
+  for (const bad of [() => reconcile(stale, existing()), () => reconcile(current(), [{ ...auto, components: [{ filamentId: p0, weight: 1 }] }])])
+    execute(bad());
+  batch([renameProject("Batched"), setWipeTower(ids.plate, wipeTowerInput(true, [50, 50], 45))], "Project transaction");
+  batch([renameProject("Rolled back"), setWipeTower("import:plate:missing", undefined)], "Rolled back project");
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+
+const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/filaments/autoPairReconciliation.ts", "web/src/project/annotations/FacetAnnotationStrokeCommand.ts", "web/src/project/annotations/sparse.ts", "web/src/project/annotations/types.ts", "web/src/project/objects/semanticVolumeCommands.ts", "web/src/project/settingsOverrides.ts", "web/src/project/scopedOverrides.ts", "web/src/project/domain/settingScopes.ts", "web/src/project/filaments/commands.ts", "web/src/project/filaments/mixedCommands.ts", "web/src/project/filaments/fullSpectrumRecipe.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";
 const path = new URL("testdata/cross-platform/project-command-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);

@@ -982,6 +982,56 @@
         "label": "OptionalText"
       }
     },
+    "RenameProject": {
+      "kind": "object",
+      "fields": {
+        "name": "EditText"
+      }
+    },
+    "PlanarPosition": {
+      "kind": "array",
+      "items": "Finite",
+      "min": 2,
+      "max": 2
+    },
+    "WipeTowerInput": {
+      "kind": "object",
+      "fields": {
+        "enabled": "Flag",
+        "positionMm": "PlanarPosition",
+        "rotationDeg": "Finite",
+        "filamentId": "OptionalId"
+      }
+    },
+    "OptionalWipeTower": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "WipeTowerInput"
+      }
+    },
+    "SetPlateWipeTower": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id",
+        "wipeTower": "OptionalWipeTower",
+        "label": "OptionalText"
+      }
+    },
+    "MixedFilamentInputs": {
+      "kind": "array",
+      "items": "MixedFilamentInput",
+      "min": 0,
+      "max": 4096
+    },
+    "ReconcileAutoPairs": {
+      "kind": "object",
+      "fields": {
+        "guard": "SettingsGuard",
+        "filaments": "MixedFilamentInputs",
+        "label": "OptionalText"
+      }
+    },
     "Command": {
       "kind": "union",
       "variants": {
@@ -1036,7 +1086,10 @@
         "setProjectSettingsOverrides": "SetProjectSettingsOverrides",
         "setScopedOverrides": "SetScopedOverrides",
         "convertVolumeRole": "ConvertVolumeRole",
-        "facetStroke": "FacetStroke"
+        "facetStroke": "FacetStroke",
+        "renameProject": "RenameProject",
+        "setPlateWipeTower": "SetPlateWipeTower",
+        "reconcileAutoPairs": "ReconcileAutoPairs"
       }
     },
     "Commands": {
