@@ -5,7 +5,7 @@
     "web/src/project/session.ts": "c749fe8da3bbb84e9fb0457029d8d6764460fc7364e48154ab57045cf19dae62",
     "web/src/project/assets.ts": "e8e10fac5d3821abbd3fd69e2949f3551d6a0db4c52ee43d678663aeabd2bba7",
     "web/src/project/history/commandBus.ts": "1ceb7e35e92ab0cdc18db529c3ad3f487edac2b3a25f42545abad925a541e86c",
-    "testdata/cross-platform/project-clipboard-vectors.json": "94e39aa66aec3918293d59c6b1f92152c45ae48201444fd3957075da523114d2",
+    "testdata/cross-platform/project-clipboard-vectors.json": "ebb96e8f1ee1c0c95929fdc50dde1a8b5602bcec7d91752d12c83a0ead752437",
     "testdata/cross-platform/project-model-vectors.json": "7c8510f7a0b3009f17baa7c74ffb1c11ca83d5ed279a8b6c9a369ff775027f51"
   },
   "documents": [

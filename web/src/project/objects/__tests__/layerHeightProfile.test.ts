@@ -286,6 +286,12 @@ test('impossible parameters and profiles fail closed', () => {
     { ...PARAMETERS, maxLayerHeightMm: 0.01 },
     { ...PARAMETERS, objectHeightMm: 0 },
     { ...PARAMETERS, layerHeightMm: Number.NaN },
+    // Work bounds: each of these would otherwise never finish generating.
+    { ...PARAMETERS, firstObjectLayerHeightMm: 0 },
+    { ...PARAMETERS, firstObjectLayerHeightMm: -1 },
+    { ...PARAMETERS, layerHeightMm: -0.2 },
+    { ...PARAMETERS, objectHeightMm: 10_000.5 },
+    { ...PARAMETERS, minLayerHeightMm: 1e-6 },
   ]) {
     assert.throws(
       () => baseLayerHeightProfile(bad),
@@ -296,6 +302,12 @@ test('impossible parameters and profiles fail closed', () => {
     assert.throws(
       () => smoothHeightProfile(bad, PARAMETERS),
       (error: unknown) => error instanceof LayerHeightProfileError && error.code === 'invalid-profile',
+    );
+  }
+  for (const radius of [101, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(
+      () => smoothHeightProfile(baseLayerHeightProfile(PARAMETERS), PARAMETERS, { radius, keepMin: false }),
+      (error: unknown) => error instanceof LayerHeightProfileError && error.code === 'invalid-parameters',
     );
   }
   assert.throws(

@@ -2,9 +2,11 @@
 //! separate: a declared layout alone does not prove finite vertices/valid indices.
 mod bounds;
 mod encode;
+mod indexed;
 use crate::assets::AssetLease;
 pub use bounds::{Bounds, BoundsLimits, instance_bounds};
 pub use encode::{Coordinates, EncodeOptions, encode};
+pub use indexed::{IndexedMesh, decode_indexed};
 use orcaxr_contracts::canonical::Value;
 use std::fmt;
 

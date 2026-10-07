@@ -4,6 +4,7 @@
 mod brim_ears;
 mod duplicate;
 mod layer_events;
+mod layer_heights;
 mod layer_ranges;
 mod lifecycle;
 mod objects;
@@ -87,6 +88,7 @@ enum Kind {
     LayerRange(Box<layer_ranges::LayerRangeCommand>),
     LayerEvent(Box<layer_events::LayerEventCommand>),
     BrimEar(Box<brim_ears::BrimEarCommand>),
+    LayerHeight(Box<layer_heights::LayerHeightCommand>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -228,6 +230,18 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
             id(v.object_id)?,
             id(v.layer_range_id)?,
         )),
+        wire::Command::AdjustLayerHeightProfile(v) => {
+            layer_height(layer_heights::LayerHeightCommand::adjust(v)?)
+        }
+        wire::Command::SmoothLayerHeightProfile(v) => {
+            layer_height(layer_heights::LayerHeightCommand::smooth(v)?)
+        }
+        wire::Command::AdaptiveLayerHeightProfile(v) => {
+            layer_height(layer_heights::LayerHeightCommand::adaptive(v)?)
+        }
+        wire::Command::ResetLayerHeightProfile(v) => {
+            layer_height(layer_heights::LayerHeightCommand::reset(v)?)
+        }
         wire::Command::AddBrimEar(v) => brim_ear(brim_ears::BrimEarCommand::add(v)?),
         wire::Command::AddBrimEars(v) => brim_ear(brim_ears::BrimEarCommand::add_many(v)?),
         wire::Command::RemoveBrimEar(v) => brim_ear(brim_ears::BrimEarCommand::remove(v)?),
@@ -348,6 +362,9 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
     };
     Ok(PreparedCommand { label, kind })
 }
+fn layer_height(c: layer_heights::LayerHeightCommand) -> (Text, Kind) {
+    (c.label(), Kind::LayerHeight(Box::new(c)))
+}
 fn brim_ear(c: brim_ears::BrimEarCommand) -> (Text, Kind) {
     (c.label(), Kind::BrimEar(Box::new(c)))
 }
@@ -367,6 +384,13 @@ fn transform_command(c: transforms::TransformCommand) -> (Text, Kind) {
     (c.label(), Kind::Transform(c))
 }
 const PROJECT: &[DirtyCategory] = &[DirtyCategory::ProjectData];
+/// Validation's first check: a state canonical JSON cannot encode (a
+/// non-finite number) is refused as its single issue, before any graph check.
+fn non_serializable<E>() -> CommandError<E> {
+    CommandError::domain(
+        "Invalid project state (1 errors): Canonical JSON cannot contain non-finite numbers at $",
+    )
+}
 /// The plate and object positions of `id`: the first match in plate order, like
 /// the browser's object walks.
 fn locate_object(state: &ProjectState, id: &ObjectId) -> Option<(usize, usize)> {
@@ -462,6 +486,7 @@ impl PreparedCommand {
             Kind::LayerRange(ref c) => c.reason(),
             Kind::LayerEvent(ref c) => c.reason(),
             Kind::BrimEar(ref c) => c.reason(),
+            Kind::LayerHeight(ref c) => c.reason(),
         }
     }
 }
@@ -505,6 +530,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::LayerRange(c) => c.apply(context, reason)?,
             Kind::LayerEvent(c) => c.apply(context, reason)?,
             Kind::BrimEar(c) => c.apply(context)?,
+            Kind::LayerHeight(c) => c.apply(context)?,
             Kind::Add {
                 plate,
                 activate,
@@ -637,6 +663,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::Lifecycle(c) => return c.revert(context, reason),
             Kind::LayerEvent(c) => return c.revert(context, reason),
             Kind::BrimEar(c) => return c.revert(context),
+            Kind::LayerHeight(c) => return c.revert(context),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()

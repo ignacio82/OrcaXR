@@ -719,6 +719,88 @@ object ProjectIntents {
             w.field("objectId") { writeId(w, v.objectId) }
         }
     }
+    data class LayerHeightLimits(val layerHeightMm: Double, val minLayerHeightMm: Double, val maxLayerHeightMm: Double, val firstObjectLayerHeightMm: Double, val firstObjectLayerHeightFixed: Boolean)
+    private fun readLayerHeightLimits(v: Any): LayerHeightLimits {
+        val obj = ProjectIntentJson.fields(v, setOf("layerHeightMm", "minLayerHeightMm", "maxLayerHeightMm", "firstObjectLayerHeightMm", "firstObjectLayerHeightFixed"), false)
+        return LayerHeightLimits(readFinite(obj.get("layerHeightMm")), readFinite(obj.get("minLayerHeightMm")), readFinite(obj.get("maxLayerHeightMm")), readFinite(obj.get("firstObjectLayerHeightMm")), readFlag(obj.get("firstObjectLayerHeightFixed")))
+    }
+    private fun writeLayerHeightLimits(w: ProjectIntentWriter, v: LayerHeightLimits) {
+        w.obj {
+            w.field("layerHeightMm") { writeFinite(w, v.layerHeightMm) }
+            w.field("minLayerHeightMm") { writeFinite(w, v.minLayerHeightMm) }
+            w.field("maxLayerHeightMm") { writeFinite(w, v.maxLayerHeightMm) }
+            w.field("firstObjectLayerHeightMm") { writeFinite(w, v.firstObjectLayerHeightMm) }
+            w.field("firstObjectLayerHeightFixed") { writeFlag(w, v.firstObjectLayerHeightFixed) }
+        }
+    }
+    data class LayerHeightParameters(val limits: LayerHeightLimits, val objectHeightMm: Double)
+    private fun readLayerHeightParameters(v: Any): LayerHeightParameters {
+        val obj = ProjectIntentJson.fields(v, setOf("limits", "objectHeightMm"), false)
+        return LayerHeightParameters(readLayerHeightLimits(obj.get("limits")), readFinite(obj.get("objectHeightMm")))
+    }
+    private fun writeLayerHeightParameters(w: ProjectIntentWriter, v: LayerHeightParameters) {
+        w.obj {
+            w.field("limits") { writeLayerHeightLimits(w, v.limits) }
+            w.field("objectHeightMm") { writeFinite(w, v.objectHeightMm) }
+        }
+    }
+    enum class LayerHeightAction {Increase,Decrease,Reduce,Smooth}
+    private fun readLayerHeightAction(v: Any): LayerHeightAction {
+        return when(v) {"increase" -> LayerHeightAction.Increase;"decrease" -> LayerHeightAction.Decrease;"reduce" -> LayerHeightAction.Reduce;"smooth" -> LayerHeightAction.Smooth; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeLayerHeightAction(w: ProjectIntentWriter, v: LayerHeightAction) {
+        w.literal(when(v) {LayerHeightAction.Increase -> "increase";LayerHeightAction.Decrease -> "decrease";LayerHeightAction.Reduce -> "reduce";LayerHeightAction.Smooth -> "smooth";})
+    }
+    data class AdjustLayerHeightProfile(val objectId: List<Int>, val parameters: LayerHeightParameters, val zMm: Double, val thicknessDeltaMm: Double, val bandWidthMm: Double, val action: LayerHeightAction)
+    private fun readAdjustLayerHeightProfile(v: Any): AdjustLayerHeightProfile {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "parameters", "zMm", "thicknessDeltaMm", "bandWidthMm", "action"), false)
+        return AdjustLayerHeightProfile(readId(obj.get("objectId")), readLayerHeightParameters(obj.get("parameters")), readFinite(obj.get("zMm")), readFinite(obj.get("thicknessDeltaMm")), readFinite(obj.get("bandWidthMm")), readLayerHeightAction(obj.get("action")))
+    }
+    private fun writeAdjustLayerHeightProfile(w: ProjectIntentWriter, v: AdjustLayerHeightProfile) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("parameters") { writeLayerHeightParameters(w, v.parameters) }
+            w.field("zMm") { writeFinite(w, v.zMm) }
+            w.field("thicknessDeltaMm") { writeFinite(w, v.thicknessDeltaMm) }
+            w.field("bandWidthMm") { writeFinite(w, v.bandWidthMm) }
+            w.field("action") { writeLayerHeightAction(w, v.action) }
+        }
+    }
+    data class SmoothLayerHeightProfile(val objectId: List<Int>, val parameters: LayerHeightParameters, val radius: Double, val keepMin: Boolean)
+    private fun readSmoothLayerHeightProfile(v: Any): SmoothLayerHeightProfile {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "parameters", "radius", "keepMin"), false)
+        return SmoothLayerHeightProfile(readId(obj.get("objectId")), readLayerHeightParameters(obj.get("parameters")), readFinite(obj.get("radius")), readFlag(obj.get("keepMin")))
+    }
+    private fun writeSmoothLayerHeightProfile(w: ProjectIntentWriter, v: SmoothLayerHeightProfile) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("parameters") { writeLayerHeightParameters(w, v.parameters) }
+            w.field("radius") { writeFinite(w, v.radius) }
+            w.field("keepMin") { writeFlag(w, v.keepMin) }
+        }
+    }
+    data class AdaptiveLayerHeightProfile(val objectId: List<Int>, val limits: LayerHeightLimits, val qualityFactor: Double)
+    private fun readAdaptiveLayerHeightProfile(v: Any): AdaptiveLayerHeightProfile {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "limits", "qualityFactor"), false)
+        return AdaptiveLayerHeightProfile(readId(obj.get("objectId")), readLayerHeightLimits(obj.get("limits")), readFinite(obj.get("qualityFactor")))
+    }
+    private fun writeAdaptiveLayerHeightProfile(w: ProjectIntentWriter, v: AdaptiveLayerHeightProfile) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("limits") { writeLayerHeightLimits(w, v.limits) }
+            w.field("qualityFactor") { writeFinite(w, v.qualityFactor) }
+        }
+    }
+    data class ResetLayerHeightProfile(val objectId: List<Int>)
+    private fun readResetLayerHeightProfile(v: Any): ResetLayerHeightProfile {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId"), false)
+        return ResetLayerHeightProfile(readId(obj.get("objectId")))
+    }
+    private fun writeResetLayerHeightProfile(w: ProjectIntentWriter, v: ResetLayerHeightProfile) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+        }
+    }
     sealed interface Command {
         data class AddPlate(val value: ProjectIntents.AddPlate) : Command
         data class DuplicatePlate(val value: ProjectIntents.DuplicatePlate) : Command
@@ -751,9 +833,13 @@ object ProjectIntents {
         data class AddBrimEars(val value: ProjectIntents.AddBrimEars) : Command
         data class RemoveBrimEar(val value: ProjectIntents.RemoveBrimEar) : Command
         data class ClearBrimEars(val value: ProjectIntents.ClearBrimEars) : Command
+        data class AdjustLayerHeightProfile(val value: ProjectIntents.AdjustLayerHeightProfile) : Command
+        data class SmoothLayerHeightProfile(val value: ProjectIntents.SmoothLayerHeightProfile) : Command
+        data class AdaptiveLayerHeightProfile(val value: ProjectIntents.AdaptiveLayerHeightProfile) : Command
+        data class ResetLayerHeightProfile(val value: ProjectIntents.ResetLayerHeightProfile) : Command
     }
     private fun readCommand(v: Any): Command {
-        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars"), true)
+        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile"), true)
         return when(val key = obj.keys().next()) {
             "addPlate" -> Command.AddPlate(readAddPlate(obj.get(key)))
             "duplicatePlate" -> Command.DuplicatePlate(readDuplicatePlate(obj.get(key)))
@@ -786,6 +872,10 @@ object ProjectIntents {
             "addBrimEars" -> Command.AddBrimEars(readAddBrimEars(obj.get(key)))
             "removeBrimEar" -> Command.RemoveBrimEar(readRemoveBrimEar(obj.get(key)))
             "clearBrimEars" -> Command.ClearBrimEars(readClearBrimEars(obj.get(key)))
+            "adjustLayerHeightProfile" -> Command.AdjustLayerHeightProfile(readAdjustLayerHeightProfile(obj.get(key)))
+            "smoothLayerHeightProfile" -> Command.SmoothLayerHeightProfile(readSmoothLayerHeightProfile(obj.get(key)))
+            "adaptiveLayerHeightProfile" -> Command.AdaptiveLayerHeightProfile(readAdaptiveLayerHeightProfile(obj.get(key)))
+            "resetLayerHeightProfile" -> Command.ResetLayerHeightProfile(readResetLayerHeightProfile(obj.get(key)))
             else -> throw InvalidProjectIntent()
         }
     }
@@ -822,6 +912,10 @@ object ProjectIntents {
             is Command.AddBrimEars -> w.field("addBrimEars") { writeAddBrimEars(w, v.value) }
             is Command.RemoveBrimEar -> w.field("removeBrimEar") { writeRemoveBrimEar(w, v.value) }
             is Command.ClearBrimEars -> w.field("clearBrimEars") { writeClearBrimEars(w, v.value) }
+            is Command.AdjustLayerHeightProfile -> w.field("adjustLayerHeightProfile") { writeAdjustLayerHeightProfile(w, v.value) }
+            is Command.SmoothLayerHeightProfile -> w.field("smoothLayerHeightProfile") { writeSmoothLayerHeightProfile(w, v.value) }
+            is Command.AdaptiveLayerHeightProfile -> w.field("adaptiveLayerHeightProfile") { writeAdaptiveLayerHeightProfile(w, v.value) }
+            is Command.ResetLayerHeightProfile -> w.field("resetLayerHeightProfile") { writeResetLayerHeightProfile(w, v.value) }
         } }
     }
     private fun readCommands(v: Any): List<Command> {

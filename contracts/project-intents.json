@@ -457,6 +457,66 @@
         "objectId": "Id"
       }
     },
+    "LayerHeightLimits": {
+      "kind": "object",
+      "fields": {
+        "layerHeightMm": "Finite",
+        "minLayerHeightMm": "Finite",
+        "maxLayerHeightMm": "Finite",
+        "firstObjectLayerHeightMm": "Finite",
+        "firstObjectLayerHeightFixed": "Flag"
+      }
+    },
+    "LayerHeightParameters": {
+      "kind": "object",
+      "fields": {
+        "limits": "LayerHeightLimits",
+        "objectHeightMm": "Finite"
+      }
+    },
+    "LayerHeightAction": {
+      "kind": "enum",
+      "values": [
+        "increase",
+        "decrease",
+        "reduce",
+        "smooth"
+      ]
+    },
+    "AdjustLayerHeightProfile": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "parameters": "LayerHeightParameters",
+        "zMm": "Finite",
+        "thicknessDeltaMm": "Finite",
+        "bandWidthMm": "Finite",
+        "action": "LayerHeightAction"
+      }
+    },
+    "SmoothLayerHeightProfile": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "parameters": "LayerHeightParameters",
+        "radius": "Finite",
+        "keepMin": "Flag"
+      }
+    },
+    "AdaptiveLayerHeightProfile": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "limits": "LayerHeightLimits",
+        "qualityFactor": "Finite"
+      }
+    },
+    "ResetLayerHeightProfile": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id"
+      }
+    },
     "Command": {
       "kind": "union",
       "variants": {
@@ -490,7 +550,11 @@
         "addBrimEar": "AddBrimEar",
         "addBrimEars": "AddBrimEars",
         "removeBrimEar": "RemoveBrimEar",
-        "clearBrimEars": "ClearBrimEars"
+        "clearBrimEars": "ClearBrimEars",
+        "adjustLayerHeightProfile": "AdjustLayerHeightProfile",
+        "smoothLayerHeightProfile": "SmoothLayerHeightProfile",
+        "adaptiveLayerHeightProfile": "AdaptiveLayerHeightProfile",
+        "resetLayerHeightProfile": "ResetLayerHeightProfile"
       }
     },
     "Commands": {

@@ -242,10 +242,11 @@ fn owned_session_matches_typescript_queue_protocol_commands_and_effects() {
                 assert_eq!(state_json(snapshot.state()), *content);
             }
         }
+        // The lease outlives the session with the trace's exact bytes.
         drop(session);
-        assert_eq!(asset.bytes().len(), 36);
+        assert_eq!(asset.bytes().len(), trace["asset"]["bytes"].as_array().unwrap().len());
     }
-    assert_eq!((groups, requests), (1474, 1542));
+    assert_eq!((groups, requests), (1551, 1619));
 }
 #[test]
 fn local_guards_are_owner_bound_and_checkpoints_invalidate_old_work() {

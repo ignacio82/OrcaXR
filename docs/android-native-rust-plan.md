@@ -144,16 +144,17 @@ Detailed evidence and reproducible commands live in
 provider documents and STL/OBJ/AMF/ZIP model import (decode, stage, preview,
 undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
 actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
-Layer ranges, layer events and brim ears are ported (roughly 40% of the browser's
-78 command classes are now native). Next families, in order: layer-height
-profiles (object-local; the adaptive variant reads the first volume's mesh in the
-session rather than carrying it on the wire), filaments and mixed filaments, settings/scoped overrides, volumes
+Layer ranges, layer events, brim ears and layer-height profiles are ported
+(roughly 45% of the browser's 78 command classes are now native). Next families,
+in order: filaments and mixed filaments, settings/scoped overrides, volumes
 (SVG/emboss/semantic), split/boolean, then facet paint strokes. Each family adds
 intent variants to `contracts/project-intents.json` (definitions before first
 use; regenerate with `generate-project-intents.mjs --write`), maps them in
 `web/src/project/PreparedProjectCommands.ts`, appends a scenario to
-`project-command-vectors.mjs`, regenerates the dependent session/staged/query/
-document/clipboard corpora, and ports the command under
+`project-command-vectors.mjs`, regenerates the dependent captured-command/
+session/staged/query/document/clipboard corpora (every CI generator in
+`.github/workflows/native-core.yml` must pass in check mode), routes any
+browser `Math` through `orcaxr_project::js_math`, and ports the command under
 `core/crates/orcaxr-project/src/commands/`. Then continue Phase 6 (native
 slicing) and the Phase 7 application shell.
 Retain earlier binding replay evidence only when executable and JVM input
@@ -1066,8 +1067,17 @@ and replay coverage for the complete current command inventory.
     browser's undo quirks (undoing one placement pops the last ear; undoing a
     clear that removed nothing publishes no project change; an emptied list drops
     the key) and its radius/index/object refusals; session/WASM/JNI agree.
+  - [x] Port the four layer-height intents (`adjustLayerHeightProfile`,
+    `smoothLayerHeightProfile`, `adaptiveLayerHeightProfile`,
+    `resetLayerHeightProfile`) with the pinned `Slicing.cpp` profile algorithms.
+    Adaptive reads the first volume's mesh in the session (the browser command
+    and workspace now do the same), and both engines bound the work (object
+    height, layer count, smoothing radius) instead of looping on extreme input.
+    The corpus (1,338 steps, 71 new) matches bit for bit through a V8-exact
+    `js_math` (fdlibm sin/cos/exp, V8 hypot), which also corrects the AMF
+    rotation decoder; session/WASM/JNI agree.
   - [ ] Port and replay every remaining command family before session cutover
-    (filaments and mixed filaments, layer heights,
+    (filaments and mixed filaments,
     settings/scoped overrides, SVG/emboss/semantic volumes, split/boolean,
     facet paint strokes, recreate model colours).
 - [ ] Port settings resolution, physical/mixed filament identities, profile

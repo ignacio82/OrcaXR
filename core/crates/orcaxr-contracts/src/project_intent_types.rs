@@ -812,6 +812,142 @@ fn read_clear_brim_ears(v: &Value) -> Result<ClearBrimEars, InvalidIntent> {
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LayerHeightLimits {
+    pub layer_height_mm: Finite,
+    pub min_layer_height_mm: Finite,
+    pub max_layer_height_mm: Finite,
+    pub first_object_layer_height_mm: Finite,
+    pub first_object_layer_height_fixed: Flag,
+}
+fn read_layer_height_limits(v: &Value) -> Result<LayerHeightLimits, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "layerHeightMm",
+            "minLayerHeightMm",
+            "maxLayerHeightMm",
+            "firstObjectLayerHeightMm",
+            "firstObjectLayerHeightFixed",
+        ],
+        false,
+    )?;
+    Ok(LayerHeightLimits {
+        layer_height_mm: read_finite(&object["layerHeightMm"])?,
+        min_layer_height_mm: read_finite(&object["minLayerHeightMm"])?,
+        max_layer_height_mm: read_finite(&object["maxLayerHeightMm"])?,
+        first_object_layer_height_mm: read_finite(&object["firstObjectLayerHeightMm"])?,
+        first_object_layer_height_fixed: read_flag(&object["firstObjectLayerHeightFixed"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayerHeightParameters {
+    pub limits: LayerHeightLimits,
+    pub object_height_mm: Finite,
+}
+fn read_layer_height_parameters(v: &Value) -> Result<LayerHeightParameters, InvalidIntent> {
+    let object = fields(v, &["limits", "objectHeightMm"], false)?;
+    Ok(LayerHeightParameters {
+        limits: read_layer_height_limits(&object["limits"])?,
+        object_height_mm: read_finite(&object["objectHeightMm"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LayerHeightAction {
+    Increase,
+    Decrease,
+    Reduce,
+    Smooth,
+}
+fn read_layer_height_action(v: &Value) -> Result<LayerHeightAction, InvalidIntent> {
+    match v.as_str() {
+        Some("increase") => Ok(LayerHeightAction::Increase),
+        Some("decrease") => Ok(LayerHeightAction::Decrease),
+        Some("reduce") => Ok(LayerHeightAction::Reduce),
+        Some("smooth") => Ok(LayerHeightAction::Smooth),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdjustLayerHeightProfile {
+    pub object_id: Id,
+    pub parameters: LayerHeightParameters,
+    pub z_mm: Finite,
+    pub thickness_delta_mm: Finite,
+    pub band_width_mm: Finite,
+    pub action: LayerHeightAction,
+}
+fn read_adjust_layer_height_profile(v: &Value) -> Result<AdjustLayerHeightProfile, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "objectId",
+            "parameters",
+            "zMm",
+            "thicknessDeltaMm",
+            "bandWidthMm",
+            "action",
+        ],
+        false,
+    )?;
+    Ok(AdjustLayerHeightProfile {
+        object_id: read_id(&object["objectId"])?,
+        parameters: read_layer_height_parameters(&object["parameters"])?,
+        z_mm: read_finite(&object["zMm"])?,
+        thickness_delta_mm: read_finite(&object["thicknessDeltaMm"])?,
+        band_width_mm: read_finite(&object["bandWidthMm"])?,
+        action: read_layer_height_action(&object["action"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SmoothLayerHeightProfile {
+    pub object_id: Id,
+    pub parameters: LayerHeightParameters,
+    pub radius: Finite,
+    pub keep_min: Flag,
+}
+fn read_smooth_layer_height_profile(v: &Value) -> Result<SmoothLayerHeightProfile, InvalidIntent> {
+    let object = fields(v, &["objectId", "parameters", "radius", "keepMin"], false)?;
+    Ok(SmoothLayerHeightProfile {
+        object_id: read_id(&object["objectId"])?,
+        parameters: read_layer_height_parameters(&object["parameters"])?,
+        radius: read_finite(&object["radius"])?,
+        keep_min: read_flag(&object["keepMin"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdaptiveLayerHeightProfile {
+    pub object_id: Id,
+    pub limits: LayerHeightLimits,
+    pub quality_factor: Finite,
+}
+fn read_adaptive_layer_height_profile(
+    v: &Value,
+) -> Result<AdaptiveLayerHeightProfile, InvalidIntent> {
+    let object = fields(v, &["objectId", "limits", "qualityFactor"], false)?;
+    Ok(AdaptiveLayerHeightProfile {
+        object_id: read_id(&object["objectId"])?,
+        limits: read_layer_height_limits(&object["limits"])?,
+        quality_factor: read_finite(&object["qualityFactor"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetLayerHeightProfile {
+    pub object_id: Id,
+}
+fn read_reset_layer_height_profile(v: &Value) -> Result<ResetLayerHeightProfile, InvalidIntent> {
+    let object = fields(v, &["objectId"], false)?;
+    Ok(ResetLayerHeightProfile {
+        object_id: read_id(&object["objectId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Command {
     AddPlate(AddPlate),
     DuplicatePlate(DuplicatePlate),
@@ -844,6 +980,10 @@ pub enum Command {
     AddBrimEars(AddBrimEars),
     RemoveBrimEar(RemoveBrimEar),
     ClearBrimEars(ClearBrimEars),
+    AdjustLayerHeightProfile(AdjustLayerHeightProfile),
+    SmoothLayerHeightProfile(SmoothLayerHeightProfile),
+    AdaptiveLayerHeightProfile(AdaptiveLayerHeightProfile),
+    ResetLayerHeightProfile(ResetLayerHeightProfile),
 }
 fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
     let object = fields(
@@ -880,6 +1020,10 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             "addBrimEars",
             "removeBrimEar",
             "clearBrimEars",
+            "adjustLayerHeightProfile",
+            "smoothLayerHeightProfile",
+            "adaptiveLayerHeightProfile",
+            "resetLayerHeightProfile",
         ],
         true,
     )?;
@@ -930,6 +1074,18 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
         "addBrimEars" => Ok(Command::AddBrimEars(read_add_brim_ears(value)?)),
         "removeBrimEar" => Ok(Command::RemoveBrimEar(read_remove_brim_ear(value)?)),
         "clearBrimEars" => Ok(Command::ClearBrimEars(read_clear_brim_ears(value)?)),
+        "adjustLayerHeightProfile" => Ok(Command::AdjustLayerHeightProfile(
+            read_adjust_layer_height_profile(value)?,
+        )),
+        "smoothLayerHeightProfile" => Ok(Command::SmoothLayerHeightProfile(
+            read_smooth_layer_height_profile(value)?,
+        )),
+        "adaptiveLayerHeightProfile" => Ok(Command::AdaptiveLayerHeightProfile(
+            read_adaptive_layer_height_profile(value)?,
+        )),
+        "resetLayerHeightProfile" => Ok(Command::ResetLayerHeightProfile(
+            read_reset_layer_height_profile(value)?,
+        )),
         _ => Err(InvalidIntent),
     }
 }

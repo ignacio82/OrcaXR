@@ -2631,6 +2631,45 @@ clear that removed nothing records history without a project publication. None o
 these commands has a no-op check, so clearing an object without ears is still an
 undoable entry.
 
+### Layer-height profile commands
+
+The four layer-height commands (`objects/layerHeightCommands.ts`) are native,
+with `orcaxr_project::layer_heights` porting the browser's pinned `Slicing.cpp` /
+`SlicingAdaptive.cpp` algorithms (`layerHeightProfile.ts`) expression by
+expression: manual adjust (increase/decrease/reduce/smooth over a raised-cosine
+band with 0.1 mm resampling), the six-round biased Gaussian smoother, adaptive
+generation and reset. Each command replaces the whole profile; undo restores the
+previous profile or removes it again (reason `<type>:undo`), and none has a no-op
+check. Adjust and smooth carry explicit slicing parameters on the wire. Adaptive
+carries only the printer limits and a quality factor: the command reads the first
+volume's mesh from the session through `mesh::decode_indexed` (the browser's
+`decodeIndexedMeshAsset`, its checks and messages) and takes the object height
+from the mesh's Z span, 20 mm for a flat mesh. The browser command and the
+workspace's adaptive action now read the session the same way.
+
+The pinned algorithms terminate only for printer-sane input, so both engines now
+refuse, with the same messages: non-positive layer or first-layer heights, an
+object over 10,000 mm, more than 1,000,000 layers at the thinner of the minimum
+and first-layer heights, and a smoothing radius over 100. A profile edit that
+produces a non-finite number (from extreme imported profiles) is refused exactly
+as the browser's validation refuses it: `Invalid project state (1 errors):
+Canonical JSON cannot contain non-finite numbers at $`.
+
+### JavaScript `Math` parity
+
+Ported arithmetic that the browser performs with `Math` goes through
+`orcaxr_project::js_math`. Node 22's V8 (12.4) computes `sin`, `cos` and `exp`
+with its own fdlibm 5.3 port (`src/base/ieee754.cc`, including `exp(1) = E`);
+its optional glibc trig is not enabled in Node's build. The `libm` crate follows
+later FreeBSD revisions (`__kernel_cos`, `init_jk`, reduction thresholds) and
+differs from V8 in the last bit for about 1% of trig arguments, which surfaced
+as one differing layer-height sample. `js_math` ports V8's functions line for
+line, plus V8's scaled, compensated `hypot` and JavaScript's NaN/signed-zero
+`min`/`max`. `js-math-vectors.mjs` pins 10,099 sin/cos arguments (every
+range-reduction branch, thresholds, huge and subnormal inputs), 2,512 exp and
+1,509 hypot cases as bit patterns. The AMF rotation decoder, previously on
+`libm` trig, now uses it too.
+
 ## Edited canonical archive interchange
 
 `archive_interchange` and `test-archive-interchange.mjs` exercise actual archive

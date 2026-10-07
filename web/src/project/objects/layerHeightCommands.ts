@@ -10,14 +10,15 @@ import { cloneJson, cloneProjectState } from '../domain/canonical';
 import type { ObjectId } from '../domain/ids';
 import type { ProjectObject, ProjectState } from '../domain/model';
 import type { CommandContext, ProjectCommand } from '../history/command';
+import { decodeIndexedMeshAsset } from '../meshCodec';
 import {
   adaptiveLayerHeightProfile,
   adjustLayerHeightProfile,
   baseLayerHeightProfile,
   smoothHeightProfile,
-  type AdaptiveMesh,
   type HeightProfileSmoothing,
   type LayerHeightEditAction,
+  type LayerHeightLimits,
   type LayerHeightSlicingParameters,
 } from './layerHeightProfile';
 
@@ -33,7 +34,7 @@ abstract class LayerHeightProfileCommand implements ProjectCommand {
   constructor(protected readonly objectId: ObjectId) {}
 
   /** The profile this command wants, or undefined to clear it. */
-  protected abstract nextProfile(object: ProjectObject, state: ProjectState): number[] | undefined;
+  protected abstract nextProfile(object: ProjectObject, context: CommandContext): number[] | undefined;
 
   apply(context: CommandContext): void {
     const state = cloneProjectState(context.project.getSnapshot().state);
@@ -41,7 +42,7 @@ abstract class LayerHeightProfileCommand implements ProjectCommand {
     this.hadProfile = object.layerHeightProfile !== undefined;
     this.previous = object.layerHeightProfile ? [...object.layerHeightProfile] : undefined;
 
-    const next = this.nextProfile(object, state);
+    const next = this.nextProfile(object, context);
     if (next === undefined) delete object.layerHeightProfile;
     else object.layerHeightProfile = [...next];
     context.project.replaceState(state, { reason: this.type, dirtyCategories: this.dirtyCategories });
@@ -83,22 +84,41 @@ export class AdjustLayerHeightProfileCommand extends LayerHeightProfileCommand {
   }
 }
 
-/** Regenerate the whole profile from the object's geometry. */
+/**
+ * Regenerate the whole profile from the object's own geometry.
+ *
+ * The geometry is read from the session when the command applies, so a host
+ * names only the object: the first volume's mesh as stored (untransformed),
+ * with the object height taken from its Z span.
+ */
 export class AdaptiveLayerHeightProfileCommand extends LayerHeightProfileCommand {
   readonly type = 'adaptive-layer-height-profile';
   readonly label = 'Adaptive layer height';
 
   constructor(
     objectId: ObjectId,
-    private readonly parameters: LayerHeightSlicingParameters,
-    private readonly mesh: AdaptiveMesh,
+    private readonly limits: LayerHeightLimits,
     private readonly qualityFactor: number,
   ) {
     super(objectId);
   }
 
-  protected nextProfile(): number[] {
-    return adaptiveLayerHeightProfile(this.mesh, this.parameters, this.qualityFactor);
+  protected nextProfile(object: ProjectObject, context: CommandContext): number[] {
+    const volume = object.volumes[0];
+    if (!volume) throw new Error(`Object ${object.id} has no volumes`);
+    const payload = context.assets.get(volume.source.assetId);
+    if (!payload) throw new Error(`Asset ${volume.source.assetId} not found`);
+    const mesh = decodeIndexedMeshAsset(payload);
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (let index = 2; index < mesh.positions.length; index += 3) {
+      const z = mesh.positions[index];
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
+    }
+    // A flat or empty mesh has no height of its own; 20 mm is the editor's default.
+    const objectHeightMm = Number.isFinite(maxZ - minZ) && maxZ > minZ ? maxZ - minZ : 20;
+    return adaptiveLayerHeightProfile(mesh, { ...this.limits, objectHeightMm }, this.qualityFactor);
   }
 }
 

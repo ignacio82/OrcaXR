@@ -458,6 +458,66 @@ const shapes = {
       "objectId": "Id"
     }
   },
+  "LayerHeightLimits": {
+    "kind": "object",
+    "fields": {
+      "layerHeightMm": "Finite",
+      "minLayerHeightMm": "Finite",
+      "maxLayerHeightMm": "Finite",
+      "firstObjectLayerHeightMm": "Finite",
+      "firstObjectLayerHeightFixed": "Flag"
+    }
+  },
+  "LayerHeightParameters": {
+    "kind": "object",
+    "fields": {
+      "limits": "LayerHeightLimits",
+      "objectHeightMm": "Finite"
+    }
+  },
+  "LayerHeightAction": {
+    "kind": "enum",
+    "values": [
+      "increase",
+      "decrease",
+      "reduce",
+      "smooth"
+    ]
+  },
+  "AdjustLayerHeightProfile": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "parameters": "LayerHeightParameters",
+      "zMm": "Finite",
+      "thicknessDeltaMm": "Finite",
+      "bandWidthMm": "Finite",
+      "action": "LayerHeightAction"
+    }
+  },
+  "SmoothLayerHeightProfile": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "parameters": "LayerHeightParameters",
+      "radius": "Finite",
+      "keepMin": "Flag"
+    }
+  },
+  "AdaptiveLayerHeightProfile": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "limits": "LayerHeightLimits",
+      "qualityFactor": "Finite"
+    }
+  },
+  "ResetLayerHeightProfile": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id"
+    }
+  },
   "Command": {
     "kind": "union",
     "variants": {
@@ -491,7 +551,11 @@ const shapes = {
       "addBrimEar": "AddBrimEar",
       "addBrimEars": "AddBrimEars",
       "removeBrimEar": "RemoveBrimEar",
-      "clearBrimEars": "ClearBrimEars"
+      "clearBrimEars": "ClearBrimEars",
+      "adjustLayerHeightProfile": "AdjustLayerHeightProfile",
+      "smoothLayerHeightProfile": "SmoothLayerHeightProfile",
+      "adaptiveLayerHeightProfile": "AdaptiveLayerHeightProfile",
+      "resetLayerHeightProfile": "ResetLayerHeightProfile"
     }
   },
   "Commands": {
@@ -782,7 +846,14 @@ export interface ProjectAddBrimEarWire {readonly objectId: ProjectIdWire;readonl
 export interface ProjectAddBrimEarsWire {readonly objectId: ProjectIdWire;readonly ears: ProjectBrimEarListWire;}
 export interface ProjectRemoveBrimEarWire {readonly objectId: ProjectIdWire;readonly index: ProjectEarIndexWire;}
 export interface ProjectClearBrimEarsWire {readonly objectId: ProjectIdWire;}
-export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire} | {readonly addLayerEvent:ProjectAddLayerEventWire} | {readonly editLayerEvent:ProjectEditLayerEventWire} | {readonly deleteLayerEvent:ProjectDeleteLayerEventWire} | {readonly addBrimEar:ProjectAddBrimEarWire} | {readonly addBrimEars:ProjectAddBrimEarsWire} | {readonly removeBrimEar:ProjectRemoveBrimEarWire} | {readonly clearBrimEars:ProjectClearBrimEarsWire};
+export interface ProjectLayerHeightLimitsWire {readonly layerHeightMm: ProjectFiniteWire;readonly minLayerHeightMm: ProjectFiniteWire;readonly maxLayerHeightMm: ProjectFiniteWire;readonly firstObjectLayerHeightMm: ProjectFiniteWire;readonly firstObjectLayerHeightFixed: ProjectFlagWire;}
+export interface ProjectLayerHeightParametersWire {readonly limits: ProjectLayerHeightLimitsWire;readonly objectHeightMm: ProjectFiniteWire;}
+export type ProjectLayerHeightActionWire = "increase" | "decrease" | "reduce" | "smooth";
+export interface ProjectAdjustLayerHeightProfileWire {readonly objectId: ProjectIdWire;readonly parameters: ProjectLayerHeightParametersWire;readonly zMm: ProjectFiniteWire;readonly thicknessDeltaMm: ProjectFiniteWire;readonly bandWidthMm: ProjectFiniteWire;readonly action: ProjectLayerHeightActionWire;}
+export interface ProjectSmoothLayerHeightProfileWire {readonly objectId: ProjectIdWire;readonly parameters: ProjectLayerHeightParametersWire;readonly radius: ProjectFiniteWire;readonly keepMin: ProjectFlagWire;}
+export interface ProjectAdaptiveLayerHeightProfileWire {readonly objectId: ProjectIdWire;readonly limits: ProjectLayerHeightLimitsWire;readonly qualityFactor: ProjectFiniteWire;}
+export interface ProjectResetLayerHeightProfileWire {readonly objectId: ProjectIdWire;}
+export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire} | {readonly addLayerEvent:ProjectAddLayerEventWire} | {readonly editLayerEvent:ProjectEditLayerEventWire} | {readonly deleteLayerEvent:ProjectDeleteLayerEventWire} | {readonly addBrimEar:ProjectAddBrimEarWire} | {readonly addBrimEars:ProjectAddBrimEarsWire} | {readonly removeBrimEar:ProjectRemoveBrimEarWire} | {readonly clearBrimEars:ProjectClearBrimEarsWire} | {readonly adjustLayerHeightProfile:ProjectAdjustLayerHeightProfileWire} | {readonly smoothLayerHeightProfile:ProjectSmoothLayerHeightProfileWire} | {readonly adaptiveLayerHeightProfile:ProjectAdaptiveLayerHeightProfileWire} | {readonly resetLayerHeightProfile:ProjectResetLayerHeightProfileWire};
 export type ProjectCommandsWire = readonly ProjectCommandWire[];
 export interface ProjectIntentWire {readonly version: ProjectVersionWire;readonly command: ProjectCommandWire;}
 export interface ProjectBatchWire {readonly version: ProjectVersionWire;readonly label: ProjectLabelWire;readonly commands: ProjectCommandsWire;}

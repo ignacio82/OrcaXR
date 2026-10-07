@@ -132,6 +132,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-validation-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-store-vectors.mjs
+          node tools/cross-platform/js-math-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-command-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-captured-command-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-document-vectors.mjs

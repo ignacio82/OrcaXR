@@ -32,14 +32,29 @@ const RESAMPLE_STEP_MM = 0.1;
 /** Pinned number of smoothing rounds, in both the editor and the smoother. */
 const SMOOTHING_ROUNDS = 6;
 
-/** The slicing facts a profile is constrained by, as upstream names them. */
-export interface LayerHeightSlicingParameters {
+/**
+ * Work bounds. Upstream relies on the printer profile for sane inputs; a
+ * profile here can be driven by any finite number, and without these a
+ * non-positive first layer, a near-zero minimum height or an enormous object
+ * never finishes generating, and a huge smoothing radius never finishes
+ * building its kernel. Every real object is far inside them.
+ */
+export const MAX_OBJECT_HEIGHT_MM = 10_000;
+export const MAX_PROFILE_LAYERS = 1_000_000;
+export const MAX_SMOOTHING_RADIUS = 100;
+
+/** The printer's layer-height facts, without the object they apply to. */
+export interface LayerHeightLimits {
   readonly layerHeightMm: number;
   readonly minLayerHeightMm: number;
   readonly maxLayerHeightMm: number;
   readonly firstObjectLayerHeightMm: number;
   /** True when the first layer's height is fixed and not editable. */
   readonly firstObjectLayerHeightFixed: boolean;
+}
+
+/** The slicing facts a profile is constrained by, as upstream names them. */
+export interface LayerHeightSlicingParameters extends LayerHeightLimits {
   /** Object height above the bed, in millimetres. */
   readonly objectHeightMm: number;
 }
@@ -85,8 +100,26 @@ export function assertSlicingParameters(parameters: LayerHeightSlicingParameters
       'invalid-parameters',
     );
   }
+  if (parameters.layerHeightMm <= 0 || parameters.firstObjectLayerHeightMm <= 0) {
+    throw new LayerHeightProfileError('Layer heights must be positive', 'invalid-parameters');
+  }
   if (parameters.objectHeightMm <= 0) {
     throw new LayerHeightProfileError('An object with no height has no layers to edit', 'invalid-parameters');
+  }
+  if (parameters.objectHeightMm > MAX_OBJECT_HEIGHT_MM) {
+    throw new LayerHeightProfileError(
+      `An object taller than ${MAX_OBJECT_HEIGHT_MM} mm cannot be layered`,
+      'invalid-parameters',
+    );
+  }
+  // Every generated layer is at least the thinner of the minimum and first
+  // layer heights, so this also bounds the adaptive generation loop.
+  const thinnest = Math.min(parameters.minLayerHeightMm, parameters.firstObjectLayerHeightMm);
+  if (parameters.objectHeightMm / thinnest > MAX_PROFILE_LAYERS) {
+    throw new LayerHeightProfileError(
+      `A layer height profile is limited to ${MAX_PROFILE_LAYERS} layers`,
+      'invalid-parameters',
+    );
   }
 }
 
@@ -266,6 +299,12 @@ export function smoothHeightProfile(
 ): number[] {
   assertSlicingParameters(parameters);
   assertProfile(profile);
+  if (!(smoothing.radius <= MAX_SMOOTHING_RADIUS)) {
+    throw new LayerHeightProfileError(
+      `Smoothing radius must be at most ${MAX_SMOOTHING_RADIUS}`,
+      'invalid-parameters',
+    );
+  }
   let result = [...profile];
   for (let round = 0; round < SMOOTHING_ROUNDS; round += 1) result = gaussBlur(result, parameters, smoothing);
   return result;

@@ -537,10 +537,11 @@ fn instance_transform(instance: &AmfInstance) -> Transform {
     };
     let finite = |v: f64| if v.is_finite() { v } else { 0.0 };
     let [x, y, z] = instance.rotation_deg.map(radians);
-    // V8's Math.sin/Math.cos are fdlibm; `libm` is the same algorithm.
-    let (sx, cx) = (libm::sin(x / 2.0), libm::cos(x / 2.0));
-    let (sy, cy) = (libm::sin(y / 2.0), libm::cos(y / 2.0));
-    let (sz, cz) = (libm::sin(z / 2.0), libm::cos(z / 2.0));
+    // V8's Math.sin/Math.cos (its vendored glibc, not fdlibm).
+    use orcaxr_project::js_math::{cos, sin};
+    let (sx, cx) = (sin(x / 2.0), cos(x / 2.0));
+    let (sy, cy) = (sin(y / 2.0), cos(y / 2.0));
+    let (sz, cz) = (sin(z / 2.0), cos(z / 2.0));
     Transform {
         translation_mm: instance.translation.map(finite),
         rotation: [

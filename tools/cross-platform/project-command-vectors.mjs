@@ -10,6 +10,7 @@ import { prepareProjectIntent, prepareProjectBatch } from "../../web/src/project
 import { InMemoryAssetRepository, assetBundleFingerprint } from "../../web/src/project/assets.ts";
 import { createProjectFixture } from "../../web/src/project/__tests__/fixtures.ts";
 import { canonicalStringify, cloneJson } from "../../web/src/project/domain/canonical.ts";
+import { encodeIndexedMeshAsset } from "../../web/src/project/meshCodec.ts";
 process.env.TZ = "UTC";
 const root = new URL("../../", import.meta.url);
 const units = s => Array.from({ length: s.length }, (_, i) => s.charCodeAt(i));
@@ -40,7 +41,7 @@ function duplicate(state, sourceId, suffix) {
   } };
 }
 function scenario(name, options, mutate, work) {
-  const f = createProjectFixture(); mutate(f.state);
+  const f = createProjectFixture(); mutate(f.state, f);
   const project = new ProjectStore(f.state), selection = new SelectionStore(), assets = new InMemoryAssetRepository();
   assets.put(f.asset.descriptor, f.asset.bytes);
   const bus = new CommandBus({ project, selection, assets }, options);
@@ -543,7 +544,92 @@ scenario("brim-ears", {}, s => {
   run({ kind: "undo" }); run({ kind: "redo" });
 });
 
-const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
+const limits = (o = {}) => ({ layerHeightMm: 0.2, minLayerHeightMm: 0.08, maxLayerHeightMm: 0.28, firstObjectLayerHeightMm: 0.2, firstObjectLayerHeightFixed: true, ...o });
+const heightParameters = (o = {}, objectHeightMm = 20) => ({ limits: limits(o), objectHeightMm });
+const adjustHeight = (objectId, zMm, thicknessDeltaMm, bandWidthMm, action, parameters = heightParameters()) =>
+  ({ adjustLayerHeightProfile: { objectId: units(objectId), parameters, zMm, thicknessDeltaMm, bandWidthMm, action } });
+const smoothHeight = (objectId, radius, keepMin = false, parameters = heightParameters()) =>
+  ({ smoothLayerHeightProfile: { objectId: units(objectId), parameters, radius, keepMin } });
+const adaptiveHeight = (objectId, qualityFactor, o = {}) => ({ adaptiveLayerHeightProfile: { objectId: units(objectId), limits: limits(o), qualityFactor } });
+const resetHeight = objectId => ({ resetLayerHeightProfile: { objectId: units(objectId) } });
+/** A shallow cone over a fan base: many equal Z spans, which exercises the
+ * adaptive face ordering. */
+const coneAsset = id => {
+  const positions = [0, 0, 0], indices = [], segments = 24;
+  for (let i = 0; i < segments; i += 1) positions.push(Math.cos(i / segments * Math.PI * 2) * 60, Math.sin(i / segments * Math.PI * 2) * 60, 0);
+  positions.push(0, 0, 20);
+  for (let i = 0; i < segments; i += 1) { const a = 1 + i, b = 1 + (i + 1) % segments; indices.push(0, b, a, a, b, segments + 1); }
+  return encodeIndexedMeshAsset({ id, positions, indices });
+};
+const cloneObject = (object, suffix, extra) => {
+  const copy = JSON.parse(JSON.stringify(object));
+  Object.assign(copy, { id: `import:object:${suffix}`, layerRanges: [], ...extra });
+  copy.volumes[0].id = `import:volume:${suffix}`; copy.instances[0].id = `import:instance:${suffix}`;
+  return copy;
+};
+scenario("layer-heights", {}, (s, f) => {
+  f.asset = coneAsset(f.ids.asset);
+  s.sourceAssets = s.sourceAssets.map(a => (a.id === f.asset.descriptor.id ? f.asset.descriptor : a));
+  const first = s.plates[0].objects[0];
+  first.volumes[0].source.triangleCount = f.asset.descriptor.mesh.triangleCount;
+  s.plates[0].objects.push(cloneObject(first, "short", { layerHeightProfile: [0, 0.2] }),
+    cloneObject(first, "extreme", { layerHeightProfile: [0, 0.2, 10, 1e308, 20, -1e308] }),
+    cloneObject(first, "imported", { layerHeightProfile: [0, 0.2, 5, 0.12, 15, 0.26, 20, 0.2] }));
+}, ({ execute, batch, run, ids }) => {
+  const o = ids.object;
+  execute(adjustHeight(o, 8, 0.05, 3, "increase"));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(adjustHeight(o, 12, 0.04, 2, "decrease"));
+  execute(adjustHeight(o, 8, 0.02, 3, "reduce"));
+  execute(adjustHeight(o, 10, 0.05, 4, "smooth"));
+  execute(adjustHeight(o, 25, 0.05, 3, "increase"));
+  execute(adjustHeight(o, 0.1, 0.05, 3, "increase"));
+  execute(adjustHeight(o, 5, 1, 3, "increase")); execute(adjustHeight(o, 5, 1, 3, "increase"));
+  execute(adjustHeight(o, 6, -0.03, 3, "increase")); execute(adjustHeight(o, 7, 0.05, 0, "increase"));
+  execute(adjustHeight(o, 9, 0.05, -2, "decrease")); execute(adjustHeight(o, 19.95, 0.05, 1e6, "increase"));
+  execute(adjustHeight(o, 0.5, 0.05, 4, "smooth", heightParameters({ firstObjectLayerHeightFixed: false })));
+  execute(adjustHeight(o, 20, 0.05, 2, "reduce"));
+  execute(smoothHeight(o, 5)); execute(smoothHeight(o, 5, true)); execute(smoothHeight(o, 0)); execute(smoothHeight(o, 2.7)); execute(smoothHeight(o, -3));
+  execute(smoothHeight(o, 100, false, heightParameters({ firstObjectLayerHeightFixed: false })));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  for (const factor of [0.5, 0, 1, 0.25, 0.75]) execute(adaptiveHeight(o, factor));
+  execute(adaptiveHeight(o, 0.5, { firstObjectLayerHeightFixed: false, firstObjectLayerHeightMm: 0.3 }));
+  execute(adaptiveHeight(o, 0.5, { minLayerHeightMm: 0.05, maxLayerHeightMm: 0.35 }));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(resetHeight(o));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(resetHeight(o));
+  for (const bad of [adjustHeight("import:missing:object", 5, 0.05, 3, "increase"), adjustHeight("bad", 5, 0.05, 3, "increase"),
+    adjustHeight(o, 5, 0.05, 3, "increase", heightParameters({ minLayerHeightMm: 0 })),
+    adjustHeight(o, 5, 0.05, 3, "increase", heightParameters({ maxLayerHeightMm: 0.05 })),
+    adjustHeight(o, 5, 0.05, 3, "increase", heightParameters({}, 0)),
+    adjustHeight(o, 5, 0.05, 3, "increase", heightParameters({ firstObjectLayerHeightMm: 0 })),
+    adjustHeight(o, 5, 0.05, 3, "increase", heightParameters({ layerHeightMm: -0.2 })),
+    adjustHeight(o, 5, 0.05, 3, "increase", heightParameters({}, 10000.5)),
+    adjustHeight(o, 5, 0.05, 3, "increase", heightParameters({ minLayerHeightMm: 1e-6 })),
+    smoothHeight(o, 101), smoothHeight(o, 1e300), adaptiveHeight(o, 1.5), adaptiveHeight(o, -0.1),
+    adaptiveHeight(o, 0.5, { firstObjectLayerHeightMm: -1 }), adaptiveHeight("import:missing:object", 0.5), resetHeight("import:missing:object"),
+    adjustHeight("import:object:short", 5, 0.05, 3, "increase"), smoothHeight("import:object:short", 5)])
+    execute(bad);
+  execute(adjustHeight("import:object:extreme", 10, 0.05, 3, "increase"));
+  execute(adjustHeight("import:object:extreme", 5, 0.05, 3, "smooth"));
+  execute(smoothHeight("import:object:extreme", 2));
+  execute(adjustHeight("import:object:imported", 10, 0.05, 6, "smooth"));
+  execute(smoothHeight("import:object:imported", 3, true));
+  execute(resetHeight("import:object:imported"));
+  run({ kind: "undo" });
+  batch([adjustHeight(o, 8, 0.05, 3, "increase"), smoothHeight(o, 4), adaptiveHeight(o, 0.6)], "Layer height transaction");
+  batch([adjustHeight(o, 8, 0.05, 3, "increase"), adaptiveHeight(o, 2)], "Rolled back layer heights");
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+scenario("layer-heights-flat-mesh", {}, noop, ({ execute, run, ids }) => {
+  // The fixture's single flat triangle has no Z span: adaptive falls back to 20 mm.
+  execute(adaptiveHeight(ids.object, 0.5, { firstObjectLayerHeightFixed: false }));
+  execute(adaptiveHeight(ids.object, 0.1));
+  run({ kind: "undo" }); run({ kind: "undo" }); run({ kind: "redo" });
+});
+
+const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";
 const path = new URL("testdata/cross-platform/project-command-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);

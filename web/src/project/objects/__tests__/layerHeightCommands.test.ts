@@ -8,6 +8,7 @@ import {
   ResetLayerHeightProfileCommand,
   SmoothLayerHeightProfileCommand,
 } from '../layerHeightCommands';
+import { encodeIndexedMeshAsset } from '../../meshCodec';
 import { baseLayerHeightProfile, layerHeightAt, type LayerHeightSlicingParameters } from '../layerHeightProfile';
 
 let passed = 0;
@@ -26,12 +27,24 @@ const PARAMETERS: LayerHeightSlicingParameters = Object.freeze({
   objectHeightMm: 20,
 });
 
-function session() {
+/** A session whose object is the fixture's, optionally with its mesh replaced. */
+function session(mesh?: { vertices: [number, number, number][]; triangles: [number, number, number][] }) {
   const fixture = createProjectFixture();
+  const asset = mesh
+    ? encodeIndexedMeshAsset({
+        id: fixture.asset.descriptor.id,
+        positions: mesh.vertices.flat(),
+        indices: mesh.triangles.flat(),
+      })
+    : fixture.asset;
+  fixture.state.sourceAssets = fixture.state.sourceAssets.map((descriptor) =>
+    descriptor.id === asset.descriptor.id ? asset.descriptor : descriptor,
+  );
+  fixture.state.plates[0].objects[0].volumes[0].source.triangleCount = asset.descriptor.mesh!.triangleCount;
   const project = new ProjectStore(fixture.state);
   const selection = new SelectionStore();
   const assets = new InMemoryAssetRepository();
-  assets.put(fixture.asset.descriptor, fixture.asset.bytes);
+  assets.put(asset.descriptor, asset.bytes);
   const commands = new CommandBus({ project, selection, assets });
   commands.markCheckpoint();
   const objectId = project.getSnapshot().state.plates[0].objects[0].id;
@@ -87,7 +100,6 @@ test('successive edits accumulate and undo one at a time', () => {
 });
 
 test('adaptive replaces the whole profile from the geometry', () => {
-  const { project, commands, objectId } = session();
   // A shallow cone, which is the shape adaptive actually thins layers for.
   const segments = 24;
   const vertices: [number, number, number][] = [[0, 0, 0]];
@@ -104,7 +116,9 @@ test('adaptive replaces the whole profile from the geometry', () => {
     triangles.push([0, b, a], [a, b, apex]);
   }
 
-  commands.execute(new AdaptiveLayerHeightProfileCommand(objectId, PARAMETERS, { vertices, triangles }, 0.5));
+  // The command reads the cone from the object's own first volume.
+  const { project, commands, objectId } = session({ vertices, triangles });
+  commands.execute(new AdaptiveLayerHeightProfileCommand(objectId, PARAMETERS, 0.5));
   const profile = profileOf(project)!;
   assert.ok(profile.length > 10, 'adaptive produces a detailed profile');
   assert.ok(layerHeightAt(profile, 10, 0.2) < 0.2, 'a shallow surface got thinner layers');

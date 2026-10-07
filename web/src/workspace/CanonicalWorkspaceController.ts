@@ -206,7 +206,6 @@ import {
   SplitLayerRangeCommand,
 } from '../project/objects/layerRangeCommands';
 import { AdaptiveLayerHeightProfileCommand } from '../project/objects/layerHeightCommands';
-import type { LayerHeightSlicingParameters } from '../project/objects/layerHeightProfile';
 import { projectObjectsTree } from '../project/objects/projection';
 import {
   AddVolumeCommand,
@@ -3302,45 +3301,20 @@ export class CanonicalWorkspaceController {
       throw new Error('Target object not found for variable layer height');
     }
 
-    const firstVolume = targetObject.volumes[0];
-    if (!firstVolume) {
-      throw new Error('Target object has no volumes');
-    }
-    const payload = this.session.assets.get(firstVolume.source.assetId);
-    if (!payload) {
-      throw new Error(`Asset ${firstVolume.source.assetId} not found`);
-    }
-    const decoded = decodeIndexedMeshAsset(payload);
-
-    let minZ = Infinity;
-    let maxZ = -Infinity;
-    const vertices: [number, number, number][] = [];
-    for (let i = 0; i < decoded.positions.length; i += 3) {
-      const x = decoded.positions[i];
-      const y = decoded.positions[i + 1];
-      const z = decoded.positions[i + 2];
-      vertices.push([x, y, z]);
-      if (z < minZ) minZ = z;
-      if (z > maxZ) maxZ = z;
-    }
-    const triangles: [number, number, number][] = [];
-    for (let i = 0; i < decoded.indices.length; i += 3) {
-      triangles.push([decoded.indices[i], decoded.indices[i + 1], decoded.indices[i + 2]]);
-    }
-
-    const objectHeightMm = Number.isFinite(maxZ - minZ) && maxZ > minZ ? maxZ - minZ : 20;
-
-    const parameters: LayerHeightSlicingParameters = {
-      layerHeightMm: 0.2,
-      minLayerHeightMm: 0.08,
-      maxLayerHeightMm: 0.28,
-      firstObjectLayerHeightMm: 0.2,
-      firstObjectLayerHeightFixed: false,
-      objectHeightMm,
-    };
-
+    // The command reads the object's own geometry from the session, the same
+    // path an MCP or native host takes through the adaptive intent.
     this.session.execute(
-      new AdaptiveLayerHeightProfileCommand(targetObject.id, parameters, { vertices, triangles }, qualityFactor),
+      new AdaptiveLayerHeightProfileCommand(
+        targetObject.id,
+        {
+          layerHeightMm: 0.2,
+          minLayerHeightMm: 0.08,
+          maxLayerHeightMm: 0.28,
+          firstObjectLayerHeightMm: 0.2,
+          firstObjectLayerHeightFixed: false,
+        },
+        qualityFactor,
+      ),
       { coalesce: false },
     );
   }

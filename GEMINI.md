@@ -212,7 +212,9 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   Do not substitute strict ISO parsing or Rust rounding for the existing graph
   validator's `Date.parse` and layer-event `toFixed(4)` compatibility requirements.
   The Rust compatibility helpers now reproduce pinned V8 timestamp syntax and
-  exact four-decimal collision keys. Legacy timezone overflow needs an explicit
+  exact four-decimal collision keys. Browser `Math.sin/cos/exp/hypot/min/max` in
+  ported code must use `orcaxr_project::js_math` (V8 12.4's own fdlibm port): the
+  `libm` crate's FreeBSD trig differs from V8 in the last bit for ~1% of inputs. Legacy timezone overflow needs an explicit
   V8 integer profile; timezone-less dates need a host resolver with matching DST
   and historical rules. Resolver failure must propagate, never default to UTC
   or become an invalid-data diagnostic. Graph admission uses that explicit policy.

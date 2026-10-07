@@ -47,9 +47,18 @@ import {
   ClearBrimEarsCommand,
   RemoveBrimEarCommand,
 } from './objects/brimEarCommands';
+import {
+  AdaptiveLayerHeightProfileCommand,
+  AdjustLayerHeightProfileCommand,
+  ResetLayerHeightProfileCommand,
+  SmoothLayerHeightProfileCommand,
+} from './objects/layerHeightCommands';
+import type { LayerHeightLimits, LayerHeightSlicingParameters } from './objects/layerHeightProfile';
 import type { BrimEarPoint, LayerEventType, Transform } from './domain/model';
 import type {
   ProjectBrimEarWire,
+  ProjectLayerHeightLimitsWire,
+  ProjectLayerHeightParametersWire,
   ProjectLayerEventTypeWire,
   ProjectTransformWire,
 } from '../../../contracts/generated/project-intents';
@@ -215,6 +224,32 @@ function command(value: ProjectCommandWire): ProjectCommand {
   }
   if ('deleteLayerEvent' in value)
     return new DeleteLayerEventCommand(id<'custom-gcode'>(value.deleteLayerEvent.customGcodeId));
+  if ('adjustLayerHeightProfile' in value) {
+    const input = value.adjustLayerHeightProfile;
+    return new AdjustLayerHeightProfileCommand(id<'object'>(input.objectId), layerHeightParameters(input.parameters), {
+      zMm: input.zMm,
+      thicknessDeltaMm: input.thicknessDeltaMm,
+      bandWidthMm: input.bandWidthMm,
+      action: input.action,
+    });
+  }
+  if ('smoothLayerHeightProfile' in value) {
+    const input = value.smoothLayerHeightProfile;
+    return new SmoothLayerHeightProfileCommand(id<'object'>(input.objectId), layerHeightParameters(input.parameters), {
+      radius: input.radius,
+      keepMin: input.keepMin,
+    });
+  }
+  if ('adaptiveLayerHeightProfile' in value) {
+    const input = value.adaptiveLayerHeightProfile;
+    return new AdaptiveLayerHeightProfileCommand(
+      id<'object'>(input.objectId),
+      layerHeightLimits(input.limits),
+      input.qualityFactor,
+    );
+  }
+  if ('resetLayerHeightProfile' in value)
+    return new ResetLayerHeightProfileCommand(id<'object'>(value.resetLayerHeightProfile.objectId));
   if ('addBrimEar' in value)
     return new AddBrimEarCommand(id<'object'>(value.addBrimEar.objectId), brimEar(value.addBrimEar.ear));
   if ('addBrimEars' in value)
@@ -289,6 +324,18 @@ const LAYER_EVENT_TYPES: Readonly<Record<ProjectLayerEventTypeWire, LayerEventTy
   template: 'template',
   custom: 'custom',
 });
+function layerHeightLimits(value: ProjectLayerHeightLimitsWire): LayerHeightLimits {
+  return {
+    layerHeightMm: value.layerHeightMm,
+    minLayerHeightMm: value.minLayerHeightMm,
+    maxLayerHeightMm: value.maxLayerHeightMm,
+    firstObjectLayerHeightMm: value.firstObjectLayerHeightMm,
+    firstObjectLayerHeightFixed: value.firstObjectLayerHeightFixed,
+  };
+}
+function layerHeightParameters(value: ProjectLayerHeightParametersWire): LayerHeightSlicingParameters {
+  return { ...layerHeightLimits(value.limits), objectHeightMm: value.objectHeightMm };
+}
 function brimEar(value: ProjectBrimEarWire): BrimEarPoint {
   return {
     positionMm: [value.positionMm[0], value.positionMm[1], value.positionMm[2]],

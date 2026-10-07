@@ -11,6 +11,8 @@ pub mod host_layout;
 pub mod ids;
 pub mod import;
 pub mod ingress;
+pub mod js_math;
+pub mod layer_heights;
 pub mod mesh;
 pub mod model;
 pub mod query;
