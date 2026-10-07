@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "reference": "web/src/project/domain/canonical.ts",
-  "referenceSha256": "51a1dc28f01a060ac792b3d3e3eb635c71cd174562a2504b53f3d95c40c18e38",
+  "referenceSha256": "af4d5f18228dcc903a54d9fa56f187bf7f928a0ad69becfc305248c181218922",
   "provenance": "Synthetic JSON inputs generated for OrcaXR; no user models or credentials.",
   "vectors": [
     {
