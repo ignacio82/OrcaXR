@@ -501,6 +501,157 @@ object ProjectIntents {
             w.field("layerRangeId") { writeId(w, v.layerRangeId) }
         }
     }
+    enum class LayerEventType {ColorChange,Pause,ToolChange,Template,Custom}
+    private fun readLayerEventType(v: Any): LayerEventType {
+        return when(v) {"colorChange" -> LayerEventType.ColorChange;"pause" -> LayerEventType.Pause;"toolChange" -> LayerEventType.ToolChange;"template" -> LayerEventType.Template;"custom" -> LayerEventType.Custom; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeLayerEventType(w: ProjectIntentWriter, v: LayerEventType) {
+        w.literal(when(v) {LayerEventType.ColorChange -> "colorChange";LayerEventType.Pause -> "pause";LayerEventType.ToolChange -> "toolChange";LayerEventType.Template -> "template";LayerEventType.Custom -> "custom";})
+    }
+    sealed interface OptionalLayerEventType {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalLayerEventType
+        data class Value(val value: ProjectIntents.LayerEventType) : OptionalLayerEventType
+    }
+    private fun readOptionalLayerEventType(v: Any): OptionalLayerEventType {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalLayerEventType.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalLayerEventType.Value(readLayerEventType(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalLayerEventType(w: ProjectIntentWriter, v: OptionalLayerEventType) {
+        w.obj { when(v) {
+            is OptionalLayerEventType.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalLayerEventType.Value -> w.field("value") { writeLayerEventType(w, v.value) }
+        } }
+    }
+    sealed interface OptionalId {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalId
+        data class Value(val value: List<Int>) : OptionalId
+    }
+    private fun readOptionalId(v: Any): OptionalId {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalId.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalId.Value(readId(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalId(w: ProjectIntentWriter, v: OptionalId) {
+        w.obj { when(v) {
+            is OptionalId.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalId.Value -> w.field("value") { writeId(w, v.value) }
+        } }
+    }
+    sealed interface PatchFinite {
+        data class Keep(val value: ProjectIntents.Empty) : PatchFinite
+        data class Clear(val value: ProjectIntents.Empty) : PatchFinite
+        data class Value(val value: Double) : PatchFinite
+    }
+    private fun readPatchFinite(v: Any): PatchFinite {
+        val obj = ProjectIntentJson.fields(v, setOf("keep", "clear", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "keep" -> PatchFinite.Keep(readEmpty(obj.get(key)))
+            "clear" -> PatchFinite.Clear(readEmpty(obj.get(key)))
+            "value" -> PatchFinite.Value(readFinite(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePatchFinite(w: ProjectIntentWriter, v: PatchFinite) {
+        w.obj { when(v) {
+            is PatchFinite.Keep -> w.field("keep") { writeEmpty(w, v.value) }
+            is PatchFinite.Clear -> w.field("clear") { writeEmpty(w, v.value) }
+            is PatchFinite.Value -> w.field("value") { writeFinite(w, v.value) }
+        } }
+    }
+    sealed interface PatchId {
+        data class Keep(val value: ProjectIntents.Empty) : PatchId
+        data class Clear(val value: ProjectIntents.Empty) : PatchId
+        data class Value(val value: List<Int>) : PatchId
+    }
+    private fun readPatchId(v: Any): PatchId {
+        val obj = ProjectIntentJson.fields(v, setOf("keep", "clear", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "keep" -> PatchId.Keep(readEmpty(obj.get(key)))
+            "clear" -> PatchId.Clear(readEmpty(obj.get(key)))
+            "value" -> PatchId.Value(readId(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePatchId(w: ProjectIntentWriter, v: PatchId) {
+        w.obj { when(v) {
+            is PatchId.Keep -> w.field("keep") { writeEmpty(w, v.value) }
+            is PatchId.Clear -> w.field("clear") { writeEmpty(w, v.value) }
+            is PatchId.Value -> w.field("value") { writeId(w, v.value) }
+        } }
+    }
+    sealed interface PatchText {
+        data class Keep(val value: ProjectIntents.Empty) : PatchText
+        data class Clear(val value: ProjectIntents.Empty) : PatchText
+        data class Value(val value: List<Int>) : PatchText
+    }
+    private fun readPatchText(v: Any): PatchText {
+        val obj = ProjectIntentJson.fields(v, setOf("keep", "clear", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "keep" -> PatchText.Keep(readEmpty(obj.get(key)))
+            "clear" -> PatchText.Clear(readEmpty(obj.get(key)))
+            "value" -> PatchText.Value(readEditText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePatchText(w: ProjectIntentWriter, v: PatchText) {
+        w.obj { when(v) {
+            is PatchText.Keep -> w.field("keep") { writeEmpty(w, v.value) }
+            is PatchText.Clear -> w.field("clear") { writeEmpty(w, v.value) }
+            is PatchText.Value -> w.field("value") { writeEditText(w, v.value) }
+        } }
+    }
+    data class AddLayerEvent(val customGcodeId: List<Int>, val plateId: List<Int>, val eventType: LayerEventType, val topZMm: Double, val toolIndex: OptionalFinite, val filamentId: OptionalId, val color: OptionalText, val message: OptionalText, val code: OptionalText)
+    private fun readAddLayerEvent(v: Any): AddLayerEvent {
+        val obj = ProjectIntentJson.fields(v, setOf("customGcodeId", "plateId", "eventType", "topZMm", "toolIndex", "filamentId", "color", "message", "code"), false)
+        return AddLayerEvent(readId(obj.get("customGcodeId")), readId(obj.get("plateId")), readLayerEventType(obj.get("eventType")), readFinite(obj.get("topZMm")), readOptionalFinite(obj.get("toolIndex")), readOptionalId(obj.get("filamentId")), readOptionalText(obj.get("color")), readOptionalText(obj.get("message")), readOptionalText(obj.get("code")))
+    }
+    private fun writeAddLayerEvent(w: ProjectIntentWriter, v: AddLayerEvent) {
+        w.obj {
+            w.field("customGcodeId") { writeId(w, v.customGcodeId) }
+            w.field("plateId") { writeId(w, v.plateId) }
+            w.field("eventType") { writeLayerEventType(w, v.eventType) }
+            w.field("topZMm") { writeFinite(w, v.topZMm) }
+            w.field("toolIndex") { writeOptionalFinite(w, v.toolIndex) }
+            w.field("filamentId") { writeOptionalId(w, v.filamentId) }
+            w.field("color") { writeOptionalText(w, v.color) }
+            w.field("message") { writeOptionalText(w, v.message) }
+            w.field("code") { writeOptionalText(w, v.code) }
+        }
+    }
+    data class EditLayerEvent(val customGcodeId: List<Int>, val eventType: OptionalLayerEventType, val topZMm: OptionalFinite, val toolIndex: PatchFinite, val filamentId: PatchId, val color: PatchText, val message: PatchText, val code: OptionalText)
+    private fun readEditLayerEvent(v: Any): EditLayerEvent {
+        val obj = ProjectIntentJson.fields(v, setOf("customGcodeId", "eventType", "topZMm", "toolIndex", "filamentId", "color", "message", "code"), false)
+        return EditLayerEvent(readId(obj.get("customGcodeId")), readOptionalLayerEventType(obj.get("eventType")), readOptionalFinite(obj.get("topZMm")), readPatchFinite(obj.get("toolIndex")), readPatchId(obj.get("filamentId")), readPatchText(obj.get("color")), readPatchText(obj.get("message")), readOptionalText(obj.get("code")))
+    }
+    private fun writeEditLayerEvent(w: ProjectIntentWriter, v: EditLayerEvent) {
+        w.obj {
+            w.field("customGcodeId") { writeId(w, v.customGcodeId) }
+            w.field("eventType") { writeOptionalLayerEventType(w, v.eventType) }
+            w.field("topZMm") { writeOptionalFinite(w, v.topZMm) }
+            w.field("toolIndex") { writePatchFinite(w, v.toolIndex) }
+            w.field("filamentId") { writePatchId(w, v.filamentId) }
+            w.field("color") { writePatchText(w, v.color) }
+            w.field("message") { writePatchText(w, v.message) }
+            w.field("code") { writeOptionalText(w, v.code) }
+        }
+    }
+    data class DeleteLayerEvent(val customGcodeId: List<Int>)
+    private fun readDeleteLayerEvent(v: Any): DeleteLayerEvent {
+        val obj = ProjectIntentJson.fields(v, setOf("customGcodeId"), false)
+        return DeleteLayerEvent(readId(obj.get("customGcodeId")))
+    }
+    private fun writeDeleteLayerEvent(w: ProjectIntentWriter, v: DeleteLayerEvent) {
+        w.obj {
+            w.field("customGcodeId") { writeId(w, v.customGcodeId) }
+        }
+    }
     sealed interface Command {
         data class AddPlate(val value: ProjectIntents.AddPlate) : Command
         data class DuplicatePlate(val value: ProjectIntents.DuplicatePlate) : Command
@@ -526,9 +677,12 @@ object ProjectIntents {
         data class SplitLayerRange(val value: ProjectIntents.SplitLayerRange) : Command
         data class MergeLayerRanges(val value: ProjectIntents.MergeLayerRanges) : Command
         data class DeleteLayerRange(val value: ProjectIntents.DeleteLayerRange) : Command
+        data class AddLayerEvent(val value: ProjectIntents.AddLayerEvent) : Command
+        data class EditLayerEvent(val value: ProjectIntents.EditLayerEvent) : Command
+        data class DeleteLayerEvent(val value: ProjectIntents.DeleteLayerEvent) : Command
     }
     private fun readCommand(v: Any): Command {
-        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange"), true)
+        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent"), true)
         return when(val key = obj.keys().next()) {
             "addPlate" -> Command.AddPlate(readAddPlate(obj.get(key)))
             "duplicatePlate" -> Command.DuplicatePlate(readDuplicatePlate(obj.get(key)))
@@ -554,6 +708,9 @@ object ProjectIntents {
             "splitLayerRange" -> Command.SplitLayerRange(readSplitLayerRange(obj.get(key)))
             "mergeLayerRanges" -> Command.MergeLayerRanges(readMergeLayerRanges(obj.get(key)))
             "deleteLayerRange" -> Command.DeleteLayerRange(readDeleteLayerRange(obj.get(key)))
+            "addLayerEvent" -> Command.AddLayerEvent(readAddLayerEvent(obj.get(key)))
+            "editLayerEvent" -> Command.EditLayerEvent(readEditLayerEvent(obj.get(key)))
+            "deleteLayerEvent" -> Command.DeleteLayerEvent(readDeleteLayerEvent(obj.get(key)))
             else -> throw InvalidProjectIntent()
         }
     }
@@ -583,6 +740,9 @@ object ProjectIntents {
             is Command.SplitLayerRange -> w.field("splitLayerRange") { writeSplitLayerRange(w, v.value) }
             is Command.MergeLayerRanges -> w.field("mergeLayerRanges") { writeMergeLayerRanges(w, v.value) }
             is Command.DeleteLayerRange -> w.field("deleteLayerRange") { writeDeleteLayerRange(w, v.value) }
+            is Command.AddLayerEvent -> w.field("addLayerEvent") { writeAddLayerEvent(w, v.value) }
+            is Command.EditLayerEvent -> w.field("editLayerEvent") { writeEditLayerEvent(w, v.value) }
+            is Command.DeleteLayerEvent -> w.field("deleteLayerEvent") { writeDeleteLayerEvent(w, v.value) }
         } }
     }
     private fun readCommands(v: Any): List<Command> {

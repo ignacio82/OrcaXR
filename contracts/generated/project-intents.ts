@@ -332,6 +332,87 @@ const shapes = {
       "layerRangeId": "Id"
     }
   },
+  "LayerEventType": {
+    "kind": "enum",
+    "values": [
+      "colorChange",
+      "pause",
+      "toolChange",
+      "template",
+      "custom"
+    ]
+  },
+  "OptionalLayerEventType": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "LayerEventType"
+    }
+  },
+  "OptionalId": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "Id"
+    }
+  },
+  "PatchFinite": {
+    "kind": "union",
+    "variants": {
+      "keep": "Empty",
+      "clear": "Empty",
+      "value": "Finite"
+    }
+  },
+  "PatchId": {
+    "kind": "union",
+    "variants": {
+      "keep": "Empty",
+      "clear": "Empty",
+      "value": "Id"
+    }
+  },
+  "PatchText": {
+    "kind": "union",
+    "variants": {
+      "keep": "Empty",
+      "clear": "Empty",
+      "value": "EditText"
+    }
+  },
+  "AddLayerEvent": {
+    "kind": "object",
+    "fields": {
+      "customGcodeId": "Id",
+      "plateId": "Id",
+      "eventType": "LayerEventType",
+      "topZMm": "Finite",
+      "toolIndex": "OptionalFinite",
+      "filamentId": "OptionalId",
+      "color": "OptionalText",
+      "message": "OptionalText",
+      "code": "OptionalText"
+    }
+  },
+  "EditLayerEvent": {
+    "kind": "object",
+    "fields": {
+      "customGcodeId": "Id",
+      "eventType": "OptionalLayerEventType",
+      "topZMm": "OptionalFinite",
+      "toolIndex": "PatchFinite",
+      "filamentId": "PatchId",
+      "color": "PatchText",
+      "message": "PatchText",
+      "code": "OptionalText"
+    }
+  },
+  "DeleteLayerEvent": {
+    "kind": "object",
+    "fields": {
+      "customGcodeId": "Id"
+    }
+  },
   "Command": {
     "kind": "union",
     "variants": {
@@ -358,7 +439,10 @@ const shapes = {
       "editLayerRangeBounds": "EditLayerRangeBounds",
       "splitLayerRange": "SplitLayerRange",
       "mergeLayerRanges": "MergeLayerRanges",
-      "deleteLayerRange": "DeleteLayerRange"
+      "deleteLayerRange": "DeleteLayerRange",
+      "addLayerEvent": "AddLayerEvent",
+      "editLayerEvent": "EditLayerEvent",
+      "deleteLayerEvent": "DeleteLayerEvent"
     }
   },
   "Commands": {
@@ -633,7 +717,16 @@ export interface ProjectEditLayerRangeBoundsWire {readonly objectId: ProjectIdWi
 export interface ProjectSplitLayerRangeWire {readonly objectId: ProjectIdWire;readonly layerRangeId: ProjectIdWire;readonly splitZMm: ProjectFiniteWire;readonly upperRangeId: ProjectIdWire;}
 export interface ProjectMergeLayerRangesWire {readonly objectId: ProjectIdWire;readonly firstRangeId: ProjectIdWire;readonly secondRangeId: ProjectIdWire;}
 export interface ProjectDeleteLayerRangeWire {readonly objectId: ProjectIdWire;readonly layerRangeId: ProjectIdWire;}
-export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire};
+export type ProjectLayerEventTypeWire = "colorChange" | "pause" | "toolChange" | "template" | "custom";
+export type ProjectOptionalLayerEventTypeWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectLayerEventTypeWire};
+export type ProjectOptionalIdWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectIdWire};
+export type ProjectPatchFiniteWire = {readonly keep:ProjectEmptyWire} | {readonly clear:ProjectEmptyWire} | {readonly value:ProjectFiniteWire};
+export type ProjectPatchIdWire = {readonly keep:ProjectEmptyWire} | {readonly clear:ProjectEmptyWire} | {readonly value:ProjectIdWire};
+export type ProjectPatchTextWire = {readonly keep:ProjectEmptyWire} | {readonly clear:ProjectEmptyWire} | {readonly value:ProjectEditTextWire};
+export interface ProjectAddLayerEventWire {readonly customGcodeId: ProjectIdWire;readonly plateId: ProjectIdWire;readonly eventType: ProjectLayerEventTypeWire;readonly topZMm: ProjectFiniteWire;readonly toolIndex: ProjectOptionalFiniteWire;readonly filamentId: ProjectOptionalIdWire;readonly color: ProjectOptionalTextWire;readonly message: ProjectOptionalTextWire;readonly code: ProjectOptionalTextWire;}
+export interface ProjectEditLayerEventWire {readonly customGcodeId: ProjectIdWire;readonly eventType: ProjectOptionalLayerEventTypeWire;readonly topZMm: ProjectOptionalFiniteWire;readonly toolIndex: ProjectPatchFiniteWire;readonly filamentId: ProjectPatchIdWire;readonly color: ProjectPatchTextWire;readonly message: ProjectPatchTextWire;readonly code: ProjectOptionalTextWire;}
+export interface ProjectDeleteLayerEventWire {readonly customGcodeId: ProjectIdWire;}
+export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire} | {readonly addLayerEvent:ProjectAddLayerEventWire} | {readonly editLayerEvent:ProjectEditLayerEventWire} | {readonly deleteLayerEvent:ProjectDeleteLayerEventWire};
 export type ProjectCommandsWire = readonly ProjectCommandWire[];
 export interface ProjectIntentWire {readonly version: ProjectVersionWire;readonly command: ProjectCommandWire;}
 export interface ProjectBatchWire {readonly version: ProjectVersionWire;readonly label: ProjectLabelWire;readonly commands: ProjectCommandsWire;}

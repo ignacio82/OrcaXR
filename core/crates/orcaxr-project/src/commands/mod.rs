@@ -2,6 +2,7 @@
 //! stable-ID/constructor validation; execution belongs to the owned command bus.
 //! No UI, callbacks, random IDs or session ownership is inferred here.
 mod duplicate;
+mod layer_events;
 mod layer_ranges;
 mod lifecycle;
 mod objects;
@@ -83,6 +84,7 @@ enum Kind {
     },
     Import(Box<Import>),
     LayerRange(Box<layer_ranges::LayerRangeCommand>),
+    LayerEvent(Box<layer_events::LayerEventCommand>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -224,6 +226,11 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
             id(v.object_id)?,
             id(v.layer_range_id)?,
         )),
+        wire::Command::AddLayerEvent(v) => layer_event(layer_events::LayerEventCommand::add(v)?),
+        wire::Command::EditLayerEvent(v) => layer_event(layer_events::LayerEventCommand::edit(v)?),
+        wire::Command::DeleteLayerEvent(v) => {
+            layer_event(layer_events::LayerEventCommand::delete(v)?)
+        }
         wire::Command::RenameObject(v) => object_command(objects::ObjectCommand::rename(
             objects::Target::Object(id(v.object_id)?),
             v.name,
@@ -335,6 +342,9 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
     };
     Ok(PreparedCommand { label, kind })
 }
+fn layer_event(c: layer_events::LayerEventCommand) -> (Text, Kind) {
+    (c.label(), Kind::LayerEvent(Box::new(c)))
+}
 fn layer_range(c: layer_ranges::LayerRangeCommand) -> (Text, Kind) {
     (c.label(), Kind::LayerRange(Box::new(c)))
 }
@@ -414,6 +424,7 @@ impl PreparedCommand {
             Kind::Reorder { .. } => "reorder-plates",
             Kind::Import(_) => "import-project",
             Kind::LayerRange(ref c) => c.reason(),
+            Kind::LayerEvent(ref c) => c.reason(),
         }
     }
 }
@@ -432,6 +443,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::Object(c) => c.is_noop(state)?,
             Kind::Transform(c) => c.is_noop(state)?,
             Kind::LayerRange(c) => c.is_noop(state)?,
+            Kind::LayerEvent(c) => c.is_noop(state)?,
             Kind::Activate { id, .. } => &state.active_plate_id == id,
             Kind::Rename { id, name, .. } => &plate(state, id)?.name == name,
             Kind::Printable { id, printable, .. } => plate(state, id)?.printable == *printable,
@@ -454,6 +466,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             }
             Kind::Transform(c) => c.apply(context, reason)?,
             Kind::LayerRange(c) => c.apply(context, reason)?,
+            Kind::LayerEvent(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
                 activate,
@@ -584,6 +597,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
         let mut state = context.snapshot().state().clone();
         match &self.kind {
             Kind::Lifecycle(c) => return c.revert(context, reason),
+            Kind::LayerEvent(c) => return c.revert(context, reason),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()
@@ -658,6 +672,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::Transform(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Duplicate(command) => command.estimate().map_err(|_| CommandError::Encoding),
             Kind::LayerRange(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::LayerEvent(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),

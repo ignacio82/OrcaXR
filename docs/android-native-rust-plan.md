@@ -144,9 +144,9 @@ Detailed evidence and reproducible commands live in
 provider documents and STL/OBJ/AMF/ZIP model import (decode, stage, preview,
 undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
 actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
-Layer ranges are ported (roughly a third of the browser's 78 command classes are now native). Next families,
-in order: layer heights and brim ears (object-local, like layer ranges), layer
-events, filaments and mixed filaments, settings/scoped overrides, volumes
+Layer ranges and layer events are ported (roughly a third of the browser's 78
+command classes are now native). Next families, in order: layer heights and brim
+ears (object-local, like layer ranges), filaments and mixed filaments, settings/scoped overrides, volumes
 (SVG/emboss/semantic), split/boolean, then facet paint strokes. Each family adds
 intent variants to `contracts/project-intents.json` (definitions before first
 use; regenerate with `generate-project-intents.mjs --write`), maps them in
@@ -1055,8 +1055,13 @@ and replay coverage for the complete current command inventory.
     session/WASM/JNI replays agree, including refusal messages and selection
     repair. Ranges are created empty over the wire; settings and filaments stay
     with their scoped commands.
+  - [x] Port the three layer-event intents (`addLayerEvent`, `editLayerEvent`
+    with keep/clear/value field patches, `deleteLayerEvent`): the corpus (1,226
+    steps, 64 new) covers every event type, graph-validation refusals (height,
+    duplicate height key, tool index, custom code, plate, ID reuse), foreign-field
+    stripping on edit, plate deletion and transactions; session/WASM/JNI agree.
   - [ ] Port and replay every remaining command family before session cutover
-    (filaments and mixed filaments, layer heights, brim ears, layer events,
+    (filaments and mixed filaments, layer heights, brim ears,
     settings/scoped overrides, SVG/emboss/semantic volumes, split/boolean,
     facet paint strokes, recreate model colours).
 - [ ] Port settings resolution, physical/mixed filament identities, profile

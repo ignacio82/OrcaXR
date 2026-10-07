@@ -15,7 +15,7 @@
     },
     {
       "path": "web/src/project/PreparedProjectCommands.ts",
-      "sha256": "f42852e0243bf4fb28a2b61a53e1e028c76b61f2c36e8514c815f0b8b64084ab"
+      "sha256": "7e2361bf8b0ad922c983fc8b461d3ce43caca6e5275f5cd31fa0f96cc0d2af7b"
     },
     {
       "path": "web/src/project/history/command.ts",

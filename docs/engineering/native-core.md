@@ -2599,6 +2599,24 @@ range or the object). A layer-range scenario in `project-command-vectors.mjs`
 (54 steps, including transactions and rollbacks) is replayed by the Rust command
 tests, and the regenerated session traces by the WASM and JNI replays.
 
+### Layer-event commands
+
+Authored layer events (`layerEventCommands.ts`) are native: `addLayerEvent`,
+`editLayerEvent` and `deleteLayerEvent` rewrite the plate-scoped `customGcode`
+entries that carry a `layerEvent`. Event types travel as camelCase wire values
+(`colorChange`, `toolChange`, …) and map onto the canonical kebab-case literals.
+An edit patches each optional event field as keep, clear or value (the
+browser's `key in patch`); `type`, `topZMm` and `code` are absent-or-value. An
+edit rebuilds the entry canonically, so foreign fields on it are dropped and a
+non-custom event never keeps a body. Validity of the edited list (height above
+the plate and at most 10,000 mm, one event per `toFixed(4)` height on a plate,
+1-based tools for colour/tool changes, non-blank custom code, an existing plate,
+globally unique IDs) is left to graph validation inside the validating
+replacement, so refusals carry the same `Invalid project state (…)` message as the
+browser's `assertValidProjectState`. The 64-step `layer-events` scenario covers
+every type, those refusals, transport refusals for non-stable IDs, no-op edits,
+plate deletion with events, and transactions.
+
 ## Edited canonical archive interchange
 
 `archive_interchange` and `test-archive-interchange.mjs` exercise actual archive

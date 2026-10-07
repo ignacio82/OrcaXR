@@ -35,9 +35,18 @@ import {
   MergeLayerRangesCommand,
   SplitLayerRangeCommand,
 } from './objects/layerRangeCommands';
-import type { Transform } from './domain/model';
-import type { ProjectTransformWire } from '../../../contracts/generated/project-intents';
-import { entityId, isStableEntityId, type EntityId } from './domain/ids';
+import {
+  AddLayerEventCommand,
+  DeleteLayerEventCommand,
+  EditLayerEventCommand,
+  type LayerEventPatch,
+} from './layerEventCommands';
+import type { LayerEventType, Transform } from './domain/model';
+import type {
+  ProjectLayerEventTypeWire,
+  ProjectTransformWire,
+} from '../../../contracts/generated/project-intents';
+import { entityId, isStableEntityId, type EntityId, type FilamentId } from './domain/ids';
 import type { ProjectCommand } from './history/command';
 
 /** UTF-16 code units, never code points or lossy UTF-8. */
@@ -68,6 +77,11 @@ function id<K extends string>(units: readonly number[]): EntityId<K> {
   // transport validation must never expose it in an error.
   if (!isStableEntityId(value)) throw new InvalidProjectIntent();
   return entityId<K>(value);
+}
+
+/** A physical or mixed filament; the brand is only a compile-time kind. */
+function filament(units: readonly number[]): FilamentId {
+  return id<'physical-filament'>(units);
 }
 
 /** The TypeScript authority interprets prepared intents during migration.
@@ -163,6 +177,37 @@ function command(value: ProjectCommandWire): ProjectCommand {
       id<'object'>(value.deleteLayerRange.objectId),
       id<'layer-range'>(value.deleteLayerRange.layerRangeId),
     );
+  if ('addLayerEvent' in value) {
+    const input = value.addLayerEvent;
+    return new AddLayerEventCommand({
+      id: id<'custom-gcode'>(input.customGcodeId),
+      plateId: id<'plate'>(input.plateId),
+      type: LAYER_EVENT_TYPES[input.eventType],
+      topZMm: input.topZMm,
+      ...('value' in input.toolIndex ? { toolIndex: input.toolIndex.value } : {}),
+      ...('value' in input.filamentId ? { filamentId: filament(input.filamentId.value) } : {}),
+      ...('value' in input.color ? { color: text(input.color.value) } : {}),
+      ...('value' in input.message ? { message: text(input.message.value) } : {}),
+      ...('value' in input.code ? { code: text(input.code.value) } : {}),
+    });
+  }
+  if ('editLayerEvent' in value) {
+    const input = value.editLayerEvent;
+    // `keep` leaves a field out of the patch; `clear` names it as undefined,
+    // which the command reads as removal.
+    const patch: { -readonly [K in keyof LayerEventPatch]: LayerEventPatch[K] } = {};
+    if ('value' in input.eventType) patch.type = LAYER_EVENT_TYPES[input.eventType.value];
+    if ('value' in input.topZMm) patch.topZMm = input.topZMm.value;
+    if (!('keep' in input.toolIndex)) patch.toolIndex = 'value' in input.toolIndex ? input.toolIndex.value : undefined;
+    if (!('keep' in input.filamentId))
+      patch.filamentId = 'value' in input.filamentId ? filament(input.filamentId.value) : undefined;
+    if (!('keep' in input.color)) patch.color = 'value' in input.color ? text(input.color.value) : undefined;
+    if (!('keep' in input.message)) patch.message = 'value' in input.message ? text(input.message.value) : undefined;
+    if ('value' in input.code) patch.code = text(input.code.value);
+    return new EditLayerEventCommand(id<'custom-gcode'>(input.customGcodeId), patch);
+  }
+  if ('deleteLayerEvent' in value)
+    return new DeleteLayerEventCommand(id<'custom-gcode'>(value.deleteLayerEvent.customGcodeId));
   if ('renameObject' in value)
     return new RenameObjectCommand(id<'object'>(value.renameObject.objectId), text(value.renameObject.name));
   if ('renameVolume' in value)
@@ -223,6 +268,13 @@ function command(value: ProjectCommandWire): ProjectCommand {
   if ('reorderPlates' in value) return new ReorderPlatesCommand(value.reorderPlates.plateIds.map(id<'plate'>));
   return new SetPlatePrintableCommand(id<'plate'>(value.setPlatePrintable.plateId), value.setPlatePrintable.printable);
 }
+const LAYER_EVENT_TYPES: Readonly<Record<ProjectLayerEventTypeWire, LayerEventType>> = Object.freeze({
+  colorChange: 'color-change',
+  pause: 'pause',
+  toolChange: 'tool-change',
+  template: 'template',
+  custom: 'custom',
+});
 function transform(value: ProjectTransformWire): Transform {
   // Tuple lengths and finite numeric values were checked by captureProjectIntent.
   return {

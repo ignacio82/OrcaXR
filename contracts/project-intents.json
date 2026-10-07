@@ -331,6 +331,87 @@
         "layerRangeId": "Id"
       }
     },
+    "LayerEventType": {
+      "kind": "enum",
+      "values": [
+        "colorChange",
+        "pause",
+        "toolChange",
+        "template",
+        "custom"
+      ]
+    },
+    "OptionalLayerEventType": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "LayerEventType"
+      }
+    },
+    "OptionalId": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "Id"
+      }
+    },
+    "PatchFinite": {
+      "kind": "union",
+      "variants": {
+        "keep": "Empty",
+        "clear": "Empty",
+        "value": "Finite"
+      }
+    },
+    "PatchId": {
+      "kind": "union",
+      "variants": {
+        "keep": "Empty",
+        "clear": "Empty",
+        "value": "Id"
+      }
+    },
+    "PatchText": {
+      "kind": "union",
+      "variants": {
+        "keep": "Empty",
+        "clear": "Empty",
+        "value": "EditText"
+      }
+    },
+    "AddLayerEvent": {
+      "kind": "object",
+      "fields": {
+        "customGcodeId": "Id",
+        "plateId": "Id",
+        "eventType": "LayerEventType",
+        "topZMm": "Finite",
+        "toolIndex": "OptionalFinite",
+        "filamentId": "OptionalId",
+        "color": "OptionalText",
+        "message": "OptionalText",
+        "code": "OptionalText"
+      }
+    },
+    "EditLayerEvent": {
+      "kind": "object",
+      "fields": {
+        "customGcodeId": "Id",
+        "eventType": "OptionalLayerEventType",
+        "topZMm": "OptionalFinite",
+        "toolIndex": "PatchFinite",
+        "filamentId": "PatchId",
+        "color": "PatchText",
+        "message": "PatchText",
+        "code": "OptionalText"
+      }
+    },
+    "DeleteLayerEvent": {
+      "kind": "object",
+      "fields": {
+        "customGcodeId": "Id"
+      }
+    },
     "Command": {
       "kind": "union",
       "variants": {
@@ -357,7 +438,10 @@
         "editLayerRangeBounds": "EditLayerRangeBounds",
         "splitLayerRange": "SplitLayerRange",
         "mergeLayerRanges": "MergeLayerRanges",
-        "deleteLayerRange": "DeleteLayerRange"
+        "deleteLayerRange": "DeleteLayerRange",
+        "addLayerEvent": "AddLayerEvent",
+        "editLayerEvent": "EditLayerEvent",
+        "deleteLayerEvent": "DeleteLayerEvent"
       }
     },
     "Commands": {

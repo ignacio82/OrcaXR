@@ -439,7 +439,67 @@ scenario("layer-ranges", {}, s => {
   run({ kind: "undo" }); run({ kind: "redo" });
 });
 
-const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
+const optionalValue = (value, wrap = v => v) => (value === undefined ? { absent: {} } : { value: wrap(value) });
+// undefined keeps a field, null clears it.
+const patchValue = (value, wrap = v => v) => (value === undefined ? { keep: {} } : value === null ? { clear: {} } : { value: wrap(value) });
+const addEvent = (plateId, id, eventType, topZMm, o = {}) => ({ addLayerEvent: { customGcodeId: units(id), plateId: units(plateId), eventType, topZMm,
+  toolIndex: optionalValue(o.toolIndex), filamentId: optionalValue(o.filamentId, units), color: optionalValue(o.color, units), message: optionalValue(o.message, units), code: optionalValue(o.code, units) } });
+const editEvent = (id, o = {}) => ({ editLayerEvent: { customGcodeId: units(id), eventType: optionalValue(o.eventType), topZMm: optionalValue(o.topZMm),
+  toolIndex: patchValue(o.toolIndex), filamentId: patchValue(o.filamentId, units), color: patchValue(o.color, units), message: patchValue(o.message, units), code: optionalValue(o.code, units) } });
+const deleteEvent = id => ({ deleteLayerEvent: { customGcodeId: units(id) } });
+scenario("layer-events", {}, s => {
+  const plateId = s.plates[0].id;
+  s.customGcode = [
+    { id: "import:gcode:hook", scope: "project", trigger: "before-plate", code: "M117 start" },
+    { id: "import:gcode:pause", scope: "plate", plateId, trigger: "before-layer", code: "", layerEvent: { type: "pause", topZMm: 2, message: "Insert magnets", foreign: { kept: "\ud800" } }, foreign: [1, "😀"] },
+    { id: "import:gcode:color", scope: "plate", plateId, trigger: "before-layer", code: "", layerEvent: { type: "color-change", topZMm: 3.2, toolIndex: 2, filamentId: s.filaments.physical[1].id, color: "#FF0000" } },
+  ];
+}, ({ execute, batch, run, ids, state }) => {
+  const p = ids.plate, { physical, mixed } = state().filaments;
+  execute(addEvent(p, "import:gcode:new-pause", "pause", 5, { message: "Swap nozzle 😀" }));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(addEvent(p, "import:gcode:new-color", "colorChange", 6, { toolIndex: 1, filamentId: physical[0].id, color: "#00FF00" }));
+  execute(addEvent(p, "import:gcode:custom", "custom", 7, { code: "G4 S1\nM400" }));
+  execute(addEvent(p, "import:gcode:template", "template", 8, { code: "dropped: not custom" }));
+  execute(addEvent(p, "import:gcode:tool", "toolChange", 9, { toolIndex: 3, filamentId: mixed[0].id }));
+  execute(addEvent(p, "import:gcode:odd-pause", "pause", 9.5, { toolIndex: 1.5 }));
+  execute(addEvent(p, "import:gcode:unknown-filament", "pause", 9.75, { filamentId: "import:filament:missing" }));
+  for (const bad of [addEvent(p, "import:gcode:pause", "pause", 11), addEvent(p, "import:gcode:hook", "pause", 11), addEvent(p, p, "pause", 11),
+    addEvent(p, "bad", "pause", 11), addEvent("bad", "import:gcode:x", "pause", 11), addEvent(p, "import:gcode:x", "pause", 11, { filamentId: "bad" }),
+    addEvent("import:plate:missing", "import:gcode:x", "pause", 11), addEvent(p, "import:gcode:x", "pause", 0), addEvent(p, "import:gcode:x", "pause", -1),
+    addEvent(p, "import:gcode:x", "pause", 10000.5), addEvent(p, "import:gcode:x", "pause", 2), addEvent(p, "import:gcode:x", "pause", 2.00004),
+    addEvent(p, "import:gcode:x", "pause", 2.00005), addEvent(p, "import:gcode:x", "custom", 11), addEvent(p, "import:gcode:x", "custom", 11, { code: "  ﻿ \n" }),
+    addEvent(p, "import:gcode:x", "colorChange", 11), addEvent(p, "import:gcode:x", "toolChange", 11, { toolIndex: 0 }),
+    addEvent(p, "import:gcode:x", "colorChange", 11, { toolIndex: 1.5 }), addEvent(p, "import:gcode:x", "custom", 0, { toolIndex: 0 })])
+    execute(bad);
+  execute(addEvent(p, "import:gcode:boundary", "pause", 10000));
+  execute(editEvent("import:gcode:color"));
+  execute(editEvent("import:gcode:pause"));
+  execute(editEvent("import:gcode:pause", { topZMm: 2.5, message: null, color: "#123456" }));
+  execute(editEvent("import:gcode:pause", { eventType: "custom", code: "M600" }));
+  execute(editEvent("import:gcode:pause", { eventType: "pause" }));
+  execute(editEvent("import:gcode:pause", { code: "dropped" }));
+  execute(editEvent("import:gcode:custom", { code: "G4 S2" }));
+  for (const bad of [editEvent("import:gcode:missing", { topZMm: 3 }), editEvent("import:gcode:hook", { topZMm: 3 }), editEvent("bad"),
+    editEvent("import:gcode:tool", { toolIndex: null }), editEvent("import:gcode:tool", { topZMm: 7 }), editEvent("import:gcode:tool", { topZMm: 0 }),
+    editEvent("import:gcode:custom", { code: "" }), editEvent("import:gcode:tool", { eventType: "custom" }), editEvent("import:gcode:tool", { filamentId: "bad" })])
+    execute(bad);
+  execute(editEvent("import:gcode:color", { eventType: "pause" }));
+  execute(editEvent("import:gcode:color", { eventType: "toolChange", toolIndex: 4, filamentId: null, color: null, message: "Tool 4" }));
+  run({ kind: "undo" }); run({ kind: "undo" }); run({ kind: "redo" });
+  execute(deleteEvent("import:gcode:template"));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  for (const bad of [deleteEvent("import:gcode:hook"), deleteEvent("import:gcode:missing"), deleteEvent("bad")]) execute(bad);
+  execute(add("import:plate:events", "Events", 7, false));
+  execute(addEvent("import:plate:events", "import:gcode:other-plate", "pause", 5));
+  execute(del("import:plate:events"));
+  run({ kind: "undo" });
+  batch([addEvent(p, "import:gcode:b1", "pause", 12), editEvent("import:gcode:b1", { topZMm: 12.5, message: "batched" }), deleteEvent("import:gcode:custom")], "Layer event transaction");
+  batch([addEvent(p, "import:gcode:b2", "pause", 13), addEvent(p, "import:gcode:b3", "pause", 13)], "Rolled back layer events");
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+
+const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";
 const path = new URL("testdata/cross-platform/project-command-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);

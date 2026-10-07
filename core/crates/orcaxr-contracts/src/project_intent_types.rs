@@ -551,6 +551,196 @@ fn read_delete_layer_range(v: &Value) -> Result<DeleteLayerRange, InvalidIntent>
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub enum LayerEventType {
+    ColorChange,
+    Pause,
+    ToolChange,
+    Template,
+    Custom,
+}
+fn read_layer_event_type(v: &Value) -> Result<LayerEventType, InvalidIntent> {
+    match v.as_str() {
+        Some("colorChange") => Ok(LayerEventType::ColorChange),
+        Some("pause") => Ok(LayerEventType::Pause),
+        Some("toolChange") => Ok(LayerEventType::ToolChange),
+        Some("template") => Ok(LayerEventType::Template),
+        Some("custom") => Ok(LayerEventType::Custom),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalLayerEventType {
+    Absent(Empty),
+    Value(LayerEventType),
+}
+fn read_optional_layer_event_type(v: &Value) -> Result<OptionalLayerEventType, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalLayerEventType::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalLayerEventType::Value(read_layer_event_type(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalId {
+    Absent(Empty),
+    Value(Id),
+}
+fn read_optional_id(v: &Value) -> Result<OptionalId, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalId::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalId::Value(read_id(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PatchFinite {
+    Keep(Empty),
+    Clear(Empty),
+    Value(Finite),
+}
+fn read_patch_finite(v: &Value) -> Result<PatchFinite, InvalidIntent> {
+    let object = fields(v, &["keep", "clear", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "keep" => Ok(PatchFinite::Keep(read_empty(value)?)),
+        "clear" => Ok(PatchFinite::Clear(read_empty(value)?)),
+        "value" => Ok(PatchFinite::Value(read_finite(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PatchId {
+    Keep(Empty),
+    Clear(Empty),
+    Value(Id),
+}
+fn read_patch_id(v: &Value) -> Result<PatchId, InvalidIntent> {
+    let object = fields(v, &["keep", "clear", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "keep" => Ok(PatchId::Keep(read_empty(value)?)),
+        "clear" => Ok(PatchId::Clear(read_empty(value)?)),
+        "value" => Ok(PatchId::Value(read_id(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PatchText {
+    Keep(Empty),
+    Clear(Empty),
+    Value(EditText),
+}
+fn read_patch_text(v: &Value) -> Result<PatchText, InvalidIntent> {
+    let object = fields(v, &["keep", "clear", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "keep" => Ok(PatchText::Keep(read_empty(value)?)),
+        "clear" => Ok(PatchText::Clear(read_empty(value)?)),
+        "value" => Ok(PatchText::Value(read_edit_text(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddLayerEvent {
+    pub custom_gcode_id: Id,
+    pub plate_id: Id,
+    pub event_type: LayerEventType,
+    pub top_z_mm: Finite,
+    pub tool_index: OptionalFinite,
+    pub filament_id: OptionalId,
+    pub color: OptionalText,
+    pub message: OptionalText,
+    pub code: OptionalText,
+}
+fn read_add_layer_event(v: &Value) -> Result<AddLayerEvent, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "customGcodeId",
+            "plateId",
+            "eventType",
+            "topZMm",
+            "toolIndex",
+            "filamentId",
+            "color",
+            "message",
+            "code",
+        ],
+        false,
+    )?;
+    Ok(AddLayerEvent {
+        custom_gcode_id: read_id(&object["customGcodeId"])?,
+        plate_id: read_id(&object["plateId"])?,
+        event_type: read_layer_event_type(&object["eventType"])?,
+        top_z_mm: read_finite(&object["topZMm"])?,
+        tool_index: read_optional_finite(&object["toolIndex"])?,
+        filament_id: read_optional_id(&object["filamentId"])?,
+        color: read_optional_text(&object["color"])?,
+        message: read_optional_text(&object["message"])?,
+        code: read_optional_text(&object["code"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditLayerEvent {
+    pub custom_gcode_id: Id,
+    pub event_type: OptionalLayerEventType,
+    pub top_z_mm: OptionalFinite,
+    pub tool_index: PatchFinite,
+    pub filament_id: PatchId,
+    pub color: PatchText,
+    pub message: PatchText,
+    pub code: OptionalText,
+}
+fn read_edit_layer_event(v: &Value) -> Result<EditLayerEvent, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "customGcodeId",
+            "eventType",
+            "topZMm",
+            "toolIndex",
+            "filamentId",
+            "color",
+            "message",
+            "code",
+        ],
+        false,
+    )?;
+    Ok(EditLayerEvent {
+        custom_gcode_id: read_id(&object["customGcodeId"])?,
+        event_type: read_optional_layer_event_type(&object["eventType"])?,
+        top_z_mm: read_optional_finite(&object["topZMm"])?,
+        tool_index: read_patch_finite(&object["toolIndex"])?,
+        filament_id: read_patch_id(&object["filamentId"])?,
+        color: read_patch_text(&object["color"])?,
+        message: read_patch_text(&object["message"])?,
+        code: read_optional_text(&object["code"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteLayerEvent {
+    pub custom_gcode_id: Id,
+}
+fn read_delete_layer_event(v: &Value) -> Result<DeleteLayerEvent, InvalidIntent> {
+    let object = fields(v, &["customGcodeId"], false)?;
+    Ok(DeleteLayerEvent {
+        custom_gcode_id: read_id(&object["customGcodeId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Command {
     AddPlate(AddPlate),
     DuplicatePlate(DuplicatePlate),
@@ -576,6 +766,9 @@ pub enum Command {
     SplitLayerRange(SplitLayerRange),
     MergeLayerRanges(MergeLayerRanges),
     DeleteLayerRange(DeleteLayerRange),
+    AddLayerEvent(AddLayerEvent),
+    EditLayerEvent(EditLayerEvent),
+    DeleteLayerEvent(DeleteLayerEvent),
 }
 fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
     let object = fields(
@@ -605,6 +798,9 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             "splitLayerRange",
             "mergeLayerRanges",
             "deleteLayerRange",
+            "addLayerEvent",
+            "editLayerEvent",
+            "deleteLayerEvent",
         ],
         true,
     )?;
@@ -648,6 +844,9 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
         "splitLayerRange" => Ok(Command::SplitLayerRange(read_split_layer_range(value)?)),
         "mergeLayerRanges" => Ok(Command::MergeLayerRanges(read_merge_layer_ranges(value)?)),
         "deleteLayerRange" => Ok(Command::DeleteLayerRange(read_delete_layer_range(value)?)),
+        "addLayerEvent" => Ok(Command::AddLayerEvent(read_add_layer_event(value)?)),
+        "editLayerEvent" => Ok(Command::EditLayerEvent(read_edit_layer_event(value)?)),
+        "deleteLayerEvent" => Ok(Command::DeleteLayerEvent(read_delete_layer_event(value)?)),
         _ => Err(InvalidIntent),
     }
 }
