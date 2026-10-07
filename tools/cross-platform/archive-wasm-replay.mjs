@@ -83,8 +83,9 @@ export async function replayArchives(core, hostLayout, archiveLayout, cases, sha
       capture.free();
     }
   };
-  const open = (bytes) => {
-    const upload = new core.ProjectArchiveUpload(archiveLayout.version, bytes.length, policy);
+  // Declared-length and open-ended (unsized provider) staging must agree.
+  const open = (bytes, exact = true) => {
+    const upload = new core.ProjectArchiveUpload(archiveLayout.version, exact ? bytes.length : undefined, policy);
     for (let p = 0; p < bytes.length; p += archiveLayout.maxChunkBytes)
       upload.append(p, bytes.subarray(p, p + archiveLayout.maxChunkBytes));
     return upload.prepare();
@@ -99,12 +100,13 @@ export async function replayArchives(core, hostLayout, archiveLayout, cases, sha
       ticket.free();
     }
   };
-  const counts = { cases: 0, accepted: 0, refused: 0, canonical: 0, foreign: 0, saves: 0, identical: 0, acknowledged: 0, saveRefusals: [] };
+  const counts = { cases: 0, openEnded: 0, accepted: 0, refused: 0, canonical: 0, foreign: 0, saves: 0, identical: 0, acknowledged: 0, saveRefusals: [] };
   for (const c of cases) {
-    counts.cases++;
+    const exact = counts.cases++ % 2 === 0;
+    if (!exact) counts.openEnded++;
     let imported;
     try {
-      imported = open(c.bytes);
+      imported = open(c.bytes, exact);
     } catch (error) {
       check(!c.accepted, `${c.name}: binding refused (${error})`);
       counts.refused++;
@@ -195,6 +197,13 @@ export async function replayArchives(core, hostLayout, archiveLayout, cases, sha
   refuses(() => partial.append(0, new Uint8Array(11)), "oversized chunk");
   partial.append(0, new Uint8Array(4));
   refuses(() => partial.prepare(), "incomplete archive");
+  const tight = Float64Array.from(policy);
+  tight[0] = 4;
+  refuses(() => new core.ProjectArchiveUpload(archiveLayout.version, undefined, tight).prepare(), "empty open-ended archive");
+  const unsized = new core.ProjectArchiveUpload(archiveLayout.version, undefined, tight);
+  unsized.append(0, new Uint8Array(4));
+  refuses(() => unsized.append(4, new Uint8Array(1)), "open-ended archive budget");
+  refuses(() => unsized.prepare(), "open-ended non-archive");
   check(
     JSON.stringify(counts.saveRefusals) === JSON.stringify(ARCHIVE_SAVE_REFUSALS) &&
       counts.saves + counts.saveRefusals.length === counts.accepted &&

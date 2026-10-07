@@ -92,9 +92,10 @@ export class ProjectArchiveUpload {
      */
     append(offset: number, chunk: Uint8Array): void;
     /**
-     * Reserves exactly `archive_bytes` after checking it against the policy.
+     * `archive_bytes` is the exact length, reserved up front after checking it
+     * against the policy; omit it for open-ended input bounded by the policy.
      */
-    constructor(version: number, archive_bytes: number, policy: Float64Array);
+    constructor(version: number, archive_bytes: number | null | undefined, policy: Float64Array);
     /**
      * Consumes the upload on every outcome. Completes import privately: no
      * session state changes until the host adopts the returned document.
@@ -352,7 +353,7 @@ export interface InitOutput {
     readonly projectarchiveoutput_warning_count: (a: number) => number;
     readonly projectarchiveoutput_warning_length: (a: number, b: number) => [number, number, number];
     readonly projectarchiveupload_append: (a: number, b: number, c: number, d: number) => [number, number];
-    readonly projectarchiveupload_new: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly projectarchiveupload_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly projectarchiveupload_prepare: (a: number) => [number, number, number];
     readonly projectasset_digest: (a: number) => [number, number];
     readonly projectasset_length: (a: number) => number;

@@ -75,11 +75,36 @@ class ProjectSessionTest {
             LongArray(effects.length()) { kinds.indexOf(effects.getJSONObject(it).getString("kind")).toLong() }))
     }
     @Test fun actorSchedulingCrossesRealJni() { assertEquals(12L, ProjectActorChecks.run(base())) }
-    @Test fun actorArchiveOpenAndSaveCrossRealJni() {
+    private fun archiveCase(): Pair<ByteArray, Long> {
         val cases = fixture("foreign-import-vectors.json").getJSONArray("cases")
         val case = (0 until cases.length()).map { cases.getJSONObject(it) }.single { it.getString("name") == "bbs-model/16/plates-2-16" }
-        val archive = java.util.Base64.getDecoder().decode(case.getString("archiveBase64"))
-        assertEquals(7L, ProjectActorArchiveChecks.run(base(), archive, case.getJSONObject("expected").getJSONArray("warnings").length().toLong()))
+        return java.util.Base64.getDecoder().decode(case.getString("archiveBase64")) to
+            case.getJSONObject("expected").getJSONArray("warnings").length().toLong()
+    }
+    @Test fun actorArchiveOpenAndSaveCrossRealJni() {
+        val (archive, warnings) = archiveCase()
+        assertEquals(7L, ProjectActorArchiveChecks.run(base(), archive, warnings))
+    }
+    @Test fun providerDocumentOpenAndSaveCrossRealJni() {
+        val (archive, warnings) = archiveCase()
+        assertEquals(6L, ProjectDocumentChecks.run(base(), archive, warnings))
+    }
+    @Test fun contentResolverDocumentsTruncateAndReopen() {
+        val (archive, warnings) = archiveCase()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val file = java.io.File(context.cacheDir, "provider-check.3mf")
+        try {
+            file.writeBytes(archive + ByteArray(4096) { 7 }) // A longer stale document.
+            val document = ContentProjectDocument(context.contentResolver, android.net.Uri.fromFile(file))
+            document.openOutput().use { it.write(archive) }
+            assertEquals(archive.size.toLong(), file.length()) // Truncating write.
+            ProjectPreparation().use { scope ->
+                val imported = ProjectDocuments.prepare(scope, document, ProjectActorArchiveChecks.browserEquivalent,
+                    LocalTimestampResolver { it }, ProjectIntegerProfile.CHROMIUM)
+                assertEquals(ProjectArchiveFormat.FOREIGN, imported.format())
+                assertEquals(warnings, imported.warningCount())
+            }
+        } finally { file.delete() }
     }
     @Test fun documentOwnershipCrossesRealJni() { assertEquals(7L, ProjectOwnerChecks.documentChecks(base())) }
     @Test fun clipboardOwnershipCrossesRealJni() {

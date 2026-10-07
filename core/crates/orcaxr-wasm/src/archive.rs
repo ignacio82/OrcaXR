@@ -12,6 +12,7 @@ use orcaxr_archive::{
     archive_layout::{self as layout, ArchiveOptions, decode_options},
     open, package,
     policy::{Policy, archive_code, open_code, save_code},
+    staged::ArchiveInput,
     text,
 };
 use orcaxr_project::{host_layout, session::PreparedDocument};
@@ -23,55 +24,38 @@ fn options(version: f64, input: &[f64]) -> Result<ArchiveOptions, JsValue> {
 }
 #[wasm_bindgen]
 pub struct ProjectArchiveUpload {
-    bytes: Vec<u8>,
-    expected: usize,
+    input: ArchiveInput,
     policy: Policy,
 }
 #[wasm_bindgen]
 impl ProjectArchiveUpload {
-    /// Reserves exactly `archive_bytes` after checking it against the policy.
+    /// `archive_bytes` is the exact length, reserved up front after checking it
+    /// against the policy; omit it for open-ended input bounded by the policy.
     #[wasm_bindgen(constructor)]
     pub fn new(
         version: f64,
-        archive_bytes: f64,
+        archive_bytes: Option<f64>,
         policy: &[f64],
     ) -> Result<ProjectArchiveUpload, JsValue> {
-        let options = options(version, policy)?;
-        let expected = index(archive_bytes)?;
-        if expected == 0 || expected > options.archive_bytes {
-            return Err(error("input_limit"));
-        }
-        let mut bytes = Vec::new();
-        bytes
-            .try_reserve_exact(expected)
-            .map_err(|_| error("input_limit"))?;
+        let policy = Policy::new(options(version, policy)?);
+        let expected = archive_bytes.map(index).transpose()?;
         Ok(Self {
-            bytes,
-            expected,
-            policy: Policy::new(options),
+            input: ArchiveInput::new(expected, &policy).map_err(error)?,
+            policy,
         })
     }
     /// Offsets make retries and out-of-order delivery explicit; a refused
     /// chunk is not consumed.
     pub fn append(&mut self, offset: f64, chunk: &[u8]) -> Result<(), JsValue> {
-        if index(offset)? != self.bytes.len()
-            || chunk.len() > layout::MAX_CHUNK_BYTES
-            || chunk.len() > self.expected - self.bytes.len()
-        {
-            return Err(error("invalid_archive_input"));
-        }
-        self.bytes.extend_from_slice(chunk);
-        Ok(())
+        self.input.append(index(offset)?, chunk).map_err(error)
     }
     /// Consumes the upload on every outcome. Completes import privately: no
     /// session state changes until the host adopts the returned document.
     pub fn prepare(self) -> Result<ProjectArchiveImport, JsValue> {
-        if self.bytes.len() != self.expected {
-            return Err(error("incomplete_archive"));
-        }
+        let bytes = self.input.finish().map_err(error)?;
         // Bounded, redacted codes shared with JNI; no archive path, name or
         // content escapes.
-        let archive = Archive::open(Cursor::new(self.bytes), self.policy.zip(), || false)
+        let archive = Archive::open(Cursor::new(bytes), self.policy.zip(), || false)
             .map_err(|e| error(archive_code(e)))?;
         let format = match open::format(&archive) {
             open::Format::Canonical => layout::FORMAT_CANONICAL,

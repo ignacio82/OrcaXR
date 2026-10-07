@@ -265,10 +265,10 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   structural staging uses the one-part reader and bounded cross-part resolver for
   basic 3MF meshes, units, components and build items. It also decodes standard
   BBS paint roots into sparse facet channels under shared package budgets and
-  retains bounded unknown object/component/build/facet attributes. `bbs::foreign` completes
-  foreign BBS/3MF import with the browser's exact metadata semantics. Archive Open/Save are owned
-  WASM/JNI tasks; every limit derives from `contracts/project-archive.json`. Project WASM exposes immutable
-  effects/captures; Node-worker replay agrees with the TypeScript session corpus.
+  retains bounded unknown object/component/build/facet attributes. `bbs::foreign` matches browser
+  foreign import. Archive Open/Save are owned WASM/JNI tasks; all limits derive from
+  `contracts/project-archive.json`; Kotlin `ProjectDocuments` adapts provider streams (truncates only
+  after packaging). Project WASM exposes immutable effects/captures; Node-worker replay agrees.
   Browser timestamps use the host's Date.parse with lossless UTF-16 conversion. Hosts must bound inputs before wasm-bindgen copies them and
   dispatch effects before acknowledgement. Explicit JSON export allocates the
   whole serialized capture; chunk reads do not make it a live projection or

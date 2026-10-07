@@ -426,15 +426,16 @@ export class ProjectArchiveUpload {
         }
     }
     /**
-     * Reserves exactly `archive_bytes` after checking it against the policy.
+     * `archive_bytes` is the exact length, reserved up front after checking it
+     * against the policy; omit it for open-ended input bounded by the policy.
      * @param {number} version
-     * @param {number} archive_bytes
+     * @param {number | null | undefined} archive_bytes
      * @param {Float64Array} policy
      */
     constructor(version, archive_bytes, policy) {
         const ptr0 = passArrayF64ToWasm0(policy, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.projectarchiveupload_new(version, archive_bytes, ptr0, len0);
+        const ret = wasm.projectarchiveupload_new(version, !isLikeNone(archive_bytes), isLikeNone(archive_bytes) ? 0 : archive_bytes, ptr0, len0);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -1721,6 +1722,10 @@ function handleError(f, args) {
         const idx = addToExternrefTable0(e);
         wasm.__wbindgen_exn_store(idx);
     }
+}
+
+function isLikeNone(x) {
+    return x === undefined || x === null;
 }
 
 function passArray16ToWasm0(arg, malloc) {

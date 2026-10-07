@@ -15,14 +15,14 @@ use orcaxr_archive::{
     archive_layout::{self as layout, decode_options},
     open, package,
     policy::{Policy, archive_code, open_code, save_code},
+    staged::ArchiveInput,
     text as messages,
 };
 use orcaxr_project::session::PreparedDocument;
 use std::io::Cursor;
 
 pub(super) struct Upload {
-    bytes: Vec<u8>,
-    expected: usize,
+    input: ArchiveInput,
     policy: Policy,
     timestamps: Timestamps,
 }
@@ -45,8 +45,10 @@ fn policy(env: &mut JNIEnv<'_>, version: jint, options: &JDoubleArray<'_>) -> Re
     .ok_or("invalid_options")
 }
 
-/// Reserves exactly `archive_bytes` after checking it against the policy. Each
-/// upload counts against the bounded concurrent-document budget.
+/// `archive_bytes` is the exact length, reserved up front after checking it
+/// against the policy, or -1 for open-ended input (an unsized or nonseekable
+/// provider stream) bounded by the policy. Each upload counts against the
+/// bounded concurrent-document budget.
 pub(super) fn archive_upload_new(
     env: &mut JNIEnv<'_>,
     version: jint,
@@ -56,19 +58,15 @@ pub(super) fn archive_upload_new(
     integer_mode: jint,
 ) -> Result<jlong> {
     let policy = policy(env, version, &options)?;
-    let expected = index(archive_bytes)?;
-    if expected == 0 || expected > policy.options().archive_bytes {
-        return Err("input_limit");
-    }
+    let expected = match archive_bytes {
+        -1 => None,
+        value => Some(index(value)?),
+    };
     let reserved = registry().reserve(true)?;
     let timestamps = Timestamps::new(env, resolver, integer_mode)?;
-    let mut bytes = Vec::new();
-    bytes
-        .try_reserve_exact(expected)
-        .map_err(|_| "input_limit")?;
+    let input = ArchiveInput::new(expected, &policy)?;
     reserved.insert(Record::ArchiveUpload(Box::new(Upload {
-        bytes,
-        expected,
+        input,
         policy,
         timestamps,
     })))
@@ -88,13 +86,7 @@ pub(super) fn archive_upload_append(
     let chunk = env
         .convert_byte_array(&bytes)
         .map_err(|_| "invalid_input")?;
-    super::with_archive_upload(handle, |u| {
-        if index(offset)? != u.bytes.len() || chunk.len() > u.expected - u.bytes.len() {
-            return Err("invalid_archive_input");
-        }
-        u.bytes.extend_from_slice(&chunk);
-        Ok(())
-    })
+    super::with_archive_upload(handle, |u| u.input.append(index(offset)?, &chunk))
 }
 /// Consumes the upload on every outcome. Synchronous: run it on an owned import
 /// task. No session state changes until the host adopts the document.
@@ -109,14 +101,11 @@ pub(super) fn archive_upload_prepare(_: &mut JNIEnv<'_>, handle: jlong) -> Resul
             unreachable!()
         };
         let Upload {
-            bytes,
-            expected,
+            input,
             policy,
             mut timestamps,
         } = *upload;
-        if bytes.len() != expected {
-            return Err("incomplete_archive");
-        }
+        let bytes = input.finish()?;
         let archive =
             Archive::open(Cursor::new(bytes), policy.zip(), cancelled).map_err(archive_code)?;
         let format = match open::format(&archive) {

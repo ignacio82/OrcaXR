@@ -28,6 +28,7 @@ export function startProjectJni(profile = "debug") {
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
   signatures.actorChecks = ["String"];
   signatures.actorArchiveChecks = ["String", "byte[]", "long"];
+  signatures.providerDocumentChecks = ["String", "byte[]", "long"];
   signatures.intentCodec = ["String", "String"];
   signatures.resolveLocal = ["String", "long"];
   signatures.ownerChecks = ["String", "String"];
@@ -362,7 +363,7 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
   }
   class ProjectArchiveUpload extends Handle {
     constructor(version, bytes, policy) {
-      super(call("archiveUploadNew", version, bytes, policy, zone, profile));
+      super(call("archiveUploadNew", version, bytes ?? -1, policy, zone, profile));
     }
     append(offset, bytes) {
       call("archiveUploadAppend", this.handle, offset, bytes);

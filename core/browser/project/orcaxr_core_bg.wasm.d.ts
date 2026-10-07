@@ -52,7 +52,7 @@ export const projectarchiveoutput_warning: (a: number, b: number, c: number, d: 
 export const projectarchiveoutput_warning_count: (a: number) => number;
 export const projectarchiveoutput_warning_length: (a: number, b: number) => [number, number, number];
 export const projectarchiveupload_append: (a: number, b: number, c: number, d: number) => [number, number];
-export const projectarchiveupload_new: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const projectarchiveupload_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const projectarchiveupload_prepare: (a: number) => [number, number, number];
 export const projectasset_digest: (a: number) => [number, number];
 export const projectasset_length: (a: number) => number;

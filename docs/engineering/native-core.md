@@ -2465,6 +2465,34 @@ browser Open and Save and that five tight budgets refuse with `resource_limit`.
 The Android instrumented test `actorArchiveOpenAndSaveCrossRealJni` has not run
 on a device.
 
+Staging rules live in `orcaxr_archive::staged::ArchiveInput`, shared by both
+bindings: a declared length is reserved before any chunk and must be met exactly;
+open-ended input (WASM `undefined`, JNI `-1`, Kotlin `null`) grows fallibly up to
+the archive budget, for unsized or nonseekable provider streams. The replays open
+every other archive open-ended (670 of 1,341) with identical results.
+
+`ProjectDocuments` adapts provider documents to these tasks without assuming a
+path, seek, fsync or atomic replacement. `prepare` stages a plausible reported
+size exactly and re-reads a stale or missing size open-ended; provider failures
+become redacted `ProjectDocumentException` codes (`document_permission`,
+`document_unavailable`, `document_not_writable`, `document_storage_full`,
+`document_read_failed`, `document_write_failed`) while archive refusals keep
+their codes. `save` builds the complete package before opening the destination,
+so a refused Save never truncates the user's file, and returns only after the
+provider accepted close; a failure after opening is reported uncertain and the
+project stays dirty. `ContentProjectDocument` wraps a `ContentResolver` URI:
+`OpenableColumns.SIZE` as the size hint, truncating `"wt"` writes only (a stale
+tail would corrupt the ZIP directory) and `ENOSPC` as `document_storage_full`.
+`ProjectDocumentChecks` passes six journeys over real JNI and the actor: six size
+variants (exact, unknown, zero, stale high/low, over budget), budget and
+malformed refusals, permission/unavailable/read failures, an untouched
+destination after a refused Save, write/close/grant failures that keep the
+project dirty, and a successful Save that acknowledges the checkpoint and
+reopens to the same semantic hash. The instrumented tests (including a real
+`ContentResolver` truncation round trip) compile under Gradle but have not run on
+a device. Pickers, persisted grants, recent files and share intents belong to
+the application (Phase 7).
+
 The Chrome harness now loads an intercepted secure origin: Chrome 150 refuses
 blob module workers from an opaque `about:blank` page, which had silently broken
 the real-browser project replay. Its query replay treats `Date.parse` as the

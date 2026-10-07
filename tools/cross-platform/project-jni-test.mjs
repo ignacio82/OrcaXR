@@ -215,6 +215,13 @@ try {
     archiveCase.expected.warnings.length,
   );
   assert.equal(actorArchiveChecks, 7);
+  const providerDocumentChecks = jvm.call(
+    "providerDocumentChecks",
+    model.factories[0].stateJson,
+    Buffer.from(archiveCase.archiveBase64, "base64"),
+    archiveCase.expected.warnings.length,
+  );
+  assert.equal(providerDocumentChecks, 6);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);
@@ -229,6 +236,7 @@ try {
     ...queries,
     archives,
     actorArchiveChecks,
+    providerDocumentChecks,
     ownedQueryTextUnits: ownedQueryText.length,
     ownedBytes: owned.byteLength,
     hostJniSha256: createHash("sha256")

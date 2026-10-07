@@ -10,6 +10,7 @@ pub mod open;
 pub mod package;
 pub mod policy;
 mod read;
+pub mod staged;
 pub mod text;
 pub mod write;
 

@@ -107,7 +107,14 @@ Detailed evidence and reproducible commands live in
   (1,225 accepted, 1,223 saved, acknowledged and reopened) agree in Node WASM, a
   Chrome 150 worker and host JNI (debug and release); seven actor journeys pass.
   The instrumented Android test has not run on a device.
-- [ ] Add STL/OBJ/AMF import and Android document-provider Open/Save.
+- [x] Add the provider-neutral document layer for archive Open/Save:
+  open-ended staging for unsized/nonseekable streams (shared `ArchiveInput`),
+  stale-size fallback, redacted provider codes, package-before-truncate Save with
+  checkpoint only after provider close, and a `ContentResolver` adapter. Six
+  actor journeys pass over real JNI; 670 of the 1,341 replayed archives use the
+  open-ended path in every host. Instrumented tests compile but have not run.
+- [ ] Add STL/OBJ/AMF import; wire provider Open/Save into the application UI
+  (pickers, persisted grants, recent files, share intents) in Phase 7.
 - [x] Share bounded G-code text windows and case-insensitive line search through
   Rust, WASM and JNI (Phase 3). Browser, host and Chrome WASM replays agree on
   18,710 searches; the Android instrumented replay has not run on a device yet.
@@ -119,25 +126,26 @@ Detailed evidence and reproducible commands live in
   finish remaining command/query coverage and production session integration,
   then continue the app/device gates.
 
-**Resume here:** connect archive tasks to Android document providers. Archive Open
-and Save now run as owned WASM/JNI tasks under one generated host policy (see
-[native-core](engineering/native-core.md#archive-open-and-save-host-tasks)): Open
-with `ProjectArchiveUpload.prepare(scope, stream, …)` inside a `ProjectActor`
-`openDocument`/`resetDocument` producer, Save with
-`ProjectExportSource.writeArchive` inside `saveDocument`. Next, in order: (1)
-Android document-provider Open/Save (SAF picker, stream length, durable write and
-handoff before checkpoint acknowledgement, user-visible warnings and refusal
-codes), sizing `ProjectArchiveOptions` from the device memory budget; (2) port
-signature-first STL/OBJ/AMF import from `web/src/project/import/`; (3) remaining
-command families. Replay evidence: `archive-wasm-replay.mjs` in
+**Resume here:** port signature-first STL/OBJ/AMF import from
+`web/src/project/import/` into the shared core with an independent browser
+corpus, then bind it like archive Open. Archive Open/Save already run as owned
+WASM/JNI tasks under one generated host policy, and `ProjectDocuments` adapts
+provider documents (see
+[native-core](engineering/native-core.md#archive-open-and-save-host-tasks)): an
+app calls `ProjectDocuments.prepare` inside a `ProjectActor` `openDocument`/
+`resetDocument` producer and `ProjectDocuments.save` inside `saveDocument`, sizing
+`ProjectArchiveOptions` from the device memory budget. After STL/OBJ/AMF, finish
+the remaining command families; application pickers, grants and recent files
+are Phase 7. Replay evidence: `archive-wasm-replay.mjs` in
 `project-wasm-test.mjs`, `project-wasm-browser.mjs` and `project-jni-test.mjs`
-(1,341 archives each), plus `ProjectActorArchiveChecks`. The interchange harness
-still passes 2,159 edited journeys from 2,278 archives
+(1,341 archives each, half open-ended), plus `ProjectActorArchiveChecks` and
+`ProjectDocumentChecks`. The interchange harness still passes 2,159 edited
+journeys from 2,278 archives
 ([native-core](engineering/native-core.md#edited-canonical-archive-interchange)).
 Retain earlier binding replay evidence only when executable and JVM input
-identities still agree; otherwise rerun it. This host can run headless Chrome and
-git; the full web quality gate and fresh dependency advisories still need a run on
-an unloaded machine.
+identities still agree; otherwise rerun it. This host can run headless Chrome,
+git and memory-capped Gradle compiles; the full web quality gate, emulator runs
+and fresh dependency advisories still need an unloaded machine.
 
 `CanonicalArchiveSource::complete` now performs OPC/BBS reconciliation and adoption;
 only its completed result can produce the prepared document for guarded Open/reset.
@@ -1278,6 +1286,9 @@ storage journeys on phone, tablet, and desktop-sized windows.
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.
+  `ProjectDocuments`/`ContentProjectDocument` in core-bridge already handle
+  unsized/nonseekable input, stale sizes, revoked grants, disk-full codes and
+  package-before-truncate Save; pickers, grants, recent files and intents remain.
 - [ ] Implement recovery storage and Save/Discard/Cancel guards for back,
   navigation, new/open/replace, window close where observable, and app updates.
   Test process death during capture, write, commit, and restore.

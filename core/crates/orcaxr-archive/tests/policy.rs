@@ -8,9 +8,10 @@ mod complete;
 use complete::package_support as support;
 use orcaxr_archive::{
     Archive, ZipLimits,
-    archive_layout::{ArchiveOptions, VERSION, decode_options},
+    archive_layout::{ArchiveOptions, MAX_CHUNK_BYTES, VERSION, decode_options},
     open, package,
     policy::{Policy, archive_code, open_code, save_code},
+    staged::ArchiveInput,
 };
 use serde_json::Value;
 use std::io::Cursor;
@@ -222,4 +223,44 @@ fn tight_budgets_refuse_instead_of_truncating() {
         )
         .is_ok()
     );
+}
+
+#[test]
+fn staged_input_enforces_declared_and_open_ended_lengths() {
+    let policy = Policy::new(ArchiveOptions {
+        archive_bytes: 10,
+        ..browser_equivalent()
+    });
+    // Declared lengths are reserved up front and must be met exactly.
+    for bad in [0, 11] {
+        assert_eq!(
+            ArchiveInput::new(Some(bad), &policy).unwrap_err(),
+            "input_limit"
+        );
+    }
+    let mut exact = ArchiveInput::new(Some(4), &policy).unwrap();
+    assert_eq!(exact.append(1, b"x"), Err("invalid_archive_input"));
+    assert_eq!(exact.append(0, b"abcde"), Err("invalid_archive_input"));
+    assert_eq!(
+        exact.append(0, &vec![0; MAX_CHUNK_BYTES + 1]),
+        Err("input_limit")
+    );
+    exact.append(0, b"ab").unwrap();
+    // A refused chunk is not consumed; the retry at the same offset succeeds.
+    assert_eq!(exact.append(1, b"cd"), Err("invalid_archive_input"));
+    assert_eq!(exact.len(), 2);
+    let mut retry = ArchiveInput::new(Some(4), &policy).unwrap();
+    retry.append(0, b"ab").unwrap();
+    assert_eq!(retry.finish(), Err("incomplete_archive"));
+    exact.append(2, b"cd").unwrap();
+    assert_eq!(exact.finish().unwrap(), b"abcd");
+    // Open-ended input grows to the archive budget and needs at least one byte.
+    assert_eq!(
+        ArchiveInput::new(None, &policy).unwrap().finish(),
+        Err("incomplete_archive")
+    );
+    let mut open = ArchiveInput::new(None, &policy).unwrap();
+    open.append(0, b"0123456789").unwrap();
+    assert_eq!(open.append(10, b"x"), Err("input_limit"));
+    assert_eq!(open.finish().unwrap(), b"0123456789");
 }

@@ -9,11 +9,13 @@ enum class ProjectArchiveFormat { CANONICAL, FOREIGN }
  * Run staging and preparation inside an actor openDocument/resetDocument producer:
  * the actor's original Open ticket or reset guard still decides adoption. */
 class ProjectArchiveUpload(
-    archiveBytes: Long,
+    /** Exact length, reserved up front; null stages open-ended input (an unsized
+     * or nonseekable provider stream) bounded by [ProjectArchiveOptions.archiveBytes]. */
+    archiveBytes: Long?,
     options: ProjectArchiveOptions,
     resolver: LocalTimestampResolver,
     profile: ProjectIntegerProfile,
-) : ProjectHandle(NativeProject.archiveUploadNew(ProjectArchive.VERSION, archiveBytes, options.encode(), resolver, profile.bits)) {
+) : ProjectHandle(NativeProject.archiveUploadNew(ProjectArchive.VERSION, archiveBytes.also { require(it == null || it >= 0) { "input_limit" } } ?: -1, options.encode(), resolver, profile.bits)) {
     fun append(offset: Long, bytes: ByteArray) = read {
         require(bytes.size <= ProjectArchive.MAX_CHUNK_BYTES) { "input_limit" }
         NativeProject.archiveUploadAppend(it, offset, bytes)
@@ -25,12 +27,14 @@ class ProjectArchiveUpload(
         own(it, ::ProjectArchiveImport)
     }
     companion object {
-        /** Stages exactly [archiveBytes] from [input] in bounded chunks, refuses
-         * trailing bytes, then prepares. Every handle is owned by [scope]. */
+        /** Stages [input] in bounded chunks, then prepares. With [archiveBytes]
+         * the stream must hold exactly that many bytes ("incomplete_archive" or
+         * "archive_length_mismatch" otherwise); null reads to the end under the
+         * policy's archive budget. Every handle is owned by [scope]. */
         fun prepare(
             scope: ProjectPreparation,
             input: InputStream,
-            archiveBytes: Long,
+            archiveBytes: Long?,
             options: ProjectArchiveOptions,
             resolver: LocalTimestampResolver,
             profile: ProjectIntegerProfile,
@@ -38,14 +42,16 @@ class ProjectArchiveUpload(
             val upload = scope.own(ProjectArchiveUpload(archiveBytes, options, resolver, profile))
             val buffer = ByteArray(ProjectArchive.MAX_CHUNK_BYTES)
             var offset = 0L
-            while (offset < archiveBytes) {
+            while (archiveBytes == null || offset < archiveBytes) {
                 scope.checkActive()
-                val count = input.read(buffer, 0, minOf(buffer.size.toLong(), archiveBytes - offset).toInt())
+                val wanted = if (archiveBytes == null) buffer.size else minOf(buffer.size.toLong(), archiveBytes - offset).toInt()
+                val count = input.read(buffer, 0, wanted)
+                if (count < 0 && archiveBytes == null) break
                 check(count > 0) { "incomplete_archive" }
                 upload.append(offset, if (count == buffer.size) buffer else buffer.copyOf(count))
                 offset += count
             }
-            check(input.read() < 0) { "archive_length_mismatch" }
+            if (archiveBytes != null) check(input.read() < 0) { "archive_length_mismatch" }
             scope.checkActive()
             return scope.own(upload.prepare())
         }
