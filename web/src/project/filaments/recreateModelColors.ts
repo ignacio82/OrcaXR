@@ -402,16 +402,29 @@ export interface RecreateModelColorsApplyMapping {
 export class RecreateModelColorsCommand extends SnapshotFilamentCommand {
   readonly type = 'recreate-model-colors';
   readonly label: string;
+  /**
+   * The ID each adopted tool received, drawn once per tool: the next state is
+   * built for the no-op check and again on every apply and redo, and a fresh
+   * ID each time would orphan redone references to the adopted tool.
+   */
+  private readonly adoptedIds = new Map<number, PhysicalFilamentId>();
 
   constructor(
     private readonly mappings: readonly RecreateModelColorsApplyMapping[],
     private readonly newMixedFilaments: readonly MixedFilament[] = [],
     private readonly printerSlotsToAdopt?: readonly PrinterFilamentSlotFacts[],
-    private readonly candidatePhysicalFilaments?: readonly PhysicalFilament[],
+    private readonly candidatePhysicalFilaments?: readonly Pick<PhysicalFilament, 'id' | 'toolId'>[],
     private readonly ids?: IdSource,
   ) {
     super();
     this.label = mappings.length === 1 ? 'Recreate 1 model color' : `Recreate ${mappings.length} model colors`;
+  }
+
+  private adoptedId(toolId: number): PhysicalFilamentId | undefined {
+    if (!this.ids) return undefined;
+    const id = this.adoptedIds.get(toolId) ?? this.ids.next<'physical-filament'>('physical-filament');
+    this.adoptedIds.set(toolId, id);
+    return id;
   }
 
   protected mutate(state: ProjectState): void {
@@ -424,7 +437,7 @@ export class RecreateModelColorsCommand extends SnapshotFilamentCommand {
         const name = printerFilamentSlotName(slot);
         const candidate = candidateByTool.get(slot.toolId);
         if (!filament) {
-          const newId = candidate?.id ?? this.ids?.next<'physical-filament'>('physical-filament');
+          const newId = candidate?.id ?? this.adoptedId(slot.toolId);
           if (!newId) continue;
           state.filaments.physical.push({
             id: newId,

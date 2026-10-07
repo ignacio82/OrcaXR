@@ -65,6 +65,7 @@ import {
   SetVolumeFilamentCommand,
   SyncPhysicalFilamentsFromPrinterCommand,
   type FilamentAssignmentTarget,
+  type PrinterFilamentSlotFacts,
 } from './filaments/commands';
 import {
   AddMixedFilamentCommand,
@@ -76,6 +77,8 @@ import {
   type EditMixedFilamentPatch,
 } from './filaments/mixedCommands';
 import { ReconcileFullSpectrumAutoPairsCommand } from './filaments/autoPairReconciliation';
+import { RecreateModelColorsCommand } from './filaments/recreateModelColors';
+import { SeparateObjectVolumesRequestCommand } from './objects/splitToObjectsCommands';
 import { assertCanonicalSerializable } from './domain/canonical';
 import { SetProjectSettingsOverridesCommand } from './settingsOverrides';
 import { ConvertVolumeRoleCommand } from './objects/semanticVolumeCommands';
@@ -96,6 +99,7 @@ import type {
   WipeTowerState,
 } from './domain/model';
 import type {
+  ProjectPrinterSlotWire,
   ProjectWipeTowerInputWire,
   ProjectFacetStrokeOperationInputWire,
   ProjectVolumeRoleNameWire,
@@ -275,6 +279,42 @@ function command(value: ProjectCommandWire): ProjectCommand {
   }
   if ('deleteLayerEvent' in value)
     return new DeleteLayerEventCommand(id<'custom-gcode'>(value.deleteLayerEvent.customGcodeId));
+  if ('recreateModelColors' in value) {
+    const input = value.recreateModelColors;
+    return new RecreateModelColorsCommand(
+      input.mappings.map((mapping) => ({
+        sourceColor: text(mapping.sourceColor),
+        destinationFilamentId: filament(mapping.destinationFilamentId),
+        ...('value' in mapping.sourceFilamentIds
+          ? { sourceFilamentIds: mapping.sourceFilamentIds.value.map(filament) }
+          : {}),
+      })),
+      input.newMixedFilaments.map(mixedFilament),
+      input.printerSlots.map(printerSlot),
+      input.candidateTools.map((candidate) => ({
+        id: id<'physical-filament'>(candidate.filamentId),
+        toolId: candidate.toolId,
+      })),
+      'value' in input.newFilamentIds
+        ? listedIds(
+            input.newFilamentIds.value.map(id<'physical-filament'>),
+            'Model colour recreation needs more new filament IDs',
+          )
+        : undefined,
+    );
+  }
+  if ('separateObjectVolumes' in value) {
+    const input = value.separateObjectVolumes;
+    return new SeparateObjectVolumesRequestCommand(
+      { revision: input.guard.sourceRevision, hash: text(input.guard.sourceHash) },
+      id<'object'>(input.objectId),
+      input.identities.map((identity) => ({
+        sourceVolumeId: id<'volume'>(identity.sourceVolumeId),
+        objectId: id<'object'>(identity.objectId),
+        instanceIds: identity.instanceIds.map(id<'instance'>),
+      })),
+    );
+  }
   if ('reconcileAutoPairs' in value) {
     const input = value.reconcileAutoPairs;
     return new ReconcileFullSpectrumAutoPairsCommand(
@@ -407,16 +447,11 @@ function command(value: ProjectCommandWire): ProjectCommand {
   }
   if ('syncPhysicalFilaments' in value) {
     const input = value.syncPhysicalFilaments;
-    const slots = input.slots.map((slot) => ({
-      toolId: slot.toolId,
-      color: text(slot.color),
-      material: text(slot.material),
-      ...('value' in slot.subType ? { subType: text(slot.subType.value) } : {}),
-      ...('value' in slot.vendor ? { vendor: text(slot.vendor.value) } : {}),
-    }));
     return new SyncPhysicalFilamentsFromPrinterCommand(
-      slots,
-      'value' in input.newFilamentIds ? listedIds(input.newFilamentIds.value.map(id<'physical-filament'>)) : undefined,
+      input.slots.map(printerSlot),
+      'value' in input.newFilamentIds
+        ? listedIds(input.newFilamentIds.value.map(id<'physical-filament'>), 'Printer sync needs more new filament IDs')
+        : undefined,
     );
   }
   if ('adjustLayerHeightProfile' in value) {
@@ -553,7 +588,9 @@ function wipeTower(value: ProjectWipeTowerInputWire): WipeTowerState {
   };
 }
 /** Paint values travel untyped; the stroke's validation refuses one its channel cannot hold. */
-function facetStrokeOperation(value: ProjectFacetStrokeOperationInputWire): FacetStrokeOperation<FacetAnnotationChannel> {
+function facetStrokeOperation(
+  value: ProjectFacetStrokeOperationInputWire,
+): FacetStrokeOperation<FacetAnnotationChannel> {
   const ranges = (input: readonly { start: number; endExclusive: number }[]) =>
     input.map((range) => ({ start: range.start, endExclusive: range.endExclusive }));
   if ('reset' in value) return { mode: 'reset' };
@@ -669,7 +706,11 @@ function mixedFilament(value: ProjectMixedFilamentInputWire): MixedFilament {
 function assignmentTarget(value: ProjectAssignmentTargetWire): FilamentAssignmentTarget {
   if ('object' in value) return { kind: 'object', objectId: id<'object'>(value.object.objectId) };
   if ('volume' in value)
-    return { kind: 'volume', objectId: id<'object'>(value.volume.objectId), volumeId: id<'volume'>(value.volume.volumeId) };
+    return {
+      kind: 'volume',
+      objectId: id<'object'>(value.volume.objectId),
+      volumeId: id<'volume'>(value.volume.volumeId),
+    };
   return {
     kind: 'layer-range',
     objectId: id<'object'>(value.layerRange.objectId),
@@ -680,12 +721,21 @@ function assignmentTarget(value: ProjectAssignmentTargetWire): FilamentAssignmen
 function optionalFilament(value: ProjectOptionalIdWire): FilamentId | null {
   return 'value' in value ? filament(value.value) : null;
 }
+function printerSlot(slot: ProjectPrinterSlotWire): PrinterFilamentSlotFacts {
+  return {
+    toolId: slot.toolId,
+    color: text(slot.color),
+    material: text(slot.material),
+    ...('value' in slot.subType ? { subType: text(slot.subType.value) } : {}),
+    ...('value' in slot.vendor ? { vendor: text(slot.vendor.value) } : {}),
+  };
+}
 /** Hands out caller-chosen IDs in order; running out is a refusal, not a guess. */
-function listedIds(ids: readonly EntityId<'physical-filament'>[]): IdSource {
+function listedIds(ids: readonly EntityId<'physical-filament'>[], exhausted: string): IdSource {
   let next = 0;
   return {
     next<Kind extends string>(): EntityId<Kind> {
-      if (next >= ids.length) throw new Error('Printer sync needs more new filament IDs');
+      if (next >= ids.length) throw new Error(exhausted);
       return ids[next++] as unknown as EntityId<Kind>;
     },
   };

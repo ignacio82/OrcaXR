@@ -13,6 +13,7 @@ mod mixed;
 mod objects;
 mod project_plate;
 mod settings_overrides;
+mod split_objects;
 pub mod staged;
 mod transforms;
 mod volume_roles;
@@ -104,6 +105,7 @@ enum Kind {
     RenameProject(Box<project_plate::RenameProject>),
     WipeTower(Box<project_plate::PlateWipeTower>),
     ReconcileAutoPairs(Box<project_plate::ReconcileAutoPairs>),
+    SeparateObjectVolumes(Box<split_objects::SeparateObjectVolumes>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -253,6 +255,13 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
             let command = project_plate::PlateWipeTower::new(v)?;
             (command.label(), Kind::WipeTower(Box::new(command)))
         }
+        wire::Command::SeparateObjectVolumes(v) => {
+            let command = split_objects::SeparateObjectVolumes::new(v)?;
+            (
+                command.label(),
+                Kind::SeparateObjectVolumes(Box::new(command)),
+            )
+        }
         wire::Command::ReconcileAutoPairs(v) => {
             let command = project_plate::ReconcileAutoPairs::new(v)?;
             (command.label(), Kind::ReconcileAutoPairs(Box::new(command)))
@@ -297,6 +306,7 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
             Text::from_utf8("Remove mixed filament"),
             Kind::RemoveMixed(Box::new(mixed::RemoveMixed::new(v)?)),
         ),
+        wire::Command::RecreateModelColors(v) => filament(filaments::FilamentCommand::recreate(v)?),
         wire::Command::SetFilamentAssignments(v) => {
             filament(filaments::FilamentCommand::assignments(v)?)
         }
@@ -598,6 +608,7 @@ impl PreparedCommand {
             Kind::RenameProject(_) => "rename-project",
             Kind::WipeTower(_) => "set-plate-wipe-tower",
             Kind::ReconcileAutoPairs(_) => "reconcile-full-spectrum-auto-pairs",
+            Kind::SeparateObjectVolumes(_) => "separate-object-volumes",
         }
     }
 }
@@ -664,6 +675,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::RenameProject(c) => c.apply(context, reason)?,
             Kind::WipeTower(c) => c.apply(context, reason)?,
             Kind::ReconcileAutoPairs(c) => c.apply(context, reason)?,
+            Kind::SeparateObjectVolumes(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
                 activate,
@@ -806,6 +818,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::RenameProject(c) => return c.revert(context, reason),
             Kind::WipeTower(c) => return c.revert(context, reason),
             Kind::ReconcileAutoPairs(c) => return c.revert(context, reason),
+            Kind::SeparateObjectVolumes(c) => return c.revert(context, reason),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()
@@ -889,6 +902,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::FacetStroke(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::WipeTower(_) => Ok(128),
             Kind::ReconcileAutoPairs(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::SeparateObjectVolumes(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),

@@ -1032,6 +1032,65 @@
         "label": "OptionalText"
       }
     },
+    "ColorMapping": {
+      "kind": "object",
+      "fields": {
+        "sourceColor": "EditText",
+        "destinationFilamentId": "Id",
+        "sourceFilamentIds": "OptionalIds"
+      }
+    },
+    "ColorMappings": {
+      "kind": "array",
+      "items": "ColorMapping",
+      "min": 0,
+      "max": 4096
+    },
+    "CandidateTool": {
+      "kind": "object",
+      "fields": {
+        "toolId": "ToolSlot",
+        "filamentId": "Id"
+      }
+    },
+    "CandidateTools": {
+      "kind": "array",
+      "items": "CandidateTool",
+      "min": 0,
+      "max": 1024
+    },
+    "RecreateModelColors": {
+      "kind": "object",
+      "fields": {
+        "mappings": "ColorMappings",
+        "newMixedFilaments": "MixedFilamentInputs",
+        "printerSlots": "PrinterSlots",
+        "candidateTools": "CandidateTools",
+        "newFilamentIds": "OptionalIds"
+      }
+    },
+    "SeparatedObject": {
+      "kind": "object",
+      "fields": {
+        "sourceVolumeId": "Id",
+        "objectId": "Id",
+        "instanceIds": "Ids"
+      }
+    },
+    "SeparatedObjects": {
+      "kind": "array",
+      "items": "SeparatedObject",
+      "min": 0,
+      "max": 131072
+    },
+    "SeparateObjectVolumes": {
+      "kind": "object",
+      "fields": {
+        "guard": "SettingsGuard",
+        "objectId": "Id",
+        "identities": "SeparatedObjects"
+      }
+    },
     "Command": {
       "kind": "union",
       "variants": {
@@ -1089,7 +1148,9 @@
         "facetStroke": "FacetStroke",
         "renameProject": "RenameProject",
         "setPlateWipeTower": "SetPlateWipeTower",
-        "reconcileAutoPairs": "ReconcileAutoPairs"
+        "reconcileAutoPairs": "ReconcileAutoPairs",
+        "recreateModelColors": "RecreateModelColors",
+        "separateObjectVolumes": "SeparateObjectVolumes"
       }
     },
     "Commands": {

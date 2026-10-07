@@ -300,10 +300,7 @@ export function smoothHeightProfile(
   assertSlicingParameters(parameters);
   assertProfile(profile);
   if (!(smoothing.radius <= MAX_SMOOTHING_RADIUS)) {
-    throw new LayerHeightProfileError(
-      `Smoothing radius must be at most ${MAX_SMOOTHING_RADIUS}`,
-      'invalid-parameters',
-    );
+    throw new LayerHeightProfileError(`Smoothing radius must be at most ${MAX_SMOOTHING_RADIUS}`, 'invalid-parameters');
   }
   let result = [...profile];
   for (let round = 0; round < SMOOTHING_ROUNDS; round += 1) result = gaussBlur(result, parameters, smoothing);

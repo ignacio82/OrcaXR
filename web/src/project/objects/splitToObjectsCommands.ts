@@ -6,6 +6,7 @@ import { findObject, findVolume } from '../domain/selectors';
 import type { CommandContext, ProjectCommand } from '../history/command';
 import type { CommandBus } from '../history/commandBus';
 import { selectionKey, type SelectionRef, type SelectionSnapshot } from '../selection';
+import type { ProjectRevisionGuard } from '../store';
 import { SplitVolumeToPartsCommand, type PreparedVolumeSplitPart, type VolumeSplitGuard } from './splitCommands';
 
 export interface ObjectVolumeSeparationGuard {
@@ -131,6 +132,47 @@ export class SeparateObjectVolumesCommand implements ProjectCommand {
         (this.before ? canonicalStringify(this.before).length : 0) +
         (this.after ? canonicalStringify(this.after).length : 0),
     );
+  }
+}
+
+/**
+ * Split to objects described by its request, for hosts that send intents. The
+ * first apply refuses a project that is no longer the revision the host saw,
+ * then fingerprints the source object exactly as the workspace does; later
+ * applies and reverts are those of the resulting `SeparateObjectVolumesCommand`.
+ */
+export class SeparateObjectVolumesRequestCommand implements ProjectCommand {
+  readonly type = 'separate-object-volumes';
+  readonly label = 'Split to objects';
+  readonly dirtyCategories = ['projectData'] as const;
+  private command?: SeparateObjectVolumesCommand;
+
+  constructor(
+    private readonly guard: ProjectRevisionGuard,
+    private readonly objectId: ObjectId,
+    private readonly identities: readonly SeparatedObjectIdentity[],
+  ) {}
+
+  apply(context: CommandContext): void {
+    if (!this.command) {
+      if (!context.project.isCurrent(this.guard)) {
+        throw new Error(`Split-to-objects source ${this.objectId} is stale`);
+      }
+      this.command = new SeparateObjectVolumesCommand(
+        captureObjectVolumeSeparationGuard(context.project.getSnapshot().state, this.objectId),
+        this.identities,
+      );
+    }
+    this.command.apply(context);
+  }
+
+  revert(context: CommandContext): void {
+    if (!this.command) throw new Error('SeparateObjectVolumesRequestCommand has not been applied');
+    this.command.revert(context);
+  }
+
+  estimateBytes(): number {
+    return this.command ? this.command.estimateBytes() : 1;
   }
 }
 

@@ -146,12 +146,12 @@ undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
 actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
 Layer ranges, layer events, brim ears, layer-height profiles, physical and
 mixed filaments, project/scoped setting overrides, volume-role conversion and
-whole-facet paint strokes, project rename, plate wipe towers and auto-pair
-reconciliation are ported (about 63 of the browser's 78 command classes are now
-native). Next families, in order: model-colour recreation (intent-only), then the asset-bearing commands, which need new
-captured (staged) command types for their mesh payloads: add volume, mesh
-topology replacement, split and split-to-objects, SVG and emboss volumes, and
-mesh booleans. Each family adds intent variants to
+whole-facet paint strokes, project rename, plate wipe towers, auto-pair
+reconciliation, model-colour recreation and multi-volume split to objects are
+ported (about 65 of the browser's 78 command classes are now native). Next
+come the asset-bearing commands. They need new captured (staged) command types
+for their mesh payloads: add volume, mesh topology replacement, split to parts
+and single-volume split to objects, SVG and emboss volumes, and mesh booleans. Each family adds intent variants to
 `contracts/project-intents.json` (definitions before first use; regenerate with
 `generate-project-intents.mjs --write`), maps them in
 `web/src/project/PreparedProjectCommands.ts`, appends a scenario to
@@ -1120,10 +1120,22 @@ and replay coverage for the complete current command inventory.
     recipes). The corpus (1,598 steps, 29 new) keeps the browser's quirks: a
     rename to the same name is still an entry, and the wipe tower's history
     estimate is a fixed 128.
-  - [ ] Port and replay every remaining command family before session cutover
-    (
-    settings/scoped overrides, SVG/emboss/semantic volumes, split/boolean,
-    facet paint strokes, recreate model colours).
+  - [x] Port `recreateModelColors`: printer-slot adoption (candidate IDs,
+    then caller-supplied IDs drawn once per tool), recreated recipes, and
+    remapping by source filament or by normalized hex colour through
+    wipe towers, scoped assignments, source-material colours and paint
+    (including the volume/project `originalFilamentColors` fallback). The
+    corpus (1,614 steps, 16 new) also fixed the browser command's redo
+    instability for adopted tools.
+  - [x] Port multi-volume split to objects (`separateObjectVolumes`). It is
+    revision/hash-guarded and uses a new browser request command that
+    fingerprints the source like the workspace does. It has the browser's
+    source and identity refusals, transfers instance offsets through
+    quaternions, remaps the selection and swaps whole states. The corpus
+    (1,659 steps, 45 new) pins the history estimate at the retention boundary.
+  - [ ] Port and replay every remaining command family before session cutover:
+    add object/volume, mesh replacement, split to parts and component split
+    to objects, SVG/emboss volumes, mesh booleans and refined facet commits.
 - [ ] Port settings resolution, physical/mixed filament identities, profile
   selection semantics, and canonical slice preflight. Consume the generated
   pinned schema/catalog rather than reconstructing defaults in Kotlin.

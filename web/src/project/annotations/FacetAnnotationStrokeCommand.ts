@@ -232,7 +232,9 @@ export class FacetStrokeRequestCommand<Channel extends FacetAnnotationChannel> i
   readonly label: string;
   private stroke?: FacetAnnotationStrokeCommand;
 
-  constructor(private readonly request: Pick<FacetStrokeRequest<Channel>, 'guard' | 'channel' | 'operation' | 'label'>) {
+  constructor(
+    private readonly request: Pick<FacetStrokeRequest<Channel>, 'guard' | 'channel' | 'operation' | 'label'>,
+  ) {
     this.label = strokeLabel(request);
   }
 
@@ -259,7 +261,9 @@ export class FacetStrokeRequestCommand<Channel extends FacetAnnotationChannel> i
   }
 }
 
-function strokeLabel(request: Pick<FacetStrokeRequest<FacetAnnotationChannel>, 'channel' | 'operation' | 'label'>): string {
+function strokeLabel(
+  request: Pick<FacetStrokeRequest<FacetAnnotationChannel>, 'channel' | 'operation' | 'label'>,
+): string {
   return request.label ?? defaultStrokeLabel(request.channel, request.operation.mode);
 }
 

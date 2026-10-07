@@ -1956,6 +1956,112 @@ fn read_reconcile_auto_pairs(v: &Value) -> Result<ReconcileAutoPairs, InvalidInt
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ColorMapping {
+    pub source_color: EditText,
+    pub destination_filament_id: Id,
+    pub source_filament_ids: OptionalIds,
+}
+fn read_color_mapping(v: &Value) -> Result<ColorMapping, InvalidIntent> {
+    let object = fields(
+        v,
+        &["sourceColor", "destinationFilamentId", "sourceFilamentIds"],
+        false,
+    )?;
+    Ok(ColorMapping {
+        source_color: read_edit_text(&object["sourceColor"])?,
+        destination_filament_id: read_id(&object["destinationFilamentId"])?,
+        source_filament_ids: read_optional_ids(&object["sourceFilamentIds"])?,
+    })
+}
+pub type ColorMappings = Vec<ColorMapping>;
+fn read_color_mappings(v: &Value) -> Result<ColorMappings, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_color_mapping).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CandidateTool {
+    pub tool_id: ToolSlot,
+    pub filament_id: Id,
+}
+fn read_candidate_tool(v: &Value) -> Result<CandidateTool, InvalidIntent> {
+    let object = fields(v, &["toolId", "filamentId"], false)?;
+    Ok(CandidateTool {
+        tool_id: read_tool_slot(&object["toolId"])?,
+        filament_id: read_id(&object["filamentId"])?,
+    })
+}
+pub type CandidateTools = Vec<CandidateTool>;
+fn read_candidate_tools(v: &Value) -> Result<CandidateTools, InvalidIntent> {
+    list(v, 0, 1024)?.iter().map(read_candidate_tool).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecreateModelColors {
+    pub mappings: ColorMappings,
+    pub new_mixed_filaments: MixedFilamentInputs,
+    pub printer_slots: PrinterSlots,
+    pub candidate_tools: CandidateTools,
+    pub new_filament_ids: OptionalIds,
+}
+fn read_recreate_model_colors(v: &Value) -> Result<RecreateModelColors, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "mappings",
+            "newMixedFilaments",
+            "printerSlots",
+            "candidateTools",
+            "newFilamentIds",
+        ],
+        false,
+    )?;
+    Ok(RecreateModelColors {
+        mappings: read_color_mappings(&object["mappings"])?,
+        new_mixed_filaments: read_mixed_filament_inputs(&object["newMixedFilaments"])?,
+        printer_slots: read_printer_slots(&object["printerSlots"])?,
+        candidate_tools: read_candidate_tools(&object["candidateTools"])?,
+        new_filament_ids: read_optional_ids(&object["newFilamentIds"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeparatedObject {
+    pub source_volume_id: Id,
+    pub object_id: Id,
+    pub instance_ids: Ids,
+}
+fn read_separated_object(v: &Value) -> Result<SeparatedObject, InvalidIntent> {
+    let object = fields(v, &["sourceVolumeId", "objectId", "instanceIds"], false)?;
+    Ok(SeparatedObject {
+        source_volume_id: read_id(&object["sourceVolumeId"])?,
+        object_id: read_id(&object["objectId"])?,
+        instance_ids: read_ids(&object["instanceIds"])?,
+    })
+}
+pub type SeparatedObjects = Vec<SeparatedObject>;
+fn read_separated_objects(v: &Value) -> Result<SeparatedObjects, InvalidIntent> {
+    list(v, 0, 131072)?
+        .iter()
+        .map(read_separated_object)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeparateObjectVolumes {
+    pub guard: SettingsGuard,
+    pub object_id: Id,
+    pub identities: SeparatedObjects,
+}
+fn read_separate_object_volumes(v: &Value) -> Result<SeparateObjectVolumes, InvalidIntent> {
+    let object = fields(v, &["guard", "objectId", "identities"], false)?;
+    Ok(SeparateObjectVolumes {
+        guard: read_settings_guard(&object["guard"])?,
+        object_id: read_id(&object["objectId"])?,
+        identities: read_separated_objects(&object["identities"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Command {
     AddPlate(AddPlate),
     DuplicatePlate(DuplicatePlate),
@@ -2012,6 +2118,8 @@ pub enum Command {
     RenameProject(RenameProject),
     SetPlateWipeTower(SetPlateWipeTower),
     ReconcileAutoPairs(ReconcileAutoPairs),
+    RecreateModelColors(RecreateModelColors),
+    SeparateObjectVolumes(SeparateObjectVolumes),
 }
 fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
     let object = fields(
@@ -2072,6 +2180,8 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             "renameProject",
             "setPlateWipeTower",
             "reconcileAutoPairs",
+            "recreateModelColors",
+            "separateObjectVolumes",
         ],
         true,
     )?;
@@ -2178,6 +2288,12 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
         "reconcileAutoPairs" => Ok(Command::ReconcileAutoPairs(read_reconcile_auto_pairs(
             value,
         )?)),
+        "recreateModelColors" => Ok(Command::RecreateModelColors(read_recreate_model_colors(
+            value,
+        )?)),
+        "separateObjectVolumes" => Ok(Command::SeparateObjectVolumes(
+            read_separate_object_volumes(value)?,
+        )),
         _ => Err(InvalidIntent),
     }
 }

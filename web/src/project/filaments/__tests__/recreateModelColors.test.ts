@@ -10,8 +10,13 @@ import {
   type ProjectState,
 } from '../..';
 import { createProjectFixture } from '../../__tests__/fixtures';
-import { extractModelColorUsages, planRecreateModelColors, executeRecreateModelColors } from '../recreateModelColors';
-import { SyncPhysicalFilamentsFromPrinterCommand } from '../commands';
+import {
+  extractModelColorUsages,
+  planRecreateModelColors,
+  executeRecreateModelColors,
+  RecreateModelColorsCommand,
+} from '../recreateModelColors';
+import { SetObjectFilamentCommand, SyncPhysicalFilamentsFromPrinterCommand } from '../commands';
 
 let passed = 0;
 function test(name: string, run: () => void): void {
@@ -509,6 +514,29 @@ test('preserves and remaps painted facet annotations when syncing filaments and 
   // Values should be remapped to the matched destinations
   assert.notEqual(colorAnnotations[0].value, idRed);
   assert.notEqual(afterState.plates[0].objects[0].volumes[0].filamentId, idGreen);
+});
+
+test('a tool adopted while recreating colors keeps its ID through undo and redo', () => {
+  const { fixture, session, ids } = harness();
+  const slot = { toolId: 2, color: '#12ab34', material: 'PETG' };
+  session.commands.execute(
+    new RecreateModelColorsCommand(
+      [{ sourceColor: '#12AB34', destinationFilamentId: fixture.ids.physical0 }],
+      [],
+      [slot],
+      undefined,
+      ids,
+    ),
+  );
+  const adopted = session.project.getSnapshot().state.filaments.physical.find((f) => f.toolId === 2)!.id;
+  // A later edit that references the adopted tool must survive a full replay.
+  session.commands.execute(new SetObjectFilamentCommand(fixture.ids.object, adopted));
+  assert.equal(session.commands.undo(), true);
+  assert.equal(session.commands.undo(), true);
+  assert.equal(session.commands.redo(), true);
+  assert.equal(session.project.getSnapshot().state.filaments.physical.find((f) => f.toolId === 2)!.id, adopted);
+  assert.equal(session.commands.redo(), true);
+  assert.equal(session.project.getSnapshot().state.plates[0].objects[0].filamentId, adopted);
 });
 
 console.log(`Recreate model colors tests: ${passed} tests passed.`);

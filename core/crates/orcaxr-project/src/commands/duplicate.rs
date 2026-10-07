@@ -388,9 +388,9 @@ pub(super) fn available_for<E>(
 /// stream (including nested sourceFingerprint escaping) without materializing
 /// large JSON/paint strings. Encoders produce valid UTF-8 and escape controls.
 #[derive(Default)]
-struct Length {
-    units: u64,
-    nested_string: bool,
+pub(super) struct Length {
+    pub(super) units: u64,
+    pub(super) nested_string: bool,
 }
 fn overflow() -> io::Error {
     io::Error::other("canonical length overflow")

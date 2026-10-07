@@ -28,6 +28,26 @@ pub(super) struct Slot {
     sub_type: Option<Vec<u16>>,
     vendor: Option<Vec<u16>>,
 }
+impl Slot {
+    fn from_wire(slot: wire::PrinterSlot) -> Self {
+        Self {
+            tool: slot.tool_id,
+            color: slot.color,
+            material: slot.material,
+            sub_type: optional_text(slot.sub_type),
+            vendor: optional_text(slot.vendor),
+        }
+    }
+}
+/// The material in `config.filament_type`, where the 3MF and preflight read it.
+fn with_filament_type<E>(
+    config: &ConfigMap,
+    material: &[u16],
+) -> Result<ConfigMap, CommandError<E>> {
+    let mut map = fields(&Some(config.clone()));
+    map.insert(u("filament_type"), Value::String(material.to_vec()));
+    json_object(map)
+}
 #[derive(Clone)]
 pub(super) enum Op {
     Assign {
@@ -51,6 +71,7 @@ pub(super) enum Op {
         adopted: Vec<(u64, PhysicalFilamentId)>,
     },
     Mixed(super::mixed::MixedOp),
+    Recreate(Box<Recreate>),
 }
 #[derive(Clone)]
 pub(super) struct FilamentCommand {
@@ -416,13 +437,7 @@ impl FilamentCommand {
                     &u(" reported no material"),
                 ])));
             }
-            slots.push(Slot {
-                tool: slot.tool_id,
-                color: slot.color,
-                material: slot.material,
-                sub_type: optional_text(slot.sub_type),
-                vendor: optional_text(slot.vendor),
-            });
+            slots.push(Slot::from_wire(slot));
         }
         Ok(Self::new(
             Op::Sync {
@@ -433,6 +448,11 @@ impl FilamentCommand {
             },
             Text::from_utf8("Sync filaments from printer"),
         ))
+    }
+    /// `RecreateModelColorsCommand`.
+    pub(super) fn recreate(v: wire::RecreateModelColors) -> Result<Self, PreparationError> {
+        let (recreate, label) = Recreate::new(v)?;
+        Ok(Self::new(Op::Recreate(Box::new(recreate)), label))
     }
     /// A mixed-filament recipe command (`mixedCommands.ts`).
     pub(super) fn mixed(op: super::mixed::MixedOp, add_label: Option<Text>) -> Self {
@@ -452,6 +472,7 @@ impl FilamentCommand {
             Op::Enabled { .. } => "set-filament-enabled",
             Op::Sync { .. } => "sync-physical-filaments-from-printer",
             Op::Mixed(op) => op.reason(),
+            Op::Recreate(_) => "recreate-model-colors",
         }
     }
     fn class(&self) -> &'static str {
@@ -461,6 +482,7 @@ impl FilamentCommand {
             Op::Enabled { .. } => "SetFilamentEnabledCommand",
             Op::Sync { .. } => "SyncPhysicalFilamentsFromPrinterCommand",
             Op::Mixed(op) => op.class(),
+            Op::Recreate(_) => "RecreateModelColorsCommand",
         }
     }
 
@@ -483,6 +505,7 @@ impl FilamentCommand {
                 adopted,
             } => sync(state, slots, ids.as_deref(), consumed, adopted),
             Op::Mixed(op) => op.mutate(state),
+            Op::Recreate(recreate) => recreate.mutate(state),
         }
     }
     /// `buildNext`: mutate a copy and validate it like `assertValidProjectState`.
@@ -636,7 +659,9 @@ fn remap<E>(
             for volume in volumes.iter_mut() {
                 let volume = Arc::make_mut(volume);
                 volume.filament_id = replace(&volume.filament_id);
-                remap_paint(volume, &is_source, destination)?;
+                remap_paint(volume, &mut |id| {
+                    is_source(id).then(|| destination.as_utf16().to_vec())
+                })?;
             }
             object.volumes = volumes.into();
             let mut ranges = object.layer_ranges.to_vec();
@@ -671,8 +696,7 @@ fn remap<E>(
 /// split that becomes uniform moves into the whole-facet assignments.
 fn remap_paint<E>(
     volume: &mut ProjectVolume,
-    is_source: &impl Fn(&[u16]) -> bool,
-    destination: &FilamentId,
+    map: &mut dyn FnMut(&[u16]) -> Option<Vec<u16>>,
 ) -> Result<(), CommandError<E>> {
     let annotations = Arc::make_mut(&mut volume.annotations);
     let mut refinement = annotations
@@ -702,9 +726,10 @@ fn remap_paint<E>(
     let remapped = channel
         .remap(
             |value| match value {
-                PaintValue::Text(id) if is_source(id) => {
-                    PaintValue::text(destination.as_utf16().to_vec())
-                }
+                PaintValue::Text(id) => match map(id) {
+                    Some(next) => PaintValue::text(next),
+                    None => value.clone(),
+                },
                 other => other.clone(),
             },
             None,
@@ -968,17 +993,12 @@ fn sync<E>(
     for slot in slots {
         let name = slot_name(slot);
         let vendor = slot.vendor.as_deref().map(trim).filter(|v| !v.is_empty());
-        let filament_type = |config: &ConfigMap| -> Result<ConfigMap, CommandError<E>> {
-            let mut map = fields(&Some(config.clone()));
-            map.insert(u("filament_type"), Value::String(slot.material.clone()));
-            json_object(map)
-        };
         match by_tool.get(&(slot.tool as f64).to_bits()) {
             Some(&i) => {
                 let filament = Arc::make_mut(&mut physical[i]);
                 filament.color = Text::new(slot.color.clone());
                 filament.material = Text::new(slot.material.clone());
-                filament.config = filament_type(&filament.config)?;
+                filament.config = with_filament_type(&filament.config, &slot.material)?;
                 if let Some(name) = &name {
                     filament.name = Text::new(name.clone());
                 }
@@ -1013,7 +1033,7 @@ fn sync<E>(
                     vendor: vendor.map(|v| Text::new(v.to_vec())),
                     color: Text::new(slot.color.clone()),
                     nozzle_diameter_mm: None,
-                    config: filament_type(&empty)?,
+                    config: with_filament_type(&empty, &slot.material)?,
                     enabled: true,
                     extension_data: None,
                     extra: ExtraFields::default(),
@@ -1038,4 +1058,304 @@ fn sync<E>(
     filaments.physical = physical.into();
     state.filaments = filaments;
     Ok(())
+}
+
+/// `RecreateModelColorsCommand`: adopt reported printer slots, add recreated
+/// recipes, then point every reference whose colour or source filament maps to
+/// a destination at it.
+#[derive(Clone)]
+pub(super) struct Recreate {
+    mappings: Vec<(Vec<u16>, FilamentId, Vec<FilamentId>)>,
+    mixed: Vec<MixedFilament>,
+    slots: Vec<Slot>,
+    candidates: Vec<(u64, PhysicalFilamentId)>,
+    ids: Option<Vec<PhysicalFilamentId>>,
+    consumed: usize,
+    adopted: Vec<(u64, PhysicalFilamentId)>,
+}
+
+/// `normalizeHexColor`: `#RRGGBB` (upper case) from optionally `#`-prefixed
+/// hex, after JavaScript `trim`.
+fn normalize_hex(units: &[u16]) -> Option<Vec<u16>> {
+    let trimmed = trim(units);
+    let digits = trimmed
+        .strip_prefix(&[u16::from(b'#')][..])
+        .unwrap_or(trimmed);
+    if digits.len() != 6
+        || !digits
+            .iter()
+            .all(|u| char::from_u32(u32::from(*u)).is_some_and(|c| c.is_ascii_hexdigit()))
+    {
+        return None;
+    }
+    let mut out = vec![u16::from(b'#')];
+    out.extend(digits.iter().map(|u| {
+        let c = char::from_u32(u32::from(*u)).expect("ASCII hex digit");
+        c.to_ascii_uppercase() as u16
+    }));
+    Some(out)
+}
+/// `normalizeHexColor` of a JSON value read from extension data: the browser
+/// calls `trim` on it, which only strings have.
+fn normalize_hex_value<E>(value: &Value) -> Result<Option<Vec<u16>>, CommandError<E>> {
+    match value {
+        Value::String(units) => Ok(normalize_hex(units)),
+        _ => Err(CommandError::domain("color.trim is not a function")),
+    }
+}
+/// `object?.[key]` on JSON for a stable-ID key: an own property of an object
+/// (IDs are never array indices or inherited names).
+fn own<'a>(value: Option<&'a Value>, key: &[u16]) -> Option<&'a Value> {
+    match value {
+        Some(Value::Object(fields)) => fields.get(key),
+        _ => None,
+    }
+}
+
+impl Recreate {
+    pub(super) fn new(v: wire::RecreateModelColors) -> Result<(Self, Text), PreparationError> {
+        let mappings = v
+            .mappings
+            .into_iter()
+            .map(|m| {
+                let sources = match m.source_filament_ids {
+                    wire::OptionalIds::Absent(_) => Vec::new(),
+                    wire::OptionalIds::Value(list) => ids(list)?,
+                };
+                Ok((m.source_color, id(m.destination_filament_id)?, sources))
+            })
+            .collect::<Result<Vec<_>, PreparationError>>()?;
+        let mixed = v
+            .new_mixed_filaments
+            .into_iter()
+            .map(super::mixed::mixed_filament)
+            .collect::<Result<Vec<_>, _>>()?;
+        let slots = v.printer_slots.into_iter().map(Slot::from_wire).collect();
+        let candidates = v
+            .candidate_tools
+            .into_iter()
+            .map(|c| Ok((c.tool_id, id(c.filament_id)?)))
+            .collect::<Result<Vec<_>, PreparationError>>()?;
+        let ids = match v.new_filament_ids {
+            wire::OptionalIds::Absent(_) => None,
+            wire::OptionalIds::Value(list) => Some(ids(list)?),
+        };
+        let label = if mappings.len() == 1 {
+            Text::from_utf8("Recreate 1 model color")
+        } else {
+            Text::from_utf8(&format!("Recreate {} model colors", mappings.len()))
+        };
+        Ok((
+            Self {
+                mappings,
+                mixed,
+                slots,
+                candidates,
+                ids,
+                consumed: 0,
+                adopted: Vec::new(),
+            },
+            label,
+        ))
+    }
+
+    fn mutate<E>(&mut self, state: &mut ProjectState) -> Result<(), CommandError<E>> {
+        if !self.slots.is_empty() {
+            self.adopt(state)?;
+        }
+        if !self.mixed.is_empty() {
+            let mut filaments = state.filaments.clone();
+            let mut mixed = filaments.mixed.to_vec();
+            mixed.extend(self.mixed.iter().cloned().map(Arc::new));
+            filaments.mixed = mixed.into();
+            state.filaments = filaments;
+        }
+        let mut by_color: HashMap<Vec<u16>, FilamentId> = HashMap::new();
+        let mut by_source: HashMap<Vec<u16>, FilamentId> = HashMap::new();
+        for (color, destination, sources) in &self.mappings {
+            if let Some(color) = normalize_hex(color) {
+                by_color.insert(color, destination.clone());
+            }
+            for source in sources {
+                if source != destination {
+                    by_source.insert(source.as_utf16().to_vec(), destination.clone());
+                }
+            }
+        }
+        let mapped = |id: &Option<FilamentId>| {
+            id.as_ref()
+                .and_then(|id| by_source.get(id.as_utf16()))
+                .cloned()
+        };
+        let state_colors = state
+            .extension_data
+            .as_ref()
+            .map(JsonObject::value)
+            .and_then(|v| own(Some(v), &u("orcaxr:originalFilamentColors")))
+            .cloned();
+        let mut plates = state.plates.to_vec();
+        for plate in plates.iter_mut() {
+            let plate = Arc::make_mut(plate);
+            if let Some(tower) = &mut plate.wipe_tower
+                && let Some(destination) = mapped(&tower.filament_id)
+            {
+                Arc::make_mut(tower).filament_id = Some(destination);
+            }
+            let mut objects = plate.objects.to_vec();
+            for object in objects.iter_mut() {
+                let object = Arc::make_mut(object);
+                if let Some(destination) = mapped(&object.filament_id) {
+                    object.filament_id = Some(destination);
+                }
+                let mut ranges = object.layer_ranges.to_vec();
+                for range in ranges.iter_mut() {
+                    if let Some(destination) = mapped(&range.filament_id) {
+                        Arc::make_mut(range).filament_id = Some(destination);
+                    }
+                }
+                object.layer_ranges = ranges.into();
+                let mut volumes = object.volumes.to_vec();
+                for volume in volumes.iter_mut() {
+                    let volume = Arc::make_mut(volume);
+                    let extension = volume.extension_data.as_ref().map(JsonObject::value);
+                    let material = own(extension, &u("orcaxr:sourceMaterial"));
+                    if let Some(color) = own(material, &u("color"))
+                        && truthy(Some(color))
+                        && let Some(color) = normalize_hex_value(color)?
+                        && let Some(destination) = by_color.get(&color)
+                    {
+                        volume.filament_id = Some(destination.clone());
+                    }
+                    if let Some(destination) = mapped(&volume.filament_id) {
+                        volume.filament_id = Some(destination);
+                    }
+                    // `volume.extensionData?.[key] ?? state.extensionData?.[key]`.
+                    let originals = match own(extension, &u("orcaxr:originalFilamentColors")) {
+                        Some(Value::Null) | None => state_colors.clone(),
+                        Some(value) => Some(value.clone()),
+                    };
+                    let mut failure = None;
+                    remap_paint(volume, &mut |value: &[u16]| {
+                        if let Some(destination) = by_source.get(value) {
+                            return Some(destination.as_utf16().to_vec());
+                        }
+                        if let Some(original) = own(originals.as_ref(), value)
+                            && truthy(Some(original))
+                        {
+                            match normalize_hex_value::<()>(original) {
+                                Ok(Some(hex)) => {
+                                    if let Some(destination) = by_color.get(&hex) {
+                                        return Some(destination.as_utf16().to_vec());
+                                    }
+                                }
+                                Ok(None) => {}
+                                Err(_) => {
+                                    failure.get_or_insert(());
+                                    return None;
+                                }
+                            }
+                        }
+                        normalize_hex(value)
+                            .and_then(|hex| by_color.get(&hex))
+                            .map(|d| d.as_utf16().to_vec())
+                    })?;
+                    if failure.is_some() {
+                        return Err(CommandError::domain("color.trim is not a function"));
+                    }
+                }
+                object.volumes = volumes.into();
+            }
+            plate.objects = objects.into();
+        }
+        state.plates = plates.into();
+        Ok(())
+    }
+
+    /// The printer-slot adoption step (the same rules as printer sync, with
+    /// candidate IDs first and colours normalized when they are hex).
+    fn adopt<E>(&mut self, state: &mut ProjectState) -> Result<(), CommandError<E>> {
+        let mut physical = state.filaments.physical.to_vec();
+        let mut by_tool: HashMap<u64, usize> = HashMap::new();
+        for (i, f) in physical.iter().enumerate() {
+            by_tool.insert(f.tool_id.get().to_bits(), i);
+        }
+        let candidates: HashMap<u64, PhysicalFilamentId> =
+            self.candidates.iter().cloned().collect();
+        for slot in &self.slots {
+            let name = slot_name(slot);
+            let vendor = slot.vendor.as_deref().map(trim).filter(|v| !v.is_empty());
+            let color = normalize_hex(&slot.color).unwrap_or_else(|| slot.color.clone());
+            match by_tool.get(&(slot.tool as f64).to_bits()) {
+                Some(&i) => {
+                    let filament = Arc::make_mut(&mut physical[i]);
+                    filament.color = Text::new(color);
+                    filament.material = Text::new(slot.material.clone());
+                    filament.config = with_filament_type(&filament.config, &slot.material)?;
+                    if let Some(name) = &name {
+                        filament.name = Text::new(name.clone());
+                    }
+                    if let Some(vendor) = vendor {
+                        filament.vendor = Some(Text::new(vendor.to_vec()));
+                    }
+                }
+                None => {
+                    let id = match candidates.get(&slot.tool) {
+                        Some(id) => id.clone(),
+                        None => {
+                            let Some(ids) = &self.ids else { continue };
+                            match self.adopted.iter().find(|(tool, _)| *tool == slot.tool) {
+                                Some((_, id)) => id.clone(),
+                                None => {
+                                    let id = ids.get(self.consumed).cloned().ok_or_else(|| {
+                                        CommandError::domain(
+                                            "Model colour recreation needs more new filament IDs",
+                                        )
+                                    })?;
+                                    self.consumed += 1;
+                                    self.adopted.push((slot.tool, id.clone()));
+                                    id
+                                }
+                            }
+                        }
+                    };
+                    let empty =
+                        JsonObject::new(Value::Object(BTreeMap::new())).expect("empty object");
+                    physical.push(Arc::new(PhysicalFilament {
+                        id,
+                        name: Text::new(
+                            name.clone()
+                                .unwrap_or_else(|| u(&format!("Tool {}", slot.tool + 1))),
+                        ),
+                        tool_id: number(slot.tool as f64)?,
+                        preset_id: None,
+                        preset_hash: None,
+                        material: Text::new(slot.material.clone()),
+                        vendor: vendor.map(|v| Text::new(v.to_vec())),
+                        color: Text::new(color),
+                        nozzle_diameter_mm: None,
+                        config: with_filament_type(&empty, &slot.material)?,
+                        enabled: true,
+                        extension_data: None,
+                        extra: ExtraFields::default(),
+                    }));
+                }
+            }
+        }
+        physical.sort_by(|a, b| {
+            a.tool_id
+                .get()
+                .partial_cmp(&b.tool_id.get())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let highest = physical.iter().fold(-1.0, |highest, f| {
+            crate::js_math::max(highest, f.tool_id.get())
+        });
+        let mut printer = state.printer.clone();
+        printer.tool_count = number(crate::js_math::max(printer.tool_count.get(), highest + 1.0))?;
+        state.printer = printer;
+        let mut filaments = state.filaments.clone();
+        filaments.physical = physical.into();
+        state.filaments = filaments;
+        Ok(())
+    }
 }

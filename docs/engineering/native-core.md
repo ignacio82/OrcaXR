@@ -2754,6 +2754,49 @@ Auto-pair reconciliation replaces the whole mixed-filament list with typed
 recipes under a revision/hash guard; redo refuses if the list moved. The list
 is validated as a whole, so dropping a referenced recipe is refused.
 
+### Model-colour recreation
+
+`recreateModelColors` is native as a filament snapshot command. It applies a
+recreation plan the host already chose: it adopts reported printer slots (a
+candidate tool's ID first, otherwise caller-supplied IDs drawn once per tool,
+refusing when they run out), adds the plan's new recipes, then points every
+reference at its destination. Matches are by source filament, or by colour
+normalized like `normalizeHexColor` (trimmed, optional `#`, six hex digits,
+upper case). That covers wipe towers, scoped assignments, a volume's
+`orcaxr:sourceMaterial` colour and colour paint. Paint falls back from a
+volume's `orcaxr:originalFilamentColors` to the project's when the volume has
+none. A non-string colour where the browser calls `trim` is refused with the
+browser's own error. The browser command now also draws adopted IDs once per
+tool, as printer sync does.
+
+### Split to objects
+
+`separateObjectVolumes` promotes each model volume of a multi-volume object
+into an object of its own, with no mesh bytes involved. The intent carries a
+revision/hash guard, the object, and caller-chosen object and instance IDs per
+volume. The browser's `SeparateObjectVolumesRequestCommand` checks the guard,
+then fingerprints the object as the workspace does. Both sides then follow
+`SeparateObjectVolumesCommand`:
+
+- the browser's refusals, in order: fewer than two volumes; modifier or
+  negative volumes; volumes under three facets; layer ranges; object
+  extension data;
+- IDs fresh against `collectStableIds`, which excludes asset and blob IDs;
+- the object configuration overlaid by the volume's, and the volume's filament
+  or else the object's;
+- each volume offset carried through every instance's scale and normalized
+  quaternion (V8 `hypot`);
+- the selection remapped from the source object and instances to every copy.
+
+Redo and undo swap whole states and refuse a project that changed underneath.
+Brim ears, the layer-height profile and unknown object fields are dropped, as
+in Orca's `ModelObject::split`.
+
+The history estimate counts the source object's canonical JSON escaped as a
+string, plus the identities and both states. Retention traces pin it to the
+unit. Splitting a single volume into components needs staged mesh payloads; it
+moves with the asset-bearing commands.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

@@ -1613,6 +1613,88 @@ object ProjectIntents {
             w.field("label") { writeOptionalText(w, v.label) }
         }
     }
+    data class ColorMapping(val sourceColor: List<Int>, val destinationFilamentId: List<Int>, val sourceFilamentIds: OptionalIds)
+    private fun readColorMapping(v: Any): ColorMapping {
+        val obj = ProjectIntentJson.fields(v, setOf("sourceColor", "destinationFilamentId", "sourceFilamentIds"), false)
+        return ColorMapping(readEditText(obj.get("sourceColor")), readId(obj.get("destinationFilamentId")), readOptionalIds(obj.get("sourceFilamentIds")))
+    }
+    private fun writeColorMapping(w: ProjectIntentWriter, v: ColorMapping) {
+        w.obj {
+            w.field("sourceColor") { writeEditText(w, v.sourceColor) }
+            w.field("destinationFilamentId") { writeId(w, v.destinationFilamentId) }
+            w.field("sourceFilamentIds") { writeOptionalIds(w, v.sourceFilamentIds) }
+        }
+    }
+    private fun readColorMappings(v: Any): List<ColorMapping> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readColorMapping(array.get(it)) }
+    }
+    private fun writeColorMappings(w: ProjectIntentWriter, v: List<ColorMapping>) {
+        w.array(v, 0, 4096) { writeColorMapping(w, it) }
+    }
+    data class CandidateTool(val toolId: Long, val filamentId: List<Int>)
+    private fun readCandidateTool(v: Any): CandidateTool {
+        val obj = ProjectIntentJson.fields(v, setOf("toolId", "filamentId"), false)
+        return CandidateTool(readToolSlot(obj.get("toolId")), readId(obj.get("filamentId")))
+    }
+    private fun writeCandidateTool(w: ProjectIntentWriter, v: CandidateTool) {
+        w.obj {
+            w.field("toolId") { writeToolSlot(w, v.toolId) }
+            w.field("filamentId") { writeId(w, v.filamentId) }
+        }
+    }
+    private fun readCandidateTools(v: Any): List<CandidateTool> {
+        val array = ProjectIntentJson.list(v, 0, 1024)
+        return List(array.length()) { readCandidateTool(array.get(it)) }
+    }
+    private fun writeCandidateTools(w: ProjectIntentWriter, v: List<CandidateTool>) {
+        w.array(v, 0, 1024) { writeCandidateTool(w, it) }
+    }
+    data class RecreateModelColors(val mappings: List<ColorMapping>, val newMixedFilaments: List<MixedFilamentInput>, val printerSlots: List<PrinterSlot>, val candidateTools: List<CandidateTool>, val newFilamentIds: OptionalIds)
+    private fun readRecreateModelColors(v: Any): RecreateModelColors {
+        val obj = ProjectIntentJson.fields(v, setOf("mappings", "newMixedFilaments", "printerSlots", "candidateTools", "newFilamentIds"), false)
+        return RecreateModelColors(readColorMappings(obj.get("mappings")), readMixedFilamentInputs(obj.get("newMixedFilaments")), readPrinterSlots(obj.get("printerSlots")), readCandidateTools(obj.get("candidateTools")), readOptionalIds(obj.get("newFilamentIds")))
+    }
+    private fun writeRecreateModelColors(w: ProjectIntentWriter, v: RecreateModelColors) {
+        w.obj {
+            w.field("mappings") { writeColorMappings(w, v.mappings) }
+            w.field("newMixedFilaments") { writeMixedFilamentInputs(w, v.newMixedFilaments) }
+            w.field("printerSlots") { writePrinterSlots(w, v.printerSlots) }
+            w.field("candidateTools") { writeCandidateTools(w, v.candidateTools) }
+            w.field("newFilamentIds") { writeOptionalIds(w, v.newFilamentIds) }
+        }
+    }
+    data class SeparatedObject(val sourceVolumeId: List<Int>, val objectId: List<Int>, val instanceIds: List<List<Int>>)
+    private fun readSeparatedObject(v: Any): SeparatedObject {
+        val obj = ProjectIntentJson.fields(v, setOf("sourceVolumeId", "objectId", "instanceIds"), false)
+        return SeparatedObject(readId(obj.get("sourceVolumeId")), readId(obj.get("objectId")), readIds(obj.get("instanceIds")))
+    }
+    private fun writeSeparatedObject(w: ProjectIntentWriter, v: SeparatedObject) {
+        w.obj {
+            w.field("sourceVolumeId") { writeId(w, v.sourceVolumeId) }
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("instanceIds") { writeIds(w, v.instanceIds) }
+        }
+    }
+    private fun readSeparatedObjects(v: Any): List<SeparatedObject> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readSeparatedObject(array.get(it)) }
+    }
+    private fun writeSeparatedObjects(w: ProjectIntentWriter, v: List<SeparatedObject>) {
+        w.array(v, 0, 131072) { writeSeparatedObject(w, it) }
+    }
+    data class SeparateObjectVolumes(val guard: SettingsGuard, val objectId: List<Int>, val identities: List<SeparatedObject>)
+    private fun readSeparateObjectVolumes(v: Any): SeparateObjectVolumes {
+        val obj = ProjectIntentJson.fields(v, setOf("guard", "objectId", "identities"), false)
+        return SeparateObjectVolumes(readSettingsGuard(obj.get("guard")), readId(obj.get("objectId")), readSeparatedObjects(obj.get("identities")))
+    }
+    private fun writeSeparateObjectVolumes(w: ProjectIntentWriter, v: SeparateObjectVolumes) {
+        w.obj {
+            w.field("guard") { writeSettingsGuard(w, v.guard) }
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("identities") { writeSeparatedObjects(w, v.identities) }
+        }
+    }
     sealed interface Command {
         data class AddPlate(val value: ProjectIntents.AddPlate) : Command
         data class DuplicatePlate(val value: ProjectIntents.DuplicatePlate) : Command
@@ -1669,9 +1751,11 @@ object ProjectIntents {
         data class RenameProject(val value: ProjectIntents.RenameProject) : Command
         data class SetPlateWipeTower(val value: ProjectIntents.SetPlateWipeTower) : Command
         data class ReconcileAutoPairs(val value: ProjectIntents.ReconcileAutoPairs) : Command
+        data class RecreateModelColors(val value: ProjectIntents.RecreateModelColors) : Command
+        data class SeparateObjectVolumes(val value: ProjectIntents.SeparateObjectVolumes) : Command
     }
     private fun readCommand(v: Any): Command {
-        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments", "addMixedFilament", "editMixedFilament", "duplicateMixedFilament", "setMixedFilamentEnabled", "tombstoneMixedFilament", "removeMixedFilament", "setProjectSettingsOverrides", "setScopedOverrides", "convertVolumeRole", "facetStroke", "renameProject", "setPlateWipeTower", "reconcileAutoPairs"), true)
+        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments", "addMixedFilament", "editMixedFilament", "duplicateMixedFilament", "setMixedFilamentEnabled", "tombstoneMixedFilament", "removeMixedFilament", "setProjectSettingsOverrides", "setScopedOverrides", "convertVolumeRole", "facetStroke", "renameProject", "setPlateWipeTower", "reconcileAutoPairs", "recreateModelColors", "separateObjectVolumes"), true)
         return when(val key = obj.keys().next()) {
             "addPlate" -> Command.AddPlate(readAddPlate(obj.get(key)))
             "duplicatePlate" -> Command.DuplicatePlate(readDuplicatePlate(obj.get(key)))
@@ -1728,6 +1812,8 @@ object ProjectIntents {
             "renameProject" -> Command.RenameProject(readRenameProject(obj.get(key)))
             "setPlateWipeTower" -> Command.SetPlateWipeTower(readSetPlateWipeTower(obj.get(key)))
             "reconcileAutoPairs" -> Command.ReconcileAutoPairs(readReconcileAutoPairs(obj.get(key)))
+            "recreateModelColors" -> Command.RecreateModelColors(readRecreateModelColors(obj.get(key)))
+            "separateObjectVolumes" -> Command.SeparateObjectVolumes(readSeparateObjectVolumes(obj.get(key)))
             else -> throw InvalidProjectIntent()
         }
     }
@@ -1788,6 +1874,8 @@ object ProjectIntents {
             is Command.RenameProject -> w.field("renameProject") { writeRenameProject(w, v.value) }
             is Command.SetPlateWipeTower -> w.field("setPlateWipeTower") { writeSetPlateWipeTower(w, v.value) }
             is Command.ReconcileAutoPairs -> w.field("reconcileAutoPairs") { writeReconcileAutoPairs(w, v.value) }
+            is Command.RecreateModelColors -> w.field("recreateModelColors") { writeRecreateModelColors(w, v.value) }
+            is Command.SeparateObjectVolumes -> w.field("separateObjectVolumes") { writeSeparateObjectVolumes(w, v.value) }
         } }
     }
     private fun readCommands(v: Any): List<Command> {

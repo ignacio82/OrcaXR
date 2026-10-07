@@ -999,7 +999,145 @@ scenario("project-plate-reconcile", {}, noop, ({ execute, batch, run, ids, state
   run({ kind: "undo" }); run({ kind: "redo" });
 });
 
-const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/filaments/autoPairReconciliation.ts", "web/src/project/annotations/FacetAnnotationStrokeCommand.ts", "web/src/project/annotations/sparse.ts", "web/src/project/annotations/types.ts", "web/src/project/objects/semanticVolumeCommands.ts", "web/src/project/settingsOverrides.ts", "web/src/project/scopedOverrides.ts", "web/src/project/domain/settingScopes.ts", "web/src/project/filaments/commands.ts", "web/src/project/filaments/mixedCommands.ts", "web/src/project/filaments/fullSpectrumRecipe.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
+const colorMapping = (sourceColor, destination, sources) => ({ sourceColor: units(sourceColor), destinationFilamentId: units(destination),
+  sourceFilamentIds: sources === undefined ? { absent: {} } : { value: sources.map(units) } });
+const recreateColors = (mappings, o = {}) => ({ recreateModelColors: { mappings, newMixedFilaments: (o.mixed ?? []).map(m => mixedInput(m)),
+  printerSlots: o.slots ?? [], candidateTools: (o.candidates ?? []).map(([toolId, id]) => ({ toolId, filamentId: units(id) })),
+  newFilamentIds: o.ids === undefined ? { absent: {} } : { value: o.ids.map(units) } } });
+scenario("recreate-model-colors", {}, (s, f) => {
+  f.asset = coneAsset(f.ids.asset);
+  s.sourceAssets = s.sourceAssets.map(a => (a.id === f.asset.descriptor.id ? f.asset.descriptor : a));
+  const [p0, p1] = s.filaments.physical.map(p => p.id), purple = s.filaments.mixed[0].id;
+  const object = s.plates[0].objects[0], volume = object.volumes[0];
+  volume.source.triangleCount = f.asset.descriptor.mesh.triangleCount;
+  volume.filamentId = p0;
+  volume.annotations.color = [{ value: p0, triangles: [1, 2] }, { value: purple, triangles: [0] }, { value: p1, triangles: [5] }];
+  volume.annotations.refinement = { color: { version: 2, triangleCount: 48, splits: [{ triangle: 3, node: facetSplit([facetLeaf(p0), facetLeaf(p1)]) }] } };
+  volume.extensionData = { "orcaxr:sourceMaterial": { color: " #ff0000 ", name: "Red" }, "orcaxr:originalFilamentColors": { [p1]: "#00ff00" } };
+  object.layerRanges[0].filamentId = p0;
+  s.plates[0].wipeTower = { enabled: true, positionMm: [5, 5], rotationDeg: 0, filamentId: p0 };
+  s.extensionData = { "orcaxr:originalFilamentColors": { [p0]: "#FF0000" } };
+}, ({ execute, run, state }) => {
+  const [p0, p1] = state().filaments.physical.map(p => p.id);
+  execute(recreateColors([colorMapping("#FF0000", p1, [p0])]));
+  run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "undo" });
+  execute(recreateColors([colorMapping("00ff00", p0), colorMapping("#0000FF", p1, [p1])]));
+  run({ kind: "undo" });
+  const slots = [printerSlot(0, "#ff0000", "PLA", { vendor: "Elegoo", subType: "Matte" }), printerSlot(2, " #12ab34 ", "PETG"), printerSlot(3, "teal", "PLA")];
+  execute(recreateColors([colorMapping("#12AB34", "import:filament:adopt-2", [p1])], { slots, ids: ["import:filament:adopt-2"], candidates: [[3, "import:filament:candidate-3"]] }));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  run({ kind: "undo" });
+  const blend = { id: "import:mixed:recreated", name: "Recreated blend", displayColor: "#7F7F00", components: [{ filamentId: p0, weight: 1 }, { filamentId: p1, weight: 1 }],
+    distribution: { mode: "ratio" }, config: {}, enabled: true };
+  execute(recreateColors([colorMapping("#FF0000", blend.id, [p0]), colorMapping("#00FF00", blend.id)], { mixed: [blend] }));
+  run({ kind: "undo" });
+  execute(recreateColors([colorMapping("#ABCDEF", p0)]));
+  for (const bad of [recreateColors([colorMapping("#FF0000", "import:filament:missing", [p0])]),
+    recreateColors([colorMapping("#FF0000", p1)], { slots: [printerSlot(5, "#000000", "PLA"), printerSlot(6, "#000000", "PLA")], ids: ["import:filament:only"] }),
+    recreateColors([colorMapping("#FF0000", "bad")])])
+    execute(bad);
+});
+
+// Split to objects: the revision/hash guard, every identity and source refusal,
+// instance offset transfer through non-unit quaternions and mirrored scales,
+// selection remapping, and whole-state undo/redo.
+const separateVolumes = (guard, objectId, identities) => ({ separateObjectVolumes: { guard, objectId: units(objectId),
+  identities: identities.map(([sourceVolumeId, id, instanceIds]) => ({ sourceVolumeId: units(sourceVolumeId), objectId: units(id), instanceIds: instanceIds.map(units) })) } });
+const splitIdentities = (object, suffix) => object.volumes.map((v, i) => [v.id, `import:object:${suffix}${i}`, object.instances.map((_, j) => `import:instance:${suffix}${i}-${j}`)]);
+const splitSource = (template, suffix, mutate) => {
+  const object = cloneJson(template);
+  Object.assign(object, { id: `import:object:${suffix}`, layerRanges: [] });
+  object.volumes = object.volumes.slice(0, 2).map((v, i) => ({ ...v, id: `import:volume:${suffix}${i}` }));
+  object.instances = [{ ...object.instances[0], id: `import:instance:${suffix}` }];
+  delete object.brimEars; delete object.foreign;
+  mutate(object);
+  return object;
+};
+function splitFixture(s, f) {
+  f.asset = coneAsset(f.ids.asset);
+  s.sourceAssets = s.sourceAssets.map(a => (a.id === f.asset.descriptor.id ? f.asset.descriptor : a));
+  const object = s.plates[0].objects[0], body = object.volumes[0];
+  body.source.triangleCount = f.asset.descriptor.mesh.triangleCount;
+  body.transform = { translationMm: [3, -4, 5], rotation: [0.1, 0.2, 0.3, 0.9], scale: [1, 2, 0.5] };
+  object.volumes.push(
+    { ...cloneJson(body), id: "import:volume:wing", name: "Wing", filamentId: f.ids.physical1, config: { sparse_infill_density: 40, wall_loops: 5 },
+      transform: { translationMm: [-7.25, 0.001, 2], rotation: [0, 0, 0, 1], scale: [1, 1, 1] }, extensionData: { "orcaxr:note": "kept" } },
+    { ...cloneJson(body), id: "import:volume:cap", name: "Cap\\\"\u0000\ud800😀", config: {}, transform: { translationMm: [0, 0, 12.5], rotation: [0, 0, 0, 2], scale: [-1, 1, 1] } });
+  object.layerRanges = [];
+  object.extensionData = {};
+  object.brimEars = [{ positionMm: [1, 2, 0], headFrontRadiusMm: 1 }];
+  object.foreign = { dropped: true };
+  object.instances[0].transform = { translationMm: [100, 50, 0], rotation: [0, 0, 0.3826834323650898, 0.9238795325112867], scale: [1.5, 1.5, 1.5] };
+  object.instances.push({ id: "import:instance:second", name: "Second", transform: { translationMm: [-20, 10, 1], rotation: [1, 1, 1, 1], scale: [1, -1, 2] }, printable: false, extensionData: { kept: 1 } });
+  s.plates[0].objects.push(
+    splitSource(object, "single", o => { o.volumes.length = 1; }),
+    splitSource(object, "modifier", o => { o.volumes[1].role = "parameter-modifier"; o.volumes[1].annotations = { ...o.volumes[1].annotations, color: [] }; }),
+    splitSource(object, "ranged", o => { o.layerRanges = [{ id: "import:range:ranged", minZMm: 0, maxZMm: 5, config: {} }]; }),
+    splitSource(object, "extended", o => { o.extensionData = { "orcaxr:owner": "host" }; }),
+    splitSource(object, "far", o => { o.volumes[1].transform = { translationMm: [1e308, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] }; o.instances[0].transform.scale = [10, 10, 10]; }));
+}
+scenario("split-to-objects", {}, splitFixture, ({ execute, run, state, snapshot, ids }) => {
+  const guard = () => settingsGuard(snapshot());
+  const objectAt = id => state().plates[0].objects.find(o => o.id === id);
+  const fresh = splitIdentities(objectAt(ids.object), "split");
+  const edit = (index, change) => fresh.map((identity, i) => (i === index ? change(cloneJson(identity)) : identity));
+  run({ kind: "selection", refs: [{ kind: "object", id: units(ids.object) }, { kind: "plate", id: units(ids.plate) }, { kind: "volume", id: units("import:volume:wing") },
+    { kind: "instance", id: units("import:instance:modifier") }, { kind: "instance", id: units("import:instance:second") }] });
+  execute(separateVolumes({ ...guard(), sourceRevision: snapshot().revision + 1 }, ids.object, fresh));
+  execute(separateVolumes({ ...guard(), sourceHash: units("fnv1a64:0000000000000000") }, ids.object, fresh));
+  execute(separateVolumes(guard(), "import:object:missing", fresh));
+  execute(separateVolumes(guard(), ids.object, fresh.slice(0, 2)));
+  execute(separateVolumes(guard(), ids.object, [fresh[1], fresh[0], fresh[2]]));
+  execute(separateVolumes(guard(), ids.object, edit(1, i => [i[0], "import:object:modifier", i[2]])));
+  execute(separateVolumes(guard(), ids.object, edit(2, i => [i[0], fresh[0][1], i[2]])));
+  execute(separateVolumes(guard(), ids.object, edit(0, i => [i[0], i[1], i[2].slice(1)])));
+  execute(separateVolumes(guard(), ids.object, edit(1, i => [i[0], i[1], ["import:instance:second", i[2][1]]])));
+  execute(separateVolumes(guard(), ids.object, edit(0, i => [i[0], i[1], [i[1], i[2][1]]])));
+  execute(separateVolumes(guard(), ids.object, edit(2, i => [i[0], i[1], [i[2][0], fresh[1][2][1]]])));
+  execute(separateVolumes(guard(), ids.object, edit(0, i => [i[0], "bad", i[2]])));
+  for (const suffix of ["single", "modifier", "ranged", "extended", "far"])
+    execute(separateVolumes(guard(), `import:object:${suffix}`, splitIdentities(objectAt(`import:object:${suffix}`), `${suffix}-out`)));
+  const before = guard();
+  execute(separateVolumes(before, ids.object, fresh));
+  assert.equal(state().plates[0].objects.length, 8);
+  run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "undo" }); run({ kind: "redo" });
+  execute(separateVolumes(before, ids.object, fresh));
+  execute(separateVolumes(guard(), ids.object, fresh));
+  execute(separateVolumes(guard(), "import:object:split1", splitIdentities(objectAt("import:object:split1"), "again")));
+  run({ kind: "undo" });
+  run({ kind: "selection", refs: [] });
+  execute(separateVolumes(guard(), ids.object, splitIdentities(objectAt(ids.object), "again")));
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+// History retention charges the escaped source fingerprint, the identities and
+// both whole states: with a following rename, an exact budget keeps the split
+// and one unit less evicts it.
+const splitProbe = createProjectFixture(); splitFixture(splitProbe.state, splitProbe);
+const splitStore = new ProjectStore(splitProbe.state);
+const splitBus = new CommandBus({ project: splitStore, selection: new SelectionStore(), assets: new InMemoryAssetRepository() });
+const splitCommand = prepareProjectIntent({ version: 1, command: separateVolumes(settingsGuard(splitStore.getSnapshot()), splitProbe.ids.object, splitIdentities(splitProbe.state.plates[0].objects[0], "split")) });
+splitBus.execute(splitCommand);
+const splitRename = prepareProjectIntent({ version: 1, command: rename(splitProbe.ids.plate, "After split") });
+splitBus.execute(splitRename);
+const splitBytes = splitCommand.estimateBytes() + Math.max(1, splitRename.estimateBytes?.() ?? 1);
+for (const [label, budget] of [["exact", splitBytes], ["short", splitBytes - 1]])
+  scenario(`split-to-objects-retention-${label}`, { maxEstimatedBytes: budget }, splitFixture, ({ execute, run, state, snapshot, ids }) => {
+    execute(separateVolumes(settingsGuard(snapshot()), ids.object, splitIdentities(state().plates[0].objects[0], "split")));
+    execute(rename(ids.plate, "After split"));
+    assert.equal(state().plates[0].objects.length, 8);
+    run({ kind: "undo" }); run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "redo" });
+  });
+scenario("split-to-objects-small-facets", {}, s => {
+  const object = s.plates[0].objects[0];
+  object.volumes.push({ ...cloneJson(object.volumes[0]), id: "import:volume:second", name: "Second" });
+  s.plates[0].objects.push(splitSource(object, "modifier", o => { o.volumes[0].role = "negative-volume"; o.volumes[0].annotations = { ...o.volumes[0].annotations, color: [] }; }));
+}, ({ execute, state, snapshot, ids }) => {
+  for (const object of state().plates[0].objects)
+    execute(separateVolumes(settingsGuard(snapshot()), object.id, splitIdentities(object, `${object.id.split(":")[2]}-out`)));
+  assert.equal(state().plates[0].objects.length, 2);
+  void ids;
+});
+const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/filaments/recreateModelColors.ts", "web/src/project/objects/splitToObjectsCommands.ts", "web/src/project/filaments/autoPairReconciliation.ts", "web/src/project/annotations/FacetAnnotationStrokeCommand.ts", "web/src/project/annotations/sparse.ts", "web/src/project/annotations/types.ts", "web/src/project/objects/semanticVolumeCommands.ts", "web/src/project/settingsOverrides.ts", "web/src/project/scopedOverrides.ts", "web/src/project/domain/settingScopes.ts", "web/src/project/filaments/commands.ts", "web/src/project/filaments/mixedCommands.ts", "web/src/project/filaments/fullSpectrumRecipe.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";
 const path = new URL("testdata/cross-platform/project-command-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);
