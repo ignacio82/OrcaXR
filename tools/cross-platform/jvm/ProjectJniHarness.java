@@ -22,6 +22,9 @@ public final class ProjectJniHarness {
         return ProjectActorPreparationChecks.captured(source, payload, asset, expected, effects);
     }
     public static long actorChecks(String source) { return ProjectActorChecks.run(source); }
+    public static long actorArchiveChecks(String source, byte[] archive, long warnings) {
+        return ProjectActorArchiveChecks.run(source, archive, warnings);
+    }
     public static String intentCodec(String kind, String input) {
         ProjectIntents codec = ProjectIntents.INSTANCE;
         return switch (kind) {
@@ -119,6 +122,7 @@ public final class ProjectJniHarness {
             if (name.equals("actorPreparationChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("actorCapturedChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, String.class, long[].class);
             if (name.equals("actorChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("actorArchiveChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, long.class);
             if (name.equals("intentCodec")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class);
             if (name.equals("resolveLocal")) method = ProjectJniHarness.class.getMethod(name, String.class, long.class);
             if (name.equals("ownerChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class);

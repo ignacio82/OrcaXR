@@ -41,6 +41,67 @@ export class CapturedSelection {
     primary_index(): number;
 }
 
+export class ProjectArchiveImport {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Takes the prepared document once for guarded adoption.
+     */
+    document(): ProjectDocument;
+    /**
+     * `FORMAT_CANONICAL` or `FORMAT_FOREIGN` from the generated layout.
+     */
+    format(): number;
+    /**
+     * Bounded UTF-16 reads; lone surrogates survive.
+     */
+    warning(position: number, start: number, count: number): Uint16Array;
+    /**
+     * The browser's sorted, unique warning texts.
+     */
+    warning_count(): number;
+    warning_length(position: number): number;
+}
+
+export class ProjectArchiveOutput {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * The checkpoint guard of the written capture, taken once. Acknowledge it
+     * only after the host confirms the save handoff.
+     */
+    guard(): ProjectGuard;
+    length(): number;
+    /**
+     * Copies one bounded chunk into host-owned memory.
+     */
+    read(start: number, count: number): Uint8Array;
+    warning(position: number, start: number, count: number): Uint16Array;
+    warning_count(): number;
+    warning_length(position: number): number;
+}
+
+export class ProjectArchiveUpload {
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Offsets make retries and out-of-order delivery explicit; a refused
+     * chunk is not consumed.
+     */
+    append(offset: number, chunk: Uint8Array): void;
+    /**
+     * Reserves exactly `archive_bytes` after checking it against the policy.
+     */
+    constructor(version: number, archive_bytes: number, policy: Float64Array);
+    /**
+     * Consumes the upload on every outcome. Completes import privately: no
+     * session state changes until the host adopts the returned document.
+     */
+    prepare(): ProjectArchiveImport;
+}
+
 export class ProjectAsset {
     private constructor();
     free(): void;
@@ -198,6 +259,11 @@ export class ProjectSession {
     stage_commands(input: ProjectCommandUpload): number;
     staging_usage(): Float64Array;
     submit(request: string): ProjectReply | undefined;
+    /**
+     * Write the current immutable capture as a complete 3MF package. The guard
+     * is captured with the same snapshot; writing never changes dirty state.
+     */
+    write_archive(version: number, policy: Float64Array): ProjectArchiveOutput;
 }
 
 export class ProjectUpload {
@@ -238,6 +304,9 @@ export interface InitOutput {
     readonly __wbg_capturedhistory_free: (a: number, b: number) => void;
     readonly __wbg_capturedproject_free: (a: number, b: number) => void;
     readonly __wbg_capturedselection_free: (a: number, b: number) => void;
+    readonly __wbg_projectarchiveimport_free: (a: number, b: number) => void;
+    readonly __wbg_projectarchiveoutput_free: (a: number, b: number) => void;
+    readonly __wbg_projectarchiveupload_free: (a: number, b: number) => void;
     readonly __wbg_projectasset_free: (a: number, b: number) => void;
     readonly __wbg_projectbytes_free: (a: number, b: number) => void;
     readonly __wbg_projectclipboard_free: (a: number, b: number) => void;
@@ -271,6 +340,20 @@ export interface InitOutput {
     readonly capturedselection_primary_index: (a: number) => number;
     readonly core_info: () => [number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
+    readonly projectarchiveimport_document: (a: number) => [number, number, number];
+    readonly projectarchiveimport_format: (a: number) => number;
+    readonly projectarchiveimport_warning: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly projectarchiveimport_warning_count: (a: number) => number;
+    readonly projectarchiveimport_warning_length: (a: number, b: number) => [number, number, number];
+    readonly projectarchiveoutput_guard: (a: number) => [number, number, number];
+    readonly projectarchiveoutput_length: (a: number) => number;
+    readonly projectarchiveoutput_read: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectarchiveoutput_warning: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly projectarchiveoutput_warning_count: (a: number) => number;
+    readonly projectarchiveoutput_warning_length: (a: number, b: number) => [number, number, number];
+    readonly projectarchiveupload_append: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly projectarchiveupload_new: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly projectarchiveupload_prepare: (a: number) => [number, number, number];
     readonly projectasset_digest: (a: number) => [number, number];
     readonly projectasset_length: (a: number) => number;
     readonly projectasset_metadata: (a: number, b: number) => [number, number, number];
@@ -332,6 +415,7 @@ export interface InitOutput {
     readonly projectsession_stage_commands: (a: number, b: number) => [number, number, number];
     readonly projectsession_staging_usage: (a: number) => [number, number];
     readonly projectsession_submit: (a: number, b: number, c: number) => number;
+    readonly projectsession_write_archive: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectupload_append_asset: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectupload_append_document: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectupload_asset_count: (a: number) => [number, number, number];

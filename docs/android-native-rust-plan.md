@@ -98,8 +98,16 @@ Detailed evidence and reproducible commands live in
   cases), as do the 15 authored foreign references. Three browser defects found
   on the way were fixed: empty builds, undeclared SVG drawings and unrepresentable
   layer events. Library scope only; bindings and adoption remain open below.
-- [ ] Add STL/OBJ/AMF import, then expose canonical and foreign archive work
-  through owned WASM/JNI tasks and Android document-provider Open/Save.
+- [x] Expose canonical and foreign archive Open and complete package Save through
+  owned WASM/JNI tasks driven by one generated host policy
+  (`contracts/project-archive.json`); every detailed limit derives from it and
+  failures map to shared redacted codes. The Kotlin actor schedules Open through
+  `openDocument`/`resetDocument` (guarded adoption) and Save through
+  `saveDocument` with `ProjectExportSource.writeArchive`. 1,341 browser archives
+  (1,225 accepted, 1,223 saved, acknowledged and reopened) agree in Node WASM, a
+  Chrome 150 worker and host JNI (debug and release); seven actor journeys pass.
+  The instrumented Android test has not run on a device.
+- [ ] Add STL/OBJ/AMF import and Android document-provider Open/Save.
 - [x] Share bounded G-code text windows and case-insensitive line search through
   Rust, WASM and JNI (Phase 3). Browser, host and Chrome WASM replays agree on
   18,710 searches; the Android instrumented replay has not run on a device yet.
@@ -111,25 +119,25 @@ Detailed evidence and reproducible commands live in
   finish remaining command/query coverage and production session integration,
   then continue the app/device gates.
 
-**Resume here:** expose archive work through owned host tasks. Foreign import now produces the same
-`CompletedCanonicalArchive` as canonical completion (`bbs::foreign::import`, see
-[native-core](engineering/native-core.md#complete-foreign-bbs3mf-import)); its
-browser corpus is `testdata/cross-platform/foreign-import-vectors.json`, generated
-by `tools/cross-platform/foreign-import-vectors.mjs`; `orcaxr_archive::open`
-dispatches like the browser's `deserialize`. Next, in order: (1) add bounded
-WASM/JNI archive tasks for Open (`open::open`) and package Save, driven by one
-generated host policy contract from which every detailed archive limit derives,
-scheduled by the Kotlin actor with guarded prepared-document adoption, never
-bypassing the original Open guard; (2) Android document-provider Open/Save with
-checkpoint acknowledgement; (3) port signature-first STL/OBJ/AMF import from
-`web/src/project/import/`. The interchange harness passes 2,159 complete edited
-journeys from 2,278 canonical and foreign archives (116 import refusals and three
-Save refusals are separate); reproducible commands live in
-[native-core](engineering/native-core.md#edited-canonical-archive-interchange).
+**Resume here:** connect archive tasks to Android document providers. Archive Open
+and Save now run as owned WASM/JNI tasks under one generated host policy (see
+[native-core](engineering/native-core.md#archive-open-and-save-host-tasks)): Open
+with `ProjectArchiveUpload.prepare(scope, stream, …)` inside a `ProjectActor`
+`openDocument`/`resetDocument` producer, Save with
+`ProjectExportSource.writeArchive` inside `saveDocument`. Next, in order: (1)
+Android document-provider Open/Save (SAF picker, stream length, durable write and
+handoff before checkpoint acknowledgement, user-visible warnings and refusal
+codes), sizing `ProjectArchiveOptions` from the device memory budget; (2) port
+signature-first STL/OBJ/AMF import from `web/src/project/import/`; (3) remaining
+command families. Replay evidence: `archive-wasm-replay.mjs` in
+`project-wasm-test.mjs`, `project-wasm-browser.mjs` and `project-jni-test.mjs`
+(1,341 archives each), plus `ProjectActorArchiveChecks`. The interchange harness
+still passes 2,159 edited journeys from 2,278 archives
+([native-core](engineering/native-core.md#edited-canonical-archive-interchange)).
 Retain earlier binding replay evidence only when executable and JVM input
-identities still agree; otherwise rerun it. This host can now run headless Chrome
-and git; the full web quality gate and fresh dependency advisories still need a
-run on an unloaded machine.
+identities still agree; otherwise rerun it. This host can run headless Chrome and
+git; the full web quality gate and fresh dependency advisories still need a run on
+an unloaded machine.
 
 `CanonicalArchiveSource::complete` now performs OPC/BBS reconciliation and adoption;
 only its completed result can produce the prepared document for guarded Open/reset.
@@ -1090,12 +1098,10 @@ painting, and FullSpectrum operations that can support real native projects.
   unowned file with exact compressed-archive-derived IDs and recognizes plate PNG
   thumbnails. The final graph is re-admitted before prepared-document conversion.
   Independent browser comparisons cover 385 inputs (276 accepted / 109 refused),
-  complete state/assets/warnings and unknown metadata. Foreign format detection,
-  BBS metadata/settings and paint-slot resolution, canonical assembly, bindings
-  and application import remain required; bounded structural parsing, standard
-  facet/extension-attribute projection and cross-part reference resolution
-  provide the current foreign-model seams. This does not close the archive task
-  or phase gate.
+  complete state/assets/warnings and unknown metadata. Foreign import and the
+  WASM/JNI archive tasks are now complete (sub-items below); STL/OBJ/AMF and
+  application/provider import remain required. This does not close the archive
+  task or phase gate.
   - [x] Implement and independently verify bounded ZIP/ZIP64 indexing, streaming
     reads, integrity checks, cancellation and safe member paths.
   - [x] Stage canonical envelopes, legacy facet migrations and declared assets
@@ -1114,8 +1120,11 @@ painting, and FullSpectrum operations that can support real native projects.
     paint-slot resolution, plate origins, canonical extensionData and candidate
     assembly, OPC, regenerated-member exclusion, adoption and admission. 956
     browser-derived archives and 15 authored references agree exactly.
-  - [ ] Add STL/OBJ/AMF detection/parsing, then bind canonical and foreign
-    import to owned host tasks and provider lifetimes.
+  - [x] Bind canonical and foreign Open and package Save to owned WASM/JNI
+    tasks under one generated host policy, with guarded actor adoption, Save
+    checkpoint handoff, cooperative JNI cancellation and shared redacted codes;
+    replayed over 1,341 browser archives in three hosts.
+  - [ ] Add STL/OBJ/AMF detection/parsing and provider lifetimes.
 - [ ] Port canonical-envelope and BBS authoring, scoped overrides, plate origins,
   assembly transforms, custom G-code, modifier/negative volumes, annotations,
   mixed recipes, and unknown metadata preservation. A consumed metadata member

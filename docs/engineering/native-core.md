@@ -2415,8 +2415,61 @@ matches **949 accepted** opens (complete state digests, or full canonical JSON f
 real and authored cases, every asset descriptor and byte digest, and the sorted
 warning set) and all **7 refusals**. The fifteen authored foreign references also
 match complete state, and a cancellation test publishes nothing. Mutating one
-warning string or one state field makes every affected comparison fail. Bindings,
-application adoption, provider Open and STL/OBJ/AMF import remain open.
+warning string or one state field makes every affected comparison fail. Host
+bindings are described next; application adoption, provider Open and STL/OBJ/AMF
+import remain open.
+
+### Archive Open and Save host tasks
+
+A host chooses thirteen budgets in `contracts/project-archive.json` (archive,
+entry and total bytes, entries, vertices, triangles, records, text units, paint
+nodes, asset counts/bytes, warnings). `generate-project-archive.mjs` emits the
+Rust decoder (`archive_layout`), TypeScript and Kotlin encoders; the decoder
+refuses wrong versions, non-integral or out-of-range values and per-item caps
+above their totals. `orcaxr_archive::policy::Policy` derives every detailed ZIP,
+XML, model, metadata, settings, OPC, envelope and package limit from those
+budgets, so WASM and JNI enforce one policy and a new internal limit cannot drift
+between bindings. The same module maps failures to bounded, redacted codes
+(`resource_limit`, `invalid_archive`, `invalid_document`, `timestamp_service`,
+`unsavable_project`, `cancelled`); budget refusals nested in any decoder report
+`resource_limit`, so a host can tell "too large" from "invalid". `archive::text`
+renders warnings as the browser's sorted, unique UTF-16 texts.
+
+Open stages exact bytes in offset-checked 64 KiB chunks and then prepares
+privately: canonical completion or foreign import, warnings and format, ending in
+a prepared document that only the session's guarded `finish_open` or
+`reset_document` adopts. Save packages a frozen capture with its checkpoint guard
+and never changes dirty state; only a confirmed handoff acknowledges the guard.
+WASM exposes `ProjectArchiveUpload`/`ProjectArchiveImport` and
+`ProjectSession.write_archive`. JNI keeps each step in one registry slot (upload,
+then import, then document) under the bounded concurrent-document budget, and
+packages an immutable `ExportCapture` so no session gate is held while writing.
+Closing a JNI handle cancels its import or write cooperatively. Kotlin adds
+`ProjectArchiveUpload.prepare(scope, stream, …)` for an actor `openDocument` or
+`resetDocument` producer, and `ProjectExportSource.writeArchive` for
+`saveDocument`, whose existing handoff rule acknowledges the checkpoint.
+
+`archive-wasm-replay.mjs` drives the same 1,341 browser archives (canonical
+completion and foreign-import corpora) through each binding: matching format,
+warnings and complete state for **1,225 accepted** and refusal for **116**; then
+Save, checkpoint acknowledgement and reopening the saved bytes as canonical with
+plates and every asset intact (**1,223 saves**, 1,213 byte-identical states; the
+two unresolved-origin envelopes are the browser's Save refusals too). It passes
+in Node WASM, a Chrome 150 module worker and the host JVM over real JNI (debug
+and release). `ProjectActorArchiveChecks` adds seven actor journeys: guarded Open
+of a foreign archive, Save with checkpoint, reopen to the same semantic hash,
+mutually exclusive bundle/package streams, budget and malformed-input refusals
+that leave the session untouched, chunk-order refusals, and closed-handle
+behavior. `tests/policy.rs` proves browser-equivalent budgets accept every
+browser Open and Save and that five tight budgets refuse with `resource_limit`.
+The Android instrumented test `actorArchiveOpenAndSaveCrossRealJni` has not run
+on a device.
+
+The Chrome harness now loads an intercepted secure origin: Chrome 150 refuses
+blob module workers from an opaque `about:blank` page, which had silently broken
+the real-browser project replay. Its query replay treats `Date.parse` as the
+engine oracle, because Chromium's 31-bit Smi parser refuses one legacy offset
+(`Jan 1 1970 GMT+500000:00`) that Node accepts.
 
 ## Edited canonical archive interchange
 
@@ -2447,9 +2500,9 @@ native/browser edited journeys**, 949 of them starting from foreign packages. Al
 unresolved-origin cases and the preserved model-settings collision are reported
 separately; they are accepted imports but do not count as successful Save
 journeys. Earlier canonical-only debug and optimized reports agreed byte-for-byte.
-The harness runs in CI alongside the package references; STL/OBJ/AMF, WASM/JNI
-archive tasks, provider publication and application UI/device execution remain
-open.
+The harness runs in CI alongside the package references; STL/OBJ/AMF, provider
+publication and application UI/device execution remain open (WASM/JNI archive
+tasks are covered in the previous section).
 
 ## G-code computation and ownership
 
@@ -2804,6 +2857,7 @@ node tools/cross-platform/generate-project-query.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-query-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-query.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-host.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-archive.mjs
 node tools/cross-platform/generate-setting-scopes.mjs
 node tools/cross-platform/test-project-intent-generator.mjs
 node tools/cross-platform/project-intent-vectors.mjs
@@ -2910,6 +2964,7 @@ node tools/cross-platform/project-wasm-test.mjs
 node tools/cross-platform/project-wasm-browser.mjs
 node tools/cross-platform/wasm-smoke.mjs
 node tools/cross-platform/generate-project-jni.mjs
+node tools/cross-platform/generate-project-archive.mjs
 cargo build --manifest-path core/Cargo.toml -p orcaxr-android --locked --jobs 1
 cargo build --manifest-path core/Cargo.toml -p orcaxr-android --release --locked --jobs 1
 python3 tools/cross-platform/build-project-jvm.py

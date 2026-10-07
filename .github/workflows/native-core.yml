@@ -106,10 +106,12 @@ jobs:
           node tools/cross-platform/generate-project-intents.mjs
           node tools/cross-platform/generate-project-host.mjs
           node tools/cross-platform/generate-project-jni.mjs
+          node tools/cross-platform/generate-project-archive.mjs
           node tools/cross-platform/generate-project-query.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-query-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-query.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-host.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-archive.mjs
           node tools/cross-platform/generate-project-staging.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-staging.mjs
           node tools/cross-platform/generate-setting-scopes.mjs

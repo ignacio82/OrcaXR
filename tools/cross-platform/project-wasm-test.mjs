@@ -9,6 +9,8 @@ import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
 import { projectStagedBoundaries } from "./project-staged-boundaries.mjs";
 import { projectClipboardBoundaries } from "./project-clipboard-boundaries.mjs";
+import { replayArchives, archiveCases } from "./archive-wasm-replay.mjs";
+import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 if (isMainThread) {
   const worker = new Worker(new URL(import.meta.url));
@@ -17,7 +19,7 @@ if (isMainThread) {
     const result = await new Promise((resolve, reject) => {
       timer = setTimeout(
         () => reject(Error("Project WASM worker deadline exceeded")),
-        120_000,
+        900_000,
       );
       worker.once("message", resolve);
       worker.once("error", reject);
@@ -27,6 +29,12 @@ if (isMainThread) {
     });
     await worker.terminate();
     assert.ok(result.owned instanceof Uint8Array);
+    // Browser-derived Open expectations plus native Save round trips; the
+    // replay checks every case and the Save refusal set itself.
+    assert.deepEqual(
+      [result.archives.cases, result.archives.accepted, result.archives.saves],
+      [1341, 1225, 1223],
+    );
     assert.ok(
       result.ownedQueryText instanceof Uint16Array &&
         result.ownedQueryText.length > 0,
@@ -91,6 +99,18 @@ if (isMainThread) {
     await readFile(new URL("contracts/project-host.json", root)),
   );
   const { owned, ...metrics } = await replayProject(core, fixture, layout);
+  metrics.archives = await replayArchives(
+    core,
+    layout,
+    JSON.parse(await readFile(new URL("contracts/project-archive.json", root))),
+    archiveCases(
+      JSON.parse(await readFile(new URL("testdata/cross-platform/canonical-complete-vectors.json", root))),
+      JSON.parse(await readFile(new URL("testdata/cross-platform/foreign-import-vectors.json", root))),
+      (path) => new Uint8Array(readFileSync(new URL(path, root))),
+      (text) => new Uint8Array(Buffer.from(text, "base64")),
+    ),
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
   const queryLayout = JSON.parse(
     await readFile(new URL("contracts/project-query.json", root)),
   );

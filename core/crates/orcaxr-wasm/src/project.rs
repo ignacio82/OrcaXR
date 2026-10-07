@@ -34,8 +34,8 @@ extern "C" {
     #[wasm_bindgen(js_namespace = Date, js_name = parse, catch)]
     fn parse_date(text: &HostText) -> Result<f64, JsValue>;
 }
-type Timestamps = fn(&[u16]) -> Result<bool, ()>;
-fn timestamps(units: &[u16]) -> Result<bool, ()> {
+pub(crate) type Timestamps = fn(&[u16]) -> Result<bool, ()>;
+pub(crate) fn timestamps(units: &[u16]) -> Result<bool, ()> {
     // Avoid UTF-8/lossy conversion and argument-count limits. Browser Date.parse
     // remains the exact authority for its own timezone and legacy syntax.
     let mut text = from_units(&[]).map_err(|_| ())?;
@@ -46,10 +46,10 @@ fn timestamps(units: &[u16]) -> Result<bool, ()> {
     }
     parse_date(&text).map(|v| v.is_finite()).map_err(|_| ())
 }
-fn error(code: &str) -> JsValue {
+pub(crate) fn error(code: &str) -> JsValue {
     JsValue::from_str(code)
 }
-fn index(value: f64) -> Result<usize, JsValue> {
+pub(crate) fn index(value: f64) -> Result<usize, JsValue> {
     if value.is_finite()
         && value.fract() == 0.0
         && (0.0..=layout::MAX_BUDGET as f64).contains(&value)
@@ -59,7 +59,7 @@ fn index(value: f64) -> Result<usize, JsValue> {
         Err(error("invalid_range"))
     }
 }
-fn range(
+pub(crate) fn range(
     start: f64,
     count: f64,
     length: usize,
@@ -230,7 +230,7 @@ impl ProjectUpload {
 /// Admission consumes the contents on every outcome. Free the empty wrapper
 /// afterwards; reusing its consumed contents returns invalid_state.
 pub struct ProjectDocument {
-    inner: Option<PreparedDocument>,
+    pub(crate) inner: Option<PreparedDocument>,
 }
 #[wasm_bindgen]
 pub struct ProjectOpen {
@@ -246,7 +246,7 @@ fn document_error(value: orcaxr_contracts::project_intent_types::SessionError) -
 }
 #[wasm_bindgen]
 pub struct ProjectSession {
-    inner: Session<Timestamps>,
+    pub(crate) inner: Session<Timestamps>,
 }
 #[wasm_bindgen]
 impl ProjectSession {
@@ -484,7 +484,7 @@ impl ProjectSession {
 }
 #[wasm_bindgen]
 pub struct ProjectGuard {
-    inner: LocalGuard,
+    pub(crate) inner: LocalGuard,
 }
 
 #[wasm_bindgen]

@@ -12,10 +12,12 @@ macro_rules! export {
         }
     };
 }
+mod archive;
 mod bindings;
 mod json_sink;
 mod registry;
 mod timestamps;
+use archive::*;
 use jni::{
     JNIEnv,
     objects::{JByteArray, JCharArray, JClass, JDoubleArray, JLongArray, JObject, JString},
@@ -83,6 +85,9 @@ enum Record {
     Export(ExportCapture),
     Document(PreparedDocument),
     Open(DocumentOpen),
+    ArchiveUpload(Box<archive::Upload>),
+    ArchiveImport(Box<archive::Import>),
+    ArchiveOutput(Box<archive::Output>),
 }
 fn registry() -> &'static Registry<Record> {
     static REGISTRY: OnceLock<Registry<Record>> = OnceLock::new();
@@ -133,6 +138,9 @@ access!(with_query_list, QueryList, QueryList);
 access!(with_command_upload, CommandUpload, Box<CommandUpload>);
 access!(with_clipboard, Clipboard, ClipboardCapture);
 access!(with_open, Open, DocumentOpen);
+access!(with_archive_upload, ArchiveUpload, Box<archive::Upload>);
+access!(with_archive_import, ArchiveImport, Box<archive::Import>);
+access!(with_archive_output, ArchiveOutput, Box<archive::Output>);
 fn option_values<const N: usize>(
     env: &mut JNIEnv<'_>,
     values: &JDoubleArray<'_>,

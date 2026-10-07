@@ -31,6 +31,10 @@ pub(super) struct Slot<T> {
     _document: Option<Permit>,
 }
 impl<T> Slot<T> {
+    /// Cooperative cancellation for long native work on this handle.
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(Ordering::Acquire)
+    }
     pub fn with<R>(&self, call: impl FnOnce(&mut Option<T>) -> Result<R>) -> Result<R> {
         // Kotlin serializes ordinary calls. Refuse concurrent or reentrant raw
         // JNI calls instead of deadlocking in a timezone-service callback.
@@ -135,7 +139,10 @@ mod tests {
         let registry = Registry::new(4, 1);
         let id = registry.reserve(true).unwrap().insert(41).unwrap();
         let active = registry.slot(id).unwrap();
+        assert!(!active.is_closed());
         registry.close(id).unwrap();
+        // Long native work polls this to cancel cooperatively.
+        assert!(active.is_closed());
         assert!(registry.slot(id).is_err());
         assert!(registry.reserve(true).is_err());
         assert_eq!(active.with(|v| Ok(v.take())), Err("closed"));

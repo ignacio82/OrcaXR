@@ -186,6 +186,11 @@ class ProjectExportCapture internal constructor(handle: Long) : ProjectHandle(ha
     fun project(): ProjectSnapshot = read { own(NativeProject.exportProject(it), ::ProjectSnapshot) }
     fun assetCount(): Long = read { NativeProject.exportAssetCount(it) }
     fun asset(position: Long): ProjectAsset = read { own(NativeProject.exportAsset(it, position), ::ProjectAsset) }
+    /** Package this frozen bundle as a complete 3MF archive. Synchronous; run it
+     * on the export worker. Closing this capture cancels the native write. */
+    fun writeArchive(options: ProjectArchiveOptions): ProjectArchiveOutput = read {
+        own(NativeProject.exportArchive(it, ProjectArchive.VERSION, options.encode()), ::ProjectArchiveOutput)
+    }
 }
 data class ProjectStagingUsage(val resources: Long, val commands: Long, val units: Long)
 data class ProjectClipboardInfo(val volumes: Long, val instances: Long, val layerRanges: Long, val assets: Long, val bytes: Long)

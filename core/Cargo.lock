@@ -204,6 +204,7 @@ name = "orcaxr-android"
 version = "0.1.0"
 dependencies = [
  "jni",
+ "orcaxr-archive",
  "orcaxr-contracts",
  "orcaxr-gcode",
  "orcaxr-project",
@@ -254,6 +255,7 @@ dependencies = [
 name = "orcaxr-wasm"
 version = "0.1.0"
 dependencies = [
+ "orcaxr-archive",
  "orcaxr-contracts",
  "orcaxr-gcode",
  "orcaxr-project",

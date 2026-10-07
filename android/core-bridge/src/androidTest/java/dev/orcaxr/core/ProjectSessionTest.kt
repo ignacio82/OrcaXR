@@ -75,6 +75,12 @@ class ProjectSessionTest {
             LongArray(effects.length()) { kinds.indexOf(effects.getJSONObject(it).getString("kind")).toLong() }))
     }
     @Test fun actorSchedulingCrossesRealJni() { assertEquals(12L, ProjectActorChecks.run(base())) }
+    @Test fun actorArchiveOpenAndSaveCrossRealJni() {
+        val cases = fixture("foreign-import-vectors.json").getJSONArray("cases")
+        val case = (0 until cases.length()).map { cases.getJSONObject(it) }.single { it.getString("name") == "bbs-model/16/plates-2-16" }
+        val archive = java.util.Base64.getDecoder().decode(case.getString("archiveBase64"))
+        assertEquals(7L, ProjectActorArchiveChecks.run(base(), archive, case.getJSONObject("expected").getJSONArray("warnings").length().toLong()))
+    }
     @Test fun documentOwnershipCrossesRealJni() { assertEquals(7L, ProjectOwnerChecks.documentChecks(base())) }
     @Test fun clipboardOwnershipCrossesRealJni() {
         val capture = fixture("project-clipboard-vectors.json")

@@ -27,6 +27,7 @@ export function startProjectJni(profile = "debug") {
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
   signatures.actorChecks = ["String"];
+  signatures.actorArchiveChecks = ["String", "byte[]", "long"];
   signatures.intentCodec = ["String", "String"];
   signatures.resolveLocal = ["String", "long"];
   signatures.ownerChecks = ["String", "String"];
@@ -58,7 +59,7 @@ export function startProjectJni(profile = "debug") {
   const stdin = child.stdin._handle.fd,
     stdout = child.stdout._handle.fd;
   const sleep = new Int32Array(new SharedArrayBuffer(4));
-  const deadline = Date.now() + 300_000;
+  const deadline = Date.now() + 900_000;
   function io(fn, data) {
     let offset = 0;
     while (offset < data.length) {
@@ -340,6 +341,84 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
         ),
       );
     }
+    // The Kotlin export path: guard, immutable capture, then package the capture.
+    write_archive(version, policy) {
+      const guard = this.capture_guard();
+      try {
+        const capture = new Handle(call("captureExport", this.handle, guard.handle));
+        try {
+          return new ProjectArchiveOutput(
+            call("exportArchive", capture.handle, version, policy),
+            guard,
+          );
+        } finally {
+          capture.free();
+        }
+      } catch (e) {
+        guard.free();
+        throw e;
+      }
+    }
+  }
+  class ProjectArchiveUpload extends Handle {
+    constructor(version, bytes, policy) {
+      super(call("archiveUploadNew", version, bytes, policy, zone, profile));
+    }
+    append(offset, bytes) {
+      call("archiveUploadAppend", this.handle, offset, bytes);
+    }
+    prepare() {
+      return consumed(this, (id) => {
+        call("archiveUploadPrepare", id);
+        return new ProjectArchiveImport(id);
+      });
+    }
+  }
+  class ArchiveWarnings extends Handle {
+    warning_count() {
+      return call("archiveWarningCount", this.handle);
+    }
+    warning_length(position) {
+      return call("archiveWarningLength", this.handle, position);
+    }
+    warning(position, start, count) {
+      return call("archiveWarning", this.handle, position, start, count);
+    }
+  }
+  class ProjectArchiveImport extends ArchiveWarnings {
+    format() {
+      return call("archiveFormat", this.handle);
+    }
+    // Consumed in place: the same native slot becomes the prepared document.
+    document() {
+      return consumed(this, (id) => {
+        call("archiveDocument", id);
+        return new Handle(id);
+      });
+    }
+  }
+  class ProjectArchiveOutput extends ArchiveWarnings {
+    constructor(id, guard) {
+      super(id);
+      this.owned = guard;
+    }
+    length() {
+      return call("archiveLength", this.handle);
+    }
+    read(start, count) {
+      return call("archiveRead", this.handle, start, count);
+    }
+    guard() {
+      const guard = this.owned;
+      if (!guard) throw Error("invalid_state");
+      this.owned = undefined;
+      return guard;
+    }
+    free() {
+      this.owned?.free();
+      this.owned = undefined;
+      super.free();
+    }
   }
   class ProjectSelectionInput extends Handle {
     constructor() {
@@ -529,5 +608,5 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return call("historyDirtyCategories", this.handle);
     }
   }
-  return { ProjectUpload, ProjectSelectionInput };
+  return { ProjectUpload, ProjectSelectionInput, ProjectArchiveUpload };
 }

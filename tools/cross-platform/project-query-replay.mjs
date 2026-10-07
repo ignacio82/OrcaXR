@@ -12,7 +12,8 @@ export function replayProjectQueries(
   let queryCaptures = 0,
     queryNodes = 0,
     queryPages = 0,
-    queryRefusals = 0;
+    queryRefusals = 0,
+    engineRefusals = 0;
   const refuses = (work) => {
     try {
       work();
@@ -31,6 +32,12 @@ export function replayProjectQueries(
       ),
     );
     if (assets.some((a) => !a)) continue; // Library-only metadata corpus has no attested payload for this case.
+    // Admission delegates timestamps to this engine's Date.parse. The corpus is
+    // generated under Node's 32-bit Smi date parser; Chromium's 31-bit parser
+    // refuses some legacy offsets, so its own verdict is the oracle here.
+    const engineRefuses = ![state.createdAt, state.updatedAt].every((t) =>
+      Number.isFinite(Date.parse(t)),
+    );
     const bytes = new TextEncoder().encode(c.stateJson);
     const upload = new core.ProjectUpload(
       1,
@@ -61,7 +68,15 @@ export function replayProjectQueries(
       session = upload.open(new Float64Array([1, 2, 3, 4]));
     } catch (e) {
       upload.free();
+      if (engineRefuses && String(e).includes("invalid_document")) {
+        engineRefusals++;
+        continue;
+      }
       throw e;
+    }
+    if (engineRefuses) {
+      session.free();
+      throw Error("Admitted a timestamp this engine refuses");
     }
     const snapshot = session.snapshot(),
       revision = snapshot.revision(),
@@ -166,6 +181,7 @@ export function replayProjectQueries(
     queryNodes,
     queryPages,
     queryRefusals,
+    engineRefusals,
     ownedQueryText,
     ownedQueryExpected,
   };

@@ -1,5 +1,7 @@
 // Actual browser module worker without a test HTTP listener. This qualifies the
 // WASM boundary/worker lifetime, not production network/cache/offline startup.
+// The page is an intercepted secure origin: Chrome refuses blob module workers
+// from an opaque about:blank origin, and WebCrypto needs a secure context.
 import assert from "node:assert/strict";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -27,6 +29,10 @@ const [
   documentFixtureText,
   stagedFixtureText,
   stagingLayoutText,
+  archiveReplay,
+  archiveLayoutText,
+  canonicalArchivesText,
+  foreignArchivesText,
   wasm,
 ] = await Promise.all([
   read("core/dist/project-wasm/orcaxr_core.js"),
@@ -46,13 +52,33 @@ const [
   read("testdata/cross-platform/project-document-vectors.json"),
   read("testdata/cross-platform/project-staged-session-vectors.json"),
   read("contracts/project-staging.json"),
+  read("tools/cross-platform/archive-wasm-replay.mjs"),
+  read("contracts/project-archive.json"),
+  read("testdata/cross-platform/canonical-complete-vectors.json"),
+  read("testdata/cross-platform/foreign-import-vectors.json"),
   readFile(new URL("core/dist/project-wasm/orcaxr_core_bg.wasm", root)),
 ]);
+// Real archives referenced by the foreign corpus, delivered as bytes.
+const archiveFiles = Object.fromEntries(
+  await Promise.all(
+    [
+      ...new Set(
+        JSON.parse(foreignArchivesText)
+          .cases.map((c) => c.archivePath)
+          .filter(Boolean),
+      ),
+    ].map(async (path) => [
+      path,
+      (await readFile(new URL(path, root))).toString("base64"),
+    ]),
+  ),
+);
 const browser = await puppeteer.launch({
   headless: true,
   pipe: true,
   dumpio: process.env.ORCAXR_BROWSER_DIAGNOSTICS === "1",
   timeout: 30_000,
+  protocolTimeout: 1_200_000,
   args: [
     "--disable-dev-shm-usage",
     "--enable-unsafe-swiftshader",
@@ -62,6 +88,15 @@ const browser = await puppeteer.launch({
 });
 try {
   const page = await browser.newPage();
+  await page.setRequestInterception(true);
+  page.on("request", (request) =>
+    request.respond({
+      status: 200,
+      contentType: "text/html",
+      body: "<!doctype html><title>project-wasm</title>",
+    }),
+  );
+  await page.goto("https://project-wasm.invalid/");
   const result = await page.evaluate(
     async ({
       glue,
@@ -81,6 +116,11 @@ try {
       documentFixture,
       stagedFixture,
       stagingLayout,
+      archiveReplay,
+      archiveLayout,
+      canonicalArchives,
+      foreignArchives,
+      archiveFiles,
       wasm,
     }) => {
       const coreUrl = URL.createObjectURL(
@@ -89,7 +129,7 @@ try {
       const workerUrl = URL.createObjectURL(
         new Blob(
           [
-            `import * as core from '${coreUrl}';\n${replay}\n${boundaries}\n${queryReplay}\n${stagedReplay}\n${stagedBoundaries}\n${clipboardBoundaries}\n${documentReplay}\nself.onmessage=async({data})=>{try{await core.default({module_or_path:data.wasm});const result=await replayProject(core,data.fixture,data.layout);Object.assign(result,replayProjectDocuments(core,data.documentFixture,data.layout),await replayStagedProject(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectStagedBoundaries(core,data.stagedFixture.traces[0],data.layout,data.stagingLayout),projectClipboardBoundaries(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectBoundaries(core,data.base,data.layout,data.timestamps),replayProjectQueries(core,data.queryFixture,data.queryLayout));self.postMessage({ok:true,result},[result.owned.buffer,result.ownedQueryText.buffer]);}catch(e){self.postMessage({ok:false,error:String(e)});}};`,
+            `import * as core from '${coreUrl}';\n${replay}\n${boundaries}\n${queryReplay}\n${stagedReplay}\n${stagedBoundaries}\n${clipboardBoundaries}\n${documentReplay}\n${archiveReplay}\nconst b64=(t)=>Uint8Array.from(atob(t),(c)=>c.charCodeAt(0));const sha256=async(b)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",b)),(x)=>x.toString(16).padStart(2,"0")).join("");self.onmessage=async({data})=>{try{await core.default({module_or_path:data.wasm});const result=await replayProject(core,data.fixture,data.layout);result.archives=await replayArchives(core,data.layout,data.archiveLayout,archiveCases(JSON.parse(data.canonicalArchives),JSON.parse(data.foreignArchives),(p)=>b64(data.archiveFiles[p]),b64),sha256);Object.assign(result,replayProjectDocuments(core,data.documentFixture,data.layout),await replayStagedProject(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectStagedBoundaries(core,data.stagedFixture.traces[0],data.layout,data.stagingLayout),projectClipboardBoundaries(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectBoundaries(core,data.base,data.layout,data.timestamps),replayProjectQueries(core,data.queryFixture,data.queryLayout));self.postMessage({ok:true,result},[result.owned.buffer,result.ownedQueryText.buffer]);}catch(e){self.postMessage({ok:false,error:String(e)});}};`,
           ],
           { type: "text/javascript" },
         ),
@@ -100,7 +140,7 @@ try {
         const result = await new Promise((resolve, reject) => {
           timer = setTimeout(
             () => reject(Error("Project worker deadline exceeded")),
-            120_000,
+            900_000,
           );
           worker.onerror = (e) => reject(Error(e.message));
           worker.onmessage = ({ data }) =>
@@ -118,6 +158,10 @@ try {
               stagedFixture,
               documentFixture,
               stagingLayout,
+              archiveLayout,
+              canonicalArchives,
+              foreignArchives,
+              archiveFiles,
             },
             [bytes.buffer],
           );
@@ -151,7 +195,9 @@ try {
           queryNodes: result.queryNodes,
           queryPages: result.queryPages,
           queryRefusals: result.queryRefusals,
+          queryEngineRefusals: result.engineRefusals,
           ownedQueryTextUnits: result.ownedQueryText.length,
+          archives: result.archives,
           owned: Array.from(result.owned),
           isolated: crossOriginIsolated,
         };
@@ -179,6 +225,11 @@ try {
       documentFixture: JSON.parse(documentFixtureText),
       stagedFixture: JSON.parse(stagedFixtureText),
       stagingLayout: JSON.parse(stagingLayoutText),
+      archiveReplay,
+      archiveLayout: JSON.parse(archiveLayoutText),
+      canonicalArchives: canonicalArchivesText,
+      foreignArchives: foreignArchivesText,
+      archiveFiles,
       fixture: JSON.parse(fixtureText),
       layout: JSON.parse(layoutText),
       base: JSON.parse(JSON.parse(modelText).factories[0].stateJson),
@@ -187,6 +238,10 @@ try {
     },
   );
   assert.equal(result.isolated, false);
+  assert.deepEqual(
+    [result.archives.cases, result.archives.accepted, result.archives.saves],
+    [1341, 1225, 1223],
+  );
   assert.deepEqual(
     result.owned,
     JSON.parse(fixtureText).traces.at(-1).asset.bytes,

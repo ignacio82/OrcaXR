@@ -29,6 +29,22 @@ final class NativeProject {
     static native long exportProject(long handle);
     static native long exportAssetCount(long handle);
     static native long exportAsset(long handle, long position);
+    // Archive Open stages exact bytes; prepare consumes the upload in place and
+    // the slot then holds the completed import. Closing cancels native work.
+    static native long archiveUploadNew(int version, long archiveBytes, double[] options, LocalTimestampResolver resolver, int integerMode);
+    static native void archiveUploadAppend(long handle, long offset, byte[] bytes);
+    static native void archiveUploadPrepare(long handle);
+    static native int archiveFormat(long handle);
+    // Consumes the import in place; the slot then holds the prepared document.
+    static native void archiveDocument(long handle);
+    // Archive Save packages an immutable export capture into an owned output.
+    static native long exportArchive(long handle, int version, double[] options);
+    static native long archiveLength(long handle);
+    static native byte[] archiveRead(long handle, long start, long count);
+    // Import or output warnings: the browser's sorted, unique UTF-16 texts.
+    static native long archiveWarningCount(long handle);
+    static native long archiveWarningLength(long handle, long position);
+    static native char[] archiveWarning(long handle, long position, long start, long count);
     static native long selection(long handle);
     static native long history(long handle);
     static native long historyRevision(long handle);

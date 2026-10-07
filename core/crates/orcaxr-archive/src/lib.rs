@@ -1,13 +1,16 @@
 //! Shared archive boundary. Hosts own immutable staged input and private output;
 //! this crate performs no filesystem extraction, UI, network or project mutation.
 //! Container verification is not canonical-envelope/BBS semantic admission.
+pub mod archive_layout;
 pub mod bbs;
 pub mod canonical;
 mod index;
 pub mod opc;
 pub mod open;
 pub mod package;
+pub mod policy;
 mod read;
+pub mod text;
 pub mod write;
 
 pub use read::{Archive, Entry, EntryComparison, EntryReceipt, EntryStream};

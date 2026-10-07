@@ -9,6 +9,7 @@ publish.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+orcaxr-archive.workspace = true
 orcaxr-contracts.workspace = true
 orcaxr-gcode.workspace = true
 orcaxr-project.workspace = true

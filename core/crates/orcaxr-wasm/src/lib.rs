@@ -1,5 +1,7 @@
 use wasm_bindgen::prelude::*;
 #[cfg(feature = "project")]
+mod archive;
+#[cfg(feature = "project")]
 mod project;
 
 #[wasm_bindgen]

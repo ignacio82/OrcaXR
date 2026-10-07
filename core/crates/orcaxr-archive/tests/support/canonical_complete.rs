@@ -7,7 +7,7 @@ use orcaxr_archive::{
         foreign,
         read_xml::{Limits as XmlLimits, graph, package, part},
     },
-    canonical::{CanonicalArchiveSource, CompleteLimits, CompletedCanonicalArchive, ImportWarning},
+    canonical::{CanonicalArchiveSource, CompleteLimits, CompletedCanonicalArchive},
     open,
 };
 use orcaxr_project::{
@@ -82,74 +82,7 @@ pub fn units(v: &str) -> Vec<u16> {
     v.encode_utf16().collect()
 }
 pub fn warnings(source: &CompletedCanonicalArchive) -> Vec<Vec<u16>> {
-    use orcaxr_archive::opc::Warning as O;
-    let state = source.project().state();
-    let mut result = vec![];
-    for w in source.warnings() {
-        let text = match w {
-            ImportWarning::DenseChannels(n) => units(&format!(
-                "Converted {n} facet refinement channel{} from the per-triangle encoding to the subdivided-facet encoding",
-                if *n == 1 { "" } else { "s" }
-            )),
-            ImportWarning::FalseFuzzyAssignments(n) => units(&format!(
-                "Removed {n} legacy false fuzzy-skin facet assignment{}; false represented the inherited/unpainted state",
-                if *n == 1 { "" } else { "s" }
-            )),
-            ImportWarning::UnsupportedDigest { asset } => {
-                let d = &state.source_assets[*asset];
-                [
-                    units("Asset "),
-                    d.id.as_utf16().to_vec(),
-                    units(" uses unsupported digest "),
-                    d.digest.units().to_vec(),
-                    units("; ZIP CRC and byte length were validated"),
-                ]
-                .concat()
-            }
-            ImportWarning::UnresolvedPlateCoordinates => units(&format!(
-                "Opened the canonical OrcaXR envelope safely, but standard BBS metadata cannot be regenerated until its plate coordinates are resolvable: Cannot project {} canonical plates into BBS global build coordinates: project config has no valid printable_area",
-                state.plates.len()
-            )),
-            ImportWarning::PreservedOriginal { blob } => [
-                units("Detected externally modified "),
-                state.extension_blobs[*blob].path.units().to_vec(),
-                units("; preserving its original bytes as opaque BBS metadata"),
-            ]
-            .concat(),
-            ImportWarning::PreservedEntries(n) => units(&format!(
-                "Preserved {n} package entr{} as opaque canonical assets",
-                if *n == 1 { "y" } else { "ies" }
-            )),
-            ImportWarning::Foreign(w) => w.text.clone(),
-            ImportWarning::Opc(o) => match o {
-                O::IncompleteRelationship { source } => units(&format!(
-                    "Ignored an incomplete OPC relationship in {}",
-                    source.member()
-                )),
-                O::MissingContentTypes => units(
-                    "3MF is missing [Content_Types].xml; a valid content-type manifest will be generated on save",
-                ),
-                O::MissingRelationshipTarget { source, id, target } => [
-                    units("Preserved OPC relationship "),
-                    id.units().to_vec(),
-                    units(&format!(" from {}, but target ", source.member())),
-                    target.units().to_vec(),
-                    units(" is missing"),
-                ]
-                .concat(),
-                O::MissingOverride { part_name } => [
-                    units("Preserved content-type override for missing package part "),
-                    part_name.units().to_vec(),
-                ]
-                .concat(),
-                O::DroppedRelationships { .. } => panic!("import does not drop relationships"),
-            },
-        };
-        result.push(text);
-    }
-    result.sort();
-    result.dedup();
-    result
+    orcaxr_archive::text::import_warnings(source.project().state(), source.warnings())
 }
 /// Foreign import budgets large enough for the real archives in the corpus.
 pub fn foreign_limits() -> foreign::Limits {

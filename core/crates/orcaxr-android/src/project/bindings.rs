@@ -146,6 +146,75 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_archiveUploadNew, archive_upload_new, jlong,
+    version: jint,
+    archive_bytes: jlong,
+    options: JDoubleArray<'local>,
+    resolver: JObject<'local>,
+    integer_mode: jint,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_archiveUploadAppend, archive_upload_append, (),
+    handle: jlong,
+    offset: jlong,
+    bytes: JByteArray<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_archiveUploadPrepare, archive_upload_prepare, (),
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_archiveFormat, archive_format, jint,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_archiveDocument, archive_document, (),
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_exportArchive, export_archive, jlong,
+    handle: jlong,
+    version: jint,
+    options: JDoubleArray<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_archiveLength, archive_length, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_archiveRead, archive_read, jbyteArray,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_archiveWarningCount, archive_warning_count, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_archiveWarningLength, archive_warning_length, jlong,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_archiveWarning, archive_warning, jcharArray,
+    handle: jlong,
+    position: jlong,
+    start: jlong,
+    count: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_selection, selection, jlong,
     handle: jlong,
 }

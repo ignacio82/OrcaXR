@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "maxChunkBytes": 65536,
+  "maxBudget": 4294967295,
+  "options": [
+    "archiveBytes",
+    "entries",
+    "entryBytes",
+    "totalBytes",
+    "vertices",
+    "triangles",
+    "records",
+    "textUnits",
+    "paintNodes",
+    "assets",
+    "assetBytes",
+    "totalAssetBytes",
+    "warnings"
+  ],
+  "formats": ["canonical", "foreign"]
+}

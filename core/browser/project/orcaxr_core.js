@@ -239,6 +239,225 @@ export class CapturedSelection {
 }
 if (Symbol.dispose) CapturedSelection.prototype[Symbol.dispose] = CapturedSelection.prototype.free;
 
+export class ProjectArchiveImport {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectArchiveImport.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectArchiveImportFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectArchiveImportFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectarchiveimport_free(ptr, 0);
+    }
+    /**
+     * Takes the prepared document once for guarded adoption.
+     * @returns {ProjectDocument}
+     */
+    document() {
+        const ret = wasm.projectarchiveimport_document(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectDocument.__wrap(ret[0]);
+    }
+    /**
+     * `FORMAT_CANONICAL` or `FORMAT_FOREIGN` from the generated layout.
+     * @returns {number}
+     */
+    format() {
+        const ret = wasm.projectarchiveimport_format(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Bounded UTF-16 reads; lone surrogates survive.
+     * @param {number} position
+     * @param {number} start
+     * @param {number} count
+     * @returns {Uint16Array}
+     */
+    warning(position, start, count) {
+        const ret = wasm.projectarchiveimport_warning(this.__wbg_ptr, position, start, count);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU16FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 2, 2);
+        return v1;
+    }
+    /**
+     * The browser's sorted, unique warning texts.
+     * @returns {number}
+     */
+    warning_count() {
+        const ret = wasm.projectarchiveimport_warning_count(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {number} position
+     * @returns {number}
+     */
+    warning_length(position) {
+        const ret = wasm.projectarchiveimport_warning_length(this.__wbg_ptr, position);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+}
+if (Symbol.dispose) ProjectArchiveImport.prototype[Symbol.dispose] = ProjectArchiveImport.prototype.free;
+
+export class ProjectArchiveOutput {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectArchiveOutput.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectArchiveOutputFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectArchiveOutputFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectarchiveoutput_free(ptr, 0);
+    }
+    /**
+     * The checkpoint guard of the written capture, taken once. Acknowledge it
+     * only after the host confirms the save handoff.
+     * @returns {ProjectGuard}
+     */
+    guard() {
+        const ret = wasm.projectarchiveoutput_guard(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectGuard.__wrap(ret[0]);
+    }
+    /**
+     * @returns {number}
+     */
+    length() {
+        const ret = wasm.projectarchiveoutput_length(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Copies one bounded chunk into host-owned memory.
+     * @param {number} start
+     * @param {number} count
+     * @returns {Uint8Array}
+     */
+    read(start, count) {
+        const ret = wasm.projectarchiveoutput_read(this.__wbg_ptr, start, count);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * @param {number} position
+     * @param {number} start
+     * @param {number} count
+     * @returns {Uint16Array}
+     */
+    warning(position, start, count) {
+        const ret = wasm.projectarchiveoutput_warning(this.__wbg_ptr, position, start, count);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU16FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 2, 2);
+        return v1;
+    }
+    /**
+     * @returns {number}
+     */
+    warning_count() {
+        const ret = wasm.projectarchiveoutput_warning_count(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {number} position
+     * @returns {number}
+     */
+    warning_length(position) {
+        const ret = wasm.projectarchiveoutput_warning_length(this.__wbg_ptr, position);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+}
+if (Symbol.dispose) ProjectArchiveOutput.prototype[Symbol.dispose] = ProjectArchiveOutput.prototype.free;
+
+export class ProjectArchiveUpload {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectArchiveUploadFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectarchiveupload_free(ptr, 0);
+    }
+    /**
+     * Offsets make retries and out-of-order delivery explicit; a refused
+     * chunk is not consumed.
+     * @param {number} offset
+     * @param {Uint8Array} chunk
+     */
+    append(offset, chunk) {
+        const ptr0 = passArray8ToWasm0(chunk, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectarchiveupload_append(this.__wbg_ptr, offset, ptr0, len0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Reserves exactly `archive_bytes` after checking it against the policy.
+     * @param {number} version
+     * @param {number} archive_bytes
+     * @param {Float64Array} policy
+     */
+    constructor(version, archive_bytes, policy) {
+        const ptr0 = passArrayF64ToWasm0(policy, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectarchiveupload_new(version, archive_bytes, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0];
+        ProjectArchiveUploadFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Consumes the upload on every outcome. Completes import privately: no
+     * session state changes until the host adopts the returned document.
+     * @returns {ProjectArchiveImport}
+     */
+    prepare() {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.projectarchiveupload_prepare(ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectArchiveImport.__wrap(ret[0]);
+    }
+}
+if (Symbol.dispose) ProjectArchiveUpload.prototype[Symbol.dispose] = ProjectArchiveUpload.prototype.free;
+
 export class ProjectAsset {
     static __wrap(ptr) {
         const obj = Object.create(ProjectAsset.prototype);
@@ -1161,6 +1380,22 @@ export class ProjectSession {
         const ret = wasm.projectsession_submit(this.__wbg_ptr, ptr0, len0);
         return ret === 0 ? undefined : ProjectReply.__wrap(ret);
     }
+    /**
+     * Write the current immutable capture as a complete 3MF package. The guard
+     * is captured with the same snapshot; writing never changes dirty state.
+     * @param {number} version
+     * @param {Float64Array} policy
+     * @returns {ProjectArchiveOutput}
+     */
+    write_archive(version, policy) {
+        const ptr0 = passArrayF64ToWasm0(policy, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectsession_write_archive(this.__wbg_ptr, version, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectArchiveOutput.__wrap(ret[0]);
+    }
 }
 if (Symbol.dispose) ProjectSession.prototype[Symbol.dispose] = ProjectSession.prototype.free;
 
@@ -1372,6 +1607,15 @@ const CapturedProjectFinalization = (typeof FinalizationRegistry === 'undefined'
 const CapturedSelectionFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_capturedselection_free(ptr, 1));
+const ProjectArchiveImportFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectarchiveimport_free(ptr, 1));
+const ProjectArchiveOutputFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectarchiveoutput_free(ptr, 1));
+const ProjectArchiveUploadFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectarchiveupload_free(ptr, 1));
 const ProjectAssetFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectasset_free(ptr, 1));

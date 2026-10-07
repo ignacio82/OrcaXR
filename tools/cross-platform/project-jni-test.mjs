@@ -10,7 +10,11 @@ import { replayStagedProject } from "./project-staged-replay.mjs";
 import { projectStagedBoundaries } from "./project-staged-boundaries.mjs";
 import { projectClipboardBoundaries } from "./project-clipboard-boundaries.mjs";
 import { stagedCommandJson } from "./project-staged-replay.mjs";
+import { replayArchives, archiveCases } from "./archive-wasm-replay.mjs";
+import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
+/** Authored two-plate BBS archive shared with the instrumented actor test. */
+const ACTOR_ARCHIVE_CASE = "bbs-model/16/plates-2-16";
 const fixture = JSON.parse(
   await readFile(
     new URL("testdata/cross-platform/project-session-vectors.json", root),
@@ -186,6 +190,31 @@ try {
   );
   const { ownedQueryText, ownedQueryExpected, ...queries } =
     replayProjectQueries(projectJniCore(jvm.call), queryFixture, queryLayout);
+  // The browser-equivalent archive corpus through the real JNI exports: Open via
+  // the upload/import/document slots, Save via an immutable export capture.
+  const archives = await replayArchives(
+    projectJniCore(jvm.call),
+    layout,
+    JSON.parse(await readFile(new URL("contracts/project-archive.json", root))),
+    archiveCases(
+      JSON.parse(await readFile(new URL("testdata/cross-platform/canonical-complete-vectors.json", root))),
+      JSON.parse(await readFile(new URL("testdata/cross-platform/foreign-import-vectors.json", root))),
+      (path) => new Uint8Array(readFileSync(new URL(path, root))),
+      (text) => new Uint8Array(Buffer.from(text, "base64")),
+    ),
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
+  assert.deepEqual([archives.cases, archives.accepted, archives.saves], [1341, 1225, 1223]);
+  const archiveCase = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/foreign-import-vectors.json", root)),
+  ).cases.find((c) => c.name === ACTOR_ARCHIVE_CASE);
+  const actorArchiveChecks = jvm.call(
+    "actorArchiveChecks",
+    model.factories[0].stateJson,
+    Buffer.from(archiveCase.archiveBase64, "base64"),
+    archiveCase.expected.warnings.length,
+  );
+  assert.equal(actorArchiveChecks, 7);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);
@@ -198,6 +227,8 @@ try {
     stagingOwnerChecks,
     ...boundaries,
     ...queries,
+    archives,
+    actorArchiveChecks,
     ownedQueryTextUnits: ownedQueryText.length,
     ownedBytes: owned.byteLength,
     hostJniSha256: createHash("sha256")

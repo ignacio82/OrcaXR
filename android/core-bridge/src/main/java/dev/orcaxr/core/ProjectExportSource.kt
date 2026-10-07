@@ -8,8 +8,8 @@ data class ProjectExportLimits(val jsonBytes: Long, val assets: Long, val assetB
 }
 
 /** Borrowed on one export worker. Streams canonical JSON and assets in declaration
- * order through bounded owned chunks. The host owns its destination, archive
- * format, flushing, durable-write policy and handoff; return only after success.
+ * order through bounded owned chunks, or one complete 3MF package. The host owns
+ * its destination, flushing, durable-write policy and handoff; return only after success.
  * A complete bundle must be consumed before a save can acknowledge its checkpoint.
  * Retained source calls refuse after the callback returns or the actor closes. */
 class ProjectExportSource internal constructor(
@@ -23,6 +23,7 @@ class ProjectExportSource internal constructor(
     val assetCount: Long = capture.assetCount()
     private var nextAsset = 0L
     private var jsonWritten = false
+    private var archiveWritten = false
     init {
         check(assetCount <= limits.assets) { "resource_limit" }
         var total = 0L
@@ -44,13 +45,13 @@ class ProjectExportSource internal constructor(
     fun assetIdLength(index: Long): Long { checkActive(); return capture.asset(index).use { it.idLength() } }
     fun assetId(index: Long, start: Long, count: Long): CharArray { checkActive(); return capture.asset(index).use { it.id(start, count) } }
     fun writeJson(destination: OutputStream): Long {
-        checkActive(); check(!jsonWritten) { "already_written" }
+        checkActive(); check(!jsonWritten && !archiveWritten) { "already_written" }
         val bytes = project.writeJson(limits.jsonBytes) { chunk -> checkActive(); destination.write(chunk) }
         checkActive(); jsonWritten = true
         return bytes
     }
     fun writeAsset(index: Long, destination: OutputStream): Long {
-        checkActive(); check(index == nextAsset) { "invalid_export_order" }
+        checkActive(); check(!archiveWritten) { "already_written" }; check(index == nextAsset) { "invalid_export_order" }
         return capture.asset(index).use { asset ->
             val length = asset.length()
             var offset = 0L
@@ -63,6 +64,25 @@ class ProjectExportSource internal constructor(
             length
         }
     }
-    internal fun requireComplete() { checkActive(); check(jsonWritten && nextAsset == assetCount) { "incomplete_export" } }
+    /** Alternative to the bundle stream: write this capture as one complete 3MF
+     * package (canonical envelope plus standard BBS metadata). Returns the
+     * browser's Save warnings once every byte reached [destination]. A refused
+     * Save (for example unresolvable plate origins) writes nothing. */
+    fun writeArchive(options: ProjectArchiveOptions, destination: OutputStream): List<CharArray> {
+        checkActive(); check(!jsonWritten && nextAsset == 0L && !archiveWritten) { "already_written" }
+        return capture.writeArchive(options).use { output ->
+            val length = output.length()
+            var offset = 0L
+            while (offset < length) {
+                checkActive()
+                val bytes = output.read(offset, minOf(ProjectArchive.MAX_CHUNK_BYTES.toLong(), length - offset))
+                destination.write(bytes); offset += bytes.size
+            }
+            val warnings = output.warnings()
+            checkActive(); archiveWritten = true
+            warnings
+        }
+    }
+    internal fun requireComplete() { checkActive(); check(archiveWritten || (jsonWritten && nextAsset == assetCount)) { "incomplete_export" } }
     internal fun invalidate() { active.set(false) }
 }

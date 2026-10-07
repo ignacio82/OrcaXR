@@ -266,8 +266,8 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   basic 3MF meshes, units, components and build items. It also decodes standard
   BBS paint roots into sparse facet channels under shared package budgets and
   retains bounded unknown object/component/build/facet attributes. `bbs::foreign` completes
-  foreign BBS/3MF import with the browser's exact metadata semantics; bindings stay open. Project
-  WASM exposes immutable
+  foreign BBS/3MF import with the browser's exact metadata semantics. Archive Open/Save are owned
+  WASM/JNI tasks; every limit derives from `contracts/project-archive.json`. Project WASM exposes immutable
   effects/captures; Node-worker replay agrees with the TypeScript session corpus.
   Browser timestamps use the host's Date.parse with lossless UTF-16 conversion. Hosts must bound inputs before wasm-bindgen copies them and
   dispatch effects before acknowledgement. Explicit JSON export allocates the
