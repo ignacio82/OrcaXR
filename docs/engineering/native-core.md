@@ -2949,6 +2949,28 @@ payloads. Its endpoint pool tracks `assetBytes`, and split-to-objects work runs
 replays every asset trace through staging (bundles made consistent), and the
 replay harness streams each work's payloads into real uploads.
 
+### Refined facet commits
+
+`commitFacetRefinement` is `prepare_facet_refinement(snapshot, request)` with a
+`FacetRefinement` request: guard, channel, dense roots and an optional label.
+Roots decode with exactly their fields (`facets::Node::from_value`), and
+browser captures enforce the same shapes, so unit charges match. In the
+browser's order, it refuses without publishing on:
+
+- a stale guard, missing volume or moved topology;
+- a non-model volume;
+- prior annotations with validation issues;
+- a root count that differs from the triangle count.
+
+Then `facets::collapse_roots` normalizes the roots and groups whole-facet
+values in canonical order. The encoding is validated without requiring
+splits, and so is the resulting annotation set. A result identical to the
+current annotations returns `None` and executes nothing. Otherwise it returns
+the stroke command with the prepared before/after, which applies, reverts and
+estimates exactly like `FacetAnnotationStrokeCommand` (default label "Paint
+refined <channel> facets"). Staged hosts send a `facetRefinement` work; the
+session runs the preparation against live state when the work executes.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

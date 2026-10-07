@@ -14,6 +14,7 @@ object ProjectStaging {
     const val WORK_SINGLE = 0
     const val WORK_TRANSACTION = 1
     const val WORK_SPLIT_TO_OBJECTS = 2
+    const val WORK_FACET_REFINEMENT = 3
     const val COMMAND_CREATE_INSTANCE = 0
     const val COMMAND_PASTE_OBJECT = 1
     const val COMMAND_INTENT = 2

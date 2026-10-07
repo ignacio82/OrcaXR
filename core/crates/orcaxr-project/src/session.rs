@@ -465,6 +465,20 @@ impl<P: TimestampPolicy> ProjectSession<P> {
                 WorkKind::Transaction { label, commands } => {
                     self.bus.execute_batch(label, commands)
                 }
+                WorkKind::FacetRefinement(request) => {
+                    match crate::commands::prepare_facet_refinement(&self.bus.snapshot(), *request)
+                    {
+                        Ok(Some(command)) => self.bus.execute(command, false),
+                        Ok(None) => CommandOutcome {
+                            result: Ok(false),
+                            events: vec![],
+                        },
+                        Err(error) => CommandOutcome {
+                            result: Err(CommandError::Domain(error.user_message())),
+                            events: vec![],
+                        },
+                    }
+                }
                 // Its checks refuse against the live state without publishing.
                 WorkKind::SplitToObjects(work) => match work.prepare(self.bus.snapshot().state()) {
                     Ok(batch) => self.bus.execute_batch(batch.label, batch.commands),

@@ -7,7 +7,7 @@
   "poolOptions": ["resources", "commands", "inputUnits", "assetBytes"],
   "clipboardOptions": ["assets", "bytes"],
   "clipboardInfo": ["volumes", "instances", "layerRanges", "assets", "bytes"],
-  "workKinds": {"single": ["command"], "transaction": ["label", "commands"], "splitToObjects": ["guard", "parts", "identities"]},
+  "workKinds": {"single": ["command"], "transaction": ["label", "commands"], "splitToObjects": ["guard", "parts", "identities"], "facetRefinement": ["guard", "channel", "roots", "label"]},
   "commandKinds": {
     "createInstance": ["objectId", "record", "index"],
     "pasteObject": ["record", "objectId", "volumeIds", "instanceIds", "layerRangeIds", "destination", "name"],

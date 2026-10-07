@@ -48,6 +48,12 @@ export const PROJECT_STAGING = {
       "guard",
       "parts",
       "identities"
+    ],
+    "facetRefinement": [
+      "guard",
+      "channel",
+      "roots",
+      "label"
     ]
   },
   "commandKinds": {

@@ -8,8 +8,8 @@ use crate::{
     assets::AssetPayload,
     clipboard::ClipboardData,
     commands::{
-        BooleanGuard, BooleanOp, IndependentObjectIds, PartPlacement, Recipe, SeparatedObject,
-        SplitPart, StagedAsset, TopologyGuard, VolumeSplitGuard,
+        BooleanGuard, BooleanOp, FacetRefinement, IndependentObjectIds, PartPlacement, Recipe,
+        SeparatedObject, SplitPart, StagedAsset, TopologyGuard, VolumeSplitGuard,
         staged::{CaptureError, CapturedCommand, StagedWork},
     },
     host_layout::{MAX_BUDGET, MAX_SUPPORTED_DEPTH},
@@ -465,8 +465,12 @@ type BuildWork = Box<dyn FnOnce(&[StagedAsset], u64) -> Result<StagedWork, Captu
 /// Decoded work, built once every declared payload is present.
 enum Plan {
     Single(Build),
-    Transaction { label: Text, commands: Vec<Build> },
-    Split(BuildWork),
+    Transaction {
+        label: Text,
+        commands: Vec<Build>,
+    },
+    /// Work that is not a list of commands: split to objects, refined facets.
+    Whole(BuildWork),
 }
 impl Plan {
     fn build(self, assets: &[StagedAsset], max_units: u64) -> Result<StagedWork, CaptureError> {
@@ -480,7 +484,7 @@ impl Plan {
                     .collect::<Result<Vec<_>, _>>()?,
                 max_units,
             ),
-            Self::Split(build) => build(assets, max_units),
+            Self::Whole(build) => build(assets, max_units),
         }
     }
 }
@@ -542,13 +546,69 @@ fn work(
             let guard = split_guard(values.next().unwrap())?;
             let parts = pending_parts(values.next().unwrap(), declarations)?;
             let identities = separated(values.next().unwrap())?;
-            Ok(Plan::Split(Box::new(move |assets, max_units| {
+            Ok(Plan::Whole(Box::new(move |assets, max_units| {
                 StagedWork::split_to_objects(
                     guard,
                     resolve_parts(parts, assets),
                     identities,
                     max_units,
                 )
+            })))
+        }
+        layout::WORK_FACET_REFINEMENT => {
+            let mut values = array(Value::Array(values), layout::WORK_FACET_REFINEMENT_LENGTH)?;
+            values.next();
+            if max_commands == 0 {
+                return Err(CommandInputError::Limit);
+            }
+            let mut guard = object(
+                values.next().unwrap(),
+                &[
+                    "revision",
+                    "hash",
+                    "volumeId",
+                    "topologyRevision",
+                    "triangleCount",
+                ],
+            )?
+            .into_iter();
+            let revision = number(guard.next().unwrap())?;
+            if revision < 0.0
+                || revision.fract() != 0.0
+                || revision > crate::store::MAX_REVISION as f64
+            {
+                return Err(CommandInputError::InvalidShape);
+            }
+            let hash = string(guard.next().unwrap())?;
+            let volume = decode::<VolumeId>(guard.next().unwrap())?;
+            let topology_revision = number(guard.next().unwrap())?;
+            let triangle_count = number(guard.next().unwrap())?;
+            let channel = string(values.next().unwrap())?;
+            let channel = crate::facets::Channel::ALL
+                .into_iter()
+                .find(|c| c.name().encode_utf16().eq(channel.iter().copied()))
+                .ok_or(CommandInputError::InvalidShape)?;
+            let Value::Array(roots) = values.next().unwrap() else {
+                return Err(CommandInputError::InvalidShape);
+            };
+            let roots = roots
+                .iter()
+                .map(crate::facets::Node::from_value)
+                .collect::<Option<Vec<_>>>()
+                .ok_or(CommandInputError::InvalidShape)?;
+            let label = nullable::<Text>(values.next().unwrap())?;
+            let request = FacetRefinement {
+                revision: revision as u64,
+                hash,
+                volume,
+                topology_revision,
+                triangle_count,
+                channel,
+                roots,
+                label,
+            };
+            Ok(Plan::Whole(Box::new(move |_, max_units| {
+                StagedWork::facet_refinement(request, max_units)
             })))
         }
         _ => Err(CommandInputError::InvalidShape),

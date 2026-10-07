@@ -9,6 +9,7 @@ use crate::facets::{
     stroke::{
         StrokeOperation, TriangleRange, apply_stroke, normalize_assignments, normalize_ranges,
     },
+    validate_refinement,
 };
 use std::collections::BTreeSet;
 
@@ -414,6 +415,126 @@ impl FacetStroke {
                 + duplicate::canonical_length(after.as_ref())?),
             None => Ok(1),
         }
+    }
+}
+
+/// `commitFacetRefinement`'s request: dense per-facet roots for one channel of
+/// one volume, as a selector produced them against a known project revision.
+#[derive(Clone)]
+pub struct FacetRefinement {
+    pub revision: u64,
+    pub hash: Vec<u16>,
+    pub volume: VolumeId,
+    pub topology_revision: f64,
+    pub triangle_count: f64,
+    pub channel: Channel,
+    pub roots: Vec<crate::facets::Node>,
+    pub label: Option<Text>,
+}
+impl FacetRefinement {
+    /// The browser's checks against `snapshot`, refusing without publishing;
+    /// `None` when the result changes nothing. Otherwise a stroke command that
+    /// applies exactly the prepared annotations (`FacetAnnotationStrokeCommand`).
+    pub(super) fn prepare(
+        self,
+        snapshot: &crate::store::ProjectSnapshot,
+    ) -> Result<Option<(FacetStroke, Text)>, PreparationError> {
+        let label = self.label.unwrap_or_else(|| {
+            Text::from_utf8(&format!(
+                "Paint refined {} facets",
+                channel_name(self.channel)
+            ))
+        });
+        let mut stroke = FacetStroke {
+            guard: Guard {
+                revision: self.revision,
+                hash: self.hash,
+                volume: self.volume,
+                topology: self.topology_revision,
+                triangles: self.triangle_count,
+            },
+            channel: self.channel,
+            operation: StrokeOperation::Reset,
+            label: label.clone(),
+            prepared: None,
+            applied_once: false,
+        };
+        let refuse = |error: CommandError<()>| match error {
+            CommandError::Domain(text) => PreparationError::Domain(text),
+            _ => PreparationError::InvalidIntent,
+        };
+        if !stroke.current(snapshot) {
+            return Err(refuse(stale("project")));
+        }
+        let state = snapshot.state();
+        let (_, _, _, volume) = stroke.find(state).ok_or_else(|| refuse(stale("project")))?;
+        if stroke.topology_moved(volume) {
+            return Err(refuse(stale("topology")));
+        }
+        if volume.role != VolumeRole::Model {
+            return Err(refuse(invalid(1)));
+        }
+        let filaments: BTreeSet<Vec<u16>> = state
+            .filaments
+            .physical
+            .iter()
+            .map(|f| f.id.as_utf16().to_vec())
+            .chain(
+                state
+                    .filaments
+                    .mixed
+                    .iter()
+                    .map(|f| f.id.as_utf16().to_vec()),
+            )
+            .collect();
+        let before = volume.annotations.clone();
+        let before_fields = fields_of(&before);
+        let issues = stroke.issues(&before_fields, &filaments);
+        if issues > 0 {
+            return Err(refuse(invalid(issues)));
+        }
+        if self.roots.len() as f64 != stroke.guard.triangles {
+            return Err(refuse(invalid(1)));
+        }
+        let (assignments, encoding) = crate::facets::collapse_roots(self.roots);
+        let assignments = Value::Array(assignments.iter().map(|a| a.to_value()).collect());
+        if let Some(encoding) = &encoding {
+            let path = format!("refinement.{}", channel_name(self.channel));
+            let issues = validate_refinement(
+                self.channel,
+                &encoding.to_value(),
+                &assignments,
+                &ValidationOptions {
+                    triangle_count: stroke.guard.triangles,
+                    filament_ids: Some(&filaments),
+                    path: &path,
+                    require_split: false,
+                },
+            );
+            if !issues.is_empty() {
+                return Err(refuse(invalid(issues.len())));
+            }
+        }
+        let mut after = before_fields.clone();
+        after.insert(u(self.channel.name()), assignments);
+        set_refinement(
+            &mut after,
+            self.channel,
+            encoding
+                .filter(|e| !e.splits().is_empty())
+                .map(|e| e.to_value()),
+        );
+        let issues = stroke.issues(&after, &filaments);
+        if issues > 0 {
+            return Err(refuse(invalid(issues)));
+        }
+        if before_fields == after {
+            return Ok(None);
+        }
+        let after = FacetAnnotations::from_value(Value::Object(after))
+            .map_err(|_| PreparationError::InvalidIntent)?;
+        stroke.prepared = Some((before, Arc::new(after)));
+        Ok(Some((stroke, label)))
     }
 }
 

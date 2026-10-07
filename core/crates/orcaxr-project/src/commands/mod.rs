@@ -27,6 +27,7 @@ use crate::{
 pub use asset_commands::StagedAsset;
 pub use drawn_parts::{PartPlacement, Recipe};
 use duplicate::*;
+pub use facet_stroke::FacetRefinement;
 pub use lifecycle::IndependentObjectIds;
 use orcaxr_contracts::{canonical::Value, project_intent_types as wire};
 pub use split_objects::SeparatedObject;
@@ -183,6 +184,19 @@ pub(crate) fn prepare_decoded_batch(batch: wire::Batch) -> Result<PreparedBatch,
             .map(prepare_decoded)
             .collect::<Result<_, _>>()?,
     })
+}
+/// `commitFacetRefinement`: its checks against the live snapshot refuse
+/// without publishing; `None` when the refined result changes nothing.
+pub fn prepare_facet_refinement(
+    snapshot: &crate::store::ProjectSnapshot,
+    request: FacetRefinement,
+) -> Result<Option<PreparedCommand>, PreparationError> {
+    Ok(request
+        .prepare(snapshot)?
+        .map(|(stroke, label)| PreparedCommand {
+            label,
+            kind: Kind::FacetStroke(Box::new(stroke)),
+        }))
 }
 /// `commitPreparedVolumeSplitToObjects` for one single-volume object: its checks
 /// against the live `state` (refusing without publishing anything), then the

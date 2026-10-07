@@ -32,6 +32,7 @@ import {
   captureEditEmbossTextCommand,
   captureReplaceProjectCommand,
   splitToObjectsStagedWork,
+  facetRefinementStagedWork,
   singleStagedWork,
   transactionStagedWork,
   StagedInputError,
@@ -205,6 +206,16 @@ function captureCommand(c, clips, assets) {
   );
 }
 function captureWork(w, clips, assets) {
+  if (w.facetRefinement)
+    return facetRefinementStagedWork(
+      {
+        guard: guardFrom(w.facetRefinement.guard),
+        channel: w.facetRefinement.channel,
+        encoding: { version: 2, roots: JSON.parse(w.facetRefinement.rootsJson) },
+        ...(w.facetRefinement.label === null ? {} : { label: text(w.facetRefinement.label) }),
+      },
+      input,
+    );
   if (w.splitToObjects)
     return splitToObjectsStagedWork(
       guardFrom(w.splitToObjects.guard),
@@ -443,6 +454,8 @@ for (const trace of assetCorpus.traces) {
         else if (op.kind === "intent") work = { single: { intent: JSON.parse(op.json).command } };
         else if (op.kind === "splitToObjects")
           work = { splitToObjects: { guard: op.guard, parts: op.parts, identities: op.identities } };
+        else if (op.kind === "facetRefinement")
+          work = { facetRefinement: { guard: op.guard, channel: op.channel, rootsJson: op.rootsJson, label: op.label } };
         if (work) {
           const name = `work-${index++}`;
           const [outcome] = await group([{ kind: "stage", name, work }]);

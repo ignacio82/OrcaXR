@@ -460,6 +460,9 @@ pub(crate) enum WorkKind {
     /// `commitPreparedVolumeSplitToObjects`: checked against the live state
     /// when it runs, then one transaction.
     SplitToObjects(Box<SplitToObjects>),
+    /// `commitFacetRefinement`: checked against the live state when it runs;
+    /// a result that changes nothing executes nothing.
+    FacetRefinement(Box<FacetRefinement>),
 }
 /// Each distinct payload once; one ID must carry one payload throughout.
 fn distinct_bytes<'a>(assets: impl Iterator<Item = &'a StagedAsset>) -> Result<u64, CaptureError> {
@@ -516,6 +519,43 @@ impl StagedWork {
             commands: 2,
             asset_bytes,
             kind: WorkKind::SplitToObjects(Box::new(work)),
+        })
+    }
+    /// `["facetRefinement",guard,channel,roots,label]`.
+    pub fn facet_refinement(
+        request: FacetRefinement,
+        max_units: u64,
+    ) -> Result<Self, CaptureError> {
+        let units = measure(max_units, |out| {
+            out.write_all(b"[\"facetRefinement\",{\"hash\":")?;
+            Value::String(request.hash.clone()).write_canonical(&mut &mut *out)?;
+            out.write_all(b",\"revision\":")?;
+            Value::Number(request.revision as f64).write_canonical(&mut &mut *out)?;
+            out.write_all(b",\"topologyRevision\":")?;
+            Value::Number(request.topology_revision).write_canonical(&mut &mut *out)?;
+            out.write_all(b",\"triangleCount\":")?;
+            Value::Number(request.triangle_count).write_canonical(&mut &mut *out)?;
+            out.write_all(b",\"volumeId\":")?;
+            request.volume.write_json(out)?;
+            out.write_all(b"},")?;
+            Value::String(request.channel.name().encode_utf16().collect())
+                .write_canonical(&mut &mut *out)?;
+            out.write_all(b",[")?;
+            for (index, root) in request.roots.iter().enumerate() {
+                if index > 0 {
+                    out.write_all(b",")?;
+                }
+                root.to_value().write_canonical(&mut &mut *out)?;
+            }
+            out.write_all(b"],")?;
+            optional(&request.label, out)?;
+            out.write_all(b"]")
+        })?;
+        Ok(Self {
+            units,
+            commands: 1,
+            asset_bytes: 0,
+            kind: WorkKind::FacetRefinement(Box::new(request)),
         })
     }
     pub fn asset_bytes(&self) -> u64 {

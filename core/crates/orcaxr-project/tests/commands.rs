@@ -57,6 +57,29 @@ fn split_parts(parts: &Value) -> Vec<SplitPart> {
         })
         .collect()
 }
+/// `commitFacetRefinement`'s request in the asset corpus's wire form.
+fn refinement(op: &Value) -> FacetRefinement {
+    let guard = &op["guard"];
+    FacetRefinement {
+        revision: guard["revision"].as_u64().unwrap(),
+        hash: utf16(&guard["hash"]),
+        volume: VolumeId::try_from_utf16(utf16(&guard["volumeId"])).unwrap(),
+        topology_revision: guard["topologyRevision"].as_f64().unwrap(),
+        triangle_count: guard["triangleCount"].as_f64().unwrap(),
+        channel: orcaxr_project::facets::Channel::ALL
+            .into_iter()
+            .find(|c| c.name() == op["channel"].as_str().unwrap())
+            .unwrap(),
+        roots: match parse(op["rootsJson"].as_str().unwrap()).unwrap() {
+            orcaxr_contracts::canonical::Value::Array(roots) => roots
+                .iter()
+                .map(|root| orcaxr_project::facets::Node::from_value(root).unwrap())
+                .collect(),
+            _ => panic!("roots"),
+        },
+        label: (!op["label"].is_null()).then(|| Text::new(utf16(&op["label"]))),
+    }
+}
 fn separated(identities: &Value) -> Vec<SeparatedObject> {
     identities
         .as_array()
@@ -371,7 +394,7 @@ fn asset_commands_and_payloads_match_every_typescript_step() {
             "../../../../testdata/cross-platform/project-asset-command-vectors.json"
         ))
         .unwrap(),
-        325,
+        348,
     );
 }
 /// Applying and redoing a staged payload installs its validated record by
@@ -629,6 +652,16 @@ fn replay(f: Value, expected_steps: usize) {
                         None
                     }
                 },
+                "facetRefinement" => {
+                    match prepare_facet_refinement(&bus.snapshot(), refinement(op)) {
+                        Ok(Some(command)) => Some(bus.execute(command, false)),
+                        Ok(None) => None,
+                        Err(e) => {
+                            error = json!(e.user_message().units());
+                            None
+                        }
+                    }
+                }
                 "splitToObjects" => match prepare_split_to_objects(
                     bus.snapshot().state(),
                     split_guard(&op["guard"]),

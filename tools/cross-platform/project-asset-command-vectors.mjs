@@ -19,6 +19,7 @@ import { commitPreparedVolumeSplitToObjects } from "../../web/src/project/object
 import { AddSvgPartCommand, EditSvgPartCommand, prepareSvgPart } from "../../web/src/project/objects/svgCommands.ts";
 import { AddEmbossTextCommand, EditEmbossTextCommand, prepareEmbossedVolume } from "../../web/src/project/objects/embossCommands.ts";
 import { DEFAULT_EMBOSS_FONT_PROPERTY } from "../../web/src/project/objects/emboss.ts";
+import { commitFacetRefinement } from "../../web/src/project/annotations/FacetAnnotationStrokeCommand.ts";
 import { InMemoryAssetRepository, assetBundleFingerprint } from "../../web/src/project/assets.ts";
 import { createProjectFixture } from "../../web/src/project/__tests__/fixtures.ts";
 import { canonicalStringify, cloneJson } from "../../web/src/project/domain/canonical.ts";
@@ -46,6 +47,7 @@ const guardTo = g => Object.fromEntries(Object.entries(g).map(([k, v]) => [k, ty
 const guardFrom = g => Object.fromEntries(Object.entries(g).map(([k, v]) => [k, Array.isArray(v) ? string(v) : v]));
 const partsTo = parts => parts.map(p => ({ volumeId: units(p.volumeId), asset: wirePayload(p.asset), transformJson: canonicalStringify(p.transform), sourceTriangleIndices: [...p.sourceTriangleIndices] }));
 const partsFrom = parts => parts.map(p => ({ volumeId: string(p.volumeId), asset: payload(p.asset), transform: JSON.parse(p.transformJson), sourceTriangleIndices: p.sourceTriangleIndices }));
+const refinementFrom = o => ({ guard: guardFrom(o.guard), channel: o.channel, encoding: { version: 2, roots: JSON.parse(o.rootsJson) }, ...(o.label === null ? {} : { label: string(o.label) }) });
 const identitiesTo = identities => identities.map(i => ({ sourceVolumeId: units(i.sourceVolumeId), objectId: units(i.objectId), instanceIds: i.instanceIds.map(units) }));
 const identitiesFrom = identities => identities.map(i => ({ sourceVolumeId: string(i.sourceVolumeId), objectId: string(i.objectId), instanceIds: i.instanceIds.map(string) }));
 function prepare(c) {
@@ -88,6 +90,7 @@ function scenario(name, options, mutate, work) {
         case "assetBatch": { const commands = operation.commands.map(c => (c.intent ? prepareProjectIntent({ version: 1, command: c.intent }) : prepare(c))); bus.transaction(string(operation.label), () => { for (const c of commands) bus.execute(c); }); break; }
         case "intent": bus.execute(prepareProjectIntent(JSON.parse(operation.json)), { coalesce: operation.coalesce }); break;
         case "splitToObjects": commitPreparedVolumeSplitToObjects(bus, guardFrom(operation.guard), partsFrom(operation.parts), identitiesFrom(operation.identities)); break;
+        case "facetRefinement": commitFacetRefinement(bus, refinementFrom(operation)); break;
         case "undo": result = bus.undo(); break;
         case "redo": result = bus.redo(); break;
         case "checkpoint": bus.markCheckpoint(); break;
@@ -102,7 +105,7 @@ function scenario(name, options, mutate, work) {
   const execute = command => run({ kind: "asset", command });
   const intent = command => run({ kind: "intent", json: JSON.stringify({ version: 1, command }), coalesce: true });
   const batch = (commands, label = "Asset transaction") => run({ kind: "assetBatch", commands, label: units(label) });
-  work({ execute, intent, batch, run, state: () => project.getSnapshot().state, repository: assets, ids: f.ids, fixture: f });
+  work({ execute, intent, batch, run, state: () => project.getSnapshot().state, snapshot: () => project.getSnapshot(), repository: assets, ids: f.ids, fixture: f });
   traces.push({ name, options, stateJson: canonicalStringify(f.state), asset: wirePayload(f.asset), extraAssets: extraAssets.map(wirePayload), initial, steps });
 }
 
@@ -474,6 +477,54 @@ scenario("replace-project", {}, () => {}, ({ execute, run, state, ids }) => {
   run({ kind: "undo" });
 });
 
+// Refined facet commits: dense per-facet roots collapsed into whole-facet
+// assignments and split trees, checked against the live state first.
+/** A shallow cone over a fan base: 48 facets to refine. */
+const coneAsset = id => {
+  const positions = [0, 0, 0], indices = [], segments = 24;
+  for (let i = 0; i < segments; i += 1) positions.push(Math.cos(i / segments * Math.PI * 2) * 60, Math.sin(i / segments * Math.PI * 2) * 60, 0);
+  positions.push(0, 0, 20);
+  for (let i = 0; i < segments; i += 1) { const a = 1 + i, b = 1 + (i + 1) % segments; indices.push(0, b, a, a, b, segments + 1); }
+  return encodeIndexedMeshAsset({ id, positions, indices });
+};
+const unpaintedLeaf = { kind: "leaf", state: { kind: "unpainted" } };
+const paintLeaf = value => ({ kind: "leaf", state: { kind: "assigned", value } });
+const splitNode = (children, splitSides = children.length - 1, specialSide = 0) => ({ kind: "split", splitSides, specialSide, children });
+const refine = (guard, channel, roots, label = null) => ({ kind: "facetRefinement", guard: guardTo(guard), channel, rootsJson: JSON.stringify(roots), label: label === null ? null : units(label) });
+scenario("facet-refinement", {}, (s, f) => {
+  f.asset = coneAsset(f.ids.asset);
+  s.sourceAssets = s.sourceAssets.map(a => (a.id === f.asset.descriptor.id ? f.asset.descriptor : a));
+  const object = s.plates[0].objects[0], body = object.volumes[0];
+  body.source.triangleCount = f.asset.descriptor.mesh.triangleCount;
+  body.annotations = { topologyRevision: 0, color: [{ value: f.ids.physical0, triangles: [1, 2] }], support: [], seam: [], fuzzySkin: [], brim: [] };
+  object.volumes.push({ ...cloneJson(body), id: "import:volume:refine-modifier", name: "Modifier", role: "parameter-modifier", annotations: { ...body.annotations, color: [] } });
+}, ({ run, snapshot, state, ids }) => {
+  const guard = (volumeId = ids.volume) => {
+    const volume = state().plates[0].objects[0].volumes.find(v => v.id === volumeId);
+    return { revision: snapshot().revision, hash: snapshot().hash, volumeId, topologyRevision: volume.source.topologyRevision, triangleCount: volume.source.triangleCount };
+  };
+  const [p0, p1] = state().filaments.physical.map(p => p.id), mixed = state().filaments.mixed[0].id;
+  const color = Array.from({ length: 48 }, (_, i) =>
+    i % 3 === 0 ? paintLeaf(p0) : i % 3 === 1 ? splitNode([paintLeaf(p0), paintLeaf(mixed)]) : i === 2 ? splitNode([paintLeaf(p1), paintLeaf(p1), paintLeaf(p1)]) : unpaintedLeaf);
+  run({ kind: "selection", refs: [{ kind: "volume", id: units(ids.volume) }] });
+  run(refine({ ...guard(), revision: guard().revision + 1 }, "color", color));
+  run(refine({ ...guard(), volumeId: "import:volume:missing" }, "color", color));
+  run(refine({ ...guard(), topologyRevision: 5 }, "color", color));
+  run(refine(guard("import:volume:refine-modifier"), "color", color));
+  run(refine(guard(), "color", color.slice(1)));
+  run(refine(guard(), "color", color.map((root, i) => (i === 4 ? splitNode([paintLeaf(p0), paintLeaf("import:filament:missing")]) : root))));
+  run(refine(guard(), "color", color.map((root, i) => (i === 3 ? paintLeaf("import:filament:missing") : root))));
+  run(refine(guard(), "color", color));
+  run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "undo" }); run({ kind: "redo" });
+  run(refine(guard(), "color", color));
+  run(refine(guard(), "seam", Array.from({ length: 48 }, (_, i) => (i < 8 ? splitNode([paintLeaf("prefer"), paintLeaf("avoid")], 1, 1) : i < 12 ? paintLeaf("avoid") : unpaintedLeaf)), "Refine seams"));
+  run(refine(guard(), "support", Array.from({ length: 48 }, (_, i) => (i % 2 ? paintLeaf("enforce") : splitNode([paintLeaf("block"), unpaintedLeaf, unpaintedLeaf, paintLeaf("block")], 3, 0)))));
+  run(refine(guard(), "brim", Array.from({ length: 48 }, (_, i) => (i < 6 ? paintLeaf(i % 2 === 0) : unpaintedLeaf))));
+  run(refine(guard(), "fuzzySkin", Array.from({ length: 48 }, (_, i) => (i < 3 ? paintLeaf(true) : i === 3 ? paintLeaf(false) : unpaintedLeaf))));
+  run(refine(guard(), "color", Array.from({ length: 48 }, () => unpaintedLeaf)));
+  for (let i = 0; i < 4; i++) run({ kind: "undo" });
+});
+
 // History charges the canonical record plus the payload bytes; a following
 // rename moves each across the boundary.
 const probe = createProjectFixture();
@@ -516,7 +567,8 @@ for (const [label, bytes, command, mutate] of [["object", objectBytes, ids => ad
 const sources = ["tools/cross-platform/project-asset-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/semanticVolumeCommands.ts",
   "web/src/project/objects/topologyCommands.ts", "web/src/project/objects/meshBooleanCommands.ts", "web/src/project/objects/splitCommands.ts",
   "web/src/project/objects/splitPreparation.ts", "web/src/project/objects/splitToObjectsCommands.ts", "web/src/project/objects/svgCommands.ts",
-  "web/src/project/objects/embossCommands.ts", "web/src/project/objects/emboss.ts", "web/src/project/PreparedProjectCommands.ts",
+  "web/src/project/objects/embossCommands.ts", "web/src/project/objects/emboss.ts", "web/src/project/annotations/FacetAnnotationStrokeCommand.ts",
+  "web/src/project/domain/facetRefinement.ts", "web/src/project/PreparedProjectCommands.ts",
   "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/meshCodec.ts",
   "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";

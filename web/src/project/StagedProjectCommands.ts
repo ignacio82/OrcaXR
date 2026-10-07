@@ -23,6 +23,8 @@ import { commitPreparedVolumeSplitToObjects, type SeparatedObjectIdentity } from
 import { AddSvgPartCommand, EditSvgPartCommand, type SvgPlacement } from './objects/svgCommands';
 import { AddEmbossTextCommand, EditEmbossTextCommand, type EmbossPlacement } from './objects/embossCommands';
 import type { EmbossTextConfiguration } from './objects/emboss';
+import { commitFacetRefinement, type FacetRefinementCommitRequest } from './annotations/FacetAnnotationStrokeCommand';
+import type { FacetAnnotationChannel } from './annotations/types';
 
 export class StagedInputError extends Error {
   constructor(readonly code: 'limit' | 'invalid') {
@@ -574,6 +576,93 @@ export function captureReplaceProjectCommand(
     units,
   } = capture(['replaceProject', state, label ?? null] as const, limits);
   return captured(owned === null ? new ReplaceProjectCommand(next) : new ReplaceProjectCommand(next, owned), units);
+}
+const FACET_CHANNELS: readonly string[] = ['color', 'support', 'seam', 'fuzzySkin', 'brim'];
+/** Selector nodes with exactly their fields and scalar paint values, so the
+ * measured input is the input the native decoder accepts. */
+function assertRefinementNode(node: unknown, depth = 0): void {
+  if (depth > 64 || node === null || typeof node !== 'object' || Array.isArray(node))
+    throw new StagedInputError('invalid');
+  const value = node as Record<string, unknown>;
+  const keys = Object.keys(value).sort().join();
+  if (value.kind === 'leaf' && keys === 'kind,state') {
+    const state = value.state as Record<string, unknown> | null;
+    if (state === null || typeof state !== 'object' || Array.isArray(state)) throw new StagedInputError('invalid');
+    const stateKeys = Object.keys(state).sort().join();
+    if (state.kind === 'unpainted' && stateKeys === 'kind') return;
+    if (
+      state.kind === 'assigned' &&
+      stateKeys === 'kind,value' &&
+      (typeof state.value === 'string' || typeof state.value === 'boolean')
+    )
+      return;
+    throw new StagedInputError('invalid');
+  }
+  if (value.kind !== 'split' || keys !== 'children,kind,specialSide,splitSides') throw new StagedInputError('invalid');
+  const sides = value.splitSides,
+    special = value.specialSide;
+  if (
+    !Number.isInteger(sides) ||
+    !Number.isInteger(special) ||
+    (sides as number) < 1 ||
+    (sides as number) > 3 ||
+    (special as number) < 0 ||
+    (special as number) > 2 ||
+    (sides === 3 && special !== 0) ||
+    !Array.isArray(value.children) ||
+    value.children.length !== (sides as number) + 1
+  )
+    throw new StagedInputError('invalid');
+  for (const child of value.children) assertRefinementNode(child, depth + 1);
+}
+/**
+ * A refined selector result as one staged work: when it runs, it is
+ * `commitFacetRefinement` on the session's bus, so its live-state checks refuse
+ * without publishing and a result that changes nothing executes nothing.
+ */
+export function facetRefinementStagedWork<Channel extends FacetAnnotationChannel>(
+  request: Pick<FacetRefinementCommitRequest<Channel>, 'guard' | 'channel' | 'encoding' | 'label'>,
+  limits: StagedInputLimits,
+): StagedProjectWork {
+  const {
+    value: [, guard, channel, roots, label],
+    units,
+  } = capture(
+    [
+      'facetRefinement',
+      {
+        revision: request.guard.revision,
+        hash: request.guard.hash,
+        volumeId: request.guard.volumeId,
+        topologyRevision: request.guard.topologyRevision,
+        triangleCount: request.guard.triangleCount,
+      },
+      request.channel,
+      request.encoding.roots,
+      request.label ?? null,
+    ] as const,
+    limits,
+  );
+  if (!FACET_CHANNELS.includes(channel) || !Number.isSafeInteger(guard.revision) || guard.revision < 0)
+    throw new StagedInputError('invalid');
+  plainStable(guard.volumeId);
+  for (const root of roots) assertRefinementNode(root);
+  const result = Object.freeze({ inputUnits: units, commandCount: 1, assetBytes: 0 });
+  work.set(result, {
+    commands: [],
+    program: (bus) => {
+      commitFacetRefinement(bus, {
+        guard,
+        channel: channel as Channel,
+        encoding: {
+          version: request.encoding.version,
+          roots: roots as FacetRefinementCommitRequest<Channel>['encoding']['roots'],
+        },
+        ...(label === null ? {} : { label }),
+      });
+    },
+  });
+  return result;
 }
 /**
  * The single-volume split to objects as one staged work: the parts are

@@ -216,6 +216,48 @@ impl Node {
             ]),
         }
     }
+    /// A selector node from JSON with exactly its fields: kinds, topology and
+    /// scalar paint values. Whether a value suits its channel is the
+    /// validators' concern, as in the browser's refined commit.
+    pub fn from_value(value: &Value) -> Option<Self> {
+        let Value::Object(fields) = value else {
+            return None;
+        };
+        if is_text(field(value, "kind"), "leaf") {
+            let state = field(value, "state")?;
+            let Value::Object(state_fields) = state else {
+                return None;
+            };
+            if fields.len() != 2 {
+                return None;
+            }
+            let state = if is_text(field(state, "kind"), "unpainted") && state_fields.len() == 1 {
+                State::Unpainted
+            } else if is_text(field(state, "kind"), "assigned") && state_fields.len() == 2 {
+                State::Assigned(PaintValue::from_value(field(state, "value")?)?)
+            } else {
+                return None;
+            };
+            return Some(Self::leaf(state));
+        }
+        if !is_text(field(value, "kind"), "split") || fields.len() != 4 {
+            return None;
+        }
+        let sides = number(field(value, "splitSides"))?;
+        let special = number(field(value, "specialSide"))?;
+        if !(0.0..=3.0).contains(&sides)
+            || sides.fract() != 0.0
+            || !(0.0..=2.0).contains(&special)
+            || special.fract() != 0.0
+        {
+            return None;
+        }
+        let children = array(field(value, "children"))?
+            .iter()
+            .map(Self::from_value)
+            .collect::<Option<Vec<_>>>()?;
+        Self::split(sides as u8, special as u8, children).ok()
+    }
     fn from_validated(value: &Value) -> Self {
         if is_text(field(value, "kind"), "leaf") {
             let state = field(value, "state").expect("validated state");
@@ -777,6 +819,35 @@ fn charge_materialization(
     Ok(())
 }
 
+/// `collapseFacetRefinementRoots`: dense per-facet roots into sparse
+/// whole-facet assignments and the subdivided facets alone, without validating
+/// values (the browser's refined commit validates the result afterwards).
+pub fn collapse_roots(roots: Vec<Node>) -> (Vec<Assignment>, Option<Encoding>) {
+    let triangle_count = Triangle(roots.len() as f64);
+    let mut groups = BTreeMap::new();
+    let mut splits = Vec::new();
+    for (i, root) in roots.into_iter().enumerate() {
+        let triangle = Triangle(i as f64);
+        match root.normalize() {
+            Node {
+                kind: NodeKind::Leaf(State::Assigned(value)),
+                ..
+            } => add_group(&mut groups, triangle, value),
+            Node {
+                kind: NodeKind::Leaf(State::Unpainted),
+                ..
+            } => {}
+            node => splits.push(Split { triangle, node }),
+        }
+    }
+    (
+        sorted_groups(groups),
+        (!splits.is_empty()).then_some(Encoding {
+            triangle_count,
+            splits,
+        }),
+    )
+}
 fn add_group(groups: &mut BTreeMap<PaintValue, Assignment>, triangle: Triangle, value: PaintValue) {
     groups
         .entry(value.clone())

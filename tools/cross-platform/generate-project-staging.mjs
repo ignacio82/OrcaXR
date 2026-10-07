@@ -30,6 +30,7 @@ assert.deepEqual(Object.keys(s.workKinds), [
   "single",
   "transaction",
   "splitToObjects",
+  "facetRefinement",
 ]);
 assert.deepEqual(Object.keys(s.commandKinds), [
   "createInstance",
@@ -87,6 +88,7 @@ assert.deepEqual(s.workKinds, {
   single: ["command"],
   transaction: ["label", "commands"],
   splitToObjects: ["guard", "parts", "identities"],
+  facetRefinement: ["guard", "channel", "roots", "label"],
 });
 assert.deepEqual(s.commandKinds, {
   createInstance: ["objectId", "record", "index"],

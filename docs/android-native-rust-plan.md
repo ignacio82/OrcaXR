@@ -151,12 +151,12 @@ reconciliation, model-colour recreation and multi-volume split to objects are
 ported. So are the payload-carrying commands for add object, add object with
 asset, add volume, mesh topology replacement, mesh booleans, split to parts,
 single-volume split to objects, and SVG and embossed-text parts. They install
-validated payload leases without copying bytes. Whole-project replacement is
-native too (76 of the browser's 78 command classes; the transaction composite
-and import were already native). All of them stage through command uploads:
-records declare their payload descriptors, then the bytes stream per declared
-payload, through Rust, WASM and JNI/Kotlin. Refined (dense-root) facet commits
-are next, as a bulk record kind. Each family adds intent variants to
+validated payload leases without copying bytes. Whole-project replacement and
+refined (dense-root) facet commits are native too, so every browser command
+class now has a native counterpart replayed against browser-authored traces.
+All of them stage through command uploads: records declare their payload
+descriptors, then the bytes stream per declared payload, through Rust, WASM and
+JNI/Kotlin. Session cutover, the application shell and the device gates remain. Each family adds intent variants to
 `contracts/project-intents.json` (definitions before first use; regenerate with
 `generate-project-intents.mjs --write`), maps them in
 `web/src/project/PreparedProjectCommands.ts`, appends a scenario to
@@ -991,10 +991,14 @@ and replay coverage for the complete current command inventory.
     export with host JVM/JNI lifecycle/failure checks.
   - [ ] Integrate live application projections, archive adoption, recovery and
     Android runtime qualification; isolate browser bulk export work.
-- [ ] Port commands and transaction/history semantics by family, preserving
+- [x] Port commands and transaction/history semantics by family, preserving
   rollback revision behavior, coalescing, checkpoint acknowledgement, selection,
   and history retention accounting. Test every command's failed and stale cases.
-  The native command owner executes nineteen prepared intents: seven plate
+  Every browser command class now has a native port. Each replays browser-authored
+  traces: prepared intents (67 traces / 1,659 steps), captured records (11 / 197),
+  clipboard (17 / 130), payload-carrying commands (24 / 348) and staged work
+  (56 / 934). The history below records how the families arrived.
+  The native command owner first executed nineteen prepared intents: seven plate
   commands, three entity renames, instance printability, single/batch transforms,
   object/instance deletion, plate clearing, independent object duplication,
   cross-plate movement and conversion of an instance to an independent object.
@@ -1186,9 +1190,15 @@ and replay coverage for the complete current command inventory.
     on every apply, the selection pruned against each side, and history
     charged for both states. Traces cover pruning, refusal, labels and
     retention (asset corpus: 23 traces / 325 steps).
-  - [ ] Port refined facet commits (`commitFacetRefinement`): dense roots
-    collapsed into sparse assignments and split trees, checked against live
-    state without publishing. They travel as a staged bulk record.
+  - [x] Port refined facet commits (`commitFacetRefinement`) as
+    `prepare_facet_refinement` and a `facetRefinement` staged work. Dense
+    roots (strict selector-node shapes) collapse into whole-facet assignments
+    and split trees. The browser's checks run against the live state without
+    publishing, the encoding and result are validated by issue count, and a
+    result that changes nothing executes nothing. Otherwise the prepared
+    stroke command applies. Traces cover every channel, staleness, non-model
+    volumes, root counts, both validation stages and noops (asset corpus 24 /
+    348; staged 56 / 934 through Rust, WASM and JNI).
 - [ ] Port settings resolution, physical/mixed filament identities, profile
   selection semantics, and canonical slice preflight. Consume the generated
   pinned schema/catalog rather than reconstructing defaults in Kotlin.

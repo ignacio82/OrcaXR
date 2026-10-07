@@ -63,9 +63,11 @@ export function stagedPayloads(work) {
         : c.asset
           ? [c.asset]
           : [];
-  const all = work.splitToObjects
-    ? work.splitToObjects.parts.map((p) => p.asset)
-    : (work.single ? [work.single] : work.commands).flatMap(commandPayloads);
+  const all = work.facetRefinement
+    ? []
+    : work.splitToObjects
+      ? work.splitToObjects.parts.map((p) => p.asset)
+      : (work.single ? [work.single] : work.commands).flatMap(commandPayloads);
   const seen = new Map();
   for (const p of all) {
     const id = descriptor(p).id;
@@ -113,7 +115,15 @@ export function stagedCommandJson(work, schema) {
   };
   const single = Object.keys(schema.workKinds).indexOf("single"),
     transaction = Object.keys(schema.workKinds).indexOf("transaction"),
-    split = Object.keys(schema.workKinds).indexOf("splitToObjects");
+    split = Object.keys(schema.workKinds).indexOf("splitToObjects"),
+    refinement = Object.keys(schema.workKinds).indexOf("facetRefinement");
+  if (work.facetRefinement) {
+    const w = work.facetRefinement;
+    return JSON.stringify([
+      schema.version,
+      [refinement, guardJson(w.guard), w.channel, JSON.parse(w.rootsJson), text(w.label)],
+    ]);
+  }
   if (work.splitToObjects) {
     const w = work.splitToObjects;
     return JSON.stringify([

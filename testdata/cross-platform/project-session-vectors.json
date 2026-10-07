@@ -37,7 +37,7 @@
     },
     {
       "path": "web/src/project/StagedProjectCommands.ts",
-      "sha256": "459e680b96183e9ca835662d1e93fc3c16f62144fe66b7f066a6a30e57333e75"
+      "sha256": "76a0868e892550855abf8246a99921c7dc9f86f380cfbe8885d3cf09704dbcb7"
     },
     {
       "path": "web/src/project/commands.ts",

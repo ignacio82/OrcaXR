@@ -13,8 +13,8 @@ use orcaxr_project::{
 };
 use orcaxr_project::{
     commands::{
-        BooleanGuard, BooleanOp, IndependentObjectIds, PartPlacement, Recipe, SeparatedObject,
-        SplitPart, StagedAsset, TopologyGuard, VolumeSplitGuard, staged::*,
+        BooleanGuard, BooleanOp, FacetRefinement, IndependentObjectIds, PartPlacement, Recipe,
+        SeparatedObject, SplitPart, StagedAsset, TopologyGuard, VolumeSplitGuard, staged::*,
     },
     ingress::{
         command_record::{InstanceInput, ObjectInput},
@@ -448,6 +448,31 @@ fn capture_work(
     v: &Value,
     clips: &std::collections::BTreeMap<String, ClipboardCapture>,
 ) -> Result<StagedWork, wire::SessionError> {
+    if let Some(r) = v.get("facetRefinement") {
+        let guard = &r["guard"];
+        let roots = match parse(r["rootsJson"].as_str().unwrap()).unwrap() {
+            orcaxr_contracts::canonical::Value::Array(roots) => roots
+                .iter()
+                .map(orcaxr_project::facets::Node::from_value)
+                .collect::<Option<Vec<_>>>()
+                .ok_or(wire::SessionError::InvalidRequest)?,
+            _ => return Err(wire::SessionError::InvalidRequest),
+        };
+        let request = FacetRefinement {
+            revision: guard["revision"].as_u64().unwrap(),
+            hash: utf16(&guard["hash"]),
+            volume: stable(&guard["volumeId"])?,
+            topology_revision: guard["topologyRevision"].as_f64().unwrap(),
+            triangle_count: guard["triangleCount"].as_f64().unwrap(),
+            channel: orcaxr_project::facets::Channel::ALL
+                .into_iter()
+                .find(|c| c.name() == r["channel"].as_str().unwrap())
+                .ok_or(wire::SessionError::InvalidRequest)?,
+            roots,
+            label: (!r["label"].is_null()).then(|| Text::new(utf16(&r["label"]))),
+        };
+        return StagedWork::facet_refinement(request, 4_000_000).map_err(capture_error);
+    }
     if let Some(split) = v.get("splitToObjects") {
         let identities = split["identities"]
             .as_array()
@@ -660,5 +685,5 @@ fn staged_ownership_and_protocol_match_independent_typescript_authority() {
             }
         }
     }
-    assert_eq!((groups, requests), (895, 665));
+    assert_eq!((groups, requests), (934, 690));
 }
