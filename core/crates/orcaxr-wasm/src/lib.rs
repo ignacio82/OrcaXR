@@ -73,4 +73,20 @@ impl GcodeSession {
     pub fn view(&mut self, request: &str) -> Result<Vec<u8>, JsValue> {
         self.inner.view(request).map_err(gcode_error)
     }
+    /// Readable source lines with the browser viewer's clamping; JSON text is
+    /// UTF-16 code units. Non-finite or nonpositive counts return no lines.
+    #[wasm_bindgen(js_name = textWindow)]
+    pub fn text_window(&mut self, from: f64, count: f64) -> Result<String, JsValue> {
+        self.inner.text_window(from, count).map_err(gcode_error)
+    }
+    /// Case-insensitive line search over the sealed source, bounded by `limit`.
+    #[wasm_bindgen(js_name = textSearch)]
+    pub fn text_search(&mut self, query: &[u16], limit: f64) -> Result<String, JsValue> {
+        if query.len() > orcaxr_gcode::layout::MAX_QUERY_UNITS {
+            return Err(JsValue::from_str("resource_limit"));
+        }
+        self.inner
+            .text_search(query, gcode_index(limit)?)
+            .map_err(gcode_error)
+    }
 }

@@ -18,6 +18,11 @@ export const GCODE_LAYOUT = {
   "maxIndexPageEntries": 256,
   "maxWindowRecords": 240000,
   "maxPathPoints": 8000000,
+  "maxTextWindowLines": 1024,
+  "maxTextWindowUnits": 1048576,
+  "maxSearchResults": 500,
+  "maxSearchLimit": 10000,
+  "maxQueryUnits": 4096,
   "columns": {
     "kind": "u8",
     "startX": "f32",

@@ -6,7 +6,7 @@ import org.json.JSONObject
 
 internal object GcodeMetadata {
     const val MAX_VALIDATION_NODES = 4194304
-    enum class Kind { Text, Provenance, Limits, Termination, Warning, Filament, Model, Index, IndexEntry, IndexPage, Mode, Limitation, Legend, Range, Missing, PreviewReady, PreviewUnsupported, LayerSelection, MoveSelection, Cursor, ToolMarker, SourceLine, SourceWindow, Bounds, Inspection, Playback }
+    enum class Kind { Text, Provenance, Limits, Termination, Warning, Filament, Model, Index, IndexEntry, IndexPage, Mode, Limitation, Legend, Range, Missing, PreviewReady, PreviewUnsupported, LayerSelection, MoveSelection, Cursor, ToolMarker, SourceLine, SourceWindow, Bounds, Inspection, Playback, TextLine, TextWindow, TextSearch }
     private object Missing
     private class Budget(val active: () -> Unit, var remaining: Int = MAX_VALIDATION_NODES) {
         fun take(): Boolean {
@@ -56,6 +56,9 @@ internal object GcodeMetadata {
     private val keys56 = setOf<String>("minMm", "maxMm")
     private val keys60 = setOf<String>("sourceRecordCount", "layerSelection", "moveSelection", "current", "toolMarker", "sourceWindow", "focusBounds", "limitations", "tickLabels")
     private val keys64 = setOf<String>()
+    private val keys66 = setOf<String>("number", "text")
+    private val keys69 = setOf<String>("lineCount", "lines")
+    private val keys72 = setOf<String>("lineNumbers", "truncated")
     private fun validText(v: Any?, budget: Budget): Boolean = budget.take() && (array(v, budget, 0, 65536) { item0 -> number(item0, true, 0.0, 65535.0) })
     private fun validProvenance(v: Any?, budget: Budget): Boolean = budget.take() && (array(v, budget, 0, 256) { item1 -> number(item1, true, 0.0, 65535.0) })
     private fun validLimits(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys3) { object2 -> (number(field(object2, "inputCharacters"), true, 1.0, 268435456.0)) && (number(field(object2, "lines"), true, 1.0, 16000000.0)) && (number(field(object2, "records"), true, 1.0, 240000.0)) && (number(field(object2, "pathPoints"), true, 1.0, 8000000.0)) && (number(field(object2, "warnings"), true, 1.0, 2048.0)) && (number(field(object2, "lineCharacters"), true, 1.0, 65536.0)) && (number(field(object2, "roles"), true, 1.0, 512.0)) && (number(field(object2, "filaments"), true, 1.0, 4096.0)) })
@@ -82,6 +85,9 @@ internal object GcodeMetadata {
     private fun validBounds(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys56) { object55 -> (array(field(object55, "minMm"), budget, 3, 3) { item57 -> number(item57, false, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY) }) && (array(field(object55, "maxMm"), budget, 3, 3) { item58 -> number(item58, false, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY) }) })
     private fun validInspection(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys60) { object59 -> (number(field(object59, "sourceRecordCount"), true, 0.0, 240000.0)) && ((field(object59, "layerSelection") === JSONObject.NULL || (validLayerSelection(field(object59, "layerSelection"), budget)))) && ((field(object59, "moveSelection") === JSONObject.NULL || (validMoveSelection(field(object59, "moveSelection"), budget)))) && ((field(object59, "current") === JSONObject.NULL || (validCursor(field(object59, "current"), budget)))) && ((field(object59, "toolMarker") === JSONObject.NULL || (validToolMarker(field(object59, "toolMarker"), budget)))) && ((field(object59, "sourceWindow") === JSONObject.NULL || (validSourceWindow(field(object59, "sourceWindow"), budget)))) && ((field(object59, "focusBounds") === JSONObject.NULL || (validBounds(field(object59, "focusBounds"), budget)))) && (array(field(object59, "limitations"), budget, 0, 1) { item61 -> validLimitation(item61, budget) }) && (array(field(object59, "tickLabels"), budget, 0, 100000) { item62 -> string(item62, 256) }) })
     private fun validPlayback(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys64) { object63 -> true })
+    private fun validTextLine(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys66) { object65 -> (number(field(object65, "number"), true, 1.0, 268435456.0)) && (array(field(object65, "text"), budget, 0, 1048576) { item67 -> number(item67, true, 0.0, 65535.0) }) })
+    private fun validTextWindow(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys69) { object68 -> (number(field(object68, "lineCount"), true, 1.0, 268435456.0)) && (array(field(object68, "lines"), budget, 0, 1024) { item70 -> validTextLine(item70, budget) }) })
+    private fun validTextSearch(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys72) { object71 -> (array(field(object71, "lineNumbers"), budget, 0, 10000) { item73 -> number(item73, true, 1.0, 268435456.0) }) && (field(object71, "truncated") is Boolean) })
 
     fun validate(kind: Kind, value: Any?, active: () -> Unit = {}) {
         active()
@@ -113,6 +119,9 @@ internal object GcodeMetadata {
             Kind.Bounds -> validBounds(value, budget)
             Kind.Inspection -> validInspection(value, budget)
             Kind.Playback -> validPlayback(value, budget)
+            Kind.TextLine -> validTextLine(value, budget)
+            Kind.TextWindow -> validTextWindow(value, budget)
+            Kind.TextSearch -> validTextSearch(value, budget)
         }) { "Invalid shared G-code metadata" }
         active()
     }

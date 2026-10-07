@@ -7,6 +7,11 @@ pub const MAX_CHUNK_UNITS: usize = 65536;
 pub const MAX_INDEX_PAGE_ENTRIES: usize = 256;
 pub const MAX_WINDOW_RECORDS: usize = 240000;
 pub const MAX_PATH_POINTS: usize = 8000000;
+pub const MAX_TEXT_WINDOW_LINES: usize = 1024;
+pub const MAX_TEXT_WINDOW_UNITS: usize = 1048576;
+pub const MAX_SEARCH_RESULTS: usize = 500;
+pub const MAX_SEARCH_LIMIT: usize = 10000;
+pub const MAX_QUERY_UNITS: usize = 4096;
 pub fn columns_bytes(records: usize, points: usize) -> Option<usize> {
     let mut total = 0usize;
     total = total.checked_add(records.checked_mul(1)?.checked_add(3)? & !3)?;

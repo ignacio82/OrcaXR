@@ -74,7 +74,7 @@ engine (`libslic3r` via WASM) as the computational core.
   Application slicing and ARM64 execution remain unqualified; see the slicing document.
   [Canonical slice fixtures](docs/engineering/native-slice-fixtures.md) exercise eleven
   authored archives through the browser engine; these are reference inputs.
-  Production rendering, search and device qualification remain open; native PCVR is outside scope.
+  Shared Rust G-code search is browser-qualified; rendering/device gates stay open; no PCVR.
 
 ## Stack
 

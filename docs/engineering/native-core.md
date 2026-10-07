@@ -2440,8 +2440,8 @@ selectors releases the old columns before parsing the replacement. An explicit
 selector on every view query prevents accidental use of the last loaded window.
 Packed outputs are independent allocations. Metadata encoding checks cancellation
 on writes; column serialization checks every 4,096 elements and before publishing.
-Production native renderer consumers, search, and
-device latency/memory budgets remain open.
+Production native renderer consumers and device latency/memory budgets remain
+open; readable-text search is described below.
 
 The internal Rust projection implements all 12 display modes, composable
 role/tool/event/layer/record/value filters, numeric ranges, accessible legends,
@@ -2464,6 +2464,37 @@ implementation resolves that observed difference in debug and optimized host
 tests. The source-owned binding corpus also includes those 128 extreme cases.
 This is corpus evidence, not proof for every float, browser engine or physical
 device; physical consumer qualification has its own remaining gates.
+
+### Readable G-code text and search
+
+`orcaxr_gcode::document` ports the browser `GcodeDocument` reader over the same
+sealed UTF-16 source: lines end at `\n`, one trailing `\r` is not text, a final
+newline does not start a line, and windows clamp exactly like the viewer. The
+line index stores one `u32` start per line and is built on the first text request;
+it never copies or lowercases the program. Search applies ECMAScript `trim` and
+`toLowerCase` (Final_Sigma context, lone surrogates preserved) to the query and to
+each line independently, then matches with KMP; ASCII lines need no allocation.
+
+Per-line folding fixed a browser defect: lowercasing the whole program and mapping
+offsets through the original line index put results on wrong lines whenever a
+character's lowercase form had another length (one Turkish `İ` in an object-name
+comment shifted every later match), and a query could span a newline. A search
+returning exactly `limit` lines now reports `truncated: false`; `true` means at
+least one further line matched. `contracts/gcode-buffer.json` generates the window
+(1,024 lines / 1,048,576 units), result (500 default, 10,000 maximum) and query
+(4,096 units) limits; `contracts/gcode-metadata.json` generates the `TextWindow`
+and `TextSearch` validators. `Session.text_window`/`text_search`, WASM
+`textWindow`/`textSearch` and Kotlin `GcodeSession.textWindow`/`search` expose it.
+Kotlin recomputes the viewer clamp and line ordering; a native refusal such as
+`resource_limit` leaves the session open, while an impossible reply closes it.
+
+`tools/cross-platform/gcode-document-vectors.mjs` records 114 production-browser
+sources (the 98 parser vectors, authored line-ending, Unicode, surrogate and
+long-line cases, and a 25,000-line program), 1,536 windows and 18,710 searches.
+The library, the session transport (4,093-unit chunks that split surrogate pairs)
+and wasm-bindgen output in a non-isolated Chrome 150 worker match all of them.
+`GcodeTextTest` replays the same corpus through real JNI but has not yet run on a
+device or emulator; Android search qualification remains open.
 
 ## Source-owned view queries
 
@@ -2725,7 +2756,7 @@ node tools/cross-platform/test-project-intent-generator.mjs
 node tools/cross-platform/project-intent-vectors.mjs
 node tools/cross-platform/package-browser-core.mjs
 node tools/cross-platform/package-browser-core.mjs --project
-node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts rust-gcode-loading.test.ts project-intents.test.ts project-session-transport.test.ts
+node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts rust-gcode-loading.test.ts project-intents.test.ts project-session-transport.test.ts GcodeDocument.test.ts GcodePanel.test.ts
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-id-vectors.mjs
@@ -2753,6 +2784,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/packag
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/mesh-vectors.mjs
 node web/scripts/run-tests.mjs bbs3mf-serializer.test.ts zip64-archive.test.ts deterministic-zip.test.ts
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-document-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/view-vectors.mjs
@@ -2809,7 +2841,7 @@ cargo check -p orcaxr-project --lib --locked --jobs 2 --target x86_64-linux-andr
 cargo check -p orcaxr-archive --lib --locked --jobs 2 --target wasm32-unknown-unknown
 cargo check -p orcaxr-archive --lib --locked --jobs 2 --target aarch64-linux-android
 cargo check -p orcaxr-archive --lib --locked --jobs 2 --target x86_64-linux-android
-cargo test -p orcaxr-gcode --test preview --test inspection --test views --test session --test requests --release --locked --jobs 2
+cargo test -p orcaxr-gcode --lib --test preview --test inspection --test views --test session --test requests --test document_vectors --test document_session --release --locked --jobs 2
 cargo audit
 ```
 

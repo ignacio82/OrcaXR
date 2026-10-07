@@ -1,7 +1,7 @@
 use jni::{
     JNIEnv,
     objects::{JByteBuffer, JCharArray, JClass, JString},
-    sys::{jint, jlong, jstring},
+    sys::{jdouble, jint, jlong, jstring},
 };
 use orcaxr_gcode::{Cancellation, Session, SessionError, layout};
 use std::{
@@ -185,6 +185,56 @@ pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_page(
             .map_err(|_| "invalid_state")?
             .session
             .page(integer(start)?, integer(count)?)
+            .map_err(code)?;
+        string(env, value)
+    })
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_textWindow(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    handle: jlong,
+    from: jdouble,
+    count: jdouble,
+) -> jstring {
+    boundary(&mut env, |env| {
+        let owner = owner(handle)?;
+        let value = owner
+            .work
+            .lock()
+            .map_err(|_| "invalid_state")?
+            .session
+            .text_window(from, count)
+            .map_err(code)?;
+        string(env, value)
+    })
+}
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_textSearch(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    handle: jlong,
+    query: JCharArray<'_>,
+    limit: jint,
+) -> jstring {
+    boundary(&mut env, |env| {
+        let owner = owner(handle)?;
+        // Bound the Java array before copying it into Rust.
+        let length = env
+            .get_array_length(&query)
+            .map_err(|_| "invalid_request")?;
+        if length < 0 || length as usize > layout::MAX_QUERY_UNITS {
+            return Err("resource_limit");
+        }
+        let mut copy = vec![0u16; length as usize];
+        env.get_char_array_region(&query, 0, &mut copy)
+            .map_err(|_| "invalid_request")?;
+        let value = owner
+            .work
+            .lock()
+            .map_err(|_| "invalid_state")?
+            .session
+            .text_search(&copy, integer(limit)?)
             .map_err(code)?;
         string(env, value)
     })

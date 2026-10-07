@@ -74,6 +74,29 @@ test('a bounded search says it was bounded', () => {
   const complete = many.search('G1', MAX_SEARCH_RESULTS);
   assert.equal(complete.lineNumbers.length, 20);
   assert.equal(complete.truncated, false);
+
+  // Exactly as many matches as the limit is the whole answer, not "at least".
+  const exact = many.search('G1', 20);
+  assert.equal(exact.lineNumbers.length, 20);
+  assert.equal(exact.truncated, false);
+});
+
+test('search reports the right lines when lowercasing changes text length', () => {
+  // `İ` lowercases to two UTF-16 units. Folding the whole program and mapping
+  // offsets back through the original line index moved later results onto the
+  // wrong lines, so an object-name comment could hide a heater command.
+  const document = new GcodeDocument(`;${'İ'.repeat(20)}\nG1 X1\nG1 X2\nG1 X3\nM104 S200\nG1 X4\n`);
+  assert.deepEqual(document.search('M104').lineNumbers, [5]);
+  assert.deepEqual(document.search('g1').lineNumbers, [2, 3, 4, 6]);
+  assert.deepEqual(document.search('i̇').lineNumbers, [1], 'and the folded character itself still matches');
+});
+
+test('a match never spans a line break', () => {
+  // A reader looking for "lines containing" a command cannot be shown a line
+  // that does not contain it; the old whole-program scan matched across lines.
+  const document = new GcodeDocument('G28\nM104 S230');
+  assert.deepEqual(document.search('G28\nM104').lineNumbers, []);
+  assert.deepEqual(document.search('M104').lineNumbers, [2]);
 });
 
 test('an empty query matches nothing rather than everything', () => {

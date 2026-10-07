@@ -91,6 +91,9 @@ Detailed evidence and reproducible commands live in
   across expanded occurrences. Canonical extensionData assembly remains open.
 - [ ] Complete foreign BBS/3MF and STL/OBJ/AMF import, then expose archive work
   through owned WASM/JNI tasks and Android document-provider Open/Save.
+- [x] Share bounded G-code text windows and case-insensitive line search through
+  Rust, WASM and JNI (Phase 3). Browser, host and Chrome WASM replays agree on
+  18,710 searches; the Android instrumented replay has not run on a device yet.
 - [x] Exercise edited canonical archive interchange through guarded native Open,
   native session commands and browser commands: 1,210 complete journeys in the
   debug and optimized host harness. Foreign/application journeys remain open.
@@ -209,8 +212,9 @@ preview projection, bounded inspection and playback now have development WASM/JN
 session bindings and independently generated source/window expectations. Generated
 browser metadata validation and the bounded worker-side source owner now replay
 the actual WASM corpus. Production browser preview now uses the Rust worker
-adapter, with a fixed startup reference choice and verified offline asset pair; search,
-production native rendering, native asset integration, and device budgets remain required to qualify
+adapter, with a fixed startup reference choice and verified offline asset pair. Readable
+text windows and line search are shared through Rust and browser-qualified; Android
+JNI search replay, production native rendering, native asset integration, and device budgets remain required to qualify
 Stage B fully. No phase exit is closed by the browser integration alone.
 
 The Android host now has validators generated from the same 26 metadata shapes,
@@ -804,7 +808,11 @@ that native code automatically reduces total memory.
   behavior. Keep engine-authoritative statistics distinct from parser observations.
   - [x] Implement twelve-mode projection, bounded inspection and playback with
     independent source/window expectations and WASM/JNI session bindings.
-  - [ ] Implement and qualify the remaining bounded search behavior.
+  - [x] Implement bounded readable-text windows and line search in Rust with
+    WASM/JNI bindings; 1,536 windows and 18,710 searches match the production
+    browser through the library, session transport and Chrome WASM. Per-line
+    folding also fixed a browser defect that moved results onto wrong lines.
+  - [ ] Replay the search corpus through Android JNI on an emulator or device.
 - [ ] Replace the browser worker implementation behind its existing session
   interface; account for source conversion and WASM transfer overhead in benchmarks.
   Keep a startup-selectable reference adapter during qualification.

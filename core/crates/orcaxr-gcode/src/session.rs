@@ -1,6 +1,8 @@
 use crate::{
-    Cancellation, Index, Limits, Model, Options, ParseError, index_with_cancellation, inspection,
-    layout, packet, parse_window_with_cancellation, parse_with_cancellation, preview, view_packet,
+    Cancellation, Index, Limits, Model, Options, ParseError, Text,
+    document::{Document, DocumentError, WindowLimits},
+    index_with_cancellation, inspection, layout, packet, parse_window_with_cancellation,
+    parse_with_cancellation, preview, view_packet,
     view_request::{Request, Window},
 };
 use serde::Serialize;
@@ -32,6 +34,14 @@ impl SessionError {
         }
     }
 }
+impl From<DocumentError> for SessionError {
+    fn from(error: DocumentError) -> Self {
+        match error {
+            DocumentError::Cancelled => Self::Cancelled,
+            DocumentError::ResourceLimit => Self::ResourceLimit,
+        }
+    }
+}
 impl From<ParseError> for SessionError {
     fn from(error: ParseError) -> Self {
         match error {
@@ -55,6 +65,8 @@ pub struct Session {
     options: Options,
     cancellation: Cancellation,
     loaded: Option<(Window, Model)>,
+    /// Readable-text line index, built on first use over the sealed source.
+    document: Option<Document>,
 }
 impl Session {
     pub fn new(
@@ -86,6 +98,7 @@ impl Session {
             options,
             cancellation,
             loaded: None,
+            document: None,
         })
     }
     fn active(&self) -> Result<(), SessionError> {
@@ -303,5 +316,71 @@ impl Session {
                 view_packet::playback(&frames, cancel)
             }
         }
+    }
+
+    fn text(&mut self) -> Result<&Document, SessionError> {
+        self.active()?;
+        if self.document.is_none() {
+            let source = self.index()?.source.clone();
+            self.document = Some(Document::new(source, &self.cancellation)?);
+        }
+        Ok(self.document.as_ref().expect("built document"))
+    }
+    /// Readable lines `[from, from + count)` with the browser viewer's clamping.
+    /// Text is UTF-16 code units, so lone surrogates survive the transport.
+    pub fn text_window(&mut self, from: f64, count: f64) -> Result<String, SessionError> {
+        #[derive(Serialize)]
+        struct Line {
+            number: usize,
+            text: Text,
+        }
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct TextWindow {
+            line_count: usize,
+            lines: Vec<Line>,
+        }
+        let document = self.text()?;
+        let lines = document
+            .window(
+                from,
+                count,
+                WindowLimits {
+                    lines: layout::MAX_TEXT_WINDOW_LINES,
+                    units: layout::MAX_TEXT_WINDOW_UNITS,
+                },
+            )?
+            .into_iter()
+            .map(|line| Line {
+                number: line.number,
+                text: Text(line.text.to_vec()),
+            })
+            .collect();
+        let value = TextWindow {
+            line_count: document.line_count(),
+            lines,
+        };
+        String::from_utf8(packet::json_with_cancellation(
+            &value,
+            Some(&self.cancellation),
+        )?)
+        .map_err(|_| SessionError::InvalidState)
+    }
+    /// Line numbers containing `query` case-insensitively, at most `limit`.
+    pub fn text_search(&mut self, query: &[u16], limit: usize) -> Result<String, SessionError> {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct TextSearch {
+            line_numbers: Vec<usize>,
+            truncated: bool,
+        }
+        let cancellation = self.cancellation.clone();
+        let result = self.text()?.search(query, limit, &cancellation)?;
+        let value = TextSearch {
+            line_numbers: result.line_numbers,
+            truncated: result.truncated,
+        };
+        String::from_utf8(packet::json_with_cancellation(&value, Some(&cancellation))?)
+            .map_err(|_| SessionError::InvalidState)
     }
 }

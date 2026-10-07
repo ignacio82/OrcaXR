@@ -9,6 +9,8 @@ final class NativeGcode {
     static native void append(long handle, int offset, char[] units);
     static native String seal(long handle);
     static native String page(long handle, int start, int count);
+    static native String textWindow(long handle, double from, double count);
+    static native String textSearch(long handle, char[] query, int limit);
     static native int prepare(long handle, int first, int last);
     static native int prepareView(long handle, String request);
     static native void copy(long handle, ByteBuffer target);

@@ -88,6 +88,57 @@ export class GcodeSession {
         }
     }
     /**
+     * Case-insensitive line search over the sealed source, bounded by `limit`.
+     * @param {Uint16Array} query
+     * @param {number} limit
+     * @returns {string}
+     */
+    textSearch(query, limit) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passArray16ToWasm0(query, wasm.__wbindgen_malloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.gcodesession_textSearch(this.__wbg_ptr, ptr0, len0, limit);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * Readable source lines with the browser viewer's clamping; JSON text is
+     * UTF-16 code units. Non-finite or nonpositive counts return no lines.
+     * @param {number} from
+     * @param {number} count
+     * @returns {string}
+     */
+    textWindow(from, count) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.gcodesession_textWindow(this.__wbg_ptr, from, count);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * @param {string} request
      * @returns {Uint8Array}
      */

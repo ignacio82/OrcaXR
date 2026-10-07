@@ -2,6 +2,7 @@
 //! the production/reference implementation until cross-host qualification.
 mod arc;
 mod cancellation;
+pub mod document;
 pub mod inspection;
 pub mod layout;
 mod lexer;

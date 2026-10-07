@@ -23,7 +23,10 @@ export interface GcodeLine {
 export interface GcodeSearchResult {
   /** Line numbers that matched, in order. */
   readonly lineNumbers: readonly number[];
-  /** True when the search stopped early; the count is then a lower bound. */
+  /**
+   * True when at least one further line matched beyond the limit; the count is
+   * then a lower bound. Exactly `limit` matching lines is a complete result.
+   */
   readonly truncated: boolean;
 }
 
@@ -65,16 +68,7 @@ export class GcodeDocument {
     const start = Math.max(1, Math.min(Math.floor(from), this.lineCount));
     const end = Math.min(this.lineCount, start + Math.floor(count) - 1);
     const lines: GcodeLine[] = [];
-    for (let number = start; number <= end; number += 1) {
-      const begin = this.offsets[number - 1];
-      const stop = number < this.lineCount ? this.offsets[number] - 1 : this.source.length;
-      // The final line's slice runs to the end of the source, which still
-      // carries its own terminator when the program ends with a newline — that
-      // offset was dropped so it would not count as an extra line. Both the
-      // newline and a CRLF carriage return come off here.
-      const text = this.source.slice(begin, stop).replace(/\n$/, '').replace(/\r$/, '');
-      lines.push({ number, text });
-    }
+    for (let number = start; number <= end; number += 1) lines.push({ number, text: this.lineText(number) });
     return lines;
   }
 
@@ -85,22 +79,35 @@ export class GcodeDocument {
    * half-million-line program blocks the tab for seconds, and a viewer that
    * reported "500 matches" without saying there are more would have an operator
    * believe they had seen them all.
+   *
+   * Each line is folded on its own. Folding the whole program once and mapping
+   * match offsets back through the original line index reported matches on the
+   * wrong lines whenever lowercasing changed a character's length: one Turkish
+   * `İ` in an object-name comment shifted every later result. Matching per line
+   * is also what an operator asked for, and a line matching twice is one result.
    */
   search(query: string, limit = MAX_SEARCH_RESULTS): GcodeSearchResult {
     const needle = query.trim().toLowerCase();
     if (needle.length === 0) return { lineNumbers: [], truncated: false };
     const lineNumbers: number[] = [];
-    const haystack = this.source.toLowerCase();
-    let cursor = haystack.indexOf(needle);
-    while (cursor >= 0) {
-      const number = this.lineAt(cursor);
-      // A line matching twice is one result: an operator is looking for lines,
-      // not occurrences.
-      if (lineNumbers[lineNumbers.length - 1] !== number) lineNumbers.push(number);
+    for (let number = 1; number <= this.lineCount; number += 1) {
+      if (!this.lineText(number).toLowerCase().includes(needle)) continue;
       if (lineNumbers.length >= limit) return { lineNumbers, truncated: true };
-      cursor = haystack.indexOf(needle, cursor + needle.length);
+      lineNumbers.push(number);
     }
     return { lineNumbers, truncated: false };
+  }
+
+  /**
+   * One line without its terminator. The final line's slice runs to the end of
+   * the source, which still carries its own newline when the program ends with
+   * one — that offset was dropped so it would not count as an extra line. Both
+   * the newline and a CRLF carriage return come off here.
+   */
+  private lineText(number: number): string {
+    const begin = this.offsets[number - 1];
+    const stop = number < this.lineCount ? this.offsets[number] - 1 : this.source.length;
+    return this.source.slice(begin, stop).replace(/\n$/, '').replace(/\r$/, '');
   }
 
   /** The 1-based line a byte offset falls on, by binary search. */

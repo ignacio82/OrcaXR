@@ -890,6 +890,66 @@
     "Playback": {
       "type": "object",
       "fields": {}
+    },
+    "TextLine": {
+      "type": "object",
+      "fields": {
+        "number": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 268435456
+        },
+        "text": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "integer": true,
+            "min": 0,
+            "max": 65535
+          },
+          "minLength": 0,
+          "maxLength": 1048576
+        }
+      }
+    },
+    "TextWindow": {
+      "type": "object",
+      "fields": {
+        "lineCount": {
+          "type": "number",
+          "integer": true,
+          "min": 1,
+          "max": 268435456
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "ref": "TextLine"
+          },
+          "minLength": 0,
+          "maxLength": 1024
+        }
+      }
+    },
+    "TextSearch": {
+      "type": "object",
+      "fields": {
+        "lineNumbers": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "integer": true,
+            "min": 1,
+            "max": 268435456
+          },
+          "minLength": 0,
+          "maxLength": 10000
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
     }
   }
 }

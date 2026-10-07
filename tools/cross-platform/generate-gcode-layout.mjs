@@ -3,7 +3,7 @@ import {readFileSync, writeFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 const root = new URL('../../', import.meta.url);
 const schema = JSON.parse(readFileSync(new URL('contracts/gcode-buffer.json', root)));
-assert.deepEqual(Object.keys(schema).sort(), ['version','magic','byteOrder','alignment','header','maxMetadataBytes','maxPacketBytes','maxChunkUnits','maxIndexPageEntries','maxWindowRecords','maxPathPoints','columns','pathColumns','textEncoding'].sort());
+assert.deepEqual(Object.keys(schema).sort(), ['version','magic','byteOrder','alignment','header','maxMetadataBytes','maxPacketBytes','maxChunkUnits','maxIndexPageEntries','maxWindowRecords','maxPathPoints','maxTextWindowLines','maxTextWindowUnits','maxSearchResults','maxSearchLimit','maxQueryUnits','columns','pathColumns','textEncoding'].sort());
 assert.equal(schema.magic, 'OXGP');
 assert.equal(schema.byteOrder, 'little');
 assert.equal(schema.alignment, 4);

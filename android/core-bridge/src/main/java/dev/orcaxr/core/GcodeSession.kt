@@ -1,6 +1,7 @@
 package dev.orcaxr.core
 
 import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONArray
@@ -13,6 +14,7 @@ class GcodeSession(private val sourceUnits: Int, options: String = "{}") : AutoC
     constructor(sourceUnits: Int, options: GcodeRequests.Options) : this(sourceUnits, options.encode())
     private val gate = Any()
     private val index = AtomicReference<GcodePacketChecks.IndexBounds?>()
+    private val lineCount = AtomicInteger(0)
     private fun active(current: Long) { check(handle.get() == current) { "cancelled" } }
     private fun <T> work(operation: (Long) -> T): T = synchronized(gate) {
         val current = handle.get()
@@ -52,6 +54,37 @@ class GcodeSession(private val sourceUnits: Int, options: String = "{}") : AutoC
             } else null
             GcodePacketChecks.page(value, bounds, previous)
             value
+        } catch (error: Throwable) {
+            close()
+            throw error
+        }
+    }
+    /** Readable lines `[from, from + count)` from the sealed source, clamped like
+     * the browser viewer. A native refusal such as `resource_limit` leaves the
+     * session open; a response no correct core can produce closes it. */
+    fun textWindow(from: Double, count: Double): GcodeTextWindow = work { current ->
+        val encoded = NativeGcode.textWindow(current, from, count)
+        try {
+            val value = GcodeJson.objectValue(encoded) { active(current) }
+            GcodeMetadata.validate(GcodeMetadata.Kind.TextWindow, value) { active(current) }
+            GcodeText.window(value, from, count, sourceUnits, lineCount.get()) { active(current) }
+                .also { lineCount.compareAndSet(0, it.lineCount) }
+        } catch (error: Throwable) {
+            close()
+            throw error
+        }
+    }
+    /** Lines containing [query] case-insensitively (ECMAScript trim and
+     * toLowerCase), in order, at most [limit]. */
+    fun search(query: String, limit: Int = GcodeLayout.MAX_SEARCH_RESULTS): GcodeTextSearch = work { current ->
+        require(query.length <= GcodeLayout.MAX_QUERY_UNITS && limit in 0..GcodeLayout.MAX_SEARCH_LIMIT) {
+            "resource_limit"
+        }
+        val encoded = NativeGcode.textSearch(current, query.toCharArray(), limit)
+        try {
+            val value = GcodeJson.objectValue(encoded) { active(current) }
+            GcodeMetadata.validate(GcodeMetadata.Kind.TextSearch, value) { active(current) }
+            GcodeText.search(value, limit, sourceUnits, lineCount.get())
         } catch (error: Throwable) {
             close()
             throw error

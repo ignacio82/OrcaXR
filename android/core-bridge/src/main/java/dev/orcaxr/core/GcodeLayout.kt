@@ -10,6 +10,11 @@ object GcodeLayout {
     const val MAX_INDEX_PAGE_ENTRIES = 256
     const val MAX_WINDOW_RECORDS = 240000
     const val MAX_PATH_POINTS = 8000000
+    const val MAX_TEXT_WINDOW_LINES = 1024
+    const val MAX_TEXT_WINDOW_UNITS = 1048576
+    const val MAX_SEARCH_RESULTS = 500
+    const val MAX_SEARCH_LIMIT = 10000
+    const val MAX_QUERY_UNITS = 4096
     data class Field(val group: String, val name: String, val type: String, val bytes: Int)
     val fields = listOf(
         Field("columns", "kind", "u8", 1),
