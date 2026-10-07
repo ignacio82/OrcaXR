@@ -829,6 +829,67 @@
         "mixedFilamentId": "Id"
       }
     },
+    "SourceRevision": {
+      "kind": "integer",
+      "min": 0,
+      "max": 9007199254740991
+    },
+    "SourceHash": {
+      "kind": "array",
+      "items": "Unit",
+      "min": 1,
+      "max": 128
+    },
+    "SettingsGuard": {
+      "kind": "object",
+      "fields": {
+        "sourceRevision": "SourceRevision",
+        "sourceHash": "SourceHash"
+      }
+    },
+    "SetProjectSettingsOverrides": {
+      "kind": "object",
+      "fields": {
+        "guard": "SettingsGuard",
+        "inheritedConfigJson": "JsonText",
+        "overridesJson": "JsonText"
+      }
+    },
+    "PlateScope": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id"
+      }
+    },
+    "PartScope": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id"
+      }
+    },
+    "LayerRangeScope": {
+      "kind": "object",
+      "fields": {
+        "layerRangeId": "Id"
+      }
+    },
+    "ScopedTarget": {
+      "kind": "union",
+      "variants": {
+        "plate": "PlateScope",
+        "object": "ObjectTarget",
+        "part": "PartScope",
+        "layerRange": "LayerRangeScope"
+      }
+    },
+    "SetScopedOverrides": {
+      "kind": "object",
+      "fields": {
+        "guard": "SettingsGuard",
+        "target": "ScopedTarget",
+        "overridesJson": "JsonText"
+      }
+    },
     "Command": {
       "kind": "union",
       "variants": {
@@ -879,7 +940,9 @@
         "duplicateMixedFilament": "DuplicateMixedFilament",
         "setMixedFilamentEnabled": "SetMixedFilamentEnabled",
         "tombstoneMixedFilament": "TombstoneMixedFilament",
-        "removeMixedFilament": "RemoveMixedFilament"
+        "removeMixedFilament": "RemoveMixedFilament",
+        "setProjectSettingsOverrides": "SetProjectSettingsOverrides",
+        "setScopedOverrides": "SetScopedOverrides"
       }
     },
     "Commands": {

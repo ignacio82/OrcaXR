@@ -1296,6 +1296,108 @@ object ProjectIntents {
             w.field("mixedFilamentId") { writeId(w, v.mixedFilamentId) }
         }
     }
+    private fun readSourceRevision(v: Any): Long {
+        return ProjectIntentJson.integer(v, 0L, 9007199254740991L)
+    }
+    private fun writeSourceRevision(w: ProjectIntentWriter, v: Long) {
+        w.integer(v.toLong(), 0L, 9007199254740991L)
+    }
+    private fun readSourceHash(v: Any): List<Int> {
+        val array = ProjectIntentJson.list(v, 1, 128)
+        return List(array.length()) { readUnit(array.get(it)) }
+    }
+    private fun writeSourceHash(w: ProjectIntentWriter, v: List<Int>) {
+        w.array(v, 1, 128) { writeUnit(w, it) }
+    }
+    data class SettingsGuard(val sourceRevision: Long, val sourceHash: List<Int>)
+    private fun readSettingsGuard(v: Any): SettingsGuard {
+        val obj = ProjectIntentJson.fields(v, setOf("sourceRevision", "sourceHash"), false)
+        return SettingsGuard(readSourceRevision(obj.get("sourceRevision")), readSourceHash(obj.get("sourceHash")))
+    }
+    private fun writeSettingsGuard(w: ProjectIntentWriter, v: SettingsGuard) {
+        w.obj {
+            w.field("sourceRevision") { writeSourceRevision(w, v.sourceRevision) }
+            w.field("sourceHash") { writeSourceHash(w, v.sourceHash) }
+        }
+    }
+    data class SetProjectSettingsOverrides(val guard: SettingsGuard, val inheritedConfigJson: List<Int>, val overridesJson: List<Int>)
+    private fun readSetProjectSettingsOverrides(v: Any): SetProjectSettingsOverrides {
+        val obj = ProjectIntentJson.fields(v, setOf("guard", "inheritedConfigJson", "overridesJson"), false)
+        return SetProjectSettingsOverrides(readSettingsGuard(obj.get("guard")), readJsonText(obj.get("inheritedConfigJson")), readJsonText(obj.get("overridesJson")))
+    }
+    private fun writeSetProjectSettingsOverrides(w: ProjectIntentWriter, v: SetProjectSettingsOverrides) {
+        w.obj {
+            w.field("guard") { writeSettingsGuard(w, v.guard) }
+            w.field("inheritedConfigJson") { writeJsonText(w, v.inheritedConfigJson) }
+            w.field("overridesJson") { writeJsonText(w, v.overridesJson) }
+        }
+    }
+    data class PlateScope(val plateId: List<Int>)
+    private fun readPlateScope(v: Any): PlateScope {
+        val obj = ProjectIntentJson.fields(v, setOf("plateId"), false)
+        return PlateScope(readId(obj.get("plateId")))
+    }
+    private fun writePlateScope(w: ProjectIntentWriter, v: PlateScope) {
+        w.obj {
+            w.field("plateId") { writeId(w, v.plateId) }
+        }
+    }
+    data class PartScope(val volumeId: List<Int>)
+    private fun readPartScope(v: Any): PartScope {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeId"), false)
+        return PartScope(readId(obj.get("volumeId")))
+    }
+    private fun writePartScope(w: ProjectIntentWriter, v: PartScope) {
+        w.obj {
+            w.field("volumeId") { writeId(w, v.volumeId) }
+        }
+    }
+    data class LayerRangeScope(val layerRangeId: List<Int>)
+    private fun readLayerRangeScope(v: Any): LayerRangeScope {
+        val obj = ProjectIntentJson.fields(v, setOf("layerRangeId"), false)
+        return LayerRangeScope(readId(obj.get("layerRangeId")))
+    }
+    private fun writeLayerRangeScope(w: ProjectIntentWriter, v: LayerRangeScope) {
+        w.obj {
+            w.field("layerRangeId") { writeId(w, v.layerRangeId) }
+        }
+    }
+    sealed interface ScopedTarget {
+        data class Plate(val value: ProjectIntents.PlateScope) : ScopedTarget
+        data class Object(val value: ProjectIntents.ObjectTarget) : ScopedTarget
+        data class Part(val value: ProjectIntents.PartScope) : ScopedTarget
+        data class LayerRange(val value: ProjectIntents.LayerRangeScope) : ScopedTarget
+    }
+    private fun readScopedTarget(v: Any): ScopedTarget {
+        val obj = ProjectIntentJson.fields(v, setOf("plate", "object", "part", "layerRange"), true)
+        return when(val key = obj.keys().next()) {
+            "plate" -> ScopedTarget.Plate(readPlateScope(obj.get(key)))
+            "object" -> ScopedTarget.Object(readObjectTarget(obj.get(key)))
+            "part" -> ScopedTarget.Part(readPartScope(obj.get(key)))
+            "layerRange" -> ScopedTarget.LayerRange(readLayerRangeScope(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeScopedTarget(w: ProjectIntentWriter, v: ScopedTarget) {
+        w.obj { when(v) {
+            is ScopedTarget.Plate -> w.field("plate") { writePlateScope(w, v.value) }
+            is ScopedTarget.Object -> w.field("object") { writeObjectTarget(w, v.value) }
+            is ScopedTarget.Part -> w.field("part") { writePartScope(w, v.value) }
+            is ScopedTarget.LayerRange -> w.field("layerRange") { writeLayerRangeScope(w, v.value) }
+        } }
+    }
+    data class SetScopedOverrides(val guard: SettingsGuard, val target: ScopedTarget, val overridesJson: List<Int>)
+    private fun readSetScopedOverrides(v: Any): SetScopedOverrides {
+        val obj = ProjectIntentJson.fields(v, setOf("guard", "target", "overridesJson"), false)
+        return SetScopedOverrides(readSettingsGuard(obj.get("guard")), readScopedTarget(obj.get("target")), readJsonText(obj.get("overridesJson")))
+    }
+    private fun writeSetScopedOverrides(w: ProjectIntentWriter, v: SetScopedOverrides) {
+        w.obj {
+            w.field("guard") { writeSettingsGuard(w, v.guard) }
+            w.field("target") { writeScopedTarget(w, v.target) }
+            w.field("overridesJson") { writeJsonText(w, v.overridesJson) }
+        }
+    }
     sealed interface Command {
         data class AddPlate(val value: ProjectIntents.AddPlate) : Command
         data class DuplicatePlate(val value: ProjectIntents.DuplicatePlate) : Command
@@ -1345,9 +1447,11 @@ object ProjectIntents {
         data class SetMixedFilamentEnabled(val value: ProjectIntents.SetMixedFilamentEnabled) : Command
         data class TombstoneMixedFilament(val value: ProjectIntents.TombstoneMixedFilament) : Command
         data class RemoveMixedFilament(val value: ProjectIntents.RemoveMixedFilament) : Command
+        data class SetProjectSettingsOverrides(val value: ProjectIntents.SetProjectSettingsOverrides) : Command
+        data class SetScopedOverrides(val value: ProjectIntents.SetScopedOverrides) : Command
     }
     private fun readCommand(v: Any): Command {
-        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments", "addMixedFilament", "editMixedFilament", "duplicateMixedFilament", "setMixedFilamentEnabled", "tombstoneMixedFilament", "removeMixedFilament"), true)
+        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments", "addMixedFilament", "editMixedFilament", "duplicateMixedFilament", "setMixedFilamentEnabled", "tombstoneMixedFilament", "removeMixedFilament", "setProjectSettingsOverrides", "setScopedOverrides"), true)
         return when(val key = obj.keys().next()) {
             "addPlate" -> Command.AddPlate(readAddPlate(obj.get(key)))
             "duplicatePlate" -> Command.DuplicatePlate(readDuplicatePlate(obj.get(key)))
@@ -1397,6 +1501,8 @@ object ProjectIntents {
             "setMixedFilamentEnabled" -> Command.SetMixedFilamentEnabled(readSetMixedFilamentEnabled(obj.get(key)))
             "tombstoneMixedFilament" -> Command.TombstoneMixedFilament(readTombstoneMixedFilament(obj.get(key)))
             "removeMixedFilament" -> Command.RemoveMixedFilament(readRemoveMixedFilament(obj.get(key)))
+            "setProjectSettingsOverrides" -> Command.SetProjectSettingsOverrides(readSetProjectSettingsOverrides(obj.get(key)))
+            "setScopedOverrides" -> Command.SetScopedOverrides(readSetScopedOverrides(obj.get(key)))
             else -> throw InvalidProjectIntent()
         }
     }
@@ -1450,6 +1556,8 @@ object ProjectIntents {
             is Command.SetMixedFilamentEnabled -> w.field("setMixedFilamentEnabled") { writeSetMixedFilamentEnabled(w, v.value) }
             is Command.TombstoneMixedFilament -> w.field("tombstoneMixedFilament") { writeTombstoneMixedFilament(w, v.value) }
             is Command.RemoveMixedFilament -> w.field("removeMixedFilament") { writeRemoveMixedFilament(w, v.value) }
+            is Command.SetProjectSettingsOverrides -> w.field("setProjectSettingsOverrides") { writeSetProjectSettingsOverrides(w, v.value) }
+            is Command.SetScopedOverrides -> w.field("setScopedOverrides") { writeSetScopedOverrides(w, v.value) }
         } }
     }
     private fun readCommands(v: Any): List<Command> {

@@ -10,6 +10,7 @@ mod layer_ranges;
 mod lifecycle;
 mod mixed;
 mod objects;
+mod settings_overrides;
 pub mod staged;
 mod transforms;
 use crate::{
@@ -93,6 +94,8 @@ enum Kind {
     LayerHeight(Box<layer_heights::LayerHeightCommand>),
     Filament(Box<filaments::FilamentCommand>),
     RemoveMixed(Box<mixed::RemoveMixed>),
+    ProjectSettings(Box<settings_overrides::ProjectSettings>),
+    ScopedSettings(Box<settings_overrides::Scoped>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -234,6 +237,14 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
             id(v.object_id)?,
             id(v.layer_range_id)?,
         )),
+        wire::Command::SetProjectSettingsOverrides(v) => (
+            Text::from_utf8("Update project setting overrides"),
+            Kind::ProjectSettings(Box::new(settings_overrides::ProjectSettings::new(v)?)),
+        ),
+        wire::Command::SetScopedOverrides(v) => {
+            let command = settings_overrides::Scoped::new(v)?;
+            (command.label(), Kind::ScopedSettings(Box::new(command)))
+        }
         wire::Command::AddMixedFilament(v) => {
             let (op, label) = mixed::MixedOp::add(v)?;
             filament(filaments::FilamentCommand::mixed(op, Some(label)))
@@ -552,6 +563,8 @@ impl PreparedCommand {
             Kind::LayerHeight(ref c) => c.reason(),
             Kind::Filament(ref c) => c.reason(),
             Kind::RemoveMixed(_) => "remove-mixed-filament",
+            Kind::ProjectSettings(_) => "set-project-settings-overrides",
+            Kind::ScopedSettings(_) => "set-scoped-overrides",
         }
     }
 }
@@ -578,6 +591,8 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::Transform(c) => c.is_noop(state)?,
             Kind::LayerRange(c) => c.is_noop(state)?,
             Kind::LayerEvent(c) => c.is_noop(state)?,
+            Kind::ProjectSettings(c) => return c.is_noop(context),
+            Kind::ScopedSettings(c) => return c.is_noop(context),
             Kind::Activate { id, .. } => &state.active_plate_id == id,
             Kind::Rename { id, name, .. } => &plate(state, id)?.name == name,
             Kind::Printable { id, printable, .. } => plate(state, id)?.printable == *printable,
@@ -605,6 +620,8 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::LayerHeight(c) => c.apply(context)?,
             Kind::Filament(c) => c.apply(context, reason)?,
             Kind::RemoveMixed(c) => c.apply(context, reason)?,
+            Kind::ProjectSettings(c) => c.apply(context, reason)?,
+            Kind::ScopedSettings(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
                 activate,
@@ -740,6 +757,8 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::LayerHeight(c) => return c.revert(context),
             Kind::Filament(c) => return c.revert(context, reason),
             Kind::RemoveMixed(c) => return c.revert(context, reason),
+            Kind::ProjectSettings(c) => return c.revert(context, reason),
+            Kind::ScopedSettings(c) => return c.revert(context, reason),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()
@@ -817,6 +836,8 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::LayerEvent(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Filament(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::RemoveMixed(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::ProjectSettings(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::ScopedSettings(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),

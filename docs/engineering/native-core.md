@@ -2701,6 +2701,20 @@ depth limit of 64. Accepting deeper text produced projects the native parser
 could not read back, which the query corpus caught. Every invalid-intent refusal precedes the commands' own blank-name checks,
 as in the browser mapping.
 
+### Setting-override commands
+
+`setProjectSettingsOverrides` and `setScopedOverrides` (`settingsOverrides.ts`,
+`scopedOverrides.ts`) are native. Each is prepared against the revision and
+semantic hash of the snapshot its caller read. The no-op check and the first
+apply refuse a stale guard; a redo instead requires the stored settings to be
+exactly what the command left. The project command stores the complete
+inherited/override pair and their spread as `config`. The scoped command checks
+every key against the generated scope table: one out-of-scope key is named
+(`brim_width cannot be set on a part`), several are counted. It replaces the
+node's in-scope overrides while preserving stored keys the scope does not own.
+Because a failed command publishes a rollback revision, callers read a fresh
+guard for every intent.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

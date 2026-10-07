@@ -1578,6 +1578,111 @@ fn read_remove_mixed_filament(v: &Value) -> Result<RemoveMixedFilament, InvalidI
         mixed_filament_id: read_id(&object["mixedFilamentId"])?,
     })
 }
+pub type SourceRevision = u64;
+fn read_source_revision(v: &Value) -> Result<SourceRevision, InvalidIntent> {
+    Ok(integer(v, 0, 9007199254740991)? as SourceRevision)
+}
+pub type SourceHash = Vec<Unit>;
+fn read_source_hash(v: &Value) -> Result<SourceHash, InvalidIntent> {
+    list(v, 1, 128)?.iter().map(read_unit).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsGuard {
+    pub source_revision: SourceRevision,
+    pub source_hash: SourceHash,
+}
+fn read_settings_guard(v: &Value) -> Result<SettingsGuard, InvalidIntent> {
+    let object = fields(v, &["sourceRevision", "sourceHash"], false)?;
+    Ok(SettingsGuard {
+        source_revision: read_source_revision(&object["sourceRevision"])?,
+        source_hash: read_source_hash(&object["sourceHash"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetProjectSettingsOverrides {
+    pub guard: SettingsGuard,
+    pub inherited_config_json: JsonText,
+    pub overrides_json: JsonText,
+}
+fn read_set_project_settings_overrides(
+    v: &Value,
+) -> Result<SetProjectSettingsOverrides, InvalidIntent> {
+    let object = fields(v, &["guard", "inheritedConfigJson", "overridesJson"], false)?;
+    Ok(SetProjectSettingsOverrides {
+        guard: read_settings_guard(&object["guard"])?,
+        inherited_config_json: read_json_text(&object["inheritedConfigJson"])?,
+        overrides_json: read_json_text(&object["overridesJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlateScope {
+    pub plate_id: Id,
+}
+fn read_plate_scope(v: &Value) -> Result<PlateScope, InvalidIntent> {
+    let object = fields(v, &["plateId"], false)?;
+    Ok(PlateScope {
+        plate_id: read_id(&object["plateId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PartScope {
+    pub volume_id: Id,
+}
+fn read_part_scope(v: &Value) -> Result<PartScope, InvalidIntent> {
+    let object = fields(v, &["volumeId"], false)?;
+    Ok(PartScope {
+        volume_id: read_id(&object["volumeId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayerRangeScope {
+    pub layer_range_id: Id,
+}
+fn read_layer_range_scope(v: &Value) -> Result<LayerRangeScope, InvalidIntent> {
+    let object = fields(v, &["layerRangeId"], false)?;
+    Ok(LayerRangeScope {
+        layer_range_id: read_id(&object["layerRangeId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ScopedTarget {
+    Plate(PlateScope),
+    Object(ObjectTarget),
+    Part(PartScope),
+    LayerRange(LayerRangeScope),
+}
+fn read_scoped_target(v: &Value) -> Result<ScopedTarget, InvalidIntent> {
+    let object = fields(v, &["plate", "object", "part", "layerRange"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "plate" => Ok(ScopedTarget::Plate(read_plate_scope(value)?)),
+        "object" => Ok(ScopedTarget::Object(read_object_target(value)?)),
+        "part" => Ok(ScopedTarget::Part(read_part_scope(value)?)),
+        "layerRange" => Ok(ScopedTarget::LayerRange(read_layer_range_scope(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetScopedOverrides {
+    pub guard: SettingsGuard,
+    pub target: ScopedTarget,
+    pub overrides_json: JsonText,
+}
+fn read_set_scoped_overrides(v: &Value) -> Result<SetScopedOverrides, InvalidIntent> {
+    let object = fields(v, &["guard", "target", "overridesJson"], false)?;
+    Ok(SetScopedOverrides {
+        guard: read_settings_guard(&object["guard"])?,
+        target: read_scoped_target(&object["target"])?,
+        overrides_json: read_json_text(&object["overridesJson"])?,
+    })
+}
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Command {
@@ -1629,6 +1734,8 @@ pub enum Command {
     SetMixedFilamentEnabled(SetMixedFilamentEnabled),
     TombstoneMixedFilament(TombstoneMixedFilament),
     RemoveMixedFilament(RemoveMixedFilament),
+    SetProjectSettingsOverrides(SetProjectSettingsOverrides),
+    SetScopedOverrides(SetScopedOverrides),
 }
 fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
     let object = fields(
@@ -1682,6 +1789,8 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             "setMixedFilamentEnabled",
             "tombstoneMixedFilament",
             "removeMixedFilament",
+            "setProjectSettingsOverrides",
+            "setScopedOverrides",
         ],
         true,
     )?;
@@ -1771,6 +1880,12 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             read_tombstone_mixed_filament(value)?,
         )),
         "removeMixedFilament" => Ok(Command::RemoveMixedFilament(read_remove_mixed_filament(
+            value,
+        )?)),
+        "setProjectSettingsOverrides" => Ok(Command::SetProjectSettingsOverrides(
+            read_set_project_settings_overrides(value)?,
+        )),
+        "setScopedOverrides" => Ok(Command::SetScopedOverrides(read_set_scoped_overrides(
             value,
         )?)),
         _ => Err(InvalidIntent),

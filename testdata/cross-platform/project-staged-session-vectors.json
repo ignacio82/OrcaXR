@@ -18,11 +18,11 @@
     },
     {
       "path": "testdata/cross-platform/project-captured-command-vectors.json",
-      "sha256": "af819a00089897d6b8eadb710d6e47bce56b3ff630884426fd75ac4f6bfd2bbf"
+      "sha256": "33543ed73b44035634aaeb9a5e128a4eb03f82cc2d06635f0778b2ff40f65d3c"
     },
     {
       "path": "testdata/cross-platform/project-clipboard-vectors.json",
-      "sha256": "49c1b7f64326f14a30f3d916864c1561096972660b97230862899c8846cd0762"
+      "sha256": "e8c2409aa6392bbcaf467de1414ce68fc9afe6e0f911b02c5d6b1fd02b2ca51e"
     },
     {
       "path": "web/src/project/StagedProjectCommands.ts",
@@ -46,7 +46,7 @@
     },
     {
       "path": "web/src/project/PreparedProjectCommands.ts",
-      "sha256": "32864cc66fbd43443bb835dcecd84876f48109c01497ecb8955db699c005dfee"
+      "sha256": "cccbd3650583f18781180401877011b01f8dfb1311fbc4a2b144cf348b8bc2cf"
     },
     {
       "path": "web/src/project/objects/commands.ts",
@@ -82,11 +82,11 @@
     },
     {
       "path": "contracts/project-intents.json",
-      "sha256": "3934c911c7f1c6b5b7b90f84c663d6484d87975902fff346051fca9801ec1b6b"
+      "sha256": "cf4b42a67b9ea6e0df440c3854a6956d41fc703128ad8424dd9d96343c790f59"
     },
     {
       "path": "contracts/generated/project-intents.ts",
-      "sha256": "965f22fb78fe63a9b37503388076c3424cb106e9b29c90f4def0103fb4bad428"
+      "sha256": "cd3b4aa035add7e57c05e20c7aae6d97f62293fe1f4d42db9cb62ec58812eb7a"
     },
     {
       "path": "contracts/runtime/project-intents.ts",

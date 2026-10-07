@@ -144,9 +144,9 @@ Detailed evidence and reproducible commands live in
 provider documents and STL/OBJ/AMF/ZIP model import (decode, stage, preview,
 undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
 actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
-Layer ranges, layer events, brim ears, layer-height profiles and the physical
-and mixed filament commands are ported (roughly 60% of the browser's 78 command
-classes are now native). Next families, in order: settings/scoped overrides, volumes
+Layer ranges, layer events, brim ears, layer-height profiles, physical and
+mixed filaments and project/scoped setting overrides are ported (roughly 60% of
+the browser's 78 command classes are now native). Next families, in order: settings/scoped overrides, volumes
 (SVG/emboss/semantic), split/boolean, then facet paint strokes. Each family adds
 intent variants to `contracts/project-intents.json` (definitions before first
 use; regenerate with `generate-project-intents.mjs --write`), maps them in
@@ -1090,9 +1090,16 @@ and replay coverage for the complete current command inventory.
     `tombstoneMixedFilament`, `removeMixedFilament`). Recipes travel typed
     (components, distributions, full-spectrum state with upstream mode codes);
     free-form `config`/`extensionData` travel as canonical JSON text, nested at
-    most 16 deep so every resulting state stays parseable natively. The corpus (1,482 steps, 76 new) covers recipe-shape
-    and component refusals, full-spectrum duplication (FNV-derived upstream IDs),
-    tombstones and dependency-checked removal with sorted reference paths.
+    most 16 deep so every resulting state stays parseable natively. The corpus
+    (1,483 steps, 77 new) covers recipe-shape and component refusals,
+    full-spectrum duplication (FNV-derived upstream IDs), tombstones and
+    dependency-checked removal with sorted reference paths.
+  - [x] Port the two setting-override intents (`setProjectSettingsOverrides`,
+    `setScopedOverrides`): revision/hash-guarded, with redo refused if the
+    stored settings diverged, scoped keys checked against the generated scope
+    table (out-of-scope stored keys preserved), and maps as canonical JSON
+    text. The corpus (1,516 steps, 33 new) covers every scope, stale guards,
+    scope refusals, unknown targets and guarded transactions.
   - [ ] Port and replay every remaining command family before session cutover
     (
     settings/scoped overrides, SVG/emboss/semantic volumes, split/boolean,

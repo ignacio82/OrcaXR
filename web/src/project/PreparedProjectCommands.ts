@@ -74,6 +74,8 @@ import {
   type EditMixedFilamentPatch,
 } from './filaments/mixedCommands';
 import { assertCanonicalSerializable } from './domain/canonical';
+import { SetProjectSettingsOverridesCommand } from './settingsOverrides';
+import { SetScopedOverridesCommand, type ScopedOverrideTarget } from './scopedOverrides';
 import type {
   BrimEarPoint,
   ConfigMap,
@@ -86,6 +88,8 @@ import type {
   Transform,
 } from './domain/model';
 import type {
+  ProjectScopedTargetWire,
+  ProjectSettingsGuardWire,
   ProjectAssignmentTargetWire,
   ProjectFullSpectrumInputWire,
   ProjectMixedComponentInputWire,
@@ -260,6 +264,21 @@ function command(value: ProjectCommandWire): ProjectCommand {
   }
   if ('deleteLayerEvent' in value)
     return new DeleteLayerEventCommand(id<'custom-gcode'>(value.deleteLayerEvent.customGcodeId));
+  if ('setProjectSettingsOverrides' in value) {
+    const input = value.setProjectSettingsOverrides;
+    return new SetProjectSettingsOverridesCommand(settingsGuard(input.guard), {
+      inheritedConfig: jsonObject(input.inheritedConfigJson),
+      overrides: jsonObject(input.overridesJson),
+    });
+  }
+  if ('setScopedOverrides' in value) {
+    const input = value.setScopedOverrides;
+    return new SetScopedOverridesCommand(
+      settingsGuard(input.guard),
+      scopedTarget(input.target),
+      jsonObject(input.overridesJson),
+    );
+  }
   if ('addMixedFilament' in value) return new AddMixedFilamentCommand(mixedFilament(value.addMixedFilament.filament));
   if ('editMixedFilament' in value) {
     const input = value.editMixedFilament;
@@ -476,6 +495,16 @@ function jsonObject(units: readonly number[]): ConfigMap {
   if (jsonDepth(parsed) > JSON_TEXT_MAX_DEPTH) throw new InvalidProjectIntent();
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new InvalidProjectIntent();
   return parsed as ConfigMap;
+}
+/** The revision and semantic hash of the snapshot the caller read. */
+function settingsGuard(value: ProjectSettingsGuardWire): { sourceRevision: number; sourceHash: string } {
+  return { sourceRevision: value.sourceRevision, sourceHash: text(value.sourceHash) };
+}
+function scopedTarget(value: ProjectScopedTargetWire): Exclude<ScopedOverrideTarget, { scope: 'project' }> {
+  if ('plate' in value) return { scope: 'plate', plateId: id<'plate'>(value.plate.plateId) };
+  if ('object' in value) return { scope: 'object', objectId: id<'object'>(value.object.objectId) };
+  if ('part' in value) return { scope: 'part', volumeId: id<'volume'>(value.part.volumeId) };
+  return { scope: 'layerRange', layerRangeId: id<'layer-range'>(value.layerRange.layerRangeId) };
 }
 /** Every surrogate is paired: the native side parses UTF-8, which cannot carry a lone one. */
 function wellFormed(units: readonly number[]): boolean {

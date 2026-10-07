@@ -74,7 +74,7 @@ function scenario(name, options, mutate, work) {
   }
   const execute = (c, coalesce = true) => run({ kind: "intent", json: JSON.stringify({ version: 1, command: c }), coalesce });
   const batch = (commands, label = "Plate transaction") => run({ kind: "batch", json: JSON.stringify({ version: 1, label: units(label), commands }) });
-  work({ execute, batch, run, state: () => project.getSnapshot().state, ids: f.ids });
+  work({ execute, batch, run, state: () => project.getSnapshot().state, snapshot: () => project.getSnapshot(), ids: f.ids });
   traces.push({ name, options, stateJson: canonicalStringify(f.state), asset: { descriptorJson: canonicalStringify(f.asset.descriptor), bytes: [...f.asset.bytes] }, initial, steps });
 }
 const noop = () => {};
@@ -832,7 +832,51 @@ scenario("mixed-filaments", {}, (s, f) => {
   run({ kind: "undo" }); run({ kind: "redo" });
 });
 
-const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/filaments/commands.ts", "web/src/project/filaments/mixedCommands.ts", "web/src/project/filaments/fullSpectrumRecipe.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
+const settingsGuard = snap => ({ sourceRevision: snap.revision, sourceHash: units(snap.hash) });
+const projectOverrides = (guard, inherited, overrides) => ({ setProjectSettingsOverrides: { guard, inheritedConfigJson: typeof inherited === "string" ? units(inherited) : jsonText(inherited),
+  overridesJson: typeof overrides === "string" ? units(overrides) : jsonText(overrides) } });
+const scopedOverrides = (guard, target, overrides) => ({ setScopedOverrides: { guard, target, overridesJson: typeof overrides === "string" ? units(overrides) : jsonText(overrides) } });
+const plateScope = id => ({ plate: { plateId: units(id) } });
+const objectScope = id => ({ object: { objectId: units(id) } });
+const partScope = id => ({ part: { volumeId: units(id) } });
+const rangeScope = id => ({ layerRange: { layerRangeId: units(id) } });
+scenario("settings-overrides", {}, s => {
+  s.plates[0].config = { curr_bed_type: "Textured PEI Plate" };
+  // A key this scope does not own is preserved verbatim on every write.
+  s.plates[0].objects[0].config = { brim_width: 5, nozzle_diameter: [0.4] };
+}, ({ execute, batch, run, ids, state, snapshot }) => {
+  const initial = settingsGuard(snapshot()), inherited = state().config;
+  execute(projectOverrides(settingsGuard(snapshot()), inherited, { sparse_infill_density: 25, wall_loops: 4 }));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(projectOverrides(settingsGuard(snapshot()), inherited, { sparse_infill_density: 25, wall_loops: 4 }));
+  // Each failure publishes a rollback revision, so every guard is read when its
+  // intent runs.
+  const current = () => settingsGuard(snapshot());
+  for (const bad of [() => projectOverrides(initial, inherited, {}), () => projectOverrides({ ...current(), sourceHash: units("fnv1a64:0000000000000000") }, inherited, {}),
+    () => projectOverrides(current(), inherited, { " ": 1 }), () => projectOverrides(current(), { "": 1 }, {}),
+    () => projectOverrides(current(), inherited, "{"), () => projectOverrides(current(), "[]", {}),
+    () => projectOverrides(current(), inherited, JSON.stringify({ a: [[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]] }))])
+    execute(bad());
+  execute(projectOverrides(settingsGuard(snapshot()), { ...inherited, layer_height: 0.2 }, {}));
+  execute(scopedOverrides(settingsGuard(snapshot()), plateScope(ids.plate), { curr_bed_type: "Cool Plate" }));
+  execute(scopedOverrides(settingsGuard(snapshot()), objectScope(ids.object), { brim_width: 3, wall_loops: 2 }));
+  execute(scopedOverrides(settingsGuard(snapshot()), partScope(ids.volume), { wall_loops: 5 }));
+  execute(scopedOverrides(settingsGuard(snapshot()), rangeScope(ids.range), { layer_height: 0.16 }));
+  run({ kind: "undo" }); run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "redo" });
+  execute(scopedOverrides(settingsGuard(snapshot()), rangeScope(ids.range), { layer_height: 0.16 }));
+  execute(scopedOverrides(settingsGuard(snapshot()), objectScope(ids.object), {}));
+  for (const bad of [() => scopedOverrides(current(), partScope(ids.volume), { brim_width: 1 }),
+    () => scopedOverrides(current(), rangeScope(ids.range), { curr_bed_type: "x", brim_width: 1, layer_height: 0.1 }),
+    () => scopedOverrides(initial, plateScope(ids.plate), {}), () => scopedOverrides(current(), plateScope("import:plate:missing"), {}),
+    () => scopedOverrides(current(), rangeScope("import:range:missing"), {}), () => scopedOverrides(current(), partScope("bad"), {}),
+    () => scopedOverrides(current(), objectScope(ids.object), "null")])
+    execute(bad());
+  batch([scopedOverrides(settingsGuard(snapshot()), plateScope(ids.plate), { curr_bed_type: "Smooth PEI Plate" }), add("import:plate:settings", "Settings", 3, false)], "Settings transaction");
+  batch([scopedOverrides(settingsGuard(snapshot()), plateScope(ids.plate), { curr_bed_type: "Engineering Plate" }), scopedOverrides(settingsGuard(snapshot()), objectScope(ids.object), { wall_loops: 9 })], "Stale settings transaction");
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+
+const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/settingsOverrides.ts", "web/src/project/scopedOverrides.ts", "web/src/project/domain/settingScopes.ts", "web/src/project/filaments/commands.ts", "web/src/project/filaments/mixedCommands.ts", "web/src/project/filaments/fullSpectrumRecipe.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";
 const path = new URL("testdata/cross-platform/project-command-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);
