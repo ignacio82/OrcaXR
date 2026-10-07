@@ -82,7 +82,53 @@ fn view(
     Ok((offset as usize, stride as usize, count as usize))
 }
 
+/// Counts of a payload that passed every `decodeIndexedMeshAsset` check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MeshCounts {
+    pub vertices: usize,
+    pub triangles: usize,
+}
+
 pub fn decode_indexed(asset: &AssetLease) -> Result<IndexedMesh, String> {
+    let mut mesh = IndexedMesh {
+        positions: Vec::new(),
+        indices: Vec::new(),
+    };
+    walk(asset, &mut mesh)?;
+    Ok(mesh)
+}
+
+/// The same checks, in the same order and with the same messages, without
+/// materializing the mesh: commands re-validate stored payloads on every apply.
+pub fn validate_indexed(asset: &AssetLease) -> Result<MeshCounts, String> {
+    walk(asset, &mut Discard)
+}
+
+/// Receives a mesh as it is checked; validation alone keeps nothing.
+trait Sink {
+    fn vertices(&mut self, _count: usize) {}
+    fn vertex(&mut self, _vertex: [f32; 3]) {}
+    fn indices(&mut self, _count: usize) {}
+    fn index(&mut self, _index: u32) {}
+}
+struct Discard;
+impl Sink for Discard {}
+impl Sink for IndexedMesh {
+    fn vertices(&mut self, count: usize) {
+        self.positions.reserve_exact(count);
+    }
+    fn vertex(&mut self, vertex: [f32; 3]) {
+        self.positions.push(vertex.map(f64::from));
+    }
+    fn indices(&mut self, count: usize) {
+        self.indices.reserve_exact(count);
+    }
+    fn index(&mut self, index: u32) {
+        self.indices.push(index);
+    }
+}
+
+fn walk(asset: &AssetLease, sink: &mut impl Sink) -> Result<MeshCounts, String> {
     let descriptor = Some(asset.descriptor());
     let bytes = asset.bytes();
     let mesh = field(descriptor, "mesh");
@@ -109,17 +155,18 @@ pub fn decode_indexed(asset: &AssetLease) -> Result<IndexedMesh, String> {
     }
     let (offset, stride, vertex_count) = view(positions, bytes.len(), 4.0, "position")?;
     let float = |at: usize| f32::from_le_bytes(bytes[at..at + 4].try_into().expect("4 bytes"));
-    let mut vertices = Vec::with_capacity(vertex_count);
+    sink.vertices(vertex_count);
     for index in 0..vertex_count {
         let at = offset + index * stride;
         let vertex = [float(at), float(at + 4), float(at + 8)];
         if !vertex.iter().all(|v| v.is_finite()) {
             return Err("Mesh contains a non-finite vertex".into());
         }
-        vertices.push(vertex.map(f64::from));
+        sink.vertex(vertex);
     }
     let indices_view = field(mesh, "indices");
-    let indices = if present(indices_view) {
+    let mut outside = false;
+    let index_count = if present(indices_view) {
         let kind = field(indices_view, "componentType");
         let width = if text_is(kind, "uint16") {
             2
@@ -132,30 +179,34 @@ pub fn decode_indexed(asset: &AssetLease) -> Result<IndexedMesh, String> {
             return Err("Mesh indices must be scalar values".into());
         }
         let (offset, stride, count) = view(indices_view, bytes.len(), width as f64, "index")?;
-        (0..count)
-            .map(|index| {
-                let at = offset + index * stride;
-                if width == 2 {
-                    u32::from(u16::from_le_bytes([bytes[at], bytes[at + 1]]))
-                } else {
-                    u32::from_le_bytes(bytes[at..at + 4].try_into().expect("4 bytes"))
-                }
-            })
-            .collect()
+        sink.indices(count);
+        for index in 0..count {
+            let at = offset + index * stride;
+            let value = if width == 2 {
+                u32::from(u16::from_le_bytes([bytes[at], bytes[at + 1]]))
+            } else {
+                u32::from_le_bytes(bytes[at..at + 4].try_into().expect("4 bytes"))
+            };
+            outside |= value as usize >= vertex_count;
+            sink.index(value);
+        }
+        count
     } else {
-        (0..vertex_count as u32).collect::<Vec<_>>()
+        sink.indices(vertex_count);
+        (0..vertex_count as u32).for_each(|index| sink.index(index));
+        vertex_count
     };
     let triangles = number(field(mesh, "triangleCount"))
         .filter(|n| n.is_finite() && n.fract() == 0.0 && *n >= 0.0)
         .ok_or("Mesh triangle count must be a non-negative integer")?;
-    if !indices.len().is_multiple_of(3) || (indices.len() / 3) as f64 != triangles {
+    if !index_count.is_multiple_of(3) || (index_count / 3) as f64 != triangles {
         return Err("Mesh index count does not match the declared triangle count".into());
     }
-    if indices.iter().any(|i| *i as usize >= vertex_count) {
+    if outside {
         return Err("Mesh index is outside the vertex buffer".into());
     }
-    Ok(IndexedMesh {
-        positions: vertices,
-        indices,
+    Ok(MeshCounts {
+        vertices: vertex_count,
+        triangles: index_count / 3,
     })
 }

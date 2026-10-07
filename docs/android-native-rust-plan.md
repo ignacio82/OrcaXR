@@ -148,13 +148,13 @@ Layer ranges, layer events, brim ears, layer-height profiles, physical and
 mixed filaments, project/scoped setting overrides, volume-role conversion and
 whole-facet paint strokes, project rename, plate wipe towers, auto-pair
 reconciliation, model-colour recreation and multi-volume split to objects are
-ported. So are the payload-carrying add object / add object with asset / add
-volume commands, which install validated payload leases without copying bytes
-(about 68 of the browser's 78 command classes are now native). Next comes the
-staged upload path for payloads. Command uploads will declare descriptors in
-their JSON and then stream the bytes, as bundle input does. After that come the
-remaining asset-bearing commands: mesh topology replacement, mesh booleans,
-split to parts and single-volume split to objects, then SVG and emboss volumes. Each family adds intent variants to
+ported. So are the payload-carrying commands for add object, add object with
+asset, add volume, mesh topology replacement and mesh booleans. They install
+validated payload leases without copying bytes (about 70 of the browser's 78
+command classes are now native). Next come split to parts and single-volume
+split to objects, then SVG and emboss volumes. The staged upload path follows
+for every payload-carrying kind at once: command uploads will declare
+descriptors in their JSON and then stream the bytes, as bundle input does. Each family adds intent variants to
 `contracts/project-intents.json` (definitions before first use; regenerate with
 `generate-project-intents.mjs --write`), maps them in
 `web/src/project/PreparedProjectCommands.ts`, appends a scenario to
@@ -1147,9 +1147,17 @@ and replay coverage for the complete current command inventory.
   - [ ] Stage payload-carrying commands through command uploads: descriptors
     declared in the JSON phase, bytes streamed per declared asset under
     upload/pool byte budgets, then WASM, JNI and Kotlin actor exposure.
+  - [x] Port mesh topology replacement and mesh booleans (`ReplaceVolumeMeshCommand`,
+    `MeshBooleanCommand`). Both are guarded by their starting topology and
+    re-validate stored meshes without materializing them (`validate_indexed`).
+    Removed payloads are kept as leases, so undo restores the same records.
+    Three browser boolean bugs were fixed first: undo now restores the declared
+    asset order exactly, a boolean of an instance with itself is refused, and
+    history no longer stringifies payload bytes as index-keyed objects. The
+    asset corpus is now 13 traces / 177 steps.
   - [ ] Port and replay every remaining command family before session cutover:
-    mesh replacement, split to parts and component split to objects,
-    SVG/emboss volumes, mesh booleans and refined facet commits.
+    split to parts and component split to objects, SVG/emboss volumes and
+    refined facet commits.
 - [ ] Port settings resolution, physical/mixed filament identities, profile
   selection semantics, and canonical slice preflight. Consume the generated
   pinned schema/catalog rather than reconstructing defaults in Kotlin.

@@ -39,6 +39,7 @@ interface PreviousTargetState {
   readonly annotations: FacetAnnotations;
   readonly volumeTransform: Transform;
   readonly instanceTransform: Transform;
+  /** Where the old target descriptor sat when apply removed it. */
   readonly oldDescriptorIndex: number;
   readonly removedOldAsset?: AssetPayload;
 }
@@ -91,7 +92,6 @@ export class MeshBooleanCommand implements ProjectCommand {
     assertReplacementAvailable(context, state, this.replacement);
 
     // Save previous target state
-    const oldDescriptorIndex = state.sourceAssets.findIndex((a) => a.id === this.guard.targetAssetId);
     const oldAsset = requireCanonicalMeshAsset(context, state, this.guard.targetAssetId);
     const previousSource = cloneJson(target.volume.source);
     const previousAnnotations = cloneJson(target.volume.annotations);
@@ -153,10 +153,8 @@ export class MeshBooleanCommand implements ProjectCommand {
 
     // Check if target old asset is unreferenced
     const removeOldTargetAsset = !projectReferencesAsset(state, this.guard.targetAssetId);
-    if (removeOldTargetAsset) {
-      const idx = state.sourceAssets.findIndex((a) => a.id === this.guard.targetAssetId);
-      if (idx >= 0) state.sourceAssets.splice(idx, 1);
-    }
+    const oldDescriptorIndex = state.sourceAssets.findIndex((a) => a.id === this.guard.targetAssetId);
+    if (removeOldTargetAsset && oldDescriptorIndex >= 0) state.sourceAssets.splice(oldDescriptorIndex, 1);
 
     // Commit assets and state
     context.assets.put(this.replacement.descriptor, this.replacement.bytes);
@@ -202,10 +200,9 @@ export class MeshBooleanCommand implements ProjectCommand {
     targetVol.transform = cloneJson(this.previousTarget.volumeTransform);
     target.instance.transform = cloneJson(this.previousTarget.instanceTransform);
 
-    const replacementIndex = state.sourceAssets.findIndex((a) => a.id === this.replacement.descriptor.id);
-    if (replacementIndex >= 0) state.sourceAssets.splice(replacementIndex, 1);
-
-    // Restore target old asset if removed
+    // Undo the descriptor edits in exactly the reverse order of apply, so the
+    // declared asset list returns to its original order: the old target asset,
+    // then the other object's assets last-removed first, then the replacement.
     if (this.previousTarget.removedOldAsset) {
       state.sourceAssets.splice(
         this.previousTarget.oldDescriptorIndex,
@@ -224,7 +221,7 @@ export class MeshBooleanCommand implements ProjectCommand {
         0,
         cloneJson((this.removedOther as RemovedOtherObject).object),
       );
-      for (const rem of (this.removedOther as RemovedOtherObject).removedAssets) {
+      for (const rem of [...(this.removedOther as RemovedOtherObject).removedAssets].reverse()) {
         state.sourceAssets.splice(rem.descriptorIndex, 0, cloneJson(rem.payload.descriptor));
         context.assets.put(rem.payload.descriptor, rem.payload.bytes);
       }
@@ -240,6 +237,9 @@ export class MeshBooleanCommand implements ProjectCommand {
       );
     }
 
+    const replacementIndex = state.sourceAssets.findIndex((a) => a.id === this.replacement.descriptor.id);
+    if (replacementIndex >= 0) state.sourceAssets.splice(replacementIndex, 1);
+
     context.project.replaceState(state, {
       reason: `revert:${this.type}`,
       dirtyCategories: this.dirtyCategories,
@@ -250,22 +250,36 @@ export class MeshBooleanCommand implements ProjectCommand {
     context.selection.set([{ kind: 'instance', id: this.guard.targetInstanceId }]);
   }
 
+  /**
+   * Retained records at their canonical length and payloads at their byte
+   * length. Payload bytes are never stringified: a typed array would serialize
+   * as an object keyed by every byte index.
+   */
   estimateBytes(): number {
-    let estimate =
-      canonicalStringify(this.guard).length +
-      canonicalStringify(this.replacement.descriptor).length +
-      this.replacement.bytes.byteLength;
+    let estimate = canonicalStringify(this.guard).length + payloadBytes(this.replacement);
     if (this.previousTarget) {
-      estimate += canonicalStringify(this.previousTarget).length;
+      const { removedOldAsset, ...target } = this.previousTarget;
+      estimate += canonicalStringify(target).length + (removedOldAsset ? payloadBytes(removedOldAsset) : 0);
     }
-    if (this.removedOther) {
+    if (this.removedOther?.kind === 'object') {
+      const { removedAssets, ...other } = this.removedOther;
+      estimate += canonicalStringify(other).length;
+      for (const removed of removedAssets) estimate += payloadBytes(removed.payload);
+    } else if (this.removedOther) {
       estimate += canonicalStringify(this.removedOther).length;
     }
     return Math.max(1, estimate);
   }
 }
 
+function payloadBytes(payload: AssetPayload): number {
+  return canonicalStringify(payload.descriptor).length + payload.bytes.byteLength;
+}
+
 function assertBooleanGuard(guard: MeshBooleanGuard): void {
+  if (guard.targetInstanceId === guard.otherInstanceId) {
+    throw new Error('A mesh boolean needs two different instances');
+  }
   if (!isStableEntityId(guard.targetInstanceId)) throw new Error(`Target instance ID is not stable`);
   if (!isStableEntityId(guard.targetVolumeId)) throw new Error(`Target volume ID is not stable`);
   if (!isStableEntityId(guard.targetAssetId)) throw new Error(`Target asset ID is not stable`);

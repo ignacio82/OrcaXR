@@ -16,6 +16,7 @@ mod project_plate;
 mod settings_overrides;
 mod split_objects;
 pub mod staged;
+mod topology;
 mod transforms;
 mod volume_roles;
 use crate::{
@@ -26,6 +27,7 @@ use duplicate::*;
 pub use lifecycle::IndependentObjectIds;
 use orcaxr_contracts::{canonical::Value, project_intent_types as wire};
 use std::{collections::BTreeSet, fmt, sync::Arc};
+pub use topology::{BooleanGuard, BooleanOp, TopologyGuard};
 
 #[derive(Clone)]
 pub enum PreparationError {
@@ -110,6 +112,8 @@ enum Kind {
     SeparateObjectVolumes(Box<split_objects::SeparateObjectVolumes>),
     AddObject(Box<asset_commands::AddObject>),
     AddVolume(Box<asset_commands::AddVolume>),
+    ReplaceMesh(Box<topology::ReplaceVolumeMesh>),
+    MeshBoolean(Box<topology::MeshBoolean>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -600,6 +604,29 @@ impl PreparedCommand {
             kind: Kind::AddVolume(Box::new(command)),
         }
     }
+    /// `ReplaceVolumeMeshCommand`.
+    pub fn replace_volume_mesh(
+        guard: TopologyGuard,
+        replacement: StagedAsset,
+    ) -> Result<Self, PreparationError> {
+        let command = topology::ReplaceVolumeMesh::new(guard, replacement)?;
+        Ok(Self {
+            label: Text::from_utf8("Replace mesh topology"),
+            kind: Kind::ReplaceMesh(Box::new(command)),
+        })
+    }
+    /// `MeshBooleanCommand`.
+    pub fn mesh_boolean(
+        guard: BooleanGuard,
+        replacement: StagedAsset,
+        op: BooleanOp,
+    ) -> Result<Self, PreparationError> {
+        let (command, label) = topology::MeshBoolean::new(guard, replacement, op)?;
+        Ok(Self {
+            label,
+            kind: Kind::MeshBoolean(Box::new(command)),
+        })
+    }
     pub fn paste_clipboard(
         clipboard: Arc<crate::clipboard::ClipboardData>,
         ids: IndependentObjectIds,
@@ -645,6 +672,8 @@ impl PreparedCommand {
             Kind::AddObject(ref c) if c.has_asset() => "add-object-with-asset",
             Kind::AddObject(_) => "add-object",
             Kind::AddVolume(_) => "add-volume",
+            Kind::ReplaceMesh(_) => "replace-volume-mesh",
+            Kind::MeshBoolean(_) => "mesh-boolean",
         }
     }
 }
@@ -714,6 +743,8 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::SeparateObjectVolumes(c) => c.apply(context, reason)?,
             Kind::AddObject(c) => c.apply(context, reason)?,
             Kind::AddVolume(c) => c.apply(context, reason)?,
+            Kind::ReplaceMesh(c) => c.apply(context, reason)?,
+            Kind::MeshBoolean(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
                 activate,
@@ -859,6 +890,8 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::SeparateObjectVolumes(c) => return c.revert(context, reason),
             Kind::AddObject(c) => return c.revert(context, reason),
             Kind::AddVolume(c) => return c.revert(context, reason),
+            Kind::ReplaceMesh(c) => return c.revert(context, reason),
+            Kind::MeshBoolean(c) => return c.revert(context, reason),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()
@@ -945,6 +978,8 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::SeparateObjectVolumes(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::AddObject(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::AddVolume(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::ReplaceMesh(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::MeshBoolean(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),

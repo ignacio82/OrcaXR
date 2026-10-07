@@ -11,6 +11,8 @@ import { CommandBus } from "../../web/src/project/history/commandBus.ts";
 import { prepareProjectIntent } from "../../web/src/project/PreparedProjectCommands.ts";
 import { AddObjectCommand, AddObjectWithAssetCommand } from "../../web/src/project/commands.ts";
 import { AddVolumeCommand } from "../../web/src/project/objects/semanticVolumeCommands.ts";
+import { ReplaceVolumeMeshCommand } from "../../web/src/project/objects/topologyCommands.ts";
+import { MeshBooleanCommand } from "../../web/src/project/objects/meshBooleanCommands.ts";
 import { InMemoryAssetRepository, assetBundleFingerprint } from "../../web/src/project/assets.ts";
 import { createProjectFixture } from "../../web/src/project/__tests__/fixtures.ts";
 import { canonicalStringify, cloneJson } from "../../web/src/project/domain/canonical.ts";
@@ -33,12 +35,17 @@ function snapshot(s) {
 const wirePayload = p => ({ descriptorJson: canonicalStringify(p.descriptor), bytes: [...p.bytes] });
 const payload = w => ({ descriptor: JSON.parse(w.descriptorJson), bytes: Uint8Array.from(w.bytes) });
 /** The production constructor for one captured record command. */
+/** Guards travel with UTF-16 strings, so their exact text reaches both sides. */
+const guardTo = g => Object.fromEntries(Object.entries(g).map(([k, v]) => [k, typeof v === "string" ? units(v) : v]));
+const guardFrom = g => Object.fromEntries(Object.entries(g).map(([k, v]) => [k, Array.isArray(v) ? string(v) : v]));
 function prepare(c) {
-  const record = JSON.parse(c.recordJson);
+  const record = c.recordJson === undefined ? undefined : JSON.parse(c.recordJson);
   switch (c.kind) {
     case "addObject": return new AddObjectCommand(string(c.plateId), record);
     case "addObjectWithAsset": return new AddObjectWithAssetCommand(string(c.plateId), record, payload(c.asset));
     case "addVolume": return new AddVolumeCommand(string(c.objectId), record, payload(c.asset));
+    case "replaceVolumeMesh": return new ReplaceVolumeMeshCommand(guardFrom(c.guard), payload(c.asset));
+    case "meshBoolean": return new MeshBooleanCommand(guardFrom(c.guard), payload(c.asset), c.op);
     default: throw new Error("unknown captured kind");
   }
 }
@@ -160,6 +167,99 @@ scenario("add-volumes-in-role-order", {}, (s, f, extra) => {
   run({ kind: "redo" });
 });
 
+const replaceMesh = (guard, asset) => ({ kind: "replaceVolumeMesh", guard: guardTo(guard), asset: wirePayload(asset) });
+const meshBoolean = (guard, asset, op = "UNION") => ({ kind: "meshBoolean", guard: guardTo(guard), asset: wirePayload(asset), op });
+const topologyGuard = (state, volumeId) => {
+  const volume = state.plates.flatMap(p => p.objects).flatMap(o => o.volumes).find(v => v.id === volumeId);
+  const descriptor = state.sourceAssets.find(a => a.id === volume.source.assetId);
+  return { volumeId, assetId: volume.source.assetId, assetDigest: descriptor.digest, topologyRevision: volume.source.topologyRevision, triangleCount: volume.source.triangleCount };
+};
+const withMeshDescriptor = (p, edit) => withDescriptor(p, d => edit(d.mesh));
+
+scenario("replace-volume-mesh", {}, (s, f, extra) => {
+  // A second volume shares the fixture mesh, so the first replacement keeps it.
+  const object = s.plates[0].objects[0];
+  object.volumes.push({ ...cloneJson(object.volumes[0]), id: "import:volume:sharing", name: "Sharing", annotations: { ...object.volumes[0].annotations, color: [] } });
+  extra.push(mesh("import:asset:repository-held", 13));
+}, ({ execute, run, state, ids, fixture }) => {
+  const guard = () => topologyGuard(state(), ids.volume);
+  const result = mesh("import:asset:replaced", 21);
+  for (const bad of [{ volumeId: "bad" }, { assetId: "bad" }, { assetDigest: " \t" }, { topologyRevision: -1 }, { topologyRevision: 1.5 },
+    { topologyRevision: Number.MAX_SAFE_INTEGER }, { topologyRevision: Number.MAX_SAFE_INTEGER + 2 }, { triangleCount: -1 }, { triangleCount: 0.5 }])
+    execute(replaceMesh({ ...guard(), ...bad }, result));
+  execute(replaceMesh(guard(), withDescriptor(result, d => (d.digest = " "))));
+  execute(replaceMesh(guard(), encodeIndexedMeshAsset({ id: "import:asset:empty", positions: [] })));
+  execute(replaceMesh(guard(), withMeshDescriptor(result, m => (m.triangleCount = 3))));
+  execute(replaceMesh(guard(), withDescriptor(fixture.asset, () => {})));
+  for (const stale of [{ volumeId: "import:volume:missing" }, { assetId: "import:asset:other" }, { topologyRevision: 1 }, { triangleCount: 2 }, { assetDigest: "fnv1a64:0000000000000000" }])
+    execute(replaceMesh({ ...guard(), ...stale }, result));
+  execute(replaceMesh(guard(), mesh("import:asset:repository-held", 13)));
+  execute(replaceMesh(guard(), withDescriptor(fixture.asset, d => (d.id = "import:asset:fixture-copy"))));
+  execute(replaceMesh(guard(), withDescriptor(mesh("import:asset:repository-held", 13), d => (d.id = "import:asset:repository-copy"))));
+  run({ kind: "selection", refs: [{ kind: "volume", id: units(ids.volume) }] });
+  execute(replaceMesh(guard(), result));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  // The sharing volume now holds the last reference; replacing it drops the old mesh.
+  const second = mesh("import:asset:replaced-again", 22);
+  execute(replaceMesh(topologyGuard(state(), "import:volume:sharing"), second));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  for (let i = 0; i < 2; i++) run({ kind: "undo" });
+  for (let i = 0; i < 2; i++) run({ kind: "redo" });
+  execute(replaceMesh(topologyGuard(state(), ids.volume), mesh("import:asset:third", 23)));
+  run({ kind: "undo" });
+});
+
+/** Target object (fixture) plus an object with two meshes declared after it,
+ * and an object with two instances. */
+function booleanFixture(s, f, extra) {
+  const object = s.plates[0].objects[0], first = mesh("import:asset:other-a", 31), second = mesh("import:asset:other-b", 32);
+  s.sourceAssets.push(first.descriptor, second.descriptor);
+  extra.push(first, second);
+  const part = (id, asset) => ({ ...volumeFor(id, asset), annotations: { ...object.volumes[0].annotations, color: [] } });
+  s.plates[0].objects.push({ ...objectFor("other", first), volumes: [part("import:volume:other-a", first), part("import:volume:other-b", second)] });
+  s.plates[0].objects.push({ ...objectFor("twins", first), instances: [0, 1, 2].map(i => ({ id: `import:instance:twin-${i}`, transform: { translationMm: [i * 30, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] }, printable: i !== 1 })) });
+  object.volumes[0].transform = { translationMm: [1, 2, 3], rotation: [0, 0, 0.5, 0.5], scale: [2, 2, 2] };
+  object.instances[0].transform = { translationMm: [50, 60, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] };
+}
+const booleanGuard = (state, targetInstanceId, otherInstanceId) => {
+  const object = state.plates.flatMap(p => p.objects).find(o => o.instances.some(i => i.id === targetInstanceId));
+  const volume = object.volumes[0], descriptor = state.sourceAssets.find(a => a.id === volume.source.assetId);
+  return { targetInstanceId, targetVolumeId: volume.id, targetAssetId: volume.source.assetId, targetAssetDigest: descriptor.digest,
+    targetTopologyRevision: volume.source.topologyRevision, targetTriangleCount: volume.source.triangleCount, otherInstanceId };
+};
+scenario("mesh-boolean", {}, booleanFixture, ({ execute, run, state, ids }) => {
+  const guard = (other = "import:instance:other") => booleanGuard(state(), ids.instance, other);
+  const result = mesh("import:asset:boolean", 41);
+  run({ kind: "selection", refs: [{ kind: "instance", id: units("import:instance:other") }, { kind: "volume", id: units(ids.volume) }] });
+  execute(meshBoolean({ ...guard(), otherInstanceId: ids.instance }, result));
+  for (const bad of [{ targetInstanceId: "bad" }, { targetVolumeId: "bad" }, { targetAssetId: "bad" }, { otherInstanceId: "bad" }, { targetAssetDigest: "" },
+    { targetTopologyRevision: -1 }, { targetTriangleCount: 2.5 }])
+    execute(meshBoolean({ ...guard(), ...bad }, result));
+  execute(meshBoolean(guard(), withDescriptor(result, d => (d.id = guard().targetAssetId))));
+  for (const stale of [{ targetInstanceId: "import:instance:missing" }, { targetVolumeId: "import:volume:missing" }, { targetAssetId: "import:asset:other-a" },
+    { targetTopologyRevision: 4 }, { targetTriangleCount: 9 }, { targetAssetDigest: "fnv1a64:0000000000000000" }, { otherInstanceId: "import:instance:missing" }])
+    execute(meshBoolean({ ...guard(), ...stale }, result));
+  execute(meshBoolean(guard(), mesh("import:asset:other-a", 31)));
+  execute(meshBoolean(guard(), withDescriptor(mesh("import:asset:other-b", 32), d => (d.id = "import:asset:other-b-copy"))));
+  // The other object goes with both of its meshes; undo restores their order.
+  execute(meshBoolean(guard(), result, "UNION"));
+  run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "undo" });
+  // One of three instances goes; undo puts it back in place.
+  execute(meshBoolean(guard("import:instance:twin-1"), mesh("import:asset:boolean-twin", 42), "A_NOT_B"));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(meshBoolean(booleanGuard(state(), "import:instance:twin-0", "import:instance:twin-2"), mesh("import:asset:boolean-pair", 43), "INTERSECTION"));
+  run({ kind: "undo" }); run({ kind: "undo" });
+});
+scenario("mesh-boolean-shared-target-mesh", {}, (s, f, extra) => {
+  booleanFixture(s, f, extra);
+  // The other object also uses the target's mesh: it is dropped with the target's.
+  s.plates[0].objects[1].volumes[1].source = cloneJson(s.plates[0].objects[0].volumes[0].source);
+  s.plates[0].objects[1].volumes[1].annotations = { ...s.plates[0].objects[1].volumes[1].annotations, topologyRevision: 0 };
+}, ({ execute, run, state, ids }) => {
+  execute(meshBoolean(booleanGuard(state(), ids.instance, "import:instance:other"), mesh("import:asset:boolean-shared", 44)));
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+
 // History charges the canonical record plus the payload bytes; a following
 // rename moves each across the boundary.
 const probe = createProjectFixture();
@@ -168,15 +268,28 @@ const probeObject = objectFor("retained", probeAsset), probeVolume = volumeFor("
 const objectBytes = prepare(addObjectWithAsset(probe.ids.plate, probeObject, probeAsset)).estimateBytes();
 const volumeBytes = prepare(addVolume(probe.ids.object, probeVolume, probeAsset)).estimateBytes();
 assert.equal(objectBytes, canonicalStringify(probeObject).length + probeAsset.bytes.length);
-for (const [label, bytes, command] of [["object", objectBytes, ids => addObjectWithAsset(ids.plate, probeObject, probeAsset)], ["volume", volumeBytes, ids => addVolume(ids.object, probeVolume, probeAsset)]])
+const probeRun = (fixture, command) => {
+  const project = new ProjectStore(fixture.state), assets = new InMemoryAssetRepository();
+  for (const p of [fixture.asset, ...(fixture.extra ?? [])]) assets.put(p.descriptor, p.bytes);
+  const bus = new CommandBus({ project, selection: new SelectionStore(), assets }), prepared = prepare(command(fixture.ids, project.getSnapshot().state));
+  bus.execute(prepared);
+  return prepared.estimateBytes();
+};
+const booleanProbe = createProjectFixture(); booleanProbe.extra = []; booleanFixture(booleanProbe.state, booleanProbe, booleanProbe.extra);
+const replaceCommand = (ids, state) => replaceMesh(topologyGuard(state, ids.volume), mesh("import:asset:retained-mesh", 51));
+const booleanCommand = (ids, state) => meshBoolean(booleanGuard(state, ids.instance, "import:instance:other"), mesh("import:asset:retained-boolean", 52));
+const replaceBytes = probeRun(createProjectFixture(), replaceCommand), booleanBytes = probeRun(booleanProbe, booleanCommand);
+for (const [label, bytes, command, mutate] of [["object", objectBytes, ids => addObjectWithAsset(ids.plate, probeObject, probeAsset)], ["volume", volumeBytes, ids => addVolume(ids.object, probeVolume, probeAsset)],
+  ["replace", replaceBytes, (ids, state) => replaceCommand(ids, state)], ["boolean", booleanBytes, (ids, state) => booleanCommand(ids, state), booleanFixture]])
   for (const delta of [0, -1])
-    scenario(`asset-retention-${label}-${delta}`, { maxEstimatedBytes: bytes + 1 + delta }, () => {}, ({ execute, intent, run, ids }) => {
-      execute(command(ids));
+    scenario(`asset-retention-${label}-${delta}`, { maxEstimatedBytes: bytes + 1 + delta }, mutate ?? (() => {}), ({ execute, intent, run, ids, state }) => {
+      execute(command(ids, state()));
       intent({ renamePlate: { plateId: units(ids.plate), name: units("Following") } });
       run({ kind: "undo" }); run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "redo" });
     });
 
-const sources = ["tools/cross-platform/project-asset-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/semanticVolumeCommands.ts", "web/src/project/PreparedProjectCommands.ts",
+const sources = ["tools/cross-platform/project-asset-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/semanticVolumeCommands.ts",
+  "web/src/project/objects/topologyCommands.ts", "web/src/project/objects/meshBooleanCommands.ts", "web/src/project/PreparedProjectCommands.ts",
   "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/meshCodec.ts",
   "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";

@@ -2824,6 +2824,38 @@ canonical record plus the payload bytes; a payload-free add charges one.
 constructors. They carry repository-only payloads too (`extraAssets`), and the
 Rust replay compares the asset bundle fingerprint at every step.
 
+### Mesh topology replacement and booleans
+
+`ReplaceVolumeMeshCommand` and `MeshBooleanCommand` are native as
+`PreparedCommand::replace_volume_mesh` and `mesh_boolean`. Their guards arrive
+as raw text and numbers (`TopologyGuard`, `BooleanGuard`) and are checked like
+`assertGuardShape` / `assertBooleanGuard`, so malformed IDs, digests and counts
+fail with the browser's messages. Both commands, in the browser's order:
+
+- check the guarded topology against the live volume and its declared,
+  stored, decodable mesh;
+- require a fresh replacement ID and digest;
+- reset every annotation channel at the next topology revision;
+- drop payloads that nothing references any more.
+
+The boolean also resets both transforms, since its result is in bed
+coordinates, and removes the other instance, or its whole object (with that
+object's unreferenced meshes) when it was the last instance.
+
+Stored meshes are re-validated with `mesh::validate_indexed`. It is the same
+walker as `decode_indexed` (same checks, order and messages), but it keeps
+nothing. Removed payloads are retained as `AssetLease`s, so undo restores the
+exact records; the replay checks the original mesh's identity whenever it is
+present. Three browser defects were fixed before porting:
+
+- undo now reverses apply's descriptor edits exactly, where it used to permute
+  the declared asset order when the removed object held several meshes;
+- a boolean of an instance with itself is refused;
+- history no longer stringifies payload bytes, which a typed array turns into
+  an index-keyed object; it charges their byte length instead.
+
+`meshBooleanCommands.test.ts` covers each fix.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

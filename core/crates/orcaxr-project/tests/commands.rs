@@ -24,8 +24,52 @@ fn prepare_asset(v: &Value) -> Result<PreparedCommand, PreparationError> {
     if let Some(intent) = v.get("intent") {
         return prepare_intent(&json!({"version":1,"command":intent}).to_string());
     }
-    let record = v["recordJson"].as_str().unwrap().as_bytes();
     let asset = || StagedAsset::new(payload(&v["asset"])).unwrap();
+    let guard = &v["guard"];
+    let units = |name: &str| -> Vec<u16> {
+        guard[name]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n.as_u64().unwrap() as u16)
+            .collect()
+    };
+    let number = |name: &str| guard[name].as_f64().unwrap();
+    match v["kind"].as_str().unwrap() {
+        "replaceVolumeMesh" => {
+            return PreparedCommand::replace_volume_mesh(
+                TopologyGuard {
+                    volume_id: units("volumeId"),
+                    asset_id: units("assetId"),
+                    asset_digest: units("assetDigest"),
+                    topology_revision: number("topologyRevision"),
+                    triangle_count: number("triangleCount"),
+                },
+                asset(),
+            );
+        }
+        "meshBoolean" => {
+            return PreparedCommand::mesh_boolean(
+                BooleanGuard {
+                    target_instance_id: units("targetInstanceId"),
+                    target_volume_id: units("targetVolumeId"),
+                    target_asset_id: units("targetAssetId"),
+                    target_asset_digest: units("targetAssetDigest"),
+                    target_topology_revision: number("targetTopologyRevision"),
+                    target_triangle_count: number("targetTriangleCount"),
+                    other_instance_id: units("otherInstanceId"),
+                },
+                asset(),
+                match v["op"].as_str().unwrap() {
+                    "UNION" => BooleanOp::Union,
+                    "A_NOT_B" => BooleanOp::ANotB,
+                    _ => BooleanOp::Intersection,
+                },
+            );
+        }
+        _ => {}
+    }
+    let record = v["recordJson"].as_str().unwrap().as_bytes();
     let object = || {
         let mut input = ObjectInput::new(record.len(), record_limits(record)).unwrap();
         for (i, chunk) in record.chunks(7).enumerate() {
@@ -217,7 +261,7 @@ fn asset_commands_and_payloads_match_every_typescript_step() {
             "../../../../testdata/cross-platform/project-asset-command-vectors.json"
         ))
         .unwrap(),
-        87,
+        177,
     );
 }
 /// Applying and redoing a staged payload installs its validated record by
@@ -559,9 +603,13 @@ fn replay(f: Value, expected_steps: usize) {
                     trace["name"]
                 );
             }
-            if let Some(lease) = &original_lease {
+            // Mesh replacements may remove the original payload; whenever it is
+            // present (including after undo restores it) it is the same record.
+            if let Some(lease) = &original_lease
+                && let Some(current) = bus.assets().peek(lease.id())
+            {
                 assert!(
-                    bus.assets().peek(lease.id()).unwrap().same_record(lease),
+                    current.same_record(lease),
                     "prepared editing commands preserve mesh identity"
                 );
             }

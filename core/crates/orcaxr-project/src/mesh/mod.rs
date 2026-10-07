@@ -6,7 +6,7 @@ mod indexed;
 use crate::assets::AssetLease;
 pub use bounds::{Bounds, BoundsLimits, instance_bounds};
 pub use encode::{Coordinates, EncodeOptions, encode};
-pub use indexed::{IndexedMesh, decode_indexed};
+pub use indexed::{IndexedMesh, MeshCounts, decode_indexed, validate_indexed};
 use orcaxr_contracts::canonical::Value;
 use std::fmt;
 
