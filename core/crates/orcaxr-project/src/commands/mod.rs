@@ -194,20 +194,31 @@ pub fn prepare_split_to_objects(
     parts: Vec<SplitPart>,
     identities: Vec<SeparatedObject>,
 ) -> Result<PreparedBatch, PreparationError> {
+    split_to_objects_checks(state, &guard.volume_id, &checks_of(&parts))?;
+    Ok(SplitToObjects::new(guard, parts, identities)?.batch())
+}
+fn checks_of(parts: &[SplitPart]) -> Vec<(Vec<u16>, usize)> {
+    parts
+        .iter()
+        .map(|part| (part.volume_id.clone(), part.source_triangles.len()))
+        .collect()
+}
+/// The live-state checks `commitPreparedVolumeSplitToObjects` makes before
+/// opening its transaction.
+fn split_to_objects_checks(
+    state: &ProjectState,
+    volume: &[u16],
+    parts: &[(Vec<u16>, usize)],
+) -> Result<(), PreparationError> {
     let source = state
         .plates
         .iter()
         .flat_map(|plate| plate.objects.iter())
-        .find(|object| {
-            object
-                .volumes
-                .iter()
-                .any(|v| v.id.as_utf16() == guard.volume_id)
-        });
+        .find(|object| object.volumes.iter().any(|v| v.id.as_utf16() == volume));
     let Some(source) = source else {
         return Err(PreparationError::Domain(text_parts(
             "Unknown split-to-objects source volume ",
-            &guard.volume_id,
+            volume,
             "",
         )));
     };
@@ -216,28 +227,64 @@ pub fn prepare_split_to_objects(
             "Prepared component split-to-objects requires an object with exactly one volume",
         )));
     }
-    if let Some(undersized) = parts.iter().find(|part| part.source_triangles.len() < 3) {
+    if let Some((id, _)) = parts.iter().find(|(_, triangles)| *triangles < 3) {
         return Err(PreparationError::Domain(text_parts(
             "Split-to-objects component for ",
-            &undersized.volume_id,
+            id,
             " has fewer than three facets; refusing the pinned lossy discard",
         )));
     }
-    let first = parts.first().map(|part| part.volume_id.clone());
-    let split = PreparedCommand::split_volume_to_parts(guard, parts)?;
-    // Construction proved the first part's ID stable.
-    let part = id(first.expect("a split has parts")).expect("stable part ID");
-    let separate = split_objects::SeparateObjectVolumes::after_split(part, identities);
-    Ok(PreparedBatch {
-        label: Text::from_utf8("Split to objects"),
-        commands: vec![
+    Ok(())
+}
+/// A validated single-volume split to objects, waiting for the live state its
+/// checks run against (staged work executes it later).
+#[derive(Clone)]
+pub struct SplitToObjects {
+    volume: Vec<u16>,
+    checks: Vec<(Vec<u16>, usize)>,
+    split: PreparedCommand,
+    part: VolumeId,
+    identities: Vec<SeparatedObject>,
+}
+impl SplitToObjects {
+    pub fn new(
+        guard: VolumeSplitGuard,
+        parts: Vec<SplitPart>,
+        identities: Vec<SeparatedObject>,
+    ) -> Result<Self, PreparationError> {
+        let volume = guard.volume_id.clone();
+        let checks = checks_of(&parts);
+        let first = parts.first().map(|part| part.volume_id.clone());
+        let split = PreparedCommand::split_volume_to_parts(guard, parts)?;
+        // Construction proved the first part's ID stable.
+        let part = id(first.expect("a split has parts")).expect("stable part ID");
+        Ok(Self {
+            volume,
+            checks,
             split,
-            PreparedCommand {
-                label: separate.label(),
-                kind: Kind::SeparateObjectVolumes(Box::new(separate)),
-            },
-        ],
-    })
+            part,
+            identities,
+        })
+    }
+    /// The checks against `state`, then the transaction to execute.
+    pub fn prepare(self, state: &ProjectState) -> Result<PreparedBatch, PreparationError> {
+        split_to_objects_checks(state, &self.volume, &self.checks)?;
+        Ok(self.batch())
+    }
+    fn batch(self) -> PreparedBatch {
+        let separate =
+            split_objects::SeparateObjectVolumes::after_split(self.part, self.identities);
+        PreparedBatch {
+            label: Text::from_utf8("Split to objects"),
+            commands: vec![
+                self.split,
+                PreparedCommand {
+                    label: separate.label(),
+                    kind: Kind::SeparateObjectVolumes(Box::new(separate)),
+                },
+            ],
+        }
+    }
 }
 fn id<K>(units: Vec<u16>) -> Result<EntityId<K>, PreparationError> {
     EntityId::try_from_utf16(units).map_err(|_| PreparationError::InvalidIntent)

@@ -153,7 +153,8 @@ export class AsyncEditorSession {
     return this.mutate(() => {
       const prepared = slot.take();
       try {
-        if (prepared.label === undefined) this.session.execute(prepared.commands[0]!);
+        if (prepared.program) prepared.program(this.session.commands);
+        else if (prepared.label === undefined) this.session.execute(prepared.commands[0]!);
         else
           this.session.transaction(prepared.label, () => {
             for (const command of prepared.commands) this.session.execute(command);

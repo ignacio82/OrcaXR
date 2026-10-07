@@ -134,7 +134,7 @@ export function projectClipboardBoundaries(
     return wire;
   };
   try {
-    session.configure_staging(1, Float64Array.from([4, 100, 4_000_000]));
+    session.configure_staging(1, Float64Array.from([4, 100, 4_000_000, 0]));
     receive(
       session.submit(
         wire({
@@ -320,7 +320,7 @@ export function projectClipboardBoundaries(
     const result = receive(session.run_next());
     if (!Object.hasOwn(result.result, "acknowledged"))
       throw Error("Detached clipboard paste failed");
-    eq(Array.from(session.staging_usage()), [0, 0, 0]);
+    eq(Array.from(session.staging_usage()), [0, 0, 0, 0]);
     // History retains data but must not retain clipboard owner slots.
     const current = session.capture_guard();
     try {

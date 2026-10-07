@@ -58,7 +58,7 @@ object ProjectOwnerChecks {
             u.open(longArrayOf(0, 1, 2, 3))
         }
         val bytes = payload.toByteArray(Charsets.UTF_8)
-        val options = ProjectStagingInputOptions(bytes.size.toLong(), 100_000, 1_000_000, 1024, 128, 100, 4_000_000)
+        val options = ProjectStagingInputOptions(bytes.size.toLong(), 100_000, 1_000_000, 1024, 128, 100, 4_000_000, 64, 16_777_216)
         val captureLimits = ProjectStagingClipboardOptions(2, (mesh.size + svg.size).toLong())
         fun copy(s: ProjectSession, guard: ProjectGuard): ProjectClipboard = s.snapshot().use { snapshot -> snapshot.query().use { root ->
             root.children(QueryRelation.PLATES, 4096).use { plates -> plates.node(0).use { plate ->
@@ -73,7 +73,7 @@ object ProjectOwnerChecks {
         fun wire(id: Long, operation: ProjectIntents.SessionOperation) = ProjectIntents.encodeSessionRequest(ProjectIntents.SessionRequest(1, listOf(0, 1, 2, 3), id, operation))
         var passed = 0L
         session().use { s ->
-            s.configureStaging(ProjectStagingPoolOptions(4, 100, 8_000_000))
+            s.configureStaging(ProjectStagingPoolOptions(4, 100, 8_000_000, 16_777_216))
             s.captureGuard().use { guard ->
                 val c = copy(s, guard)
                 check(c.info() == ProjectClipboardInfo(2, 1, 1, 2, (mesh.size + svg.size).toLong()))
@@ -132,8 +132,8 @@ object ProjectOwnerChecks {
             u.sealDocument(); u.open(longArrayOf(0, 1, 2, 3))
         }
         val bytes = payload.toByteArray(Charsets.UTF_8)
-        val options = ProjectStagingInputOptions(bytes.size.toLong(), 100_000, 1_000_000, 1024, 128, 100, 4_000_000)
-        val limits = ProjectStagingPoolOptions(4, 100, 8_000_000)
+        val options = ProjectStagingInputOptions(bytes.size.toLong(), 100_000, 1_000_000, 1024, 128, 100, 4_000_000, 64, 16_777_216)
+        val limits = ProjectStagingPoolOptions(4, 100, 8_000_000, 16_777_216)
         fun ready(s: ProjectSession, guard: ProjectGuard): ProjectCommandUpload {
             val input = s.commandUpload(guard, bytes.size.toLong(), options)
             try { for (start in bytes.indices step 97) input.append(start.toLong(), bytes.copyOfRange(start, minOf(start + 97, bytes.size))); input.seal(); return input }

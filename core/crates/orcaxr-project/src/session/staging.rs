@@ -11,18 +11,22 @@ pub struct StagingLimits {
     pub max_resources: usize,
     pub max_commands: usize,
     pub max_units: u64,
+    /// Payload bytes held by staged work: each distinct asset once per work.
+    pub max_asset_bytes: u64,
 }
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct StagingUsage {
     pub resources: usize,
     pub commands: usize,
     pub units: u64,
+    pub asset_bytes: u64,
 }
 impl StagingUsage {
     fn fits(self, limits: StagingLimits) -> bool {
         self.resources <= limits.max_resources
             && self.commands <= limits.max_commands
             && self.units <= limits.max_units
+            && self.asset_bytes <= limits.max_asset_bytes
     }
 }
 struct Lease {
@@ -35,6 +39,7 @@ impl Drop for Lease {
         usage.resources -= self.usage.resources;
         usage.commands -= self.usage.commands;
         usage.units -= self.usage.units;
+        usage.asset_bytes -= self.usage.asset_bytes;
     }
 }
 pub(super) struct StagedResource {
@@ -59,6 +64,7 @@ impl StagingPool {
         if limits.max_resources as u64 > max
             || limits.max_commands as u64 > max
             || limits.max_units > max
+            || limits.max_asset_bytes > max
         {
             return Err(wire::SessionError::InvalidRequest);
         }
@@ -80,6 +86,7 @@ impl StagingPool {
             resources: 1,
             commands: work.command_count(),
             units: work.units(),
+            asset_bytes: work.asset_bytes(),
         };
         let mut usage = self.budget.lock().expect("private staging counter lock");
         let next = StagingUsage {
@@ -94,6 +101,10 @@ impl StagingPool {
             units: usage
                 .units
                 .checked_add(charge.units)
+                .ok_or(wire::SessionError::ResourceLimit)?,
+            asset_bytes: usage
+                .asset_bytes
+                .checked_add(charge.asset_bytes)
                 .ok_or(wire::SessionError::ResourceLimit)?,
         };
         if !next.fits(self.limits) {

@@ -127,7 +127,7 @@ try {
   const actorChecks = jvm.call("actorChecks", JSON.parse(await readFile(new URL("testdata/cross-platform/project-model-vectors.json",root))).factories[0].stateJson);
   assert.equal(actorChecks, 12);
   const actorPreparationChecks = jvm.call("actorPreparationChecks", model.factories[0].stateJson);
-  assert.equal(actorPreparationChecks, 16);
+  assert.equal(actorPreparationChecks, 17);
   const exportFixture = JSON.parse(await readFile(new URL("testdata/cross-platform/project-export-vectors.json", root)));
   const actorExportChecks = jvm.call("actorExportChecks", exportFixture.source, exportFixture.canonical,
     Uint8Array.from(exportFixture.assets[0].bytes), Uint8Array.from(exportFixture.assets[1].bytes), exportFixture.empty, exportFixture.large, exportFixture.largeCanonical);

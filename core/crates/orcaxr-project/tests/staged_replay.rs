@@ -12,13 +12,17 @@ use orcaxr_project::{
     validation::*,
 };
 use orcaxr_project::{
-    commands::{IndependentObjectIds, staged::*},
+    commands::{
+        BooleanGuard, BooleanOp, IndependentObjectIds, PartPlacement, Recipe, SeparatedObject,
+        SplitPart, StagedAsset, TopologyGuard, VolumeSplitGuard, staged::*,
+    },
     ingress::{
         command_record::{InstanceInput, ObjectInput},
         json::JsonLimits,
     },
 };
 use serde_json::{Value, json};
+use std::sync::Arc;
 fn fixture() -> Value {
     serde_json::from_str(include_str!(
         "../../../../testdata/cross-platform/project-staged-session-vectors.json"
@@ -145,7 +149,7 @@ fn session(trace: &Value) -> ProjectSession<impl TimestampPolicy<Error = ()>> {
 }
 fn usage<P: TimestampPolicy>(session: &ProjectSession<P>) -> Value {
     let u = session.staging_usage();
-    json!({"resources":u.resources,"commands":u.commands,"units":u.units})
+    json!({"resources":u.resources,"commands":u.commands,"units":u.units,"assetBytes":u.asset_bytes})
 }
 fn capture_error(error: CaptureError) -> wire::SessionError {
     match error {
@@ -194,6 +198,12 @@ fn capture_command(
             .then(|| PlateId::try_from_utf16(text(&v["destination"]).units().to_vec()).unwrap());
         return CapturedCommand::clipboard_paste(clips[name].data(), ids, destination, LIMIT)
             .map_err(capture_error);
+    }
+    if v["kind"]
+        .as_str()
+        .is_some_and(|k| k != "instance" && k != "object")
+    {
+        return capture_asset_command(v);
     }
     let bytes = v["recordJson"].as_str().unwrap().as_bytes();
     let limits = JsonLimits {
@@ -261,10 +271,209 @@ fn capture_command(
         .map_err(capture_error)
     }
 }
+fn utf16(value: &Value) -> Vec<u16> {
+    value
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n.as_u64().unwrap() as u16)
+        .collect()
+}
+fn staged_asset(value: &Value) -> Result<StagedAsset, wire::SessionError> {
+    StagedAsset::new(AssetPayload {
+        descriptor: parse(value["descriptorJson"].as_str().unwrap()).unwrap(),
+        bytes: value["bytes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|b| b.as_u64().unwrap() as u8)
+            .collect(),
+    })
+    .map_err(|_| wire::SessionError::InvalidRequest)
+}
+fn decoded<T: Decode>(json: &Value) -> Result<T, wire::SessionError> {
+    T::from_value(parse(json.as_str().unwrap()).unwrap())
+        .map_err(|_| wire::SessionError::InvalidRequest)
+}
+fn stable<K>(value: &Value) -> Result<EntityId<K>, wire::SessionError> {
+    EntityId::try_from_utf16(utf16(value)).map_err(|_| wire::SessionError::InvalidRequest)
+}
+fn split_guard(g: &Value) -> VolumeSplitGuard {
+    VolumeSplitGuard {
+        volume_id: utf16(&g["volumeId"]),
+        asset_id: utf16(&g["assetId"]),
+        asset_digest: utf16(&g["assetDigest"]),
+        topology_revision: g["topologyRevision"].as_f64().unwrap(),
+        triangle_count: g["triangleCount"].as_f64().unwrap(),
+        volume_fingerprint: utf16(&g["volumeFingerprint"]),
+    }
+}
+fn split_parts(parts: &Value) -> Result<Vec<SplitPart>, wire::SessionError> {
+    parts
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            Ok(SplitPart {
+                volume_id: utf16(&p["volumeId"]),
+                asset: staged_asset(&p["asset"])?,
+                transform: decoded(&p["transformJson"])?,
+                source_triangles: p["sourceTriangleIndices"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|n| n.as_f64().unwrap())
+                    .collect(),
+            })
+        })
+        .collect()
+}
+fn placement(p: &Value) -> Result<PartPlacement, wire::SessionError> {
+    Ok(PartPlacement {
+        object: stable(&p["objectId"])?,
+        volume: stable(&p["volumeId"])?,
+        asset: stable(&p["assetId"])?,
+        transform: decoded(&p["transformJson"])?,
+    })
+}
+/// The payload-carrying kinds, in the asset corpus's wire form.
+fn capture_asset_command(v: &Value) -> Result<CapturedCommand, wire::SessionError> {
+    const LIMIT: u64 = 4_000_000;
+    let record = || v["recordJson"].clone();
+    let triangles = || v["triangleCount"].as_f64().unwrap();
+    let captured = match v["kind"].as_str().unwrap() {
+        "addObject" => CapturedCommand::add_object(
+            stable(&v["plateId"])?,
+            Arc::new(decoded(&record())?),
+            LIMIT,
+        ),
+        "addObjectWithAsset" => CapturedCommand::add_object_with_asset(
+            stable(&v["plateId"])?,
+            Arc::new(decoded(&record())?),
+            staged_asset(&v["asset"])?,
+            LIMIT,
+        ),
+        "addVolume" => CapturedCommand::add_volume(
+            stable(&v["objectId"])?,
+            Arc::new(decoded(&record())?),
+            staged_asset(&v["asset"])?,
+            LIMIT,
+        ),
+        "replaceVolumeMesh" => {
+            let g = &v["guard"];
+            CapturedCommand::replace_volume_mesh(
+                TopologyGuard {
+                    volume_id: utf16(&g["volumeId"]),
+                    asset_id: utf16(&g["assetId"]),
+                    asset_digest: utf16(&g["assetDigest"]),
+                    topology_revision: g["topologyRevision"].as_f64().unwrap(),
+                    triangle_count: g["triangleCount"].as_f64().unwrap(),
+                },
+                staged_asset(&v["asset"])?,
+                LIMIT,
+            )
+        }
+        "meshBoolean" => {
+            let g = &v["guard"];
+            CapturedCommand::mesh_boolean(
+                BooleanGuard {
+                    target_instance_id: utf16(&g["targetInstanceId"]),
+                    target_volume_id: utf16(&g["targetVolumeId"]),
+                    target_asset_id: utf16(&g["targetAssetId"]),
+                    target_asset_digest: utf16(&g["targetAssetDigest"]),
+                    target_topology_revision: g["targetTopologyRevision"].as_f64().unwrap(),
+                    target_triangle_count: g["targetTriangleCount"].as_f64().unwrap(),
+                    other_instance_id: utf16(&g["otherInstanceId"]),
+                },
+                staged_asset(&v["asset"])?,
+                match v["op"].as_str().unwrap() {
+                    "UNION" => BooleanOp::Union,
+                    "A_NOT_B" => BooleanOp::ANotB,
+                    _ => BooleanOp::Intersection,
+                },
+                LIMIT,
+            )
+        }
+        "splitVolumeToParts" => CapturedCommand::split_volume_to_parts(
+            split_guard(&v["guard"]),
+            split_parts(&v["parts"])?,
+            LIMIT,
+        ),
+        "addSvgPart" => CapturedCommand::add_drawn_part(
+            placement(&v["placement"])?,
+            staged_asset(&v["asset"])?,
+            triangles(),
+            Recipe::Svg {
+                drawing: Some(staged_asset(&v["drawing"])?),
+                part: Arc::new(decoded(&v["partJson"])?),
+            },
+            Some(Text::new(utf16(&v["name"]))),
+            LIMIT,
+        ),
+        "editSvgPart" => CapturedCommand::recut_part(
+            stable(&v["volumeId"])?,
+            staged_asset(&v["asset"])?,
+            triangles(),
+            Recipe::Svg {
+                drawing: None,
+                part: Arc::new(decoded(&v["partJson"])?),
+            },
+            LIMIT,
+        ),
+        "addEmbossText" => CapturedCommand::add_drawn_part(
+            placement(&v["placement"])?,
+            staged_asset(&v["asset"])?,
+            triangles(),
+            Recipe::Text(Arc::new(decoded(&v["configurationJson"])?)),
+            None,
+            LIMIT,
+        ),
+        "editEmbossText" => CapturedCommand::recut_part(
+            stable(&v["volumeId"])?,
+            staged_asset(&v["asset"])?,
+            triangles(),
+            Recipe::Text(Arc::new(decoded(&v["configurationJson"])?)),
+            LIMIT,
+        ),
+        "replaceProject" => CapturedCommand::replace_project(
+            decoded(&v["stateJson"])?,
+            (!v["label"].is_null()).then(|| Text::new(utf16(&v["label"]))),
+            LIMIT,
+        ),
+        kind => panic!("unknown staged command {kind}"),
+    };
+    captured.map_err(capture_error)
+}
 fn capture_work(
     v: &Value,
     clips: &std::collections::BTreeMap<String, ClipboardCapture>,
 ) -> Result<StagedWork, wire::SessionError> {
+    if let Some(split) = v.get("splitToObjects") {
+        let identities = split["identities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| {
+                Ok(SeparatedObject {
+                    source_volume: stable(&i["sourceVolumeId"])?,
+                    object: stable(&i["objectId"])?,
+                    instances: i["instanceIds"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(stable)
+                        .collect::<Result<_, _>>()?,
+                })
+            })
+            .collect::<Result<_, wire::SessionError>>()?;
+        return StagedWork::split_to_objects(
+            split_guard(&split["guard"]),
+            split_parts(&split["parts"])?,
+            identities,
+            4_000_000,
+        )
+        .map_err(capture_error);
+    }
     if let Some(single) = v.get("single") {
         Ok(StagedWork::single(capture_command(single, clips)?))
     } else {
@@ -315,6 +524,7 @@ fn staged_ownership_and_protocol_match_independent_typescript_authority() {
                             max_commands: action["limits"]["maxCommands"].as_u64().unwrap()
                                 as usize,
                             max_units: action["limits"]["maxUnits"].as_u64().unwrap(),
+                            max_asset_bytes: action["limits"]["maxAssetBytes"].as_u64().unwrap(),
                         })?,
                         "guard" => {
                             guards.insert(
@@ -359,8 +569,11 @@ fn staged_ownership_and_protocol_match_independent_typescript_authority() {
                             let work = capture_work(&action["work"], &clips)?;
                             let units = work.units();
                             let commands = work.command_count();
+                            let asset_bytes = work.asset_bytes();
                             let id = owner.stage(&guard, work)?;
-                            return Ok(json!({"id":id,"units":units,"commands":commands}));
+                            return Ok(
+                                json!({"id":id,"units":units,"commands":commands,"assetBytes":asset_bytes}),
+                            );
                         }
                         "request" => {
                             requests += 1;
@@ -437,11 +650,15 @@ fn staged_ownership_and_protocol_match_independent_typescript_authority() {
                     trace["name"]
                 );
             }
-            assert!(owner.assets().peek(asset.id()).unwrap().same_record(&asset));
+            // Mesh edits may drop the first payload; while present it is the
+            // record the session started with.
+            if let Some(current) = owner.assets().peek(asset.id()) {
+                assert!(current.same_record(&asset));
+            }
             for (s, json) in &retained {
                 assert_eq!(state_json(s.state()), *json, "immutable retained graph");
             }
         }
     }
-    assert_eq!((groups, requests), (398, 331));
+    assert_eq!((groups, requests), (895, 665));
 }

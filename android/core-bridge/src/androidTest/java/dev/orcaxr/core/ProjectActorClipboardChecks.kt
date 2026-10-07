@@ -19,8 +19,8 @@ object ProjectActorClipboardChecks {
     private fun guard(owner: ProjectActor) = checkNotNull(query(owner).authority)
     private fun refused(request: ProjectRequest, reason: ProjectRefusal) { check(result(request) == ProjectOutcome.NotStarted(reason)) }
     private val limits = ProjectStagingClipboardOptions(2, 57)
-    private val pool = ProjectStagingPoolOptions(4, 4096, 16_777_216)
-    private fun options(bytes: Int) = ProjectStagingInputOptions(bytes.toLong(), 1_000_000, 4_000_000, 1024, 128, 4096, 16_777_216)
+    private val pool = ProjectStagingPoolOptions(4, 4096, 16_777_216, 16_777_216)
+    private fun options(bytes: Int) = ProjectStagingInputOptions(bytes.toLong(), 1_000_000, 4_000_000, 1024, 128, 4096, 16_777_216, 64, 16_777_216)
     private fun upload(scope: ProjectPreparation, source: String, mesh: ByteArray, svg: ByteArray): ProjectUpload {
         val bytes = source.toByteArray(Charsets.UTF_8)
         val input = scope.own(ProjectUpload(bytes.size.toLong(), ProjectHostOptions(bytes.size.toLong(), 1_000_000, 4_000_000, 1024, 128, 3, 4096, 4096, 100, 33_554_432), LocalTimestampResolver { it }, ProjectIntegerProfile.CHROMIUM))
@@ -52,7 +52,7 @@ object ProjectActorClipboardChecks {
                 val copied = copy(owner)
                 check(copied.clipboard.info == ProjectClipboardInfo(2, 1, 1, 2, 57))
                 val added = completed(paste(owner, copied.clipboard, bytes)); check(state(added).changed)
-                check(raw.get().stagingUsage() == ProjectStagingUsage(0, 0, 0))
+                check(raw.get().stagingUsage() == ProjectStagingUsage(0, 0, 0, 0))
                 check(state(undo(owner, added)).history.redoCount == 1L)
             }
             check(result(owner.clearClipboard()) is ProjectOutcome.ClipboardCleared)
@@ -120,7 +120,7 @@ object ProjectActorClipboardChecks {
                 start.countDown(); try { waitIgnoringInterrupt(resume); write(writer, bytes) } finally { stopped.countDown() }
             }
             await(start); check(pending.cancel()); refused(pending, ProjectRefusal.CANCELLED)
-            check(raw.get().stagingUsage() == ProjectStagingUsage(0, 0, 0))
+            check(raw.get().stagingUsage() == ProjectStagingUsage(0, 0, 0, 0))
             resume.countDown(); await(stopped)
             check(state(completed(paste(owner, copied.clipboard, bytes))).changed)
         }; checks++
@@ -166,7 +166,7 @@ object ProjectActorClipboardChecks {
             refused(paste(owner, previous.clipboard, bytes), ProjectRefusal.STALE)
         }; checks++
 
-        actor(source, mesh, svg, staging = ProjectStagingPoolOptions(0, 0, 0)).use { owner ->
+        actor(source, mesh, svg, staging = ProjectStagingPoolOptions(0, 0, 0, 0)).use { owner ->
             val copied = copy(owner)
             refused(paste(owner, copied.clipboard, bytes), ProjectRefusal.RESOURCE_LIMIT)
             check(query(owner).authority != null)

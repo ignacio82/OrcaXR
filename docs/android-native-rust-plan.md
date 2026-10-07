@@ -153,10 +153,10 @@ asset, add volume, mesh topology replacement, mesh booleans, split to parts,
 single-volume split to objects, and SVG and embossed-text parts. They install
 validated payload leases without copying bytes. Whole-project replacement is
 native too (76 of the browser's 78 command classes; the transaction composite
-and import were already native). Next comes the staged upload path for every
-payload-carrying kind at once: command uploads will declare descriptors in their
-JSON and then stream the bytes, as bundle input does. Refined (dense-root) facet
-commits then join it as a bulk record kind. Each family adds intent variants to
+and import were already native). All of them stage through command uploads:
+records declare their payload descriptors, then the bytes stream per declared
+payload, through Rust, WASM and JNI/Kotlin. Refined (dense-root) facet commits
+are next, as a bulk record kind. Each family adds intent variants to
 `contracts/project-intents.json` (definitions before first use; regenerate with
 `generate-project-intents.mjs --write`), maps them in
 `web/src/project/PreparedProjectCommands.ts`, appends a scenario to
@@ -1146,9 +1146,19 @@ and replay coverage for the complete current command inventory.
     consistency, digest and immutable conflicts, role-ordered volume
     insertion, shared payloads in transactions, rollback, and history charges
     at the byte boundary.
-  - [ ] Stage payload-carrying commands through command uploads: descriptors
-    declared in the JSON phase, bytes streamed per declared asset under
-    upload/pool byte budgets, then WASM, JNI and Kotlin actor exposure.
+  - [x] Stage payload-carrying commands through command uploads. The staging
+    contract gains eleven record kinds and a `splitToObjects` work. Uploads
+    declare each payload's descriptor in their records, then stream the bytes
+    per declared payload after `seal`, as bundle input does: exact offsets,
+    bounded chunks, and digest validation that discards only that payload. The
+    last payload prepares the commands on the preparation task. Budgets are an
+    upload's payload count and bytes, and a pool's `assetBytes`; each distinct
+    payload is charged once per work. The browser captures and the endpoint
+    pool match, and the browser's split-to-objects runs as a staged program.
+    Every asset-corpus trace replays through staging (55 traces / 895 groups):
+    natively, then as 287 JSON uploads with streamed payloads through WASM
+    (Node, Chrome) and JNI. The boundary suites add payload refusals, and a
+    Kotlin `ProjectAssetWriter` streams payloads through the actor.
   - [x] Port mesh topology replacement and mesh booleans (`ReplaceVolumeMeshCommand`,
     `MeshBooleanCommand`). Both are guarded by their starting topology and
     re-validate stored meshes without materializing them (`validate_indexed`).

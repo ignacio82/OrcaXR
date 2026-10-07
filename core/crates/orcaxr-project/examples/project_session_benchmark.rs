@@ -250,6 +250,7 @@ fn main() {
             max_resources: 1,
             max_commands: 1,
             max_units: PAYLOAD_BYTES as u64,
+            max_asset_bytes: 16_000_000,
         })
         .unwrap();
     let queued_operation = request.operation.clone();
@@ -283,7 +284,8 @@ fn main() {
             StagingUsage {
                 resources: 1,
                 commands: 1,
-                units: charge
+                units: charge,
+                asset_bytes: 0,
             }
         );
         staged_retained = staged_retained.max(LIVE.load(Ordering::SeqCst) - baseline);
@@ -390,6 +392,7 @@ fn clipboard_preparation<P: TimestampPolicy>(
             max_resources: 1,
             max_commands: 1,
             max_units: 16 * 1024 * 1024,
+            max_asset_bytes: 16_000_000,
         })
         .unwrap();
     let snapshot = session.snapshot();
@@ -465,6 +468,8 @@ fn clipboard_preparation<P: TimestampPolicy>(
                 depth: 16,
                 commands: 1,
                 input_units: 16 * 1024 * 1024,
+                assets: 64,
+                asset_bytes: 16_000_000,
             },
         )
         .unwrap();

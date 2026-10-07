@@ -353,6 +353,7 @@ fn replacement_keeps_staged_work_charged_until_its_stale_settlement() {
             max_resources: 1,
             max_commands: 1,
             max_units: 4096,
+            max_asset_bytes: 16_000_000,
         })
         .unwrap();
     let guard = owner.capture_guard().unwrap();

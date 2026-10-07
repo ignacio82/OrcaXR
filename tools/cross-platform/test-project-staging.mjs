@@ -16,11 +16,13 @@ for (const [encode, base] of [
       depth: 128,
       commands: 100,
       inputUnits: 8_000_000,
+      assets: 64,
+      assetBytes: 16_000_000,
     },
   ],
   [
     encodeProjectStagingPoolOptions,
-    { resources: 4, commands: 100, inputUnits: 8_000_000 },
+    { resources: 4, commands: 100, inputUnits: 8_000_000, assetBytes: 16_000_000 },
   ],
   [encodeProjectStagingClipboardOptions, { assets: 4096, bytes: 536_870_912 }],
 ]) {
@@ -71,6 +73,8 @@ for (const base of [
     depth: 0,
     commands: 0,
     inputUnits: 0,
+    assets: 0,
+    assetBytes: 0,
   },
   {
     bytes: 4294967295,
@@ -80,6 +84,8 @@ for (const base of [
     depth: 128,
     commands: 4294967295,
     inputUnits: 4294967295,
+    assets: 4294967295,
+    assetBytes: 4294967295,
   },
 ]) {
   assert.deepEqual(
@@ -101,9 +107,10 @@ assert.deepEqual(
       resources: 0,
       commands: 0,
       inputUnits: 0,
+      assetBytes: 0,
     }),
   ),
-  [0, 0, 0],
+  [0, 0, 0, 0],
 );
 cases++;
 console.log(

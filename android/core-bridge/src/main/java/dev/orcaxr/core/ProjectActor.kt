@@ -125,7 +125,8 @@ class ProjectActor private constructor(
             val select: (ProjectPreparation, ProjectSnapshot) -> ProjectQueryNode) : Work
         data class Document(val mode: DocumentMode, val expected: ProjectActorGuard?, val produce: (ProjectPreparation) -> ProjectDocument) : Work
         data class Commands(val expected: ProjectActorGuard, val clipboard: ProjectActorClipboard?, val bytes: Long, val options: ProjectStagingInputOptions,
-            val write: (ProjectPreparation, ProjectSnapshot, ProjectCommandWriter) -> Unit) : Work
+            val write: (ProjectPreparation, ProjectSnapshot, ProjectCommandWriter) -> Unit,
+            val assets: ((ProjectPreparation, ProjectAssetWriter) -> Unit)? = null) : Work
         data class Import(val expected: ProjectActorGuard, val prepare: (ProjectPreparation, ProjectImportBase) -> ProjectImportPreview) : Work
         data class CommitImport(val candidate: ProjectActorImport, val acknowledged: List<String>) : Work
     }
@@ -183,7 +184,7 @@ class ProjectActor private constructor(
             factory: (ProjectPreparation, LongArray) -> ProjectSession,
             onEffects: (ProjectEffects) -> Unit,
             maxPending: Int = 32,
-            staging: ProjectStagingPoolOptions = ProjectStagingPoolOptions(0, 0, 0),
+            staging: ProjectStagingPoolOptions = ProjectStagingPoolOptions(0, 0, 0, 0),
         ): ProjectActor {
             require(maxPending in 1..32)
             staging.encode()
@@ -287,6 +288,17 @@ class ProjectActor private constructor(
         write: (ProjectPreparation, ProjectSnapshot, ProjectCommandWriter) -> Unit,
     ): ProjectRequest = prepareCommands(expected, null, bytes, options, write)
 
+    /** Commands that carry mesh payloads: the records are written and sealed as
+     * above, then [assets] streams each payload the records declared, in the
+     * order the writer reports. Unstreamed payloads fail the preparation. */
+    fun prepareCommands(
+        expected: ProjectActorGuard,
+        bytes: Long,
+        options: ProjectStagingInputOptions,
+        write: (ProjectPreparation, ProjectSnapshot, ProjectCommandWriter) -> Unit,
+        assets: (ProjectPreparation, ProjectAssetWriter) -> Unit,
+    ): ProjectRequest = prepareCommands(expected, null, bytes, options, write, assets)
+
     /** Capture this clipboard's data on the authority before the producer starts.
      * Each paste binds a fresh destination guard and retains its own data even
      * after clipboard replacement/clear. The producer uses clipboardPaste work. */
@@ -302,6 +314,7 @@ class ProjectActor private constructor(
         expected: ProjectActorGuard, source: ProjectActorClipboard?, bytes: Long,
         options: ProjectStagingInputOptions,
         write: (ProjectPreparation, ProjectSnapshot, ProjectCommandWriter) -> Unit,
+        assets: ((ProjectPreparation, ProjectAssetWriter) -> Unit)? = null,
     ): ProjectRequest = synchronized(gate) {
         refusal()?.let { return refused(it) }
         if (expected.owner !== guardOwner) return refused(ProjectRefusal.STALE)
@@ -311,7 +324,7 @@ class ProjectActor private constructor(
             require(bytes in 0..options.bytes)
         } catch (_: IllegalArgumentException) { return refused(ProjectRefusal.INVALID_REQUEST) }
         if (staging.resources == 0L || staging.commands == 0L || staging.inputUnits == 0L) return refused(ProjectRefusal.RESOURCE_LIMIT)
-        enqueue(Work.Commands(expected, source, bytes, options, write))
+        enqueue(Work.Commands(expected, source, bytes, options, write, assets))
     }
 
     /** Capture the import base on the authority (the expected guard must be
@@ -465,8 +478,14 @@ class ProjectActor private constructor(
                     try {
                         work.write(task.scope, snapshot, writer)
                         writer.finish()
-                        Prepared.Commands(upload)
                     } finally { writer.invalidate() }
+                    work.assets?.let { stream ->
+                        val payloads = ProjectAssetWriter(task.scope, upload)
+                        try { stream(task.scope, payloads) } finally { payloads.invalidate() }
+                    }
+                    // Every payload the records declared must have arrived.
+                    require(upload.assetCount() == 0L) { "incomplete_input" }
+                    Prepared.Commands(upload)
                 })
             }
             is Work.Import -> {

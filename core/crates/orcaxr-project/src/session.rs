@@ -465,6 +465,14 @@ impl<P: TimestampPolicy> ProjectSession<P> {
                 WorkKind::Transaction { label, commands } => {
                     self.bus.execute_batch(label, commands)
                 }
+                // Its checks refuse against the live state without publishing.
+                WorkKind::SplitToObjects(work) => match work.prepare(self.bus.snapshot().state()) {
+                    Ok(batch) => self.bus.execute_batch(batch.label, batch.commands),
+                    Err(error) => CommandOutcome {
+                        result: Err(CommandError::Domain(error.user_message())),
+                        events: vec![],
+                    },
+                },
             },
             Operation::Execute(command) => self.bus.execute(command, true),
             Operation::Transaction { label, commands } => self.bus.execute_batch(label, commands),

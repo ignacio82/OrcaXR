@@ -28,8 +28,8 @@ object ProjectActorPreparationChecks {
     private fun refused(request: ProjectRequest, reason: ProjectRefusal) { check(result(request) == ProjectOutcome.NotStarted(reason)) }
     private fun units(value: String) = value.map { it.code }
     private fun text(value: List<Int>) = value.map { it.toChar() }.joinToString("")
-    private val pool = ProjectStagingPoolOptions(4, 4096, 16_777_216)
-    private fun options(bytes: Int) = ProjectStagingInputOptions(bytes.toLong(), 1_000_000, 4_000_000, 1024, 128, 4096, 16_777_216)
+    private val pool = ProjectStagingPoolOptions(4, 4096, 16_777_216, 16_777_216)
+    private fun options(bytes: Int) = ProjectStagingInputOptions(bytes.toLong(), 1_000_000, 4_000_000, 1024, 128, 4096, 16_777_216, 64, 16_777_216)
     private fun add(id: String = "import:plate:prepared") = ProjectIntents.Command.AddPlate(ProjectIntents.AddPlate(units(id), listOf(78), 2.0, true))
     private fun input(scope: ProjectPreparation, source: String, asset: ByteArray? = null, resolver: LocalTimestampResolver = LocalTimestampResolver { it }): ProjectUpload {
         val bytes = source.toByteArray(Charsets.UTF_8)
@@ -62,13 +62,36 @@ object ProjectActorPreparationChecks {
     }
     private fun prepare(actor: ProjectActor, guard: ProjectActorGuard, bytes: ByteArray = payload(add())) =
         actor.prepareCommands(guard, bytes.size.toLong(), options(bytes.size)) { _, _, writer -> append(writer, bytes) }
-    private fun noCharge(raw: ProjectSession) { check(raw.stagingUsage() == ProjectStagingUsage(0, 0, 0)) }
+    private fun noCharge(raw: ProjectSession) { check(raw.stagingUsage() == ProjectStagingUsage(0, 0, 0, 0)) }
+    /** An addObjectWithAsset record on the active plate and its tetrahedron mesh. */
+    private fun volumePayload(source: String): Pair<ByteArray, ByteArray> {
+        val mesh = java.nio.ByteBuffer.allocate(96).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        listOf(0f, 0f, 0f, 10f, 0f, 0f, 0f, 10f, 0f, 0f, 0f, 10f).forEach { mesh.putFloat(it) }
+        listOf(0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 2, 3).forEach { mesh.putInt(it) }
+        val bytes = mesh.array()
+        var hash = 0xcbf29ce484222325uL
+        for (b in bytes) hash = (hash xor b.toUByte().toULong()) * 0x100000001b3uL
+        val digest = "fnv1a64:" + hash.toString(16).padStart(16, '0')
+        val plateId = checkNotNull(Regex("\"activePlateId\":\"([^\"]+)\"").find(source)).groupValues[1]
+        val descriptor = "{\"byteLength\":96,\"digest\":\"$digest\",\"id\":\"import:asset:actor\",\"kind\":\"mesh\"," +
+            "\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48," +
+            "\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0," +
+            "\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}"
+        val identity = "\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}"
+        val volume = "{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0}," +
+            "\"config\":{},\"id\":\"import:volume:actor\",\"name\":\"Actor\",\"role\":\"model\"," +
+            "\"source\":{\"assetId\":\"import:asset:actor\",\"topologyRevision\":0,\"triangleCount\":4},$identity}"
+        val record = "{\"config\":{},\"id\":\"import:object:actor\",\"instances\":[{\"id\":\"import:instance:actor\",\"printable\":true,$identity}]," +
+            "\"layerRanges\":[],\"name\":\"Actor\",\"volumes\":[$volume]}"
+        val records = "[${ProjectStaging.VERSION},[${ProjectStaging.WORK_SINGLE},[${ProjectStaging.COMMAND_ADD_OBJECT_WITH_ASSET},\"$plateId\",$record,$descriptor]]]"
+        return records.toByteArray(Charsets.UTF_8) to bytes
+    }
     private fun closed(handle: ProjectHandle) { check(runCatching { handle.reference() }.exceptionOrNull()?.message == "closed") }
 
     @JvmStatic fun run(source: String): Long {
         var checks = 0L
         val bytes = payload(add())
-        actor(source, limits = ProjectStagingPoolOptions(0, 0, 0)).use { disabled ->
+        actor(source, limits = ProjectStagingPoolOptions(0, 0, 0, 0)).use { disabled ->
             refused(prepare(disabled, query(disabled).current), ProjectRefusal.RESOURCE_LIMIT)
             for (operation in listOf(ProjectIntents.SessionOperation.ExecuteStaged(ProjectIntents.StagedReference(1)), ProjectIntents.SessionOperation.ReleaseStaged(ProjectIntents.StagedReference(1))))
                 refused(disabled.submit(operation), ProjectRefusal.INVALID_REQUEST)
@@ -100,6 +123,27 @@ object ProjectActorPreparationChecks {
                 val undone = state(completed(owner.submit(ProjectIntents.SessionOperation.Undo(state(added).guard))))
                 check(undone.history.undoCount == 0L && undone.history.redoCount == 1L)
             }
+        }
+        checks++
+
+        // Payload-carrying records: the actor seals the records, streams each declared
+        // payload in bounded chunks, then admits and executes exactly once.
+        actor(source, raw).use { owner ->
+            val (records, mesh) = volumePayload(source)
+            val before = query(owner)
+            val retained = AtomicReference<ProjectAssetWriter>()
+            val added = completed(owner.prepareCommands(before.current, records.size.toLong(), options(records.size), { _, _, writer -> append(writer, records) }) { scope, assets ->
+                check(Thread.currentThread().name == "orcaxr-prepare"); scope.checkActive(); retained.set(assets)
+                check(assets.count() == 1L && assets.begin(0) == mesh.size.toLong())
+                for (start in mesh.indices step 7) assets.append(mesh.copyOfRange(start, minOf(start + 7, mesh.size)))
+                assets.finish()
+            })
+            check(state(added).changed && state(added).history.undoCount == 1L)
+            check(runCatching { retained.get().count() }.exceptionOrNull()?.message == "closed_writer")
+            noCharge(raw.get())
+            // Records whose payloads never arrive fail preparation; nothing is charged.
+            refused(owner.prepareCommands(query(owner).current, records.size.toLong(), options(records.size)) { _, _, writer -> append(writer, records) }, ProjectRefusal.PREPARATION_FAILED)
+            noCharge(raw.get())
         }
         checks++
 
@@ -163,7 +207,7 @@ object ProjectActorPreparationChecks {
         }
         checks++
 
-        actor(source, raw, limits = ProjectStagingPoolOptions(1, 1, 1)).use { owner ->
+        actor(source, raw, limits = ProjectStagingPoolOptions(1, 1, 1, 1)).use { owner ->
             val before = query(owner)
             repeat(5) { refused(prepare(owner, before.current), ProjectRefusal.RESOURCE_LIMIT); noCharge(raw.get()) }
             check(state(query(owner)).guard == state(before).guard)

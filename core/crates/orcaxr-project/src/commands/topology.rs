@@ -270,7 +270,7 @@ pub struct TopologyGuard {
     pub triangle_count: f64,
 }
 impl TopologyGuard {
-    fn value(&self) -> Value {
+    pub(crate) fn value(&self) -> Value {
         object(vec![
             ("volumeId", string(&self.volume_id)),
             ("assetId", string(&self.asset_id)),
@@ -606,7 +606,7 @@ pub struct BooleanGuard {
     pub other_instance_id: Vec<u16>,
 }
 impl BooleanGuard {
-    fn value(&self) -> Value {
+    pub(crate) fn value(&self) -> Value {
         object(vec![
             ("targetInstanceId", string(&self.target_instance_id)),
             ("targetVolumeId", string(&self.target_volume_id)),

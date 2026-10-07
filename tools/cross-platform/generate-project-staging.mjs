@@ -26,12 +26,27 @@ assert.deepEqual(
 );
 assert.equal(s.version, 1);
 assert.deepEqual(s.envelope, ["version", "work"]);
-assert.deepEqual(Object.keys(s.workKinds), ["single", "transaction"]);
+assert.deepEqual(Object.keys(s.workKinds), [
+  "single",
+  "transaction",
+  "splitToObjects",
+]);
 assert.deepEqual(Object.keys(s.commandKinds), [
   "createInstance",
   "pasteObject",
   "intent",
   "clipboardPaste",
+  "addObject",
+  "addObjectWithAsset",
+  "addVolume",
+  "replaceVolumeMesh",
+  "meshBoolean",
+  "splitVolumeToParts",
+  "addSvgPart",
+  "editSvgPart",
+  "addEmbossText",
+  "editEmbossText",
+  "replaceProject",
 ]);
 assert.ok(
   Number.isSafeInteger(s.maxPreparations) &&
@@ -59,11 +74,19 @@ assert.deepEqual(s.inputOptions, [
   "depth",
   "commands",
   "inputUnits",
+  "assets",
+  "assetBytes",
 ]);
-assert.deepEqual(s.poolOptions, ["resources", "commands", "inputUnits"]);
+assert.deepEqual(s.poolOptions, [
+  "resources",
+  "commands",
+  "inputUnits",
+  "assetBytes",
+]);
 assert.deepEqual(s.workKinds, {
   single: ["command"],
   transaction: ["label", "commands"],
+  splitToObjects: ["guard", "parts", "identities"],
 });
 assert.deepEqual(s.commandKinds, {
   createInstance: ["objectId", "record", "index"],
@@ -84,6 +107,24 @@ assert.deepEqual(s.commandKinds, {
     "layerRangeIds",
     "destination",
   ],
+  addObject: ["plateId", "record"],
+  addObjectWithAsset: ["plateId", "record", "descriptor"],
+  addVolume: ["objectId", "record", "descriptor"],
+  replaceVolumeMesh: ["guard", "descriptor"],
+  meshBoolean: ["guard", "descriptor", "op"],
+  splitVolumeToParts: ["guard", "parts"],
+  addSvgPart: [
+    "placement",
+    "descriptor",
+    "drawing",
+    "triangleCount",
+    "part",
+    "name",
+  ],
+  editSvgPart: ["volumeId", "descriptor", "triangleCount", "part"],
+  addEmbossText: ["placement", "configuration", "descriptor", "triangleCount"],
+  editEmbossText: ["volumeId", "configuration", "descriptor", "triangleCount"],
+  replaceProject: ["state", "label"],
 });
 const snake = (n) => n.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase());
 const header =

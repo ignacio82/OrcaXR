@@ -300,6 +300,7 @@ impl ProjectSession {
                 max_resources: v.resources,
                 max_commands: v.commands,
                 max_units: v.input_units as u64,
+                max_asset_bytes: v.asset_bytes as u64,
             })
             .map_err(|e| {
                 error(match e {
@@ -311,7 +312,12 @@ impl ProjectSession {
     }
     pub fn staging_usage(&self) -> Vec<f64> {
         let v = self.inner.staging_usage();
-        vec![v.resources as f64, v.commands as f64, v.units as f64]
+        vec![
+            v.resources as f64,
+            v.commands as f64,
+            v.units as f64,
+            v.asset_bytes as f64,
+        ]
     }
     pub fn command_upload(
         &self,
@@ -537,6 +543,52 @@ impl ProjectCommandUpload {
             .ok_or_else(|| error("input_state"))?
             .command_count()
             .map_err(|e| error(e.code()))
+    }
+    /// Payload bytes the sealed work holds (each distinct payload once).
+    pub fn asset_bytes(&self) -> Result<f64, JsValue> {
+        self.inner
+            .as_ref()
+            .ok_or_else(|| error("input_state"))?
+            .asset_bytes()
+            .map(|n| n as f64)
+            .map_err(|e| error(e.code()))
+    }
+    /// Payloads the sealed records declared, in first-declaration order.
+    pub fn asset_count(&self) -> Result<usize, JsValue> {
+        self.inner
+            .as_ref()
+            .ok_or_else(|| error("input_state"))?
+            .asset_count()
+            .map_err(|e| error(e.code()))
+    }
+    /// Start one declared payload; returns its exact byte length.
+    pub fn begin_asset(&mut self, position: f64) -> Result<f64, JsValue> {
+        self.inner
+            .as_mut()
+            .ok_or_else(|| error("input_state"))?
+            .begin_asset(index(position)?)
+            .map(|n| n as f64)
+            .map_err(|e| error(e.code()))
+    }
+    pub fn append_asset(&mut self, offset: f64, bytes: &[u8]) -> Result<(), JsValue> {
+        self.inner
+            .as_mut()
+            .ok_or_else(|| error("input_state"))?
+            .append_asset(index(offset)?, bytes)
+            .map_err(|e| error(e.code()))
+    }
+    /// Validates the payload; the last one prepares the work's commands.
+    pub fn finish_asset(&mut self) -> Result<(), JsValue> {
+        self.inner
+            .as_mut()
+            .ok_or_else(|| error("input_state"))?
+            .finish_asset()
+            .map_err(|e| error(e.code()))
+    }
+    pub fn cancel_asset(&mut self) {
+        if let Some(inner) = self.inner.as_mut() {
+            inner.cancel_asset();
+        }
     }
     pub fn cancel(&mut self) {
         self.inner = None;

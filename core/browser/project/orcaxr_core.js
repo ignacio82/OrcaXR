@@ -632,8 +632,57 @@ export class ProjectCommandUpload {
             throw takeFromExternrefTable0(ret[0]);
         }
     }
+    /**
+     * @param {number} offset
+     * @param {Uint8Array} bytes
+     */
+    append_asset(offset, bytes) {
+        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectcommandupload_append_asset(this.__wbg_ptr, offset, ptr0, len0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Payload bytes the sealed work holds (each distinct payload once).
+     * @returns {number}
+     */
+    asset_bytes() {
+        const ret = wasm.projectcommandupload_asset_bytes(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0];
+    }
+    /**
+     * Payloads the sealed records declared, in first-declaration order.
+     * @returns {number}
+     */
+    asset_count() {
+        const ret = wasm.projectcommandupload_asset_count(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+    /**
+     * Start one declared payload; returns its exact byte length.
+     * @param {number} position
+     * @returns {number}
+     */
+    begin_asset(position) {
+        const ret = wasm.projectcommandupload_begin_asset(this.__wbg_ptr, position);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0];
+    }
     cancel() {
         wasm.projectcommandupload_cancel(this.__wbg_ptr);
+    }
+    cancel_asset() {
+        wasm.projectcommandupload_cancel_asset(this.__wbg_ptr);
     }
     /**
      * @returns {number}
@@ -644,6 +693,15 @@ export class ProjectCommandUpload {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ret[0] >>> 0;
+    }
+    /**
+     * Validates the payload; the last one prepares the work's commands.
+     */
+    finish_asset() {
+        const ret = wasm.projectcommandupload_finish_asset(this.__wbg_ptr);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
     }
     seal() {
         const ret = wasm.projectcommandupload_seal(this.__wbg_ptr);

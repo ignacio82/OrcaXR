@@ -5,9 +5,79 @@ const text = (units) =>
   units === null
     ? null
     : units.reduce((s, u) => s + String.fromCharCode(u), "");
+const descriptor = (wire) => JSON.parse(wire.descriptorJson);
+const guardJson = (g) =>
+  Object.fromEntries(
+    Object.entries(g).map(([k, v]) => [k, Array.isArray(v) ? text(v) : v]),
+  );
+const partsJson = (parts) =>
+  parts.map((p) => ({
+    volumeId: text(p.volumeId),
+    descriptor: descriptor(p.asset),
+    transform: JSON.parse(p.transformJson),
+    sourceTriangleIndices: p.sourceTriangleIndices,
+  }));
+const placementJson = (p) => ({
+  objectId: text(p.objectId),
+  volumeId: text(p.volumeId),
+  assetId: text(p.assetId),
+  transform: JSON.parse(p.transformJson),
+});
+/** The record for a payload-carrying command, in the decoder's field order. */
+function assetCommand(c, tag) {
+  switch (c.kind) {
+    case "addObject":
+      return [tag("addObject"), text(c.plateId), JSON.parse(c.recordJson)];
+    case "addObjectWithAsset":
+      return [tag("addObjectWithAsset"), text(c.plateId), JSON.parse(c.recordJson), descriptor(c.asset)];
+    case "addVolume":
+      return [tag("addVolume"), text(c.objectId), JSON.parse(c.recordJson), descriptor(c.asset)];
+    case "replaceVolumeMesh":
+      return [tag("replaceVolumeMesh"), guardJson(c.guard), descriptor(c.asset)];
+    case "meshBoolean":
+      return [tag("meshBoolean"), guardJson(c.guard), descriptor(c.asset), c.op];
+    case "splitVolumeToParts":
+      return [tag("splitVolumeToParts"), guardJson(c.guard), partsJson(c.parts)];
+    case "addSvgPart":
+      return [tag("addSvgPart"), placementJson(c.placement), descriptor(c.asset), descriptor(c.drawing), c.triangleCount, JSON.parse(c.partJson), text(c.name)];
+    case "editSvgPart":
+      return [tag("editSvgPart"), text(c.volumeId), descriptor(c.asset), c.triangleCount, JSON.parse(c.partJson)];
+    case "addEmbossText":
+      return [tag("addEmbossText"), placementJson(c.placement), JSON.parse(c.configurationJson), descriptor(c.asset), c.triangleCount];
+    case "editEmbossText":
+      return [tag("editEmbossText"), text(c.volumeId), JSON.parse(c.configurationJson), descriptor(c.asset), c.triangleCount];
+    case "replaceProject":
+      return [tag("replaceProject"), JSON.parse(c.stateJson), text(c.label)];
+    default:
+      return undefined;
+  }
+}
+/** Payloads a work declares, deduplicated by ID in first-declaration order:
+ * the order an upload asks for them after `seal`. */
+export function stagedPayloads(work) {
+  const commandPayloads = (c) =>
+    c.kind === "splitVolumeToParts"
+      ? c.parts.map((p) => p.asset)
+      : c.kind === "addSvgPart"
+        ? [c.asset, c.drawing]
+        : c.asset
+          ? [c.asset]
+          : [];
+  const all = work.splitToObjects
+    ? work.splitToObjects.parts.map((p) => p.asset)
+    : (work.single ? [work.single] : work.commands).flatMap(commandPayloads);
+  const seen = new Map();
+  for (const p of all) {
+    const id = descriptor(p).id;
+    if (!seen.has(id)) seen.set(id, p);
+  }
+  return [...seen.values()];
+}
 export function stagedCommandJson(work, schema) {
   const commandTag = (kind) => Object.keys(schema.commandKinds).indexOf(kind);
   const capture = (c) => {
+    const asset = assetCommand(c, commandTag);
+    if (asset) return asset;
     if (c.intent)
       return [
         commandTag("intent"),
@@ -42,7 +112,24 @@ export function stagedCommandJson(work, schema) {
     ];
   };
   const single = Object.keys(schema.workKinds).indexOf("single"),
-    transaction = Object.keys(schema.workKinds).indexOf("transaction");
+    transaction = Object.keys(schema.workKinds).indexOf("transaction"),
+    split = Object.keys(schema.workKinds).indexOf("splitToObjects");
+  if (work.splitToObjects) {
+    const w = work.splitToObjects;
+    return JSON.stringify([
+      schema.version,
+      [
+        split,
+        guardJson(w.guard),
+        partsJson(w.parts),
+        w.identities.map((i) => ({
+          sourceVolumeId: text(i.sourceVolumeId),
+          objectId: text(i.objectId),
+          instanceIds: i.instanceIds.map(text),
+        })),
+      ],
+    ]);
+  }
   return JSON.stringify([
     schema.version,
     work.single
@@ -59,6 +146,8 @@ export function stagedInputOptions(bytes, schema) {
     depth: 128,
     commands: 100_000,
     inputUnits: 4_000_000,
+    assets: 64,
+    assetBytes: 16_000_000,
   };
   return Float64Array.from(schema.inputOptions.map((k) => limits[k]));
 }
@@ -100,8 +189,8 @@ export async function replayStagedProject(
     layout,
   );
   const usage = (session) => {
-    const [resources, commands, units] = session.staging_usage();
-    return { resources, commands, units };
+    const [resources, commands, units, assetBytes] = session.staging_usage();
+    return { resources, commands, units, assetBytes };
   };
   const observed = (session) => ({
     ...observe(session),
@@ -117,6 +206,7 @@ export async function replayStagedProject(
       busy: "busy",
       invalid_command: "invalidRequest",
       invalid_options: "invalidRequest",
+      invalid_asset: "invalidRequest",
     };
     if (!codes[value])
       throw Error(`Unexpected command upload failure: ${value}`);
@@ -194,7 +284,12 @@ export async function replayStagedProject(
               const v = action.limits;
               session.configure_staging(
                 schema.version,
-                Float64Array.from([v.maxResources, v.maxCommands, v.maxUnits]),
+                Float64Array.from([
+                  v.maxResources,
+                  v.maxCommands,
+                  v.maxUnits,
+                  v.maxAssetBytes,
+                ]),
               );
             } else if (action.kind === "guard") {
               guards.get(action.name)?.free();
@@ -246,7 +341,7 @@ export async function replayStagedProject(
                   ...new Set(
                     (action.work.single
                       ? [action.work.single]
-                      : action.work.commands
+                      : (action.work.commands ?? [])
                     )
                       .map((c) => c.clipboard)
                       .filter(Boolean),
@@ -273,11 +368,27 @@ export async function replayStagedProject(
                 for (let p = 0; p < source.length; p += 997)
                   upload.append(p, source.subarray(p, p + 997));
                 upload.seal();
+                // Declared payloads stream after the records, in 997-byte chunks.
+                const payloads = stagedPayloads(action.work);
+                eq(upload.asset_count(), payloads.length);
+                for (const [index, payload] of payloads.entries()) {
+                  const data = Uint8Array.from(payload.bytes);
+                  eq(upload.begin_asset(index), data.length);
+                  for (let p = 0; p < data.length; p += 997)
+                    upload.append_asset(p, data.subarray(p, p + 997));
+                  upload.finish_asset();
+                }
                 const units = upload.units(),
-                  commands = upload.command_count();
+                  commands = upload.command_count(),
+                  assetBytes = upload.asset_bytes();
                 const owned = upload;
                 upload = undefined;
-                result = { id: session.stage_commands(owned), units, commands };
+                result = {
+                  id: session.stage_commands(owned),
+                  units,
+                  commands,
+                  assetBytes,
+                };
               } finally {
                 upload?.free();
                 if (action.guard === undefined) guard.free();

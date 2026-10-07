@@ -486,6 +486,24 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     command_count() {
       return call("commandUploadCount", this.handle);
     }
+    asset_bytes() {
+      return call("commandUploadAssetBytes", this.handle);
+    }
+    asset_count() {
+      return call("commandUploadAssetCount", this.handle);
+    }
+    begin_asset(position) {
+      return call("commandUploadBeginAsset", this.handle, position);
+    }
+    append_asset(offset, bytes) {
+      call("commandUploadAppendAsset", this.handle, offset, bytes);
+    }
+    finish_asset() {
+      call("commandUploadFinishAsset", this.handle);
+    }
+    cancel_asset() {
+      call("commandUploadCancelAsset", this.handle);
+    }
     cancel() {
       this.free();
     }

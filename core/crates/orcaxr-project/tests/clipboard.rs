@@ -480,6 +480,7 @@ fn host_capture_resolves_sorted_query_nodes_and_requires_the_current_graph() {
             max_resources: 1,
             max_commands: 1,
             max_units: 4_000_000,
+            max_asset_bytes: 16_000_000,
         })
         .unwrap();
     let work = StagedWork::single(

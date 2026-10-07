@@ -80,14 +80,19 @@ export class ProjectSessionEndpoint {
   private ready = false;
   private disposed = false;
   private readonly pending = new Map<number, { aborted: boolean; release?: () => void }>();
-  private stagingLimits: ProjectStagingLimits = { maxResources: 0, maxCommands: 0, maxUnits: 0 };
-  private stagingUsed = { resources: 0, commands: 0, units: 0 };
+  private stagingLimits: ProjectStagingLimits = { maxResources: 0, maxCommands: 0, maxUnits: 0, maxAssetBytes: 0 };
+  private stagingUsed = { resources: 0, commands: 0, units: 0, assetBytes: 0 };
   private stagedSequence = 0;
   private readonly staged = new Map<number, { readonly guard: AsyncSessionGuard; readonly slot: StagedWorkSlot }>();
 
   configureStaging(limits: ProjectStagingLimits): void {
     if (this.disposed) throw new AsyncSessionError('disposed');
-    const owned = { maxResources: limits.maxResources, maxCommands: limits.maxCommands, maxUnits: limits.maxUnits };
+    const owned = {
+      maxResources: limits.maxResources,
+      maxCommands: limits.maxCommands,
+      maxUnits: limits.maxUnits,
+      maxAssetBytes: limits.maxAssetBytes,
+    };
     if (!Object.values(owned).every((n) => Number.isSafeInteger(n) && n >= 0))
       throw new AsyncSessionError('invalid-request');
     if (!this.fits(this.stagingUsed, owned)) throw new AsyncSessionError('busy');
@@ -109,6 +114,7 @@ export class ProjectSessionEndpoint {
       resources: this.stagingUsed.resources + 1,
       commands: this.stagingUsed.commands + value.commandCount,
       units: this.stagingUsed.units + value.inputUnits,
+      assetBytes: this.stagingUsed.assetBytes + value.assetBytes,
     };
     if (
       !Number.isSafeInteger(this.stagedSequence + 1) ||
@@ -122,6 +128,7 @@ export class ProjectSessionEndpoint {
       this.stagingUsed.resources--;
       this.stagingUsed.commands -= value.commandCount;
       this.stagingUsed.units -= value.inputUnits;
+      this.stagingUsed.assetBytes -= value.assetBytes;
     });
     const id = ++this.stagedSequence;
     this.staged.set(id, { guard: capturedGuard, slot });
@@ -138,7 +145,10 @@ export class ProjectSessionEndpoint {
   }
   private fits(usage: ProjectStagingUsage, limits: ProjectStagingLimits): boolean {
     return (
-      usage.resources <= limits.maxResources && usage.commands <= limits.maxCommands && usage.units <= limits.maxUnits
+      usage.resources <= limits.maxResources &&
+      usage.commands <= limits.maxCommands &&
+      usage.units <= limits.maxUnits &&
+      usage.assetBytes <= limits.maxAssetBytes
     );
   }
 

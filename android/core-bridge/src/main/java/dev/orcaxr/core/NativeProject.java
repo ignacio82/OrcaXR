@@ -75,6 +75,12 @@ final class NativeProject {
     static native void commandUploadSeal(long handle);
     static native long commandUploadUnits(long handle);
     static native long commandUploadCount(long handle);
+    static native long commandUploadAssetBytes(long handle);
+    static native long commandUploadAssetCount(long handle);
+    static native long commandUploadBeginAsset(long handle, long position);
+    static native void commandUploadAppendAsset(long handle, long offset, byte[] bytes);
+    static native void commandUploadFinishAsset(long handle);
+    static native void commandUploadCancelAsset(long handle);
     static native long stageCommands(long handle, long input);
     static native boolean releaseStaged(long handle, long id);
     static native boolean isCurrent(long handle, long guard, boolean export);

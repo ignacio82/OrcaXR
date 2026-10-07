@@ -14,6 +14,8 @@ pub const WORK_SINGLE: usize = 0;
 pub const WORK_SINGLE_LENGTH: usize = 2;
 pub const WORK_TRANSACTION: usize = 1;
 pub const WORK_TRANSACTION_LENGTH: usize = 3;
+pub const WORK_SPLIT_TO_OBJECTS: usize = 2;
+pub const WORK_SPLIT_TO_OBJECTS_LENGTH: usize = 4;
 pub const COMMAND_CREATE_INSTANCE: usize = 0;
 pub const COMMAND_CREATE_INSTANCE_LENGTH: usize = 4;
 pub const COMMAND_PASTE_OBJECT: usize = 1;
@@ -22,6 +24,28 @@ pub const COMMAND_INTENT: usize = 2;
 pub const COMMAND_INTENT_LENGTH: usize = 2;
 pub const COMMAND_CLIPBOARD_PASTE: usize = 3;
 pub const COMMAND_CLIPBOARD_PASTE_LENGTH: usize = 6;
+pub const COMMAND_ADD_OBJECT: usize = 4;
+pub const COMMAND_ADD_OBJECT_LENGTH: usize = 3;
+pub const COMMAND_ADD_OBJECT_WITH_ASSET: usize = 5;
+pub const COMMAND_ADD_OBJECT_WITH_ASSET_LENGTH: usize = 4;
+pub const COMMAND_ADD_VOLUME: usize = 6;
+pub const COMMAND_ADD_VOLUME_LENGTH: usize = 4;
+pub const COMMAND_REPLACE_VOLUME_MESH: usize = 7;
+pub const COMMAND_REPLACE_VOLUME_MESH_LENGTH: usize = 3;
+pub const COMMAND_MESH_BOOLEAN: usize = 8;
+pub const COMMAND_MESH_BOOLEAN_LENGTH: usize = 4;
+pub const COMMAND_SPLIT_VOLUME_TO_PARTS: usize = 9;
+pub const COMMAND_SPLIT_VOLUME_TO_PARTS_LENGTH: usize = 3;
+pub const COMMAND_ADD_SVG_PART: usize = 10;
+pub const COMMAND_ADD_SVG_PART_LENGTH: usize = 7;
+pub const COMMAND_EDIT_SVG_PART: usize = 11;
+pub const COMMAND_EDIT_SVG_PART_LENGTH: usize = 5;
+pub const COMMAND_ADD_EMBOSS_TEXT: usize = 12;
+pub const COMMAND_ADD_EMBOSS_TEXT_LENGTH: usize = 5;
+pub const COMMAND_EDIT_EMBOSS_TEXT: usize = 13;
+pub const COMMAND_EDIT_EMBOSS_TEXT_LENGTH: usize = 5;
+pub const COMMAND_REPLACE_PROJECT: usize = 14;
+pub const COMMAND_REPLACE_PROJECT_LENGTH: usize = 3;
 #[derive(Debug, Clone, Copy)]
 pub struct InputOptions {
     pub bytes: usize,
@@ -31,10 +55,12 @@ pub struct InputOptions {
     pub depth: usize,
     pub commands: usize,
     pub input_units: usize,
+    pub assets: usize,
+    pub asset_bytes: usize,
 }
 pub fn decode_input(version: f64, input: &[f64]) -> Option<InputOptions> {
     if version != VERSION as f64
-        || input.len() != 7
+        || input.len() != 9
         || input
             .iter()
             .any(|v| !v.is_finite() || v.fract() != 0.0 || *v < 0.0 || *v > MAX_BUDGET as f64)
@@ -52,6 +78,8 @@ pub fn decode_input(version: f64, input: &[f64]) -> Option<InputOptions> {
         depth: input[4] as usize,
         commands: input[5] as usize,
         input_units: input[6] as usize,
+        assets: input[7] as usize,
+        asset_bytes: input[8] as usize,
     })
 }
 #[derive(Debug, Clone, Copy)]
@@ -59,10 +87,11 @@ pub struct PoolOptions {
     pub resources: usize,
     pub commands: usize,
     pub input_units: usize,
+    pub asset_bytes: usize,
 }
 pub fn decode_pool(version: f64, input: &[f64]) -> Option<PoolOptions> {
     if version != VERSION as f64
-        || input.len() != 3
+        || input.len() != 4
         || input
             .iter()
             .any(|v| !v.is_finite() || v.fract() != 0.0 || *v < 0.0 || *v > MAX_BUDGET as f64)
@@ -73,6 +102,7 @@ pub fn decode_pool(version: f64, input: &[f64]) -> Option<PoolOptions> {
         resources: input[0] as usize,
         commands: input[1] as usize,
         input_units: input[2] as usize,
+        asset_bytes: input[3] as usize,
     })
 }
 #[derive(Debug, Clone, Copy)]

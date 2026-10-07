@@ -142,8 +142,26 @@ export class ProjectCommandUpload {
     free(): void;
     [Symbol.dispose](): void;
     append(offset: number, bytes: Uint8Array): void;
+    append_asset(offset: number, bytes: Uint8Array): void;
+    /**
+     * Payload bytes the sealed work holds (each distinct payload once).
+     */
+    asset_bytes(): number;
+    /**
+     * Payloads the sealed records declared, in first-declaration order.
+     */
+    asset_count(): number;
+    /**
+     * Start one declared payload; returns its exact byte length.
+     */
+    begin_asset(position: number): number;
     cancel(): void;
+    cancel_asset(): void;
     command_count(): number;
+    /**
+     * Validates the payload; the last one prepares the work's commands.
+     */
+    finish_asset(): void;
     seal(): void;
     units(): number;
 }
@@ -411,8 +429,14 @@ export interface InitOutput {
     readonly projectbytes_read: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectclipboard_info: (a: number) => [number, number];
     readonly projectcommandupload_append: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly projectcommandupload_append_asset: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly projectcommandupload_asset_bytes: (a: number) => [number, number, number];
+    readonly projectcommandupload_asset_count: (a: number) => [number, number, number];
+    readonly projectcommandupload_begin_asset: (a: number, b: number) => [number, number, number];
     readonly projectcommandupload_cancel: (a: number) => void;
+    readonly projectcommandupload_cancel_asset: (a: number) => void;
     readonly projectcommandupload_command_count: (a: number) => [number, number, number];
+    readonly projectcommandupload_finish_asset: (a: number) => [number, number];
     readonly projectcommandupload_seal: (a: number) => [number, number];
     readonly projectcommandupload_units: (a: number) => [number, number, number];
     readonly projecteffects_count: (a: number) => number;

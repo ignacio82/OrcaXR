@@ -13,10 +13,22 @@ object ProjectStaging {
     const val CLIPBOARD_BYTES = 4
     const val WORK_SINGLE = 0
     const val WORK_TRANSACTION = 1
+    const val WORK_SPLIT_TO_OBJECTS = 2
     const val COMMAND_CREATE_INSTANCE = 0
     const val COMMAND_PASTE_OBJECT = 1
     const val COMMAND_INTENT = 2
     const val COMMAND_CLIPBOARD_PASTE = 3
+    const val COMMAND_ADD_OBJECT = 4
+    const val COMMAND_ADD_OBJECT_WITH_ASSET = 5
+    const val COMMAND_ADD_VOLUME = 6
+    const val COMMAND_REPLACE_VOLUME_MESH = 7
+    const val COMMAND_MESH_BOOLEAN = 8
+    const val COMMAND_SPLIT_VOLUME_TO_PARTS = 9
+    const val COMMAND_ADD_SVG_PART = 10
+    const val COMMAND_EDIT_SVG_PART = 11
+    const val COMMAND_ADD_EMBOSS_TEXT = 12
+    const val COMMAND_EDIT_EMBOSS_TEXT = 13
+    const val COMMAND_REPLACE_PROJECT = 14
 }
 
 data class ProjectStagingInputOptions(
@@ -27,9 +39,11 @@ data class ProjectStagingInputOptions(
     val depth: Long,
     val commands: Long,
     val inputUnits: Long,
+    val assets: Long,
+    val assetBytes: Long,
 ) {
     fun encode(): DoubleArray {
-        val values = longArrayOf(bytes, nodes, textUnits, numberBytes, depth, commands, inputUnits)
+        val values = longArrayOf(bytes, nodes, textUnits, numberBytes, depth, commands, inputUnits, assets, assetBytes)
         require(values.all { it in 0..ProjectHost.MAX_BUDGET } && depth <= ProjectHost.MAX_SUPPORTED_DEPTH && numberBytes > 0) { "Invalid staging options" }
         return values.map { it.toDouble() }.toDoubleArray()
     }
@@ -39,9 +53,10 @@ data class ProjectStagingPoolOptions(
     val resources: Long,
     val commands: Long,
     val inputUnits: Long,
+    val assetBytes: Long,
 ) {
     fun encode(): DoubleArray {
-        val values = longArrayOf(resources, commands, inputUnits)
+        val values = longArrayOf(resources, commands, inputUnits, assetBytes)
         require(values.all { it in 0..ProjectHost.MAX_BUDGET }) { "Invalid staging options" }
         return values.map { it.toDouble() }.toDoubleArray()
     }

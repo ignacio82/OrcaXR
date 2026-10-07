@@ -235,8 +235,8 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   rollback. Local instance creation/paste retain full immutable records; clipboard paste
   also restores selected assets atomically. Bulk decoders require explicit budgets. Session-owned one-use staging
   retains preparation guards and charges ready/queued work until release or commit;
-  cancellation drops its payload immediately. Limits count encoded input units,
-  not resident memory. WASM/JNI upload owners now parse bounded UTF-8 separately;
+  cancellation drops its payload immediately. Limits count encoded input units plus,
+  for mesh payloads streamed after the records, their bytes. WASM/JNI upload owners parse bounded UTF-8 separately;
   four preparation permits cover parsing, sealing and transfer, then the finished
   pool owns the charge. Detached input owns its original guard, never a live session;
   hosts cancel preparation tasks on lifetime changes. WASM handles are module-local;

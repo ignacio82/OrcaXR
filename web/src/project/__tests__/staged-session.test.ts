@@ -27,8 +27,8 @@ import { createProjectFixture } from './fixtures';
 const nonce = [0, 1, 2147483648, 4294967295];
 const hello = { hello: { minProtocolVersion: 1, maxProtocolVersion: 1, projectSchemaVersion: 1, intentVersion: 1 } };
 const input = { maxUnits: 4_000_000, maxNodes: 1_000_000, maxDepth: 128 };
-const limits = { maxResources: 4, maxCommands: 100, maxUnits: 8_000_000 };
-const zero = { resources: 0, commands: 0, units: 0 };
+const limits = { maxResources: 4, maxCommands: 100, maxUnits: 8_000_000, maxAssetBytes: 0 };
+const zero = { resources: 0, commands: 0, units: 0, assetBytes: 0 };
 function setup(largeId = false) {
   const fixture = createProjectFixture();
   if (largeId) fixture.state.id = entityId<'project'>('import:large:' + 'a'.repeat(131072));
@@ -197,7 +197,7 @@ await test('staging is explicitly enabled, budgets cover pending work, and IDs a
     (e) => e instanceof AsyncSessionError && e.code === 'resourceLimit',
   );
   assert.throws(
-    () => s.endpoint.configureStaging({ maxResources: 0, maxCommands: 0, maxUnits: 0 }),
+    () => s.endpoint.configureStaging({ maxResources: 0, maxCommands: 0, maxUnits: 0, maxAssetBytes: 0 }),
     (e) => e instanceof AsyncSessionError && e.code === 'busy',
   );
   assert.deepEqual(await s.send({ releaseStaged: { stagedId: id } }), { released: false });

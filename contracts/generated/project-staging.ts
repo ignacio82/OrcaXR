@@ -15,12 +15,15 @@ export const PROJECT_STAGING = {
     "numberBytes",
     "depth",
     "commands",
-    "inputUnits"
+    "inputUnits",
+    "assets",
+    "assetBytes"
   ],
   "poolOptions": [
     "resources",
     "commands",
-    "inputUnits"
+    "inputUnits",
+    "assetBytes"
   ],
   "clipboardOptions": [
     "assets",
@@ -40,6 +43,11 @@ export const PROJECT_STAGING = {
     "transaction": [
       "label",
       "commands"
+    ],
+    "splitToObjects": [
+      "guard",
+      "parts",
+      "identities"
     ]
   },
   "commandKinds": {
@@ -66,6 +74,63 @@ export const PROJECT_STAGING = {
       "instanceIds",
       "layerRangeIds",
       "destination"
+    ],
+    "addObject": [
+      "plateId",
+      "record"
+    ],
+    "addObjectWithAsset": [
+      "plateId",
+      "record",
+      "descriptor"
+    ],
+    "addVolume": [
+      "objectId",
+      "record",
+      "descriptor"
+    ],
+    "replaceVolumeMesh": [
+      "guard",
+      "descriptor"
+    ],
+    "meshBoolean": [
+      "guard",
+      "descriptor",
+      "op"
+    ],
+    "splitVolumeToParts": [
+      "guard",
+      "parts"
+    ],
+    "addSvgPart": [
+      "placement",
+      "descriptor",
+      "drawing",
+      "triangleCount",
+      "part",
+      "name"
+    ],
+    "editSvgPart": [
+      "volumeId",
+      "descriptor",
+      "triangleCount",
+      "part"
+    ],
+    "addEmbossText": [
+      "placement",
+      "configuration",
+      "descriptor",
+      "triangleCount"
+    ],
+    "editEmbossText": [
+      "volumeId",
+      "configuration",
+      "descriptor",
+      "triangleCount"
+    ],
+    "replaceProject": [
+      "state",
+      "label"
     ]
   }
 } as const;
@@ -77,6 +142,8 @@ export interface ProjectStagingInputOptions {
   readonly depth: number;
   readonly commands: number;
   readonly inputUnits: number;
+  readonly assets: number;
+  readonly assetBytes: number;
 }
 export function encodeProjectStagingInputOptions(value: ProjectStagingInputOptions): Float64Array {
   const fields = PROJECT_STAGING.inputOptions;
@@ -95,6 +162,7 @@ export interface ProjectStagingPoolOptions {
   readonly resources: number;
   readonly commands: number;
   readonly inputUnits: number;
+  readonly assetBytes: number;
 }
 export function encodeProjectStagingPoolOptions(value: ProjectStagingPoolOptions): Float64Array {
   const fields = PROJECT_STAGING.poolOptions;

@@ -20,6 +20,18 @@ import {
   capturePasteCommand,
   captureClipboardPasteCommand,
   captureSmallIntentJson,
+  captureAddObjectCommand,
+  captureAddObjectWithAssetCommand,
+  captureAddVolumeCommand,
+  captureReplaceVolumeMeshCommand,
+  captureMeshBooleanCommand,
+  captureSplitVolumeToPartsCommand,
+  captureAddSvgPartCommand,
+  captureEditSvgPartCommand,
+  captureAddEmbossTextCommand,
+  captureEditEmbossTextCommand,
+  captureReplaceProjectCommand,
+  splitToObjectsStagedWork,
   singleStagedWork,
   transactionStagedWork,
   StagedInputError,
@@ -31,9 +43,23 @@ const root = new URL("../../", import.meta.url),
 const corpus = JSON.parse(
   read("testdata/cross-platform/project-captured-command-vectors.json"),
 );
+const assetCorpus = JSON.parse(
+  read("testdata/cross-platform/project-asset-command-vectors.json"),
+);
 const nonce = [0, 1, 2147483648, 4294967295],
-  input = { maxUnits: 4_000_000, maxNodes: 1_000_000, maxDepth: 128 };
-const limits = { maxResources: 4, maxCommands: 100, maxUnits: 8_000_000 };
+  input = {
+    maxUnits: 4_000_000,
+    maxNodes: 1_000_000,
+    maxDepth: 128,
+    maxAssets: 64,
+    maxAssetBytes: 16_000_000,
+  };
+const limits = {
+  maxResources: 4,
+  maxCommands: 100,
+  maxUnits: 8_000_000,
+  maxAssetBytes: 16_000_000,
+};
 const units = (s) =>
     Array.from({ length: s.length }, (_, i) => s.charCodeAt(i)),
   text = (u) => (u === null ? undefined : String.fromCharCode(...u));
@@ -59,7 +85,83 @@ function snapshot(s) {
   }
   return { revision: s.revision, hash: s.hash, content };
 }
+// Payload-carrying commands in the asset corpus's wire form.
+const payload = (w) => ({
+  descriptor: JSON.parse(w.descriptorJson),
+  bytes: Uint8Array.from(w.bytes),
+});
+const guardFrom = (g) =>
+  Object.fromEntries(
+    Object.entries(g).map(([k, v]) => [k, Array.isArray(v) ? text(v) : v]),
+  );
+const partsFrom = (parts) =>
+  parts.map((p) => ({
+    volumeId: text(p.volumeId),
+    asset: payload(p.asset),
+    transform: JSON.parse(p.transformJson),
+    sourceTriangleIndices: p.sourceTriangleIndices,
+  }));
+const identitiesFrom = (identities) =>
+  identities.map((i) => ({
+    sourceVolumeId: text(i.sourceVolumeId),
+    objectId: text(i.objectId),
+    instanceIds: i.instanceIds.map(text),
+  }));
+const placementFrom = (p) => ({
+  objectId: text(p.objectId),
+  volumeId: text(p.volumeId),
+  assetId: text(p.assetId),
+  transform: JSON.parse(p.transformJson),
+});
+function captureAssetCommand(c) {
+  switch (c.kind) {
+    case "addObject":
+      return captureAddObjectCommand(text(c.plateId), JSON.parse(c.recordJson), input);
+    case "addObjectWithAsset":
+      return captureAddObjectWithAssetCommand(text(c.plateId), JSON.parse(c.recordJson), payload(c.asset), input);
+    case "addVolume":
+      return captureAddVolumeCommand(text(c.objectId), JSON.parse(c.recordJson), payload(c.asset), input);
+    case "replaceVolumeMesh":
+      return captureReplaceVolumeMeshCommand(guardFrom(c.guard), payload(c.asset), input);
+    case "meshBoolean":
+      return captureMeshBooleanCommand(guardFrom(c.guard), payload(c.asset), c.op, input);
+    case "splitVolumeToParts":
+      return captureSplitVolumeToPartsCommand(guardFrom(c.guard), partsFrom(c.parts), input);
+    case "addSvgPart":
+      return captureAddSvgPartCommand(
+        placementFrom(c.placement),
+        { asset: payload(c.asset), drawing: payload(c.drawing), mesh: { triangleCount: c.triangleCount }, part: JSON.parse(c.partJson) },
+        text(c.name),
+        input,
+      );
+    case "editSvgPart":
+      return captureEditSvgPartCommand(
+        text(c.volumeId),
+        { asset: payload(c.asset), mesh: { triangleCount: c.triangleCount }, part: JSON.parse(c.partJson) },
+        input,
+      );
+    case "addEmbossText":
+      return captureAddEmbossTextCommand(
+        placementFrom(c.placement),
+        JSON.parse(c.configurationJson),
+        { asset: payload(c.asset), mesh: { triangleCount: c.triangleCount } },
+        input,
+      );
+    case "editEmbossText":
+      return captureEditEmbossTextCommand(
+        text(c.volumeId),
+        JSON.parse(c.configurationJson),
+        { asset: payload(c.asset), mesh: { triangleCount: c.triangleCount } },
+        input,
+      );
+    case "replaceProject":
+      return captureReplaceProjectCommand(JSON.parse(c.stateJson), text(c.label), input);
+    default:
+      throw new Error(`unknown asset command ${c.kind}`);
+  }
+}
 function captureCommand(c, clips, assets) {
+  if (c.kind && !["instance", "object"].includes(c.kind)) return captureAssetCommand(c);
   if (c.intent)
     return captureSmallIntentJson(
       JSON.stringify({ version: 1, command: c.intent }),
@@ -103,6 +205,13 @@ function captureCommand(c, clips, assets) {
   );
 }
 function captureWork(w, clips, assets) {
+  if (w.splitToObjects)
+    return splitToObjectsStagedWork(
+      guardFrom(w.splitToObjects.guard),
+      partsFrom(w.splitToObjects.parts),
+      identitiesFrom(w.splitToObjects.identities),
+      input,
+    );
   return w.single
     ? singleStagedWork(captureCommand(w.single, clips, assets))
     : transactionStagedWork(
@@ -225,7 +334,7 @@ async function scenario(name, fixture, body) {
           const work = captureWork(op.work, clips, assets),
             id = endpoint.stage(work, guard);
           resources.set(op.name, id);
-          result = { id, units: work.inputUnits, commands: work.commandCount };
+          result = { id, units: work.inputUnits, commands: work.commandCount, assetBytes: work.assetBytes };
         } else if (op.kind === "request") {
           requests.push(endpoint.handle(op.json));
           result = { reply: requests.length - 1 };
@@ -311,6 +420,42 @@ for (const trace of corpus.traces)
       await group([request({ query: {} }), request({ close: {} })]);
     },
   );
+// Every asset-corpus trace, staged and executed command by command. A session
+// opens only consistent bundles, so repository-only payloads and declarations
+// without payloads (the corpus's inconsistency probes) are left out here.
+for (const trace of assetCorpus.traces) {
+  const state = JSON.parse(trace.stateJson);
+  const declared = new Set(state.sourceAssets.map((a) => a.id));
+  const payloads = [trace.asset, ...trace.extraAssets].filter((p) => declared.has(JSON.parse(p.descriptorJson).id));
+  const present = new Set(payloads.map((p) => JSON.parse(p.descriptorJson).id));
+  state.sourceAssets = state.sourceAssets.filter((a) => present.has(a.id));
+  await scenario(
+    `asset:${trace.name}`,
+    { stateJson: canonicalStringify(state), asset: trace.asset, assets: payloads, options: trace.options },
+    async ({ group, request, resources, guard }) => {
+      await group([{ kind: "configure", limits }, request(hello)]);
+      let index = 0;
+      for (const step of trace.steps) {
+        const op = step.operation;
+        let work;
+        if (op.kind === "asset") work = { single: op.command };
+        else if (op.kind === "assetBatch") work = { commands: op.commands, label: op.label };
+        else if (op.kind === "intent") work = { single: { intent: JSON.parse(op.json).command } };
+        else if (op.kind === "splitToObjects")
+          work = { splitToObjects: { guard: op.guard, parts: op.parts, identities: op.identities } };
+        if (work) {
+          const name = `work-${index++}`;
+          const [outcome] = await group([{ kind: "stage", name, work }]);
+          if (!outcome.error)
+            await group([request({ executeStaged: { stagedId: resources.get(name) } })]);
+        } else if (op.kind === "undo" || op.kind === "redo")
+          await group([request({ [op.kind]: guard() })]);
+        else if (op.kind === "checkpoint" || op.kind === "selection") await group([op]);
+      }
+      await group([request({ query: {} }), request({ close: {} })]);
+    },
+  );
+}
 const base = corpus.traces[0],
   sample = base.steps.find((s) => s.operation.kind === "captured").operation
     .command;
@@ -371,7 +516,7 @@ for (const mode of [
           { kind: "stage", name: "overflow", work: { single: sample } },
           {
             kind: "configure",
-            limits: { maxResources: 0, maxCommands: 0, maxUnits: 0 },
+            limits: { maxResources: 0, maxCommands: 0, maxUnits: 0, maxAssetBytes: 0 },
           },
         ]);
       if (mode === "unknown-after-take")
@@ -610,6 +755,7 @@ for (const mode of [
 const sources = [
   "tools/cross-platform/project-staged-session-vectors.mjs",
   "testdata/cross-platform/project-captured-command-vectors.json",
+  "testdata/cross-platform/project-asset-command-vectors.json",
   "testdata/cross-platform/project-clipboard-vectors.json",
   "web/src/project/StagedProjectCommands.ts",
   "web/src/project/ProjectSessionEndpoint.ts",

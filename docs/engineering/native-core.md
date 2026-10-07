@@ -2915,6 +2915,40 @@ validated project, pruning again. History charges the canonical length of both
 states. The browser's bus also restores each entry's recorded selection on
 undo and redo, and the native bus matches it.
 
+### Staged payload uploads
+
+The staging contract gains record kinds for every payload-carrying command. They
+are `addObject`, `addObjectWithAsset`, `addVolume`, `replaceVolumeMesh`,
+`meshBoolean`, `splitVolumeToParts`, `addSvgPart`, `editSvgPart`,
+`addEmbossText`, `editEmbossText` and `replaceProject`, plus a `splitToObjects`
+work. Records carry each payload's descriptor in place of its bytes. Guards are
+objects with exactly their fields.
+
+After `seal`, `CommandUpload` holds decoded builders and the declared payloads,
+deduplicated by ID; one ID with two descriptors refuses the upload. Payloads
+stream like bundle assets:
+
+- `asset_count` lists them in first-declaration order;
+- `begin_asset(i)` reserves the exact length;
+- `append_asset` takes exact offsets and chunks of at most 64 KiB;
+- `finish_asset` validates the payload (`StagedAsset`, a shareable lease); a
+  mismatch discards only that payload.
+
+The last payload builds the commands on the preparation task, and a refusal
+there cancels the upload. Upload options add `assets` and `assetBytes`, checked
+at sealing before any byte arrives. Pool options and usage add `assetBytes`,
+charging each distinct payload once per work. `asset_bytes` reports the charge.
+WASM, JNI (`commandUpload*Asset*`) and Kotlin (`ProjectCommandUpload`,
+`ProjectAssetWriter`, `ProjectActor.prepareCommands(..., assets)`) expose the
+same steps, and the actor refuses preparation if a declared payload never
+arrived.
+
+The browser's capture functions measure the same records and validate and copy
+payloads. Its endpoint pool tracks `assetBytes`, and split-to-objects work runs
+`commitPreparedVolumeSplitToObjects` as a staged program. The staged corpus
+replays every asset trace through staging (bundles made consistent), and the
+replay harness streams each work's payloads into real uploads.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

@@ -3,15 +3,26 @@
   "maxPreparations": 4,
   "maxClipboards": 4,
   "envelope": ["version", "work"],
-  "inputOptions": ["bytes", "nodes", "textUnits", "numberBytes", "depth", "commands", "inputUnits"],
-  "poolOptions": ["resources", "commands", "inputUnits"],
+  "inputOptions": ["bytes", "nodes", "textUnits", "numberBytes", "depth", "commands", "inputUnits", "assets", "assetBytes"],
+  "poolOptions": ["resources", "commands", "inputUnits", "assetBytes"],
   "clipboardOptions": ["assets", "bytes"],
   "clipboardInfo": ["volumes", "instances", "layerRanges", "assets", "bytes"],
-  "workKinds": {"single": ["command"], "transaction": ["label", "commands"]},
+  "workKinds": {"single": ["command"], "transaction": ["label", "commands"], "splitToObjects": ["guard", "parts", "identities"]},
   "commandKinds": {
     "createInstance": ["objectId", "record", "index"],
     "pasteObject": ["record", "objectId", "volumeIds", "instanceIds", "layerRangeIds", "destination", "name"],
     "intent": ["asciiJson"],
-    "clipboardPaste": ["objectId", "volumeIds", "instanceIds", "layerRangeIds", "destination"]
+    "clipboardPaste": ["objectId", "volumeIds", "instanceIds", "layerRangeIds", "destination"],
+    "addObject": ["plateId", "record"],
+    "addObjectWithAsset": ["plateId", "record", "descriptor"],
+    "addVolume": ["objectId", "record", "descriptor"],
+    "replaceVolumeMesh": ["guard", "descriptor"],
+    "meshBoolean": ["guard", "descriptor", "op"],
+    "splitVolumeToParts": ["guard", "parts"],
+    "addSvgPart": ["placement", "descriptor", "drawing", "triangleCount", "part", "name"],
+    "editSvgPart": ["volumeId", "descriptor", "triangleCount", "part"],
+    "addEmbossText": ["placement", "configuration", "descriptor", "triangleCount"],
+    "editEmbossText": ["volumeId", "configuration", "descriptor", "triangleCount"],
+    "replaceProject": ["state", "label"]
   }
 }

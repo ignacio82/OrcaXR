@@ -113,8 +113,8 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun configureStaging(options: ProjectStagingPoolOptions) = read { NativeProject.configureStaging(it, ProjectStaging.VERSION, options.encode()) }
     fun stagingUsage(): ProjectStagingUsage = read {
         val values = NativeProject.stagingUsage(it)
-        check(values.size == 3 && values.all { n -> n.isFinite() && n >= 0 && n <= ProjectHost.MAX_BUDGET && n == n.toLong().toDouble() }) { "invalid_staging_usage" }
-        ProjectStagingUsage(values[0].toLong(), values[1].toLong(), values[2].toLong())
+        check(values.size == 4 && values.all { n -> n.isFinite() && n >= 0 && n <= ProjectHost.MAX_BUDGET && n == n.toLong().toDouble() }) { "invalid_staging_usage" }
+        ProjectStagingUsage(values[0].toLong(), values[1].toLong(), values[2].toLong(), values[3].toLong())
     }
     /** Capture the guard before preparation begins. Each upload owns a separate
      * bounded task; closing/disposal makes its eventual admission invalid. */
@@ -201,7 +201,7 @@ class ProjectExportCapture internal constructor(handle: Long) : ProjectHandle(ha
         own(NativeProject.exportArchive(it, ProjectArchive.VERSION, options.encode()), ::ProjectArchiveOutput)
     }
 }
-data class ProjectStagingUsage(val resources: Long, val commands: Long, val units: Long)
+data class ProjectStagingUsage(val resources: Long, val commands: Long, val units: Long, val assetBytes: Long)
 data class ProjectClipboardInfo(val volumes: Long, val instances: Long, val layerRanges: Long, val assets: Long, val bytes: Long)
 /** Counts against the same four-owner clipboard budget as a completed capture.
  * Consumed on success/failure; closing invalidates late worker results. */
@@ -229,6 +229,20 @@ class ProjectCommandUpload internal constructor(handle: Long) : ProjectHandle(ha
     fun seal() = read { NativeProject.commandUploadSeal(it) }
     fun units(): Long = read { NativeProject.commandUploadUnits(it) }
     fun commandCount(): Long = read { NativeProject.commandUploadCount(it) }
+    /** Payload bytes the sealed work holds (each distinct payload once). */
+    fun assetBytes(): Long = read { NativeProject.commandUploadAssetBytes(it) }
+    /** Payloads the sealed records declared, in first-declaration order. */
+    fun assetCount(): Long = read { NativeProject.commandUploadAssetCount(it) }
+    /** Start one declared payload; returns its exact byte length. */
+    fun beginAsset(position: Long): Long = read { NativeProject.commandUploadBeginAsset(it, position) }
+    fun appendAsset(offset: Long, bytes: ByteArray) = read {
+        require(bytes.size <= ProjectHost.MAX_CHUNK_BYTES) { "input_limit" }
+        NativeProject.commandUploadAppendAsset(it, offset, bytes)
+    }
+    /** Validates the payload; the last one prepares the work's commands, so it
+     * belongs on the owned preparation executor too. */
+    fun finishAsset() = read { NativeProject.commandUploadFinishAsset(it) }
+    fun cancelAsset() = read { NativeProject.commandUploadCancelAsset(it) }
 }
 /** Ready-input cleanup uses the session's ordinary call gate. Closing the whole
  * session remains nonblocking. A refused release retains this ID for retry. */

@@ -64,6 +64,114 @@ export function projectStagedBoundaries(core, trace, layout, schema) {
   const json = JSON.stringify([1, [0, [2, intent]]]),
     data = encode.encode(json);
   const options = stagedInputOptions(data.length, schema);
+  // A payload-carrying record: a tetrahedron added as a volume. Its bytes stream
+  // after the records, one declared payload at a time, and are validated.
+  const fnv1a64 = (bytes) => {
+    let h = 0xcbf29ce484222325n;
+    for (const b of bytes) h = ((h ^ BigInt(b)) * 0x100000001b3n) & 0xffffffffffffffffn;
+    return `fnv1a64:${h.toString(16).padStart(16, "0")}`;
+  };
+  const mesh = new Uint8Array(96);
+  const view = new DataView(mesh.buffer);
+  [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10].forEach((v, i) => view.setFloat32(i * 4, v, true));
+  [0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 2, 3].forEach((v, i) => view.setUint32(48 + i * 4, v, true));
+  const descriptor = {
+    id: "import:asset:boundary",
+    kind: "mesh",
+    digest: fnv1a64(mesh),
+    byteLength: 96,
+    mediaType: "application/vnd.orcaxr.indexed-mesh",
+    mesh: {
+      positions: { byteOffset: 0, byteLength: 48, componentType: "float32", componentCount: 3, count: 4 },
+      indices: { byteOffset: 48, byteLength: 48, componentType: "uint32", componentCount: 1, count: 12 },
+      triangleCount: 4,
+    },
+  };
+  const volume = {
+    id: "import:volume:boundary",
+    name: "Boundary",
+    role: "model",
+    source: { assetId: descriptor.id, topologyRevision: 0, triangleCount: 4 },
+    transform: { translationMm: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+    config: {},
+    annotations: { topologyRevision: 0, color: [], support: [], seam: [], fuzzySkin: [], brim: [] },
+  };
+  const payloadData = encode.encode(
+    JSON.stringify([
+      1,
+      [
+        0,
+        [
+          Object.keys(schema.commandKinds).indexOf("addVolume"),
+          plate.objects[0].id,
+          volume,
+          descriptor,
+        ],
+      ],
+    ]),
+  );
+  const payloadOptions = stagedInputOptions(payloadData.length, schema);
+  const sealedPayload = (bound = payloadOptions) => {
+    let input = session.command_upload(guard, 1, payloadData.length, bound);
+    try {
+      input.append(0, payloadData);
+      input.seal();
+      const owned = input;
+      input = undefined;
+      return owned;
+    } finally {
+      input?.free();
+    }
+  };
+  const payloadBoundaries = () => {
+    session.configure_staging(
+      1,
+      Float64Array.from([4, 100, 8_000_000, 16_000_000]),
+    );
+    let input = sealedPayload();
+    try {
+      eq(input.asset_count(), 1);
+      refuse(() => input.units());
+      refuse(() => input.begin_asset(1));
+      refuse(() => input.append_asset(0, mesh.subarray(0, 1)));
+      eq(input.begin_asset(0), 96);
+      refuse(() => input.begin_asset(0));
+      refuse(() => input.append_asset(1, mesh.subarray(0, 1)));
+      refuse(() => input.append_asset(0, new Uint8Array(0)));
+      input.append_asset(0, mesh.subarray(0, 7));
+      refuse(() => input.finish_asset());
+      const tampered = mesh.slice(7);
+      tampered[0] ^= 1;
+      input.append_asset(7, tampered);
+      // A digest mismatch discards only that payload; it can be streamed again.
+      refuse(() => input.finish_asset());
+      eq(input.begin_asset(0), 96);
+      for (let p = 0; p < mesh.length; p += 5)
+        input.append_asset(p, mesh.subarray(p, p + 5));
+      input.finish_asset();
+      eq(input.asset_count(), 0);
+      eq(input.asset_bytes(), 96);
+      const units = input.units();
+      const owned = input;
+      input = undefined;
+      const id = session.stage_commands(owned);
+      eq(Array.from(session.staging_usage()), [1, 1, units, 96]);
+      eq(session.release_staged(id), true);
+    } finally {
+      input?.free();
+    }
+    // Admission needs every payload and consumes the upload either way.
+    refuse(() => session.stage_commands(sealedPayload()));
+    // Upload budgets refuse at sealing, before any payload byte arrives.
+    for (const [field, value] of [
+      ["assets", 0],
+      ["assetBytes", 95],
+    ]) {
+      const bound = payloadOptions.slice();
+      bound[schema.inputOptions.indexOf(field)] = value;
+      refuse(() => sealedPayload(bound).free());
+    }
+  };
   const newInput = (owner = session, capture = guard) =>
     owner.command_upload(capture, 1, data.length, options);
   const ready = (owner = session, capture = guard) => {
@@ -83,13 +191,13 @@ export function projectStagedBoundaries(core, trace, layout, schema) {
     }
   };
   try {
-    eq(Array.from(session.staging_usage()), [0, 0, 0]);
+    eq(Array.from(session.staging_usage()), [0, 0, 0, 0]);
     refuse(() => session.stage_commands(ready())); // Disabled finished pool consumes input.
     for (const version of [-1, 0, 2]) {
       refuse(() =>
         session.configure_staging(
           version,
-          Float64Array.from([4, 100, 8_000_000]),
+          Float64Array.from([4, 100, 8_000_000, 16_000_000]),
         ),
       );
       refuse(() =>
@@ -97,7 +205,7 @@ export function projectStagedBoundaries(core, trace, layout, schema) {
       );
     }
     for (const pool of [false, true]) {
-      const base = pool ? [4, 100, 8_000_000] : Array.from(options);
+      const base = pool ? [4, 100, 8_000_000, 16_000_000] : Array.from(options);
       const apply = (values) =>
         pool
           ? session.configure_staging(1, values)
@@ -119,7 +227,10 @@ export function projectStagedBoundaries(core, trace, layout, schema) {
       bad[field] = value;
       refuse(() => session.command_upload(guard, 1, data.length, bad));
     }
-    session.configure_staging(1, Float64Array.from([4, 100, 8_000_000]));
+    session.configure_staging(
+      1,
+      Float64Array.from([4, 100, 8_000_000, 16_000_000]),
+    );
     for (const id of [0, -1, 9007199254740992])
       refuse(() => session.release_staged(id));
     eq(session.release_staged(Number.MAX_SAFE_INTEGER), false);
@@ -237,11 +348,14 @@ export function projectStagedBoundaries(core, trace, layout, schema) {
     let id = session.stage_commands(input);
     input = undefined;
     const charge = intent.length + '["intent",]'.length;
-    eq(Array.from(session.staging_usage()), [1, 1, charge]);
-    refuse(() => session.configure_staging(1, Float64Array.from([0, 0, 0])));
-    session.configure_staging(1, Float64Array.from([1, 1, charge]));
+    eq(Array.from(session.staging_usage()), [1, 1, charge, 0]);
+    refuse(() =>
+      session.configure_staging(1, Float64Array.from([0, 0, 0, 0])),
+    );
+    session.configure_staging(1, Float64Array.from([1, 1, charge, 0]));
     refuse(() => session.stage_commands(ready()));
     eq(session.release_staged(id), true);
+    payloadBoundaries();
     const stale = ready();
     const effects = session.acknowledge_checkpoint(guard);
     effects.free();

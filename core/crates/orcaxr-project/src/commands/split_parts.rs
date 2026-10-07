@@ -141,7 +141,7 @@ fn canonical_text_is(value: &impl Encode, expected: &[u16]) -> io::Result<bool> 
 }
 
 impl VolumeSplitGuard {
-    fn value(&self) -> Value {
+    pub(crate) fn value(&self) -> Value {
         super::topology::object(vec![
             ("volumeId", string(&self.volume_id)),
             ("assetId", string(&self.asset_id)),

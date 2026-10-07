@@ -279,6 +279,7 @@ const INSTANCE_STAGING_LIMITS = Object.freeze({
   maxResources: 4,
   maxCommands: 4096,
   maxUnits: INSTANCE_INPUT_LIMITS.maxUnits,
+  maxAssetBytes: 0,
 });
 const CLIPBOARD_ASSET_LIMITS = Object.freeze({ maxAssets: 4096, maxBytes: 512 * 1024 * 1024 });
 const MAX_UI_NAME_LENGTH = 160;

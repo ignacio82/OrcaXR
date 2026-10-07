@@ -45,7 +45,7 @@ function deferred() {
   return { promise, resolve };
 }
 const stale = (error: unknown) => error instanceof AsyncSessionError && error.code === 'stale';
-const emptyPool = { resources: 0, commands: 0, units: 0 };
+const emptyPool = { resources: 0, commands: 0, units: 0, assetBytes: 0 };
 type Fixture = Awaited<ReturnType<typeof setup>>;
 const operations = {
   duplicate: ({ controller }: Fixture) => controller.duplicateSelectedInstance(),
@@ -147,7 +147,7 @@ for (const [name, operation] of Object.entries(operations)) {
     const { controller, transport } = s;
     try {
       const before = footprint(controller);
-      transport.configureStaging({ maxResources: 0, maxCommands: 0, maxUnits: 0 });
+      transport.configureStaging({ maxResources: 0, maxCommands: 0, maxUnits: 0, maxAssetBytes: 0 });
       await assert.rejects(operation(s), { code: 'resourceLimit' });
       assert.deepEqual(footprint(controller), before);
       assert.deepEqual(transport.stagingUsage(), emptyPool);

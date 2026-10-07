@@ -170,13 +170,14 @@ fn configure_staging(
     version: jint,
     options: JDoubleArray<'_>,
 ) -> Result<()> {
-    let options = staging::decode_pool(version as f64, &option_values::<3>(env, &options)?)
+    let options = staging::decode_pool(version as f64, &option_values::<4>(env, &options)?)
         .ok_or("invalid_options")?;
     with_session(handle, |s| {
         s.configure_staging(StagingLimits {
             max_resources: options.resources,
             max_commands: options.commands,
             max_units: options.input_units as u64,
+            max_asset_bytes: options.asset_bytes as u64,
         })
         .map_err(|e| match e {
             orcaxr_contracts::project_intent_types::SessionError::Busy => "busy",
@@ -189,7 +190,12 @@ fn staging_usage(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jdoubleArray> {
     let v = with_session(handle, |s| Ok(s.staging_usage()))?;
     doubles(
         env,
-        &[v.resources as f64, v.commands as f64, v.units as f64],
+        &[
+            v.resources as f64,
+            v.commands as f64,
+            v.units as f64,
+            v.asset_bytes as f64,
+        ],
     )
 }
 fn command_upload_new(
@@ -200,7 +206,7 @@ fn command_upload_new(
     bytes: jlong,
     options: JDoubleArray<'_>,
 ) -> Result<jlong> {
-    let options = staging::decode_input(version as f64, &option_values::<7>(env, &options)?)
+    let options = staging::decode_input(version as f64, &option_values::<9>(env, &options)?)
         .ok_or("invalid_options")?;
     let guard = with_guard(guard, |g| Ok(g.clone()))?;
     let bytes = index(bytes)?;
@@ -292,7 +298,7 @@ fn clipboard_upload_new(
     bytes: jlong,
     options: JDoubleArray<'_>,
 ) -> Result<jlong> {
-    let options = staging::decode_input(version as f64, &option_values::<7>(env, &options)?)
+    let options = staging::decode_input(version as f64, &option_values::<9>(env, &options)?)
         .ok_or("invalid_options")?;
     let guard = with_guard(guard, |g| Ok(g.clone()))?;
     let clipboard = with_clipboard(clipboard, |c| Ok(c.data()))?;
@@ -316,6 +322,45 @@ fn command_upload_units(_: &mut JNIEnv<'_>, handle: jlong) -> Result<jlong> {
 fn command_upload_count(_: &mut JNIEnv<'_>, handle: jlong) -> Result<jlong> {
     with_command_upload(handle, |u| {
         u.command_count().map(|n| n as i64).map_err(|e| e.code())
+    })
+}
+fn command_upload_asset_bytes(_: &mut JNIEnv<'_>, handle: jlong) -> Result<jlong> {
+    with_command_upload(handle, |u| {
+        u.asset_bytes().map(|n| n as i64).map_err(|e| e.code())
+    })
+}
+fn command_upload_asset_count(_: &mut JNIEnv<'_>, handle: jlong) -> Result<jlong> {
+    with_command_upload(handle, |u| {
+        u.asset_count().map(|n| n as i64).map_err(|e| e.code())
+    })
+}
+fn command_upload_begin_asset(_: &mut JNIEnv<'_>, handle: jlong, position: jlong) -> Result<jlong> {
+    let position = index(position)?;
+    with_command_upload(handle, |u| {
+        u.begin_asset(position)
+            .map(|n| n as i64)
+            .map_err(|e| e.code())
+    })
+}
+fn command_upload_append_asset(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    offset: jlong,
+    bytes: JByteArray<'_>,
+) -> Result<()> {
+    let bytes = input_bytes(env, &bytes)?;
+    let offset = index(offset)?;
+    with_command_upload(handle, |u| {
+        u.append_asset(offset, &bytes).map_err(|e| e.code())
+    })
+}
+fn command_upload_finish_asset(_: &mut JNIEnv<'_>, handle: jlong) -> Result<()> {
+    with_command_upload(handle, |u| u.finish_asset().map_err(|e| e.code()))
+}
+fn command_upload_cancel_asset(_: &mut JNIEnv<'_>, handle: jlong) -> Result<()> {
+    with_command_upload(handle, |u| {
+        u.cancel_asset();
+        Ok(())
     })
 }
 fn stage_commands(_: &mut JNIEnv<'_>, handle: jlong, input: jlong) -> Result<jlong> {

@@ -51,6 +51,7 @@ fn limits() -> StagingLimits {
         max_resources: 4,
         max_commands: 100,
         max_units: 8_000_000,
+        max_asset_bytes: 16_000_000,
     }
 }
 fn captured<P: TimestampPolicy>(

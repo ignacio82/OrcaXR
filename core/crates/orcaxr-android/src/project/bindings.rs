@@ -384,6 +384,39 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_commandUploadAssetBytes, command_upload_asset_bytes, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_commandUploadAssetCount, command_upload_asset_count, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_commandUploadBeginAsset, command_upload_begin_asset, jlong,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_commandUploadAppendAsset, command_upload_append_asset, (),
+    handle: jlong,
+    offset: jlong,
+    bytes: JByteArray<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_commandUploadFinishAsset, command_upload_finish_asset, (),
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_commandUploadCancelAsset, command_upload_cancel_asset, (),
+    handle: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_stageCommands, stage_commands, jlong,
     handle: jlong,
     input: jlong,

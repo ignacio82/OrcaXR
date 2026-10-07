@@ -46,7 +46,7 @@ function deferred() {
   return { promise, resolve };
 }
 const stale = (error: unknown) => error instanceof AsyncSessionError && error.code === 'stale';
-const emptyPool = { resources: 0, commands: 0, units: 0 };
+const emptyPool = { resources: 0, commands: 0, units: 0, assetBytes: 0 };
 let passed = 0;
 async function test(name: string, run: () => Promise<void>) {
   await run();
@@ -220,7 +220,7 @@ await test('invalid destination and exhausted staging cannot restore assets outs
     assert.equal(controller.captureProjectExportGuard().assetFingerprint, before.assetFingerprint);
     assert.equal(controller.getSummary().history.undoCount, 0);
     assert.equal(assets.list().length, 0);
-    transport.configureStaging({ maxResources: 0, maxCommands: 0, maxUnits: 0 });
+    transport.configureStaging({ maxResources: 0, maxCommands: 0, maxUnits: 0, maxAssetBytes: 0 });
     await assert.rejects(controller.pasteClipboard(), { code: 'resourceLimit' });
     assert.equal(assets.list().length, 0);
     assert.deepEqual(transport.stagingUsage(), emptyPool);
