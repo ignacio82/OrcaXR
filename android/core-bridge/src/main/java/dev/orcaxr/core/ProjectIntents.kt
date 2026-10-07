@@ -1398,6 +1398,24 @@ object ProjectIntents {
             w.field("overridesJson") { writeJsonText(w, v.overridesJson) }
         }
     }
+    enum class VolumeRoleName {Model,NegativeVolume,ParameterModifier,SupportBlocker,SupportEnforcer}
+    private fun readVolumeRoleName(v: Any): VolumeRoleName {
+        return when(v) {"model" -> VolumeRoleName.Model;"negativeVolume" -> VolumeRoleName.NegativeVolume;"parameterModifier" -> VolumeRoleName.ParameterModifier;"supportBlocker" -> VolumeRoleName.SupportBlocker;"supportEnforcer" -> VolumeRoleName.SupportEnforcer; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeVolumeRoleName(w: ProjectIntentWriter, v: VolumeRoleName) {
+        w.literal(when(v) {VolumeRoleName.Model -> "model";VolumeRoleName.NegativeVolume -> "negativeVolume";VolumeRoleName.ParameterModifier -> "parameterModifier";VolumeRoleName.SupportBlocker -> "supportBlocker";VolumeRoleName.SupportEnforcer -> "supportEnforcer";})
+    }
+    data class ConvertVolumeRole(val volumeId: List<Int>, val role: VolumeRoleName)
+    private fun readConvertVolumeRole(v: Any): ConvertVolumeRole {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeId", "role"), false)
+        return ConvertVolumeRole(readId(obj.get("volumeId")), readVolumeRoleName(obj.get("role")))
+    }
+    private fun writeConvertVolumeRole(w: ProjectIntentWriter, v: ConvertVolumeRole) {
+        w.obj {
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("role") { writeVolumeRoleName(w, v.role) }
+        }
+    }
     sealed interface Command {
         data class AddPlate(val value: ProjectIntents.AddPlate) : Command
         data class DuplicatePlate(val value: ProjectIntents.DuplicatePlate) : Command
@@ -1449,9 +1467,10 @@ object ProjectIntents {
         data class RemoveMixedFilament(val value: ProjectIntents.RemoveMixedFilament) : Command
         data class SetProjectSettingsOverrides(val value: ProjectIntents.SetProjectSettingsOverrides) : Command
         data class SetScopedOverrides(val value: ProjectIntents.SetScopedOverrides) : Command
+        data class ConvertVolumeRole(val value: ProjectIntents.ConvertVolumeRole) : Command
     }
     private fun readCommand(v: Any): Command {
-        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments", "addMixedFilament", "editMixedFilament", "duplicateMixedFilament", "setMixedFilamentEnabled", "tombstoneMixedFilament", "removeMixedFilament", "setProjectSettingsOverrides", "setScopedOverrides"), true)
+        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments", "addMixedFilament", "editMixedFilament", "duplicateMixedFilament", "setMixedFilamentEnabled", "tombstoneMixedFilament", "removeMixedFilament", "setProjectSettingsOverrides", "setScopedOverrides", "convertVolumeRole"), true)
         return when(val key = obj.keys().next()) {
             "addPlate" -> Command.AddPlate(readAddPlate(obj.get(key)))
             "duplicatePlate" -> Command.DuplicatePlate(readDuplicatePlate(obj.get(key)))
@@ -1503,6 +1522,7 @@ object ProjectIntents {
             "removeMixedFilament" -> Command.RemoveMixedFilament(readRemoveMixedFilament(obj.get(key)))
             "setProjectSettingsOverrides" -> Command.SetProjectSettingsOverrides(readSetProjectSettingsOverrides(obj.get(key)))
             "setScopedOverrides" -> Command.SetScopedOverrides(readSetScopedOverrides(obj.get(key)))
+            "convertVolumeRole" -> Command.ConvertVolumeRole(readConvertVolumeRole(obj.get(key)))
             else -> throw InvalidProjectIntent()
         }
     }
@@ -1558,6 +1578,7 @@ object ProjectIntents {
             is Command.RemoveMixedFilament -> w.field("removeMixedFilament") { writeRemoveMixedFilament(w, v.value) }
             is Command.SetProjectSettingsOverrides -> w.field("setProjectSettingsOverrides") { writeSetProjectSettingsOverrides(w, v.value) }
             is Command.SetScopedOverrides -> w.field("setScopedOverrides") { writeSetScopedOverrides(w, v.value) }
+            is Command.ConvertVolumeRole -> w.field("convertVolumeRole") { writeConvertVolumeRole(w, v.value) }
         } }
     }
     private fun readCommands(v: Any): List<Command> {

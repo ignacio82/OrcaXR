@@ -75,6 +75,7 @@ import {
 } from './filaments/mixedCommands';
 import { assertCanonicalSerializable } from './domain/canonical';
 import { SetProjectSettingsOverridesCommand } from './settingsOverrides';
+import { ConvertVolumeRoleCommand } from './objects/semanticVolumeCommands';
 import { SetScopedOverridesCommand, type ScopedOverrideTarget } from './scopedOverrides';
 import type {
   BrimEarPoint,
@@ -82,12 +83,14 @@ import type {
   FullSpectrumRecipeState,
   JsonValue,
   LayerEventType,
+  VolumeRole,
   MixedComponent,
   MixedDistribution,
   MixedFilament,
   Transform,
 } from './domain/model';
 import type {
+  ProjectVolumeRoleNameWire,
   ProjectScopedTargetWire,
   ProjectSettingsGuardWire,
   ProjectAssignmentTargetWire,
@@ -264,6 +267,11 @@ function command(value: ProjectCommandWire): ProjectCommand {
   }
   if ('deleteLayerEvent' in value)
     return new DeleteLayerEventCommand(id<'custom-gcode'>(value.deleteLayerEvent.customGcodeId));
+  if ('convertVolumeRole' in value)
+    return new ConvertVolumeRoleCommand(
+      id<'volume'>(value.convertVolumeRole.volumeId),
+      VOLUME_ROLES[value.convertVolumeRole.role],
+    );
   if ('setProjectSettingsOverrides' in value) {
     const input = value.setProjectSettingsOverrides;
     return new SetProjectSettingsOverridesCommand(settingsGuard(input.guard), {
@@ -496,6 +504,13 @@ function jsonObject(units: readonly number[]): ConfigMap {
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new InvalidProjectIntent();
   return parsed as ConfigMap;
 }
+const VOLUME_ROLES: Readonly<Record<ProjectVolumeRoleNameWire, VolumeRole>> = Object.freeze({
+  model: 'model',
+  negativeVolume: 'negative-volume',
+  parameterModifier: 'parameter-modifier',
+  supportBlocker: 'support-blocker',
+  supportEnforcer: 'support-enforcer',
+});
 /** The revision and semantic hash of the snapshot the caller read. */
 function settingsGuard(value: ProjectSettingsGuardWire): { sourceRevision: number; sourceHash: string } {
   return { sourceRevision: value.sourceRevision, sourceHash: text(value.sourceHash) };

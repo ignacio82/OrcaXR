@@ -890,6 +890,23 @@
         "overridesJson": "JsonText"
       }
     },
+    "VolumeRoleName": {
+      "kind": "enum",
+      "values": [
+        "model",
+        "negativeVolume",
+        "parameterModifier",
+        "supportBlocker",
+        "supportEnforcer"
+      ]
+    },
+    "ConvertVolumeRole": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id",
+        "role": "VolumeRoleName"
+      }
+    },
     "Command": {
       "kind": "union",
       "variants": {
@@ -942,7 +959,8 @@
         "tombstoneMixedFilament": "TombstoneMixedFilament",
         "removeMixedFilament": "RemoveMixedFilament",
         "setProjectSettingsOverrides": "SetProjectSettingsOverrides",
-        "setScopedOverrides": "SetScopedOverrides"
+        "setScopedOverrides": "SetScopedOverrides",
+        "convertVolumeRole": "ConvertVolumeRole"
       }
     },
     "Commands": {

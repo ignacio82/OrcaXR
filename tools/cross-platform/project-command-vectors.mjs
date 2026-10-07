@@ -876,7 +876,39 @@ scenario("settings-overrides", {}, s => {
   run({ kind: "undo" }); run({ kind: "redo" });
 });
 
-const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/settingsOverrides.ts", "web/src/project/scopedOverrides.ts", "web/src/project/domain/settingScopes.ts", "web/src/project/filaments/commands.ts", "web/src/project/filaments/mixedCommands.ts", "web/src/project/filaments/fullSpectrumRecipe.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
+const convertRole = (volumeId, role) => ({ convertVolumeRole: { volumeId: units(volumeId), role } });
+scenario("volume-roles", {}, (s) => {
+  const object = s.plates[0].objects[0], base = object.volumes[0];
+  const [p0, p1] = s.filaments.physical.map(p => p.id);
+  const unpainted = { topologyRevision: 0, color: [], support: [], seam: [], fuzzySkin: [], brim: [] };
+  const volume = (id, role, extra = {}) => {
+    const copy = JSON.parse(JSON.stringify(base));
+    delete copy.filamentId;
+    return { ...copy, id, name: id, role, annotations: { ...unpainted }, ...extra };
+  };
+  object.volumes = [base, volume("import:volume:part2", "model", { filamentId: p0 }), volume("import:volume:negative", "negative-volume"),
+    volume("import:volume:modifier", "parameter-modifier", { filamentId: p1 }), volume("import:volume:blocker", "support-blocker")];
+  s.plates[0].objects.push(cloneObject(object, "single", { volumes: [volume("import:volume:single", "model")] }));
+}, ({ execute, batch, run, ids }) => {
+  execute(convertRole("import:volume:part2", "negativeVolume"));
+  execute(volumeFilament(ids.object, "import:volume:part2", null));
+  execute(convertRole("import:volume:part2", "negativeVolume"));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(convertRole(ids.volume, "parameterModifier"));
+  execute(convertRole("import:volume:modifier", "model"));
+  execute(convertRole(ids.volume, "parameterModifier"));
+  execute(convertRole("import:volume:blocker", "supportBlocker"));
+  execute(convertRole("import:volume:blocker", "supportEnforcer"));
+  execute(convertRole("import:volume:negative", "model"));
+  run({ kind: "undo" }); run({ kind: "undo" }); run({ kind: "redo" });
+  for (const bad of [convertRole("import:volume:single", "supportEnforcer"), convertRole("import:volume:missing", "model"), convertRole("bad", "model")])
+    execute(bad);
+  batch([convertRole("import:volume:part2", "model"), convertRole("import:volume:blocker", "parameterModifier")], "Role transaction");
+  batch([convertRole("import:volume:blocker", "negativeVolume"), convertRole("import:volume:single", "negativeVolume")], "Rolled back roles");
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+
+const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/objects/semanticVolumeCommands.ts", "web/src/project/settingsOverrides.ts", "web/src/project/scopedOverrides.ts", "web/src/project/domain/settingScopes.ts", "web/src/project/filaments/commands.ts", "web/src/project/filaments/mixedCommands.ts", "web/src/project/filaments/fullSpectrumRecipe.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";
 const path = new URL("testdata/cross-platform/project-command-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);

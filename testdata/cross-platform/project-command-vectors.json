@@ -3,7 +3,7 @@
   "sources": [
     {
       "path": "tools/cross-platform/project-command-vectors.mjs",
-      "sha256": "3a053cc8a9b841041a4a5f70b511d80e8bd8b08fac3af1ce23419878eda526ae"
+      "sha256": "7e9bdf01eb65fcaa15e2fc742ea21452b41bfcb422bef34f0ba271e223060197"
     },
     {
       "path": "web/src/project/commands.ts",
@@ -42,6 +42,10 @@
       "sha256": "8b60584a77dbd88455e58e832633935b98787f765dd680aefdd897cfc845b6cc"
     },
     {
+      "path": "web/src/project/objects/semanticVolumeCommands.ts",
+      "sha256": "5ecc195087b462669b42799af3830798fd95c4fb60292e2d321a5c010a586962"
+    },
+    {
       "path": "web/src/project/settingsOverrides.ts",
       "sha256": "d5632d40558f4658f980f78d14be67371d717a38e15e53c7aca39c77eef6d52a"
     },
@@ -75,7 +79,7 @@
     },
     {
       "path": "web/src/project/PreparedProjectCommands.ts",
-      "sha256": "cccbd3650583f18781180401877011b01f8dfb1311fbc4a2b144cf348b8bc2cf"
+      "sha256": "8b29cd140d489bd622b32acfe78f6e9889ba7f4e7e2a0c9ef7f66d38831e7dcf"
     },
     {
       "path": "web/src/project/history/command.ts",
@@ -119,7 +123,7 @@
     },
     {
       "path": "contracts/generated/project-intents.ts",
-      "sha256": "cd3b4aa035add7e57c05e20c7aae6d97f62293fe1f4d42db9cb62ec58812eb7a"
+      "sha256": "0c6e841e6dbbc4d9c12fa85d66c468d5eb57ce1583c1ea8a0e550ebf6c341fc4"
     },
     {
       "path": "contracts/runtime/project-intents.ts",
@@ -127,7 +131,7 @@
     },
     {
       "path": "contracts/project-intents.json",
-      "sha256": "cf4b42a67b9ea6e0df440c3854a6956d41fc703128ad8424dd9d96343c790f59"
+      "sha256": "7f6d5044c3b72cacc9020d3e177200b693a3d783d7458ecaa545e4734bd69026"
     }
   ],
   "contents": [
@@ -533,7 +537,16 @@
     "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.2,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"curr_bed_type\":\"Cool Plate\"},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"nozzle_diameter\":[0.4]},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.16},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":5},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"settingsBaseConfig\":{\"layer_height\":0.2,\"sparse_infill_density\":15},\"settingsOverrides\":{},\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
     "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.2,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"curr_bed_type\":\"Smooth PEI Plate\"},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"nozzle_diameter\":[0.4]},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.16},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":5},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"settingsBaseConfig\":{\"layer_height\":0.2,\"sparse_infill_density\":15},\"settingsOverrides\":{},\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
     "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.2,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"curr_bed_type\":\"Smooth PEI Plate\"},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"nozzle_diameter\":[0.4]},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.16},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":5},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true},{\"config\":{},\"id\":\"import:plate:settings\",\"name\":\"Settings\",\"objects\":[],\"order\":3,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"settingsBaseConfig\":{\"layer_height\":0.2,\"sparse_infill_density\":15},\"settingsOverrides\":{},\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
-    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.2,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"curr_bed_type\":\"Engineering Plate\"},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"nozzle_diameter\":[0.4]},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.16},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":5},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true},{\"config\":{},\"id\":\"import:plate:settings\",\"name\":\"Settings\",\"objects\":[],\"order\":3,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"settingsBaseConfig\":{\"layer_height\":0.2,\"sparse_infill_density\":15},\"settingsOverrides\":{},\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}"
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.2,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"curr_bed_type\":\"Engineering Plate\"},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"nozzle_diameter\":[0.4]},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.16},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":5},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true},{\"config\":{},\"id\":\"import:plate:settings\",\"name\":\"Settings\",\"objects\":[],\"order\":3,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"settingsBaseConfig\":{\"layer_height\":0.2,\"sparse_infill_density\":15},\"settingsOverrides\":{},\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"import:volume:part2\",\"name\":\"import:volume:part2\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:negative\",\"name\":\"import:volume:negative\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"import:volume:modifier\",\"name\":\"import:volume:modifier\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:blocker\",\"name\":\"import:volume:blocker\",\"role\":\"support-blocker\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"import:object:single\",\"instances\":[{\"id\":\"import:instance:single\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:single\",\"name\":\"import:volume:single\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:part2\",\"name\":\"import:volume:part2\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:negative\",\"name\":\"import:volume:negative\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"import:volume:modifier\",\"name\":\"import:volume:modifier\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:blocker\",\"name\":\"import:volume:blocker\",\"role\":\"support-blocker\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"import:object:single\",\"instances\":[{\"id\":\"import:instance:single\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:single\",\"name\":\"import:volume:single\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:part2\",\"name\":\"import:volume:part2\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:negative\",\"name\":\"import:volume:negative\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"import:volume:modifier\",\"name\":\"import:volume:modifier\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:blocker\",\"name\":\"import:volume:blocker\",\"role\":\"support-blocker\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"import:object:single\",\"instances\":[{\"id\":\"import:instance:single\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:single\",\"name\":\"import:volume:single\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"import:volume:modifier\",\"name\":\"import:volume:modifier\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:part2\",\"name\":\"import:volume:part2\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:negative\",\"name\":\"import:volume:negative\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:blocker\",\"name\":\"import:volume:blocker\",\"role\":\"support-blocker\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"import:object:single\",\"instances\":[{\"id\":\"import:instance:single\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:single\",\"name\":\"import:volume:single\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"import:volume:modifier\",\"name\":\"import:volume:modifier\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:part2\",\"name\":\"import:volume:part2\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:negative\",\"name\":\"import:volume:negative\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:blocker\",\"name\":\"import:volume:blocker\",\"role\":\"support-enforcer\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"import:object:single\",\"instances\":[{\"id\":\"import:instance:single\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:single\",\"name\":\"import:volume:single\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"import:volume:modifier\",\"name\":\"import:volume:modifier\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:negative\",\"name\":\"import:volume:negative\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:part2\",\"name\":\"import:volume:part2\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:blocker\",\"name\":\"import:volume:blocker\",\"role\":\"support-enforcer\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"import:object:single\",\"instances\":[{\"id\":\"import:instance:single\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:single\",\"name\":\"import:volume:single\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"import:volume:modifier\",\"name\":\"import:volume:modifier\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:part2\",\"name\":\"import:volume:part2\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:negative\",\"name\":\"import:volume:negative\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:blocker\",\"name\":\"import:volume:blocker\",\"role\":\"support-enforcer\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"import:object:single\",\"instances\":[{\"id\":\"import:instance:single\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:single\",\"name\":\"import:volume:single\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"import:volume:modifier\",\"name\":\"import:volume:modifier\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:part2\",\"name\":\"import:volume:part2\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:negative\",\"name\":\"import:volume:negative\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:blocker\",\"name\":\"import:volume:blocker\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"import:object:single\",\"instances\":[{\"id\":\"import:instance:single\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:single\",\"name\":\"import:volume:single\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"import:volume:modifier\",\"name\":\"import:volume:modifier\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:part2\",\"name\":\"import:volume:part2\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:negative\",\"name\":\"import:volume:negative\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:blocker\",\"name\":\"import:volume:blocker\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"import:object:single\",\"instances\":[{\"id\":\"import:instance:single\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:single\",\"name\":\"import:volume:single\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}"
   ],
   "traces": [
     {
@@ -316861,6 +316874,4067 @@
             ]
           },
           "historyRevision": 16,
+          "assets": "fnv1a64:737122e47b045c13"
+        }
+      ]
+    },
+    {
+      "name": "volume-roles",
+      "options": {},
+      "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"import:volume:part2\",\"name\":\"import:volume:part2\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:negative\",\"name\":\"import:volume:negative\",\"role\":\"negative-volume\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"id\":\"import:volume:modifier\",\"name\":\"import:volume:modifier\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:blocker\",\"name\":\"import:volume:blocker\",\"role\":\"support-blocker\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"import:object:single\",\"instances\":[{\"id\":\"import:instance:single\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:single\",\"name\":\"import:volume:single\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+      "asset": {
+        "descriptorJson": "{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}",
+        "bytes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          32,
+          65,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          32,
+          65,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:75e9e62bce2ca3fe",
+          "content": 403
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 0,
+        "assets": "fnv1a64:737122e47b045c13"
+      },
+      "steps": [
+        {
+          "operation": {
+            "kind": "intent",
+            "json": "{\"version\":1,\"command\":{\"convertVolumeRole\":{\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,112,97,114,116,50],\"role\":\"negativeVolume\"}}}",
+            "coalesce": true
+          },
+          "result": null,
+          "error": [
+            67,
+            108,
+            101,
+            97,
+            114,
+            32,
+            116,
+            104,
+            101,
+            32,
+            108,
+            111,
+            99,
+            97,
+            108,
+            32,
+            102,
+            105,
+            108,
+            97,
+            109,
+            101,
+            110,
+            116,
+            32,
+            97,
+            115,
+            115,
+            105,
+            103,
+            110,
+            109,
+            101,
+            110,
+            116,
+            32,
+            98,
+            101,
+            102,
+            111,
+            114,
+            101,
+            32,
+            99,
+            111,
+            110,
+            118,
+            101,
+            114,
+            116,
+            105,
+            110,
+            103,
+            32,
+            116,
+            104,
+            105,
+            115,
+            32,
+            118,
+            111,
+            108,
+            117,
+            109,
+            101,
+            32,
+            116,
+            111,
+            32,
+            110,
+            101,
+            103,
+            97,
+            116,
+            105,
+            118,
+            101,
+            45,
+            118,
+            111,
+            108,
+            117,
+            109,
+            101
+          ],
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:75e9e62bce2ca3fe",
+                "content": 403
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:75e9e62bce2ca3fe",
+                "content": 403
+              },
+              "reason": [
+                99,
+                111,
+                109,
+                109,
+                97,
+                110,
+                100,
+                45,
+                97,
+                112,
+                112,
+                108,
+                121,
+                45,
+                114,
+                111,
+                108,
+                108,
+                98,
+                97,
+                99,
+                107
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:75e9e62bce2ca3fe",
+            "content": 403
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 0,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "intent",
+            "json": "{\"version\":1,\"command\":{\"setVolumeFilament\":{\"objectId\":[54,48,99,52,50,55,48,98,45,99,48,52,57,45,52,52,50,97,45,56,51,49,51,45,55,53,54,52,102,52,99,97,100,55,99,101],\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,112,97,114,116,50],\"filamentId\":{\"absent\":{}}}}}",
+            "coalesce": true
+          },
+          "result": null,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 1,
+                "hash": "fnv1a64:75e9e62bce2ca3fe",
+                "content": 403
+              },
+              "current": {
+                "revision": 2,
+                "hash": "fnv1a64:c34809eaae7dcea0",
+                "content": 404
+              },
+              "reason": [
+                115,
+                101,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                102,
+                105,
+                108,
+                97,
+                109,
+                101,
+                110,
+                116
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  73,
+                  110,
+                  104,
+                  101,
+                  114,
+                  105,
+                  116,
+                  32,
+                  111,
+                  98,
+                  106,
+                  101,
+                  99,
+                  116,
+                  32,
+                  102,
+                  105,
+                  108,
+                  97,
+                  109,
+                  101,
+                  110,
+                  116
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 2,
+            "hash": "fnv1a64:c34809eaae7dcea0",
+            "content": 404
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              73,
+              110,
+              104,
+              101,
+              114,
+              105,
+              116,
+              32,
+              111,
+              98,
+              106,
+              101,
+              99,
+              116,
+              32,
+              102,
+              105,
+              108,
+              97,
+              109,
+              101,
+              110,
+              116
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "intent",
+            "json": "{\"version\":1,\"command\":{\"convertVolumeRole\":{\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,112,97,114,116,50],\"role\":\"negativeVolume\"}}}",
+            "coalesce": true
+          },
+          "result": null,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 2,
+                "hash": "fnv1a64:c34809eaae7dcea0",
+                "content": 404
+              },
+              "current": {
+                "revision": 3,
+                "hash": "fnv1a64:0a03040076e0e3f7",
+                "content": 405
+              },
+              "reason": [
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  73,
+                  110,
+                  104,
+                  101,
+                  114,
+                  105,
+                  116,
+                  32,
+                  111,
+                  98,
+                  106,
+                  101,
+                  99,
+                  116,
+                  32,
+                  102,
+                  105,
+                  108,
+                  97,
+                  109,
+                  101,
+                  110,
+                  116
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 2,
+                "redoCount": 0,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  110,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  118,
+                  101,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 3,
+            "hash": "fnv1a64:0a03040076e0e3f7",
+            "content": 405
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 2,
+            "redoCount": 0,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              110,
+              101,
+              103,
+              97,
+              116,
+              105,
+              118,
+              101,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "undo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 3,
+                "hash": "fnv1a64:0a03040076e0e3f7",
+                "content": 405
+              },
+              "current": {
+                "revision": 4,
+                "hash": "fnv1a64:c34809eaae7dcea0",
+                "content": 404
+              },
+              "reason": [
+                114,
+                101,
+                118,
+                101,
+                114,
+                116,
+                58,
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 2,
+                "redoCount": 0,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  110,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  118,
+                  101,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 1,
+                "undoLabel": [
+                  73,
+                  110,
+                  104,
+                  101,
+                  114,
+                  105,
+                  116,
+                  32,
+                  111,
+                  98,
+                  106,
+                  101,
+                  99,
+                  116,
+                  32,
+                  102,
+                  105,
+                  108,
+                  97,
+                  109,
+                  101,
+                  110,
+                  116
+                ],
+                "redoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  110,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  118,
+                  101,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 4,
+            "hash": "fnv1a64:c34809eaae7dcea0",
+            "content": 404
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 1,
+            "undoLabel": [
+              73,
+              110,
+              104,
+              101,
+              114,
+              105,
+              116,
+              32,
+              111,
+              98,
+              106,
+              101,
+              99,
+              116,
+              32,
+              102,
+              105,
+              108,
+              97,
+              109,
+              101,
+              110,
+              116
+            ],
+            "redoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              110,
+              101,
+              103,
+              97,
+              116,
+              105,
+              118,
+              101,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 3,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "redo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 4,
+                "hash": "fnv1a64:c34809eaae7dcea0",
+                "content": 404
+              },
+              "current": {
+                "revision": 5,
+                "hash": "fnv1a64:0a03040076e0e3f7",
+                "content": 405
+              },
+              "reason": [
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 1,
+                "redoCount": 1,
+                "undoLabel": [
+                  73,
+                  110,
+                  104,
+                  101,
+                  114,
+                  105,
+                  116,
+                  32,
+                  111,
+                  98,
+                  106,
+                  101,
+                  99,
+                  116,
+                  32,
+                  102,
+                  105,
+                  108,
+                  97,
+                  109,
+                  101,
+                  110,
+                  116
+                ],
+                "redoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  110,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  118,
+                  101,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 2,
+                "redoCount": 0,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  110,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  118,
+                  101,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 5,
+            "hash": "fnv1a64:0a03040076e0e3f7",
+            "content": 405
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 2,
+            "redoCount": 0,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              110,
+              101,
+              103,
+              97,
+              116,
+              105,
+              118,
+              101,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 4,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "intent",
+            "json": "{\"version\":1,\"command\":{\"convertVolumeRole\":{\"volumeId\":[56,102,48,51,48,49,98,102,45,51,99,102,53,45,52,102,52,51,45,56,101,99,55,45,49,49,99,102,98,51,100,102,56,49,48,54],\"role\":\"parameterModifier\"}}}",
+            "coalesce": true
+          },
+          "result": null,
+          "error": [
+            84,
+            104,
+            101,
+            32,
+            108,
+            97,
+            115,
+            116,
+            32,
+            109,
+            111,
+            100,
+            101,
+            108,
+            32,
+            112,
+            97,
+            114,
+            116,
+            32,
+            111,
+            110,
+            32,
+            97,
+            110,
+            32,
+            111,
+            98,
+            106,
+            101,
+            99,
+            116,
+            32,
+            99,
+            97,
+            110,
+            110,
+            111,
+            116,
+            32,
+            98,
+            101,
+            32,
+            99,
+            111,
+            110,
+            118,
+            101,
+            114,
+            116,
+            101,
+            100,
+            32,
+            116,
+            111,
+            32,
+            97,
+            32,
+            110,
+            111,
+            110,
+            45,
+            109,
+            111,
+            100,
+            101,
+            108,
+            32,
+            114,
+            111,
+            108,
+            101
+          ],
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 5,
+                "hash": "fnv1a64:0a03040076e0e3f7",
+                "content": 405
+              },
+              "current": {
+                "revision": 6,
+                "hash": "fnv1a64:0a03040076e0e3f7",
+                "content": 405
+              },
+              "reason": [
+                99,
+                111,
+                109,
+                109,
+                97,
+                110,
+                100,
+                45,
+                97,
+                112,
+                112,
+                108,
+                121,
+                45,
+                114,
+                111,
+                108,
+                108,
+                98,
+                97,
+                99,
+                107
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 6,
+            "hash": "fnv1a64:0a03040076e0e3f7",
+            "content": 405
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 2,
+            "redoCount": 0,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              110,
+              101,
+              103,
+              97,
+              116,
+              105,
+              118,
+              101,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 4,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "intent",
+            "json": "{\"version\":1,\"command\":{\"convertVolumeRole\":{\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,109,111,100,105,102,105,101,114],\"role\":\"model\"}}}",
+            "coalesce": true
+          },
+          "result": null,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 6,
+                "hash": "fnv1a64:0a03040076e0e3f7",
+                "content": 405
+              },
+              "current": {
+                "revision": 7,
+                "hash": "fnv1a64:e846a92bfaca0b5d",
+                "content": 406
+              },
+              "reason": [
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 2,
+                "redoCount": 0,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  110,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  118,
+                  101,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 3,
+                "redoCount": 0,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 7,
+            "hash": "fnv1a64:e846a92bfaca0b5d",
+            "content": 406
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 3,
+            "redoCount": 0,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 5,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "intent",
+            "json": "{\"version\":1,\"command\":{\"convertVolumeRole\":{\"volumeId\":[56,102,48,51,48,49,98,102,45,51,99,102,53,45,52,102,52,51,45,56,101,99,55,45,49,49,99,102,98,51,100,102,56,49,48,54],\"role\":\"parameterModifier\"}}}",
+            "coalesce": true
+          },
+          "result": null,
+          "error": [
+            67,
+            108,
+            101,
+            97,
+            114,
+            32,
+            102,
+            97,
+            99,
+            101,
+            116,
+            32,
+            112,
+            97,
+            105,
+            110,
+            116,
+            32,
+            97,
+            110,
+            110,
+            111,
+            116,
+            97,
+            116,
+            105,
+            111,
+            110,
+            115,
+            32,
+            98,
+            101,
+            102,
+            111,
+            114,
+            101,
+            32,
+            99,
+            111,
+            110,
+            118,
+            101,
+            114,
+            116,
+            105,
+            110,
+            103,
+            32,
+            116,
+            104,
+            105,
+            115,
+            32,
+            109,
+            111,
+            100,
+            101,
+            108,
+            32,
+            112,
+            97,
+            114,
+            116,
+            32,
+            116,
+            111,
+            32,
+            97,
+            32,
+            110,
+            111,
+            110,
+            45,
+            109,
+            111,
+            100,
+            101,
+            108,
+            32,
+            114,
+            111,
+            108,
+            101
+          ],
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 7,
+                "hash": "fnv1a64:e846a92bfaca0b5d",
+                "content": 406
+              },
+              "current": {
+                "revision": 8,
+                "hash": "fnv1a64:e846a92bfaca0b5d",
+                "content": 406
+              },
+              "reason": [
+                99,
+                111,
+                109,
+                109,
+                97,
+                110,
+                100,
+                45,
+                97,
+                112,
+                112,
+                108,
+                121,
+                45,
+                114,
+                111,
+                108,
+                108,
+                98,
+                97,
+                99,
+                107
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 8,
+            "hash": "fnv1a64:e846a92bfaca0b5d",
+            "content": 406
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 3,
+            "redoCount": 0,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 5,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "intent",
+            "json": "{\"version\":1,\"command\":{\"convertVolumeRole\":{\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,98,108,111,99,107,101,114],\"role\":\"supportBlocker\"}}}",
+            "coalesce": true
+          },
+          "result": null,
+          "error": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 8,
+            "hash": "fnv1a64:e846a92bfaca0b5d",
+            "content": 406
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 3,
+            "redoCount": 0,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 5,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "intent",
+            "json": "{\"version\":1,\"command\":{\"convertVolumeRole\":{\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,98,108,111,99,107,101,114],\"role\":\"supportEnforcer\"}}}",
+            "coalesce": true
+          },
+          "result": null,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 8,
+                "hash": "fnv1a64:e846a92bfaca0b5d",
+                "content": 406
+              },
+              "current": {
+                "revision": 9,
+                "hash": "fnv1a64:1b0e5cd6903e1c29",
+                "content": 407
+              },
+              "reason": [
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 3,
+                "redoCount": 0,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 4,
+                "redoCount": 0,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  115,
+                  117,
+                  112,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  101,
+                  110,
+                  102,
+                  111,
+                  114,
+                  99,
+                  101,
+                  114
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 9,
+            "hash": "fnv1a64:1b0e5cd6903e1c29",
+            "content": 407
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 4,
+            "redoCount": 0,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              115,
+              117,
+              112,
+              112,
+              111,
+              114,
+              116,
+              32,
+              101,
+              110,
+              102,
+              111,
+              114,
+              99,
+              101,
+              114
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 6,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "intent",
+            "json": "{\"version\":1,\"command\":{\"convertVolumeRole\":{\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,110,101,103,97,116,105,118,101],\"role\":\"model\"}}}",
+            "coalesce": true
+          },
+          "result": null,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 9,
+                "hash": "fnv1a64:1b0e5cd6903e1c29",
+                "content": 407
+              },
+              "current": {
+                "revision": 10,
+                "hash": "fnv1a64:5faf25c711331934",
+                "content": 408
+              },
+              "reason": [
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 4,
+                "redoCount": 0,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  115,
+                  117,
+                  112,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  101,
+                  110,
+                  102,
+                  111,
+                  114,
+                  99,
+                  101,
+                  114
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 5,
+                "redoCount": 0,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 10,
+            "hash": "fnv1a64:5faf25c711331934",
+            "content": 408
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 5,
+            "redoCount": 0,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 7,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "undo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 10,
+                "hash": "fnv1a64:5faf25c711331934",
+                "content": 408
+              },
+              "current": {
+                "revision": 11,
+                "hash": "fnv1a64:1b0e5cd6903e1c29",
+                "content": 407
+              },
+              "reason": [
+                114,
+                101,
+                118,
+                101,
+                114,
+                116,
+                58,
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 5,
+                "redoCount": 0,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 4,
+                "redoCount": 1,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  115,
+                  117,
+                  112,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  101,
+                  110,
+                  102,
+                  111,
+                  114,
+                  99,
+                  101,
+                  114
+                ],
+                "redoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 11,
+            "hash": "fnv1a64:1b0e5cd6903e1c29",
+            "content": 407
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 4,
+            "redoCount": 1,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              115,
+              117,
+              112,
+              112,
+              111,
+              114,
+              116,
+              32,
+              101,
+              110,
+              102,
+              111,
+              114,
+              99,
+              101,
+              114
+            ],
+            "redoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 8,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "undo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 11,
+                "hash": "fnv1a64:1b0e5cd6903e1c29",
+                "content": 407
+              },
+              "current": {
+                "revision": 12,
+                "hash": "fnv1a64:e846a92bfaca0b5d",
+                "content": 406
+              },
+              "reason": [
+                114,
+                101,
+                118,
+                101,
+                114,
+                116,
+                58,
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 4,
+                "redoCount": 1,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  115,
+                  117,
+                  112,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  101,
+                  110,
+                  102,
+                  111,
+                  114,
+                  99,
+                  101,
+                  114
+                ],
+                "redoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 3,
+                "redoCount": 2,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "redoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  115,
+                  117,
+                  112,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  101,
+                  110,
+                  102,
+                  111,
+                  114,
+                  99,
+                  101,
+                  114
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 12,
+            "hash": "fnv1a64:e846a92bfaca0b5d",
+            "content": 406
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 3,
+            "redoCount": 2,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "redoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              115,
+              117,
+              112,
+              112,
+              111,
+              114,
+              116,
+              32,
+              101,
+              110,
+              102,
+              111,
+              114,
+              99,
+              101,
+              114
+            ],
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 9,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "redo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 12,
+                "hash": "fnv1a64:e846a92bfaca0b5d",
+                "content": 406
+              },
+              "current": {
+                "revision": 13,
+                "hash": "fnv1a64:1b0e5cd6903e1c29",
+                "content": 407
+              },
+              "reason": [
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 3,
+                "redoCount": 2,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "redoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  115,
+                  117,
+                  112,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  101,
+                  110,
+                  102,
+                  111,
+                  114,
+                  99,
+                  101,
+                  114
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 4,
+                "redoCount": 1,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  115,
+                  117,
+                  112,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  101,
+                  110,
+                  102,
+                  111,
+                  114,
+                  99,
+                  101,
+                  114
+                ],
+                "redoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 13,
+            "hash": "fnv1a64:1b0e5cd6903e1c29",
+            "content": 407
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 4,
+            "redoCount": 1,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              115,
+              117,
+              112,
+              112,
+              111,
+              114,
+              116,
+              32,
+              101,
+              110,
+              102,
+              111,
+              114,
+              99,
+              101,
+              114
+            ],
+            "redoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 10,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "intent",
+            "json": "{\"version\":1,\"command\":{\"convertVolumeRole\":{\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,115,105,110,103,108,101],\"role\":\"supportEnforcer\"}}}",
+            "coalesce": true
+          },
+          "result": null,
+          "error": [
+            84,
+            104,
+            101,
+            32,
+            108,
+            97,
+            115,
+            116,
+            32,
+            109,
+            111,
+            100,
+            101,
+            108,
+            32,
+            112,
+            97,
+            114,
+            116,
+            32,
+            111,
+            110,
+            32,
+            97,
+            110,
+            32,
+            111,
+            98,
+            106,
+            101,
+            99,
+            116,
+            32,
+            99,
+            97,
+            110,
+            110,
+            111,
+            116,
+            32,
+            98,
+            101,
+            32,
+            99,
+            111,
+            110,
+            118,
+            101,
+            114,
+            116,
+            101,
+            100,
+            32,
+            116,
+            111,
+            32,
+            97,
+            32,
+            110,
+            111,
+            110,
+            45,
+            109,
+            111,
+            100,
+            101,
+            108,
+            32,
+            114,
+            111,
+            108,
+            101
+          ],
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 13,
+                "hash": "fnv1a64:1b0e5cd6903e1c29",
+                "content": 407
+              },
+              "current": {
+                "revision": 14,
+                "hash": "fnv1a64:1b0e5cd6903e1c29",
+                "content": 407
+              },
+              "reason": [
+                99,
+                111,
+                109,
+                109,
+                97,
+                110,
+                100,
+                45,
+                97,
+                112,
+                112,
+                108,
+                121,
+                45,
+                114,
+                111,
+                108,
+                108,
+                98,
+                97,
+                99,
+                107
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 14,
+            "hash": "fnv1a64:1b0e5cd6903e1c29",
+            "content": 407
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 4,
+            "redoCount": 1,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              115,
+              117,
+              112,
+              112,
+              111,
+              114,
+              116,
+              32,
+              101,
+              110,
+              102,
+              111,
+              114,
+              99,
+              101,
+              114
+            ],
+            "redoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 10,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "intent",
+            "json": "{\"version\":1,\"command\":{\"convertVolumeRole\":{\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,109,105,115,115,105,110,103],\"role\":\"model\"}}}",
+            "coalesce": true
+          },
+          "result": null,
+          "error": [
+            85,
+            110,
+            107,
+            110,
+            111,
+            119,
+            110,
+            32,
+            118,
+            111,
+            108,
+            117,
+            109,
+            101,
+            32,
+            105,
+            109,
+            112,
+            111,
+            114,
+            116,
+            58,
+            118,
+            111,
+            108,
+            117,
+            109,
+            101,
+            58,
+            109,
+            105,
+            115,
+            115,
+            105,
+            110,
+            103
+          ],
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 14,
+                "hash": "fnv1a64:1b0e5cd6903e1c29",
+                "content": 407
+              },
+              "current": {
+                "revision": 15,
+                "hash": "fnv1a64:1b0e5cd6903e1c29",
+                "content": 407
+              },
+              "reason": [
+                99,
+                111,
+                109,
+                109,
+                97,
+                110,
+                100,
+                45,
+                97,
+                112,
+                112,
+                108,
+                121,
+                45,
+                114,
+                111,
+                108,
+                108,
+                98,
+                97,
+                99,
+                107
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 15,
+            "hash": "fnv1a64:1b0e5cd6903e1c29",
+            "content": 407
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 4,
+            "redoCount": 1,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              115,
+              117,
+              112,
+              112,
+              111,
+              114,
+              116,
+              32,
+              101,
+              110,
+              102,
+              111,
+              114,
+              99,
+              101,
+              114
+            ],
+            "redoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 10,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "intent",
+            "json": "{\"version\":1,\"command\":{\"convertVolumeRole\":{\"volumeId\":[98,97,100],\"role\":\"model\"}}}",
+            "coalesce": true
+          },
+          "result": null,
+          "error": [
+            73,
+            110,
+            118,
+            97,
+            108,
+            105,
+            100,
+            32,
+            112,
+            114,
+            111,
+            106,
+            101,
+            99,
+            116,
+            32,
+            99,
+            111,
+            109,
+            109,
+            97,
+            110,
+            100,
+            32,
+            105,
+            110,
+            116,
+            101,
+            110,
+            116
+          ],
+          "effects": [],
+          "snapshot": {
+            "revision": 15,
+            "hash": "fnv1a64:1b0e5cd6903e1c29",
+            "content": 407
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 4,
+            "redoCount": 1,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              115,
+              117,
+              112,
+              112,
+              111,
+              114,
+              116,
+              32,
+              101,
+              110,
+              102,
+              111,
+              114,
+              99,
+              101,
+              114
+            ],
+            "redoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              112,
+              97,
+              114,
+              116
+            ],
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 10,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "batch",
+            "json": "{\"version\":1,\"label\":[82,111,108,101,32,116,114,97,110,115,97,99,116,105,111,110],\"commands\":[{\"convertVolumeRole\":{\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,112,97,114,116,50],\"role\":\"model\"}},{\"convertVolumeRole\":{\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,98,108,111,99,107,101,114],\"role\":\"parameterModifier\"}}]}"
+          },
+          "result": null,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 15,
+                "hash": "fnv1a64:1b0e5cd6903e1c29",
+                "content": 407
+              },
+              "current": {
+                "revision": 16,
+                "hash": "fnv1a64:ccc7aa64634d84c4",
+                "content": 409
+              },
+              "reason": [
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 16,
+                "hash": "fnv1a64:ccc7aa64634d84c4",
+                "content": 409
+              },
+              "current": {
+                "revision": 17,
+                "hash": "fnv1a64:065d795315eb778f",
+                "content": 410
+              },
+              "reason": [
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 4,
+                "redoCount": 1,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  115,
+                  117,
+                  112,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  101,
+                  110,
+                  102,
+                  111,
+                  114,
+                  99,
+                  101,
+                  114
+                ],
+                "redoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  112,
+                  97,
+                  114,
+                  116
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 5,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  111,
+                  108,
+                  101,
+                  32,
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  97,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 17,
+            "hash": "fnv1a64:065d795315eb778f",
+            "content": 410
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 5,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              111,
+              108,
+              101,
+              32,
+              116,
+              114,
+              97,
+              110,
+              115,
+              97,
+              99,
+              116,
+              105,
+              111,
+              110
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 11,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "batch",
+            "json": "{\"version\":1,\"label\":[82,111,108,108,101,100,32,98,97,99,107,32,114,111,108,101,115],\"commands\":[{\"convertVolumeRole\":{\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,98,108,111,99,107,101,114],\"role\":\"negativeVolume\"}},{\"convertVolumeRole\":{\"volumeId\":[105,109,112,111,114,116,58,118,111,108,117,109,101,58,115,105,110,103,108,101],\"role\":\"negativeVolume\"}}]}"
+          },
+          "result": null,
+          "error": [
+            84,
+            104,
+            101,
+            32,
+            108,
+            97,
+            115,
+            116,
+            32,
+            109,
+            111,
+            100,
+            101,
+            108,
+            32,
+            112,
+            97,
+            114,
+            116,
+            32,
+            111,
+            110,
+            32,
+            97,
+            110,
+            32,
+            111,
+            98,
+            106,
+            101,
+            99,
+            116,
+            32,
+            99,
+            97,
+            110,
+            110,
+            111,
+            116,
+            32,
+            98,
+            101,
+            32,
+            99,
+            111,
+            110,
+            118,
+            101,
+            114,
+            116,
+            101,
+            100,
+            32,
+            116,
+            111,
+            32,
+            97,
+            32,
+            110,
+            111,
+            110,
+            45,
+            109,
+            111,
+            100,
+            101,
+            108,
+            32,
+            114,
+            111,
+            108,
+            101
+          ],
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 17,
+                "hash": "fnv1a64:065d795315eb778f",
+                "content": 410
+              },
+              "current": {
+                "revision": 18,
+                "hash": "fnv1a64:d28ea5281ee861e2",
+                "content": 411
+              },
+              "reason": [
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 18,
+                "hash": "fnv1a64:d28ea5281ee861e2",
+                "content": 411
+              },
+              "current": {
+                "revision": 19,
+                "hash": "fnv1a64:d28ea5281ee861e2",
+                "content": 411
+              },
+              "reason": [
+                99,
+                111,
+                109,
+                109,
+                97,
+                110,
+                100,
+                45,
+                97,
+                112,
+                112,
+                108,
+                121,
+                45,
+                114,
+                111,
+                108,
+                108,
+                98,
+                97,
+                99,
+                107
+              ],
+              "dirtyCategories": []
+            },
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 19,
+                "hash": "fnv1a64:d28ea5281ee861e2",
+                "content": 411
+              },
+              "current": {
+                "revision": 20,
+                "hash": "fnv1a64:065d795315eb778f",
+                "content": 410
+              },
+              "reason": [
+                116,
+                114,
+                97,
+                110,
+                115,
+                97,
+                99,
+                116,
+                105,
+                111,
+                110,
+                45,
+                114,
+                111,
+                108,
+                108,
+                98,
+                97,
+                99,
+                107
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 20,
+            "hash": "fnv1a64:065d795315eb778f",
+            "content": 410
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 5,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              111,
+              108,
+              101,
+              32,
+              116,
+              114,
+              97,
+              110,
+              115,
+              97,
+              99,
+              116,
+              105,
+              111,
+              110
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 11,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "undo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 20,
+                "hash": "fnv1a64:065d795315eb778f",
+                "content": 410
+              },
+              "current": {
+                "revision": 21,
+                "hash": "fnv1a64:ccc7aa64634d84c4",
+                "content": 409
+              },
+              "reason": [
+                114,
+                101,
+                118,
+                101,
+                114,
+                116,
+                58,
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 21,
+                "hash": "fnv1a64:ccc7aa64634d84c4",
+                "content": 409
+              },
+              "current": {
+                "revision": 22,
+                "hash": "fnv1a64:1b0e5cd6903e1c29",
+                "content": 407
+              },
+              "reason": [
+                114,
+                101,
+                118,
+                101,
+                114,
+                116,
+                58,
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 5,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  111,
+                  108,
+                  101,
+                  32,
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  97,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 4,
+                "redoCount": 1,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  115,
+                  117,
+                  112,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  101,
+                  110,
+                  102,
+                  111,
+                  114,
+                  99,
+                  101,
+                  114
+                ],
+                "redoLabel": [
+                  82,
+                  111,
+                  108,
+                  101,
+                  32,
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  97,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 22,
+            "hash": "fnv1a64:1b0e5cd6903e1c29",
+            "content": 407
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 4,
+            "redoCount": 1,
+            "undoLabel": [
+              67,
+              111,
+              110,
+              118,
+              101,
+              114,
+              116,
+              32,
+              118,
+              111,
+              108,
+              117,
+              109,
+              101,
+              32,
+              116,
+              111,
+              32,
+              115,
+              117,
+              112,
+              112,
+              111,
+              114,
+              116,
+              32,
+              101,
+              110,
+              102,
+              111,
+              114,
+              99,
+              101,
+              114
+            ],
+            "redoLabel": [
+              82,
+              111,
+              108,
+              101,
+              32,
+              116,
+              114,
+              97,
+              110,
+              115,
+              97,
+              99,
+              116,
+              105,
+              111,
+              110
+            ],
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 12,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "redo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 22,
+                "hash": "fnv1a64:1b0e5cd6903e1c29",
+                "content": 407
+              },
+              "current": {
+                "revision": 23,
+                "hash": "fnv1a64:ccc7aa64634d84c4",
+                "content": 409
+              },
+              "reason": [
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 23,
+                "hash": "fnv1a64:ccc7aa64634d84c4",
+                "content": 409
+              },
+              "current": {
+                "revision": 24,
+                "hash": "fnv1a64:065d795315eb778f",
+                "content": 410
+              },
+              "reason": [
+                99,
+                111,
+                110,
+                118,
+                101,
+                114,
+                116,
+                45,
+                118,
+                111,
+                108,
+                117,
+                109,
+                101,
+                45,
+                114,
+                111,
+                108,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 4,
+                "redoCount": 1,
+                "undoLabel": [
+                  67,
+                  111,
+                  110,
+                  118,
+                  101,
+                  114,
+                  116,
+                  32,
+                  118,
+                  111,
+                  108,
+                  117,
+                  109,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  115,
+                  117,
+                  112,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  101,
+                  110,
+                  102,
+                  111,
+                  114,
+                  99,
+                  101,
+                  114
+                ],
+                "redoLabel": [
+                  82,
+                  111,
+                  108,
+                  101,
+                  32,
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  97,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 5,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  111,
+                  108,
+                  101,
+                  32,
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  97,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 24,
+            "hash": "fnv1a64:065d795315eb778f",
+            "content": 410
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 5,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              111,
+              108,
+              101,
+              32,
+              116,
+              114,
+              97,
+              110,
+              115,
+              97,
+              99,
+              116,
+              105,
+              111,
+              110
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 13,
           "assets": "fnv1a64:737122e47b045c13"
         }
       ]

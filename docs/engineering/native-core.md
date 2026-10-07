@@ -2715,6 +2715,16 @@ node's in-scope overrides while preserving stored keys the scope does not own.
 Because a failed command publishes a rollback revision, callers read a fresh
 guard for every intent.
 
+### Volume-role conversion
+
+`convertVolumeRole` (`objects/semanticVolumeCommands.ts`) is native. A volume
+becomes a part, negative part, modifier, support blocker or support enforcer.
+The browser's reasons are kept: an unknown volume, the last model part of an
+object, facet paint on a part becoming a non-model role, and a local filament
+on a role that cannot carry one. The object's volumes are re-sorted into
+upstream Orca's role order with a stable sort, and undo restores the previous
+list exactly.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

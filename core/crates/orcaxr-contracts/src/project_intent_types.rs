@@ -1685,6 +1685,38 @@ fn read_set_scoped_overrides(v: &Value) -> Result<SetScopedOverrides, InvalidInt
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub enum VolumeRoleName {
+    Model,
+    NegativeVolume,
+    ParameterModifier,
+    SupportBlocker,
+    SupportEnforcer,
+}
+fn read_volume_role_name(v: &Value) -> Result<VolumeRoleName, InvalidIntent> {
+    match v.as_str() {
+        Some("model") => Ok(VolumeRoleName::Model),
+        Some("negativeVolume") => Ok(VolumeRoleName::NegativeVolume),
+        Some("parameterModifier") => Ok(VolumeRoleName::ParameterModifier),
+        Some("supportBlocker") => Ok(VolumeRoleName::SupportBlocker),
+        Some("supportEnforcer") => Ok(VolumeRoleName::SupportEnforcer),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConvertVolumeRole {
+    pub volume_id: Id,
+    pub role: VolumeRoleName,
+}
+fn read_convert_volume_role(v: &Value) -> Result<ConvertVolumeRole, InvalidIntent> {
+    let object = fields(v, &["volumeId", "role"], false)?;
+    Ok(ConvertVolumeRole {
+        volume_id: read_id(&object["volumeId"])?,
+        role: read_volume_role_name(&object["role"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Command {
     AddPlate(AddPlate),
     DuplicatePlate(DuplicatePlate),
@@ -1736,6 +1768,7 @@ pub enum Command {
     RemoveMixedFilament(RemoveMixedFilament),
     SetProjectSettingsOverrides(SetProjectSettingsOverrides),
     SetScopedOverrides(SetScopedOverrides),
+    ConvertVolumeRole(ConvertVolumeRole),
 }
 fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
     let object = fields(
@@ -1791,6 +1824,7 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             "removeMixedFilament",
             "setProjectSettingsOverrides",
             "setScopedOverrides",
+            "convertVolumeRole",
         ],
         true,
     )?;
@@ -1888,6 +1922,7 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
         "setScopedOverrides" => Ok(Command::SetScopedOverrides(read_set_scoped_overrides(
             value,
         )?)),
+        "convertVolumeRole" => Ok(Command::ConvertVolumeRole(read_convert_volume_role(value)?)),
         _ => Err(InvalidIntent),
     }
 }

@@ -145,11 +145,15 @@ provider documents and STL/OBJ/AMF/ZIP model import (decode, stage, preview,
 undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
 actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
 Layer ranges, layer events, brim ears, layer-height profiles, physical and
-mixed filaments and project/scoped setting overrides are ported (roughly 60% of
-the browser's 78 command classes are now native). Next families, in order: settings/scoped overrides, volumes
-(SVG/emboss/semantic), split/boolean, then facet paint strokes. Each family adds
-intent variants to `contracts/project-intents.json` (definitions before first
-use; regenerate with `generate-project-intents.mjs --write`), maps them in
+mixed filaments, project/scoped setting overrides and volume-role conversion are
+ported (roughly 60% of the browser's 78 command classes are now native). Next
+families, in order: facet paint strokes, model-colour recreation and auto-pair
+reconciliation (intent-only), then the asset-bearing commands, which need new
+captured (staged) command types for their mesh payloads: add volume, mesh
+topology replacement, split and split-to-objects, SVG and emboss volumes, and
+mesh booleans. Each family adds intent variants to
+`contracts/project-intents.json` (definitions before first use; regenerate with
+`generate-project-intents.mjs --write`), maps them in
 `web/src/project/PreparedProjectCommands.ts`, appends a scenario to
 `project-command-vectors.mjs`, regenerates the dependent captured-command/
 session/staged/query/document/clipboard corpora (every CI generator in
@@ -1100,6 +1104,10 @@ and replay coverage for the complete current command inventory.
     table (out-of-scope stored keys preserved), and maps as canonical JSON
     text. The corpus (1,516 steps, 33 new) covers every scope, stale guards,
     scope refusals, unknown targets and guarded transactions.
+  - [x] Port `convertVolumeRole`: the browser's refusals (unknown volume,
+    last model part, facet paint, local filament) and upstream role order on
+    every conversion; the corpus (1,537 steps, 21 new) covers each refusal,
+    re-sorting, no-ops and transactions.
   - [ ] Port and replay every remaining command family before session cutover
     (
     settings/scoped overrides, SVG/emboss/semantic volumes, split/boolean,

@@ -249,7 +249,7 @@ fn owned_session_matches_typescript_queue_protocol_commands_and_effects() {
             trace["asset"]["bytes"].as_array().unwrap().len()
         );
     }
-    assert_eq!((groups, requests), (1738, 1805));
+    assert_eq!((groups, requests), (1762, 1829));
 }
 #[test]
 fn local_guards_are_owner_bound_and_checkpoints_invalidate_old_work() {

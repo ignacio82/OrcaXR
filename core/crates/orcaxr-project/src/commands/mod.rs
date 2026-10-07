@@ -13,6 +13,7 @@ mod objects;
 mod settings_overrides;
 pub mod staged;
 mod transforms;
+mod volume_roles;
 use crate::{
     history::*, ids::*, model::*, selection::SelectionRef, store::DirtyCategory, validation::*,
 };
@@ -96,6 +97,7 @@ enum Kind {
     RemoveMixed(Box<mixed::RemoveMixed>),
     ProjectSettings(Box<settings_overrides::ProjectSettings>),
     ScopedSettings(Box<settings_overrides::Scoped>),
+    VolumeRole(Box<volume_roles::ConvertVolumeRole>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -237,6 +239,10 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
             id(v.object_id)?,
             id(v.layer_range_id)?,
         )),
+        wire::Command::ConvertVolumeRole(v) => {
+            let command = volume_roles::ConvertVolumeRole::new(v)?;
+            (command.label(), Kind::VolumeRole(Box::new(command)))
+        }
         wire::Command::SetProjectSettingsOverrides(v) => (
             Text::from_utf8("Update project setting overrides"),
             Kind::ProjectSettings(Box::new(settings_overrides::ProjectSettings::new(v)?)),
@@ -565,6 +571,7 @@ impl PreparedCommand {
             Kind::RemoveMixed(_) => "remove-mixed-filament",
             Kind::ProjectSettings(_) => "set-project-settings-overrides",
             Kind::ScopedSettings(_) => "set-scoped-overrides",
+            Kind::VolumeRole(_) => "convert-volume-role",
         }
     }
 }
@@ -591,6 +598,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::Transform(c) => c.is_noop(state)?,
             Kind::LayerRange(c) => c.is_noop(state)?,
             Kind::LayerEvent(c) => c.is_noop(state)?,
+            Kind::VolumeRole(c) => c.is_noop(state)?,
             Kind::ProjectSettings(c) => return c.is_noop(context),
             Kind::ScopedSettings(c) => return c.is_noop(context),
             Kind::Activate { id, .. } => &state.active_plate_id == id,
@@ -622,6 +630,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::RemoveMixed(c) => c.apply(context, reason)?,
             Kind::ProjectSettings(c) => c.apply(context, reason)?,
             Kind::ScopedSettings(c) => c.apply(context, reason)?,
+            Kind::VolumeRole(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
                 activate,
@@ -759,6 +768,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::RemoveMixed(c) => return c.revert(context, reason),
             Kind::ProjectSettings(c) => return c.revert(context, reason),
             Kind::ScopedSettings(c) => return c.revert(context, reason),
+            Kind::VolumeRole(c) => return c.revert(context, reason),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()
@@ -838,6 +848,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::RemoveMixed(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::ProjectSettings(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::ScopedSettings(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::VolumeRole(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),
