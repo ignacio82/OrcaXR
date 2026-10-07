@@ -8,6 +8,7 @@ mod layer_events;
 mod layer_heights;
 mod layer_ranges;
 mod lifecycle;
+mod mixed;
 mod objects;
 pub mod staged;
 mod transforms;
@@ -91,6 +92,7 @@ enum Kind {
     BrimEar(Box<brim_ears::BrimEarCommand>),
     LayerHeight(Box<layer_heights::LayerHeightCommand>),
     Filament(Box<filaments::FilamentCommand>),
+    RemoveMixed(Box<mixed::RemoveMixed>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -232,6 +234,30 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
             id(v.object_id)?,
             id(v.layer_range_id)?,
         )),
+        wire::Command::AddMixedFilament(v) => {
+            let (op, label) = mixed::MixedOp::add(v)?;
+            filament(filaments::FilamentCommand::mixed(op, Some(label)))
+        }
+        wire::Command::EditMixedFilament(v) => filament(filaments::FilamentCommand::mixed(
+            mixed::MixedOp::edit(v)?,
+            None,
+        )),
+        wire::Command::DuplicateMixedFilament(v) => filament(filaments::FilamentCommand::mixed(
+            mixed::MixedOp::duplicate(v)?,
+            None,
+        )),
+        wire::Command::SetMixedFilamentEnabled(v) => filament(filaments::FilamentCommand::mixed(
+            mixed::MixedOp::enabled(v)?,
+            None,
+        )),
+        wire::Command::TombstoneMixedFilament(v) => filament(filaments::FilamentCommand::mixed(
+            mixed::MixedOp::tombstone(v)?,
+            None,
+        )),
+        wire::Command::RemoveMixedFilament(v) => (
+            Text::from_utf8("Remove mixed filament"),
+            Kind::RemoveMixed(Box::new(mixed::RemoveMixed::new(v)?)),
+        ),
         wire::Command::SetFilamentAssignments(v) => {
             filament(filaments::FilamentCommand::assignments(v)?)
         }
@@ -407,6 +433,27 @@ fn non_serializable<E>() -> CommandError<E> {
         "Invalid project state (1 errors): Canonical JSON cannot contain non-finite numbers at $",
     )
 }
+/// Every entity ID in the project (`collectProjectIds`).
+pub(super) fn ids_in_use(state: &ProjectState) -> std::collections::HashSet<&[u16]> {
+    let mut ids = std::collections::HashSet::new();
+    ids.insert(state.id.as_utf16());
+    for plate in state.plates.iter() {
+        ids.insert(plate.id.as_utf16());
+        for object in plate.objects.iter() {
+            ids.insert(object.id.as_utf16());
+            ids.extend(object.volumes.iter().map(|v| v.id.as_utf16()));
+            ids.extend(object.instances.iter().map(|v| v.id.as_utf16()));
+            ids.extend(object.layer_ranges.iter().map(|v| v.id.as_utf16()));
+        }
+    }
+    ids.extend(state.filaments.physical.iter().map(|v| v.id.as_utf16()));
+    ids.extend(state.filaments.mixed.iter().map(|v| v.id.as_utf16()));
+    ids.extend(state.source_assets.iter().map(|v| v.id.as_utf16()));
+    ids.extend(state.custom_gcode.iter().map(|v| v.id.as_utf16()));
+    ids.extend(state.thumbnails.iter().map(|v| v.id.as_utf16()));
+    ids.extend(state.extension_blobs.iter().map(|v| v.id.as_utf16()));
+    ids
+}
 /// The plate and object positions of `id`: the first match in plate order, like
 /// the browser's object walks.
 fn locate_object(state: &ProjectState, id: &ObjectId) -> Option<(usize, usize)> {
@@ -504,6 +551,7 @@ impl PreparedCommand {
             Kind::BrimEar(ref c) => c.reason(),
             Kind::LayerHeight(ref c) => c.reason(),
             Kind::Filament(ref c) => c.reason(),
+            Kind::RemoveMixed(_) => "remove-mixed-filament",
         }
     }
 }
@@ -556,6 +604,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::BrimEar(c) => c.apply(context)?,
             Kind::LayerHeight(c) => c.apply(context)?,
             Kind::Filament(c) => c.apply(context, reason)?,
+            Kind::RemoveMixed(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
                 activate,
@@ -690,6 +739,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::BrimEar(c) => return c.revert(context),
             Kind::LayerHeight(c) => return c.revert(context),
             Kind::Filament(c) => return c.revert(context, reason),
+            Kind::RemoveMixed(c) => return c.revert(context, reason),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()
@@ -766,6 +816,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::LayerRange(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::LayerEvent(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Filament(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::RemoveMixed(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),

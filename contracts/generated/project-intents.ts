@@ -638,6 +638,198 @@ const shapes = {
       "newFilamentIds": "OptionalIds"
     }
   },
+  "JsonText": {
+    "kind": "array",
+    "items": "Unit",
+    "min": 0,
+    "max": 131072
+  },
+  "OptionalJsonText": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "JsonText"
+    }
+  },
+  "Weights": {
+    "kind": "array",
+    "items": "Finite",
+    "min": 0,
+    "max": 4096
+  },
+  "MixedComponentInput": {
+    "kind": "object",
+    "fields": {
+      "filamentId": "Id",
+      "weight": "Finite"
+    }
+  },
+  "MixedComponentInputs": {
+    "kind": "array",
+    "items": "MixedComponentInput",
+    "min": 0,
+    "max": 4096
+  },
+  "OptionalMixedComponents": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "MixedComponentInputs"
+    }
+  },
+  "CycleDistributionInput": {
+    "kind": "object",
+    "fields": {
+      "cycleLengthMm": "OptionalFinite"
+    }
+  },
+  "MatchDistributionInput": {
+    "kind": "object",
+    "fields": {
+      "targetColor": "EditText"
+    }
+  },
+  "GradientDistributionInput": {
+    "kind": "object",
+    "fields": {
+      "startZMm": "OptionalFinite",
+      "endZMm": "OptionalFinite",
+      "startWeights": "Weights",
+      "endWeights": "Weights"
+    }
+  },
+  "MixedDistributionInput": {
+    "kind": "union",
+    "variants": {
+      "ratio": "Empty",
+      "cycle": "CycleDistributionInput",
+      "match": "MatchDistributionInput",
+      "gradient": "GradientDistributionInput"
+    }
+  },
+  "OptionalMixedDistribution": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "MixedDistributionInput"
+    }
+  },
+  "PatternGroups": {
+    "kind": "array",
+    "items": "Ids",
+    "min": 0,
+    "max": 4096
+  },
+  "FullSpectrumUiMode": {
+    "kind": "enum",
+    "values": [
+      "legacy",
+      "ui0",
+      "ui1",
+      "ui2",
+      "ui3"
+    ]
+  },
+  "FullSpectrumDistributionMode": {
+    "kind": "enum",
+    "values": [
+      "m0",
+      "m2"
+    ]
+  },
+  "FullSpectrumInput": {
+    "kind": "object",
+    "fields": {
+      "upstreamStableId": "EditText",
+      "uiMode": "FullSpectrumUiMode",
+      "componentAId": "Id",
+      "componentBId": "Id",
+      "ratioA": "Finite",
+      "ratioB": "Finite",
+      "mixBPercent": "Finite",
+      "manualPatternGroups": "PatternGroups",
+      "gradientComponentIds": "Ids",
+      "gradientComponentWeights": "Weights",
+      "distributionMode": "FullSpectrumDistributionMode",
+      "localZMaxSublayers": "Finite",
+      "gradientEnabled": "Flag",
+      "gradientStart": "Finite",
+      "gradientEnd": "Finite",
+      "componentASurfaceOffsetMm": "Finite",
+      "componentBSurfaceOffsetMm": "Finite",
+      "deleted": "Flag",
+      "custom": "Flag",
+      "originAuto": "Flag"
+    }
+  },
+  "OptionalFullSpectrum": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "FullSpectrumInput"
+    }
+  },
+  "MixedFilamentInput": {
+    "kind": "object",
+    "fields": {
+      "mixedFilamentId": "Id",
+      "name": "EditText",
+      "displayColor": "EditText",
+      "components": "MixedComponentInputs",
+      "distribution": "MixedDistributionInput",
+      "fullSpectrum": "OptionalFullSpectrum",
+      "configJson": "JsonText",
+      "enabled": "Flag",
+      "extensionDataJson": "OptionalJsonText"
+    }
+  },
+  "AddMixedFilament": {
+    "kind": "object",
+    "fields": {
+      "filament": "MixedFilamentInput"
+    }
+  },
+  "EditMixedFilament": {
+    "kind": "object",
+    "fields": {
+      "mixedFilamentId": "Id",
+      "name": "OptionalText",
+      "displayColor": "OptionalText",
+      "components": "OptionalMixedComponents",
+      "distribution": "OptionalMixedDistribution",
+      "fullSpectrum": "OptionalFullSpectrum",
+      "configJson": "OptionalJsonText"
+    }
+  },
+  "DuplicateMixedFilament": {
+    "kind": "object",
+    "fields": {
+      "sourceId": "Id",
+      "duplicateId": "Id",
+      "name": "OptionalText"
+    }
+  },
+  "SetMixedFilamentEnabled": {
+    "kind": "object",
+    "fields": {
+      "mixedFilamentId": "Id",
+      "enabled": "Flag",
+      "reason": "OptionalText"
+    }
+  },
+  "TombstoneMixedFilament": {
+    "kind": "object",
+    "fields": {
+      "mixedFilamentId": "Id",
+      "reason": "OptionalText"
+    }
+  },
+  "RemoveMixedFilament": {
+    "kind": "object",
+    "fields": {
+      "mixedFilamentId": "Id"
+    }
+  },
   "Command": {
     "kind": "union",
     "variants": {
@@ -682,7 +874,13 @@ const shapes = {
       "setLayerRangeFilament": "SetLayerRangeFilament",
       "remapFilaments": "RemapFilaments",
       "setFilamentEnabled": "SetFilamentEnabled",
-      "syncPhysicalFilaments": "SyncPhysicalFilaments"
+      "syncPhysicalFilaments": "SyncPhysicalFilaments",
+      "addMixedFilament": "AddMixedFilament",
+      "editMixedFilament": "EditMixedFilament",
+      "duplicateMixedFilament": "DuplicateMixedFilament",
+      "setMixedFilamentEnabled": "SetMixedFilamentEnabled",
+      "tombstoneMixedFilament": "TombstoneMixedFilament",
+      "removeMixedFilament": "RemoveMixedFilament"
     }
   },
   "Commands": {
@@ -997,7 +1195,30 @@ export type ProjectToolSlotWire = number;
 export interface ProjectPrinterSlotWire {readonly toolId: ProjectToolSlotWire;readonly color: ProjectEditTextWire;readonly material: ProjectEditTextWire;readonly subType: ProjectOptionalTextWire;readonly vendor: ProjectOptionalTextWire;}
 export type ProjectPrinterSlotsWire = readonly ProjectPrinterSlotWire[];
 export interface ProjectSyncPhysicalFilamentsWire {readonly slots: ProjectPrinterSlotsWire;readonly newFilamentIds: ProjectOptionalIdsWire;}
-export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire} | {readonly addLayerEvent:ProjectAddLayerEventWire} | {readonly editLayerEvent:ProjectEditLayerEventWire} | {readonly deleteLayerEvent:ProjectDeleteLayerEventWire} | {readonly addBrimEar:ProjectAddBrimEarWire} | {readonly addBrimEars:ProjectAddBrimEarsWire} | {readonly removeBrimEar:ProjectRemoveBrimEarWire} | {readonly clearBrimEars:ProjectClearBrimEarsWire} | {readonly adjustLayerHeightProfile:ProjectAdjustLayerHeightProfileWire} | {readonly smoothLayerHeightProfile:ProjectSmoothLayerHeightProfileWire} | {readonly adaptiveLayerHeightProfile:ProjectAdaptiveLayerHeightProfileWire} | {readonly resetLayerHeightProfile:ProjectResetLayerHeightProfileWire} | {readonly setFilamentAssignments:ProjectSetFilamentAssignmentsWire} | {readonly setObjectFilament:ProjectSetObjectFilamentWire} | {readonly setVolumeFilament:ProjectSetVolumeFilamentWire} | {readonly setLayerRangeFilament:ProjectSetLayerRangeFilamentWire} | {readonly remapFilaments:ProjectRemapFilamentsWire} | {readonly setFilamentEnabled:ProjectSetFilamentEnabledWire} | {readonly syncPhysicalFilaments:ProjectSyncPhysicalFilamentsWire};
+export type ProjectJsonTextWire = readonly ProjectUnitWire[];
+export type ProjectOptionalJsonTextWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectJsonTextWire};
+export type ProjectWeightsWire = readonly ProjectFiniteWire[];
+export interface ProjectMixedComponentInputWire {readonly filamentId: ProjectIdWire;readonly weight: ProjectFiniteWire;}
+export type ProjectMixedComponentInputsWire = readonly ProjectMixedComponentInputWire[];
+export type ProjectOptionalMixedComponentsWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectMixedComponentInputsWire};
+export interface ProjectCycleDistributionInputWire {readonly cycleLengthMm: ProjectOptionalFiniteWire;}
+export interface ProjectMatchDistributionInputWire {readonly targetColor: ProjectEditTextWire;}
+export interface ProjectGradientDistributionInputWire {readonly startZMm: ProjectOptionalFiniteWire;readonly endZMm: ProjectOptionalFiniteWire;readonly startWeights: ProjectWeightsWire;readonly endWeights: ProjectWeightsWire;}
+export type ProjectMixedDistributionInputWire = {readonly ratio:ProjectEmptyWire} | {readonly cycle:ProjectCycleDistributionInputWire} | {readonly match:ProjectMatchDistributionInputWire} | {readonly gradient:ProjectGradientDistributionInputWire};
+export type ProjectOptionalMixedDistributionWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectMixedDistributionInputWire};
+export type ProjectPatternGroupsWire = readonly ProjectIdsWire[];
+export type ProjectFullSpectrumUiModeWire = "legacy" | "ui0" | "ui1" | "ui2" | "ui3";
+export type ProjectFullSpectrumDistributionModeWire = "m0" | "m2";
+export interface ProjectFullSpectrumInputWire {readonly upstreamStableId: ProjectEditTextWire;readonly uiMode: ProjectFullSpectrumUiModeWire;readonly componentAId: ProjectIdWire;readonly componentBId: ProjectIdWire;readonly ratioA: ProjectFiniteWire;readonly ratioB: ProjectFiniteWire;readonly mixBPercent: ProjectFiniteWire;readonly manualPatternGroups: ProjectPatternGroupsWire;readonly gradientComponentIds: ProjectIdsWire;readonly gradientComponentWeights: ProjectWeightsWire;readonly distributionMode: ProjectFullSpectrumDistributionModeWire;readonly localZMaxSublayers: ProjectFiniteWire;readonly gradientEnabled: ProjectFlagWire;readonly gradientStart: ProjectFiniteWire;readonly gradientEnd: ProjectFiniteWire;readonly componentASurfaceOffsetMm: ProjectFiniteWire;readonly componentBSurfaceOffsetMm: ProjectFiniteWire;readonly deleted: ProjectFlagWire;readonly custom: ProjectFlagWire;readonly originAuto: ProjectFlagWire;}
+export type ProjectOptionalFullSpectrumWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectFullSpectrumInputWire};
+export interface ProjectMixedFilamentInputWire {readonly mixedFilamentId: ProjectIdWire;readonly name: ProjectEditTextWire;readonly displayColor: ProjectEditTextWire;readonly components: ProjectMixedComponentInputsWire;readonly distribution: ProjectMixedDistributionInputWire;readonly fullSpectrum: ProjectOptionalFullSpectrumWire;readonly configJson: ProjectJsonTextWire;readonly enabled: ProjectFlagWire;readonly extensionDataJson: ProjectOptionalJsonTextWire;}
+export interface ProjectAddMixedFilamentWire {readonly filament: ProjectMixedFilamentInputWire;}
+export interface ProjectEditMixedFilamentWire {readonly mixedFilamentId: ProjectIdWire;readonly name: ProjectOptionalTextWire;readonly displayColor: ProjectOptionalTextWire;readonly components: ProjectOptionalMixedComponentsWire;readonly distribution: ProjectOptionalMixedDistributionWire;readonly fullSpectrum: ProjectOptionalFullSpectrumWire;readonly configJson: ProjectOptionalJsonTextWire;}
+export interface ProjectDuplicateMixedFilamentWire {readonly sourceId: ProjectIdWire;readonly duplicateId: ProjectIdWire;readonly name: ProjectOptionalTextWire;}
+export interface ProjectSetMixedFilamentEnabledWire {readonly mixedFilamentId: ProjectIdWire;readonly enabled: ProjectFlagWire;readonly reason: ProjectOptionalTextWire;}
+export interface ProjectTombstoneMixedFilamentWire {readonly mixedFilamentId: ProjectIdWire;readonly reason: ProjectOptionalTextWire;}
+export interface ProjectRemoveMixedFilamentWire {readonly mixedFilamentId: ProjectIdWire;}
+export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire} | {readonly addLayerEvent:ProjectAddLayerEventWire} | {readonly editLayerEvent:ProjectEditLayerEventWire} | {readonly deleteLayerEvent:ProjectDeleteLayerEventWire} | {readonly addBrimEar:ProjectAddBrimEarWire} | {readonly addBrimEars:ProjectAddBrimEarsWire} | {readonly removeBrimEar:ProjectRemoveBrimEarWire} | {readonly clearBrimEars:ProjectClearBrimEarsWire} | {readonly adjustLayerHeightProfile:ProjectAdjustLayerHeightProfileWire} | {readonly smoothLayerHeightProfile:ProjectSmoothLayerHeightProfileWire} | {readonly adaptiveLayerHeightProfile:ProjectAdaptiveLayerHeightProfileWire} | {readonly resetLayerHeightProfile:ProjectResetLayerHeightProfileWire} | {readonly setFilamentAssignments:ProjectSetFilamentAssignmentsWire} | {readonly setObjectFilament:ProjectSetObjectFilamentWire} | {readonly setVolumeFilament:ProjectSetVolumeFilamentWire} | {readonly setLayerRangeFilament:ProjectSetLayerRangeFilamentWire} | {readonly remapFilaments:ProjectRemapFilamentsWire} | {readonly setFilamentEnabled:ProjectSetFilamentEnabledWire} | {readonly syncPhysicalFilaments:ProjectSyncPhysicalFilamentsWire} | {readonly addMixedFilament:ProjectAddMixedFilamentWire} | {readonly editMixedFilament:ProjectEditMixedFilamentWire} | {readonly duplicateMixedFilament:ProjectDuplicateMixedFilamentWire} | {readonly setMixedFilamentEnabled:ProjectSetMixedFilamentEnabledWire} | {readonly tombstoneMixedFilament:ProjectTombstoneMixedFilamentWire} | {readonly removeMixedFilament:ProjectRemoveMixedFilamentWire};
 export type ProjectCommandsWire = readonly ProjectCommandWire[];
 export interface ProjectIntentWire {readonly version: ProjectVersionWire;readonly command: ProjectCommandWire;}
 export interface ProjectBatchWire {readonly version: ProjectVersionWire;readonly label: ProjectLabelWire;readonly commands: ProjectCommandsWire;}

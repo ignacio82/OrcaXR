@@ -145,9 +145,8 @@ provider documents and STL/OBJ/AMF/ZIP model import (decode, stage, preview,
 undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
 actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
 Layer ranges, layer events, brim ears, layer-height profiles and the physical
-filament commands (assignment, remap, enablement, printer sync) are ported
-(roughly half of the browser's 78 command classes are now native). Next
-families, in order: mixed filaments, settings/scoped overrides, volumes
+and mixed filament commands are ported (roughly 60% of the browser's 78 command
+classes are now native). Next families, in order: settings/scoped overrides, volumes
 (SVG/emboss/semantic), split/boolean, then facet paint strokes. Each family adds
 intent variants to `contracts/project-intents.json` (definitions before first
 use; regenerate with `generate-project-intents.mjs --write`), maps them in
@@ -1086,8 +1085,16 @@ and replay coverage for the complete current command inventory.
     adoption with caller-supplied IDs. Two browser bugs were fixed on the way:
     re-enabling a disabled filament failed validation, and printer sync drew a
     fresh adopted-tool ID on every apply, orphaning redone references.
+  - [x] Port the six mixed-filament intents (`addMixedFilament`,
+    `editMixedFilament`, `duplicateMixedFilament`, `setMixedFilamentEnabled`,
+    `tombstoneMixedFilament`, `removeMixedFilament`). Recipes travel typed
+    (components, distributions, full-spectrum state with upstream mode codes);
+    free-form `config`/`extensionData` travel as canonical JSON text, nested at
+    most 16 deep so every resulting state stays parseable natively. The corpus (1,482 steps, 76 new) covers recipe-shape
+    and component refusals, full-spectrum duplication (FNV-derived upstream IDs),
+    tombstones and dependency-checked removal with sorted reference paths.
   - [ ] Port and replay every remaining command family before session cutover
-    (mixed filaments,
+    (
     settings/scoped overrides, SVG/emboss/semantic volumes, split/boolean,
     facet paint strokes, recreate model colours).
 - [ ] Port settings resolution, physical/mixed filament identities, profile

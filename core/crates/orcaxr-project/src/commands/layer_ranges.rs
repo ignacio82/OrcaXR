@@ -85,26 +85,6 @@ fn owned<E>(
         ]))
     })
 }
-fn ids_in_use(state: &ProjectState) -> std::collections::HashSet<&[u16]> {
-    let mut ids = std::collections::HashSet::new();
-    ids.insert(state.id.as_utf16());
-    for plate in state.plates.iter() {
-        ids.insert(plate.id.as_utf16());
-        for object in plate.objects.iter() {
-            ids.insert(object.id.as_utf16());
-            ids.extend(object.volumes.iter().map(|v| v.id.as_utf16()));
-            ids.extend(object.instances.iter().map(|v| v.id.as_utf16()));
-            ids.extend(object.layer_ranges.iter().map(|v| v.id.as_utf16()));
-        }
-    }
-    ids.extend(state.filaments.physical.iter().map(|v| v.id.as_utf16()));
-    ids.extend(state.filaments.mixed.iter().map(|v| v.id.as_utf16()));
-    ids.extend(state.source_assets.iter().map(|v| v.id.as_utf16()));
-    ids.extend(state.custom_gcode.iter().map(|v| v.id.as_utf16()));
-    ids.extend(state.thumbnails.iter().map(|v| v.id.as_utf16()));
-    ids.extend(state.extension_blobs.iter().map(|v| v.id.as_utf16()));
-    ids
-}
 fn available<E>(state: &ProjectState, id: &[u16]) -> Result<(), CommandError<E>> {
     if ids_in_use(state).contains(id) {
         return Err(domain(message(&[

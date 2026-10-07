@@ -996,6 +996,306 @@ object ProjectIntents {
             w.field("newFilamentIds") { writeOptionalIds(w, v.newFilamentIds) }
         }
     }
+    private fun readJsonText(v: Any): List<Int> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readUnit(array.get(it)) }
+    }
+    private fun writeJsonText(w: ProjectIntentWriter, v: List<Int>) {
+        w.array(v, 0, 131072) { writeUnit(w, it) }
+    }
+    sealed interface OptionalJsonText {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalJsonText
+        data class Value(val value: List<Int>) : OptionalJsonText
+    }
+    private fun readOptionalJsonText(v: Any): OptionalJsonText {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalJsonText.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalJsonText.Value(readJsonText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalJsonText(w: ProjectIntentWriter, v: OptionalJsonText) {
+        w.obj { when(v) {
+            is OptionalJsonText.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalJsonText.Value -> w.field("value") { writeJsonText(w, v.value) }
+        } }
+    }
+    private fun readWeights(v: Any): List<Double> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readFinite(array.get(it)) }
+    }
+    private fun writeWeights(w: ProjectIntentWriter, v: List<Double>) {
+        w.array(v, 0, 4096) { writeFinite(w, it) }
+    }
+    data class MixedComponentInput(val filamentId: List<Int>, val weight: Double)
+    private fun readMixedComponentInput(v: Any): MixedComponentInput {
+        val obj = ProjectIntentJson.fields(v, setOf("filamentId", "weight"), false)
+        return MixedComponentInput(readId(obj.get("filamentId")), readFinite(obj.get("weight")))
+    }
+    private fun writeMixedComponentInput(w: ProjectIntentWriter, v: MixedComponentInput) {
+        w.obj {
+            w.field("filamentId") { writeId(w, v.filamentId) }
+            w.field("weight") { writeFinite(w, v.weight) }
+        }
+    }
+    private fun readMixedComponentInputs(v: Any): List<MixedComponentInput> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readMixedComponentInput(array.get(it)) }
+    }
+    private fun writeMixedComponentInputs(w: ProjectIntentWriter, v: List<MixedComponentInput>) {
+        w.array(v, 0, 4096) { writeMixedComponentInput(w, it) }
+    }
+    sealed interface OptionalMixedComponents {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalMixedComponents
+        data class Value(val value: List<ProjectIntents.MixedComponentInput>) : OptionalMixedComponents
+    }
+    private fun readOptionalMixedComponents(v: Any): OptionalMixedComponents {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalMixedComponents.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalMixedComponents.Value(readMixedComponentInputs(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalMixedComponents(w: ProjectIntentWriter, v: OptionalMixedComponents) {
+        w.obj { when(v) {
+            is OptionalMixedComponents.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalMixedComponents.Value -> w.field("value") { writeMixedComponentInputs(w, v.value) }
+        } }
+    }
+    data class CycleDistributionInput(val cycleLengthMm: OptionalFinite)
+    private fun readCycleDistributionInput(v: Any): CycleDistributionInput {
+        val obj = ProjectIntentJson.fields(v, setOf("cycleLengthMm"), false)
+        return CycleDistributionInput(readOptionalFinite(obj.get("cycleLengthMm")))
+    }
+    private fun writeCycleDistributionInput(w: ProjectIntentWriter, v: CycleDistributionInput) {
+        w.obj {
+            w.field("cycleLengthMm") { writeOptionalFinite(w, v.cycleLengthMm) }
+        }
+    }
+    data class MatchDistributionInput(val targetColor: List<Int>)
+    private fun readMatchDistributionInput(v: Any): MatchDistributionInput {
+        val obj = ProjectIntentJson.fields(v, setOf("targetColor"), false)
+        return MatchDistributionInput(readEditText(obj.get("targetColor")))
+    }
+    private fun writeMatchDistributionInput(w: ProjectIntentWriter, v: MatchDistributionInput) {
+        w.obj {
+            w.field("targetColor") { writeEditText(w, v.targetColor) }
+        }
+    }
+    data class GradientDistributionInput(val startZMm: OptionalFinite, val endZMm: OptionalFinite, val startWeights: List<Double>, val endWeights: List<Double>)
+    private fun readGradientDistributionInput(v: Any): GradientDistributionInput {
+        val obj = ProjectIntentJson.fields(v, setOf("startZMm", "endZMm", "startWeights", "endWeights"), false)
+        return GradientDistributionInput(readOptionalFinite(obj.get("startZMm")), readOptionalFinite(obj.get("endZMm")), readWeights(obj.get("startWeights")), readWeights(obj.get("endWeights")))
+    }
+    private fun writeGradientDistributionInput(w: ProjectIntentWriter, v: GradientDistributionInput) {
+        w.obj {
+            w.field("startZMm") { writeOptionalFinite(w, v.startZMm) }
+            w.field("endZMm") { writeOptionalFinite(w, v.endZMm) }
+            w.field("startWeights") { writeWeights(w, v.startWeights) }
+            w.field("endWeights") { writeWeights(w, v.endWeights) }
+        }
+    }
+    sealed interface MixedDistributionInput {
+        data class Ratio(val value: ProjectIntents.Empty) : MixedDistributionInput
+        data class Cycle(val value: ProjectIntents.CycleDistributionInput) : MixedDistributionInput
+        data class Match(val value: ProjectIntents.MatchDistributionInput) : MixedDistributionInput
+        data class Gradient(val value: ProjectIntents.GradientDistributionInput) : MixedDistributionInput
+    }
+    private fun readMixedDistributionInput(v: Any): MixedDistributionInput {
+        val obj = ProjectIntentJson.fields(v, setOf("ratio", "cycle", "match", "gradient"), true)
+        return when(val key = obj.keys().next()) {
+            "ratio" -> MixedDistributionInput.Ratio(readEmpty(obj.get(key)))
+            "cycle" -> MixedDistributionInput.Cycle(readCycleDistributionInput(obj.get(key)))
+            "match" -> MixedDistributionInput.Match(readMatchDistributionInput(obj.get(key)))
+            "gradient" -> MixedDistributionInput.Gradient(readGradientDistributionInput(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMixedDistributionInput(w: ProjectIntentWriter, v: MixedDistributionInput) {
+        w.obj { when(v) {
+            is MixedDistributionInput.Ratio -> w.field("ratio") { writeEmpty(w, v.value) }
+            is MixedDistributionInput.Cycle -> w.field("cycle") { writeCycleDistributionInput(w, v.value) }
+            is MixedDistributionInput.Match -> w.field("match") { writeMatchDistributionInput(w, v.value) }
+            is MixedDistributionInput.Gradient -> w.field("gradient") { writeGradientDistributionInput(w, v.value) }
+        } }
+    }
+    sealed interface OptionalMixedDistribution {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalMixedDistribution
+        data class Value(val value: ProjectIntents.MixedDistributionInput) : OptionalMixedDistribution
+    }
+    private fun readOptionalMixedDistribution(v: Any): OptionalMixedDistribution {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalMixedDistribution.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalMixedDistribution.Value(readMixedDistributionInput(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalMixedDistribution(w: ProjectIntentWriter, v: OptionalMixedDistribution) {
+        w.obj { when(v) {
+            is OptionalMixedDistribution.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalMixedDistribution.Value -> w.field("value") { writeMixedDistributionInput(w, v.value) }
+        } }
+    }
+    private fun readPatternGroups(v: Any): List<List<List<Int>>> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readIds(array.get(it)) }
+    }
+    private fun writePatternGroups(w: ProjectIntentWriter, v: List<List<List<Int>>>) {
+        w.array(v, 0, 4096) { writeIds(w, it) }
+    }
+    enum class FullSpectrumUiMode {Legacy,Ui0,Ui1,Ui2,Ui3}
+    private fun readFullSpectrumUiMode(v: Any): FullSpectrumUiMode {
+        return when(v) {"legacy" -> FullSpectrumUiMode.Legacy;"ui0" -> FullSpectrumUiMode.Ui0;"ui1" -> FullSpectrumUiMode.Ui1;"ui2" -> FullSpectrumUiMode.Ui2;"ui3" -> FullSpectrumUiMode.Ui3; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeFullSpectrumUiMode(w: ProjectIntentWriter, v: FullSpectrumUiMode) {
+        w.literal(when(v) {FullSpectrumUiMode.Legacy -> "legacy";FullSpectrumUiMode.Ui0 -> "ui0";FullSpectrumUiMode.Ui1 -> "ui1";FullSpectrumUiMode.Ui2 -> "ui2";FullSpectrumUiMode.Ui3 -> "ui3";})
+    }
+    enum class FullSpectrumDistributionMode {M0,M2}
+    private fun readFullSpectrumDistributionMode(v: Any): FullSpectrumDistributionMode {
+        return when(v) {"m0" -> FullSpectrumDistributionMode.M0;"m2" -> FullSpectrumDistributionMode.M2; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeFullSpectrumDistributionMode(w: ProjectIntentWriter, v: FullSpectrumDistributionMode) {
+        w.literal(when(v) {FullSpectrumDistributionMode.M0 -> "m0";FullSpectrumDistributionMode.M2 -> "m2";})
+    }
+    data class FullSpectrumInput(val upstreamStableId: List<Int>, val uiMode: FullSpectrumUiMode, val componentAId: List<Int>, val componentBId: List<Int>, val ratioA: Double, val ratioB: Double, val mixBPercent: Double, val manualPatternGroups: List<List<List<Int>>>, val gradientComponentIds: List<List<Int>>, val gradientComponentWeights: List<Double>, val distributionMode: FullSpectrumDistributionMode, val localZMaxSublayers: Double, val gradientEnabled: Boolean, val gradientStart: Double, val gradientEnd: Double, val componentASurfaceOffsetMm: Double, val componentBSurfaceOffsetMm: Double, val deleted: Boolean, val custom: Boolean, val originAuto: Boolean)
+    private fun readFullSpectrumInput(v: Any): FullSpectrumInput {
+        val obj = ProjectIntentJson.fields(v, setOf("upstreamStableId", "uiMode", "componentAId", "componentBId", "ratioA", "ratioB", "mixBPercent", "manualPatternGroups", "gradientComponentIds", "gradientComponentWeights", "distributionMode", "localZMaxSublayers", "gradientEnabled", "gradientStart", "gradientEnd", "componentASurfaceOffsetMm", "componentBSurfaceOffsetMm", "deleted", "custom", "originAuto"), false)
+        return FullSpectrumInput(readEditText(obj.get("upstreamStableId")), readFullSpectrumUiMode(obj.get("uiMode")), readId(obj.get("componentAId")), readId(obj.get("componentBId")), readFinite(obj.get("ratioA")), readFinite(obj.get("ratioB")), readFinite(obj.get("mixBPercent")), readPatternGroups(obj.get("manualPatternGroups")), readIds(obj.get("gradientComponentIds")), readWeights(obj.get("gradientComponentWeights")), readFullSpectrumDistributionMode(obj.get("distributionMode")), readFinite(obj.get("localZMaxSublayers")), readFlag(obj.get("gradientEnabled")), readFinite(obj.get("gradientStart")), readFinite(obj.get("gradientEnd")), readFinite(obj.get("componentASurfaceOffsetMm")), readFinite(obj.get("componentBSurfaceOffsetMm")), readFlag(obj.get("deleted")), readFlag(obj.get("custom")), readFlag(obj.get("originAuto")))
+    }
+    private fun writeFullSpectrumInput(w: ProjectIntentWriter, v: FullSpectrumInput) {
+        w.obj {
+            w.field("upstreamStableId") { writeEditText(w, v.upstreamStableId) }
+            w.field("uiMode") { writeFullSpectrumUiMode(w, v.uiMode) }
+            w.field("componentAId") { writeId(w, v.componentAId) }
+            w.field("componentBId") { writeId(w, v.componentBId) }
+            w.field("ratioA") { writeFinite(w, v.ratioA) }
+            w.field("ratioB") { writeFinite(w, v.ratioB) }
+            w.field("mixBPercent") { writeFinite(w, v.mixBPercent) }
+            w.field("manualPatternGroups") { writePatternGroups(w, v.manualPatternGroups) }
+            w.field("gradientComponentIds") { writeIds(w, v.gradientComponentIds) }
+            w.field("gradientComponentWeights") { writeWeights(w, v.gradientComponentWeights) }
+            w.field("distributionMode") { writeFullSpectrumDistributionMode(w, v.distributionMode) }
+            w.field("localZMaxSublayers") { writeFinite(w, v.localZMaxSublayers) }
+            w.field("gradientEnabled") { writeFlag(w, v.gradientEnabled) }
+            w.field("gradientStart") { writeFinite(w, v.gradientStart) }
+            w.field("gradientEnd") { writeFinite(w, v.gradientEnd) }
+            w.field("componentASurfaceOffsetMm") { writeFinite(w, v.componentASurfaceOffsetMm) }
+            w.field("componentBSurfaceOffsetMm") { writeFinite(w, v.componentBSurfaceOffsetMm) }
+            w.field("deleted") { writeFlag(w, v.deleted) }
+            w.field("custom") { writeFlag(w, v.custom) }
+            w.field("originAuto") { writeFlag(w, v.originAuto) }
+        }
+    }
+    sealed interface OptionalFullSpectrum {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalFullSpectrum
+        data class Value(val value: ProjectIntents.FullSpectrumInput) : OptionalFullSpectrum
+    }
+    private fun readOptionalFullSpectrum(v: Any): OptionalFullSpectrum {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalFullSpectrum.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalFullSpectrum.Value(readFullSpectrumInput(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalFullSpectrum(w: ProjectIntentWriter, v: OptionalFullSpectrum) {
+        w.obj { when(v) {
+            is OptionalFullSpectrum.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalFullSpectrum.Value -> w.field("value") { writeFullSpectrumInput(w, v.value) }
+        } }
+    }
+    data class MixedFilamentInput(val mixedFilamentId: List<Int>, val name: List<Int>, val displayColor: List<Int>, val components: List<MixedComponentInput>, val distribution: MixedDistributionInput, val fullSpectrum: OptionalFullSpectrum, val configJson: List<Int>, val enabled: Boolean, val extensionDataJson: OptionalJsonText)
+    private fun readMixedFilamentInput(v: Any): MixedFilamentInput {
+        val obj = ProjectIntentJson.fields(v, setOf("mixedFilamentId", "name", "displayColor", "components", "distribution", "fullSpectrum", "configJson", "enabled", "extensionDataJson"), false)
+        return MixedFilamentInput(readId(obj.get("mixedFilamentId")), readEditText(obj.get("name")), readEditText(obj.get("displayColor")), readMixedComponentInputs(obj.get("components")), readMixedDistributionInput(obj.get("distribution")), readOptionalFullSpectrum(obj.get("fullSpectrum")), readJsonText(obj.get("configJson")), readFlag(obj.get("enabled")), readOptionalJsonText(obj.get("extensionDataJson")))
+    }
+    private fun writeMixedFilamentInput(w: ProjectIntentWriter, v: MixedFilamentInput) {
+        w.obj {
+            w.field("mixedFilamentId") { writeId(w, v.mixedFilamentId) }
+            w.field("name") { writeEditText(w, v.name) }
+            w.field("displayColor") { writeEditText(w, v.displayColor) }
+            w.field("components") { writeMixedComponentInputs(w, v.components) }
+            w.field("distribution") { writeMixedDistributionInput(w, v.distribution) }
+            w.field("fullSpectrum") { writeOptionalFullSpectrum(w, v.fullSpectrum) }
+            w.field("configJson") { writeJsonText(w, v.configJson) }
+            w.field("enabled") { writeFlag(w, v.enabled) }
+            w.field("extensionDataJson") { writeOptionalJsonText(w, v.extensionDataJson) }
+        }
+    }
+    data class AddMixedFilament(val filament: MixedFilamentInput)
+    private fun readAddMixedFilament(v: Any): AddMixedFilament {
+        val obj = ProjectIntentJson.fields(v, setOf("filament"), false)
+        return AddMixedFilament(readMixedFilamentInput(obj.get("filament")))
+    }
+    private fun writeAddMixedFilament(w: ProjectIntentWriter, v: AddMixedFilament) {
+        w.obj {
+            w.field("filament") { writeMixedFilamentInput(w, v.filament) }
+        }
+    }
+    data class EditMixedFilament(val mixedFilamentId: List<Int>, val name: OptionalText, val displayColor: OptionalText, val components: OptionalMixedComponents, val distribution: OptionalMixedDistribution, val fullSpectrum: OptionalFullSpectrum, val configJson: OptionalJsonText)
+    private fun readEditMixedFilament(v: Any): EditMixedFilament {
+        val obj = ProjectIntentJson.fields(v, setOf("mixedFilamentId", "name", "displayColor", "components", "distribution", "fullSpectrum", "configJson"), false)
+        return EditMixedFilament(readId(obj.get("mixedFilamentId")), readOptionalText(obj.get("name")), readOptionalText(obj.get("displayColor")), readOptionalMixedComponents(obj.get("components")), readOptionalMixedDistribution(obj.get("distribution")), readOptionalFullSpectrum(obj.get("fullSpectrum")), readOptionalJsonText(obj.get("configJson")))
+    }
+    private fun writeEditMixedFilament(w: ProjectIntentWriter, v: EditMixedFilament) {
+        w.obj {
+            w.field("mixedFilamentId") { writeId(w, v.mixedFilamentId) }
+            w.field("name") { writeOptionalText(w, v.name) }
+            w.field("displayColor") { writeOptionalText(w, v.displayColor) }
+            w.field("components") { writeOptionalMixedComponents(w, v.components) }
+            w.field("distribution") { writeOptionalMixedDistribution(w, v.distribution) }
+            w.field("fullSpectrum") { writeOptionalFullSpectrum(w, v.fullSpectrum) }
+            w.field("configJson") { writeOptionalJsonText(w, v.configJson) }
+        }
+    }
+    data class DuplicateMixedFilament(val sourceId: List<Int>, val duplicateId: List<Int>, val name: OptionalText)
+    private fun readDuplicateMixedFilament(v: Any): DuplicateMixedFilament {
+        val obj = ProjectIntentJson.fields(v, setOf("sourceId", "duplicateId", "name"), false)
+        return DuplicateMixedFilament(readId(obj.get("sourceId")), readId(obj.get("duplicateId")), readOptionalText(obj.get("name")))
+    }
+    private fun writeDuplicateMixedFilament(w: ProjectIntentWriter, v: DuplicateMixedFilament) {
+        w.obj {
+            w.field("sourceId") { writeId(w, v.sourceId) }
+            w.field("duplicateId") { writeId(w, v.duplicateId) }
+            w.field("name") { writeOptionalText(w, v.name) }
+        }
+    }
+    data class SetMixedFilamentEnabled(val mixedFilamentId: List<Int>, val enabled: Boolean, val reason: OptionalText)
+    private fun readSetMixedFilamentEnabled(v: Any): SetMixedFilamentEnabled {
+        val obj = ProjectIntentJson.fields(v, setOf("mixedFilamentId", "enabled", "reason"), false)
+        return SetMixedFilamentEnabled(readId(obj.get("mixedFilamentId")), readFlag(obj.get("enabled")), readOptionalText(obj.get("reason")))
+    }
+    private fun writeSetMixedFilamentEnabled(w: ProjectIntentWriter, v: SetMixedFilamentEnabled) {
+        w.obj {
+            w.field("mixedFilamentId") { writeId(w, v.mixedFilamentId) }
+            w.field("enabled") { writeFlag(w, v.enabled) }
+            w.field("reason") { writeOptionalText(w, v.reason) }
+        }
+    }
+    data class TombstoneMixedFilament(val mixedFilamentId: List<Int>, val reason: OptionalText)
+    private fun readTombstoneMixedFilament(v: Any): TombstoneMixedFilament {
+        val obj = ProjectIntentJson.fields(v, setOf("mixedFilamentId", "reason"), false)
+        return TombstoneMixedFilament(readId(obj.get("mixedFilamentId")), readOptionalText(obj.get("reason")))
+    }
+    private fun writeTombstoneMixedFilament(w: ProjectIntentWriter, v: TombstoneMixedFilament) {
+        w.obj {
+            w.field("mixedFilamentId") { writeId(w, v.mixedFilamentId) }
+            w.field("reason") { writeOptionalText(w, v.reason) }
+        }
+    }
+    data class RemoveMixedFilament(val mixedFilamentId: List<Int>)
+    private fun readRemoveMixedFilament(v: Any): RemoveMixedFilament {
+        val obj = ProjectIntentJson.fields(v, setOf("mixedFilamentId"), false)
+        return RemoveMixedFilament(readId(obj.get("mixedFilamentId")))
+    }
+    private fun writeRemoveMixedFilament(w: ProjectIntentWriter, v: RemoveMixedFilament) {
+        w.obj {
+            w.field("mixedFilamentId") { writeId(w, v.mixedFilamentId) }
+        }
+    }
     sealed interface Command {
         data class AddPlate(val value: ProjectIntents.AddPlate) : Command
         data class DuplicatePlate(val value: ProjectIntents.DuplicatePlate) : Command
@@ -1039,9 +1339,15 @@ object ProjectIntents {
         data class RemapFilaments(val value: ProjectIntents.RemapFilaments) : Command
         data class SetFilamentEnabled(val value: ProjectIntents.SetFilamentEnabled) : Command
         data class SyncPhysicalFilaments(val value: ProjectIntents.SyncPhysicalFilaments) : Command
+        data class AddMixedFilament(val value: ProjectIntents.AddMixedFilament) : Command
+        data class EditMixedFilament(val value: ProjectIntents.EditMixedFilament) : Command
+        data class DuplicateMixedFilament(val value: ProjectIntents.DuplicateMixedFilament) : Command
+        data class SetMixedFilamentEnabled(val value: ProjectIntents.SetMixedFilamentEnabled) : Command
+        data class TombstoneMixedFilament(val value: ProjectIntents.TombstoneMixedFilament) : Command
+        data class RemoveMixedFilament(val value: ProjectIntents.RemoveMixedFilament) : Command
     }
     private fun readCommand(v: Any): Command {
-        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments"), true)
+        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments", "addMixedFilament", "editMixedFilament", "duplicateMixedFilament", "setMixedFilamentEnabled", "tombstoneMixedFilament", "removeMixedFilament"), true)
         return when(val key = obj.keys().next()) {
             "addPlate" -> Command.AddPlate(readAddPlate(obj.get(key)))
             "duplicatePlate" -> Command.DuplicatePlate(readDuplicatePlate(obj.get(key)))
@@ -1085,6 +1391,12 @@ object ProjectIntents {
             "remapFilaments" -> Command.RemapFilaments(readRemapFilaments(obj.get(key)))
             "setFilamentEnabled" -> Command.SetFilamentEnabled(readSetFilamentEnabled(obj.get(key)))
             "syncPhysicalFilaments" -> Command.SyncPhysicalFilaments(readSyncPhysicalFilaments(obj.get(key)))
+            "addMixedFilament" -> Command.AddMixedFilament(readAddMixedFilament(obj.get(key)))
+            "editMixedFilament" -> Command.EditMixedFilament(readEditMixedFilament(obj.get(key)))
+            "duplicateMixedFilament" -> Command.DuplicateMixedFilament(readDuplicateMixedFilament(obj.get(key)))
+            "setMixedFilamentEnabled" -> Command.SetMixedFilamentEnabled(readSetMixedFilamentEnabled(obj.get(key)))
+            "tombstoneMixedFilament" -> Command.TombstoneMixedFilament(readTombstoneMixedFilament(obj.get(key)))
+            "removeMixedFilament" -> Command.RemoveMixedFilament(readRemoveMixedFilament(obj.get(key)))
             else -> throw InvalidProjectIntent()
         }
     }
@@ -1132,6 +1444,12 @@ object ProjectIntents {
             is Command.RemapFilaments -> w.field("remapFilaments") { writeRemapFilaments(w, v.value) }
             is Command.SetFilamentEnabled -> w.field("setFilamentEnabled") { writeSetFilamentEnabled(w, v.value) }
             is Command.SyncPhysicalFilaments -> w.field("syncPhysicalFilaments") { writeSyncPhysicalFilaments(w, v.value) }
+            is Command.AddMixedFilament -> w.field("addMixedFilament") { writeAddMixedFilament(w, v.value) }
+            is Command.EditMixedFilament -> w.field("editMixedFilament") { writeEditMixedFilament(w, v.value) }
+            is Command.DuplicateMixedFilament -> w.field("duplicateMixedFilament") { writeDuplicateMixedFilament(w, v.value) }
+            is Command.SetMixedFilamentEnabled -> w.field("setMixedFilamentEnabled") { writeSetMixedFilamentEnabled(w, v.value) }
+            is Command.TombstoneMixedFilament -> w.field("tombstoneMixedFilament") { writeTombstoneMixedFilament(w, v.value) }
+            is Command.RemoveMixedFilament -> w.field("removeMixedFilament") { writeRemoveMixedFilament(w, v.value) }
         } }
     }
     private fun readCommands(v: Any): List<Command> {

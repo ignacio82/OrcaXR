@@ -50,6 +50,7 @@ pub(super) enum Op {
         consumed: usize,
         adopted: Vec<(u64, PhysicalFilamentId)>,
     },
+    Mixed(super::mixed::MixedOp),
 }
 #[derive(Clone)]
 pub(super) struct FilamentCommand {
@@ -433,6 +434,14 @@ impl FilamentCommand {
             Text::from_utf8("Sync filaments from printer"),
         ))
     }
+    /// A mixed-filament recipe command (`mixedCommands.ts`).
+    pub(super) fn mixed(op: super::mixed::MixedOp, add_label: Option<Text>) -> Self {
+        let label = op
+            .label()
+            .or(add_label)
+            .expect("an add carries its own label");
+        Self::new(Op::Mixed(op), label)
+    }
     pub(super) fn label(&self) -> Text {
         self.label.clone()
     }
@@ -442,6 +451,7 @@ impl FilamentCommand {
             Op::Remap { .. } => "remap-filaments",
             Op::Enabled { .. } => "set-filament-enabled",
             Op::Sync { .. } => "sync-physical-filaments-from-printer",
+            Op::Mixed(op) => op.reason(),
         }
     }
     fn class(&self) -> &'static str {
@@ -450,6 +460,7 @@ impl FilamentCommand {
             Op::Remap { .. } => "RemapFilamentsCommand",
             Op::Enabled { .. } => "SetFilamentEnabledCommand",
             Op::Sync { .. } => "SyncPhysicalFilamentsFromPrinterCommand",
+            Op::Mixed(op) => op.class(),
         }
     }
 
@@ -471,6 +482,7 @@ impl FilamentCommand {
                 consumed,
                 adopted,
             } => sync(state, slots, ids.as_deref(), consumed, adopted),
+            Op::Mixed(op) => op.mutate(state),
         }
     }
     /// `buildNext`: mutate a copy and validate it like `assertValidProjectState`.

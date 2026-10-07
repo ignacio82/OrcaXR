@@ -64,9 +64,33 @@ import {
   SyncPhysicalFilamentsFromPrinterCommand,
   type FilamentAssignmentTarget,
 } from './filaments/commands';
-import type { BrimEarPoint, LayerEventType, Transform } from './domain/model';
+import {
+  AddMixedFilamentCommand,
+  DuplicateMixedFilamentCommand,
+  EditMixedFilamentCommand,
+  RemoveMixedFilamentCommand,
+  SetMixedFilamentEnabledCommand,
+  TombstoneMixedFilamentCommand,
+  type EditMixedFilamentPatch,
+} from './filaments/mixedCommands';
+import { assertCanonicalSerializable } from './domain/canonical';
+import type {
+  BrimEarPoint,
+  ConfigMap,
+  FullSpectrumRecipeState,
+  JsonValue,
+  LayerEventType,
+  MixedComponent,
+  MixedDistribution,
+  MixedFilament,
+  Transform,
+} from './domain/model';
 import type {
   ProjectAssignmentTargetWire,
+  ProjectFullSpectrumInputWire,
+  ProjectMixedComponentInputWire,
+  ProjectMixedDistributionInputWire,
+  ProjectMixedFilamentInputWire,
   ProjectBrimEarWire,
   ProjectOptionalIdWire,
   ProjectLayerHeightLimitsWire,
@@ -236,6 +260,43 @@ function command(value: ProjectCommandWire): ProjectCommand {
   }
   if ('deleteLayerEvent' in value)
     return new DeleteLayerEventCommand(id<'custom-gcode'>(value.deleteLayerEvent.customGcodeId));
+  if ('addMixedFilament' in value) return new AddMixedFilamentCommand(mixedFilament(value.addMixedFilament.filament));
+  if ('editMixedFilament' in value) {
+    const input = value.editMixedFilament;
+    const patch: { -readonly [K in keyof EditMixedFilamentPatch]: EditMixedFilamentPatch[K] } = {};
+    if ('value' in input.name) patch.name = text(input.name.value);
+    if ('value' in input.displayColor) patch.displayColor = text(input.displayColor.value);
+    if ('value' in input.components) patch.components = input.components.value.map(mixedComponent);
+    if ('value' in input.distribution) patch.distribution = mixedDistribution(input.distribution.value);
+    if ('value' in input.fullSpectrum) patch.fullSpectrum = fullSpectrum(input.fullSpectrum.value);
+    if ('value' in input.configJson) patch.config = jsonObject(input.configJson.value);
+    return new EditMixedFilamentCommand(id<'mixed-filament'>(input.mixedFilamentId), patch);
+  }
+  if ('duplicateMixedFilament' in value) {
+    const input = value.duplicateMixedFilament;
+    return new DuplicateMixedFilamentCommand(
+      id<'mixed-filament'>(input.sourceId),
+      id<'mixed-filament'>(input.duplicateId),
+      'value' in input.name ? text(input.name.value) : undefined,
+    );
+  }
+  if ('setMixedFilamentEnabled' in value) {
+    const input = value.setMixedFilamentEnabled;
+    return new SetMixedFilamentEnabledCommand(
+      id<'mixed-filament'>(input.mixedFilamentId),
+      input.enabled,
+      'value' in input.reason ? text(input.reason.value) : undefined,
+    );
+  }
+  if ('tombstoneMixedFilament' in value) {
+    const input = value.tombstoneMixedFilament;
+    return new TombstoneMixedFilamentCommand(
+      id<'mixed-filament'>(input.mixedFilamentId),
+      'value' in input.reason ? text(input.reason.value) : undefined,
+    );
+  }
+  if ('removeMixedFilament' in value)
+    return new RemoveMixedFilamentCommand(id<'mixed-filament'>(value.removeMixedFilament.mixedFilamentId));
   if ('setFilamentAssignments' in value)
     return new SetFilamentAssignmentsCommand(
       value.setFilamentAssignments.assignments.map((assignment) => ({
@@ -391,6 +452,115 @@ const LAYER_EVENT_TYPES: Readonly<Record<ProjectLayerEventTypeWire, LayerEventTy
   template: 'template',
   custom: 'custom',
 });
+/**
+ * Nesting limit for free-form JSON text. A map lands up to seven levels deep in
+ * the project state (a volume's config), and the whole state must stay inside
+ * the native canonical parser's limit of 64, so the text gets far less.
+ */
+const JSON_TEXT_MAX_DEPTH = 16;
+/**
+ * A free-form JSON object carried as canonical JSON text. Refusals match the
+ * native side exactly: ill-formed UTF-16, invalid or non-finite JSON, nesting
+ * deeper than the limit, and a non-object root are invalid intents.
+ */
+function jsonObject(units: readonly number[]): ConfigMap {
+  if (!wellFormed(units)) throw new InvalidProjectIntent();
+  const source = text(units);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+    assertCanonicalSerializable(parsed);
+  } catch {
+    throw new InvalidProjectIntent();
+  }
+  if (jsonDepth(parsed) > JSON_TEXT_MAX_DEPTH) throw new InvalidProjectIntent();
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new InvalidProjectIntent();
+  return parsed as ConfigMap;
+}
+/** Every surrogate is paired: the native side parses UTF-8, which cannot carry a lone one. */
+function wellFormed(units: readonly number[]): boolean {
+  for (let index = 0; index < units.length; index += 1) {
+    const unit = units[index];
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = units[index + 1];
+      if (next === undefined || next < 0xdc00 || next > 0xdfff) return false;
+      index += 1;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+      return false;
+    }
+  }
+  return true;
+}
+/** Depth of the deepest value, the root being 0. */
+function jsonDepth(value: unknown): number {
+  if (value === null || typeof value !== 'object') return 0;
+  const children = Array.isArray(value) ? value : Object.values(value as Record<string, JsonValue>);
+  let deepest = 0;
+  for (const child of children) deepest = Math.max(deepest, 1 + jsonDepth(child));
+  return deepest;
+}
+function mixedComponent(value: ProjectMixedComponentInputWire): MixedComponent {
+  return { filamentId: id<'physical-filament'>(value.filamentId), weight: value.weight };
+}
+function mixedDistribution(value: ProjectMixedDistributionInputWire): MixedDistribution {
+  if ('ratio' in value) return { mode: 'ratio' };
+  if ('cycle' in value)
+    return {
+      mode: 'cycle',
+      ...('value' in value.cycle.cycleLengthMm ? { cycleLengthMm: value.cycle.cycleLengthMm.value } : {}),
+    };
+  if ('match' in value) return { mode: 'match', targetColor: text(value.match.targetColor) };
+  const gradient = value.gradient;
+  return {
+    mode: 'gradient',
+    ...('value' in gradient.startZMm ? { startZMm: gradient.startZMm.value } : {}),
+    ...('value' in gradient.endZMm ? { endZMm: gradient.endZMm.value } : {}),
+    startWeights: [...gradient.startWeights],
+    endWeights: [...gradient.endWeights],
+  };
+}
+const FULL_SPECTRUM_UI_MODES = { legacy: -1, ui0: 0, ui1: 1, ui2: 2, ui3: 3 } as const;
+const FULL_SPECTRUM_DISTRIBUTION_MODES = { m0: 0, m2: 2 } as const;
+function fullSpectrum(value: ProjectFullSpectrumInputWire): FullSpectrumRecipeState {
+  return {
+    schemaVersion: 1,
+    upstreamStableId: text(value.upstreamStableId),
+    uiMode: FULL_SPECTRUM_UI_MODES[value.uiMode],
+    componentAId: id<'physical-filament'>(value.componentAId),
+    componentBId: id<'physical-filament'>(value.componentBId),
+    ratioA: value.ratioA,
+    ratioB: value.ratioB,
+    mixBPercent: value.mixBPercent,
+    manualPatternGroups: value.manualPatternGroups.map((group) => group.map(id<'physical-filament'>)),
+    gradientComponentIds: value.gradientComponentIds.map(id<'physical-filament'>),
+    gradientComponentWeights: [...value.gradientComponentWeights],
+    // Compiled out of the pinned engine, so never authored.
+    pointillismAllFilaments: false,
+    distributionMode: FULL_SPECTRUM_DISTRIBUTION_MODES[value.distributionMode],
+    localZMaxSublayers: value.localZMaxSublayers,
+    gradientEnabled: value.gradientEnabled,
+    gradientStart: value.gradientStart,
+    gradientEnd: value.gradientEnd,
+    componentASurfaceOffsetMm: value.componentASurfaceOffsetMm,
+    componentBSurfaceOffsetMm: value.componentBSurfaceOffsetMm,
+    deleted: value.deleted,
+    custom: value.custom,
+    originAuto: value.originAuto,
+  };
+}
+function mixedFilament(value: ProjectMixedFilamentInputWire): MixedFilament {
+  return {
+    id: id<'mixed-filament'>(value.mixedFilamentId),
+    name: text(value.name),
+    displayColor: text(value.displayColor),
+    components: value.components.map(mixedComponent),
+    distribution: mixedDistribution(value.distribution),
+    ...('value' in value.fullSpectrum ? { fullSpectrum: fullSpectrum(value.fullSpectrum.value) } : {}),
+    config: jsonObject(value.configJson),
+    enabled: value.enabled,
+    ...('value' in value.extensionDataJson ? { extensionData: jsonObject(value.extensionDataJson.value) } : {}),
+  };
+}
 function assignmentTarget(value: ProjectAssignmentTargetWire): FilamentAssignmentTarget {
   if ('object' in value) return { kind: 'object', objectId: id<'object'>(value.object.objectId) };
   if ('volume' in value)

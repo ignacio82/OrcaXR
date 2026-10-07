@@ -2679,6 +2679,28 @@ tool; running out is refused. The browser now also draws adopted IDs once per
 tool, so redo recreates the same filament, and re-enabling removes an emptied
 `extensionData` instead of storing `undefined`.
 
+### Mixed-filament commands
+
+Mixed-filament recipes (`filaments/mixedCommands.ts`) use the same snapshot
+machinery: add, edit (one command for rename, components, distribution, full
+spectrum and config), duplicate, enable/disable and tombstone. A duplicate
+inserts after its source, and a full-spectrum duplicate gets the upstream
+stable ID `fullSpectrumStableNumericId` derives (FNV-1a 64 of the ID's UTF-8,
+never zero). Removal is separate: it refuses while any canonical reference
+remains, listing every path (wipe towers, scoped assignments, colour paint and
+refinement leaves, layer ranges, recipe components) sorted by UTF-16, then
+prunes the selection.
+
+Recipes travel as typed intents. Full-spectrum modes use upstream's codes
+(`legacy`/`ui0`…`ui3`, `m0`/`m2`). The free-form `config` and `extensionData`
+maps travel as canonical JSON text. Both engines refuse the same inputs as
+invalid intents: ill-formed UTF-16, invalid or non-finite JSON, a non-object
+root, and nesting deeper than 16. A map lands up to seven levels deep in the
+project state, and the whole state must stay inside the canonical parser's own
+depth limit of 64. Accepting deeper text produced projects the native parser
+could not read back, which the query corpus caught. Every invalid-intent refusal precedes the commands' own blank-name checks,
+as in the browser mapping.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

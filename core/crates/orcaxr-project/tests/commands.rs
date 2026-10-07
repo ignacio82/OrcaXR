@@ -156,7 +156,7 @@ fn history_value(h: &HistorySnapshot) -> Value {
 }
 #[test]
 fn prepared_commands_and_history_match_every_typescript_step() {
-    replay(fixture(), 1406);
+    replay(fixture(), 1483);
 }
 #[test]
 fn captured_commands_and_history_match_every_typescript_step() {

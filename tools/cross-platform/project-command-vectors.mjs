@@ -11,6 +11,7 @@ import { InMemoryAssetRepository, assetBundleFingerprint } from "../../web/src/p
 import { createProjectFixture } from "../../web/src/project/__tests__/fixtures.ts";
 import { canonicalStringify, cloneJson } from "../../web/src/project/domain/canonical.ts";
 import { encodeIndexedMeshAsset } from "../../web/src/project/meshCodec.ts";
+import { createFullSpectrumMixedFilament } from "../../web/src/project/filaments/fullSpectrumRecipe.ts";
 process.env.TZ = "UTC";
 const root = new URL("../../", import.meta.url);
 const units = s => Array.from({ length: s.length }, (_, i) => s.charCodeAt(i));
@@ -725,7 +726,113 @@ scenario("filaments", {}, (s, f) => {
   run({ kind: "undo" }); run({ kind: "redo" });
 });
 
-const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/filaments/commands.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
+const jsonText = value => units(JSON.stringify(value));
+const mixedComponentInput = c => ({ filamentId: units(c.filamentId), weight: c.weight });
+const distributionInput = d => d.mode === "ratio" ? { ratio: {} } : d.mode === "cycle" ? { cycle: { cycleLengthMm: optionalValue(d.cycleLengthMm) } }
+  : d.mode === "match" ? { match: { targetColor: units(d.targetColor) } }
+  : { gradient: { startZMm: optionalValue(d.startZMm), endZMm: optionalValue(d.endZMm), startWeights: d.startWeights, endWeights: d.endWeights } };
+const UI_MODES = { "-1": "legacy", 0: "ui0", 1: "ui1", 2: "ui2", 3: "ui3" }, DISTRIBUTION_MODES = { 0: "m0", 2: "m2" };
+const fullSpectrumInput = f => ({ upstreamStableId: units(f.upstreamStableId), uiMode: UI_MODES[f.uiMode], componentAId: units(f.componentAId), componentBId: units(f.componentBId),
+  ratioA: f.ratioA, ratioB: f.ratioB, mixBPercent: f.mixBPercent, manualPatternGroups: f.manualPatternGroups.map(g => g.map(units)),
+  gradientComponentIds: f.gradientComponentIds.map(units), gradientComponentWeights: f.gradientComponentWeights, distributionMode: DISTRIBUTION_MODES[f.distributionMode],
+  localZMaxSublayers: f.localZMaxSublayers, gradientEnabled: f.gradientEnabled, gradientStart: f.gradientStart, gradientEnd: f.gradientEnd,
+  componentASurfaceOffsetMm: f.componentASurfaceOffsetMm, componentBSurfaceOffsetMm: f.componentBSurfaceOffsetMm, deleted: f.deleted, custom: f.custom, originAuto: f.originAuto });
+const mixedInput = (m, o = {}) => ({ mixedFilamentId: units(m.id), name: units(m.name), displayColor: units(m.displayColor), components: m.components.map(mixedComponentInput),
+  distribution: distributionInput(m.distribution), fullSpectrum: m.fullSpectrum ? { value: fullSpectrumInput(m.fullSpectrum) } : { absent: {} },
+  configJson: o.configText !== undefined ? units(o.configText) : jsonText(m.config), enabled: m.enabled,
+  extensionDataJson: m.extensionData ? { value: jsonText(m.extensionData) } : { absent: {} } });
+const addMixed = (m, o) => ({ addMixedFilament: { filament: mixedInput(m, o) } });
+const editMixed = (id, o = {}) => ({ editMixedFilament: { mixedFilamentId: units(id), name: optionalValue(o.name, units), displayColor: optionalValue(o.displayColor, units),
+  components: optionalValue(o.components, cs => cs.map(mixedComponentInput)), distribution: optionalValue(o.distribution, distributionInput),
+  fullSpectrum: optionalValue(o.fullSpectrum, fullSpectrumInput), configJson: optionalValue(o.config, v => (typeof v === "string" ? units(v) : jsonText(v))) } });
+const duplicateMixed = (source, duplicate, name) => ({ duplicateMixedFilament: { sourceId: units(source), duplicateId: units(duplicate), name: optionalValue(name, units) } });
+const mixedEnabled = (id, enabled, reason) => ({ setMixedFilamentEnabled: { mixedFilamentId: units(id), enabled, reason: optionalValue(reason, units) } });
+const tombstoneMixed = (id, reason) => ({ tombstoneMixedFilament: { mixedFilamentId: units(id), reason: optionalValue(reason, units) } });
+const removeMixed = id => ({ removeMixedFilament: { mixedFilamentId: units(id) } });
+scenario("mixed-filaments", {}, (s, f) => {
+  f.asset = coneAsset(f.ids.asset);
+  s.sourceAssets = s.sourceAssets.map(a => (a.id === f.asset.descriptor.id ? f.asset.descriptor : a));
+  const [p0, p1] = s.filaments.physical.map(p => p.id), purple = s.filaments.mixed[0].id;
+  const volume = s.plates[0].objects[0].volumes[0];
+  volume.source.triangleCount = f.asset.descriptor.mesh.triangleCount;
+  s.printer.toolCount = 4;
+  s.filaments.physical.push({ id: "import:filament:third", name: "Head 3 PLA", toolId: 2, material: "PLA", color: "#ffff00", config: {}, enabled: true },
+    { id: "import:filament:off", name: "Head 4 PLA", toolId: 3, material: "PLA", color: "#00ffff", config: {}, enabled: false });
+  s.filaments.mixed.push(createFullSpectrumMixedFilament("import:mixed:fs", s.filaments.physical, { mode: "ratio", name: "Sunset", displayColor: "#ff8800",
+    componentFilamentIds: [p0, p1], mixBPercent: 30 }));
+  s.filaments.mixed.push({ id: "import:mixed:gradient", name: "Fade", displayColor: "#808080", components: [{ filamentId: p0, weight: 1 }, { filamentId: p1, weight: 1 }],
+    distribution: { mode: "gradient", startZMm: 1, endZMm: 9, startWeights: [1, 0], endWeights: [0, 1] }, config: { note: "kept" }, enabled: true,
+    extensionData: { kept: true } });
+  s.filaments.mixed.push({ id: "import:mixed:unused", name: "Spare mix", displayColor: "#123456", components: [{ filamentId: p0, weight: 1 }, { filamentId: "import:filament:third", weight: 3 }],
+    distribution: { mode: "ratio" }, config: {}, enabled: true });
+  volume.annotations.color = [{ value: p0, triangles: [1] }, { value: purple, triangles: [0, 2] }];
+  volume.annotations.refinement = { color: { version: 2, triangleCount: 48, splits: [
+    { triangle: 3, node: facetSplit([facetLeaf(p1), facetSplit([facetLeaf("import:mixed:gradient"), facetLeaf()])]) },
+  ] } };
+  s.plates[0].objects[0].layerRanges[0].filamentId = "import:mixed:gradient";
+}, ({ execute, batch, run, ids, state }) => {
+  const [p0, p1] = state().filaments.physical.map(p => p.id), purple = state().filaments.mixed[0].id, third = "import:filament:third";
+  const teal = { id: "import:mixed:teal", name: "Teal", displayColor: "#008080", components: [{ filamentId: p0, weight: 2 }, { filamentId: third, weight: 1 }],
+    distribution: { mode: "ratio" }, config: { mixed_filament_ratio: 2, ["__proto__"]: { kept: 1 } }, enabled: true, extensionData: { kept: [1, "😀"] } };
+  execute(addMixed(teal));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  const cycle = createFullSpectrumMixedFilament("import:mixed:fs-cycle", state().filaments.physical, { mode: "cycle", name: " Stripes ", displayColor: "#AABBCCDD",
+    manualPatternGroups: [[p0], [p1, third]] });
+  execute(addMixed(cycle));
+  const ok = (o) => ({ ...teal, id: "import:mixed:x", ...o });
+  const deep = n => (n === 0 ? 1 : [deep(n - 1)]);
+  for (const bad of [addMixed(ok({ id: purple })), addMixed(ok({ id: ids.plate })), addMixed(ok({ id: "bad" })),
+    addMixed(ok({ components: [{ filamentId: p0, weight: 1 }, { filamentId: p0, weight: 2 }] })),
+    addMixed(ok({ components: [{ filamentId: p0, weight: 1 }, { filamentId: "import:filament:missing", weight: 2 }] })),
+    addMixed(ok({ components: [{ filamentId: p0, weight: 1 }, { filamentId: "import:filament:off", weight: 2 }] })),
+    addMixed(ok({ components: [{ filamentId: p0, weight: 1 }, { filamentId: purple, weight: 2 }] })),
+    addMixed(ok({ components: [{ filamentId: p0, weight: 1 }] })), addMixed(ok({ components: [{ filamentId: p0, weight: 0 }, { filamentId: p1, weight: 0 }] })),
+    addMixed(ok({ name: " \n" })), addMixed(ok({ displayColor: "" })), addMixed(ok({ distribution: { mode: "cycle", cycleLengthMm: 0 } })),
+    addMixed(ok({ distribution: { mode: "match", targetColor: "  " } })),
+    addMixed(ok({ distribution: { mode: "gradient", startWeights: [1], endWeights: [0, 1] } })),
+    addMixed(ok({ distribution: { mode: "gradient", startWeights: [1, -1], endWeights: [0, 1] } })),
+    addMixed(ok({ distribution: { mode: "gradient", startWeights: [0, 0], endWeights: [0, 1] } })),
+    addMixed(ok({ distribution: { mode: "gradient", startZMm: 2, startWeights: [1, 0], endWeights: [0, 1] } })),
+    addMixed(ok({ distribution: { mode: "gradient", startZMm: 5, endZMm: 5, startWeights: [1, 0], endWeights: [0, 1] } })),
+    addMixed(ok({}), { configText: "{" }), addMixed(ok({}), { configText: "[1]" }), addMixed(ok({}), { configText: "1e400" }),
+    addMixed(ok({}), { configText: JSON.stringify({ a: deep(16) }) }), addMixed(ok({}), { configText: JSON.stringify({ a: deep(64) }) }), addMixed(ok({}), { configText: '{"a":"\ud800"}' }),
+    addMixed(ok({}), { configText: '{"a":1,"a":2}' })])
+    execute(bad);
+  execute(addMixed(ok({ id: "import:mixed:deep" }), { configText: JSON.stringify({ a: deep(15) }) }));
+  execute(addMixed(ok({ id: "import:mixed:escaped" }), { configText: '{"a":"\\ud800","b":-0,"c":1E2}' }));
+  execute(editMixed("import:mixed:teal", { name: "  Deep teal  ", displayColor: " #004040 " }));
+  execute(editMixed("import:mixed:teal", { name: "Deep teal" }));
+  execute(editMixed("import:mixed:teal", { components: [{ filamentId: p1, weight: 1 }, { filamentId: third, weight: 4 }], distribution: { mode: "cycle", cycleLengthMm: 2.5 } }));
+  execute(editMixed("import:mixed:teal", { fullSpectrum: state().filaments.mixed.find(m => m.id === "import:mixed:fs").fullSpectrum, config: "{\"z\":[true,null]}" }));
+  run({ kind: "undo" });
+  for (const bad of [editMixed("import:mixed:teal", { name: " " }), editMixed("import:mixed:teal", { displayColor: "\t" }), editMixed("import:mixed:missing", { name: "X" }),
+    editMixed("import:mixed:teal", { components: [{ filamentId: p0, weight: 1 }, { filamentId: p0, weight: 1 }] }), editMixed("import:mixed:teal", { config: "null" }),
+    editMixed("import:mixed:teal", { distribution: { mode: "gradient", startWeights: [1, 2, 3], endWeights: [1, 2, 3] } })])
+    execute(bad);
+  execute(duplicateMixed("import:mixed:fs", "import:mixed:fs-copy"));
+  execute(duplicateMixed("import:mixed:teal", "import:mixed:teal-copy", "  Second teal "));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  for (const bad of [duplicateMixed("import:mixed:teal", "import:mixed:x", "  "), duplicateMixed("import:mixed:teal", purple), duplicateMixed("import:mixed:missing", "import:mixed:x"),
+    duplicateMixed("import:mixed:teal", "bad")])
+    execute(bad);
+  execute(mixedEnabled("import:mixed:teal", false)); execute(mixedEnabled("import:mixed:teal", true));
+  execute(mixedEnabled("import:mixed:gradient", false, "printer-missing")); execute(mixedEnabled("import:mixed:gradient", true)); execute(mixedEnabled("import:mixed:gradient", true));
+  execute(tombstoneMixed("import:mixed:fs")); execute(tombstoneMixed("import:mixed:fs-copy", "replaced"));
+  execute(mixedEnabled("import:mixed:fs", true));
+  execute(filamentEnabled(third, false));
+  execute(mixedEnabled("import:mixed:teal", false)); execute(mixedEnabled("import:mixed:teal", true));
+  run({ kind: "undo" }); run({ kind: "undo" });
+  execute(mixedEnabled("import:mixed:missing", true)); execute(tombstoneMixed("import:mixed:missing"));
+  run({ kind: "selection", refs: [{ kind: "filament", id: units("import:mixed:unused") }, { kind: "object", id: units(ids.object) }] });
+  execute(removeMixed("import:mixed:unused"));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  for (const bad of [removeMixed(purple), removeMixed("import:mixed:gradient"), removeMixed("import:mixed:missing"), removeMixed("bad")]) execute(bad);
+  batch([addMixed({ ...teal, id: "import:mixed:batch" }), editMixed("import:mixed:batch", { name: "Batched" }), duplicateMixed("import:mixed:batch", "import:mixed:batch-copy")], "Mixed filament transaction");
+  batch([removeMixed("import:mixed:batch-copy"), removeMixed(purple)], "Rolled back mixed filaments");
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+
+const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/filaments/commands.ts", "web/src/project/filaments/mixedCommands.ts", "web/src/project/filaments/fullSpectrumRecipe.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";
 const path = new URL("testdata/cross-platform/project-command-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);

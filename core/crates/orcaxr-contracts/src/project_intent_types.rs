@@ -1163,6 +1163,421 @@ fn read_sync_physical_filaments(v: &Value) -> Result<SyncPhysicalFilaments, Inva
         new_filament_ids: read_optional_ids(&object["newFilamentIds"])?,
     })
 }
+pub type JsonText = Vec<Unit>;
+fn read_json_text(v: &Value) -> Result<JsonText, InvalidIntent> {
+    list(v, 0, 131072)?.iter().map(read_unit).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalJsonText {
+    Absent(Empty),
+    Value(JsonText),
+}
+fn read_optional_json_text(v: &Value) -> Result<OptionalJsonText, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalJsonText::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalJsonText::Value(read_json_text(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type Weights = Vec<Finite>;
+fn read_weights(v: &Value) -> Result<Weights, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_finite).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MixedComponentInput {
+    pub filament_id: Id,
+    pub weight: Finite,
+}
+fn read_mixed_component_input(v: &Value) -> Result<MixedComponentInput, InvalidIntent> {
+    let object = fields(v, &["filamentId", "weight"], false)?;
+    Ok(MixedComponentInput {
+        filament_id: read_id(&object["filamentId"])?,
+        weight: read_finite(&object["weight"])?,
+    })
+}
+pub type MixedComponentInputs = Vec<MixedComponentInput>;
+fn read_mixed_component_inputs(v: &Value) -> Result<MixedComponentInputs, InvalidIntent> {
+    list(v, 0, 4096)?
+        .iter()
+        .map(read_mixed_component_input)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalMixedComponents {
+    Absent(Empty),
+    Value(MixedComponentInputs),
+}
+fn read_optional_mixed_components(v: &Value) -> Result<OptionalMixedComponents, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalMixedComponents::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalMixedComponents::Value(read_mixed_component_inputs(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CycleDistributionInput {
+    pub cycle_length_mm: OptionalFinite,
+}
+fn read_cycle_distribution_input(v: &Value) -> Result<CycleDistributionInput, InvalidIntent> {
+    let object = fields(v, &["cycleLengthMm"], false)?;
+    Ok(CycleDistributionInput {
+        cycle_length_mm: read_optional_finite(&object["cycleLengthMm"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatchDistributionInput {
+    pub target_color: EditText,
+}
+fn read_match_distribution_input(v: &Value) -> Result<MatchDistributionInput, InvalidIntent> {
+    let object = fields(v, &["targetColor"], false)?;
+    Ok(MatchDistributionInput {
+        target_color: read_edit_text(&object["targetColor"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GradientDistributionInput {
+    pub start_z_mm: OptionalFinite,
+    pub end_z_mm: OptionalFinite,
+    pub start_weights: Weights,
+    pub end_weights: Weights,
+}
+fn read_gradient_distribution_input(v: &Value) -> Result<GradientDistributionInput, InvalidIntent> {
+    let object = fields(
+        v,
+        &["startZMm", "endZMm", "startWeights", "endWeights"],
+        false,
+    )?;
+    Ok(GradientDistributionInput {
+        start_z_mm: read_optional_finite(&object["startZMm"])?,
+        end_z_mm: read_optional_finite(&object["endZMm"])?,
+        start_weights: read_weights(&object["startWeights"])?,
+        end_weights: read_weights(&object["endWeights"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MixedDistributionInput {
+    Ratio(Empty),
+    Cycle(CycleDistributionInput),
+    Match(MatchDistributionInput),
+    Gradient(GradientDistributionInput),
+}
+fn read_mixed_distribution_input(v: &Value) -> Result<MixedDistributionInput, InvalidIntent> {
+    let object = fields(v, &["ratio", "cycle", "match", "gradient"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "ratio" => Ok(MixedDistributionInput::Ratio(read_empty(value)?)),
+        "cycle" => Ok(MixedDistributionInput::Cycle(
+            read_cycle_distribution_input(value)?,
+        )),
+        "match" => Ok(MixedDistributionInput::Match(
+            read_match_distribution_input(value)?,
+        )),
+        "gradient" => Ok(MixedDistributionInput::Gradient(
+            read_gradient_distribution_input(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalMixedDistribution {
+    Absent(Empty),
+    Value(MixedDistributionInput),
+}
+fn read_optional_mixed_distribution(v: &Value) -> Result<OptionalMixedDistribution, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalMixedDistribution::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalMixedDistribution::Value(
+            read_mixed_distribution_input(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type PatternGroups = Vec<Ids>;
+fn read_pattern_groups(v: &Value) -> Result<PatternGroups, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_ids).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FullSpectrumUiMode {
+    Legacy,
+    Ui0,
+    Ui1,
+    Ui2,
+    Ui3,
+}
+fn read_full_spectrum_ui_mode(v: &Value) -> Result<FullSpectrumUiMode, InvalidIntent> {
+    match v.as_str() {
+        Some("legacy") => Ok(FullSpectrumUiMode::Legacy),
+        Some("ui0") => Ok(FullSpectrumUiMode::Ui0),
+        Some("ui1") => Ok(FullSpectrumUiMode::Ui1),
+        Some("ui2") => Ok(FullSpectrumUiMode::Ui2),
+        Some("ui3") => Ok(FullSpectrumUiMode::Ui3),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FullSpectrumDistributionMode {
+    M0,
+    M2,
+}
+fn read_full_spectrum_distribution_mode(
+    v: &Value,
+) -> Result<FullSpectrumDistributionMode, InvalidIntent> {
+    match v.as_str() {
+        Some("m0") => Ok(FullSpectrumDistributionMode::M0),
+        Some("m2") => Ok(FullSpectrumDistributionMode::M2),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FullSpectrumInput {
+    pub upstream_stable_id: EditText,
+    pub ui_mode: FullSpectrumUiMode,
+    pub component_a_id: Id,
+    pub component_b_id: Id,
+    pub ratio_a: Finite,
+    pub ratio_b: Finite,
+    pub mix_b_percent: Finite,
+    pub manual_pattern_groups: PatternGroups,
+    pub gradient_component_ids: Ids,
+    pub gradient_component_weights: Weights,
+    pub distribution_mode: FullSpectrumDistributionMode,
+    pub local_z_max_sublayers: Finite,
+    pub gradient_enabled: Flag,
+    pub gradient_start: Finite,
+    pub gradient_end: Finite,
+    pub component_a_surface_offset_mm: Finite,
+    pub component_b_surface_offset_mm: Finite,
+    pub deleted: Flag,
+    pub custom: Flag,
+    pub origin_auto: Flag,
+}
+fn read_full_spectrum_input(v: &Value) -> Result<FullSpectrumInput, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "upstreamStableId",
+            "uiMode",
+            "componentAId",
+            "componentBId",
+            "ratioA",
+            "ratioB",
+            "mixBPercent",
+            "manualPatternGroups",
+            "gradientComponentIds",
+            "gradientComponentWeights",
+            "distributionMode",
+            "localZMaxSublayers",
+            "gradientEnabled",
+            "gradientStart",
+            "gradientEnd",
+            "componentASurfaceOffsetMm",
+            "componentBSurfaceOffsetMm",
+            "deleted",
+            "custom",
+            "originAuto",
+        ],
+        false,
+    )?;
+    Ok(FullSpectrumInput {
+        upstream_stable_id: read_edit_text(&object["upstreamStableId"])?,
+        ui_mode: read_full_spectrum_ui_mode(&object["uiMode"])?,
+        component_a_id: read_id(&object["componentAId"])?,
+        component_b_id: read_id(&object["componentBId"])?,
+        ratio_a: read_finite(&object["ratioA"])?,
+        ratio_b: read_finite(&object["ratioB"])?,
+        mix_b_percent: read_finite(&object["mixBPercent"])?,
+        manual_pattern_groups: read_pattern_groups(&object["manualPatternGroups"])?,
+        gradient_component_ids: read_ids(&object["gradientComponentIds"])?,
+        gradient_component_weights: read_weights(&object["gradientComponentWeights"])?,
+        distribution_mode: read_full_spectrum_distribution_mode(&object["distributionMode"])?,
+        local_z_max_sublayers: read_finite(&object["localZMaxSublayers"])?,
+        gradient_enabled: read_flag(&object["gradientEnabled"])?,
+        gradient_start: read_finite(&object["gradientStart"])?,
+        gradient_end: read_finite(&object["gradientEnd"])?,
+        component_a_surface_offset_mm: read_finite(&object["componentASurfaceOffsetMm"])?,
+        component_b_surface_offset_mm: read_finite(&object["componentBSurfaceOffsetMm"])?,
+        deleted: read_flag(&object["deleted"])?,
+        custom: read_flag(&object["custom"])?,
+        origin_auto: read_flag(&object["originAuto"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalFullSpectrum {
+    Absent(Empty),
+    Value(FullSpectrumInput),
+}
+fn read_optional_full_spectrum(v: &Value) -> Result<OptionalFullSpectrum, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalFullSpectrum::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalFullSpectrum::Value(read_full_spectrum_input(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MixedFilamentInput {
+    pub mixed_filament_id: Id,
+    pub name: EditText,
+    pub display_color: EditText,
+    pub components: MixedComponentInputs,
+    pub distribution: MixedDistributionInput,
+    pub full_spectrum: OptionalFullSpectrum,
+    pub config_json: JsonText,
+    pub enabled: Flag,
+    pub extension_data_json: OptionalJsonText,
+}
+fn read_mixed_filament_input(v: &Value) -> Result<MixedFilamentInput, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "mixedFilamentId",
+            "name",
+            "displayColor",
+            "components",
+            "distribution",
+            "fullSpectrum",
+            "configJson",
+            "enabled",
+            "extensionDataJson",
+        ],
+        false,
+    )?;
+    Ok(MixedFilamentInput {
+        mixed_filament_id: read_id(&object["mixedFilamentId"])?,
+        name: read_edit_text(&object["name"])?,
+        display_color: read_edit_text(&object["displayColor"])?,
+        components: read_mixed_component_inputs(&object["components"])?,
+        distribution: read_mixed_distribution_input(&object["distribution"])?,
+        full_spectrum: read_optional_full_spectrum(&object["fullSpectrum"])?,
+        config_json: read_json_text(&object["configJson"])?,
+        enabled: read_flag(&object["enabled"])?,
+        extension_data_json: read_optional_json_text(&object["extensionDataJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddMixedFilament {
+    pub filament: MixedFilamentInput,
+}
+fn read_add_mixed_filament(v: &Value) -> Result<AddMixedFilament, InvalidIntent> {
+    let object = fields(v, &["filament"], false)?;
+    Ok(AddMixedFilament {
+        filament: read_mixed_filament_input(&object["filament"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditMixedFilament {
+    pub mixed_filament_id: Id,
+    pub name: OptionalText,
+    pub display_color: OptionalText,
+    pub components: OptionalMixedComponents,
+    pub distribution: OptionalMixedDistribution,
+    pub full_spectrum: OptionalFullSpectrum,
+    pub config_json: OptionalJsonText,
+}
+fn read_edit_mixed_filament(v: &Value) -> Result<EditMixedFilament, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "mixedFilamentId",
+            "name",
+            "displayColor",
+            "components",
+            "distribution",
+            "fullSpectrum",
+            "configJson",
+        ],
+        false,
+    )?;
+    Ok(EditMixedFilament {
+        mixed_filament_id: read_id(&object["mixedFilamentId"])?,
+        name: read_optional_text(&object["name"])?,
+        display_color: read_optional_text(&object["displayColor"])?,
+        components: read_optional_mixed_components(&object["components"])?,
+        distribution: read_optional_mixed_distribution(&object["distribution"])?,
+        full_spectrum: read_optional_full_spectrum(&object["fullSpectrum"])?,
+        config_json: read_optional_json_text(&object["configJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateMixedFilament {
+    pub source_id: Id,
+    pub duplicate_id: Id,
+    pub name: OptionalText,
+}
+fn read_duplicate_mixed_filament(v: &Value) -> Result<DuplicateMixedFilament, InvalidIntent> {
+    let object = fields(v, &["sourceId", "duplicateId", "name"], false)?;
+    Ok(DuplicateMixedFilament {
+        source_id: read_id(&object["sourceId"])?,
+        duplicate_id: read_id(&object["duplicateId"])?,
+        name: read_optional_text(&object["name"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetMixedFilamentEnabled {
+    pub mixed_filament_id: Id,
+    pub enabled: Flag,
+    pub reason: OptionalText,
+}
+fn read_set_mixed_filament_enabled(v: &Value) -> Result<SetMixedFilamentEnabled, InvalidIntent> {
+    let object = fields(v, &["mixedFilamentId", "enabled", "reason"], false)?;
+    Ok(SetMixedFilamentEnabled {
+        mixed_filament_id: read_id(&object["mixedFilamentId"])?,
+        enabled: read_flag(&object["enabled"])?,
+        reason: read_optional_text(&object["reason"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TombstoneMixedFilament {
+    pub mixed_filament_id: Id,
+    pub reason: OptionalText,
+}
+fn read_tombstone_mixed_filament(v: &Value) -> Result<TombstoneMixedFilament, InvalidIntent> {
+    let object = fields(v, &["mixedFilamentId", "reason"], false)?;
+    Ok(TombstoneMixedFilament {
+        mixed_filament_id: read_id(&object["mixedFilamentId"])?,
+        reason: read_optional_text(&object["reason"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveMixedFilament {
+    pub mixed_filament_id: Id,
+}
+fn read_remove_mixed_filament(v: &Value) -> Result<RemoveMixedFilament, InvalidIntent> {
+    let object = fields(v, &["mixedFilamentId"], false)?;
+    Ok(RemoveMixedFilament {
+        mixed_filament_id: read_id(&object["mixedFilamentId"])?,
+    })
+}
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Command {
@@ -1208,6 +1623,12 @@ pub enum Command {
     RemapFilaments(RemapFilaments),
     SetFilamentEnabled(SetFilamentEnabled),
     SyncPhysicalFilaments(SyncPhysicalFilaments),
+    AddMixedFilament(AddMixedFilament),
+    EditMixedFilament(EditMixedFilament),
+    DuplicateMixedFilament(DuplicateMixedFilament),
+    SetMixedFilamentEnabled(SetMixedFilamentEnabled),
+    TombstoneMixedFilament(TombstoneMixedFilament),
+    RemoveMixedFilament(RemoveMixedFilament),
 }
 fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
     let object = fields(
@@ -1255,6 +1676,12 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             "remapFilaments",
             "setFilamentEnabled",
             "syncPhysicalFilaments",
+            "addMixedFilament",
+            "editMixedFilament",
+            "duplicateMixedFilament",
+            "setMixedFilamentEnabled",
+            "tombstoneMixedFilament",
+            "removeMixedFilament",
         ],
         true,
     )?;
@@ -1332,6 +1759,20 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
         "syncPhysicalFilaments" => Ok(Command::SyncPhysicalFilaments(
             read_sync_physical_filaments(value)?,
         )),
+        "addMixedFilament" => Ok(Command::AddMixedFilament(read_add_mixed_filament(value)?)),
+        "editMixedFilament" => Ok(Command::EditMixedFilament(read_edit_mixed_filament(value)?)),
+        "duplicateMixedFilament" => Ok(Command::DuplicateMixedFilament(
+            read_duplicate_mixed_filament(value)?,
+        )),
+        "setMixedFilamentEnabled" => Ok(Command::SetMixedFilamentEnabled(
+            read_set_mixed_filament_enabled(value)?,
+        )),
+        "tombstoneMixedFilament" => Ok(Command::TombstoneMixedFilament(
+            read_tombstone_mixed_filament(value)?,
+        )),
+        "removeMixedFilament" => Ok(Command::RemoveMixedFilament(read_remove_mixed_filament(
+            value,
+        )?)),
         _ => Err(InvalidIntent),
     }
 }
