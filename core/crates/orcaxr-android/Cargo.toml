@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 orcaxr-contracts.workspace = true
 orcaxr-gcode.workspace = true
+orcaxr-project.workspace = true
 jni.workspace = true
 
 [lints]

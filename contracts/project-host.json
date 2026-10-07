@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "maxChunkBytes": 65536,
+  "maxTextChunkUnits": 16384,
+  "maxSupportedDepth": 128,
+  "maxSelectionRefs": 131072,
+  "maxSelectionTextUnits": 131072,
+  "maxBudget": 4294967295,
+  "options": ["documentBytes", "documentNodes", "documentTextUnits", "numberBytes", "depth", "assets", "assetBytes", "totalAssetBytes", "historyEntries", "historyBytes"],
+  "effects": ["project", "selection", "history"],
+  "selectionKinds": ["project", "plate", "object", "volume", "instance", "layer-range", "filament"]
+}

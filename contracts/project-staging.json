@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "maxPreparations": 4,
+  "maxClipboards": 4,
+  "envelope": ["version", "work"],
+  "inputOptions": ["bytes", "nodes", "textUnits", "numberBytes", "depth", "commands", "inputUnits"],
+  "poolOptions": ["resources", "commands", "inputUnits"],
+  "clipboardOptions": ["assets", "bytes"],
+  "clipboardInfo": ["volumes", "instances", "layerRanges", "assets", "bytes"],
+  "workKinds": {"single": ["command"], "transaction": ["label", "commands"]},
+  "commandKinds": {
+    "createInstance": ["objectId", "record", "index"],
+    "pasteObject": ["record", "objectId", "volumeIds", "instanceIds", "layerRangeIds", "destination", "name"],
+    "intent": ["asciiJson"],
+    "clipboardPaste": ["objectId", "volumeIds", "instanceIds", "layerRangeIds", "destination"]
+  }
+}

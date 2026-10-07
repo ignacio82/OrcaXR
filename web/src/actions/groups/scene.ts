@@ -30,7 +30,8 @@ export const sceneActions: Action[] = [
     tool: 'move',
     hint: 'Move the selected model on the bed',
     shortcuts: ['G'],
-    run: (ctx) => ctx.applyTool('move'),
+    run: (ctx, invocation) =>
+      invocation.transformEdit ? ctx.applyTransformEdit(invocation.transformEdit) : ctx.applyTool('move'),
   },
   {
     id: 'tool_rotate',
@@ -42,7 +43,8 @@ export const sceneActions: Action[] = [
     tool: 'rotate',
     hint: 'Rotate the selected model',
     shortcuts: ['R'],
-    run: (ctx) => ctx.applyTool('rotate'),
+    run: (ctx, invocation) =>
+      invocation.transformEdit ? ctx.applyTransformEdit(invocation.transformEdit) : ctx.applyTool('rotate'),
   },
   {
     id: 'tool_scale',
@@ -54,7 +56,8 @@ export const sceneActions: Action[] = [
     tool: 'scale',
     hint: 'Scale the selected model',
     shortcuts: ['S'],
-    run: (ctx) => ctx.applyTool('scale'),
+    run: (ctx, invocation) =>
+      invocation.transformEdit ? ctx.applyTransformEdit(invocation.transformEdit) : ctx.applyTool('scale'),
   },
   {
     id: 'tool_lay_on_face',
@@ -66,7 +69,8 @@ export const sceneActions: Action[] = [
     disclosure: 'toolbar',
     tool: 'lay_on_face',
     hint: 'Click a face to lay it flat on the bed',
-    run: (ctx) => ctx.applyTool('lay_on_face'),
+    run: (ctx, invocation) =>
+      invocation.layOnFace ? ctx.applyLayOnFace(invocation.layOnFace) : ctx.applyTool('lay_on_face'),
   },
   {
     id: 'tool_paint',
@@ -198,7 +202,7 @@ export const sceneActions: Action[] = [
     hint: 'Include or exclude the selected models from the print',
     isEnabled: (s) => s.hasInstanceSelection,
     run: (ctx) => {
-      ctx.togglePrintable();
+      return ctx.togglePrintable();
     },
   },
   {
@@ -212,7 +216,7 @@ export const sceneActions: Action[] = [
     hint: 'Scale the selection uniformly to fill the printable volume, then place it on the bed',
     isEnabled: (s) => s.modelCount > 0,
     run: (ctx) => {
-      ctx.scaleToFitPrintVolume();
+      return ctx.scaleToFitPrintVolume();
     },
   },
   {

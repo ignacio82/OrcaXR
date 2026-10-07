@@ -1,12 +1,14 @@
 //! Lossless schema-1 project candidates. Decoding proves typed structure, stable
 //! IDs and finite JSON, not cross-references, topology, settings, timestamps or
 //! command eligibility. validation::ValidatedProject proves graph semantics;
-//! the future store/session must still enforce command, revision and history policy.
+//! the store owns revisions and the command bus owns history/rollback policy.
+//! The session owns operation identity and its prepared queue; hosts own dispatch.
 //! Records preserve unknown fields; clones share immutable child collections,
 //! configurations and annotation payloads. Public serialization deliberately
 //! makes an owned copy; canonical writing streams directly to a caller's sink.
 mod codec;
 mod document;
+pub(crate) mod equality;
 use crate::ids::*;
 pub use codec::{
     Decode, Encode, ExtraFields, Json, JsonObject, Number, PathPart, ShapeError, ShapeErrorCode,
@@ -35,6 +37,9 @@ macro_rules! record {
             }
         }
         impl Encode for $name {
+            fn matches_value(&self, value: &Value) -> io::Result<bool> {
+                codec::record_matches(codec::record_fields([$ (($wire,&self.$field as &dyn Encode)),*],&self.extra)?, value)
+            }
             fn write_json(&self,out:&mut dyn Write)->io::Result<()>{codec::write_record(codec::record_fields([$ (($wire,&self.$field as &dyn Encode)),*],&self.extra)?,out)}
             fn to_value(&self)->io::Result<Value>{codec::record_value(codec::record_fields([$ (($wire,&self.$field as &dyn Encode)),*],&self.extra)?)}
         }
@@ -164,6 +169,9 @@ impl<T: Decode> Decode for Assignments<T> {
     }
 }
 impl<T> Encode for Assignments<T> {
+    fn matches_value(&self, value: &Value) -> io::Result<bool> {
+        self.json.matches_value(value)
+    }
     fn write_json(&self, out: &mut dyn Write) -> io::Result<()> {
         self.json.write_json(out)
     }
@@ -228,6 +236,14 @@ impl Decode for MixedDistribution {
     }
 }
 impl Encode for MixedDistribution {
+    fn matches_value(&self, value: &Value) -> io::Result<bool> {
+        match self {
+            Self::Ratio(v) => v.matches_value(value),
+            Self::Cycle(v) => v.matches_value(value),
+            Self::Match(v) => v.matches_value(value),
+            Self::Gradient(v) => v.matches_value(value),
+        }
+    }
     fn write_json(&self, out: &mut dyn Write) -> io::Result<()> {
         match self {
             Self::Ratio(v) => v.write_json(out),

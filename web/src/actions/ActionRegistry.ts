@@ -43,6 +43,10 @@ import {
   type ParityTaskId,
 } from './CapabilityEvidence';
 import type { UiStateShape } from './UiState';
+import type { AsyncSessionAcknowledgement, AsyncSessionGuard } from '../project/AsyncEditorSession';
+import type { InstanceTransformChange } from '../project/objects/transformCommands';
+import type { InstanceId } from '../project/domain/ids';
+import type { Vec3 } from '../project/domain/model';
 
 /** Top-level taxonomy. Powers the Add/Tools menus, inspector, command palette. */
 export type GroupId =
@@ -72,6 +76,8 @@ export type Disclosure = 'primary' | 'toolbar' | 'menu' | 'inspector';
 export type CapabilityStatus = 'implemented' | 'partial' | 'unavailable' | 'blocked';
 
 export type ActionSurface =
+  | 'dom-scene'
+  | 'xr-scene'
   | 'dom-primary'
   | 'dom-toolbar'
   | 'dom-menu'
@@ -132,6 +138,9 @@ export interface Capability {
 
 /** Transient, non-canonical target data supplied by a presentation surface. */
 export interface ActionInvocation {
+  /** Complete stable-ID poses. Local ownership/cancellation stay outside the wire payload. */
+  readonly transformEdit?: TransformEditRequest;
+  readonly layOnFace?: { readonly instanceId: InstanceId; readonly localNormal: Vec3 };
   /** A failed startup capability; omitted to recover all failed capabilities. */
   readonly startupFeatureId?: string;
   readonly recoverySessionId?: string;
@@ -311,7 +320,26 @@ export interface ActionInvocation {
   };
 }
 
-export type ActionHandler = (ctx: ActionContext, invocation: Readonly<ActionInvocation>) => void | Promise<void>;
+export interface TransformEditRequest {
+  readonly changes: readonly InstanceTransformChange[];
+  readonly gestureId?: string;
+  readonly guard?: AsyncSessionGuard;
+  readonly signal?: AbortSignal;
+}
+
+/** A result is an actual command acknowledgement, never a later queried snapshot. */
+export interface ActionResult {
+  readonly kind: 'project-edit';
+  readonly acknowledgement: AsyncSessionAcknowledgement<void>;
+}
+export type ActionInvocationResult =
+  | { readonly invoked: false; readonly reason: string }
+  | { readonly invoked: true; readonly result: void | ActionResult };
+
+export type ActionHandler = (
+  ctx: ActionContext,
+  invocation: Readonly<ActionInvocation>,
+) => void | ActionResult | Promise<void | ActionResult>;
 
 /** Source presentation before ActionRegistry attaches validated capability truth. */
 export interface ActionDefinition {
@@ -586,6 +614,11 @@ function surfacesFor(action: ActionDefinition): ActionSurface[] {
     if (!action.xrUnsupportedReason) surfaces.push('xr-inspector');
   }
   if (INSPECTOR_MIRRORED.has(action.id) && !surfaces.includes('dom-inspector')) surfaces.push('dom-inspector');
+  if (['tool_move', 'tool_rotate', 'tool_scale'].includes(action.id)) {
+    surfaces.push('dom-inspector', 'dom-scene');
+    if (!action.xrUnsupportedReason) surfaces.push('xr-scene');
+  }
+  if (action.id === 'tool_lay_on_face') surfaces.push('dom-scene');
   if (action.context?.length) {
     surfaces.push('dom-context');
     // Same rule as every other XR surface: an action withheld from the headset
@@ -833,17 +866,28 @@ export class ActionRegistry {
     state: Readonly<UiStateShape>,
     invocation: Readonly<ActionInvocation> = {},
   ): Promise<boolean> {
+    return (await this.invokeWithResult(actionOrId, surface, ctx, state, invocation)).invoked;
+  }
+
+  /** Result-bearing invocations use the same availability boundary as ordinary actions. */
+  async invokeWithResult(
+    actionOrId: Action | string,
+    surface: ActionSurface,
+    ctx: ActionContext,
+    state: Readonly<UiStateShape>,
+    invocation: Readonly<ActionInvocation> = {},
+  ): Promise<ActionInvocationResult> {
     const action = typeof actionOrId === 'string' ? this.get(actionOrId) : actionOrId;
-    if (!action) return false;
+    if (!action) return Object.freeze({ invoked: false, reason: 'Unknown action.' });
     const availability = this.availability(action, surface, state);
     if (availability.state !== 'enabled') {
       if (availability.state === 'disabled') {
         ctx.reportCapabilityUnavailable(action.label, availability.reason);
       }
-      return false;
+      return Object.freeze({ invoked: false, reason: availability.reason });
     }
-    await action.run?.(ctx, invocation);
-    return true;
+    const result = await action.run?.(ctx, invocation);
+    return Object.freeze({ invoked: true, result });
   }
 
   /** Compatibility wrappers for non-rendering callers; prefer availability(). */

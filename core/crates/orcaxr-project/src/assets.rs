@@ -22,6 +22,9 @@ pub enum AssetError {
     ImmutableConflict,
     DuplicateId,
     ForeignSnapshot,
+    ForeignSelection,
+    MissingAsset,
+    SelectionLimit,
 }
 impl fmt::Display for AssetError {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -32,6 +35,9 @@ impl fmt::Display for AssetError {
             Self::ImmutableConflict => "An immutable asset cannot be replaced.",
             Self::DuplicateId => "Asset snapshot contains a duplicate ID.",
             Self::ForeignSnapshot => "Invalid or foreign internal asset snapshot.",
+            Self::ForeignSelection => "Invalid or foreign asset capture.",
+            Self::MissingAsset => "Missing clipboard asset.",
+            Self::SelectionLimit => "Clipboard assets exceed their capture limit.",
         })
     }
 }
@@ -116,6 +122,43 @@ pub struct AssetSnapshot {
     version: Arc<Version>,
 }
 impl AssetSnapshot {
+    pub fn peek(&self, id: &AssetId) -> Option<AssetLease> {
+        self.version.entries.get(id).cloned().map(AssetLease)
+    }
+    /// Select immutable records on a preparation worker without a live repository.
+    pub fn capture_selection(
+        &self,
+        ids: &[AssetId],
+        max_assets: usize,
+        max_bytes: u64,
+    ) -> Result<AssetSelection, AssetError> {
+        if ids.len() > max_assets {
+            return Err(AssetError::SelectionLimit);
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        let mut records = Vec::with_capacity(ids.len());
+        let mut bytes = 0u64;
+        for id in ids {
+            if !seen.insert(id) {
+                return Err(AssetError::DuplicateId);
+            }
+            let record = self
+                .version
+                .entries
+                .get(id)
+                .ok_or(AssetError::MissingAsset)?;
+            bytes = bytes
+                .checked_add(record.bytes.len() as u64)
+                .filter(|n| *n <= max_bytes)
+                .ok_or(AssetError::SelectionLimit)?;
+            records.push(record.clone());
+        }
+        Ok(AssetSelection {
+            owner: self.owner.clone(),
+            records: records.into(),
+            bytes,
+        })
+    }
     pub fn same_version(&self, other: &Self) -> bool {
         Weak::ptr_eq(&self.owner, &other.owner) && Arc::ptr_eq(&self.version, &other.version)
     }
@@ -132,17 +175,58 @@ pub struct AssetRepository {
     owner: Arc<()>,
     version: Arc<Version>,
 }
+
+/// Selected immutable records, in capture order. This is not a whole repository
+/// rollback version. Its weak owner cannot keep a disposed repository alive.
+#[derive(Clone)]
+pub struct AssetSelection {
+    owner: Weak<()>,
+    records: Arc<[Arc<Record>]>,
+    bytes: u64,
+}
+impl AssetSelection {
+    pub fn byte_length(&self) -> u64 {
+        self.bytes
+    }
+    pub fn len(&self) -> usize {
+        self.records.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.records.is_empty()
+    }
+    pub fn leases(&self) -> impl ExactSizeIterator<Item = AssetLease> + '_ {
+        self.records.iter().cloned().map(AssetLease)
+    }
+}
+impl fmt::Debug for AssetSelection {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        out.debug_struct("AssetSelection")
+            .field("records", &self.len())
+            .field("bytes", &self.bytes)
+            .finish()
+    }
+}
 impl Default for AssetRepository {
     fn default() -> Self {
         Self::new()
     }
 }
 impl AssetRepository {
+    /// Consume an already validated repository version without copying records.
+    /// Preserve this authority's owner identity, including its clipboard subsets.
+    pub(crate) fn adopt(&mut self, source: Self) {
+        self.version = source.version;
+    }
     pub fn new() -> Self {
         Self {
             owner: Arc::new(()),
             version: Arc::new(Version::default()),
         }
+    }
+    /// Borrow immutable descriptor IDs in canonical UTF-16 order, without
+    /// copying public payloads while checking a project bundle.
+    pub fn ids(&self) -> impl Iterator<Item = &AssetId> {
+        self.version.entries.keys()
     }
     pub fn len(&self) -> usize {
         self.version.entries.len()
@@ -191,7 +275,37 @@ impl AssetRepository {
         insertion_order.push(validated.id.clone());
         entries.insert(
             validated.id.clone(),
-            owned_record(validated, descriptor, bytes),
+            owned_record(validated, descriptor.clone(), bytes.into()),
+        );
+        self.version = Arc::new(Version {
+            entries,
+            insertion_order,
+            fingerprint: OnceLock::new(),
+        });
+        Ok(true)
+    }
+    /// Consume a uniquely owned transfer after the same public validation. This
+    /// is an ownership transfer, not a trust bypass: lengths, digests, metadata
+    /// and immutable conflicts are still checked before publishing a record.
+    pub fn put_owned(&mut self, payload: AssetPayload) -> Result<bool, AssetError> {
+        let validated = validate(&payload.descriptor, &payload.bytes)?;
+        if let Some(existing) = self.version.entries.get(&validated.id) {
+            if existing.descriptor != payload.descriptor || existing.bytes.as_ref() != payload.bytes
+            {
+                return Err(AssetError::ImmutableConflict);
+            }
+            return Ok(false);
+        }
+        let mut entries = self.version.entries.clone();
+        let mut insertion_order = self.version.insertion_order.clone();
+        insertion_order.push(validated.id.clone());
+        entries.insert(
+            validated.id.clone(),
+            owned_record(
+                validated,
+                payload.descriptor,
+                payload.bytes.into_boxed_slice(),
+            ),
         );
         self.version = Arc::new(Version {
             entries,
@@ -234,6 +348,53 @@ impl AssetRepository {
         Ok(())
     }
 
+    pub fn capture_selection(
+        &self,
+        ids: &[AssetId],
+        max_assets: usize,
+        max_bytes: u64,
+    ) -> Result<AssetSelection, AssetError> {
+        self.capture_internal()
+            .capture_selection(ids, max_assets, max_bytes)
+    }
+    pub fn owns_selection(&self, selection: &AssetSelection) -> bool {
+        Weak::ptr_eq(&selection.owner, &Arc::downgrade(&self.owner))
+    }
+    /// Check every conflict before publishing a new version. Captured records
+    /// retain allocation identity through removal, reintroduction and history.
+    pub fn merge_selection(&mut self, selection: &AssetSelection) -> Result<bool, AssetError> {
+        if !self.owns_selection(selection) {
+            return Err(AssetError::ForeignSelection);
+        }
+        let mut missing = Vec::new();
+        for record in selection.records.iter() {
+            if let Some(existing) = self.version.entries.get(&record.id) {
+                if !Arc::ptr_eq(existing, record)
+                    && (existing.descriptor != record.descriptor || existing.bytes != record.bytes)
+                {
+                    return Err(AssetError::ImmutableConflict);
+                }
+            } else {
+                missing.push(record.clone());
+            }
+        }
+        if missing.is_empty() {
+            return Ok(false);
+        }
+        let mut entries = self.version.entries.clone();
+        let mut insertion_order = self.version.insertion_order.clone();
+        for record in missing {
+            insertion_order.push(record.id.clone());
+            entries.insert(record.id.clone(), record);
+        }
+        self.version = Arc::new(Version {
+            entries,
+            insertion_order,
+            fingerprint: OnceLock::new(),
+        });
+        Ok(true)
+    }
+
     /// Validate/copy a public import before publishing any change. Identical
     /// imports still create fresh record/version identities, like the browser.
     pub fn restore(&mut self, payloads: &[AssetPayload]) -> Result<(), AssetError> {
@@ -249,7 +410,11 @@ impl AssetRepository {
             insertion_order.push(id.clone());
             entries.insert(
                 id,
-                owned_record(validated, &payload.descriptor, &payload.bytes),
+                owned_record(
+                    validated,
+                    payload.descriptor.clone(),
+                    payload.bytes.as_slice().into(),
+                ),
             );
         }
         self.version = Arc::new(Version {
@@ -338,16 +503,16 @@ fn validate(descriptor: &Value, bytes: &[u8]) -> Result<Validated, AssetError> {
         content_digest,
     })
 }
-fn owned_record(validated: Validated, descriptor: &Value, bytes: &[u8]) -> Arc<Record> {
+fn owned_record(validated: Validated, descriptor: Value, bytes: Box<[u8]>) -> Arc<Record> {
     let content_digest = OnceLock::new();
     if let Some(digest) = validated.content_digest {
         content_digest.set(digest).expect("new cell");
     }
     Arc::new(Record {
         id: validated.id,
-        descriptor: descriptor.clone(),
+        descriptor,
         declared_digest: validated.declared_digest,
-        bytes: bytes.into(),
+        bytes,
         content_digest,
     })
 }

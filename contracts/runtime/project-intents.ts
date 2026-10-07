@@ -1,7 +1,7 @@
 /** Runtime for the generated, bounded project-intent shapes. No domain execution. */
 export type IntentShape =
   | {
-      readonly kind: "integer" | "wholeNumber";
+      readonly kind: "integer" | "wholeNumber" | "number";
       readonly min: number;
       readonly max: number;
     }
@@ -53,13 +53,16 @@ export function captureIntent(
     if (--nodes < 0 || depth > limits.maxDepth) fail();
     const shape = shapes[type];
     switch (shape.kind) {
+      case "number":
       case "wholeNumber":
       case "integer":
         if (
           typeof input !== "number" ||
           !(shape.kind === "integer"
             ? Number.isSafeInteger(input)
-            : Number.isInteger(input)) ||
+            : shape.kind === "wholeNumber"
+              ? Number.isInteger(input)
+              : Number.isFinite(input)) ||
           input < shape.min ||
           input > shape.max
         )

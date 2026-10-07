@@ -1,3 +1,6 @@
+import { assertXmlValue, xmlAttribute, xmlText } from './bbsXml';
+import { ORCAXR_EXTENSION_PATH } from './CanonicalEnvelope';
+import { formatNumber, formatMeshCoordinate, transform3mf, matrix4 } from './bbsNumbers';
 import { canonicalStringify, cloneJson, fnv1a64 } from '../domain/canonical';
 import {
   collapseFacetRefinementRoots,
@@ -316,8 +319,20 @@ export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, As
         const svg = volume.embossSvg;
         if (!svg) continue;
         const payload = assets.get(svg.drawingAssetId);
-        if (payload) svgDrawings.set(svg.pathIn3mf, payload.bytes);
-        else warnings.push(`SVG part ${volume.name} has no stored drawing, so its reference was left out`);
+        if (payload) {
+          validatePackagePath(svg.pathIn3mf);
+          if (GENERATED_STANDARD_PATHS.has(svg.pathIn3mf) || svg.pathIn3mf === ORCAXR_EXTENSION_PATH) {
+            throw new Error(`SVG drawing cannot replace structural entry ${svg.pathIn3mf}`);
+          }
+          const existing = svgDrawings.get(svg.pathIn3mf);
+          if (
+            existing &&
+            (existing.length !== payload.bytes.length || existing.some((b, i) => b !== payload.bytes[i]))
+          ) {
+            throw new Error(`SVG drawing path ${svg.pathIn3mf} has conflicting payloads`);
+          }
+          svgDrawings.set(svg.pathIn3mf, payload.bytes);
+        } else warnings.push(`SVG part ${volume.name} has no stored drawing, so its reference was left out`);
       }
     }
   }
@@ -421,10 +436,7 @@ export function buildBbsCore(state: ProjectState, assets: ReadonlyMap<string, As
   const materialId = nextNumericId;
   const files = new Map<string, Uint8Array>();
   files.set(CORE_MODEL_PATH, encodeText(buildCoreModel(state, mappings, materialRows, materialId, filamentSlots)));
-  files.set(
-    MODEL_SETTINGS_PATH,
-    encodeText(buildModelSettings(orderedPlates, mappings, filamentSlots, new Set(svgDrawings.keys()))),
-  );
+  files.set(MODEL_SETTINGS_PATH, encodeText(buildModelSettings(orderedPlates, mappings, filamentSlots, assets)));
   for (const [path, bytes] of svgDrawings) files.set(path, bytes);
   files.set(PROJECT_SETTINGS_PATH, encodeText(buildProjectSettings(state, filamentSlots, warnings)));
   const layerRanges = buildLayerRanges(mappings, filamentSlots);
@@ -607,7 +619,7 @@ function buildModelSettings(
   orderedPlates: readonly ProjectPlate[],
   mappings: ObjectMapping[],
   filamentSlots: ReadonlyMap<FilamentId, number>,
-  svgDrawings: ReadonlySet<string>,
+  assets: ReadonlyMap<string, AssetPayload>,
 ): string {
   const lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<config>'];
   for (const mapping of mappings) {
@@ -635,10 +647,10 @@ function buildModelSettings(
         lines.push(`   ${encodeEmbossShape(entry.volume.embossText.projection)}`);
       } else if (entry.volume.embossSvg) {
         // An SVG part carries no text element — just the shape. The reference is
-        // written only when the drawing is actually in the package, matching the
-        // pinned writer, which omits it rather than naming a missing file.
+        // written only when this part's own drawing is available. Another part
+        // with the same path must not supply a missing drawing implicitly.
         const svg = entry.volume.embossSvg;
-        const stored = svgDrawings.has(svg.pathIn3mf);
+        const stored = assets.has(svg.drawingAssetId);
         lines.push(
           `   ${encodeEmbossShape(
             { depthMm: svg.depthMm, useSurface: svg.useSurface },
@@ -1211,20 +1223,6 @@ function readFacetExtensionAttributes(
   return result;
 }
 
-function assertXmlValue(value: string, label: string): void {
-  for (const character of value) {
-    const codePoint = character.codePointAt(0)!;
-    if (
-      (codePoint < 0x20 && codePoint !== 0x9 && codePoint !== 0xa && codePoint !== 0xd) ||
-      (codePoint >= 0xd800 && codePoint <= 0xdfff) ||
-      codePoint === 0xfffe ||
-      codePoint === 0xffff
-    ) {
-      throw new Error(`${label} contains a character XML 1.0 cannot represent`);
-    }
-  }
-}
-
 function serializeMixedDefinitions(state: ProjectState, warnings: string[]): string {
   const physical = new Map<FilamentId, number>(state.filaments.physical.map((entry, index) => [entry.id, index + 1]));
   const rows: string[] = [];
@@ -1260,10 +1258,8 @@ function serializeMixedDefinitions(state: ProjectState, warnings: string[]): str
       '/',
     )},m${distribution},z0,xa0,xb0,d0,o0,u${stableId},cm${uiMode}`;
     if (mixed.distribution.mode === 'gradient') {
-      const startTotal = mixed.distribution.startWeights.reduce((sum, weight) => sum + weight, 0);
-      const endTotal = mixed.distribution.endWeights.reduce((sum, weight) => sum + weight, 0);
-      const start = startTotal > 0 ? mixed.distribution.startWeights[0] / startTotal : 0.8;
-      const end = endTotal > 0 ? mixed.distribution.endWeights[0] / endTotal : 0.2;
+      const start = firstNormalizedWeight(mixed.distribution.startWeights, 0.8);
+      const end = firstNormalizedWeight(mixed.distribution.endWeights, 0.2);
       row += `,r1/${start.toFixed(4)}/${end.toFixed(4)}`;
       warnings.push(
         `Mixed gradient ${mixed.id} has OrcaXR Z-range semantics that are retained in the extension; the BBS row is an approximate display/slicer projection`,
@@ -1291,61 +1287,6 @@ function serializeMixedDefinitions(state: ProjectState, warnings: string[]): str
     }
   });
   return rows.join(';');
-}
-
-function transform3mf(transform: Transform, translationOffsetMm: { x: number; y: number } = { x: 0, y: 0 }): string {
-  const matrix = transformMatrix(transform, translationOffsetMm);
-  return [
-    matrix[0],
-    matrix[4],
-    matrix[8],
-    matrix[1],
-    matrix[5],
-    matrix[9],
-    matrix[2],
-    matrix[6],
-    matrix[10],
-    matrix[3],
-    matrix[7],
-    matrix[11],
-  ]
-    .map(formatNumber)
-    .join(' ');
-}
-
-function matrix4(transform: Transform): string {
-  return transformMatrix(transform).map(formatNumber).join(' ');
-}
-
-function transformMatrix(
-  transform: Transform,
-  translationOffsetMm: { x: number; y: number } = { x: 0, y: 0 },
-): number[] {
-  let [x, y, z, w] = transform.rotation;
-  const norm = Math.hypot(x, y, z, w);
-  x /= norm;
-  y /= norm;
-  z /= norm;
-  w /= norm;
-  const [sx, sy, sz] = transform.scale;
-  return [
-    (1 - 2 * (y * y + z * z)) * sx,
-    2 * (x * y - z * w) * sy,
-    2 * (x * z + y * w) * sz,
-    transform.translationMm[0] + translationOffsetMm.x,
-    2 * (x * y + z * w) * sx,
-    (1 - 2 * (x * x + z * z)) * sy,
-    2 * (y * z - x * w) * sz,
-    transform.translationMm[1] + translationOffsetMm.y,
-    2 * (x * z - y * w) * sx,
-    2 * (y * z + x * w) * sy,
-    (1 - 2 * (x * x + y * y)) * sz,
-    transform.translationMm[2],
-    0,
-    0,
-    0,
-    1,
-  ];
 }
 
 function volumeSubtype(role: VolumeRole): string {
@@ -1398,7 +1339,14 @@ function encodePhysicalIds(ids: number[]): string {
 
 function normalizedIntegerPercentages(weights: number[]): number[] {
   const total = weights.reduce((sum, weight) => sum + weight, 0);
-  const exact = weights.map((weight) => (100 * weight) / total);
+  let exact = weights.map((weight) => (100 * weight) / total);
+  // Keep existing rounding for representable arithmetic. Scaling only the
+  // overflowing case preserves valid finite ratios instead of emitting NaN.
+  if (!Number.isFinite(total) || exact.some((value) => !Number.isFinite(value))) {
+    const scaled = scaleWeights(weights);
+    const scaledTotal = scaled.reduce((sum, weight) => sum + weight, 0);
+    exact = scaled.map((weight) => (100 * weight) / scaledTotal);
+  }
   const result = exact.map(Math.floor);
   const remainder = 100 - result.reduce((sum, value) => sum + value, 0);
   const order = exact
@@ -1408,52 +1356,17 @@ function normalizedIntegerPercentages(weights: number[]): number[] {
   return result;
 }
 
-function formatNumber(value: number): string {
-  if (!Number.isFinite(value)) throw new Error('Cannot serialize a non-finite coordinate');
-  return Object.is(value, -0) ? '0' : String(value);
+function scaleWeights(weights: readonly number[]): number[] {
+  const maximum = weights.reduce((max, weight) => Math.max(max, weight), 0);
+  return weights.map((weight) => weight / maximum);
 }
 
-/**
- * Write a mesh coordinate as the shortest decimal that still names the same
- * float32.
- *
- * Canonical mesh positions are float32, and printing one through `String` emits
- * the shortest *double* that round-trips — for a float32 that is its exact
- * binary expansion, so a coordinate the source file wrote as `-25.7756138`
- * comes back out as `-25.77561378479004`. Those trailing digits carry no
- * information: they are the same float32 either way. They cost about 60% more
- * bytes each, and because they are effectively noise they also wreck
- * compression — reopening a 1.9M-facet model turned a 27.9 MB archive into an
- * 85.7 MB one, which is what an external slicer then has to receive.
- *
- * Round-tripping is exact in both directions: the emitted text parses to this
- * same float32, which is what the canonical asset stores.
- */
-function formatMeshCoordinate(value: number): string {
-  if (!Number.isFinite(value)) throw new Error('Cannot serialize a non-finite coordinate');
-  if (Object.is(value, -0) || value === 0) return '0';
-  // Nine significant digits always suffice to name a float32 uniquely; the loop
-  // stops at the first precision that does, which is usually far fewer.
-  for (let precision = 1; precision <= 9; precision += 1) {
-    const candidate = Number(value.toPrecision(precision));
-    if (Math.fround(candidate) === value) return String(candidate);
-  }
-  return String(value);
-}
-
-function xmlAttribute(value: string): string {
-  assertXmlValue(value, 'XML attribute');
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll("'", '&apos;');
-}
-
-function xmlText(value: string): string {
-  assertXmlValue(value, 'XML text');
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+function firstNormalizedWeight(weights: readonly number[], fallback: number): number {
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  if (total === 0) return fallback;
+  if (Number.isFinite(total)) return weights[0] / total;
+  const scaled = scaleWeights(weights);
+  return scaled[0] / scaled.reduce((sum, weight) => sum + weight, 0);
 }
 
 function encodeText(value: string): Uint8Array {
@@ -3396,10 +3309,13 @@ function validatedXmlMarkup(xml: string, path: string): string {
       const tag = parseXmlOpeningTag(source, path);
       const namespaces = new Map(stack.at(-1)?.namespaces ?? baseNamespaces);
       for (const attribute of tag.attributes) {
-        if (attribute.name === 'xmlns') namespaces.set('', attribute.value);
+        if (attribute.name === 'xmlns') {
+          assertXmlNamespaceBinding('', attribute.value, path);
+          namespaces.set('', attribute.value);
+        }
         else if (attribute.name.startsWith('xmlns:')) {
           const prefix = attribute.name.slice(6);
-          if (!attribute.value) throw new Error(`${path} undeclares XML namespace prefix ${prefix}`);
+          assertXmlNamespaceBinding(prefix, attribute.value, path);
           namespaces.set(prefix, attribute.value);
         }
       }
@@ -3408,6 +3324,18 @@ function validatedXmlMarkup(xml: string, path: string): string {
         if (attribute.name !== 'xmlns' && !attribute.name.startsWith('xmlns:')) {
           assertBoundXmlName(attribute.name, namespaces, path, true);
         }
+      }
+      const expandedAttributes = new Set<string>();
+      for (const attribute of tag.attributes) {
+        if (attribute.name === 'xmlns' || attribute.name.startsWith('xmlns:')) continue;
+        const colon = attribute.name.indexOf(':');
+        const prefix = colon < 0 ? undefined : attribute.name.slice(0, colon);
+        const localName = colon < 0 ? attribute.name : attribute.name.slice(colon + 1);
+        const expandedName = JSON.stringify([prefix === undefined ? '' : namespaces.get(prefix), localName]);
+        if (expandedAttributes.has(expandedName)) {
+          throw new Error(`${path} contains duplicate XML attribute ${attribute.name}`);
+        }
+        expandedAttributes.add(expandedName);
       }
       if (stack.length === 0) {
         rootCount += 1;
@@ -3421,6 +3349,19 @@ function validatedXmlMarkup(xml: string, path: string): string {
   if (rootCount !== 1) throw new Error(`${path} must contain exactly one XML root element`);
   sanitized.push(xml.slice(sanitizedCursor));
   return sanitized.join('');
+}
+
+function assertXmlNamespaceBinding(prefix: string, value: string, path: string): void {
+  const xmlNamespace = 'http://www.w3.org/XML/1998/namespace';
+  const xmlnsNamespace = 'http://www.w3.org/2000/xmlns/';
+  if (
+    prefix === 'xmlns' ||
+    value === xmlnsNamespace ||
+    (prefix === 'xml' ? value !== xmlNamespace : value === xmlNamespace) ||
+    (prefix !== '' && value === '')
+  ) {
+    throw new Error(`${path} contains an invalid XML namespace binding`);
+  }
 }
 
 function findXmlTagEnd(xml: string, start: number, path: string): number {

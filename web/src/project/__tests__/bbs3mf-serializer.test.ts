@@ -39,6 +39,136 @@ function archiveFixture(): ProjectArchiveSnapshot {
   };
 }
 
+await test('projects large finite mixed weights without arithmetic overflow or changing canonical weights', async () => {
+  for (const [weights, expected] of [
+    [[1e308, 1e308], 'w50/50'],
+    [[1e307, 1], 'w100/0'],
+  ] as const) {
+    const snapshot = archiveFixture();
+    snapshot.state.filaments.mixed[0].components.forEach((component, index) => {
+      component.weight = weights[index];
+    });
+    snapshot.state.filaments.mixed[0].distribution = {
+      mode: 'gradient',
+      startWeights: [1e308, 1e308],
+      endWeights: [1e308, 0],
+    };
+    const before = canonicalStringify(snapshot.state);
+    const files = readSafeZip((await new Bbs3mfProjectSerializer().serialize(snapshot)).bytes);
+    const definitions = JSON.parse(text(files.get('Metadata/project_settings.config')!)).mixed_filament_definitions;
+    assert.ok(definitions.includes(expected), definitions);
+    assert.ok(definitions.includes('r1/0.5000/1.0000'), definitions);
+    assert.equal(/NaN|Infinity/.test(definitions), false);
+    assert.equal(canonicalStringify(snapshot.state), before);
+  }
+});
+
+await test('preserves prototype-named ZIP members without changing ordinary deterministic bytes', async () => {
+  const ordinary = new Map([
+    ['metadata.txt', new Uint8Array([1, 2, 3])],
+    ['image.png', new Uint8Array([4, 5, 6])],
+  ]);
+  const reference = zipSync({
+    'image.png': [ordinary.get('image.png')!, { level: 0, mtime: new Date(1980, 0, 1), os: 3, attrs: 0o644 << 16 }],
+    'metadata.txt': [
+      ordinary.get('metadata.txt')!,
+      { level: 6, mtime: new Date(1980, 0, 1), os: 3, attrs: 0o644 << 16 },
+    ],
+  });
+  assert.deepEqual(writeDeterministicZip(ordinary), reference);
+  const files = new Map(ordinary);
+  for (const name of [
+    '__proto__',
+    '_orcx0000',
+    '_orcx0001',
+    'constructor',
+    'toString',
+    '__proto__/child.txt',
+    '火.txt',
+  ]) {
+    files.set(name, new TextEncoder().encode(name));
+  }
+  const first = writeDeterministicZip(files);
+  assert.deepEqual(writeDeterministicZip(files), first);
+  const reopened = readSafeZip(first);
+  assert.equal(reopened.size, files.size);
+  for (const [name, value] of files) assert.deepEqual(reopened.get(name), value, name);
+});
+
+await test('retains a prototype-named unknown member through canonical Open and Save', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const initial = await serializer.serialize(archiveFixture());
+  const files = readSafeZip(initial.bytes);
+  const privateBytes = new Uint8Array([7, 9, 11]);
+  files.set('__proto__', privateBytes);
+  const opened = await serializer.deserialize(writeDeterministicZip(files));
+  const saved = await serializer.serialize({
+    state: opened.state,
+    assets: opened.assets,
+    sourceRevision: 8,
+    sourceHash: projectFingerprint(opened.state),
+  });
+  assert.deepEqual(readSafeZip(saved.bytes).get('__proto__'), privateBytes);
+  assert.equal(readSafeZip(saved.bytes).has('0'), false);
+});
+
+await test('retains fragment and query relationships through canonical Open and Save', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const files = readSafeZip((await serializer.serialize(archiveFixture())).bytes);
+  files.set('Metadata/note.txt', new TextEncoder().encode('preserved target'));
+  files.set(
+    '_rels/.rels',
+    new TextEncoder().encode(
+      '<Relationships><Relationship Id="fragment" Type="urn:test" Target="/Metadata/note.txt#piece"/></Relationships>',
+    ),
+  );
+  files.set(
+    '3D/_rels/3dmodel.model.rels',
+    new TextEncoder().encode(
+      '<Relationships><Relationship Id="query" Type="urn:test" Target="../Metadata/note.txt?x=1&amp;y=2#piece"/></Relationships>',
+    ),
+  );
+  const opened = await serializer.deserialize(writeDeterministicZip(files));
+  const saved = await serializer.serialize({
+    ...opened,
+    sourceRevision: 1,
+    sourceHash: projectFingerprint(opened.state),
+  });
+  const reopened = readSafeZip(saved.bytes);
+  assert.match(new TextDecoder().decode(reopened.get('_rels/.rels')), /Id="fragment"/);
+  assert.match(new TextDecoder().decode(reopened.get('3D/_rels/3dmodel.model.rels')), /Id="query"/);
+  assert.deepEqual(reopened.get('Metadata/note.txt'), files.get('Metadata/note.txt'));
+  assert.equal(
+    (saved.warnings ?? []).some((warning) => warning.includes('Dropped') && warning.includes('relationship')),
+    false,
+  );
+});
+
+await test('unknown members with nonstandard suffixes survive repeated canonical Open and Save', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const files = readSafeZip((await serializer.serialize(archiveFixture())).bytes);
+  const names = ['Metadata/data.Σ', 'Metadata/data.İ', 'Metadata/has space.x y', 'Metadata/zero', 'Metadata.v1/nodot'];
+  const bytes = new Uint8Array([1, 2, 3]);
+  for (const name of names) files.set(name, bytes);
+  let opened = await serializer.deserialize(writeDeterministicZip(files));
+  const hash = projectFingerprint(opened.state);
+  for (let cycle = 0; cycle < 3; cycle++) {
+    const saved = await serializer.serialize({
+      ...opened,
+      sourceRevision: cycle,
+      sourceHash: projectFingerprint(opened.state),
+    });
+    const members = readSafeZip(saved.bytes);
+    const types = new TextDecoder().decode(members.get('[Content_Types].xml'));
+    for (const name of names) {
+      assert.deepEqual(members.get(name), bytes);
+      assert.ok(types.includes(`PartName="/${name}"`));
+    }
+    opened = await serializer.deserialize(saved.bytes);
+    assert.equal(projectFingerprint(opened.state), hash);
+  }
+});
+
 await test('emits a deterministic BBS-compatible core plus lossless canonical envelope', async () => {
   const serializer = new Bbs3mfProjectSerializer();
   const snapshot = archiveFixture();
@@ -796,6 +926,32 @@ await test('imports qualified Production Extension graphs and folds split member
   assert.deepEqual(resaved.bytes, saved.bytes);
 });
 
+await test('rejects reserved and duplicate-expanded XML namespace bindings during foreign import', async () => {
+  const serializer = new Bbs3mfProjectSerializer();
+  const mutateCore = (change: (xml: string) => string): Uint8Array => {
+    const files = readSafeZip(foreignSplitProductionArchive());
+    const source = text(files.get(CORE_MODEL_PATH)!);
+    files.set(CORE_MODEL_PATH, new TextEncoder().encode(change(source)));
+    return writeDeterministicZip(files);
+  };
+
+  await assert.rejects(
+    serializer.deserialize(mutateCore((xml) => xml.replace('xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06"', 'xmlns:xml="urn:invalid"'))),
+    /invalid XML namespace binding/i,
+  );
+  await assert.rejects(
+    serializer.deserialize(
+      mutateCore((xml) =>
+        xml.replace(
+          '<model unit="millimeter"',
+          '<model xmlns:a="urn:duplicate" xmlns:b="urn:duplicate" a:marker="one" b:marker="two" unit="millimeter"',
+        ),
+      ),
+    ),
+    /duplicate XML attribute/i,
+  );
+});
+
 await test('rejects unsafe or unresolved Production Extension resource graphs without guessing', async () => {
   const serializer = new Bbs3mfProjectSerializer();
   const mutate = (change: (files: Map<string, Uint8Array>) => void): Uint8Array => {
@@ -892,7 +1048,7 @@ await test('rejects unsafe or unresolved Production Extension resource graphs wi
         );
       }),
     ),
-    /conflicting Production Extension path attributes/i,
+    /duplicate XML attribute/i,
   );
 });
 
@@ -1325,6 +1481,61 @@ await test('a BBS project written elsewhere brings its emboss text across', asyn
   assert.equal(embossed.embossText?.projection.depthMm, 1.75);
 });
 
+await test('an SVG drawing cannot replace generated structural members', async () => {
+  for (const path of ['3D/3dmodel.model', 'Metadata/model_settings.config', ORCAXR_EXTENSION_PATH]) {
+    const fixture = createProjectFixture();
+    fixture.state.plates[0].objects[0].volumes[0].embossSvg = {
+      pathIn3mf: path,
+      drawingAssetId: fixture.asset.descriptor.id,
+      depthMm: 1,
+      widthMm: 1,
+      useSurface: false,
+    };
+    await assert.rejects(
+      new Bbs3mfProjectSerializer().serialize({
+        state: fixture.state,
+        assets: [fixture.asset],
+        sourceRevision: 0,
+        sourceHash: projectFingerprint(fixture.state),
+      }),
+      /drawing.*structural/,
+    );
+  }
+});
+
+await test('an SVG part with a missing drawing cannot borrow another part’s path', async () => {
+  const fixture = createProjectFixture();
+  const object = fixture.state.plates[0].objects[0];
+  const first = object.volumes[0];
+  first.embossSvg = {
+    pathIn3mf: 'Metadata/shared.svg',
+    drawingAssetId: fixture.asset.descriptor.id,
+    sourcePath: 'first.svg',
+    depthMm: 1,
+    widthMm: 1,
+    useSurface: false,
+  };
+  const second = structuredClone(first);
+  second.id = entityId<'volume'>('import:test:missing-drawing-volume');
+  second.name = 'Missing drawing';
+  second.embossSvg = {
+    ...first.embossSvg,
+    drawingAssetId: entityId<'asset'>('import:test:missing-drawing'),
+    sourcePath: 'missing.svg',
+  };
+  object.volumes.push(second);
+  const archive = await new Bbs3mfProjectSerializer().serialize({
+    state: fixture.state,
+    assets: [fixture.asset],
+    sourceRevision: 0,
+    sourceHash: projectFingerprint(fixture.state),
+  });
+  const settings = new TextDecoder().decode(readSafeZip(archive.bytes).get('Metadata/model_settings.config'));
+  assert.equal((settings.match(/filepath3mf="Metadata\/shared.svg"/g) ?? []).length, 1);
+  assert.ok(!settings.includes('missing.svg'));
+  assert.ok(archive.warnings?.some((warning) => warning.includes('SVG part Missing drawing has no stored drawing')));
+});
+
 await test('an SVG part carries its drawing into the archive and back', async () => {
   const serializer = new Bbs3mfProjectSerializer();
   const fixture = createProjectFixture();
@@ -1534,6 +1745,44 @@ await test('an object with no profile writes no profile file at all', async () =
   assert.equal(readSafeZip(archive.bytes).has('Metadata/layer_heights_profile.txt'), false);
   const reopened = await serializer.deserialize(archive.bytes);
   assert.equal(reopened.state.plates[0].objects[0].layerHeightProfile, undefined);
+});
+
+await test('canonical import refuses incomplete or mistyped persisted SVG recipes', async () => {
+  const snapshot = archiveFixture();
+  const serializer = new Bbs3mfProjectSerializer();
+  const files = readSafeZip((await serializer.serialize(snapshot)).bytes);
+  const envelope = JSON.parse(text(files.get(ORCAXR_EXTENSION_PATH)!));
+  const recipe = {
+    drawingAssetId: snapshot.state.sourceAssets[0].id,
+    pathIn3mf: 'drawings/example.svg',
+    depthMm: 1,
+    useSurface: false,
+    widthMm: 10,
+    future: { retained: true },
+  };
+  const open = async (value: unknown) => {
+    envelope.state.plates[0].objects[0].volumes[0].embossSvg = value;
+    files.set(ORCAXR_EXTENSION_PATH, new TextEncoder().encode(JSON.stringify(envelope)));
+    return serializer.deserialize(writeDeterministicZip(files));
+  };
+  const valid = await open(recipe);
+  assert.deepEqual(valid.state.plates[0].objects[0].volumes[0].embossSvg, recipe);
+  for (const key of ['drawingAssetId', 'pathIn3mf', 'depthMm', 'useSurface', 'widthMm']) {
+    const missing: Record<string, unknown> = { ...recipe };
+    delete missing[key];
+    await assert.rejects(open(missing), /Invalid SVG emboss recipe/);
+  }
+  for (const invalid of [
+    null,
+    [],
+    { ...recipe, drawingAssetId: 'unstable id' },
+    { ...recipe, pathIn3mf: 1 },
+    { ...recipe, depthMm: '1' },
+    { ...recipe, widthMm: null },
+    { ...recipe, useSurface: 0 },
+    { ...recipe, sourcePath: null },
+  ])
+    await assert.rejects(open(invalid), /Invalid SVG emboss recipe/);
 });
 
 console.log(`\nBBS-compatible 3MF serializer: ${passed} tests passed.`);

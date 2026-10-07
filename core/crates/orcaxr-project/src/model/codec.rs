@@ -55,6 +55,11 @@ impl fmt::Display for ShapeError {
 impl std::error::Error for ShapeError {}
 
 pub trait Encode {
+    /// Compare full canonical content with borrowed JSON. Built-in records,
+    /// strings and containers override the scalar fallback to share payloads.
+    fn matches_value(&self, value: &Value) -> io::Result<bool> {
+        Ok(super::equality::equal_json(&self.to_value()?, value))
+    }
     fn write_json(&self, output: &mut dyn Write) -> io::Result<()>;
     fn present(&self) -> bool {
         true
@@ -98,6 +103,9 @@ impl Decode for Text {
     }
 }
 impl Encode for Text {
+    fn matches_value(&self, value: &Value) -> io::Result<bool> {
+        Ok(matches!(value, Value::String(v) if self.units() == v))
+    }
     fn write_json(&self, out: &mut dyn Write) -> io::Result<()> {
         write_text(&self.0, out)
     }
@@ -160,6 +168,9 @@ impl<K> Decode for EntityId<K> {
     }
 }
 impl<K> Encode for EntityId<K> {
+    fn matches_value(&self, value: &Value) -> io::Result<bool> {
+        Ok(matches!(value, Value::String(v) if self.as_utf16() == v))
+    }
     fn write_json(&self, out: &mut dyn Write) -> io::Result<()> {
         write_text(self.as_utf16(), out)
     }
@@ -176,6 +187,12 @@ impl<T: Decode> Decode for Option<T> {
     }
 }
 impl<T: Encode> Encode for Option<T> {
+    fn matches_value(&self, value: &Value) -> io::Result<bool> {
+        match self {
+            Some(v) => v.matches_value(value),
+            None => Ok(false),
+        }
+    }
     fn present(&self) -> bool {
         self.is_some()
     }
@@ -196,6 +213,9 @@ impl<T: Decode> Decode for Arc<T> {
     }
 }
 impl<T: Encode> Encode for Arc<T> {
+    fn matches_value(&self, value: &Value) -> io::Result<bool> {
+        self.as_ref().matches_value(value)
+    }
     fn write_json(&self, out: &mut dyn Write) -> io::Result<()> {
         self.as_ref().write_json(out)
     }
@@ -217,6 +237,9 @@ impl<T: Decode> Decode for Arc<[T]> {
     }
 }
 impl<T: Encode> Encode for Arc<[T]> {
+    fn matches_value(&self, value: &Value) -> io::Result<bool> {
+        sequence_matches(self, value)
+    }
     fn write_json(&self, out: &mut dyn Write) -> io::Result<()> {
         out.write_all(b"[")?;
         for (i, v) in self.iter().enumerate() {
@@ -252,6 +275,9 @@ impl<T: Decode, const N: usize> Decode for [T; N] {
     }
 }
 impl<T: Encode, const N: usize> Encode for [T; N] {
+    fn matches_value(&self, value: &Value) -> io::Result<bool> {
+        sequence_matches(self, value)
+    }
     fn write_json(&self, out: &mut dyn Write) -> io::Result<()> {
         out.write_all(b"[")?;
         for (i, v) in self.iter().enumerate() {
@@ -273,8 +299,13 @@ impl<T: Encode, const N: usize> Encode for [T; N] {
 
 /// Immutable generic JSON. A typed graph clone shares configurations, extension
 /// data and sparse annotations; only an explicit public copy expands them.
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct Json(Arc<Value>);
+impl PartialEq for Json {
+    fn eq(&self, other: &Self) -> bool {
+        super::equality::equal_json(&self.0, &other.0)
+    }
+}
 impl Json {
     pub fn new(value: Value) -> Result<Self, ShapeError> {
         check_finite(&value)?;
@@ -298,6 +329,9 @@ impl Decode for Json {
     }
 }
 impl Encode for Json {
+    fn matches_value(&self, value: &Value) -> io::Result<bool> {
+        Ok(super::equality::equal_json(self.value(), value))
+    }
     fn write_json(&self, mut out: &mut dyn Write) -> io::Result<()> {
         self.0.write_canonical(&mut out)
     }
@@ -320,6 +354,11 @@ impl JsonObject {
     pub fn same_allocation(&self, other: &Self) -> bool {
         self.0.same_allocation(&other.0)
     }
+    /// Consume privately owned metadata without copying its descendants. Shared
+    /// snapshots keep their allocation; only that case requires a private copy.
+    pub fn into_value(self) -> Value {
+        Arc::unwrap_or_clone(self.0.0)
+    }
 }
 impl Decode for JsonObject {
     fn from_value(value: Value) -> Result<Self, ShapeError> {
@@ -327,6 +366,9 @@ impl Decode for JsonObject {
     }
 }
 impl Encode for JsonObject {
+    fn matches_value(&self, value: &Value) -> io::Result<bool> {
+        self.0.matches_value(value)
+    }
     fn write_json(&self, out: &mut dyn Write) -> io::Result<()> {
         self.0.write_json(out)
     }
@@ -459,4 +501,36 @@ fn check_finite(value: &Value) -> Result<(), ShapeError> {
 }
 fn write_text(text: &[u16], mut out: &mut dyn Write) -> io::Result<()> {
     orcaxr_contracts::canonical::write_string(text, &mut out)
+}
+
+fn sequence_matches<T: Encode>(values: &[T], value: &Value) -> io::Result<bool> {
+    let Value::Array(other) = value else {
+        return Ok(false);
+    };
+    if values.len() != other.len() {
+        return Ok(false);
+    }
+    for (a, b) in values.iter().zip(other) {
+        if !a.matches_value(b)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+pub(super) fn record_matches(
+    fields: BTreeMap<Cow<'_, [u16]>, &dyn Encode>,
+    value: &Value,
+) -> io::Result<bool> {
+    let Value::Object(other) = value else {
+        return Ok(false);
+    };
+    if fields.len() != other.len() {
+        return Ok(false);
+    }
+    for ((key, a), (other_key, b)) in fields.into_iter().zip(other) {
+        if key.as_ref() != other_key.as_slice() || !a.matches_value(b)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }

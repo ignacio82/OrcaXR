@@ -18,6 +18,7 @@ import type {
   EmbossVerticalAlign,
 } from '../objects/emboss';
 import { DEFAULT_EMBOSS_FONT_PROPERTY } from '../objects/emboss';
+import { assertXmlValue } from './bbsXml';
 
 export const EMBOSS_TEXT_TAG = 'slic3rpe:text';
 export const EMBOSS_SHAPE_TAG = 'slic3rpe:shape';
@@ -203,6 +204,7 @@ function formatNumber(value: number): string {
 }
 
 function escapeAttribute(value: string): string {
+  assertXmlValue(value, 'Emboss XML attribute');
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')

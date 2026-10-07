@@ -36,6 +36,12 @@ impl ProjectData {
     pub fn same_allocation(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
+    /// Full canonical content equality, including unknown fields. A matching
+    /// FNV hash alone is not proof of equality. Typed finite-number equality
+    /// preserves canonical +/-0 semantics without allocating serialized graphs.
+    pub fn same_content(&self, other: &Self) -> bool {
+        self.same_allocation(other) || self.0.state == other.0.state
+    }
 }
 /// Exact browser semantic identity, over every canonical field including
 /// timestamps, unknown metadata and array order. No intermediate JSON is built.

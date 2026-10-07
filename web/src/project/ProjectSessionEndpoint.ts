@@ -24,6 +24,14 @@ import {
 import { entityId, isStableEntityId } from './domain/ids';
 import { intentText } from './PreparedProjectCommands';
 import type { CommandHistorySnapshot } from './history/commandBus';
+import {
+  takeStagedWork,
+  StagedWorkSlot,
+  StagedInputError,
+  type StagedProjectWork,
+  type ProjectStagingLimits,
+  type ProjectStagingUsage,
+} from './StagedProjectCommands';
 
 export function wireSessionGuard(guard: AsyncSessionGuard): ProjectSessionGuardWire {
   return {
@@ -71,7 +79,68 @@ export class ProjectSessionEndpoint {
   private lastRequest = 0;
   private ready = false;
   private disposed = false;
-  private readonly pending = new Map<number, { aborted: boolean }>();
+  private readonly pending = new Map<number, { aborted: boolean; release?: () => void }>();
+  private stagingLimits: ProjectStagingLimits = { maxResources: 0, maxCommands: 0, maxUnits: 0 };
+  private stagingUsed = { resources: 0, commands: 0, units: 0 };
+  private stagedSequence = 0;
+  private readonly staged = new Map<number, { readonly guard: AsyncSessionGuard; readonly slot: StagedWorkSlot }>();
+
+  configureStaging(limits: ProjectStagingLimits): void {
+    if (this.disposed) throw new AsyncSessionError('disposed');
+    const owned = { maxResources: limits.maxResources, maxCommands: limits.maxCommands, maxUnits: limits.maxUnits };
+    if (!Object.values(owned).every((n) => Number.isSafeInteger(n) && n >= 0))
+      throw new AsyncSessionError('invalid-request');
+    if (!this.fits(this.stagingUsed, owned)) throw new AsyncSessionError('busy');
+    this.stagingLimits = owned;
+  }
+  stagingUsage(): ProjectStagingUsage {
+    return Object.freeze({ ...this.stagingUsed });
+  }
+  stage(value: StagedProjectWork, guard: AsyncSessionGuard): number {
+    let owned;
+    try {
+      owned = takeStagedWork(value);
+    } catch {
+      throw new AsyncSessionError('invalid-request');
+    }
+    if (this.disposed) throw new AsyncSessionError('disposed');
+    if (!this.session.isCurrent(guard)) throw new AsyncSessionError('stale');
+    const usage = {
+      resources: this.stagingUsed.resources + 1,
+      commands: this.stagingUsed.commands + value.commandCount,
+      units: this.stagingUsed.units + value.inputUnits,
+    };
+    if (
+      !Number.isSafeInteger(this.stagedSequence + 1) ||
+      !Object.values(usage).every(Number.isSafeInteger) ||
+      !this.fits(usage, this.stagingLimits)
+    )
+      throw new AsyncSessionError('resourceLimit');
+    const capturedGuard = this.session.captureGuard();
+    this.stagingUsed = usage;
+    const slot = new StagedWorkSlot(owned, () => {
+      this.stagingUsed.resources--;
+      this.stagingUsed.commands -= value.commandCount;
+      this.stagingUsed.units -= value.inputUnits;
+    });
+    const id = ++this.stagedSequence;
+    this.staged.set(id, { guard: capturedGuard, slot });
+    return id;
+  }
+  /** Host cleanup is also safe after transport failure: it only releases input
+   * that has not been accepted. It never cancels, retries or undoes an edit. */
+  releaseStaged(id: number): boolean {
+    const resource = this.staged.get(id);
+    if (!resource) return false;
+    this.staged.delete(id);
+    resource.slot.release();
+    return true;
+  }
+  private fits(usage: ProjectStagingUsage, limits: ProjectStagingLimits): boolean {
+    return (
+      usage.resources <= limits.maxResources && usage.commands <= limits.maxCommands && usage.units <= limits.maxUnits
+    );
+  }
 
   constructor(
     private readonly session: AsyncEditorSession,
@@ -148,12 +217,17 @@ export class ProjectSessionEndpoint {
     if (!this.ready) return reject('notReady');
     if ('cancel' in operation) {
       const token = this.pending.get(operation.cancel.targetRequestId);
-      if (token) token.aborted = true;
+      if (token) {
+        token.aborted = true;
+        token.release?.();
+      }
       // Requested is cooperative intent, never a claim that an edit was undone.
       return Promise.resolve(respond({ cancelled: token ? 'requested' : 'notPending' }));
     }
+    if ('releaseStaged' in operation)
+      return Promise.resolve(respond({ released: this.releaseStaged(operation.releaseStaged.stagedId) }));
     if (this.pending.size >= MAX_PENDING_SESSION_OPERATIONS) return reject('busy');
-    const cancellation = { aborted: false };
+    const cancellation: { aborted: boolean; release?: () => void } = { aborted: false };
     this.pending.set(request.requestId, cancellation);
     let work: Promise<AsyncSessionAcknowledgement<void | boolean>>;
     let before: AsyncSessionGuard;
@@ -163,7 +237,13 @@ export class ProjectSessionEndpoint {
         guard: localSessionGuard(value, before.generation),
         cancellation,
       });
-      if ('execute' in operation)
+      if ('executeStaged' in operation) {
+        const resource = this.staged.get(operation.executeStaged.stagedId);
+        if (!resource) throw new AsyncSessionError('invalid-request');
+        this.staged.delete(operation.executeStaged.stagedId);
+        cancellation.release = () => resource.slot.release();
+        work = this.session.executeStaged(resource.slot, { guard: resource.guard, cancellation });
+      } else if ('execute' in operation)
         work = this.session.executeIntent(operation.execute.intent, guarded(operation.execute.guard));
       else if ('transaction' in operation)
         work = this.session.transactionIntents(operation.transaction.batch, guarded(operation.transaction.guard));
@@ -202,6 +282,9 @@ export class ProjectSessionEndpoint {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    for (const resource of this.staged.values()) resource.slot.release();
+    this.staged.clear();
+    for (const pending of this.pending.values()) pending.release?.();
     this.session.dispose();
   }
 
@@ -215,6 +298,7 @@ export class ProjectSessionEndpoint {
   }
 }
 function sessionErrorCode(error: unknown): ProjectSessionErrorWire {
+  if (error instanceof StagedInputError) return error.code === 'limit' ? 'resourceLimit' : 'invalidRequest';
   if (error instanceof AsyncSessionError) return error.code === 'invalid-request' ? 'invalidRequest' : error.code;
   return 'commandFailed';
 }

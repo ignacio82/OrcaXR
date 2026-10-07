@@ -1,7 +1,7 @@
 package dev.orcaxr.core
 
-/** JsonReader owns JSON structure; callers detect duplicate keys. This lexical
- * check rejects token forms its strict mode accepts on some Android releases.
+/** Callers own JSON structure and duplicate-key validation. This lexical
+ * check rejects token forms Android JsonReader accepts even in strict mode.
  * Unicode string contents remain untouched; each caller owns its byte limits. */
 internal object StrictJsonTokens {
     fun valid(text: String, active: () -> Unit = {}): Boolean {

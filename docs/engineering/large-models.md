@@ -21,8 +21,57 @@ are fixture-specific evidence, not device-independent performance guarantees.
   records, read-only leases and opaque repository-owned versions. Its synthetic
   8 MiB probe records zero mesh-sized allocations over 200 capture/remove/restore
   cycles plus initial fingerprint computation; an owned public read makes one
-  measured 8 MiB allocation. Native command/history execution and device memory
-  ceilings remain unqualified. See the native-core document for the trace corpus.
+  measured 8 MiB allocation. Native command/history ownership has its own probe
+  below; device memory ceilings remain unqualified. See the native-core document
+  for the trace corpus.
+  Browser clipboard captures now retain only selected immutable records through
+  opaque repository-owned subsets. Copy, paste and undo/redo share mesh bytes;
+  public reads still copy. Each capture is limited to 4,096 assets / 512 MiB,
+  including editable SVG drawings, with no whole-repository version retained.
+  Staged metadata uses the controller's separate 16 Mi encoded-unit pool, and
+  command history charges all captured bytes. Four queued clipboard operations
+  can retain four different captures; these logical limits are not a device RAM
+  qualification. Eleven ownership tests cover failures/rollback and twenty
+  paste/undo/redo cycles over an 8 MiB asset with zero payload copies; the public
+  read control copies exactly 8 MiB. The Rust library now has the matching bounded
+  selected-record capture and atomic paste. Its release allocation probe includes
+  100,000 paint assignments and an 8 MiB asset/configuration: one asset capture and
+  twenty command preparation/paste/undo/redo cycles allocate 81,669,734 bytes in total, with a largest allocation
+  of 768 bytes and zero payload-sized allocations. The explicit public-read control
+  detects one 8 MiB allocation. IDs and metadata charge 590,719 encoded input units;
+  captured bytes separately count toward history. These synthetic results qualify
+  library ownership, not device residency or latency. WASM/JNI now expose four
+  clipboard owners per core instance with caller-supplied asset/byte limits.
+  Capture resolves a current object query, then retains only its immutable subtree
+  and selected records. Uploads attach that data without copying payloads or
+  serializing the source graph; they share the existing four preparation permits.
+  Closing the clipboard frees its permit while already prepared work/history
+  retain their own charged data. The release host-preparation probe runs twenty
+  capture/upload/seal/stage/release cycles over an 8 MiB mesh and shared metadata:
+  each 139-byte upload charges 8,979,001 input units, total internal allocation is
+  298,300 bytes, largest allocation is 640 bytes and no allocation reaches payload
+  size. Ready release destroys the capture immediately. The public-copy controls
+  detect all three payload copies. Android now captures immutable project/asset
+  versions before offloading query selection and object/asset scanning to its
+  preparation workers. Preparations and finished clipboards share four permits;
+  conversion reuses the same JNI slot, including at registry capacity. The full
+  source versions live only during preparation; completed copies retain selected
+  records. The actor owns one current clipboard and closes replaced/cleared data.
+  Accepted paste uploads retain their own data/charges across clear/replacement.
+  Cancellation invalidates native inputs even if a selector ignores interruption;
+  an already running JNI call may finish privately before releasing its captures.
+  Browser task isolation and native editing integration remain open; these quotas
+  do not establish a device RAM budget.
+
+- Prepared native document adoption now transfers an admitted graph and immutable
+  asset version into the existing authority without rehashing/copying payloads at
+  commit. Exact metadata checks and cached bundle fingerprinting precede commit;
+  source/operation guards still decide whether publication is allowed. A release
+  probe measures twenty bundle preparation/adoption cycles over an 8 MiB mesh and
+  two 8 MiB metadata strings: 85,328 total allocated bytes, largest allocation 640
+  bytes and zero payload-sized allocations. Three public-copy controls are detected.
+  Synthetic input allocation and graph/payload admission precede measurement. Parsing, archive/file
+  I/O, production task scheduling and device memory/latency remain separate gates.
 
 - Rust typed project candidates also share immutable graph children, configuration,
   extension data and sparse paint payloads. A transform edit copies the changed
@@ -51,7 +100,9 @@ are fixture-specific evidence, not device-independent performance guarantees.
   takes zero heap allocations over twenty parses; a full-copy positive control
   makes one allocation. The parser does not apply transport string/depth limits
   to persisted metadata and does not recurse through comments. This qualifies
-  parser ownership only; the host timezone adapter remains separate work.
+  parser ownership only. Android JNI now uses an explicit Java ZoneId resolver;
+  its JVM correctness checks do not establish device allocation or latency costs.
+  The optional WASM project binding uses its JavaScript host's Date.parse directly.
 
 - Rust graph admission indexes assigned paint indices, not the entire declared
   mesh. It borrows config values for inherited-settings consistency and uses
@@ -63,6 +114,209 @@ are fixture-specific evidence, not device-independent performance guarantees.
   `ValidatedProject` reuse the proof with zero allocations or revalidation.
   A public config export makes one measured 8 MiB copy. This is graph metadata
   ownership evidence, not actual mesh loading, history, Android memory or latency.
+
+- Native project publication and rollback retain immutable graph/proof ownership.
+  A synthetic graph with 1,897,256 declared triangles, 100,000 paint assignments
+  and an 8,388,608-byte settings string completes 200 publication/rollback cycles
+  while retaining 400 receipts. Snapshot reads, stale-guard checks, selection
+  clear/restore and full content comparisons against a separately owned equal
+  graph allocate 2,448,000 bytes in total, with a largest allocation of 640 bytes
+  and no payload-sized copy. An explicit public config export makes one measured
+  8 MiB copy. This measures the store library; it does not exercise command
+  execution, history retention policy, host dispatch or physical-device budgets.
+
+- The native command/history probe executes 20 cycles of actual prepared plate
+  duplication/deletion, undo/redo and failed batches, plus twenty single-transform
+  and twenty batch-transform/undo pairs plus 120 object lifecycle/undo pairs and
+  40 captured instance-creation/paste/undo pairs, retaining 1,520 ordered events
+  through 580 project revisions. The lifecycle
+  coverage includes object/instance deletion, plate clearing, duplication,
+  plate moves and conversion to independent objects. Its synthetic graph has 1,897,256 declared
+  source triangles, 100,000 assigned paint facets, an 8 MiB asset and two equal
+  8 MiB configuration strings. Total internal allocation is 1,124,220,476 bytes;
+  the largest individual allocation is 217,600 bytes. No mesh/config payload copy
+  occurs; duplicate paint and configuration allocations retain identity. Canonical
+  history size accounting streams full UTF-16 lengths and nested escaping instead
+  of retaining large serialized source scopes. A public asset read copies exactly
+  one 8 MiB payload as a positive control. Repeated validation still allocates
+  temporary metadata; this measures ownership, not device residency, latency or
+  thermal behavior. The caller deliberately retains events for this probe; the
+  bus itself owns no retained event queue.
+  Full-record command input uses a separate budgeted chunk parser; the measured
+  command path starts with an immutable captured record. Parsing/typed decoding,
+  session staging and asset import are not included in that command measurement.
+
+- Native session bundle admission compares exact descriptor membership and
+  canonical content through borrowed typed/JSON values. With an 8 MiB mesh and
+  two 8 MiB metadata strings (known filename plus unknown metadata), admission
+  and local guard checks allocate 3,778 bytes total, largest 640 bytes. Thirty-two
+  prepared requests containing 120,000-unit IDs retain 7,705,984 bytes. Cancelling
+  all of them releases their payloads immediately, leaving 8,064 bytes for reply
+  settlement before draining; closing similarly releases all prepared payloads.
+  Asset record identity survives these operations and session disposal. The
+  public-read positive control makes three 8 MiB copies. These are Rust ownership
+  measurements, not platform residency/latency limits. Hosts own returned reply
+  and effect lifetimes; the core keeps no unbounded result/event queue.
+  The finished-command staging pool retains an 8 MiB full instance record while
+  ready or queued, without copying its metadata. Capture/admission and both
+  release paths allocate 19,306 bytes total, largest 2,216 bytes; the maximum
+  retained delta is 8,391,984 bytes and release leaves at most 2,376 bytes before
+  queued settlement. Weak ownership checks prove the full record is destroyed.
+  Explicit resource/command/encoded-unit caps cover both ready and queued work;
+  default zero disables admission. Encoded UTF-16 units are a charge for finished
+  input, not resident memory. Record parsing/construction and in-flight preparation
+  precede this measurement and require separately bounded host tasks.
+  The command upload adapters now provide those explicit parse budgets plus four
+  preparation permits per core instance, shared across sessions. Both parsing and
+  sealed input retain their permit until transfer to the finished pool or release.
+  This bounds owner count and logical input, not peak resident memory. Typed decoding
+  and measurement remain synchronous and require an owned preparation executor.
+  WASM upload handles are module-local; a separate seal call does not provide
+  worker isolation or interruptibility. The Kotlin actor now captures an immutable
+  source and original native guard before assigning a command upload to either of
+  two preparation workers. Up to four native preparation permits cover active and
+  queued uploads; the actor also bounds all unsettled work and delivery to 32 tasks.
+  Ordered writers reject byte/chunk overruns and retained writes after sealing.
+  Admission/execution consumes the upload once and releases its ready reference
+  after settlement. Scope cancellation immediately closes native inputs/captures;
+  a provider ignoring cancellation may continue privately until it returns. Browser
+  isolation and application integration remain open. Clipboard uploads now use the
+  same actor preparation/commit path with independently owned selected data. An upload
+  can retain its immutable source guard after session close, so application lifetime
+  changes must explicitly cancel the preparation task. Native boundary checks cover
+  metadata exceeding 1 MiB and 131,072 nodes; no device latency/residency claim follows.
+  The transitional browser controller now stages clone/add-instance/fill-bed with
+  four ready/queued resources, 4,096 aggregate commands and 16 Mi encoded units.
+  Per-record capture separately bounds nodes/depth; fill subtracts each captured
+  record from the remaining batch unit budget. Capture and placement planning
+  still run synchronously. These controls do not qualify large-input responsiveness
+  or replace the required browser preparation executor and Android app integration.
+
+- Native document staging parses bounded UTF-8 chunks without retaining the
+  complete input text. Resource budgets count all decoded values/text, including
+  overwritten JSON properties. A 1,640,745-byte synthetic document with a million
+  UTF-16 units and 100,001 foreign scalar values allocates 13,586,976 bytes during
+  parsing/admission/comparison, largest 4,194,304 bytes. An 8 MiB asset transfer
+  allocates its payload once; validated ownership moves into the immutable record
+  without a second mesh copy. Cancelling that active transfer immediately releases
+  8,388,608 bytes, and a public asset read adds one measured payload copy. These
+  counts exclude the caller's preexisting source/asset buffers and are not device
+  performance budgets. Whole-graph admission/hash and asset digest finalization
+  use separate owned preparation workers in the Kotlin actor; only parsing/transfer
+  calls are chunked. The actor permits two active preparation workers and at most
+  32 total unsettled operations, including queued preparation and undelivered effects.
+  Native owner/input budgets still apply independently. Cancelling a preparation
+  invalidates its native handles immediately, including late produced handles;
+  synchronous JNI may continue privately until its current call returns. This
+  supplies task ownership for canonical document bundles, not archive decoding,
+  process isolation, forced JNI termination or measured Android residency/latency.
+
+- The optional project WASM binding retains immutable project, selection, history
+  and asset captures without serializing them in acknowledgements. Host reads copy
+  at most 64 KiB of bytes or 16,384 UTF-16 units per call; returned arrays own their
+  memory and survive handle release/worker termination. wasm-bindgen copies input
+  before Rust validation, so production hosts must check frame/chunk limits first.
+  Explicit project/metadata export serializes once into a complete owned UTF-8
+  buffer under a caller-supplied output limit; chunked reads do not remove that
+  allocation or make serialization interruptible. This bulk export is for deliberate
+  export/replay, not per-edit tree/renderer projections. Production adoption still
+  requires isolated or cooperative serialization, complete UI projections and
+  revisioned dispatch. The bounded query captures below provide the read primitives.
+  Node-worker correctness/lifetime replay is not browser/device memory qualification.
+
+- The Rust ZIP reader indexes an immutable staged seekable source without loading
+  the complete archive or expanding every member together. Metadata is bounded by
+  the admitted entry/path limits. Each member uses at most 64 KiB input and output
+  chunks plus decoder history; the end-directory scan retains at most 65,557 bytes.
+  Expansion is checked against declared lengths before output, then CRC is checked
+  before returning a receipt. A failed read can already have written provisional
+  bytes; callers must discard staging instead of publishing a partial project.
+  Twenty verified read cycles for synthetic 1 MiB and 16 MiB members allocate
+  3,614,580 and 4,807,140 bytes in total, with largest allocations 65,536 and
+  65,557 bytes, zero allocations of 1 MiB or larger and zero retained bytes after
+  release. Fixture construction and preexisting archive storage are excluded.
+  These host allocation results do not qualify provider staging, parsed project
+  residency, Android latency or forced interruption of blocking I/O.
+  The same decoder now provides bounded pull reads and generated-output comparison.
+  A dropped or partially read stream proves no integrity; successful finish must
+  consume the tail and verify CRC, expanded length and the DEFLATE terminal boundary.
+  Cancellation/I/O failures poison the attempt, while the immutable archive may be
+  reopened explicitly. Exact compressed-input FNV hashing also uses bounded chunks.
+  Canonical-envelope staging feeds decompressed chunks directly into the bounded
+  JSON parser, including a BOM split across chunks; it retains no full decoded
+  text or uncompressed envelope buffer. Graph/asset budgets precede payload
+  allocation. Payload ownership moves into immutable records after CRC/length
+  and digest validation, and blob equality uses bounded comparison writes.
+  Unknown members are verified to a sink while the original archive remains
+  owned for later reconciliation. Twenty success and twenty late-CRC-failure
+  cycles over an 8 MiB asset, its blob alias and another unknown 8 MiB member
+  each allocate 186,853,760 bytes total, with exactly twenty payload allocations
+  and zero retained bytes. The largest allocation is 8,388,608 bytes. Synthetic
+  source construction is excluded; JSON/graph storage, provider staging and
+  Android residency still need separate measurements.
+  OPC reconciliation then streams only its bounded parts/tags, preserving other
+  archive members. Consuming uniquely owned extension metadata moves its large
+  descendants without copying; an externally retained project snapshot correctly
+  forces one metadata copy. The probe's twenty merge/revalidation/write cycles
+  over existing 8 MiB UTF-16 metadata and a shared 8 MiB asset allocate 8,922,400
+  bytes total, with a 65,536-byte largest allocation and no payload copies. The
+  retained-snapshot control allocates 176,707,400 bytes, including twenty required
+  8,388,608-byte metadata copies. Both retain zero measured bytes after release.
+  Input construction is excluded. OPC output uses an explicit 64 KiB buffer that
+  does not flush on drop after cancellation/failure; callers discard provisional
+  output. Tag parsing, metadata updates and graph hashing remain synchronous and
+  belong on an owned preparation task. Full BBS parsing remains open.
+  Canonical completion now compares regenerated metadata directly against pull
+  reads, then admits unknown members into the exact asset bundle. Asset count,
+  per-asset and aggregate byte caps precede new payload allocation. Original
+  declared leases retain their records; new buffers move into immutable storage.
+  Final graph admission and bundle hashing stay off authority. The completion
+  optimized probe covers five successful completions and five late admission
+  failures, each owning one declared and one newly adopted 8 MiB payload. Each
+  payload allocates exactly once per load; both phases retain zero allocations.
+  They allocate 91,804,945 and 91,747,240 bytes total, respectively. Five equal
+  and five early-mismatch comparisons of an 8 MiB member allocate 675,005 and
+  1,002,685 bytes, respectively; the largest allocation is 65,557 bytes, with
+  zero payload-sized copies or retained bytes. The deliberate 8 MiB copy control
+  is detected. Source construction is excluded. These checks do not qualify
+  Android/provider residency or interruption of synchronous graph/hash work.
+  ZIP authoring now streams to an empty private seekable output, borrowing source
+  paths and payloads. Its charged index and fixed 64 KiB compressor buffers do
+  not retain a complete archive/member. Classic headers are patched in place;
+  wide limits reserve ZIP64 fields before payload output. Producer flush does not
+  flush/finalize host storage, and Drop writes nothing. Hosts discard staging on
+  error and separately own provider transfer, deadlines and publication. Empty
+  DEFLATE stored blocks enforce the selected ratio cap without payload replay.
+  Metadata sorting belongs on the host task; cancellation cannot interrupt a
+  blocked provider call or the underlying synchronous sort.
+  Five file-backed writes of 24 MiB expanded data allocate 4,504,940 bytes total,
+  largest 85,196 bytes, with zero retained allocations and no payload-sized copy.
+  Each output is 16,787,249 bytes with the same hash. Source construction and
+  post-write verification are excluded; an intentional 8 MiB copy is detected.
+  This is host allocator evidence, not peak RSS or provider/device qualification.
+
+- Android project JNI exposes the same immutable captures through owned Kotlin
+  handles. It checks byte/text lengths before copying into Rust and bounds output
+  chunks to 64 KiB / 16,384 UTF-16 units. Four document owners and 4,096 total
+  handles bound retained owner count, not total device memory. Reply capacity is
+  reserved before commit; closing an in-flight owner retains its memory/admission
+  until work releases it. No borrowed native pointer escapes. Java arrays are
+  copies; retained captures share immutable native state. Explicit JSON/metadata
+  serialization still allocates a complete output buffer under its supplied
+  bound and needs a separate owned export task. Host JNI replay checks capture
+  lifetime and close cleanup; it does not qualify Android memory or UI latency.
+
+- Project query nodes share an admitted snapshot and use constant-depth private
+  addresses. Unsorted child lists allocate no index; plate/range lists check an
+  explicit entry budget before allocating/sorting index positions. Numeric pages
+  contain at most 64 rows; text reads copy at most 16,384 UTF-16 units. No query
+  walks or copies settings values, paint arrays or mesh bytes. The synthetic
+  query probe retains 1,897,256 declared triangles, 100,000 painted facets, an
+  8 MiB name and an 8 MiB config string. Two hundred capture/page/text cycles
+  allocate 6,817,600 bytes total, largest 32,768 bytes, with no payload-sized
+  allocation. An explicit config export allocates one 8 MiB payload as a positive
+  control. This is library ownership evidence; sorting latency, device residency,
+  host-array copies and production projection scheduling still need qualification.
 
 Measured on `~/Downloads/narwhal.3mf` — 1,897,256 facets, 629k of them painted,
 stored as 161 MB of mesh XML inside a 28 MB archive. Every number below is from
@@ -96,8 +350,21 @@ floors, not ceilings.
   assignments and one split. Decode plus five remaps allocate 4,038,946 bytes in
   total, with a largest allocation of 131,072 bytes. The positive control's
   explicitly requested dense roots allocate 75,890,240 bytes in one array.
-  These are allocation observations on the host, not actual mesh import or
-  Android latency/memory qualification. The complete native graph/session and
+  Native BBS assembly now consumes only indexed decoded roots. Missing/unpainted
+  facets never require a dense root array. The hex decoder charges explicit roots
+  against a shared aggregate budget and a per-root node/depth cap. Its writer
+  borrows either computation trees or canonical JSON refinement values, with a
+  depth-bounded traversal stack and 4 KiB output buffer. Cancellation checks cover
+  parsing, traversal and short/interrupted writes; the host discards partial output.
+  Sparse validation/collapse remains synchronous and belongs off live authority.
+  Twenty decode/normalize/write cycles allocate 27,360 bytes total, with a largest
+  allocation of 632 bytes, for both two million and two billion declared facets
+  with three explicit roots. Twenty borrowed writes with an existing 8 MiB paint
+  value allocate 480 bytes total, largest 24 bytes, for each tree representation.
+  All runs retain zero allocations; a deliberate persisted-value clone allocates
+  the expected 8 MiB and verifies the counter. Input construction is excluded.
+  These are host allocation observations, not actual mesh import or Android
+  latency/memory qualification. Full BBS import, paint commands and application
   gesture integration remain open.
 
 - **`fnv1a64` runs over hundreds of megabytes on import and save.** It is written
@@ -118,6 +385,25 @@ floors, not ceilings.
   returns `positions`/`indices` typed arrays and materializes
   `vertices`/`triangles` only on demand. The eager tuple form cost 911 ms and
   ~400 MB per call on a path shared by render, paint, bounds, and export.
+- Native mesh views instead retain the original immutable byte lease plus a small
+  validated layout. Validation, vertex/triangle reads, cloning and transformed
+  bounds allocate no decoded vertex/index arrays. Canonical instance bounds cache
+  these views per asset, compare complete captured metadata and visit the original
+  vertices through volume then instance transforms. No transformed mesh or box
+  approximation is allocated. Byte/count, selected-instance, unique-asset and total
+  transformed-vertex budgets are explicit; they are logical limits, not device RAM
+  qualification. Authoring separately checks supplied metadata's canonical byte
+  budget before allocating its output and hashes bytes while writing. Explicit
+  expansion is a budgeted public copy. Polling covers validation, coordinate/index
+  writing and bounds loops; full graph lookups/metadata comparison run off authority.
+  A synthetic two-million-vertex / two-million-triangle asset occupies **48,000,000
+  bytes**. Twenty validation/clone/bounds cycles allocate zero bytes. Twenty
+  canonical instance-bound queries with an existing 8 MiB metadata value allocate
+  **86,520 bytes total**, largest **1,160 bytes**, with no payload copy. Encoding
+  allocates exactly one 48 MB output per cycle; explicit expansion allocates one
+  72 MB output per cycle. All phases retain zero measured allocations afterward.
+  Construction is excluded, and these host results do not qualify Android memory,
+  renderer uploads, native mesh-file import or production editing latency.
 - **`ThreeProjectSurface.resolveGeometry` is cache-first.** It used to clone the
   asset bytes and re-hash 33 MB on *every* projection — that is every canonical
   change — before consulting its own geometry cache. It now `peek`s the
@@ -180,6 +466,34 @@ floors, not ceilings.
     decimal that still round-trips through `Math.fround`. Use it for mesh
     positions only: `formatNumber` stays for canonical doubles such as layer
     `top_z` and height-range bounds, where shortening would lose precision.
+    Native BBS numeric/XML primitives preserve that exact distinction. They use
+    fixed stack buffers and write borrowed mesh vertices through a 4 KiB output
+    buffer. Rust's generic shortest float32 text differs from the browser's first
+    round-tripping `toPrecision` candidate at some power-of-two boundaries; use
+    the shared BBS formatter, including JavaScript's decimal tie direction.
+    Canonical double values retain their full ECMAScript number representation.
+    The native core-model writer now uses these primitives over borrowed mesh
+    views, sparse paint and extension text. Preparation retains only bounded
+    entity/attribute/paint indexes; it never expands unpainted source facets or
+    decodes another vertex array. Output reuses one attribute scratch buffer and
+    writes through fixed buffers. Native model settings and optional layer/brim
+    sidecars now borrow configuration, emboss recipes and captured SVG drawings.
+    Recursive semicolon arrays and canonical JSON-valued settings stream through
+    stack buffers; no complete configuration or escaped XML string is retained.
+    Preparation budgets records, configuration nodes/depth, UTF-16 text and drawing
+    bytes; each member has its own output cap. Project settings likewise borrow
+    configuration, scripts and exact FullSpectrum groups, retaining only bounded
+    field/vector indexes and derived percentages. Reset scanning is cancellable
+    during line discovery and grammar matching; JSON string escaping uses a fixed
+    buffer, including nested JSON-valued settings. Complete package assembly now
+    combines these writers with a 64 KiB streamed envelope and ZIP sink. Asset
+    leases, configuration and paint remain borrowed; inventory paths and mappings
+    have separate record/text budgets. Generated/preserved collisions compare a
+    stream directly against immutable bytes, including the entire generated member
+    after the first mismatch. No complete metadata member is retained for comparison.
+    Envelope node/depth limits cover state separately from asset/path limits; input
+    admission and bounded index construction remain owned background work. File
+    provider publication, application bindings and native import remain open.
   - **A referenced Production Extension part must not be preserved once the
     generated core absorbs it.** BBS keeps its meshes in `3D/Objects/*.model`,
     so this is every Orca/Bambu archive, not an exotic case: the writer resolved
@@ -292,6 +606,23 @@ floors, not ceilings.
   repository's cached fingerprint for freshness. Public/untrusted byte boundaries
   still copy and validate; derived fingerprints never replace output SHA-256 or
   engine provenance.
+
+  Native export now captures immutable project and asset versions together before
+  background work. JSON serialization and asset transfer run on either of the
+  actor's two preparation workers; all unsettled tasks remain bounded to 32.
+  The JNI JSON writer stages at most 64 KiB and releases each callback local
+  reference; no full-document output buffer is constructed on this path. Caller
+  streams and metadata traversal have their own memory costs. Asset reads copy
+  bounded chunks from immutable leases, preserving declaration order after edits,
+  reset or source closure. Explicit JSON, asset-count and aggregate asset-byte
+  budgets precede handoff. Raw buffered export remains available for explicit
+  diagnostics; chunk reads from it still do not make serialization incremental.
+  Complete-bundle consumption and successful host handoff precede any checkpoint.
+  Cancellation refuses after the output callback starts; close invalidates native
+  handles without joining blocked I/O and an unknown handoff is never retried.
+  This supplies native task isolation and bounded output staging, not archive
+  assembly, storage-provider durability, forced I/O interruption or device RAM
+  and latency qualification.
 
 - **A slice is not cancelled for going quiet.** Slicing the narwhal at 0.12 mm
   failed with an idle timeout, because the engine legitimately says nothing for

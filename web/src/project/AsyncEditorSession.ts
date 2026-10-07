@@ -4,11 +4,12 @@ import type { ProjectCommand } from './history/command';
 import type { CommandHistorySnapshot } from './history/commandBus';
 import type { CancellationToken, ProjectExportGuard } from './ports';
 import type { EditorSession } from './session';
+import type { StagedWorkSlot } from './StagedProjectCommands';
 
 export const MAX_PENDING_SESSION_OPERATIONS = 32;
 export const MAX_SESSION_TRANSACTION_COMMANDS = 64;
 
-export type AsyncSessionErrorCode = 'disposed' | 'stale' | 'cancelled' | 'busy' | 'invalid-request';
+export type AsyncSessionErrorCode = 'disposed' | 'stale' | 'cancelled' | 'busy' | 'invalid-request' | 'resourceLimit';
 
 export class AsyncSessionError extends Error {
   constructor(readonly code: AsyncSessionErrorCode) {
@@ -19,6 +20,7 @@ export class AsyncSessionError extends Error {
         cancelled: 'The project operation was cancelled.',
         busy: 'Too many project operations are pending.',
         'invalid-request': 'The project operation request is invalid.',
+        resourceLimit: 'The staged project input exceeds its resource budget.',
       }[code],
     );
     this.name = 'AsyncSessionError';
@@ -143,6 +145,23 @@ export class AsyncEditorSession {
         for (const command of batch) this.session.execute(command);
       });
     }, options);
+  }
+
+  /** Only the endpoint's measured staging pool creates this owned slot. Its
+   * admission budget permits full local transactions above the small wire cap. */
+  executeStaged(slot: StagedWorkSlot, options: AsyncSessionRequestOptions): Promise<AsyncSessionAcknowledgement<void>> {
+    return this.mutate(() => {
+      const prepared = slot.take();
+      try {
+        if (prepared.label === undefined) this.session.execute(prepared.commands[0]!);
+        else
+          this.session.transaction(prepared.label, () => {
+            for (const command of prepared.commands) this.session.execute(command);
+          });
+      } finally {
+        slot.finish();
+      }
+    }, options).finally(() => slot.release());
   }
 
   undo(options: AsyncSessionRequestOptions = {}): Promise<AsyncSessionAcknowledgement<boolean>> {

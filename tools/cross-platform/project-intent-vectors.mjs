@@ -29,6 +29,80 @@ const commands = [
   { renamePlate: { plateId: id, name } },
   { reorderPlates: { plateIds: [id, units("import:fixture:second")] } },
   { setPlatePrintable: { plateId: id, printable: true } },
+  { renameObject: { objectId: id, name } },
+  { renameVolume: { volumeId: id, name } },
+  { renameInstance: { instanceId: id, name } },
+  { setInstancePrintable: { instanceId: id, printable: false } },
+  { deleteObject: { objectId: id } },
+  { deletePlateObjects: { plateId: id } },
+  { deleteInstance: { instanceId: id } },
+  { moveObjectToPlate: { objectId: id, destinationPlateId: id } },
+  {
+    duplicateObject: {
+      sourceObjectId: id,
+      ids: {
+        objectId: id,
+        volumeIds: [id],
+        instanceIds: [id],
+        layerRangeIds: [id],
+      },
+      destinationPlateId: { absent: {} },
+      name: { absent: {} },
+    },
+  },
+  {
+    duplicateObject: {
+      sourceObjectId: id,
+      ids: { objectId: id, volumeIds: [], instanceIds: [], layerRangeIds: [] },
+      destinationPlateId: { value: id },
+      name: { value: [] },
+    },
+  },
+  {
+    convertInstanceToObject: {
+      instanceId: id,
+      ids: {
+        objectId: id,
+        volumeIds: [id],
+        instanceId: id,
+        layerRangeIds: [id],
+      },
+      name: { absent: {} },
+    },
+  },
+  {
+    convertInstanceToObject: {
+      instanceId: id,
+      ids: { objectId: id, volumeIds: [], instanceId: id, layerRangeIds: [] },
+      name: { value: name },
+    },
+  },
+  {
+    setInstanceTransform: {
+      instanceId: id,
+      transform: {
+        translationMm: [-0.125, 1e100, 5e-324],
+        rotation: [0, 0, 0, 1],
+        scale: [-1, 2.5, 1],
+      },
+      gestureId: [],
+    },
+  },
+  {
+    setInstanceTransforms: {
+      changes: [
+        {
+          instanceId: id,
+          transform: {
+            translationMm: [0, 0, 0],
+            rotation: [0, 0, 0.5, 0.5],
+            scale: [1, 1, 1],
+          },
+        },
+      ],
+      gestureId: name,
+    },
+  },
 ];
 const cases = [];
 function valid(label, value, input = JSON.stringify(value), kind = "Intent") {
@@ -74,6 +148,61 @@ for (const command of commands) {
   );
 }
 const add = { version: 1, command: commands[0] };
+const transformIntent = { version: 1, command: commands.at(-2) };
+for (const field of ["translationMm", "rotation", "scale"]) {
+  for (const bad of [
+    [],
+    [1, 2],
+    [1, 2, 3, 4, 5],
+    null,
+    {},
+    [true, 0, 1],
+    ["0", 0, 1],
+  ]) {
+    const value = structuredClone(transformIntent);
+    value.command.setInstanceTransform.transform[field] = bad;
+    invalid(
+      `transform ${field} malformed ${JSON.stringify(bad)}`,
+      JSON.stringify(value),
+    );
+  }
+}
+for (const number of [
+  "-0",
+  "1.25",
+  "-1.25",
+  "1.7976931348623157e308",
+  "5e-324",
+  "1e-400",
+]) {
+  const value = structuredClone(transformIntent);
+  value.command.setInstanceTransform.transform.translationMm[0] =
+    Number(number) || 0;
+  valid(
+    `finite transform ${number}`,
+    value,
+    JSON.stringify(transformIntent).replace("-0.125", number),
+  );
+}
+for (const number of [
+  "NaN",
+  "Infinity",
+  "1e309",
+  "-1e309",
+  "1.",
+  ".5",
+  "01",
+  "null",
+])
+  invalid(
+    `invalid transform ${number}`,
+    JSON.stringify(transformIntent).replace("-0.125", number),
+  );
+const duplicateTransform = JSON.stringify(transformIntent).replace(
+  '"scale":',
+  '"scale":[1,1,1],"scale":',
+);
+invalid("duplicate transform field", duplicateTransform);
 const raw = JSON.stringify(add);
 for (const version of ["1.0", "1e0", "0.1e1", "1.00000000000000001"])
   valid(
@@ -278,6 +407,8 @@ const operations = [
   { query: {} },
   { cancel: { targetRequestId: 2 } },
   { close: {} },
+  { executeStaged: { stagedId: 1 } },
+  { releaseStaged: { stagedId: 9007199254740991 } },
 ];
 const results = [
   { acknowledged: { guard, history, changed: true } },
@@ -296,6 +427,8 @@ const results = [
   { closed: {} },
   { receiptUnavailable: true },
   { receiptUnavailable: false },
+  { released: true },
+  { released: false },
   ...[
     "invalidRequest",
     "unsupportedVersion",
@@ -377,6 +510,25 @@ for (const [kind, values] of [
       kind,
     );
   }
+}
+for (const operation of ["executeStaged", "releaseStaged"]) {
+  for (const stagedId of [0, -1, 0.5, 9007199254740992, "1", null, true]) {
+    invalid(
+      `SessionRequest:${operation}:id:${JSON.stringify(stagedId)}`,
+      JSON.stringify({
+        protocolVersion: 1,
+        generation,
+        requestId: 2,
+        operation: { [operation]: { stagedId } },
+      }),
+      "SessionRequest",
+    );
+  }
+  invalid(
+    `SessionRequest:${operation}:duplicate-id`,
+    `{"protocolVersion":1,"generation":[0,1,2,3],"requestId":2,"operation":{"${operation}":{"stagedId":1,"stagedId":2}}}`,
+    "SessionRequest",
+  );
 }
 for (const [field, values] of [
   [

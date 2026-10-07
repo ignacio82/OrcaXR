@@ -13,6 +13,46 @@ bounded status and do not produce an unhandled promise rejection. Canonical
 selection removal detaches the transform helper, without a second selection edit
 from a late plate acknowledgement.
 
+Object/part renames, printability and placement tools now await canonical session
+acknowledgements through their named actions. Numeric inputs consume failures;
+late replies do not touch disposed surfaces. DOM transform controls and XR drags
+own a bounded asynchronous gesture (one dispatched edit plus the latest pending
+pose), and release waits for its final acknowledgement. Canonical projections
+continue to own rendered geometry; the local transform helper follows input.
+Selection changes, replacement gestures, tool changes, UI capture and disposal
+cancel pending poses without rolling back committed ones. XR long-press detection
+also tracks requested motion so a delayed receipt cannot mistake a drag for a
+stationary hold. New measurement picks survive an older alignment reply.
+Numeric transforms and DOM/XR drags now invoke the tool action through explicit
+`dom-inspector`, `dom-scene` and `xr-scene` registry routes. Every dispatched pose
+rechecks availability and receives the actual command acknowledgement through
+the result-bearing invocation API. Ordinary buttons/menus retain the boolean
+API and use the same gate. Committing a pose does not reactivate the tool, and a
+missing action context refuses the edit. DOM lay-on-face invokes its scene route;
+its XR scene interaction remains undeclared. Projection records are reconstructed
+on each read: XR drag validity compares stable instance IDs and mounted scene
+nodes, never record-object membership. A production select/drag/release regression
+exercises that path and its undo; it does not qualify physical-device input.
+
+Selected deletion, plate clearing, cut and instance-to-object conversion now
+preserve promises through their existing registry actions. Success feedback waits
+for acknowledgement; failures propagate through the registry, including operations
+whose changes committed before a reply was lost. Late replies cannot touch disposed
+transform helpers or replace a newer selection. Cut updates clipboard availability
+when its synchronous copy completes, before waiting for deletion, and performs no
+late clipboard UI update. Independent object duplication and plate movement have
+async controller APIs; these do not add new UI flows. Clone/add-instance/fill-bed
+now preserve acknowledgement and failure through their existing DOM/XR registry
+surfaces too. Fill keeps one transaction, including batches above the small wire
+limit; reported counts and duplicate summaries belong to the captured operation.
+Late successful replies do not refresh disposed surfaces or replace newer selection.
+Clipboard paste now follows the same acknowledgement-aware route. Copy retains
+immutable object/asset captures; stale/failed paste does not restore bytes outside
+the command, and its late reply cannot replace a newer clipboard. The local
+controller supports paste after reset when the retained material references remain
+valid. Missing/conflicting assets or materials fail without partial publication.
+The remaining editing families still need their own migration.
+
 ## XRBlocks spatial UI contract (load-bearing)
 
 OrcaXR exact-pins **XRBlocks 0.17.0** and **`@pmndrs/uikit` 1.0.74** in

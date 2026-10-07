@@ -45,6 +45,9 @@ fn error_code(error: AssetError) -> &'static str {
         AssetError::ImmutableConflict => "immutableConflict",
         AssetError::DuplicateId => "duplicateId",
         AssetError::ForeignSnapshot => "foreignSnapshot",
+        AssetError::ForeignSelection => "foreignSelection",
+        AssetError::MissingAsset => "missingAsset",
+        AssetError::SelectionLimit => "selectionLimit",
     }
 }
 struct Observations {

@@ -69,6 +69,9 @@ export default defineConfig({
                 // The pair above already has exact SHA-256 revisions. A glob
                 // entry would register each WASM URL again with another hash.
                 '**/core/**',
+                // Project editing has its own optional WASM package. Preview
+                // startup must not download an unused editor implementation.
+                '**/core-project/**',
                 // Optional features use normal network-on-demand requests. Keeping
                 // them out of precache protects first launch on headset Wi-Fi.
                 '**/assets/SimulatorAddons-*.js',

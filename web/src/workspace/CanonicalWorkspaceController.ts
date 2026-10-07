@@ -1,21 +1,29 @@
-import { LocalProjectSessionTransport } from '../project/LocalProjectSessionTransport';
+import { AsyncTransformGesture, type TransformGestureHost } from './AsyncTransformGesture';
+import { LocalProjectSessionTransport, ProjectReceiptUnavailableError } from '../project/LocalProjectSessionTransport';
 import { PROJECT_INTENT_VERSION } from '../../../contracts/generated/project-intents';
 import { createIntentTextEncoder } from '../project/PreparedProjectCommands';
+import {
+  captureInstanceCommand,
+  captureClipboardPasteCommand,
+  singleStagedWork,
+  transactionStagedWork,
+} from '../project/StagedProjectCommands';
 import * as THREE from 'three';
 
 import { BbsProjectImportWorkerClient } from '../import/BbsProjectImportWorkerClient';
-import { InMemoryAssetRepository, type AssetPayload, type AssetRepositorySnapshot } from '../project/assets';
+import {
+  InMemoryAssetRepository,
+  type AssetPayload,
+  type AssetRepositorySnapshot,
+  type AssetRepositorySelection,
+} from '../project/assets';
 import {
   AsyncEditorSession,
+  AsyncSessionError,
   type AsyncSessionAcknowledgement,
   type AsyncSessionGuard,
 } from '../project/AsyncEditorSession';
-import {
-  AddObjectWithAssetCommand,
-  ReplaceProjectCommand,
-  SetInstanceTransformCommand,
-  SetPlateWipeTowerCommand,
-} from '../project/commands';
+import { AddObjectWithAssetCommand, ReplaceProjectCommand, SetPlateWipeTowerCommand } from '../project/commands';
 import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../project/domain/canonical';
 import type { CalibrationJobPlan } from '../project/calibration/types';
 import { settingScopeAllows } from '../project/domain/settingScopes';
@@ -162,24 +170,11 @@ import {
   type SimplifyConfiguration,
   type SimplifyOptions,
 } from '../project/objects/simplify';
-import {
-  ConvertInstanceToIndependentObjectCommand,
-  CreateInstanceCommand,
-  createInstancesAtTransforms,
-  DeleteInstanceCommand,
-  DeleteObjectCommand,
-  DeletePlateObjectsCommand,
-  DuplicateObjectCommand,
-  PasteObjectCommand,
-  RenameObjectCommand,
-  RenameVolumeCommand,
-  SetInstancePrintableCommand,
-  type IndependentSingleInstanceObjectIds,
-} from '../project/objects/commands';
+import { objectAssetIds } from '../project/objects/commands';
 import { computeCanonicalInstanceBounds, type CanonicalBounds3 } from '../project/objects/bounds';
 import { exportCanonicalInstancesAsBinaryStl, exportCanonicalVolumeAsBinaryStl } from '../project/objects/stlExport';
 import { writeDeterministicZip } from '../project/serialization/deterministicZip';
-import { SetInstanceTransformsCommand, type InstanceTransformChange } from '../project/objects/transformCommands';
+import { type InstanceTransformChange } from '../project/objects/transformCommands';
 import {
   centerInstancesOnPlate,
   layInstanceOnFace,
@@ -277,6 +272,16 @@ import {
 import { projectUsesWaveOverhangs } from '../settings/waveOverhangsProject';
 
 const STAGING_ASSET_ID = entityId<'asset'>('import:orcaxr:canonical-workspace-staging');
+
+// Explicit logical limits for the transitional browser host. These bound
+// retained command input, not heap residency or synchronous preparation latency.
+const INSTANCE_INPUT_LIMITS = Object.freeze({ maxUnits: 16 * 1024 * 1024, maxNodes: 1024 * 1024, maxDepth: 128 });
+const INSTANCE_STAGING_LIMITS = Object.freeze({
+  maxResources: 4,
+  maxCommands: 4096,
+  maxUnits: INSTANCE_INPUT_LIMITS.maxUnits,
+});
+const CLIPBOARD_ASSET_LIMITS = Object.freeze({ maxAssets: 4096, maxBytes: 512 * 1024 * 1024 });
 const MAX_UI_NAME_LENGTH = 160;
 const MAX_PLATE_NAME_LENGTH = 120;
 const MAX_FILENAME_LENGTH = 255;
@@ -453,6 +458,18 @@ export interface CanonicalSplitToObjectsResult {
   readonly instanceIds: readonly InstanceId[];
   readonly volumeIds: readonly VolumeId[];
   readonly assetIds: readonly AssetId[];
+}
+
+/** A multi-instance request retains each acknowledged undo entry on interruption. */
+export class CanonicalPartialPrintabilityError extends Error {
+  constructor(
+    readonly completedCount: number,
+    cause: unknown,
+  ) {
+    const reason = cause instanceof Error ? cause.message : 'The remaining edits could not complete.';
+    super(`Printability changed on ${completedCount} model(s) before interruption. ${reason}`, { cause });
+    this.name = 'CanonicalPartialPrintabilityError';
+  }
 }
 
 export class StaleCanonicalSplitToObjectsError extends Error {
@@ -844,7 +861,8 @@ export class CanonicalWorkspaceController {
   private lastPublishedSummary: CanonicalWorkspaceSummary;
   private notificationScheduled = false;
   private transformSequence = 0;
-  private clipboard?: { readonly object: ProjectObject; readonly assets: ReadonlyArray<AssetPayload> };
+  private transformSelectionLifetime = new AbortController();
+  private clipboard?: { readonly object: ProjectObject; readonly assets: AssetRepositorySelection };
   private disposed = false;
 
   static createEmpty(options: CanonicalWorkspaceControllerOptions): CanonicalWorkspaceController {
@@ -890,6 +908,7 @@ export class CanonicalWorkspaceController {
       sessionGeneration,
       reconciledInitialState.schemaVersion,
     );
+    this.sessionTransport.configureStaging(INSTANCE_STAGING_LIMITS);
     const parser = options.projectImportParser ?? new BbsProjectImportWorkerClient();
     this.importCoordinator = new ProjectImportCoordinator({
       parser: {
@@ -911,7 +930,12 @@ export class CanonicalWorkspaceController {
       this.lastPublishedSummary = this.buildSummary();
       this.sourceUnsubscribers.push(
         this.session.project.subscribe(() => this.scheduleChange('project')),
-        this.session.selection.subscribe(() => this.scheduleChange('selection')),
+        this.session.selection.subscribe(() => {
+          const previous = this.transformSelectionLifetime;
+          this.transformSelectionLifetime = new AbortController();
+          previous.abort(new AsyncSessionError('stale'));
+          this.scheduleChange('selection');
+        }),
         this.session.commands.subscribeHistory(() => this.scheduleChange('history')),
         this.session.subscribeProjectionHealth(() => this.scheduleChange('projection-health')),
       );
@@ -2492,19 +2516,41 @@ export class CanonicalWorkspaceController {
     this.setObjectsTreeSelection([{ kind: 'layer-range', id: layerRangeId }]);
   }
 
-  renameObject(objectId: ObjectId, name: string): void {
+  async renameObject(objectId: ObjectId, name: string): Promise<void> {
     this.assertActive();
+    const guard = this.asyncSession.captureGuard();
+    const text = createIntentTextEncoder();
     if (!findObject(this.session.project.getSnapshot().state, objectId)) throw new Error(`Unknown object ${objectId}`);
-    this.session.execute(
-      new RenameObjectCommand(objectId, requireBoundedText(name, 'Object name', MAX_UI_NAME_LENGTH)),
+    await this.sessionTransport.executeIntent(
+      {
+        version: PROJECT_INTENT_VERSION,
+        command: {
+          renameObject: {
+            objectId: text(objectId),
+            name: text(requireBoundedText(name, 'Object name', MAX_UI_NAME_LENGTH)),
+          },
+        },
+      },
+      { guard },
     );
   }
 
-  renameVolume(volumeId: VolumeId, name: string): void {
+  async renameVolume(volumeId: VolumeId, name: string): Promise<void> {
     this.assertActive();
+    const guard = this.asyncSession.captureGuard();
+    const text = createIntentTextEncoder();
     if (!findVolume(this.session.project.getSnapshot().state, volumeId)) throw new Error(`Unknown volume ${volumeId}`);
-    this.session.execute(
-      new RenameVolumeCommand(volumeId, requireBoundedText(name, 'Volume name', MAX_UI_NAME_LENGTH)),
+    await this.sessionTransport.executeIntent(
+      {
+        version: PROJECT_INTENT_VERSION,
+        command: {
+          renameVolume: {
+            volumeId: text(volumeId),
+            name: text(requireBoundedText(name, 'Volume name', MAX_UI_NAME_LENGTH)),
+          },
+        },
+      },
+      { guard },
     );
   }
 
@@ -2518,14 +2564,23 @@ export class CanonicalWorkspaceController {
    * placements, so deleting their final instance removes the owning object as
    * the same single history boundary.
    */
-  deleteInstance(instanceId: InstanceId): CanonicalInstanceDeletionSummary {
+  async deleteInstance(instanceId: InstanceId): Promise<CanonicalInstanceDeletionSummary> {
     this.assertActive();
+    const guard = this.asyncSession.captureGuard();
+    const text = createIntentTextEncoder();
     const found = findInstance(this.session.project.getSnapshot().state, instanceId);
     if (!found) throw new Error(`Unknown instance ${instanceId}`);
     const objectId = found.object.id;
     const scope = found.object.instances.length === 1 ? 'object' : 'instance';
-    this.session.execute(
-      scope === 'object' ? new DeleteObjectCommand(objectId) : new DeleteInstanceCommand(instanceId),
+    await this.sessionTransport.executeIntent(
+      {
+        version: PROJECT_INTENT_VERSION,
+        command:
+          scope === 'object'
+            ? { deleteObject: { objectId: text(objectId) } }
+            : { deleteInstance: { instanceId: text(instanceId) } },
+      },
+      { guard },
     );
     return Object.freeze({ scope, instanceId, objectId }) as CanonicalInstanceDeletionSummary;
   }
@@ -2538,18 +2593,37 @@ export class CanonicalWorkspaceController {
    * usual guarded command carry it. Each instance is its own history entry
    * because each is its own decision.
    */
-  setInstancePrintable(instanceIds: readonly InstanceId[], printable: boolean): number {
+  async setInstancePrintable(instanceIds: readonly InstanceId[], printable: boolean): Promise<number> {
     this.assertActive();
+    let guard = this.asyncSession.captureGuard();
     const state = this.session.project.getSnapshot().state;
-    let changed = 0;
-    for (const instanceId of [...new Set(instanceIds)]) {
+    // Validate and capture every target before the first queued edit. Keep the
+    // existing per-instance undo boundaries, chaining only our actual receipts.
+    const intents = [...new Set(instanceIds)].flatMap((instanceId) => {
       const found = findInstance(state, instanceId);
       if (!found) throw new Error(`Unknown instance ${instanceId}`);
-      // A no-op command would still land an undo entry that restores the
-      // project it started from.
-      if (found.instance.printable === printable) continue;
-      this.session.execute(new SetInstancePrintableCommand(instanceId, printable));
-      changed += 1;
+      if (found.instance.printable === printable) return [];
+      const text = createIntentTextEncoder();
+      return [
+        {
+          version: PROJECT_INTENT_VERSION,
+          command: {
+            setInstancePrintable: { instanceId: text(instanceId), printable },
+          },
+        },
+      ];
+    });
+    let changed = 0;
+    try {
+      for (const intent of intents) {
+        const receipt = await this.sessionTransport.executeIntent(intent, { guard });
+        guard = receipt.guard;
+        changed += 1;
+      }
+    } catch (error) {
+      if (error instanceof ProjectReceiptUnavailableError && error.changed) changed += 1;
+      if (changed > 0) throw new CanonicalPartialPrintabilityError(changed, error);
+      throw error;
     }
     return changed;
   }
@@ -2562,44 +2636,76 @@ export class CanonicalWorkspaceController {
   }
 
   /** Delete the primary selected instance; ambiguous/non-instance selection is a no-op. */
-  deleteSelectedInstance(): CanonicalInstanceDeletionSummary | undefined {
+  async deleteSelectedInstance(): Promise<CanonicalInstanceDeletionSummary | undefined> {
     this.assertActive();
     const primary = this.session.selection.getSnapshot().primary;
     return primary?.kind === 'instance' ? this.deleteInstance(primary.id) : undefined;
   }
 
   /** Delete every model on the active plate (or specified plate) in one atomic reversible command. */
-  deleteAllObjectsOnPlate(plateId?: PlateId): number {
+  async deleteAllObjectsOnPlate(plateId?: PlateId): Promise<number> {
     this.assertActive();
+    const guard = this.asyncSession.captureGuard();
     const state = this.session.project.getSnapshot().state;
     const targetPlateId = plateId ?? state.activePlateId;
     const plate = state.plates.find((p) => p.id === targetPlateId);
     if (!plate || plate.objects.length === 0) return 0;
     const count = plate.objects.length;
-    this.session.execute(new DeletePlateObjectsCommand(targetPlateId));
+    await this.sessionTransport.executeIntent(
+      {
+        version: PROJECT_INTENT_VERSION,
+        command: { deletePlateObjects: { plateId: createIntentTextEncoder()(targetPlateId) } },
+      },
+      { guard },
+    );
     return count;
   }
 
-  /** Duplicate only the primary selected placement, retaining its object and immutable assets. */
-  duplicateSelectedInstance(): CanonicalInstanceDuplicationSummary | undefined {
+  /** Move a complete object without changing its plate-local transforms or active plate. */
+  async moveObjectToPlate(objectId: ObjectId, destinationPlateId: PlateId): Promise<void> {
     this.assertActive();
+    const guard = this.asyncSession.captureGuard();
+    const text = createIntentTextEncoder();
+    await this.sessionTransport.executeIntent(
+      {
+        version: PROJECT_INTENT_VERSION,
+        command: { moveObjectToPlate: { objectId: text(objectId), destinationPlateId: text(destinationPlateId) } },
+      },
+      { guard },
+    );
+  }
+
+  /** Duplicate only the primary selected placement, retaining its object and immutable assets. */
+  async duplicateSelectedInstance(): Promise<CanonicalInstanceDuplicationSummary | undefined> {
+    this.assertActive();
+    const guard = this.asyncSession.captureGuard();
     const primary = this.session.selection.getSnapshot().primary;
     if (primary?.kind !== 'instance') return undefined;
     const found = findInstance(this.session.project.getSnapshot().state, primary.id);
     if (!found) throw new Error(`Unknown selected instance ${primary.id}`);
     const instanceId = this.options.idSource.next('instance');
-    this.session.execute(
-      new CreateInstanceCommand(found.object.id, {
-        id: instanceId,
-        ...(found.instance.name !== undefined ? { name: found.instance.name } : {}),
-        transform: cloneAndValidateTransform(found.instance.transform),
-        printable: found.instance.printable,
-        ...(found.instance.extensionData ? { extensionData: cloneJson(found.instance.extensionData) } : {}),
-      }),
+    const instance = {
+      id: instanceId,
+      ...(found.instance.name !== undefined ? { name: found.instance.name } : {}),
+      transform: cloneAndValidateTransform(found.instance.transform),
+      printable: found.instance.printable,
+      // captureInstanceCommand makes the bounded owned copy below.
+      ...(found.instance.extensionData ? { extensionData: found.instance.extensionData } : {}),
+    };
+    const result = Object.freeze({
+      sourceInstanceId: primary.id,
+      plateId: found.plate.id,
+      objectId: found.object.id,
+      instanceId,
+      name: instance.name ?? found.object.name,
+      printable: found.plate.printable && instance.printable,
+      transform: freezeTransform(instance.transform),
+    });
+    await this.sessionTransport.executeStaged(
+      singleStagedWork(captureInstanceCommand(found.object.id, instance, undefined, INSTANCE_INPUT_LIMITS)),
+      { guard },
     );
-    const duplicate = this.getInstance(instanceId);
-    if (!duplicate) throw new Error(`Duplicated instance ${instanceId} is missing`);
-    return Object.freeze({ ...duplicate, sourceInstanceId: primary.id });
+    return result;
   }
 
   /**
@@ -2607,8 +2713,10 @@ export class CanonicalWorkspaceController {
    * object/instance selection. Mesh assets remain shared and every editable
    * entity receives a fresh injected stable ID.
    */
-  duplicateSelectedObject(): CanonicalObjectDuplicationSummary | undefined {
+  async duplicateSelectedObject(): Promise<CanonicalObjectDuplicationSummary | undefined> {
     this.assertActive();
+    const guard = this.asyncSession.captureGuard();
+    const text = createIntentTextEncoder();
     const state = this.session.project.getSnapshot().state;
     const primary = this.session.selection.getSnapshot().primary;
     const selected =
@@ -2623,27 +2731,39 @@ export class CanonicalWorkspaceController {
     const volumeIds = sourceObject.volumes.map(() => this.options.idSource.next('volume'));
     const instanceIds = sourceObject.instances.map(() => this.options.idSource.next('instance'));
     const layerRangeIds = sourceObject.layerRanges.map(() => this.options.idSource.next('layer-range'));
-    this.session.execute(
-      new DuplicateObjectCommand(sourceObject.id, {
-        objectId,
-        volumeIds,
-        instanceIds,
-        layerRangeIds,
-      }),
-    );
-    const duplicated = findObject(this.session.project.getSnapshot().state, objectId);
-    if (!duplicated) throw new Error(`Duplicated object ${objectId} is missing`);
     const primaryInstanceId = instanceIds[0];
-    return Object.freeze({
+    // Capture the command's result before queueing. A held acknowledgement must
+    // never turn a later rename/move/deletion into this operation's result.
+    const result = Object.freeze({
       sourceObjectId: sourceObject.id,
-      plateId: duplicated.plate.id,
+      plateId: selected.plate.id,
       objectId,
-      name: duplicated.object.name,
+      name: `${sourceObject.name} copy`,
       volumeIds: Object.freeze([...volumeIds]),
       instanceIds: Object.freeze([...instanceIds]),
       layerRangeIds: Object.freeze([...layerRangeIds]),
       ...(primaryInstanceId ? { primaryInstanceId } : {}),
     });
+    await this.sessionTransport.executeIntent(
+      {
+        version: PROJECT_INTENT_VERSION,
+        command: {
+          duplicateObject: {
+            sourceObjectId: text(sourceObject.id),
+            ids: {
+              objectId: text(objectId),
+              volumeIds: volumeIds.map(text),
+              instanceIds: instanceIds.map(text),
+              layerRangeIds: layerRangeIds.map(text),
+            },
+            destinationPlateId: { absent: {} },
+            name: { absent: {} },
+          },
+        },
+      },
+      { guard },
+    );
+    return result;
   }
 
   /** Check if the clipboard contains a copied/cut canonical object. */
@@ -2664,24 +2784,18 @@ export class CanonicalWorkspaceController {
           : undefined;
     if (!selected) return undefined;
     const sourceObject = selected.object;
-    const assetIds = new Set<AssetId>();
-    for (const volume of sourceObject.volumes) {
-      assetIds.add(volume.source.assetId);
-    }
-    const assets: AssetPayload[] = [];
-    for (const assetId of assetIds) {
-      const payload = this.assets.get(assetId);
-      if (payload) assets.push(cloneJson(payload));
-    }
+    const assets = this.assets.captureSelection(objectAssetIds(sourceObject), CLIPBOARD_ASSET_LIMITS);
     this.clipboard = Object.freeze({
-      object: cloneJson(sourceObject),
-      assets: Object.freeze(assets),
+      // Retain this immutable subtree and its byte dependencies, never a whole
+      // project/asset rollback version or a mutable serialized byte copy.
+      object: sourceObject,
+      assets,
     });
     return { objectId: sourceObject.id, name: sourceObject.name };
   }
 
   /** Cut the selected model: copies it to clipboard and removes it in one undoable command. */
-  cutSelectedObject(): CanonicalInstanceDeletionSummary | undefined {
+  async cutSelectedObject(): Promise<CanonicalInstanceDeletionSummary | undefined> {
     this.assertActive();
     const copied = this.copySelectedObject();
     if (!copied) return undefined;
@@ -2690,35 +2804,38 @@ export class CanonicalWorkspaceController {
   }
 
   /** Paste the object currently in clipboard onto the active plate with fresh stable IDs. */
-  pasteClipboard(options: { destinationPlateId?: PlateId } = {}): { objectId: ObjectId; name: string } | undefined {
+  async pasteClipboard(
+    options: { destinationPlateId?: PlateId } = {},
+  ): Promise<{ objectId: ObjectId; name: string } | undefined> {
     this.assertActive();
+    const guard = this.asyncSession.captureGuard();
     if (!this.clipboard) return undefined;
     const { object: sourceObject, assets } = this.clipboard;
-    for (const asset of assets) {
-      if (!this.assets.has(asset.descriptor.id)) {
-        this.assets.put(asset.descriptor, asset.bytes);
-      }
-    }
     const objectId = this.options.idSource.next('object');
     const volumeIds = sourceObject.volumes.map(() => this.options.idSource.next('volume'));
     const instanceIds = sourceObject.instances.map(() => this.options.idSource.next('instance'));
     const layerRangeIds = sourceObject.layerRanges.map(() => this.options.idSource.next('layer-range'));
 
-    this.session.execute(
-      new PasteObjectCommand(
-        sourceObject,
-        {
-          objectId,
-          volumeIds,
-          instanceIds,
-          layerRangeIds,
-        },
-        options,
+    const result = Object.freeze({ objectId, name: `${sourceObject.name} copy` });
+    await this.sessionTransport.executeStaged(
+      singleStagedWork(
+        captureClipboardPasteCommand(
+          sourceObject,
+          {
+            objectId,
+            volumeIds,
+            instanceIds,
+            layerRangeIds,
+          },
+          options.destinationPlateId,
+          this.assets,
+          assets,
+          INSTANCE_INPUT_LIMITS,
+        ),
       ),
+      { guard },
     );
-    const pasted = findObject(this.session.project.getSnapshot().state, objectId);
-    if (!pasted) throw new Error(`Pasted object ${objectId} is missing`);
-    return { objectId, name: pasted.object.name };
+    return result;
   }
 
   /**
@@ -3239,8 +3356,14 @@ export class CanonicalWorkspaceController {
     }));
   }
 
-  setInstanceTransform(instanceId: InstanceId, transform: Transform, gestureId?: string): void {
+  async setInstanceTransform(
+    instanceId: InstanceId,
+    transform: Transform,
+    gestureId?: string,
+    options: { readonly guard?: AsyncSessionGuard; readonly signal?: AbortSignal } = {},
+  ): Promise<AsyncSessionAcknowledgement<void>> {
     this.assertActive();
+    const guard = options.guard ?? this.asyncSession.captureGuard();
     if (!findInstance(this.session.project.getSnapshot().state, instanceId)) {
       throw new Error(`Unknown instance ${instanceId}`);
     }
@@ -3248,14 +3371,75 @@ export class CanonicalWorkspaceController {
     const boundedGestureId = gestureId
       ? requireBoundedText(gestureId, 'Transform gesture ID', MAX_GESTURE_ID_LENGTH)
       : `single:${this.transformSequence}`;
-    this.session.execute(
-      new SetInstanceTransformCommand(instanceId, cloneAndValidateTransform(transform), boundedGestureId),
+    const text = createIntentTextEncoder();
+    return this.sessionTransport.executeIntent(
+      {
+        version: PROJECT_INTENT_VERSION,
+        command: {
+          setInstanceTransform: {
+            instanceId: text(instanceId),
+            transform: cloneAndValidateTransform(transform),
+            gestureId: text(boundedGestureId),
+          },
+        },
+      },
+      { ...options, guard },
     );
   }
 
-  /** Transform an exact stable-ID instance set as one coalescible history boundary. */
-  setInstanceTransforms(changes: readonly InstanceTransformChange[], gestureId?: string): void {
+  beginTransformGesture(
+    instanceIds: readonly InstanceId[],
+    gestureId: string,
+    dispatch?: TransformGestureHost['execute'],
+  ): AsyncTransformGesture {
     this.assertActive();
+    const guard = this.asyncSession.captureGuard();
+    const selectionLifetime = this.transformSelectionLifetime.signal;
+    const ids = new Set(instanceIds);
+    if (ids.size === 0 || ids.size !== instanceIds.length)
+      throw new Error('A gesture requires an exact nonempty instance set');
+    const state = this.session.project.getSnapshot().state;
+    for (const id of ids) if (!findInstance(state, id)) throw new Error(`Unknown instance ${id}`);
+    const name = requireBoundedText(gestureId, 'Transform gesture ID', MAX_GESTURE_ID_LENGTH);
+    return new AsyncTransformGesture({
+      guard,
+      invalidation: selectionLifetime,
+      selectionCurrent: () => !this.disposed && !selectionLifetime.aborted,
+      guardCurrent: (current) => this.isSessionGuardCurrent(current),
+      capture: (changes) => {
+        if (
+          changes.length !== ids.size ||
+          new Set(changes.map((c) => c.instanceId)).size !== ids.size ||
+          changes.some((c) => !ids.has(c.instanceId))
+        ) {
+          throw new Error('Transform gesture targets changed');
+        }
+        return Object.freeze(
+          changes.map((c) =>
+            Object.freeze({
+              instanceId: c.instanceId,
+              transform: freezeTransform(cloneAndValidateTransform(c.transform)),
+            }),
+          ),
+        );
+      },
+      execute:
+        dispatch ??
+        ((changes, current, signal) =>
+          changes.length === 1
+            ? this.setInstanceTransform(changes[0].instanceId, changes[0].transform, name, { guard: current, signal })
+            : this.setInstanceTransforms(changes, name, { guard: current, signal })),
+    });
+  }
+
+  /** Transform an exact stable-ID instance set as one coalescible history boundary. */
+  async setInstanceTransforms(
+    changes: readonly InstanceTransformChange[],
+    gestureId?: string,
+    options: { readonly guard?: AsyncSessionGuard; readonly signal?: AbortSignal } = {},
+  ): Promise<AsyncSessionAcknowledgement<void>> {
+    this.assertActive();
+    const guard = options.guard ?? this.asyncSession.captureGuard();
     if (changes.length === 0) throw new Error('A batch transform requires at least one instance');
     const state = this.session.project.getSnapshot().state;
     const prepared = changes.map((change) => {
@@ -3269,7 +3453,19 @@ export class CanonicalWorkspaceController {
     const boundedGestureId = gestureId
       ? requireBoundedText(gestureId, 'Transform gesture ID', MAX_GESTURE_ID_LENGTH)
       : `batch:${this.transformSequence}`;
-    this.session.execute(new SetInstanceTransformsCommand(prepared, boundedGestureId));
+    const text = createIntentTextEncoder();
+    return this.sessionTransport.executeIntent(
+      {
+        version: PROJECT_INTENT_VERSION,
+        command: {
+          setInstanceTransforms: {
+            changes: prepared.map((c) => ({ instanceId: text(c.instanceId), transform: c.transform })),
+            gestureId: text(boundedGestureId),
+          },
+        },
+      },
+      { ...options, guard },
+    );
   }
 
   /**
@@ -3277,7 +3473,7 @@ export class CanonicalWorkspaceController {
    * model-part minimum Z from canonical mesh bytes and translate every
    * instance independently to Z=0 in one reversible history boundary.
    */
-  dropInstancesToBed(instanceIds: readonly InstanceId[]): CanonicalDropToBedResult {
+  async dropInstancesToBed(instanceIds: readonly InstanceId[]): Promise<CanonicalDropToBedResult> {
     this.assertActive();
     if (instanceIds.length === 0) throw new Error('Drop to bed requires at least one instance');
     const state = this.session.project.getSnapshot().state;
@@ -3307,7 +3503,7 @@ export class CanonicalWorkspaceController {
         },
       });
     }
-    this.setInstanceTransforms(changes);
+    await this.setInstanceTransforms(changes);
     return Object.freeze({ instances: Object.freeze(results) });
   }
 
@@ -3316,12 +3512,12 @@ export class CanonicalWorkspaceController {
    * Placement comes from canonical bounds, so locked instances, exclusion
    * zones, and the printable area are honoured without reading the scene.
    */
-  arrangePlate(plateId: PlateId, constraints: ArrangeConstraints): ArrangeResult {
+  async arrangePlate(plateId: PlateId, constraints: ArrangeConstraints): Promise<ArrangeResult> {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
     const result = planPlateArrangement(state, this.assets, plateId, constraints);
     const changes = arrangementTransformChanges(result);
-    if (changes.length > 0) this.setInstanceTransforms(changes, `arrange:${plateId}`);
+    if (changes.length > 0) await this.setInstanceTransforms(changes, `arrange:${plateId}`);
     return result;
   }
 
@@ -3330,12 +3526,15 @@ export class CanonicalWorkspaceController {
    * undoable transaction. Existing instances never move, and the copy cap is
    * reported so the surface can explain a partial fill.
    */
-  fillPlateWithInstances(
+  async fillPlateWithInstances(
     instanceId: InstanceId,
     constraints: ArrangeConstraints,
     maxNewInstances?: number,
-  ): { created: number; withheld: number } {
+  ): Promise<{ created: number; withheld: number }> {
     this.assertActive();
+    const guard = this.asyncSession.captureGuard();
+    if (maxNewInstances !== undefined && maxNewInstances > INSTANCE_STAGING_LIMITS.maxCommands)
+      throw new AsyncSessionError('resourceLimit');
     const state = this.session.project.getSnapshot().state;
     const found = findInstance(state, instanceId);
     if (!found) throw new Error(`Unknown instance ${instanceId}`);
@@ -3349,15 +3548,30 @@ export class CanonicalWorkspaceController {
       constraints,
     );
     if (plan.placements.length === 0) return { created: 0, withheld: plan.withheldSlotCount };
-    createInstancesAtTransforms(
-      this.session.commands,
-      found.object.id,
-      plan.placements.map((placement) => ({
-        id: this.options.idSource.next('instance'),
-        transform: placement.transform,
-        printable: found.instance.printable,
-        ...(found.instance.name !== undefined ? { name: found.instance.name } : {}),
-      })),
+    let remainingUnits = INSTANCE_INPUT_LIMITS.maxUnits;
+    const commands = plan.placements.map((placement) => {
+      const command = captureInstanceCommand(
+        found.object.id,
+        {
+          id: this.options.idSource.next('instance'),
+          transform: placement.transform,
+          printable: found.instance.printable,
+          // Preserve createInstancesAtTransforms' omission of an empty name.
+          ...(found.instance.name ? { name: found.instance.name } : {}),
+        },
+        undefined,
+        { ...INSTANCE_INPUT_LIMITS, maxUnits: remainingUnits },
+      );
+      remainingUnits -= command.inputUnits;
+      return command;
+    });
+    await this.sessionTransport.executeStaged(
+      transactionStagedWork(
+        commands.length === 1 ? 'Duplicate instance' : `Fill ${commands.length} instances`,
+        commands,
+        INSTANCE_INPUT_LIMITS.maxUnits,
+      ),
+      { guard },
     );
     return { created: plan.placements.length, withheld: plan.withheldSlotCount };
   }
@@ -3783,14 +3997,17 @@ export class CanonicalWorkspaceController {
   }
 
   /** Mirror an exact instance selection across one axis in one command. */
-  mirrorInstances(instanceIds: readonly InstanceId[], axis: MirrorAxis): void {
+  async mirrorInstances(instanceIds: readonly InstanceId[], axis: MirrorAxis): Promise<void> {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
-    this.setInstanceTransforms(mirrorInstances(state, instanceIds, axis), `mirror:${axis}`);
+    await this.setInstanceTransforms(mirrorInstances(state, instanceIds, axis), `mirror:${axis}`);
   }
 
   /** Clear rotation, scale, or both for an exact instance selection. */
-  resetInstanceTransforms(instanceIds: readonly InstanceId[], target: 'rotation' | 'scale' | 'both'): void {
+  async resetInstanceTransforms(
+    instanceIds: readonly InstanceId[],
+    target: 'rotation' | 'scale' | 'both',
+  ): Promise<void> {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
     const changes =
@@ -3799,18 +4016,21 @@ export class CanonicalWorkspaceController {
         : target === 'scale'
           ? resetInstanceScales(state, instanceIds)
           : mergeChanges(resetInstanceRotations(state, instanceIds), resetInstanceScales(state, instanceIds));
-    this.setInstanceTransforms(changes, `reset:${target}`);
+    await this.setInstanceTransforms(changes, `reset:${target}`);
   }
 
   /** Centre an exact instance selection on the printable area. */
-  centerInstancesOnPlate(instanceIds: readonly InstanceId[], bedSizeMm: readonly [number, number]): void {
+  async centerInstancesOnPlate(
+    instanceIds: readonly InstanceId[],
+    bedSizeMm: readonly [number, number],
+  ): Promise<void> {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
-    this.setInstanceTransforms(centerInstancesOnPlate(state, this.assets, instanceIds, bedSizeMm), 'center');
+    await this.setInstanceTransforms(centerInstancesOnPlate(state, this.assets, instanceIds, bedSizeMm), 'center');
   }
 
   /** Scale the selection to fill the printable volume, then place it on the bed. */
-  scaleInstancesToFitPrintVolume(instanceIds: readonly InstanceId[], volume: PrintVolumeMm): number {
+  async scaleInstancesToFitPrintVolume(instanceIds: readonly InstanceId[], volume: PrintVolumeMm): Promise<number> {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
     const changes = scaleInstancesToFitPrintVolume(state, this.assets, instanceIds, volume);
@@ -3818,15 +4038,15 @@ export class CanonicalWorkspaceController {
     // an empty transaction would put an undo entry on the stack that restores
     // the project it started from.
     if (changes.length === 0) return 0;
-    this.setInstanceTransforms(changes, 'scale-to-fit');
+    await this.setInstanceTransforms(changes, 'scale-to-fit');
     return changes.length;
   }
 
   /** Rotate one instance so a chosen facet rests on the bed. */
-  layInstanceOnFace(instanceId: InstanceId, localNormal: Vec3): void {
+  async layInstanceOnFace(instanceId: InstanceId, localNormal: Vec3): Promise<void> {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
-    this.setInstanceTransforms(layInstanceOnFace(state, this.assets, { instanceId, localNormal }), 'lay-on-face');
+    await this.setInstanceTransforms(layInstanceOnFace(state, this.assets, { instanceId, localNormal }), 'lay-on-face');
   }
 
   undo(): boolean {
@@ -3916,21 +4136,40 @@ export class CanonicalWorkspaceController {
   }
 
   /** Promote an instance to its own independent object with isolated parts and parameters. */
-  convertInstanceToIndependentObject(instanceId: InstanceId, newName?: string): void {
+  async convertInstanceToIndependentObject(instanceId: InstanceId, newName?: string): Promise<void> {
     this.assertActive();
+    const guard = this.asyncSession.captureGuard();
+    const text = createIntentTextEncoder();
     const state = this.session.project.getSnapshot().state;
     const found = findInstance(state, instanceId);
     if (!found) throw new Error(`Unknown instance ${instanceId}`);
     if (found.object.instances.length <= 1) {
       throw new Error('Cannot convert sole instance to individual object');
     }
-    const ids: IndependentSingleInstanceObjectIds = {
+    const ids = {
       objectId: this.options.idSource.next('object'),
       volumeIds: found.object.volumes.map(() => this.options.idSource.next('volume')),
       instanceId: this.options.idSource.next('instance'),
       layerRangeIds: found.object.layerRanges.map(() => this.options.idSource.next('layer-range')),
     };
-    this.session.execute(new ConvertInstanceToIndependentObjectCommand(instanceId, ids, newName));
+    await this.sessionTransport.executeIntent(
+      {
+        version: PROJECT_INTENT_VERSION,
+        command: {
+          convertInstanceToObject: {
+            instanceId: text(instanceId),
+            ids: {
+              objectId: text(ids.objectId),
+              volumeIds: ids.volumeIds.map(text),
+              instanceId: text(ids.instanceId),
+              layerRangeIds: ids.layerRangeIds.map(text),
+            },
+            name: newName === undefined ? { absent: {} } : { value: text(newName) },
+          },
+        },
+      },
+      { guard },
+    );
   }
 
   /** Remap one or more source filaments to a destination filament across all scene objects, annotations, and wipes. */
@@ -4153,6 +4392,8 @@ export class CanonicalWorkspaceController {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.clipboard = undefined;
+    this.transformSelectionLifetime.abort(new AsyncSessionError('disposed'));
     for (const cancellation of this.importCancellations) cancellation.cancel('canonical workspace disposed');
     this.importCancellations.clear();
     for (const unsubscribe of this.sourceUnsubscribers.splice(0)) unsubscribe();

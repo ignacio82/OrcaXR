@@ -97,7 +97,7 @@ await test('creates one empty canonical owner and immediately projects it', () =
   assert.throws(() => controller.getSummary(), /disposed/);
 });
 
-await test('imports store-first meshes, reuses duplicate bytes, and coalesces exact transform history', () => {
+await test('imports store-first meshes, reuses duplicate bytes, and coalesces exact transform history', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(10, 20, 30);
   const first = controller.importBufferGeometry(geometry, { name: 'First cube', sourceFilename: 'cube.stl' });
@@ -135,8 +135,16 @@ await test('imports store-first meshes, reuses duplicate bytes, and coalesces ex
   assert.equal(getThreeProjectEntity(firstGroup)?.primary, true);
 
   const historyBeforeDrag = controller.getSummary().history.undoCount;
-  controller.setInstanceTransform(first.instanceId, { ...identityTransform(), translationMm: [10, 2, 3] }, 'drag-1');
-  controller.setInstanceTransform(first.instanceId, { ...identityTransform(), translationMm: [42, 4, 6] }, 'drag-1');
+  await controller.setInstanceTransform(
+    first.instanceId,
+    { ...identityTransform(), translationMm: [10, 2, 3] },
+    'drag-1',
+  );
+  await controller.setInstanceTransform(
+    first.instanceId,
+    { ...identityTransform(), translationMm: [42, 4, 6] },
+    'drag-1',
+  );
   assert.equal(controller.getSummary().history.undoCount, historyBeforeDrag + 1);
   assert.deepEqual(controller.getInstance(first.instanceId)?.transform.translationMm, [42, 4, 6]);
   assert.strictEqual(controller.surface.getInstanceGroup(first.instanceId), firstGroup);
@@ -153,7 +161,7 @@ await test('imports store-first meshes, reuses duplicate bytes, and coalesces ex
   controller.dispose();
 });
 
-await test('commits a stable multi-instance transform set atomically and coalesces one streamed gesture', () => {
+await test('commits a stable multi-instance transform set atomically and coalesces one streamed gesture', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(10, 10, 10);
   const first = controller.importBufferGeometry(geometry, { name: 'Batch first' });
@@ -171,7 +179,7 @@ await test('commits a stable multi-instance transform set atomically and coalesc
   const selectionBefore = controller.getObjectsTree().selection;
   const historyBefore = controller.getSummary().history.undoCount;
 
-  controller.setInstanceTransforms(
+  await controller.setInstanceTransforms(
     [
       {
         instanceId: first.instanceId,
@@ -184,7 +192,7 @@ await test('commits a stable multi-instance transform set atomically and coalesc
     ],
     'multi-drag-1',
   );
-  controller.setInstanceTransforms(
+  await controller.setInstanceTransforms(
     [
       {
         instanceId: second.instanceId,
@@ -216,7 +224,7 @@ await test('commits a stable multi-instance transform set atomically and coalesc
   controller.dispose();
 });
 
-await test('drops each stable instance independently to the bed in one reversible canonical command', () => {
+await test('drops each stable instance independently to the bed in one reversible canonical command', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(10, 10, 10);
   const first = controller.importBufferGeometry(geometry, {
@@ -229,7 +237,7 @@ await test('drops each stable instance independently to the bed in one reversibl
   });
   const historyBefore = controller.getSummary().history.undoCount;
 
-  const result = controller.dropInstancesToBed([first.instanceId, second.instanceId]);
+  const result = await controller.dropInstancesToBed([first.instanceId, second.instanceId]);
 
   assert.deepEqual(result.instances, [
     { instanceId: first.instanceId, minZBeforeMm: 15, deltaZMm: -15 },
@@ -246,7 +254,7 @@ await test('drops each stable instance independently to the bed in one reversibl
   assert.deepEqual(controller.getInstance(second.instanceId)?.transform.translationMm, [-2, 8, -12]);
   assert.equal(controller.redo(), true);
   assert.deepEqual(controller.getInstance(second.instanceId)?.transform.translationMm, [-2, 8, 5]);
-  assert.throws(() => controller.dropInstancesToBed([first.instanceId, first.instanceId]), /duplicate instance/i);
+  await assert.rejects(controller.dropInstancesToBed([first.instanceId, first.instanceId]), /duplicate instance/i);
 
   geometry.dispose();
   controller.dispose();
@@ -274,7 +282,7 @@ await test('exports selected stable instances as a non-mutating canonical binary
   controller.dispose();
 });
 
-await test('exposes the canonical Objects hierarchy and routes object/volume selection and rename', () => {
+await test('exposes the canonical Objects hierarchy and routes object/volume selection and rename', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(10, 12, 14);
   const imported = controller.importBufferGeometry(geometry, { name: 'Tree cube' });
@@ -330,8 +338,8 @@ await test('exposes the canonical Objects hierarchy and routes object/volume sel
   );
 
   const historyBeforeRename = controller.getSummary().history.undoCount;
-  controller.renameObject(imported.objectId, ' Renamed assembly ');
-  controller.renameVolume(imported.volumeId, 'Renamed part');
+  await controller.renameObject(imported.objectId, ' Renamed assembly ');
+  await controller.renameVolume(imported.volumeId, 'Renamed part');
   const renamed = controller.getObjectsTree();
   assert.equal(renamed.projection.rowsByKey.get(objectKey)?.label, 'Renamed assembly');
   assert.equal(renamed.projection.rowsByKey.get(volumeKey)?.label, 'Renamed part');
@@ -341,11 +349,11 @@ await test('exposes the canonical Objects hierarchy and routes object/volume sel
   assert.equal(controller.getSummary().history.undoCount, historyBeforeRename + 2);
 
   const beforeNoop = controller.getSummary();
-  controller.renameObject(imported.objectId, 'Renamed assembly');
-  controller.renameVolume(imported.volumeId, ' Renamed part ');
+  await controller.renameObject(imported.objectId, 'Renamed assembly');
+  await controller.renameVolume(imported.volumeId, ' Renamed part ');
   assert.deepEqual(controller.getSummary(), beforeNoop);
-  assert.throws(() => controller.renameObject(imported.objectId, '   '), /cannot be empty/);
-  assert.throws(() => controller.renameVolume(imported.volumeId, 'bad\nname'), /control characters/);
+  await assert.rejects(controller.renameObject(imported.objectId, '   '), /cannot be empty/);
+  await assert.rejects(controller.renameVolume(imported.volumeId, 'bad\nname'), /control characters/);
   assert.throws(
     () => controller.selectObject(entityId<'object'>('import:controller-test:missing-object')),
     /Unknown object/,
@@ -422,7 +430,7 @@ await test('selects every Objects-tree entity type and rejects stale or unowned 
   controller.dispose();
 });
 
-await test('duplicates and deletes selected instances or objects through one exact history boundary', () => {
+await test('duplicates and deletes selected instances or objects through one exact history boundary', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(8, 10, 12);
   const source = controller.importBufferGeometry(geometry, {
@@ -431,7 +439,7 @@ await test('duplicates and deletes selected instances or objects through one exa
   });
   const importedHistory = controller.getSummary().history.undoCount;
 
-  const instanceCopy = controller.duplicateSelectedInstance();
+  const instanceCopy = await controller.duplicateSelectedInstance();
   assert.ok(instanceCopy);
   assert.equal(instanceCopy.sourceInstanceId, source.instanceId);
   assert.equal(instanceCopy.objectId, source.objectId);
@@ -451,7 +459,7 @@ await test('duplicates and deletes selected instances or objects through one exa
   assert.equal(controller.getInstance(instanceCopy.instanceId)?.instanceId, instanceCopy.instanceId);
   assert.equal(controller.getSummary().primaryInstanceId, instanceCopy.instanceId);
 
-  const deleteCopy = controller.deleteSelectedInstance();
+  const deleteCopy = await controller.deleteSelectedInstance();
   assert.deepEqual(deleteCopy, {
     scope: 'instance',
     instanceId: instanceCopy.instanceId,
@@ -467,7 +475,7 @@ await test('duplicates and deletes selected instances or objects through one exa
   assert.equal(controller.getInstance(instanceCopy.instanceId), undefined);
   assert.equal(controller.getSummary().primaryInstanceId, source.instanceId);
 
-  const deleteLast = controller.deleteSelectedInstance();
+  const deleteLast = await controller.deleteSelectedInstance();
   assert.deepEqual(deleteLast, {
     scope: 'object',
     instanceId: source.instanceId,
@@ -480,7 +488,7 @@ await test('duplicates and deletes selected instances or objects through one exa
   assert.equal(controller.getInstance(source.instanceId)?.instanceId, source.instanceId);
   assert.equal(controller.getSummary().primaryInstanceId, source.instanceId);
 
-  const objectCopy = controller.duplicateSelectedObject();
+  const objectCopy = await controller.duplicateSelectedObject();
   assert.ok(objectCopy);
   assert.equal(objectCopy.sourceObjectId, source.objectId);
   assert.notEqual(objectCopy.objectId, source.objectId);
@@ -506,9 +514,9 @@ await test('duplicates and deletes selected instances or objects through one exa
   assert.deepEqual(controller.getSummary().selectedInstanceIds, []);
   assert.equal(controller.getSummary().primaryInstanceId, undefined);
   assert.equal(controller.getSummary().history.undoCount, historyBeforeClear);
-  assert.equal(controller.deleteSelectedInstance(), undefined);
-  assert.equal(controller.duplicateSelectedInstance(), undefined);
-  assert.equal(controller.duplicateSelectedObject(), undefined);
+  assert.equal(await controller.deleteSelectedInstance(), undefined);
+  assert.equal(await controller.duplicateSelectedInstance(), undefined);
+  assert.equal(await controller.duplicateSelectedObject(), undefined);
   assert.equal(controller.getSummary().history.undoCount, historyBeforeClear);
 
   geometry.dispose();
@@ -822,7 +830,7 @@ await test('publishes one immutable summary per command boundary and releases ob
   controller.selectInstance(imported.instanceId);
   await Promise.resolve();
   assert.equal(changes.length, 2, 'an already-selected instance is a notification no-op');
-  controller.setInstanceTransform(
+  await controller.setInstanceTransform(
     imported.instanceId,
     { ...identityTransform(), translationMm: [1, 2, 3] },
     'subscription-test',
@@ -1135,7 +1143,7 @@ await test('rejects stale guards, hash drift, collisions, and cross-object owner
   );
   assert.deepEqual(semanticFootprint(controller), beforeFailure);
 
-  controller.renameObject(fixture.ids.object, 'Renamed before stale edit');
+  await controller.renameObject(fixture.ids.object, 'Renamed before stale edit');
   const afterRename = semanticFootprint(controller);
   assert.throws(
     () =>
@@ -1516,7 +1524,7 @@ await test('adds magnet hole negative volume to selected object and supports und
   controller.dispose();
 });
 
-await test('deletes all objects on active plate and supports undo/redo', () => {
+await test('deletes all objects on active plate and supports undo/redo', async () => {
   const controller = createController();
   const geometry1 = new THREE.BoxGeometry(20, 20, 20);
   const geometry2 = new THREE.BoxGeometry(10, 10, 10);
@@ -1524,7 +1532,7 @@ await test('deletes all objects on active plate and supports undo/redo', () => {
   controller.importBufferGeometry(geometry2, { name: 'Object 2' });
   assert.equal(controller.getSummary().objectCount, 2);
 
-  const deletedCount = controller.deleteAllObjectsOnPlate();
+  const deletedCount = await controller.deleteAllObjectsOnPlate();
   assert.equal(deletedCount, 2);
   assert.equal(controller.getSummary().objectCount, 0);
 
@@ -1551,13 +1559,13 @@ await test('copies selected object and retains clipboard contents', () => {
   controller.dispose();
 });
 
-await test('cuts selected object to clipboard and supports undo/redo', () => {
+await test('cuts selected object to clipboard and supports undo/redo', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(20, 20, 20);
   controller.importBufferGeometry(geometry, { name: 'Cut Object' });
   assert.equal(controller.getSummary().objectCount, 1);
 
-  const cut = controller.cutSelectedObject();
+  const cut = await controller.cutSelectedObject();
   assert.ok(cut);
   assert.equal(controller.getSummary().objectCount, 0);
   assert.equal(controller.hasClipboard(), true);
@@ -1571,7 +1579,7 @@ await test('cuts selected object to clipboard and supports undo/redo', () => {
   controller.dispose();
 });
 
-await test('pastes copied object from clipboard with fresh IDs and supports undo/redo', () => {
+await test('pastes copied object from clipboard with fresh IDs and supports undo/redo', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(20, 20, 20);
   controller.importBufferGeometry(geometry, { name: 'Original Object' });
@@ -1580,7 +1588,7 @@ await test('pastes copied object from clipboard with fresh IDs and supports undo
   const copied = controller.copySelectedObject();
   assert.ok(copied);
 
-  const pasted = controller.pasteClipboard();
+  const pasted = await controller.pasteClipboard();
   assert.ok(pasted);
   assert.equal(controller.getSummary().objectCount, 2);
   assert.notEqual(pasted.objectId, copied.objectId);

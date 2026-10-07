@@ -18,6 +18,19 @@ export interface AssetRepositoryInternalSnapshot {
   readonly [internalSnapshotBrand]: true;
 }
 
+declare const assetSelectionBrand: unique symbol;
+/** Immutable, owner-bound subset. Descriptors are frozen; bytes stay private.
+ * This is a local capability, never a serialized upload or a rollback version. */
+export interface AssetRepositorySelection {
+  readonly [assetSelectionBrand]: true;
+  readonly descriptors: readonly SourceAssetDescriptor[];
+  readonly byteLength: number;
+}
+export interface AssetSelectionLimits {
+  readonly maxAssets: number;
+  readonly maxBytes: number;
+}
+
 export interface AssetRepository {
   has(id: AssetId): boolean;
   get(id: AssetId): AssetPayload | undefined;
@@ -49,6 +62,10 @@ export interface AssetRepository {
   findByDigest(digest: string): AssetPayload | undefined;
   captureInternal(): AssetRepositoryInternalSnapshot;
   restoreInternal(snapshot: AssetRepositoryInternalSnapshot): void;
+  captureSelection(ids: readonly AssetId[], limits: AssetSelectionLimits): AssetRepositorySelection;
+  inspectSelection(selection: AssetRepositorySelection): AssetRepositorySelection;
+  /** Validate ownership and all conflicts before inserting shared records. */
+  mergeSelection(selection: AssetRepositorySelection): void;
   /** Serialized bundle boundary: public callers receive copies and imports are validated. */
   capture(): AssetRepositorySnapshot;
   restore(snapshot: AssetRepositorySnapshot): void;
@@ -84,6 +101,7 @@ export class InMemoryAssetRepository implements AssetRepository {
   private version: RepositoryVersion = { entries: new Map() };
   private readonly snapshots = new WeakMap<AssetRepositoryInternalSnapshot, RepositoryVersion>();
   private readonly contentDigests = new WeakMap<AssetPayload, string>();
+  private readonly selections = new WeakMap<AssetRepositorySelection, readonly AssetPayload[]>();
 
   has(id: AssetId): boolean {
     return this.version.entries.has(id);
@@ -166,6 +184,52 @@ export class InMemoryAssetRepository implements AssetRepository {
     const version = this.snapshots.get(snapshot);
     if (!version) throw new Error('Invalid or foreign internal asset snapshot.');
     this.version = version;
+  }
+
+  captureSelection(ids: readonly AssetId[], limits: AssetSelectionLimits): AssetRepositorySelection {
+    if (![limits.maxAssets, limits.maxBytes].every((v) => Number.isSafeInteger(v) && v >= 0))
+      throw new Error('Invalid asset capture limits.');
+    if (ids.length > limits.maxAssets) throw new Error('Clipboard asset count exceeds its limit.');
+    const entries: AssetPayload[] = [];
+    const seen = new Set<AssetId>();
+    let byteLength = 0;
+    for (const id of ids) {
+      if (seen.has(id)) throw new Error('Duplicate asset in capture.');
+      seen.add(id);
+      const entry = this.version.entries.get(id);
+      if (!entry) throw new Error(`Missing clipboard asset ${id}`);
+      if (entry.bytes.byteLength > limits.maxBytes - byteLength)
+        throw new Error('Clipboard asset bytes exceed their limit.');
+      byteLength += entry.bytes.byteLength;
+      entries.push(entry);
+    }
+    const selection = Object.freeze({
+      descriptors: Object.freeze(entries.map((entry) => entry.descriptor)),
+      byteLength,
+    }) as AssetRepositorySelection;
+    this.selections.set(selection, entries);
+    return selection;
+  }
+
+  mergeSelection(selection: AssetRepositorySelection): void {
+    const captured = this.selections.get(selection);
+    if (!captured) throw new Error('Invalid or foreign asset capture.');
+    const missing: AssetPayload[] = [];
+    for (const entry of captured) {
+      const existing = this.version.entries.get(entry.descriptor.id);
+      if (!existing) missing.push(entry);
+      else if (existing !== entry && !samePayload(existing, entry))
+        throw new Error(`Immutable asset ${entry.descriptor.id} cannot be replaced`);
+    }
+    if (missing.length === 0) return;
+    const entries = new Map(this.version.entries);
+    for (const entry of missing) entries.set(entry.descriptor.id, entry);
+    this.version = { entries };
+  }
+
+  inspectSelection(selection: AssetRepositorySelection): AssetRepositorySelection {
+    if (!this.selections.has(selection)) throw new Error('Invalid or foreign asset capture.');
+    return selection;
   }
 
   capture(): AssetRepositorySnapshot {

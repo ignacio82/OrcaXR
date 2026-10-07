@@ -378,7 +378,7 @@ export const gizmoActions: Action[] = [
         ctx.reportCapabilityUnavailable('Align picked faces', 'Pick two faces in the Measure panel first.');
         return;
       }
-      ctx.applyAssemblyAlignment(request.kind, request.parameter);
+      return ctx.applyAssemblyAlignment(request.kind, request.parameter);
     },
   },
   tool(

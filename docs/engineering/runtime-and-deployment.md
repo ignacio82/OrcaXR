@@ -41,6 +41,10 @@ pair once, using explicit SHA-256 revisions and excluding `core/**` from glob
 discovery. This byte caching never instantiates WASM. Both deployments support
 the first preview offline without an earlier online preview. The core loader
 verifies the paired bytes and handshake even when a service worker supplies them.
+The experimental project executor has a separate `core-project/**` package;
+Workbox excludes it from glob discovery and the preview/static-shell inventory
+does not include it. Its presence in public assets must not increase preview
+startup or offline-install downloads before a project host is integrated.
 See [native-core packaging](native-core.md#production-browser-adapter-and-packaging).
 
 A camera Moonraker reports is almost never served by Moonraker.

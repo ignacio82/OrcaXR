@@ -135,6 +135,10 @@ function accumulateTransformedBounds(
     y = y + 2 * (iqw * uvY + uuvY) + ity;
     z = z + 2 * (iqw * uvZ + uuvZ) + itz;
 
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+      throw new Error('Canonical bounds contain a non-finite transformed vertex');
+    }
+
     if (x < minX) minX = x;
     if (y < minY) minY = y;
     if (z < minZ) minZ = z;

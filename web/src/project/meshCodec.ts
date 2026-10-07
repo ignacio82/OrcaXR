@@ -169,6 +169,7 @@ export function encodeIndexedMeshAsset(options: EncodeIndexedMeshOptions): Asset
   for (let index = 0; index < options.positions.length; index += 1) {
     const coordinate = Number(options.positions[index]);
     if (!Number.isFinite(coordinate)) throw new Error('Mesh positions must be finite');
+    if (!Number.isFinite(Math.fround(coordinate))) throw new Error('Mesh positions must fit finite float32');
     view.setFloat32(index * 4, coordinate, true);
   }
   for (let index = 0; index < indices.length; index += 1) {

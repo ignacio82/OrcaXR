@@ -5366,20 +5366,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             const inY = byId('ts-y') as HTMLInputElement;
             const inZ = byId('ts-z') as HTMLInputElement;
 
-            const onTransformChange = () => {
-              const x = parseFloat(inX.value) || 0;
-              const y = parseFloat(inY.value) || 0;
-              const z = parseFloat(inZ.value) || 0;
-              if (s.activeTool === 'move') {
-                workspace.setSelectedModelPosition(x, y, z);
-              } else if (s.activeTool === 'rotate') {
-                workspace.setSelectedModelRotation(
-                  THREE.MathUtils.degToRad(x),
-                  THREE.MathUtils.degToRad(y),
-                  THREE.MathUtils.degToRad(z),
-                );
-              } else if (s.activeTool === 'scale') {
-                workspace.setSelectedModelScale(x / 100, y / 100, z / 100);
+            const onTransformChange = async () => {
+              try {
+                const x = parseFloat(inX.value) || 0;
+                const y = parseFloat(inY.value) || 0;
+                const z = parseFloat(inZ.value) || 0;
+                if (s.activeTool === 'move') {
+                  await workspace.setSelectedModelPosition(x, y, z);
+                } else if (s.activeTool === 'rotate') {
+                  await workspace.setSelectedModelRotation(
+                    THREE.MathUtils.degToRad(x),
+                    THREE.MathUtils.degToRad(y),
+                    THREE.MathUtils.degToRad(z),
+                  );
+                } else if (s.activeTool === 'scale') {
+                  await workspace.setSelectedModelScale(x / 100, y / 100, z / 100);
+                }
+              } catch (error) {
+                if (inX.isConnected) workspace.setStatus(`Transform failed: ${(error as Error).message}`);
+              } finally {
+                if (inX.isConnected) updateToolSettings();
               }
             };
 

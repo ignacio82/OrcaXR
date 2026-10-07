@@ -103,4 +103,10 @@ test('unions an exact stable-ID set and rejects duplicate, missing, or mismatche
   );
 });
 
+test('rejects overflowed transformed vertices even when other vertices stay finite', () => {
+  const { fixture, state, assets } = harness();
+  state.plates[0].objects[0].volumes[0].transform.scale = [1e308, 1, 1];
+  assert.throws(() => computeCanonicalInstanceBounds(state, assets, [fixture.ids.instance]), /non-finite/);
+});
+
 console.log(`\nCanonical instance bounds: ${passed} tests passed.`);

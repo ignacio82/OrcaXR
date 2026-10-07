@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = new URL("../../", import.meta.url);
@@ -45,6 +47,7 @@ const known = new Set();
 for (const [name, shape] of Object.entries(definitions)) {
   assert.match(name, /^[A-Z][A-Za-z]+$/);
   if (
+    shape.kind === "number" ||
     shape.kind === "integer" ||
     shape.kind === "wholeNumber" ||
     shape.kind === "array"
@@ -56,11 +59,11 @@ for (const [name, shape] of Object.entries(definitions)) {
         : ["kind", "min", "max"],
     );
     assert.ok(
-      (shape.kind === "wholeNumber"
+      (shape.kind === "number" ? Number.isFinite(shape.min) : shape.kind === "wholeNumber"
         ? Number.isInteger(shape.min)
         : Number.isSafeInteger(shape.min)) &&
-        shape.min >= 0 &&
-        (shape.kind === "wholeNumber"
+        (shape.kind === "number" || shape.min >= 0) &&
+        (shape.kind === "number" ? Number.isFinite(shape.max) : shape.kind === "wholeNumber"
           ? Number.isInteger(shape.max)
           : Number.isSafeInteger(shape.max)) &&
         shape.max >= shape.min,
@@ -127,17 +130,17 @@ ts += `const limits = ${JSON.stringify({ maxBytes: schema.maxBytes, maxNodes: sc
 ts += `const shapes = ${JSON.stringify(definitions, null, 2)} as const satisfies Readonly<Record<string,IntentShape>>;\n`;
 let rust =
   header +
-  "use serde::Serialize;\nuse serde_json::Value;\nuse super::project_intents::{InvalidIntent, fields, integer, whole_number, list};\n";
+  "use serde::Serialize;\nuse serde_json::Value;\nuse super::project_intents::{InvalidIntent, fields, integer, whole_number, number, list};\n";
 let kt =
   header +
-  "package dev.orcaxr.core\n\nimport org.json.JSONObject\n\nobject ProjectIntents {\n";
+  "package dev.orcaxr.core\n\nobject ProjectIntents {\n";
 for (const [key, value] of Object.entries(constants)) {
   rust += `pub const ${key}: usize = ${value};\n`;
   kt += `    const val ${key} = ${value}\n`;
 }
 const ktType = (name, qualified = false) => {
   const s = definitions[name];
-  if (s.kind === "wholeNumber") return "Double";
+  if (s.kind === "wholeNumber" || s.kind === "number") return "Double";
   return s.kind === "integer"
     ? s.max <= 65535
       ? "Int"
@@ -154,13 +157,14 @@ const ktString = (value) => JSON.stringify(value).replaceAll("$", "\\$");
 for (const [name, shape] of Object.entries(definitions)) {
   const type = `Project${name}Wire`;
   if (
+    shape.kind === "number" ||
     shape.kind === "integer" ||
     shape.kind === "wholeNumber" ||
     shape.kind === "boolean" ||
     shape.kind === "array"
   ) {
-    ts += `export type ${type} = ${shape.kind === "integer" || shape.kind === "wholeNumber" ? "number" : shape.kind === "boolean" ? "boolean" : `readonly Project${shape.items}Wire[]`};\n`;
-    rust += `pub type ${name} = ${shape.kind === "wholeNumber" ? "f64" : shape.kind === "integer" ? (shape.max <= 65535 ? "u16" : "u64") : shape.kind === "boolean" ? "bool" : `Vec<${shape.items}>`};\n`;
+    ts += `export type ${type} = ${["integer", "wholeNumber", "number"].includes(shape.kind) ? "number" : shape.kind === "boolean" ? "boolean" : `readonly Project${shape.items}Wire[]`};\n`;
+    rust += `pub type ${name} = ${["wholeNumber", "number"].includes(shape.kind) ? "f64" : shape.kind === "integer" ? (shape.max <= 65535 ? "u16" : "u64") : shape.kind === "boolean" ? "bool" : `Vec<${shape.items}>`};\n`;
   } else if (shape.kind === "object") {
     ts += `export interface ${type} {${Object.entries(shape.fields)
       .map(([key, type]) => `readonly ${key}: Project${type}Wire;`)
@@ -198,7 +202,10 @@ for (const [name, shape] of Object.entries(definitions)) {
   }
   rust += `fn read_${snake(name)}(v:&Value)->Result<${name},InvalidIntent> {\n`;
   kt += `    private fun read${name}(v: Any): ${ktType(name)} {\n`;
-  if (shape.kind === "wholeNumber") {
+  if (shape.kind === "number") {
+    rust += `number(v,${floating(shape.min)},${floating(shape.max)})\n`;
+    kt += `        return ProjectIntentJson.number(v, ${floating(shape.min)}, ${floating(shape.max)})\n`;
+  } else if (shape.kind === "wholeNumber") {
     rust += `whole_number(v,${floating(shape.min)},${floating(shape.max)})\n`;
     kt += `        return ProjectIntentJson.wholeNumber(v, ${floating(shape.min)}, ${floating(shape.max)})\n`;
   } else if (shape.kind === "integer") {
@@ -230,7 +237,9 @@ for (const [name, shape] of Object.entries(definitions)) {
   rust += "}\n";
   kt += "    }\n";
   kt += `    private fun write${name}(w: ProjectIntentWriter, v: ${ktType(name)}) {\n`;
-  if (shape.kind === "wholeNumber")
+  if (shape.kind === "number")
+    kt += `        w.number(v, ${floating(shape.min)}, ${floating(shape.max)})\n`;
+  else if (shape.kind === "wholeNumber")
     kt += `        w.wholeNumber(v, ${floating(shape.min)}, ${floating(shape.max)})\n`;
   else if (shape.kind === "integer")
     kt += `        w.integer(v.toLong(), ${shape.min}L, ${shape.max}L)\n`;
@@ -277,16 +286,25 @@ for (const name of Object.keys(definitions)) {
       `Unreachable ${name}`,
     );
 }
-const formatted = spawnSync("rustfmt", ["+1.94.1", "--edition", "2024"], {
-  input: rust,
-  encoding: "utf8",
-});
-assert.equal(formatted.status, 0, formatted.stderr);
+// File input avoids bounded subprocess-pipe capacity for a growing schema.
+const formatDirectory = mkdtempSync(join(tmpdir(), "orcaxr-project-intents-"));
+let formattedRust;
+try {
+  const path = join(formatDirectory, "bindings.rs");
+  writeFileSync(path, rust);
+  const formatted = spawnSync("rustfmt", ["+1.94.1", "--edition", "2024", path], {
+    stdio: "inherit", timeout: 30000,
+  });
+  assert.equal(formatted.status, 0, formatted.error?.message);
+  formattedRust = readFileSync(path, "utf8");
+} finally {
+  rmSync(formatDirectory, { recursive: true, force: true });
+}
 for (const [path, content] of [
   ["contracts/generated/project-intents.ts", ts],
   [
     "core/crates/orcaxr-contracts/src/project_intent_types.rs",
-    formatted.stdout,
+    formattedRust,
   ],
   ["android/core-bridge/src/main/java/dev/orcaxr/core/ProjectIntents.kt", kt],
 ]) {

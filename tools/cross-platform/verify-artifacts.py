@@ -75,15 +75,20 @@ def verify_apk(path, ndk):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wasm", action="store_true")
+    parser.add_argument("--project-wasm", action="store_true")
     parser.add_argument("--apk", type=Path)
     parser.add_argument("--ndk", type=Path)
     args = parser.parse_args()
-    assert args.wasm or args.apk, "Choose --wasm and/or --apk"
-    if args.wasm:
-        directory = ROOT / "core/dist/wasm"
-        value = verify_manifest(directory / "core-wasm-manifest.json", directory, "browser-wasm")
+    assert args.wasm or args.project_wasm or args.apk, "Choose --wasm, --project-wasm and/or --apk"
+    for selected, project in [(args.wasm, False), (args.project_wasm, True)]:
+        if not selected:
+            continue
+        directory = ROOT / ("core/dist/project-wasm" if project else "core/dist/wasm")
+        value = verify_manifest(directory / "core-wasm-manifest.json", directory, "browser-project-wasm" if project else "browser-wasm")
+        assert value["features"] == (["project"] if project else ["gcode"])
+        assert value["defaultFeatures"] == (not project)
         assert set(value["outputs"]) == {"orcaxr_core.js", "orcaxr_core.d.ts", "orcaxr_core_bg.wasm", "orcaxr_core_bg.wasm.d.ts"}
-        print("Verified shared-core WASM/glue/source identity")
+        print(f"Verified {'project' if project else 'computation'} WASM/glue/source identity")
     if args.apk:
         sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
         ndk = args.ndk or (Path(sdk) / "ndk/29.0.14206865" if sdk else None)

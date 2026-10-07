@@ -1,0 +1,5060 @@
+{
+  "schemaVersion": 1,
+  "sources": {
+    "tools/cross-platform/project-document-vectors.mjs": "ea0cc20ff815faf682cd2efd45482d8804a935a448ea23f7ddb3fc10b9cf3e16",
+    "web/src/project/session.ts": "c749fe8da3bbb84e9fb0457029d8d6764460fc7364e48154ab57045cf19dae62",
+    "web/src/project/assets.ts": "e8e10fac5d3821abbd3fd69e2949f3551d6a0db4c52ee43d678663aeabd2bba7",
+    "web/src/project/history/commandBus.ts": "1ceb7e35e92ab0cdc18db529c3ad3f487edac2b3a25f42545abad925a541e86c",
+    "testdata/cross-platform/project-clipboard-vectors.json": "3f2b7d1d579e3bbd83c870ecb6cf34306416574349b85e5b99f21eefaf203922",
+    "testdata/cross-platform/project-model-vectors.json": "7c8510f7a0b3009f17baa7c74ffb1c11ca83d5ed279a8b6c9a369ff775027f51"
+  },
+  "documents": [
+    {
+      "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"foreign\":{\"10\":10,\"2\":2,\"__proto__\":{\"kept\":\"\\udfff\"}},\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"extensionData\":{\"owned\":\"instance\"},\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Clipboard\\\\\\\"\\u0000\\ud800😀\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"embossSvg\":{\"depthMm\":1,\"drawingAssetId\":\"import:asset:svg\",\"pathIn3mf\":\"Metadata/svg/source.svg\",\"useSurface\":false,\"widthMm\":10},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"embossSvg\":{\"depthMm\":1,\"drawingAssetId\":\"import:asset:svg\",\"pathIn3mf\":\"Metadata/svg/source.svg\",\"useSurface\":false,\"widthMm\":10},\"id\":\"import:volume:second\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"foreign\":{\"\\ud800\":\"\\u0000😀\"},\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"},{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:svg\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"},{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:unused\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+      "assets": [
+        {
+          "descriptorJson": "{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"foreign\":{\"\\ud800\":\"\\u0000😀\"},\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}",
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            32,
+            65,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            32,
+            65,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "descriptorJson": "{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:svg\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"}",
+          "bytes": [
+            60,
+            115,
+            118,
+            103,
+            32,
+            105,
+            100,
+            61,
+            34,
+            99,
+            108,
+            105,
+            112,
+            98,
+            111,
+            97,
+            114,
+            100,
+            34,
+            47,
+            62
+          ]
+        },
+        {
+          "descriptorJson": "{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:unused\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"}",
+          "bytes": [
+            60,
+            115,
+            118,
+            103,
+            32,
+            105,
+            100,
+            61,
+            34,
+            99,
+            108,
+            105,
+            112,
+            98,
+            111,
+            97,
+            114,
+            100,
+            34,
+            47,
+            62
+          ]
+        }
+      ],
+      "foreign": false
+    },
+    {
+      "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"import:project:replacement\",\"name\":\"Replacement 😀\\ud800\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"foreign\":{\"10\":10,\"2\":2,\"__proto__\":{\"kept\":\"\\udfff\"}},\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"extensionData\":{\"owned\":\"instance\"},\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Clipboard\\\\\\\"\\u0000\\ud800😀\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"embossSvg\":{\"depthMm\":1,\"drawingAssetId\":\"import:asset:svg\",\"pathIn3mf\":\"Metadata/svg/source.svg\",\"useSurface\":false,\"widthMm\":10},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"embossSvg\":{\"depthMm\":1,\"drawingAssetId\":\"import:asset:svg\",\"pathIn3mf\":\"Metadata/svg/source.svg\",\"useSurface\":false,\"widthMm\":10},\"id\":\"import:volume:second\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"foreign\":{\"\\ud800\":\"\\u0000😀\"},\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"},{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:svg\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"},{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:unused\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+      "assets": [
+        {
+          "descriptorJson": "{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"foreign\":{\"\\ud800\":\"\\u0000😀\"},\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}",
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            32,
+            65,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            32,
+            65,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "descriptorJson": "{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:svg\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"}",
+          "bytes": [
+            60,
+            115,
+            118,
+            103,
+            32,
+            105,
+            100,
+            61,
+            34,
+            99,
+            108,
+            105,
+            112,
+            98,
+            111,
+            97,
+            114,
+            100,
+            34,
+            47,
+            62
+          ]
+        },
+        {
+          "descriptorJson": "{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:unused\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"}",
+          "bytes": [
+            60,
+            115,
+            118,
+            103,
+            32,
+            105,
+            100,
+            61,
+            34,
+            99,
+            108,
+            105,
+            112,
+            98,
+            111,
+            97,
+            114,
+            100,
+            34,
+            47,
+            62
+          ]
+        }
+      ],
+      "foreign": false
+    },
+    {
+      "stateJson": "{\"activePlateId\":\"51e07b01-e6f9-4afc-a8b5-1af96d470c43\",\"config\":{},\"createdAt\":\"2026-10-05T01:02:03Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[],\"physical\":[]},\"id\":\"0e760ef5-84a5-4902-b331-d150f9fbac83\",\"name\":\"Untitled project\",\"plates\":[{\"config\":{},\"id\":\"51e07b01-e6f9-4afc-a8b5-1af96d470c43\",\"name\":\"Plate 1\",\"objects\":[],\"order\":0,\"printable\":true}],\"printer\":{\"toolCount\":1},\"schemaVersion\":1,\"sourceAssets\":[],\"thumbnails\":[],\"updatedAt\":\"2026-10-05T01:02:03Z\"}",
+      "assets": []
+    }
+  ],
+  "contents": [
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"foreign\":{\"10\":10,\"2\":2,\"__proto__\":{\"kept\":\"\\udfff\"}},\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"extensionData\":{\"owned\":\"instance\"},\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Clipboard\\\\\\\"\\u0000\\ud800😀\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"embossSvg\":{\"depthMm\":1,\"drawingAssetId\":\"import:asset:svg\",\"pathIn3mf\":\"Metadata/svg/source.svg\",\"useSurface\":false,\"widthMm\":10},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"embossSvg\":{\"depthMm\":1,\"drawingAssetId\":\"import:asset:svg\",\"pathIn3mf\":\"Metadata/svg/source.svg\",\"useSurface\":false,\"widthMm\":10},\"id\":\"import:volume:second\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"foreign\":{\"\\ud800\":\"\\u0000😀\"},\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"},{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:svg\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"},{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:unused\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"import:project:replacement\",\"name\":\"Replacement 😀\\ud800\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"foreign\":{\"10\":10,\"2\":2,\"__proto__\":{\"kept\":\"\\udfff\"}},\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"extensionData\":{\"owned\":\"instance\"},\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Clipboard\\\\\\\"\\u0000\\ud800😀\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"embossSvg\":{\"depthMm\":1,\"drawingAssetId\":\"import:asset:svg\",\"pathIn3mf\":\"Metadata/svg/source.svg\",\"useSurface\":false,\"widthMm\":10},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"embossSvg\":{\"depthMm\":1,\"drawingAssetId\":\"import:asset:svg\",\"pathIn3mf\":\"Metadata/svg/source.svg\",\"useSurface\":false,\"widthMm\":10},\"id\":\"import:volume:second\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"foreign\":{\"\\ud800\":\"\\u0000😀\"},\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"},{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:svg\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"},{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:unused\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Changed plate\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"foreign\":{\"10\":10,\"2\":2,\"__proto__\":{\"kept\":\"\\udfff\"}},\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"extensionData\":{\"owned\":\"instance\"},\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Clipboard\\\\\\\"\\u0000\\ud800😀\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"embossSvg\":{\"depthMm\":1,\"drawingAssetId\":\"import:asset:svg\",\"pathIn3mf\":\"Metadata/svg/source.svg\",\"useSurface\":false,\"widthMm\":10},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"embossSvg\":{\"depthMm\":1,\"drawingAssetId\":\"import:asset:svg\",\"pathIn3mf\":\"Metadata/svg/source.svg\",\"useSurface\":false,\"widthMm\":10},\"id\":\"import:volume:second\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"foreign\":{\"\\ud800\":\"\\u0000😀\"},\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"},{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:svg\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"},{\"byteLength\":21,\"digest\":\"fnv1a64:d586c5b336a3741a\",\"id\":\"import:asset:unused\",\"kind\":\"extension\",\"mediaType\":\"image/svg+xml\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"51e07b01-e6f9-4afc-a8b5-1af96d470c43\",\"config\":{},\"createdAt\":\"2026-10-05T01:02:03Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[],\"physical\":[]},\"id\":\"0e760ef5-84a5-4902-b331-d150f9fbac83\",\"name\":\"Untitled project\",\"plates\":[{\"config\":{},\"id\":\"51e07b01-e6f9-4afc-a8b5-1af96d470c43\",\"name\":\"Plate 1\",\"objects\":[],\"order\":0,\"printable\":true}],\"printer\":{\"toolCount\":1},\"schemaVersion\":1,\"sourceAssets\":[],\"thumbnails\":[],\"updatedAt\":\"2026-10-05T01:02:03Z\"}"
+  ],
+  "traces": [
+    {
+      "name": "clean-open",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 1
+          },
+          "outcome": "opened",
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:a20d70fc066d76e6",
+                "content": 1
+              },
+              "reason": [
+                111,
+                112,
+                101,
+                110,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:a20d70fc066d76e6",
+            "content": 1
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "dirty-open",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "edit",
+            "intent": {
+              "version": 1,
+              "command": {
+                "renamePlate": {
+                  "plateId": [
+                    48,
+                    55,
+                    56,
+                    98,
+                    102,
+                    100,
+                    55,
+                    53,
+                    45,
+                    57,
+                    97,
+                    97,
+                    57,
+                    45,
+                    52,
+                    49,
+                    48,
+                    102,
+                    45,
+                    56,
+                    49,
+                    54,
+                    101,
+                    45,
+                    54,
+                    57,
+                    48,
+                    53,
+                    57,
+                    51,
+                    101,
+                    52,
+                    97,
+                    57,
+                    49,
+                    102
+                  ],
+                  "name": [
+                    67,
+                    104,
+                    97,
+                    110,
+                    103,
+                    101,
+                    100,
+                    32,
+                    112,
+                    108,
+                    97,
+                    116,
+                    101
+                  ]
+                }
+              }
+            }
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:054d04718dcb2f1d",
+                "content": 2
+              },
+              "reason": [
+                114,
+                101,
+                110,
+                97,
+                109,
+                101,
+                45,
+                112,
+                108,
+                97,
+                116,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": []
+        },
+        {
+          "action": {
+            "kind": "select"
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [],
+                "primary": null
+              },
+              "current": {
+                "refs": [
+                  {
+                    "kind": "project"
+                  }
+                ],
+                "primary": {
+                  "kind": "project"
+                }
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [
+              {
+                "kind": "project"
+              }
+            ],
+            "primary": {
+              "kind": "project"
+            }
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": []
+        },
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [
+              {
+                "kind": "project"
+              }
+            ],
+            "primary": {
+              "kind": "project"
+            }
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 1
+          },
+          "outcome": "opened",
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 1,
+                "hash": "fnv1a64:054d04718dcb2f1d",
+                "content": 2
+              },
+              "current": {
+                "revision": 2,
+                "hash": "fnv1a64:a20d70fc066d76e6",
+                "content": 1
+              },
+              "reason": [
+                111,
+                112,
+                101,
+                110,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": []
+            },
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [
+                  {
+                    "kind": "project"
+                  }
+                ],
+                "primary": {
+                  "kind": "project"
+                }
+              },
+              "current": {
+                "refs": [],
+                "primary": null
+              }
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 2,
+            "hash": "fnv1a64:a20d70fc066d76e6",
+            "content": 1
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 3,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "undo"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 2,
+            "hash": "fnv1a64:a20d70fc066d76e6",
+            "content": 1
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 3,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history-only",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "edit",
+            "intent": {
+              "version": 1,
+              "command": {
+                "renamePlate": {
+                  "plateId": [
+                    48,
+                    55,
+                    56,
+                    98,
+                    102,
+                    100,
+                    55,
+                    53,
+                    45,
+                    57,
+                    97,
+                    97,
+                    57,
+                    45,
+                    52,
+                    49,
+                    48,
+                    102,
+                    45,
+                    56,
+                    49,
+                    54,
+                    101,
+                    45,
+                    54,
+                    57,
+                    48,
+                    53,
+                    57,
+                    51,
+                    101,
+                    52,
+                    97,
+                    57,
+                    49,
+                    102
+                  ],
+                  "name": [
+                    67,
+                    104,
+                    97,
+                    110,
+                    103,
+                    101,
+                    100,
+                    32,
+                    112,
+                    108,
+                    97,
+                    116,
+                    101
+                  ]
+                }
+              }
+            }
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:054d04718dcb2f1d",
+                "content": 2
+              },
+              "reason": [
+                114,
+                101,
+                110,
+                97,
+                109,
+                101,
+                45,
+                112,
+                108,
+                97,
+                116,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": []
+        },
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "checkpoint"
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": []
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 3,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 2
+          },
+          "outcome": "opened",
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 1,
+                "hash": "fnv1a64:054d04718dcb2f1d",
+                "content": 2
+              },
+              "current": {
+                "revision": 2,
+                "hash": "fnv1a64:57919e33a0bb7ba2",
+                "content": 3
+              },
+              "reason": [
+                111,
+                112,
+                101,
+                110,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": []
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 2,
+            "hash": "fnv1a64:57919e33a0bb7ba2",
+            "content": 3
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 4,
+          "assets": "fnv1a64:09612b07b5ecb5a5",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "selection-only",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "select"
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [],
+                "primary": null
+              },
+              "current": {
+                "refs": [
+                  {
+                    "kind": "project"
+                  }
+                ],
+                "primary": {
+                  "kind": "project"
+                }
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [
+              {
+                "kind": "project"
+              }
+            ],
+            "primary": {
+              "kind": "project"
+            }
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 0
+          },
+          "outcome": "opened",
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "reason": [
+                111,
+                112,
+                101,
+                110,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": []
+            },
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [
+                  {
+                    "kind": "project"
+                  }
+                ],
+                "primary": {
+                  "kind": "project"
+                }
+              },
+              "current": {
+                "refs": [],
+                "primary": null
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "source-edited",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "edit",
+            "intent": {
+              "version": 1,
+              "command": {
+                "renamePlate": {
+                  "plateId": [
+                    48,
+                    55,
+                    56,
+                    98,
+                    102,
+                    100,
+                    55,
+                    53,
+                    45,
+                    57,
+                    97,
+                    97,
+                    57,
+                    45,
+                    52,
+                    49,
+                    48,
+                    102,
+                    45,
+                    56,
+                    49,
+                    54,
+                    101,
+                    45,
+                    54,
+                    57,
+                    48,
+                    53,
+                    57,
+                    51,
+                    101,
+                    52,
+                    97,
+                    57,
+                    49,
+                    102
+                  ],
+                  "name": [
+                    67,
+                    104,
+                    97,
+                    110,
+                    103,
+                    101,
+                    100,
+                    32,
+                    112,
+                    108,
+                    97,
+                    116,
+                    101
+                  ]
+                }
+              }
+            }
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:054d04718dcb2f1d",
+                "content": 2
+              },
+              "reason": [
+                114,
+                101,
+                110,
+                97,
+                109,
+                101,
+                45,
+                112,
+                108,
+                97,
+                116,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 1
+          },
+          "outcome": "stale",
+          "effects": [],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "source-undone",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "edit",
+            "intent": {
+              "version": 1,
+              "command": {
+                "renamePlate": {
+                  "plateId": [
+                    48,
+                    55,
+                    56,
+                    98,
+                    102,
+                    100,
+                    55,
+                    53,
+                    45,
+                    57,
+                    97,
+                    97,
+                    57,
+                    45,
+                    52,
+                    49,
+                    48,
+                    102,
+                    45,
+                    56,
+                    49,
+                    54,
+                    101,
+                    45,
+                    54,
+                    57,
+                    48,
+                    53,
+                    57,
+                    51,
+                    101,
+                    52,
+                    97,
+                    57,
+                    49,
+                    102
+                  ],
+                  "name": [
+                    67,
+                    104,
+                    97,
+                    110,
+                    103,
+                    101,
+                    100,
+                    32,
+                    112,
+                    108,
+                    97,
+                    116,
+                    101
+                  ]
+                }
+              }
+            }
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:054d04718dcb2f1d",
+                "content": 2
+              },
+              "reason": [
+                114,
+                101,
+                110,
+                97,
+                109,
+                101,
+                45,
+                112,
+                108,
+                97,
+                116,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "undo"
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 1,
+                "hash": "fnv1a64:054d04718dcb2f1d",
+                "content": 2
+              },
+              "current": {
+                "revision": 2,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "reason": [
+                114,
+                101,
+                118,
+                101,
+                114,
+                116,
+                58,
+                114,
+                101,
+                110,
+                97,
+                109,
+                101,
+                45,
+                112,
+                108,
+                97,
+                116,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 0,
+                "redoCount": 1,
+                "undoLabel": null,
+                "redoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "dirtyCategories": []
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 2,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 1,
+            "undoLabel": null,
+            "redoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "dirtyCategories": []
+          },
+          "historyRevision": 3,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 1
+          },
+          "outcome": "stale",
+          "effects": [],
+          "snapshot": {
+            "revision": 2,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 1,
+            "undoLabel": null,
+            "redoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "dirtyCategories": []
+          },
+          "historyRevision": 3,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "newer-open",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "begin",
+            "name": "b"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ],
+            [
+              "b",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "b",
+            "document": 1
+          },
+          "outcome": "opened",
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:a20d70fc066d76e6",
+                "content": 1
+              },
+              "reason": [
+                111,
+                112,
+                101,
+                110,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:a20d70fc066d76e6",
+            "content": 1
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ],
+            [
+              "b",
+              false
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 2
+          },
+          "outcome": "stale",
+          "effects": [],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:a20d70fc066d76e6",
+            "content": 1
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ],
+            [
+              "b",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "failed-newer",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "begin",
+            "name": "b"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ],
+            [
+              "b",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "fail",
+            "name": "b"
+          },
+          "outcome": "failed",
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ],
+            [
+              "b",
+              false
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 1
+          },
+          "outcome": "stale",
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ],
+            [
+              "b",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "older-fails",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "begin",
+            "name": "b"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ],
+            [
+              "b",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "fail",
+            "name": "a"
+          },
+          "outcome": "stale",
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ],
+            [
+              "b",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "b",
+            "document": 1
+          },
+          "outcome": "opened",
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:a20d70fc066d76e6",
+                "content": 1
+              },
+              "reason": [
+                111,
+                112,
+                101,
+                110,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:a20d70fc066d76e6",
+            "content": 1
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ],
+            [
+              "b",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cancel-newer",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "begin",
+            "name": "b"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ],
+            [
+              "b",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "cancel",
+            "name": "b"
+          },
+          "outcome": "cancelled",
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ],
+            [
+              "b",
+              false
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 1
+          },
+          "outcome": "stale",
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ],
+            [
+              "b",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "reset-open",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "reset",
+            "document": 1
+          },
+          "outcome": "reset",
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:a20d70fc066d76e6",
+                "content": 1
+              },
+              "reason": [
+                114,
+                101,
+                115,
+                101,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:a20d70fc066d76e6",
+            "content": 1
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 2
+          },
+          "outcome": "stale",
+          "effects": [],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:a20d70fc066d76e6",
+            "content": 1
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "equal-reset",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "edit",
+            "intent": {
+              "version": 1,
+              "command": {
+                "renamePlate": {
+                  "plateId": [
+                    48,
+                    55,
+                    56,
+                    98,
+                    102,
+                    100,
+                    55,
+                    53,
+                    45,
+                    57,
+                    97,
+                    97,
+                    57,
+                    45,
+                    52,
+                    49,
+                    48,
+                    102,
+                    45,
+                    56,
+                    49,
+                    54,
+                    101,
+                    45,
+                    54,
+                    57,
+                    48,
+                    53,
+                    57,
+                    51,
+                    101,
+                    52,
+                    97,
+                    57,
+                    49,
+                    102
+                  ],
+                  "name": [
+                    67,
+                    104,
+                    97,
+                    110,
+                    103,
+                    101,
+                    100,
+                    32,
+                    112,
+                    108,
+                    97,
+                    116,
+                    101
+                  ]
+                }
+              }
+            }
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:054d04718dcb2f1d",
+                "content": 2
+              },
+              "reason": [
+                114,
+                101,
+                110,
+                97,
+                109,
+                101,
+                45,
+                112,
+                108,
+                97,
+                116,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": []
+        },
+        {
+          "action": {
+            "kind": "undo"
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 1,
+                "hash": "fnv1a64:054d04718dcb2f1d",
+                "content": 2
+              },
+              "current": {
+                "revision": 2,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "reason": [
+                114,
+                101,
+                118,
+                101,
+                114,
+                116,
+                58,
+                114,
+                101,
+                110,
+                97,
+                109,
+                101,
+                45,
+                112,
+                108,
+                97,
+                116,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 0,
+                "redoCount": 1,
+                "undoLabel": null,
+                "redoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "dirtyCategories": []
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 2,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 1,
+            "undoLabel": null,
+            "redoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "dirtyCategories": []
+          },
+          "historyRevision": 3,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": []
+        },
+        {
+          "action": {
+            "kind": "select"
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [],
+                "primary": null
+              },
+              "current": {
+                "refs": [
+                  {
+                    "kind": "project"
+                  }
+                ],
+                "primary": {
+                  "kind": "project"
+                }
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 2,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [
+              {
+                "kind": "project"
+              }
+            ],
+            "primary": {
+              "kind": "project"
+            }
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 1,
+            "undoLabel": null,
+            "redoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "dirtyCategories": []
+          },
+          "historyRevision": 3,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": []
+        },
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 2,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [
+              {
+                "kind": "project"
+              }
+            ],
+            "primary": {
+              "kind": "project"
+            }
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 1,
+            "undoLabel": null,
+            "redoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "dirtyCategories": []
+          },
+          "historyRevision": 3,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "reset",
+            "document": 0
+          },
+          "outcome": "reset",
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 2,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 3,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "reason": [
+                114,
+                101,
+                115,
+                101,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": []
+            },
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [
+                  {
+                    "kind": "project"
+                  }
+                ],
+                "primary": {
+                  "kind": "project"
+                }
+              },
+              "current": {
+                "refs": [],
+                "primary": null
+              }
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 1,
+                "undoLabel": null,
+                "redoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 3,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 4,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 1
+          },
+          "outcome": "stale",
+          "effects": [],
+          "snapshot": {
+            "revision": 3,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 4,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "empty-reset",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "edit",
+            "intent": {
+              "version": 1,
+              "command": {
+                "renamePlate": {
+                  "plateId": [
+                    48,
+                    55,
+                    56,
+                    98,
+                    102,
+                    100,
+                    55,
+                    53,
+                    45,
+                    57,
+                    97,
+                    97,
+                    57,
+                    45,
+                    52,
+                    49,
+                    48,
+                    102,
+                    45,
+                    56,
+                    49,
+                    54,
+                    101,
+                    45,
+                    54,
+                    57,
+                    48,
+                    53,
+                    57,
+                    51,
+                    101,
+                    52,
+                    97,
+                    57,
+                    49,
+                    102
+                  ],
+                  "name": [
+                    67,
+                    104,
+                    97,
+                    110,
+                    103,
+                    101,
+                    100,
+                    32,
+                    112,
+                    108,
+                    97,
+                    116,
+                    101
+                  ]
+                }
+              }
+            }
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:054d04718dcb2f1d",
+                "content": 2
+              },
+              "reason": [
+                114,
+                101,
+                110,
+                97,
+                109,
+                101,
+                45,
+                112,
+                108,
+                97,
+                116,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": []
+        },
+        {
+          "action": {
+            "kind": "reset",
+            "document": 2
+          },
+          "outcome": "reset",
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 1,
+                "hash": "fnv1a64:054d04718dcb2f1d",
+                "content": 2
+              },
+              "current": {
+                "revision": 2,
+                "hash": "fnv1a64:57919e33a0bb7ba2",
+                "content": 3
+              },
+              "reason": [
+                114,
+                101,
+                115,
+                101,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": []
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 2,
+            "hash": "fnv1a64:57919e33a0bb7ba2",
+            "content": 3
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 3,
+          "assets": "fnv1a64:09612b07b5ecb5a5",
+          "opens": []
+        },
+        {
+          "action": {
+            "kind": "undo"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 2,
+            "hash": "fnv1a64:57919e33a0bb7ba2",
+            "content": 3
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 3,
+          "assets": "fnv1a64:09612b07b5ecb5a5",
+          "opens": []
+        },
+        {
+          "action": {
+            "kind": "reset",
+            "document": 0
+          },
+          "outcome": "reset",
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 2,
+                "hash": "fnv1a64:57919e33a0bb7ba2",
+                "content": 3
+              },
+              "current": {
+                "revision": 3,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "reason": [
+                114,
+                101,
+                115,
+                101,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 3,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 4,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": []
+        }
+      ]
+    },
+    {
+      "name": "dispose-open",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "dispose"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 1
+          },
+          "outcome": "disposed",
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "invalid-open-bundle",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "edit",
+            "intent": {
+              "version": 1,
+              "command": {
+                "renamePlate": {
+                  "plateId": [
+                    48,
+                    55,
+                    56,
+                    98,
+                    102,
+                    100,
+                    55,
+                    53,
+                    45,
+                    57,
+                    97,
+                    97,
+                    57,
+                    45,
+                    52,
+                    49,
+                    48,
+                    102,
+                    45,
+                    56,
+                    49,
+                    54,
+                    101,
+                    45,
+                    54,
+                    57,
+                    48,
+                    53,
+                    57,
+                    51,
+                    101,
+                    52,
+                    97,
+                    57,
+                    49,
+                    102
+                  ],
+                  "name": [
+                    67,
+                    104,
+                    97,
+                    110,
+                    103,
+                    101,
+                    100,
+                    32,
+                    112,
+                    108,
+                    97,
+                    116,
+                    101
+                  ]
+                }
+              }
+            }
+          },
+          "outcome": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:054d04718dcb2f1d",
+                "content": 2
+              },
+              "reason": [
+                114,
+                101,
+                110,
+                97,
+                109,
+                101,
+                45,
+                112,
+                108,
+                97,
+                116,
+                101
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  82,
+                  101,
+                  110,
+                  97,
+                  109,
+                  101,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101,
+                  32,
+                  116,
+                  111,
+                  32,
+                  67,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101,
+                  100,
+                  32,
+                  112,
+                  108,
+                  97,
+                  116,
+                  101
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": []
+        },
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finishInvalid",
+            "name": "a",
+            "document": 1
+          },
+          "outcome": "failed",
+          "effects": [],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:054d04718dcb2f1d",
+            "content": 2
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              82,
+              101,
+              110,
+              97,
+              109,
+              101,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101,
+              32,
+              116,
+              111,
+              32,
+              67,
+              104,
+              97,
+              110,
+              103,
+              101,
+              100,
+              32,
+              112,
+              108,
+              97,
+              116,
+              101
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "invalid-reset-preserves-open",
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:32e548b8667d2496",
+          "content": 0
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 1,
+        "assets": "fnv1a64:d92da89e58c1f53a",
+        "opens": []
+      },
+      "steps": [
+        {
+          "action": {
+            "kind": "begin",
+            "name": "a"
+          },
+          "outcome": null,
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "resetInvalid",
+            "document": 1
+          },
+          "outcome": "failed",
+          "effects": [],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:32e548b8667d2496",
+            "content": 0
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              true
+            ]
+          ]
+        },
+        {
+          "action": {
+            "kind": "finish",
+            "name": "a",
+            "document": 1
+          },
+          "outcome": "opened",
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:32e548b8667d2496",
+                "content": 0
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:a20d70fc066d76e6",
+                "content": 1
+              },
+              "reason": [
+                111,
+                112,
+                101,
+                110,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:a20d70fc066d76e6",
+            "content": 1
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:d92da89e58c1f53a",
+          "opens": [
+            [
+              "a",
+              false
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

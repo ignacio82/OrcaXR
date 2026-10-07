@@ -1,4 +1,4 @@
-import { unzipSync, zipSync, type Zippable } from 'fflate';
+import { inflateSync, zipSync, type Zippable } from 'fflate';
 
 const CRC32_TABLE = Uint32Array.from({ length: 256 }, (_unused, index) => {
   let value = index;
@@ -39,6 +39,8 @@ interface CentralEntry {
   uncompressedSize: number;
   crc32: number;
   directory: boolean;
+  dataOffset: number;
+  compression: number;
 }
 
 export function readSafeZip(archive: Uint8Array, limits: Partial<ZipSafetyLimits> = {}): Map<string, Uint8Array> {
@@ -49,21 +51,23 @@ export function readSafeZip(archive: Uint8Array, limits: Partial<ZipSafetyLimits
     );
   }
   const centralEntries = inspectCentralDirectory(archive, effective);
-  let expanded: Record<string, Uint8Array>;
-  try {
-    expanded = unzipSync(archive);
-  } catch (error) {
-    throw new UnsafeThreeMfArchiveError(
-      `Invalid or corrupt ZIP: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-
   const result = new Map<string, Uint8Array>();
   for (const entry of centralEntries) {
-    if (entry.directory) continue;
-    const bytes = expanded[entry.path];
-    if (!bytes) {
-      throw new UnsafeThreeMfArchiveError(`ZIP entry ${entry.path} is missing after expansion`);
+    const compressed = archive.subarray(entry.dataOffset, entry.dataOffset + entry.compressedSize);
+    let bytes: Uint8Array;
+    try {
+      // Decode the verified member directly. fflate's ZIP filename decoder
+      // strips a leading BOM and its dictionary can collapse distinct names.
+      // One sentinel byte detects over-expansion even when fflate truncates
+      // writes to a supplied output buffer. Never allocate from decoded length.
+      bytes =
+        entry.compression === 0
+          ? compressed.slice()
+          : inflateSync(compressed, { out: new Uint8Array(entry.uncompressedSize + 1) });
+    } catch (error) {
+      throw new UnsafeThreeMfArchiveError(
+        `Invalid or corrupt ZIP: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
     if (bytes.byteLength !== entry.uncompressedSize) {
       throw new UnsafeThreeMfArchiveError(`ZIP entry ${entry.path} expanded to an unexpected size`);
@@ -71,7 +75,7 @@ export function readSafeZip(archive: Uint8Array, limits: Partial<ZipSafetyLimits
     if (crc32(bytes) !== entry.crc32) {
       throw new UnsafeThreeMfArchiveError(`ZIP entry ${entry.path} failed its CRC-32 integrity check`);
     }
-    result.set(entry.path, bytes.slice());
+    if (!entry.directory) result.set(entry.path, bytes);
   }
   return result;
 }
@@ -85,7 +89,17 @@ export function writeDeterministicZip(
     throw new UnsafeThreeMfArchiveError(`Archive has ${files.size} entries; limit is ${effective.maxEntries}`);
   }
   let total = 0;
-  const zippable: Zippable = {};
+  const zippable: Zippable = Object.create(null) as Zippable;
+  // fflate flattens into its own ordinary object too. Keep the one JavaScript
+  // setter name out of both dictionaries, then restore only its same-length
+  // ASCII header names. Compression, offsets, CRCs and ordinary output stay exact.
+  let prototypeAlias: string | undefined;
+  if (files.has('__proto__')) {
+    let ordinal = 0;
+    do {
+      prototypeAlias = `_orcx${(ordinal++).toString(36).padStart(4, '0')}`;
+    } while (files.has(prototypeAlias));
+  }
   const fixedLocalTime = new Date(1980, 0, 1, 0, 0, 0, 0);
   const paths = [...files.keys()].sort(compareText);
   for (const path of paths) {
@@ -101,7 +115,7 @@ export function writeDeterministicZip(
       throw new UnsafeThreeMfArchiveError('Archive exceeds the total uncompressed-size limit');
     }
     const alreadyCompressed = /\.(?:3mf|jpe?g|mp4|png|webp|zip)$/i.test(path);
-    zippable[path] = [
+    zippable[path === '__proto__' ? prototypeAlias! : path] = [
       bytes,
       {
         level: alreadyCompressed ? 0 : 6,
@@ -115,7 +129,47 @@ export function writeDeterministicZip(
   if (output.byteLength > effective.maxArchiveBytes) {
     throw new UnsafeThreeMfArchiveError('Generated archive exceeds the archive-size limit');
   }
+  if (prototypeAlias) restorePrototypeMemberName(output, prototypeAlias);
   return output;
+}
+
+/** Only receives this function's freshly generated classic ZIP, never user input. */
+function restorePrototypeMemberName(output: Uint8Array, alias: string): void {
+  const view = new DataView(output.buffer, output.byteOffset, output.byteLength);
+  const end = output.byteLength - 22;
+  const name = new TextEncoder().encode(alias);
+  const original = new TextEncoder().encode('__proto__');
+  if (name.byteLength !== original.byteLength || end < 0 || view.getUint32(end, true) !== 0x06054b50) {
+    throw new UnsafeThreeMfArchiveError('Generated ZIP member-name repair failed');
+  }
+  let cursor = view.getUint32(end + 16, true);
+  let restored = 0;
+  for (let index = 0; index < view.getUint16(end + 10, true); index += 1) {
+    if (cursor + 46 > end || view.getUint32(cursor, true) !== 0x02014b50) {
+      throw new UnsafeThreeMfArchiveError('Generated ZIP directory is inconsistent');
+    }
+    const length = view.getUint16(cursor + 28, true);
+    const next = cursor + 46 + length + view.getUint16(cursor + 30, true) + view.getUint16(cursor + 32, true);
+    if (next > end) throw new UnsafeThreeMfArchiveError('Generated ZIP directory is truncated');
+    if (equalBytes(output.subarray(cursor + 46, cursor + 46 + length), name)) {
+      const local = view.getUint32(cursor + 42, true);
+      if (
+        local + 30 + length > cursor ||
+        view.getUint32(local, true) !== 0x04034b50 ||
+        view.getUint16(local + 26, true) !== length ||
+        !equalBytes(output.subarray(local + 30, local + 30 + length), name)
+      ) {
+        throw new UnsafeThreeMfArchiveError('Generated ZIP local member name is inconsistent');
+      }
+      output.set(original, local + 30);
+      output.set(original, cursor + 46);
+      restored += 1;
+    }
+    cursor = next;
+  }
+  if (restored !== 1 || cursor !== end) {
+    throw new UnsafeThreeMfArchiveError('Generated ZIP member-name repair was incomplete');
+  }
 }
 
 export function validatePackagePath(path: string, maxPathBytes = 512): void {
@@ -170,11 +224,18 @@ function readZip64Eocd(
     throw new UnsafeThreeMfArchiveError('Multi-disk ZIP64 archives are not supported');
   }
   const recordOffset = readUint64(view, locator + 8);
-  if (recordOffset < 0 || recordOffset + 56 > archive.byteLength) {
+  if (recordOffset < 0 || recordOffset + 56 > locator) {
     throw new UnsafeThreeMfArchiveError('ZIP64 end-of-central-directory record is out of bounds');
   }
   if (view.getUint32(recordOffset, true) !== 0x06064b50) {
     throw new UnsafeThreeMfArchiveError('ZIP64 end-of-central-directory record is corrupt');
+  }
+  const recordSize = readUint64(view, recordOffset + 4);
+  if (recordSize < 44 || recordOffset + 12 + recordSize !== locator) {
+    throw new UnsafeThreeMfArchiveError('ZIP64 end-of-central-directory record size is invalid');
+  }
+  if (view.getUint32(recordOffset + 16, true) !== 0 || view.getUint32(recordOffset + 20, true) !== 0) {
+    throw new UnsafeThreeMfArchiveError('Multi-disk ZIP64 archives are not supported');
   }
   return {
     entriesOnDisk: readUint64(view, recordOffset + 24),
@@ -277,6 +338,12 @@ function inspectCentralDirectory(archive: Uint8Array, limits: ZipSafetyLimits): 
     // the total-size limit. Widening what can be *parsed* is not widening what
     // is accepted.
     const zip64 = readZip64Eocd(archive, view, eocd);
+    const classic = [entriesOnDisk, entryCount, centralSize, centralOffset];
+    const wide = [zip64.entriesOnDisk, zip64.entryCount, zip64.centralSize, zip64.centralOffset];
+    const sentinels = [0xffff, 0xffff, 0xffff_ffff, 0xffff_ffff];
+    if (classic.some((value, index) => value !== sentinels[index] && value !== wide[index])) {
+      throw new UnsafeThreeMfArchiveError('Classic and ZIP64 directory metadata disagree');
+    }
     entriesOnDisk = zip64.entriesOnDisk;
     entryCount = zip64.entryCount;
     centralSize = zip64.centralSize;
@@ -357,7 +424,7 @@ function inspectCentralDirectory(archive: Uint8Array, limits: ZipSafetyLimits): 
     }
     let path: string;
     try {
-      path = new TextDecoder('utf-8', { fatal: true }).decode(nameBytes);
+      path = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(nameBytes);
     } catch {
       throw new UnsafeThreeMfArchiveError('ZIP filename is not valid UTF-8');
     }
@@ -375,10 +442,6 @@ function inspectCentralDirectory(archive: Uint8Array, limits: ZipSafetyLimits): 
       throw new UnsafeThreeMfArchiveError(`ZIP entry ${path} has invalid local data bounds`);
     }
     const localEnd = localDataOffset + compressedSize;
-    const overlap = localRegions.find((region) => localOffset < region.end && region.start < localEnd);
-    if (overlap) {
-      throw new UnsafeThreeMfArchiveError(`ZIP entries ${overlap.path} and ${path} have overlapping local data`);
-    }
     // The local header carries the same sentinels as the central record, in
     // its own ZIP64 extra field. Comparing a sentinel against a real size is
     // what made every upstream archive look inconsistent; both sides have to be
@@ -423,10 +486,28 @@ function inspectCentralDirectory(archive: Uint8Array, limits: ZipSafetyLimits): 
     if (uncompressedSize > 1024 * 1024 && uncompressedSize / Math.max(1, compressedSize) > limits.maxCompressionRatio) {
       throw new UnsafeThreeMfArchiveError(`ZIP entry ${path} has a suspicious compression ratio`);
     }
-    entries.push({ path, compressedSize, uncompressedSize, crc32: expectedCrc32, directory });
+    entries.push({
+      path,
+      compressedSize,
+      uncompressedSize,
+      crc32: expectedCrc32,
+      directory,
+      dataOffset: localDataOffset,
+      compression,
+    });
     offset = end;
   }
   if (offset !== directoryEnd) throw new UnsafeThreeMfArchiveError('ZIP central directory has trailing data');
+  localRegions.sort((left, right) => left.start - right.start);
+  for (let index = 1; index < localRegions.length; index++) {
+    const previous = localRegions[index - 1];
+    const current = localRegions[index];
+    if (current.start < previous.end) {
+      throw new UnsafeThreeMfArchiveError(
+        `ZIP entries ${previous.path} and ${current.path} have overlapping local data`,
+      );
+    }
+  }
   return entries;
 }
 

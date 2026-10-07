@@ -271,12 +271,12 @@ await test('rejects connected-component splitting when paint exists only in refi
   workspace.dispose();
 });
 
-await test('rejects stale, unselected, oversized, connected, and lossy requests without canonical mutation', () => {
+await test('rejects stale, unselected, oversized, connected, and lossy requests without canonical mutation', async () => {
   const staleWorkspace = controller();
   const staleGeometry = indexedTetrahedra(2);
   const staleSource = staleWorkspace.importBufferGeometry(staleGeometry, { name: 'Stale split' });
   const stale = staleWorkspace.getSplitToObjectsConfirmation();
-  staleWorkspace.setInstanceTransform(staleSource.instanceId, {
+  await staleWorkspace.setInstanceTransform(staleSource.instanceId, {
     ...identityTransform(),
     translationMm: [1, 0, 0],
   });

@@ -81,7 +81,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '22.21.0'
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm --prefix web ci
@@ -93,6 +93,9 @@ jobs:
       - name: Verify generated contracts and source inventory
         run: |
           node tools/cross-platform/generate-contracts.mjs
+          node tools/cross-platform/generate-opc-lowercase.mjs --verify-runtime
+          node tools/cross-platform/generate-bbs-filament-keys.mjs
+          node web/scripts/run-tests.mjs opc-lowercase.test.ts deterministic-zip.test.ts
           node tools/cross-platform/canonical-requests.mjs
           node tools/cross-platform/generate-gcode-layout.mjs
           node tools/cross-platform/generate-preview-catalog.mjs
@@ -101,11 +104,20 @@ jobs:
           node tools/cross-platform/generate-gcode-requests.mjs
           node tools/cross-platform/test-request-generator.mjs
           node tools/cross-platform/generate-project-intents.mjs
+          node tools/cross-platform/generate-project-host.mjs
+          node tools/cross-platform/generate-project-jni.mjs
+          node tools/cross-platform/generate-project-query.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-query-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-query.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-host.mjs
+          node tools/cross-platform/generate-project-staging.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-staging.mjs
           node tools/cross-platform/generate-setting-scopes.mjs
           node tools/cross-platform/test-project-intent-generator.mjs
           node tools/cross-platform/project-intent-vectors.mjs
           node tools/cross-platform/package-browser-core.mjs
-          node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts project-intents.test.ts project-session-transport.test.ts
+          node tools/cross-platform/package-browser-core.mjs --project
+          node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts project-intents.test.ts project-session-transport.test.ts staged-session.test.ts
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-id-vectors.mjs
@@ -115,6 +127,29 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-resolution-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-validation-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-store-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-command-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-captured-command-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-document-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-export-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/archive-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-archive-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-complete-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/opc-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bbs-facet-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bbs-number-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bbs-xml-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bbs-model-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bbs-xml-read-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/foreign-bbs-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bbs-metadata-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bbs-settings-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/package-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/mesh-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-clipboard-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-staged-session-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-session-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-input-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
@@ -124,25 +159,59 @@ jobs:
         working-directory: core
         run: |
           cargo fmt --all --check
-          cargo clippy --workspace --all-targets --locked --jobs 2 -- -D warnings
-          cargo test --workspace --locked --jobs 2
+          cargo clippy --workspace --all-targets --all-features --locked --jobs 2 -- -D warnings
+          cargo test --workspace --all-features --locked --jobs 2
           cargo test -p orcaxr-gcode --test preview --test inspection --test views --test session --test requests --release --locked --jobs 2
           cargo test -p orcaxr-contracts --test project_intents --release --locked --jobs 2
           cargo test -p orcaxr-project --release --locked --jobs 2
+          cargo test -p orcaxr-archive --release --locked --jobs 2
+          cargo run -p orcaxr-archive --example archive_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-archive --example zip_write_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-archive --example zip_write_reference --release --locked --jobs 2 -- "$RUNNER_TEMP/native-zip-references"
+          node --import ../web/node_modules/tsx/dist/loader.mjs ../tools/cross-platform/test-zip-write.mjs "$RUNNER_TEMP/native-zip-references/manifest.json"
+          python3 ../tools/cross-platform/test-zip-write.py "$RUNNER_TEMP/native-zip-references/manifest.json"
+          cargo run -p orcaxr-archive --example canonical_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-archive --example canonical_benchmark --release --locked --jobs 2 -- --complete
+          cargo run -p orcaxr-archive --example opc_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-archive --example bbs_facet_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-archive --example bbs_xml_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-archive --example bbs_model_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-archive --example bbs_metadata_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-archive --example bbs_settings_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-archive --example package_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-archive --example package_reference --release --locked --jobs 2 -- "$RUNNER_TEMP/native-package-references"
+          node --import ../web/node_modules/tsx/dist/loader.mjs ../tools/cross-platform/test-package-write.mjs "$RUNNER_TEMP/native-package-references/manifest.json"
+          node --import ../web/node_modules/tsx/dist/loader.mjs ../tools/cross-platform/test-archive-interchange.mjs prepare "$RUNNER_TEMP/archive-interchange"
+          cargo run -p orcaxr-archive --example archive_interchange --release --locked --jobs 2 -- "$RUNNER_TEMP/archive-interchange/input.json" "$RUNNER_TEMP/archive-interchange/native"
+          node --import ../web/node_modules/tsx/dist/loader.mjs ../tools/cross-platform/test-archive-interchange.mjs exchange "$RUNNER_TEMP/archive-interchange"
+          cargo run -p orcaxr-archive --example archive_interchange --release --locked --jobs 2 -- "$RUNNER_TEMP/archive-interchange/returns/input.json" "$RUNNER_TEMP/archive-interchange/returned"
+          node --import ../web/node_modules/tsx/dist/loader.mjs ../tools/cross-platform/test-archive-interchange.mjs verify "$RUNNER_TEMP/archive-interchange"
           cargo run -p orcaxr-project --example asset_repository_benchmark --release --locked --jobs 2
           cargo run -p orcaxr-project --example facet_sparsity_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-project --example mesh_benchmark --release --locked --jobs 2
           cargo run -p orcaxr-project --example project_model_benchmark --release --locked --jobs 2
           cargo run -p orcaxr-project --example settings_resolution_benchmark --release --locked --jobs 2
           cargo run -p orcaxr-project --example validation_values_benchmark --release --locked --jobs 2
           cargo run -p orcaxr-project --example project_validation_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-project --example project_store_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-project --example project_command_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-project --example project_session_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-project --example project_input_benchmark --release --locked --jobs 2
+          cargo run -p orcaxr-project --example project_query_benchmark --release --locked --jobs 2
           cargo check -p orcaxr-project --lib --locked --jobs 2 --target wasm32-unknown-unknown
           cargo check -p orcaxr-project --lib --locked --jobs 2 --target aarch64-linux-android
           cargo check -p orcaxr-project --lib --locked --jobs 2 --target x86_64-linux-android
+          cargo check -p orcaxr-archive --lib --locked --jobs 2 --target wasm32-unknown-unknown
+          cargo check -p orcaxr-archive --lib --locked --jobs 2 --target aarch64-linux-android
+          cargo check -p orcaxr-archive --lib --locked --jobs 2 --target x86_64-linux-android
           cargo audit
       - name: Real browser worker and artifact checks
         run: |
           python3 tools/cross-platform/build-wasm.py
-          python3 tools/cross-platform/verify-artifacts.py --wasm
+          python3 tools/cross-platform/build-wasm.py --project
+          python3 tools/cross-platform/verify-artifacts.py --wasm --project-wasm
+          node tools/cross-platform/project-wasm-test.mjs
+          node tools/cross-platform/project-wasm-browser.mjs
           node tools/cross-platform/wasm-smoke.mjs
       - uses: actions/upload-artifact@v6
         if: always()
@@ -156,6 +225,12 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm --prefix web ci
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -171,6 +246,15 @@ jobs:
           python3 tools/cross-platform/verify-artifacts.py --apk android/app/build/outputs/apk/debug/app-debug.apk
           python3 tools/cross-platform/verify-artifacts.py --apk android/app/build/outputs/apk/release/app-release-unsigned.apk
           python3 tools/cross-platform/verify-artifacts.py --apk android/xr-experiment/build/outputs/apk/debug/xr-experiment-debug.apk
+      - name: Replay project JNI and Kotlin owners on the host JVM
+        run: |
+          cargo +1.94.1 build --manifest-path core/Cargo.toml -p orcaxr-android --locked --jobs 1
+          cargo +1.94.1 build --manifest-path core/Cargo.toml -p orcaxr-android --release --locked --jobs 1
+          python3 tools/cross-platform/build-project-jvm.py
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-intent-kotlin.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-query.mjs --jni
+          node tools/cross-platform/project-jni-test.mjs
+          node tools/cross-platform/project-jni-test.mjs --release
       - name: Run JNI, non-XR startup, renderer pixels and lifecycle on an owned emulator
         run: |
           sudo chmod a+rw /dev/kvm

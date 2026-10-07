@@ -1,9 +1,174 @@
 # Native Android and shared Rust implementation plan
 
 **Status:** implementation in progress, started 2026-10-04 at the user's request.
-The tasks below are unimplemented unless linked evidence says otherwise. This
-document defines the required work; it does not change which platforms the
-current release supports.
+**Last reconciled:** 2026-10-07. Checked items below are implemented and verified
+within their stated scope; unchecked items still require work. A checked sub-item
+does not close its parent task, phase exit, or physical-device gate. This document
+defines the required work; it does not change supported release platforms.
+
+## Current handoff
+
+Keep this checklist current as work completes, including before a context or agent
+handoff. Record the implementation, verification and remaining limits together;
+do not mark a task complete merely because code exists or a target compiles.
+Detailed evidence and reproducible commands live in
+[native-core](engineering/native-core.md) and the phase entries below.
+
+- [x] Establish shared Rust computation, generated contracts and development
+  WASM/JNI bindings; production browser preview uses the Rust adapter (Phase 3).
+- [x] Implement and replay the currently ported project/session/command families,
+  staged document adoption, captured queries and Kotlin actor ownership (Phase 4).
+  Complete command coverage and production native editing are still open.
+- [x] Implement bounded ZIP read/write, canonical-envelope staging, OPC
+  reconciliation and complete BBS/canonical package output from frozen captures
+  (Phase 5). Independent browser Open/Save checks cover 947 native packages,
+  including ten real native edits; this is the native-export direction only.
+- [x] Qualify canonical completion on the host: 229 workspace tests, 81 optimized
+  archive tests, strict Clippy, format checks and the archive/completion/package
+  ownership probes pass.
+  The archive also checks for wasm32 and both Android ABIs using Rust 1.94.1.
+- [x] Rebuild and verify both WASM packages and Android/JNI libraries. Executables,
+  glue and 285 JVM classes retain their previously tested identity; this retains
+  earlier binding replay evidence rather than claiming a fresh replay.
+- [x] Pass the production web build, offline inventory and bundle-size checks
+  with the refreshed artifact sets. The full web quality gate remains open below.
+- [x] Complete canonical archive import after envelope/OPC staging: reconcile
+  regenerated BBS metadata, adopt unowned members with deterministic IDs, validate
+  the completed bundle, and produce a guarded prepared document.
+  The host corpus compares 385 browser imports (276 accepted / 109 refused),
+  including complete state, exact asset bytes/IDs and warnings. Guarded adoption,
+  eleven budget families, cancellation and timestamp failure have native tests.
+- [x] Add bounded native BBS model-XML syntax/namespace admission as the first
+  foreign-import seam. Its streaming event/sanitized-text behavior matches all
+  466 production-browser-derived cases (319 accepted / 147 refused), including
+  arbitrary UTF-8 chunk splits and resource/cancellation failures. The reference
+  generator is in native-core CI. This is not model-part projection or import.
+- [x] Capture fourteen independent foreign-3MF archive expectations through the
+  production browser serializer: seven accepted projects and seven refusals,
+  with exact ZIP input bytes, complete canonical state, asset descriptors/bytes,
+  warnings and preserved entries. Generation is bound to browser serializer,
+  model parser, XML validator and ZIP-writer source hashes and is checked in CI.
+- [x] Add a bounded streaming structural reader for one 3MF model part. It
+  projects local object IDs, units, materials, packed mesh coordinates/indices,
+  build items, component references/transforms and Production Extension paths.
+  It also decodes BBS color, support, seam and fuzzy-skin roots into sparse
+  canonical facet channels, including the legacy fuzzy alias. The foreign corpus
+  exercises seven accepted packages, painted/refined facets, invalid channel states,
+  unsupported units and duplicate IDs; color slots remain import placeholders
+  until package metadata can resolve printer filament IDs. This is a library
+  projection, not a complete metadata reader or importer.
+- [x] Add bounded cross-part Production Extension reference validation and
+  component-graph expansion. It preserves part-local IDs and build order,
+  validates package paths and every object/build reference, rejects cycles, and
+  enforces explicit part/object/reference/depth/expansion limits. The 14-archive
+  browser corpus exercises internal and external references, missing parts and
+  objects, and a component cycle. ZIP structural staging now invokes this
+  resolver before returning its private result.
+- [x] Connect ZIP, XML admission, one-part projection and graph resolution into
+  `read_xml::package::read_model_structure`. It streams only the root and
+  referenced model parts, verifies each required member's archive integrity,
+  shares geometry, title, encoded-facet, refinement-node and annotation-
+  materialization budgets across parts, and returns no result on any failure.
+  The corpus exercises all seven accepted packages; low aggregate geometry, title
+  and facet budgets reject their corresponding fixtures. Thirteen focused
+  scanner, parser, graph and package tests, strict Clippy and format checks pass;
+  the crate checks for wasm32 and both Android ABIs. Reproducible commands and
+  scope are in [native-core evidence](engineering/native-core.md#bounded-foreign-model-staging).
+  This is structural staging, not a canonical project candidate or a complete
+  foreign-format importer.
+- [x] Project standard BBS facet paint during bounded model-part parsing. Decode
+  explicit roots under shared package byte/node budgets, build sparse canonical
+  color/support/seam/fuzzy-skin channels under a materialization budget, and
+  verify paint states, refinement trees, the legacy fuzzy alias and refusals
+  against browser-authored ZIP fixtures. Real filament-ID resolution still
+  depends on BBS metadata parsing and remains open.
+- [x] Preserve bounded unknown extension attributes on foreign model objects,
+  components, build items and facets. Resolve attribute namespaces, exclude
+  namespace declarations/standard fields and the separately interpreted
+  Production Extension path, and share count/text budgets across model parts.
+  Browser-authored expected state and archive tests cover all four element types;
+  graph leaves identify their source component edge without copying attributes
+  across expanded occurrences. Canonical extensionData assembly remains open.
+- [ ] Complete foreign BBS/3MF and STL/OBJ/AMF import, then expose archive work
+  through owned WASM/JNI tasks and Android document-provider Open/Save.
+- [x] Exercise edited canonical archive interchange through guarded native Open,
+  native session commands and browser commands: 1,210 complete journeys in the
+  debug and optimized host harness. Foreign/application journeys remain open.
+- [ ] Extend round trips to foreign formats and application/provider bindings,
+  finish remaining command/query coverage and production session integration,
+  then continue the app/device gates.
+
+**Resume here:** integrate `read_xml::package::read_model_structure` with canonical
+archive staging, then complete BBS model metadata/settings and extension handling.
+The structural ZIP stage invokes the checked reader and resolver, but canonical
+archive import does not yet consume its result. The XML scanner and
+`read_xml::part::Builder` provide provisional events and one-part structural
+projections under explicit object/mesh/component/build/material/title budgets;
+callers must discard projections unless scanner `finish()` succeeds. The graph
+resolver validates part-local IDs, Production paths, references and bounded
+component expansion. Standard BBS paint roots now decode into sparse canonical
+channels; ZIP staging shares encoded-byte, refinement-node and annotation-
+materialization budgets across model parts. Color paint currently uses explicit
+`import:3mf:paint-slot-N` placeholders because BBS model metadata has not yet been
+projected. Unknown object/component/build/facet extension attributes are retained
+under shared count/text limits; graph leaves point back to their source component
+edge without copying those attributes per occurrence. Still open are
+metadata/settings and real filament-ID resolution, Float32-compatible asset
+assembly, canonical extensionData/candidate construction and guarded archive
+adoption. Port the browser
+reference in `bbsCore.ts` incrementally, preserving exact plate metadata and
+consumed-versus-absorbed paths. Use the
+browser-authored input/result fixtures in
+`testdata/cross-platform/foreign-bbs-vectors.json` as independent expectations;
+extend them before adding semantic coverage. Extend `archive_interchange` only
+after the parser can produce complete candidates. The debug and optimized harness passes 1,210 complete edited journeys
+from 1,322 initial archives (109 import refusals and three Save refusals are separate).
+Use the Rust `archive_interchange` example and
+`tools/cross-platform/test-archive-interchange.mjs`; reproducible commands live in
+[native-core](engineering/native-core.md#edited-canonical-archive-interchange).
+Retain earlier binding replay evidence only when executable and JVM input
+identities still agree; otherwise rerun it. Full web quality did not finish
+within the 300-second bound in this
+restricted environment (`git`/localhost `EPERM`); fresh dependency advisory
+fetches also failed. These gates need a capable environment and remain open.
+
+`CanonicalArchiveSource::complete` now performs OPC/BBS reconciliation and adoption;
+only its completed result can produce the prepared document for guarded Open/reset.
+Exact regenerated-member comparison uses the bounded ZIP pull reader and verifies
+unread tails even after a mismatch. SVG path/collision checks still run when missing
+printable area allows metadata preservation. Browser envelope admission now also
+rejects missing/mistyped required SVG recipe fields, matching the native schema.
+The interchange harness preserves these semantics; foreign XML/component
+resolution is next. Archive bindings, provider tasks and native UI
+remain unfinished; library prepared-document tests do not qualify those flows.
+
+The interchange harness now executes the previously planned three-step journey:
+Open the same browser bytes, adopt under the original native guard and apply a real
+rename in both implementations; compare native/browser Save member bytes and both
+readers of the same native archive; make a second browser command edit, save and
+reimport those exact bytes in Rust. Existing IDs and preserved payloads stay exact.
+Debug and optimized results agree. Missing origins and the preserved model-settings
+collision remain explicit Save refusals, never successful round trips.
+
+For the next foreign-import tranche, start from production `importBbsCore` in
+`web/src/project/serialization/bbsCore.ts` and the serializer's `deserializeForeign`
+flow. Capture independent archive expectations before porting model-part parsing,
+unit conversion, production-extension path resolution and component expansion.
+Preserve model-part-local object IDs, the shared facet budget, depth/expansion
+limits, exact plate membership/origins and consumed-versus-absorbed member policy.
+Then assemble/admit the canonical bundle and extend this actual interchange
+harness to the foreign inputs. The current OPC compatibility scanner is not a
+full model XML parser. Archive task bindings and provider integration follow the
+completed format adapters; do not bypass guarded prepared-document adoption.
+
+Use `cargo +1.94.1` from the repository root, or run Cargo inside `core/`;
+`--manifest-path core/Cargo.toml` alone does not select its pinned toolchain.
+The current work is uncommitted on `main` at base `637963c`; the last GitHub
+fast-forward pull was already up to date. Preserve existing tracked and untracked
+work. Temporary `/tmp/orcaxr-interchange-*` logs can help resume this environment,
+but repository tests, generators and maintained evidence are the durable record.
+
+## Implementation status
 
 Initial Stage A evidence is maintained in [native-core build and evidence](engineering/native-core.md).
 The development shell, bounded Rust canonicalizer, generated request bindings,
@@ -57,12 +222,18 @@ development bindings still require production integration and device qualificati
 Source options and preview/inspection/playback requests now share a schema that
 generates Rust decoders, TypeScript types/guards and Kotlin types/encoders/guards.
 This covers the G-code computation transport. Project command coverage,
-projection transport and actual worker/JNI session execution in Phases 1/4 remain open.
+production projection transport and worker/JNI session integration in Phases 1/4 remain open.
 
 Phase 4 now has a local asynchronous facade over the existing TypeScript session,
 with guarded FIFO mutation, ordered summary queries, bounded operation batches,
 and authoritative acknowledgements. Production Undo/Redo and the seven plate
-lifecycle operations await it through ActionRegistry. Plate controls retain their
+lifecycle operations await it through ActionRegistry. Object/part renames,
+instance printability and single/batch transforms now use the same transport;
+derived placement tools await their edits. DOM/XR gestures coalesce pending
+poses under an explicit owner and cancel on selection/tool/lifetime changes.
+Numeric transforms, DOM/XR gestures and DOM lay-on-face now use declared registry
+routes; result-bearing invocation preserves the actual command acknowledgement.
+Plate controls retain their
 busy state until acknowledgement; stale requests reject without edits. The seven
 plate payloads now use a versioned shared schema generating TypeScript,
 Rust and Kotlin types, bounded encoders/decoders and serializable command batches.
@@ -72,7 +243,7 @@ ordered queries, cancellation and close. Production plate/history operations
 exchange these strings through a local adapter; the TypeScript bus remains the
 executor. Lost replies fail closed without automatic retries, and completed edits
 whose summary exceeds the wire budget remain explicitly completed. Selection and
-projection subscriptions are still local. Actual worker/JNI project execution,
+projection subscriptions are still local. Production worker/JNI project integration,
 revisioned projections, crash recovery and remaining workflows are still required. See
 [project contracts](engineering/project-contracts.md).
 
@@ -95,8 +266,73 @@ conversion boundaries. Semantic graph validation now covers declared layouts,
 references, settings-base consistency, mixed recipes, transforms, topology/paint,
 layer events and extension references/paths. `ValidatedProject` retains the proof
 on immutable candidates; 622 TypeScript-derived states compare ordered diagnostics.
-Native timezone adapters, option/profile validation, commands, history policy and native session execution
-remain open; these libraries do not enable Android editing.
+Native project/selection stores now provide immutable change receipts, revision
+guards, monotonic restoration and ordered selection pruning. An independent
+311-step TypeScript trace checks these library owners. Native command/history
+execution covers nineteen intents: seven plate operations, object/volume/instance
+renames, instance printability, single/batch transforms and six object lifecycle
+operations, with 1,108 reference steps. Local full-record instance creation and
+paste add 197 steps in a separate corpus. They now have budgeted record input,
+session-owned staged references and guarded execution, with a further 331-request
+independent endpoint corpus. WASM/JNI now replay those 331 requests through 109
+guarded chunked uploads, with 103 shared boundary refusals. Production worker transport,
+asset import and native editing UI remain open. Browser clone/add-instance/fill-bed
+now await the local staged transport. Clipboard paste also queues one guarded
+local command that restores missing descriptors/immutable bytes atomically.
+Rust now matches that library operation across 17 browser-authored traces / 130
+steps, with six native boundary/fault tests and zero-payload-copy allocation
+probes. WASM/JNI now expose four bounded clipboard owners per core instance.
+Capture binds a current object query node and guard; paste attaches selected data
+to a separately budgeted command upload with fresh destination authority. Ten
+clipboard captures and 53 shared boundary refusals cover sorted projections,
+stale/foreign targets, limits, source closure and retained-command lifetimes.
+Six Kotlin ownership scenarios cover high-level close and transfer behavior.
+Android now schedules guarded clipboard copy/paste through its bounded actor;
+browser task isolation, archive import and native editing remain open.
+A native session executes the existing guarded string protocol, validates exact
+asset-bundle membership and settles a bounded queue; 1,380 reference requests cover
+its replies and effects. Staged bulk input now reads chunked canonical JSON,
+admits the graph and transfers declared payloads into immutable asset records;
+2,433 independent JSON cases and an allocation probe cover this boundary. A
+separate optional project WASM package now exposes uploads, sessions, immutable
+effects/captures and bounded reads. Actual Node-worker replay matches all 1,380
+requests and 6,137 host Date.parse cases, including retained-buffer lifetimes.
+The browser runner is implemented but cannot start Chrome in this environment.
+The Android project JNI binding and Kotlin owners now replay the same 1,380
+requests in debug/release on the host JVM. An explicit ZoneId resolver matches
+36,822 fixed-zone timestamp checks and 48 historical/DST conversions; capacity,
+ownership, reentry and close races have separate coverage. Both Android ABIs
+compile, but fresh APK assembly and device execution remain unqualified for this
+binding. A Kotlin actor now bounds command/query, bulk preparation and guarded Open/reset work on owned
+executors; ordered effect delivery precedes completion, and close preserves confirmed
+outcomes while distinguishing uncertain active edits. A portable strict Kotlin
+protocol parser allows the actual decoder and actor to run in JVM/JNI checks.
+Opaque actor guards retain no large IDs or native handles, so valid identifiers
+beyond the small wire budget still authorize bulk commands and reset. Native
+reply-to-effects transfer now preserves its reserved slot at capacity. Application
+integration and device scheduling qualification
+remain open. Option/profile validation, remaining command families,
+archive decoding and production adoption integration,
+production worker transport and bounded remote projections remain open. Explicit
+browser bulk export still needs task isolation. Android now freezes complete
+project/asset bundles and streams them on owned export tasks; successful handoff
+and a current capture are required before acknowledging a saved checkpoint.
+Rust now assembles complete BBS/canonical packages from those frozen captures;
+archive bindings and storage-provider handoff remain open. These APIs do not
+enable Android editing.
+Prepared document replacement now has Rust and WASM/JNI Open/reset bindings.
+Its source guard and operation identity prevent stale or superseded input from
+publishing; clean history, ordered effects and asset record identity are preserved.
+Sixteen browser-authored scenarios compare 59 steps through both bindings; seven
+Kotlin ownership scenarios pass. Archive decoding, production
+application integration and document UI are still required for native Open.
+The Kotlin actor supplies guarded preparation/commit scheduling for this seam.
+Captured queries now expose nine entity kinds through WASM/JNI: paged children,
+numeric inspector/transform metadata, filament inheritance and mesh declarations.
+The shared schema generates Rust codes and TypeScript/Kotlin packet validators.
+This removes full-document export from those reads, while paint summaries,
+resolved settings, capabilities, renderer packets and revisioned subscriptions
+still need implementation and production integration.
 
 Build an adaptive native Android application for phones, tablets, Googlebook,
 and Android XR while preserving the web application. Introduce Rust as a shared
@@ -470,9 +706,12 @@ baseline report, and resolved build/release assumptions.
 - [ ] Fix a compatible AGP/Gradle/JDK/Kotlin/Compose/XR/NDK/Rust toolchain matrix
   after a minimal build; choose minimum/target SDK deliberately. Do not assume
   XR artifact versions align or let optional XR support exclude ordinary devices.
-- [ ] Inspect historical application ID/signing/storage expectations before
+- [x] Inspect historical application ID/signing/storage expectations before
   selecting upgrade versus separate-install behavior for retired APK users.
   Record the result without assuming old data is compatible.
+  Historical commit `7f16e6b` establishes the old ID; the new development app uses
+  a separate ID and does not migrate old storage. Signing/publication remain
+  release work. See [build decisions](engineering/native-core.md#build-decisions).
 
 **Exit gate:** published baseline inputs and repeatable measurement procedure;
 numeric device memory ceilings and support limits are recorded before optimization.
@@ -495,12 +734,12 @@ workspace, versioned protocol, CI jobs, and cross-language test runner.
   Use direct JNI for the initial narrow Android boundary and wasm-bindgen for
   browser exports; pin binding tools and generated artifacts together. Validate
   error propagation, disposal, cancellation tokens, and buffer accounting.
-- [ ] Define versioned command/result/error schemas and generate TypeScript and
+- [x] Define versioned command/result/error schemas and generate TypeScript and
   Kotlin types. Keep runtime validation at untrusted boundaries; generated types
   alone do not validate messages. Unknown protocol versions fail explicitly.
   Establish the schema generator's authority and require a clean regeneration
   diff, including Rust types, before either host can change its message shape.
-- [ ] Add cross-language trace fixtures for IDs, number encoding, hashes, mesh
+- [x] Add cross-language trace fixtures for IDs, number encoding, hashes, mesh
   layouts, and errors. Include non-BMP names, control characters, malformed
   surrogate input, empty payloads, large sizes, and stale generations.
 - [ ] Extract action/settings/profile/localization manifests from current
@@ -550,25 +789,31 @@ that native code automatically reduces total memory.
 **Dependencies:** Phase 1; use Phase 2 renderers for native integration.
 **Deliverables:** shared parser/index/projection and production browser adapter.
 
-- [ ] Port the current rich parser's modal state, source spans, tools, extrusion
+- [x] Port the current rich parser's modal state, source spans, tools, extrusion
   roles, layer handling, statistics observations, and bounded diagnostics.
   Preserve UTF-16 source-offset semantics where the existing browser API exposes
   them, or version an explicit byte/character offset translation.
-- [ ] Preserve one semantic record per G2/G3 source command, exact Float32 operation
+- [x] Preserve one semantic record per G2/G3 source command, exact Float32 operation
   order, bounded interpolation, cap failures without partial arcs, and unsupported
   metadata reporting. Do not enable compiler optimizations that change required
   floating-point behavior without differential proof.
-- [ ] Implement streaming source/index ownership and checkpointed windows with
+- [x] Implement streaming source/index ownership and checkpointed windows with
   the existing maximum of 240,000 rich records per window. Keep huge layers
   traversable and release previous sources on replacement.
 - [ ] Port preview filtering/color projection and bounded inspection/search
   behavior. Keep engine-authoritative statistics distinct from parser observations.
+  - [x] Implement twelve-mode projection, bounded inspection and playback with
+    independent source/window expectations and WASM/JNI session bindings.
+  - [ ] Implement and qualify the remaining bounded search behavior.
 - [ ] Replace the browser worker implementation behind its existing session
   interface; account for source conversion and WASM transfer overhead in benchmarks.
   Keep a startup-selectable reference adapter during qualification.
   Browser integration and packaged/offline loading now exist; the production
   regression exercises both adapters including conversion and transfer. This
   task remains open for the required repeated device performance measurements.
+  - [x] Integrate the production worker adapter, startup rollback selection and
+    verified offline asset loading; exercise both adapters in browser regressions.
+  - [ ] Complete repeated performance measurements on the reference devices.
 - [ ] Bind the same library to Android and render the resulting columns through
   the native viewport. Verify identical semantic IDs and projections across hosts.
 - [ ] Add fuzz/property tests for malformed numbers, huge lines, truncated arcs,
@@ -594,7 +839,33 @@ and replay coverage for the complete current command inventory.
   including acknowledgement-aware UI and guarded Objects reveal. Generated
   request/reply messages now serve these operations through an in-process string
   adapter with handshake, cancellation, close and bounded queue ownership. The
-  remaining workflows, remote projections and worker/JNI execution are not migrated yet.
+  object/part rename, instance printability, single/batch transforms and derived
+  placement routes now await that adapter too. DOM/XR gestures keep one dispatched
+  command and one latest pose, chain only acknowledged guards, and invalidate on
+  every selection change, tool replacement or disposal. Release waits for final
+  settlement; cancellation and lost replies never roll back or retry committed
+  work. Multi-instance printability retains separate undo entries and reports
+  partial completion. Controller, registry and presentation regressions cover
+  these transitions. Numeric inputs and DOM/XR transform gestures now pass every
+  dispatched edit through declared registry surfaces, preserving actual receipts
+  and original availability refusals. DOM lay-on-face uses its scene action;
+  the unfinished XR lay-on-face scene interaction remains undeclared. Object and
+  instance deletion, plate clearing, cut and instance conversion now await their
+  registered actions too; independent duplication and plate movement have guarded
+  async controller APIs. Duplicates return captured operation summaries, and cut
+  keeps its completed clipboard copy on failed/uncertain deletion without late UI
+  publication. Clone/add-instance/fill-bed now await measured staged work through
+  their registry actions. Guarded full-record capture precedes submission; fill
+  retains one transaction even above 64 commands. Captured operation summaries,
+  stale/closed refusal, failed-member rollback, pool exhaustion and uncertain
+  acknowledgements have controller and presentation coverage. Clipboard paste now
+  follows that local route with immutable selected asset captures and atomic
+  restoration, including SVG drawings. Other workflows, remote projections and production worker/JNI execution are not
+  migrated yet. Browser capture and placement planning still run synchronously.
+  - [x] Route the plate/history, rename, transform and specified lifecycle/staged
+    browser actions through guarded asynchronous acknowledgements.
+  - [ ] Migrate remaining editing/settings/import/save/slice routes and isolate
+    preparation work; preserve the registry boundary for every mutation.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,
   immutable asset repository, selectors, and session lifecycle into Rust.
   Use immutable shared asset ownership and bounded history; transform/undo must
@@ -616,11 +887,138 @@ and replay coverage for the complete current command inventory.
   Semantic graph validation and a separate immutable admission type now exist,
   with 622 independent reference states, explicit host timestamp policy and a
   sparse allocation probe. The browser's unknown-channel and shared-range
-  diagnostics now survive save/reopen. A native store, bounded projections,
-  history policy and session execution remain open.
+  diagnostics now survive save/reopen. Native project and selection stores now
+  own admitted snapshots, monotonic revisions, content equality and ordered
+  selection state. Immutable receipts expose committed changes to the native
+  session; 311 independent trace steps cover replacement, rollback, refusals,
+  guards, full content, allocation identity and selection. Session dispatch,
+  complete live projections and production worker/JNI project transport remain open. The native
+  session now owns an admitted graph, checks exact repository metadata/membership,
+  and interprets the existing string protocol through a 32-request queue. It binds
+  generation/project/asset/history guards, settles cancellation and close, keeps
+  rollback effects with failures, and distinguishes unavailable post-commit
+  summaries from failed operations. An independent endpoint corpus has 1,380
+  requests in 1,306 groups over 60 traces, plus eight bundle-admission cases.
+  Host-local save acknowledgement checks the serialized identity and owner;
+  history-only changes remain valid saves but invalidate queued command guards.
+  Native staged input now accepts chunked UTF-8 canonical documents under explicit
+  resource budgets, admits their graphs, and checks declared asset payloads before
+  transferring ownership into an immutable repository. It supports large documents
+  independently of stateless request limits. The optional project WASM binding
+  now transfers documents/assets, opens guarded sessions and returns immutable
+  effects/captures. Node-worker replay compares full state and ordered effects
+  for the 1,380-request corpus; 91 refusals and 6,137 Date.parse cases check host
+  boundaries. Browser execution remains unqualified. Android now has the same
+  session endpoint through JNI, Kotlin capture owners and an explicit host timezone
+  service. Debug/release JVM replay passes the full session corpus, 75 refusals,
+  36,822 fixed-zone timestamp checks, 48 historical/DST cells and nine Kotlin
+  ownership scenarios. Prepared immutable bundles now support guarded Open/reset
+  through Rust, WASM/JNI and Kotlin owners. Sixteen independent browser scenarios
+  compare 59 lifecycle steps, including superseded/failed Opens, edits during
+  preparation, selection/history-only changes, equal resets and history clearing.
+  Atomic commit moves admitted records and checks source/operation identity;
+  source leases, repository ownership and protocol counters remain valid. Archive
+  decoding, dirty confirmation, Android runtime qualification and crash recovery
+  remain open. A Kotlin actor now owns bounded command/query execution and guarded
+  Open/reset and bulk command preparation, with separate authority, preparation
+  and ordered-effect workers. Its original twelve real-JNI host scenarios cover
+  cancellation, stale/superseded Opens, rollback, close and twenty open/edit/close
+  cycles. Sixteen additional scenarios cover native preparation quotas, immutable
+  source snapshots, pool charges, reset history rules, oversized IDs and twenty
+  staged-edit/undo cycles. The independent 70-instance fixture matches its complete
+  receipt/effect sequence through the actor. Reply-to-effects conversion reuses its
+  reserved slot. Open/reset also retain confirmed adoption when resource pressure
+  prevents the optional summary query; callers can query again after freeing handles.
+  Clipboard selection/capture now runs on preparation workers from immutable
+  guarded source versions; paste uploads own selected data across clear/replacement.
+  Thirteen additional JNI checks and two complete TypeScript fixture comparisons
+  cover this actor flow. Export now freezes project/assets together and streams
+  JSON through bounded JNI callbacks on a preparation worker. Complete bundle
+  consumption and successful host handoff precede save acknowledgement; edits keep
+  the checkpoint stale, while history-only changes remain valid. Confirmed handoff
+  survives unavailable checkpoint resources and projection failure. Thirteen
+  shared host/device scenarios cover byte agreement, all UTF-16 units, concurrent
+  changes, limits, cancellation and close. Archive bindings, storage-provider
+  handoff, native application integration and live projections still need complete
+  workflows. Browser full JSON export still requires owned task isolation.
+  - [x] Port lossless IDs/schema-1 records, asset ownership, graph admission,
+    fingerprints, project/selection stores and guarded session execution.
+  - [x] Implement bounded staged input and guarded prepared-document Open/reset
+    through Rust/WASM/JNI; compare all 59 independent lifecycle steps.
+  - [x] Implement Kotlin actor ownership for commands, preparation, clipboard and
+    export with host JVM/JNI lifecycle/failure checks.
+  - [ ] Integrate live application projections, archive adoption, recovery and
+    Android runtime qualification; isolate browser bulk export work.
 - [ ] Port commands and transaction/history semantics by family, preserving
   rollback revision behavior, coalescing, checkpoint acknowledgement, selection,
   and history retention accounting. Test every command's failed and stale cases.
+  The native command owner executes nineteen prepared intents: seven plate
+  commands, three entity renames, instance printability, single/batch transforms,
+  object/instance deletion, plate clearing, independent object duplication,
+  cross-plate movement and conversion of an instance to an independent object.
+  An independent TypeScript corpus covers 1,108 steps in 51 traces, comparing full
+  states, hashes, revisions, selection, ordered effects, history and asset identity.
+  It includes exact UTF-16 retention thresholds, failed preparation versus failed
+  execution, plate limits, metadata duplication, no-ops, undo/redo, gesture
+  coalescing, optional names, imported metadata and atomic batches. Lifecycle
+  traces cover neighboring selection, empty-plate history, ID collisions, shared
+  asset retention and conversion's intentionally narrower instance record.
+  Two additional local commands now capture full instance/clipboard records;
+  197 steps across 11 independent traces cover metadata ownership, insertion
+  order, paste after source deletion, exact retention, graph failures and atomic
+  70-instance batches. Separate chunked record input has explicit operation
+  budgets and preserves complete UTF-16/unknown fields. Local history no longer
+  inherits the small wire protocol's batch/label limits; generated admission
+  limits remain unchanged. Session-owned staged handles now retain the original
+  preparation guard, charge both ready and queued work under explicit limits and
+  release payloads immediately on cancellation/close. Generated execute/release
+  references and the local asynchronous adapter preserve one-use ownership and
+  uncertain outcomes. A separate 32-trace / 331-request endpoint corpus compares
+  those transitions against TypeScript, including atomic 70-command batches.
+  Eight native and sixteen browser-host tests cover limits, stale guards, large
+  records, immediate release and lost acknowledgements. Encoded input charges
+  do not replace resident-memory budgets. WASM/JNI now expose a separately budgeted
+  chunked upload contract: four preparations per core instance retain the original
+  guard through reading, sealing and one-use transfer. Both bindings replay 109
+  uploads / 331 requests, with 103 shared refusal cases; seven Kotlin ownership
+  scenarios check consumed handles and ready-reference cleanup. Two native tests
+  additionally cover concurrent preparation limits, full metadata beyond the
+  small wire ceilings, exact option bounds and permit release on every failure.
+  The browser's clone/add-instance/fill-bed routes now use the local staged adapter,
+  with 23 controller cases and acknowledgement-aware registry/presentation checks.
+  Clipboard paste now adds 13 browser controller checks for reset/deletion,
+  stale/closed guards, uncertain replies, newer clipboard ownership and 3MF
+  save/reopen; eleven asset tests check bounded subsets, conflicts, rollback,
+  exact record retention and zero mesh copies. Rust now ports the asset-bearing
+  operation with 17 browser-authored traces / 130 steps comparing contents,
+  ordered effects, asset identity and exact input/history charges. Six native
+  tests exercise capture limits, source consistency, foreign ownership and
+  retryable apply/undo/redo failures. A release probe runs twenty cycles over an
+  8 MiB asset without payload-sized allocations. WASM/JNI now expose bounded
+  clipboard owners captured from current object query nodes and session guards.
+  Paste uploads attach immutable selected data; their JSON carries only new IDs
+  and a destination. Ten captures, 53 shared refusals and six Kotlin ownership
+  scenarios check sorted projection targets, stale/foreign owners, quota release,
+  source closure and retained-command lifetimes. Production document adoption
+  integration remains required. The Kotlin actor now schedules ordinary staged
+  command uploads with guarded immutable source captures, bounded workers and
+  cancellation, then admits and executes each input once. Clipboard preparations
+  share the four-owner native quota with completed captures and scan frozen sources
+  outside the authority. Publication checks the original guard and latest copy/clear;
+  paste captures selected data before its producer starts. Clear/replacement keeps
+  accepted pastes valid while refusing new uses of obsolete clipboard identities.
+  Thirteen JNI scenarios and two independent fixture replays cover the host flow.
+  These libraries do not enable
+  the Android editing UI.
+  Native fault tests exercise failures after publication, undo/redo retries,
+  coalescing/estimation failure and reserved rollback capacity. Other command
+  families, production worker/JNI project transport and editor integration remain
+  unimplemented; this does not close the command inventory or Phase 4 exit gate.
+  - [x] Port the nineteen prepared intents and local full-record creation/paste,
+    including asset-bearing clipboard restoration, undo/redo and rollback.
+  - [x] Replay the ported session/staged families through WASM and host JNI and
+    verify bounded upload/clipboard ownership and failure settlement.
+  - [ ] Port and replay every remaining command family before session cutover.
 - [ ] Port settings resolution, physical/mixed filament identities, profile
   selection semantics, and canonical slice preflight. Consume the generated
   pinned schema/catalog rather than reconstructing defaults in Kotlin.
@@ -629,9 +1027,23 @@ and replay coverage for the complete current command inventory.
   comes from the browser's pinned extractor; 3,439 layer cases and 100 graph
   queries compare reference results/errors. This is scope-policy computation,
   not option-value/profile validation, native settings commands or preflight.
+  - [x] Port generated scope eligibility, layered resolution, import sanitization
+    and configuration selectors with independent reference cases.
+  - [ ] Complete option/profile validation, settings commands and slice preflight.
 - [ ] Provide bounded object-tree, inspector, capability, selection, and renderer
   projections. Subscribe to revisioned deltas; do not send the complete project
   or all geometry to every panel after each edit.
+  Immutable query captures now provide nine entity kinds and eight child relations
+  through WASM/JNI. Numeric pages contain at most 64 rows; names/IDs retain complete
+  UTF-16 through bounded chunk reads. Plate/range sorting checks an explicit entry
+  budget before allocation. The independent corpus compares 5,987 nodes across
+  365 admitted captures. This covers canonical hierarchy, numeric inspector data,
+  transforms, filament inheritance and source declarations; it does not yet supply
+  full tree presentation/paint summaries, resolved-setting pages, capabilities,
+  qualified renderer packets or revisioned projection subscriptions.
+  - [x] Expose bounded captured hierarchy/inspector/transform/filament queries
+    through WASM/JNI with generated packet validation and independent replay.
+  - [ ] Add paint/settings/capability/renderer projections and revisioned deltas.
 - [ ] Make worker/service generation changes invalidate pending replies. Implement
   explicit session disposal and recovery after the core worker fails; recover
   only from acknowledged snapshots/journal entries, never an optimistic UI view.
@@ -648,20 +1060,139 @@ Rust remains an internal session choice until Phase 5 closes archive compatibili
 **Dependencies:** Phase 4. **Deliverables:** shared import/export, geometry,
 painting, and FullSpectrum operations that can support real native projects.
 
-- [ ] Port signature-first STL/OBJ/AMF/ZIP import, 3MF component resolution,
-  transaction preview/commit, deterministic imported IDs, and legacy schema
-  migrations. Enforce archive expansion/member/depth/size limits and safe paths.
+- [ ] Port signature-first STL/OBJ/AMF/ZIP import and complete foreign 3MF
+  metadata/canonical assembly, transaction preview/commit, deterministic imported
+  IDs, and legacy schema migrations. Enforce archive expansion/member/depth/size
+  limits and safe paths.
+  The shared `orcaxr-archive` crate now implements bounded ZIP/ZIP64 indexing,
+  safe member paths, streaming stored/DEFLATE reads, exact length/CRC checks and
+  cooperative cancellation over host-owned staged input. Seventy-five independent
+  browser cases and four shipped ZIP64 calibration files qualify the container
+  boundary; six native scenarios and an allocation probe cover malformed input,
+  cancellation and bounded I/O. Browser ZIP64 validation was tightened for five
+  malformed directory cases without changing valid file bytes. Browser authoring
+  also preserves literal `__proto__` members through canonical Open/Save, fixing
+  silent renaming while retaining ordinary deterministic bytes. Canonical-envelope
+  staging now incrementally decodes bounded UTF-8/BOM JSON, performs dense-facet
+  and false-fuzzy migrations with validation before removal, admits the graph
+  under a host timestamp policy and verifies exact asset mappings, lengths,
+  digests and declared blob bytes. The owning intermediate retains every member
+  and verifies unknown members too; it cannot be consumed as a completed import.
+  Independent browser helpers compare 109 cases (46 accepted envelope stages),
+  separately recording later full-import acceptance. An 8 MiB allocation probe
+  shows one asset allocation per load and no retained allocations after success
+  or late integrity failure. Bounded OPC reconciliation now merges preserved
+  relationships/content types and re-admits the staged graph while retaining the
+  original archive and asset identities. Canonical completion now regenerates and
+  compares BBS metadata, preserves externally modified members, adopts every
+  unowned file with exact compressed-archive-derived IDs and recognizes plate PNG
+  thumbnails. The final graph is re-admitted before prepared-document conversion.
+  Independent browser comparisons cover 385 inputs (276 accepted / 109 refused),
+  complete state/assets/warnings and unknown metadata. Foreign format detection,
+  BBS metadata/settings and paint-slot resolution, canonical assembly, bindings
+  and application import remain required; bounded structural parsing, standard
+  facet/extension-attribute projection and cross-part reference resolution
+  provide the current foreign-model seams. This does not close the archive task
+  or phase gate.
+  - [x] Implement and independently verify bounded ZIP/ZIP64 indexing, streaming
+    reads, integrity checks, cancellation and safe member paths.
+  - [x] Stage canonical envelopes, legacy facet migrations and declared assets
+    under explicit budgets, then reconcile OPC metadata without losing ownership.
+  - [x] Complete BBS reconciliation and unowned-member adoption for canonical
+    archives; admit the final bundle before guarded document replacement.
+  - [x] Decode standard BBS color/support/seam/fuzzy-skin facet roots into sparse
+    channels during bounded foreign model parsing, with shared package byte,
+    refinement-node and annotation-materialization limits. Verify paint/refinement
+    and refusal behavior against browser-authored ZIP fixtures.
+  - [x] Retain bounded unknown extension attributes on objects, components,
+    build items and facets, with namespace resolution and shared package count/
+    text budgets; preserve component-edge identity through graph expansion.
+  - [ ] Complete foreign format detection/parsing and transactional application
+    import, then bind owned work to provider lifetimes. Bounded one-part structural
+    parsing, standard facet projection, bounded extension-attribute retention and
+    cross-part component-reference resolution are implemented, but BBS metadata/
+    settings, filament-ID resolution, canonical extensionData/candidate assembly
+    and archive-task integration are open.
 - [ ] Port canonical-envelope and BBS authoring, scoped overrides, plate origins,
   assembly transforms, custom G-code, modifier/negative volumes, annotations,
   mixed recipes, and unknown metadata preservation. A consumed metadata member
-  cannot later overwrite a newly generated authoritative member.
+  cannot later overwrite a newly generated authoritative member. The three OPC
+  metadata writers now produce deterministic XML under explicit limits, with
+  pinned Unicode 16 casing and shared validated relationship resolution.
+  Ninety-two production-helper cases cover merged metadata/warnings and exact
+  outputs. Repeated browser Open/Save preserves unusual member names, bytes and
+  project identity through inferred per-part content types.
+  The bounded BBS facet hex codec now preserves the browser's exact wire states,
+  split order and aggregate decode accounting. Sparse assembly consumes only
+  explicitly encoded roots; output borrows computation or persisted trees through
+  a fixed buffer. Independent production-browser references cover all 256 wire
+  states, channel mapping, depth/budget failures and sparse collapse. BBS numeric
+  and XML streaming primitives now preserve compact float32 coordinates, exact
+  double transforms, UTF-16/XML character rules and bounded provisional output.
+  Browser references cover exponent boundaries and all single Unicode code
+  points. The core-model author now combines admitted immutable state, borrowed
+  mesh leases, physical/enabled-mixed materials, sparse paint, stable numeric IDs,
+  plate origins, component/build transforms and preserved extension attributes.
+  Complete core XML and refusals match independent browser cases; preparation
+  and writing have separate resource/cancellation checks. Native model settings,
+  layer ranges/events, brim ears and layer-height profiles now use the same
+  prepared IDs, with borrowed configuration, editable emboss recipes and captured
+  SVG drawing leases. Exact member bytes/refusals match independent browser
+  references. Native project settings now preserve all 98 physical-vector keys,
+  imported-vector precedence, extruder-reset scripts, wipe-tower projections and
+  ordinary/exact FullSpectrum rows. Complete settings bytes and typed projection
+  warnings agree with 508 independent browser cases; four-decimal output agrees
+  with 4,108 independent double-bit samples. Complete package assembly now streams
+  the canonical envelope, BBS members, captured assets and preserved metadata from
+  one frozen bundle. Independent browser references cover 1,032 package cases
+  (937 accepted, 95 refused), including warning inventory and asset mappings.
+  The production browser opens and saves 947 emitted native packages, including
+  ten real native rename edits. Canonical import now has separate host evidence;
+  1,210 actual edited canonical journeys now pass the host harness. Shared SVG
+  paths require identical bytes;
+  a missing drawing never borrows another part's reference. The native ZIP/ZIP64
+  container writer now streams into an empty private seekable destination with
+  bounded compression/index storage and cancellation. It preserves literal BOM
+  member names, deterministic UTF-16 ordering and same-limit readable compression
+  ratios. Independent browser/Python readers verify its output, including actual
+  65,535/65,536-member directories. A sparse host test streams a 4 GiB member and
+  reads a following member beyond 32-bit offsets. This container API has no
+  application binding; file-provider publication and Save handoff are still open.
+  - [x] Port and verify OPC, facet/numeric/XML primitives, core-model authoring,
+    model/project settings, scoped metadata, SVG/emboss and FullSpectrum output.
+  - [x] Stream the canonical envelope and complete deterministic ZIP/ZIP64 package
+    from frozen project/assets with exact preserved-member collision policy.
+  - [x] Compare all 1,032 independent package cases, including full warning
+    inventory, member bytes and mappings; exercise native capture lifetimes,
+    cancellation, output failures and bounded memory.
+  - [ ] Bind package jobs to host tasks and qualify actual provider publication
+    and Save checkpoint acknowledgement in the application.
 - [ ] Verify web-to-native-to-web round trips and reverse round trips, including
   a real edit between each save. Compare untouched preserved members exactly and
   semantic structure independently; never use STL as the project interchange.
+  - [x] Open all 947 emitted native packages in the production browser, compare
+    state/assets/warnings, then save/reopen all 947; ten include native edits.
+  - [x] Repeat through completed canonical archive import with real edits and
+    saves on each side: 1,210 debug/release host journeys preserve exact full state,
+    asset IDs/bytes and warnings through both implementations. The initial
+    109 import refusals and three Save refusals remain separate.
+  - [ ] Qualify foreign-format and application/provider round trips, including
+    WASM/JNI task ownership, publication and physical-device execution.
 - [ ] Port measured geometry operations in order: packed mesh codec/bounds,
   picking and region selection, paint/refined-facet computation, then preparation
   operations required by the capability inventory. Reuse pinned native geometry
   kernels through an explicit adapter where they already own the algorithm.
+  The Rust mesh codec now validates immutable asset bytes and exposes borrowed
+  vertex/triangle reads, deterministic packed authoring and explicitly budgeted
+  expansion. Canonical instance bounds use exact vertices and volume/instance
+  transforms, with captured metadata agreement and role filtering. Independent
+  browser fixtures compare bytes, float bits and refusals; a two-million-vertex /
+  two-million-triangle host probe checks allocation ownership. Bindings, production
+  renderer packets, picking/region selection and device qualification remain open.
+  - [x] Port immutable packed mesh validation, deterministic authoring and exact
+    transformed bounds; verify the two-million-vertex/triangle ownership probe.
+  - [ ] Bind the geometry operations and finish picking/selection, preparation
+    kernels, renderer packets and device qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.
@@ -952,10 +1483,21 @@ npm --prefix web run parity:report:check
 ./scripts/quality.sh
 ```
 
-Phase 1 must add documented entry points for the following new checks. These are
-interfaces to implement, not commands that work in the current checkout:
+Implemented development checks and their entry points are documented in
+[native-core](engineering/native-core.md) and `.github/workflows/native-core.yml`.
+From the repository root, the host Rust checkpoint runs with:
 
-| Proposed check | What it proves |
+```sh
+cargo +1.94.1 fmt --manifest-path core/Cargo.toml --all -- --check
+cargo +1.94.1 clippy --manifest-path core/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
+cargo +1.94.1 test --manifest-path core/Cargo.toml --workspace --all-features --locked
+cargo +1.94.1 test --manifest-path core/Cargo.toml -p orcaxr-archive --release --locked
+```
+
+The following verification responsibilities remain required in full; the presence
+of an entry point or a host result does not establish browser/device qualification:
+
+| Check | What it proves |
 | --- | --- |
 | Rust format/lint/host tests | Workspace quality and deterministic domain behavior |
 | WASM browser suite | Actual browser bindings, worker scheduling, buffer lifetime, and ordinary/non-isolated execution |
@@ -1017,15 +1559,17 @@ effort separately from device availability and external distribution review.
 | Googlebook or glasses hardware is unavailable | Continue host/emulator work and hold the affected device claim open |
 | Migration grows beyond bounded Rust extraction | Require performance or shared-authority value for each crate; keep UI/platform transport in their native languages |
 
-## First implementation tranche
+## Implementation sequence and handoff discipline
 
-The first implementation change should establish Phase 0 evidence capture and
-Phase 1 contracts. It should include the fixture/device inventory, minimal
-Android/Rust builds, one verified JNI/WASM operation, canonical encoding vectors,
-and CI wiring. The next changes should prove the current engine and both viewport
-candidates, followed by the G-code extraction. Broad native authoring begins only
-once the shared command and archive foundations can preserve real projects.
+The foundation, engine/viewport experiments and G-code extraction now have the
+scoped evidence recorded above. Continue from the current handoff checklist;
+finish the shared project/archive seam while retaining the unresolved baseline,
+renderer and device dependencies. Broad native authoring begins only once the
+shared command and archive foundations can preserve real projects.
 
 Track completion using the existing parity evidence convention: task, commit,
 date, fixture hashes, commands, device/OS/toolchain, result artifacts, reviewer,
-and unresolved limits. This plan starts with every implementation task unchecked.
+and unresolved limits. Check verified tasks in the same change as their evidence.
+For partial work, check concrete sub-items and leave the parent open. Before each
+handoff, update the next action, test failures/environment limits and uncommitted
+work state; do not require the next agent to reconstruct status from chat history.

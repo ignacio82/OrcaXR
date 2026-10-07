@@ -3,6 +3,31 @@
 OrcaXR builds on several upstream projects. Source pinned by submodule
 or by snapshot date in this file.
 
+## Shared Rust archive reader
+
+The development `orcaxr-archive` crate uses the pure Rust DEFLATE backend and
+checksums below, pinned by `core/Cargo.lock`. These dependencies are not yet
+linked into the production browser package or Android application. License
+identifiers are taken from the corresponding published crate manifests.
+
+| Crate | Version | License | Source |
+| --- | --- | --- | --- |
+| flate2 | 1.1.10 | MIT OR Apache-2.0 | [flate2-rs](https://github.com/rust-lang/flate2-rs) |
+| miniz_oxide | 0.9.1 | MIT OR Zlib OR Apache-2.0 | [miniz_oxide](https://github.com/Frommi/miniz_oxide) |
+| crc32fast | 1.5.2 | MIT OR Apache-2.0 | [rust-crc32fast](https://github.com/srijs/rust-crc32fast) |
+| adler2 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | [adler2](https://github.com/oyvindln/adler2) |
+| simd-adler32 | 0.3.10 | MIT | [simd-adler32](https://github.com/mcountryman/simd-adler32) |
+
+## Unicode package casing
+
+`contracts/opc-lowercase.json` and its generated Rust/TypeScript tables pin
+Unicode 16 default lowercase mappings and Cased/Case_Ignorable properties,
+captured from Node 22.21.0 (V8/ICU Unicode 16.0). They stabilize OPC declarations
+across runtime upgrades. Unicode data: Copyright © 1991-2026 Unicode, Inc.;
+**[Unicode License V3](https://www.unicode.org/license.txt)**, retained in
+[`core/licenses/Unicode-3.0.txt`](core/licenses/Unicode-3.0.txt).
+See the [Unicode 16 default case algorithms](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/).
+
 ## OrcaSlicer
 
 `third_party/OrcaSlicer/` is a git submodule pinned to upstream

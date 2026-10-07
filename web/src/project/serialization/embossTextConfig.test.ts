@@ -97,6 +97,20 @@ test('quotes, newlines, and markup in the text survive escaping', () => {
   assert.equal(decodeEmbossTextConfiguration(xml).configuration?.text, tricky.text);
 });
 
+test('illegal XML characters in text recipes and SVG references refuse authoring', () => {
+  for (const value of ['\u0000', '\u0001', '\ud800', '\udc00', '\ufffe', '\uffff']) {
+    assert.throws(() => encodeEmbossTextConfiguration(configuration({ text: `text${value}` })), /XML 1.0/);
+    assert.throws(() => encodeEmbossTextConfiguration(configuration({ family: value })), /XML 1.0/);
+    assert.throws(
+      () =>
+        encodeEmbossShape({ depthMm: 1, useSurface: false }, undefined, undefined, {
+          pathIn3mf: `drawing${value}.svg`,
+        }),
+      /XML 1.0/,
+    );
+  }
+});
+
 test('the projection lives on the shape tag and defaults honestly', () => {
   const shape = encodeEmbossShape({ depthMm: 3, useSurface: true }, 1.5, true);
   assert.match(shape, /depth="3"/);

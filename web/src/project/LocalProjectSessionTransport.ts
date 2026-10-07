@@ -18,6 +18,12 @@ import {
   sessionText,
 } from './ProjectSessionClient';
 import { ProjectSessionEndpoint, localSessionGuard, wireSessionGuard } from './ProjectSessionEndpoint';
+import {
+  discardStagedWork,
+  type ProjectStagingLimits,
+  type ProjectStagingUsage,
+  type StagedProjectWork,
+} from './StagedProjectCommands';
 
 export interface TransportAcknowledgement<T> extends AsyncSessionAcknowledgement<T> {
   /** Preserves explicit display-label truncation without changing canonical history. */
@@ -50,12 +56,45 @@ export class LocalProjectSessionTransport {
 
   executeIntent(
     intent: ProjectIntentWire,
-    options: { readonly guard?: AsyncSessionGuard } = {},
+    options: { readonly guard?: AsyncSessionGuard; readonly signal?: AbortSignal } = {},
   ): Promise<TransportAcknowledgement<void>> {
     return this.submit(
       () => ({ execute: { guard: this.guard(options.guard), intent } }),
       () => undefined,
+      options.signal,
     );
+  }
+  configureStaging(limits: ProjectStagingLimits): void {
+    this.endpoint.configureStaging(limits);
+  }
+  stagingUsage(): ProjectStagingUsage {
+    return this.endpoint.stagingUsage();
+  }
+  executeStaged(
+    work: StagedProjectWork,
+    options: { readonly guard: AsyncSessionGuard; readonly signal?: AbortSignal },
+  ): Promise<TransportAcknowledgement<void>> {
+    try {
+      if (!options?.guard) throw new AsyncSessionError('invalid-request');
+      if (options.signal?.aborted) throw new AsyncSessionError('cancelled');
+      const stagedId = this.endpoint.stage(work, options.guard);
+      const releaseReady = () => {
+        this.endpoint.releaseStaged(stagedId);
+      };
+      options.signal?.addEventListener('abort', releaseReady, { once: true });
+      if (options.signal?.aborted) releaseReady();
+      return this.submit(
+        () => ({ executeStaged: { stagedId } }),
+        () => undefined,
+        options.signal,
+      ).finally(() => {
+        options.signal?.removeEventListener('abort', releaseReady);
+        releaseReady();
+      });
+    } catch (error) {
+      discardStagedWork(work);
+      return Promise.reject(localError(error));
+    }
   }
   transactionIntents(
     batch: ProjectBatchWire,
@@ -98,14 +137,22 @@ export class LocalProjectSessionTransport {
   private submit<T>(
     operation: () => ProjectSessionOperation,
     value: (changed: boolean) => T,
+    signal?: AbortSignal,
   ): Promise<TransportAcknowledgement<T>> {
     try {
-      return this.client
-        .submit(operation())
-        .result.then((receipt) => this.acknowledgement(receipt, value))
+      if (signal?.aborted) throw new AsyncSessionError('cancelled');
+      const ticket = this.client.submit(operation());
+      const cancel = () => {
+        void ticket.cancel().catch(() => undefined);
+      };
+      signal?.addEventListener('abort', cancel, { once: true });
+      if (signal?.aborted) cancel();
+      return ticket.result
+        .then((receipt) => this.acknowledgement(receipt, value))
         .catch((error) => {
           throw localError(error);
-        });
+        })
+        .finally(() => signal?.removeEventListener('abort', cancel));
     } catch (error) {
       return Promise.reject(localError(error));
     }

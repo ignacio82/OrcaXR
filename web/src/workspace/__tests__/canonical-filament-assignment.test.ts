@@ -182,7 +182,7 @@ await test('fails stale, unknown, duplicate, empty, and missing-scope requests w
   const { fixture, controller } = await openFixture();
   const object = { kind: 'object' as const, id: fixture.ids.object };
   const stale = controller.getFilamentAssignmentSnapshot([object]);
-  controller.renameObject(fixture.ids.object, 'Revision changed');
+  await controller.renameObject(fixture.ids.object, 'Revision changed');
   const afterRename = controller.getSummary();
   assert.throws(
     () => controller.setFilamentAssignments([object], fixture.ids.physical1, stale),

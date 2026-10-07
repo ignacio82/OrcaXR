@@ -40,7 +40,32 @@ are fixture-specific evidence, not device-independent performance guarantees.
   Imported JSON keys such as `__proto__` remain own properties through TypeScript
   cloning; they never invoke the legacy prototype setter. The native trace corpus
   includes that regression and binds the TypeScript reference source hashes.
-  This port is not connected to a native project/session executor yet.
+  The native command owner now uses these snapshots for atomic rollback;
+  the native session owns guarded string requests. An optional WASM binding now
+  executes them in worker tests; production worker/JNI integration remains open.
+
+- Rust mesh views retain an immutable asset lease and validate actual finite
+  float32 xyz values, index range, triangle count and bounded buffer layouts.
+  The repository already proves descriptor length and declared FNV digest before
+  issuing the lease; opaque digest schemes retain that existing policy. Mesh
+  views borrow source bytes without creating decoded arrays or rehashing them.
+  Little-endian reads support unaligned/interleaved positions, extra position
+  components, uint16/uint32 strided indices and implicit non-indexed triangles.
+  Safe-integer layout arithmetic precedes address narrowing, including unused
+  strides larger than wasm32 address space. Clones retain the immutable proof.
+  Authoring accepts packed float32/float64 coordinates with optional uint32 indices,
+  writes one canonical buffer and computes FNV while writing. Explicit input
+  metadata, payload/count and expansion budgets precede their allocations.
+  Finite binary64 coordinates that overflow float32 are refused by both codecs.
+  Canonical bounds check full captured descriptor agreement, unique known instance
+  IDs and optional volume roles. They visit all vertices, including unreferenced
+  ones, applying volume then instance TRS in reference arithmetic order. There
+  is no box-corner approximation or intermediate transformed mesh. Both browser
+  and Rust reject non-finite transformed vertices instead of silently omitting
+  them from a finite-looking result. Native mesh/bounds work polls cancellation;
+  graph lookup/metadata comparison still belongs on an owned preparation task.
+  This is a library proof, not a live revision guard, renderer binding or native
+  import/export workflow.
 
 - Rust facet computation retains the version-2 sparse pair: whole-facet
   assignments and only subdivided source facets. It covers color, support, seam,
@@ -52,6 +77,10 @@ are fixture-specific evidence, not device-independent performance guarantees.
   finite nonnegative binary64 integer semantics rather than introducing a
   safe-integer or platform-pointer-width schema limit. Explicit dense expansion
   checks a host-provided root budget and addressable allocation size first.
+  Sparse import assembly instead consumes strictly increasing, unique, in-range
+  indexed roots. It validates all provided trees under the channel budget, drops
+  unpainted roots and moves uniform splits into whole-facet assignments without
+  allocating or iterating over missing source facets.
   Canonical-value validation does not reuse the stateless JSON parser's smaller
   byte/node/depth limits. Raw refinement validation preserves the reference issue
   order; cyclic/shared JavaScript object identities cannot occur in owned Rust
@@ -59,7 +88,7 @@ are fixture-specific evidence, not device-independent performance guarantees.
   JavaScript TypeErrors. The computation view is not a complete annotation or
   project codec and does not discard unknown fields from a stored graph. Typed
   candidates retain those fields. The graph validator checks annotation/source
-  topology consistency; future store/session code must enforce revision guards.
+  topology consistency; the future command/session gateway must check revision guards.
   This library is not wired to browser or Android project execution yet.
 
 - Rust schema-1 candidates preserve every modeled field and unknown properties
@@ -86,7 +115,10 @@ are fixture-specific evidence, not device-independent performance guarantees.
   and the V8 build's explicit tagged-integer profile. Local dates require a host
   resolver with matching DST/historical rules and TimeClip after conversion.
   Resolver failure remains distinct from invalid project data. Graph admission
-  now uses this explicit policy; platform timezone adapters remain unimplemented.
+  now uses this explicit policy. The optional WASM project host calls JavaScript
+  Date.parse directly. Android's JNI host uses the pinned Rust parser with an
+  explicit V8 integer profile and a captured Java ZoneId resolver; host JVM
+  comparisons qualify the tested DST/history rules, not Android's timezone data.
   Unknown annotation/refinement fields stay intact in the candidate, while the
   separate facet computation view owns its existing semantic checks. Persisted
   values do not inherit the stateless canonicalization request's parser limits.
@@ -102,7 +134,8 @@ are fixture-specific evidence, not device-independent performance guarantees.
   the immutable state, fingerprint and proof across clones. Creating an edited
   candidate does not change that proof; admitting the edit validates again.
   Host timestamp-service failure cannot produce a partially accepted candidate
-  or an invalid-data report. There is no native store revision/history/session yet.
+  or an invalid-data report. Store ownership is separate from admission; native
+  command execution owns history; the native session owns request identity/queueing.
   User-facing paths/messages retain UTF-16, including lone surrogates and NULs;
   Debug/Display redact source content. Unknown refinement-channel diagnostics use
   canonical UTF-16 order. Sorted range validation carries original array indices
@@ -112,6 +145,399 @@ are fixture-specific evidence, not device-independent performance guarantees.
   Valid paint indices allocate no diagnostic strings; only assigned indices are
   indexed. Effective-settings equality borrows values and uses a depth-sized
   iterator stack, avoiding JSON copies and one stack entry per scalar.
+
+- The native command bus exclusively owns its project, selection, asset repository
+  and timestamp policy. It returns ordered immutable effects, including rollback
+  effects on errors; host dispatch happens outside the mutation. It reserves safe
+  counter capacity for command publications and every possible rollback first.
+  A context enforces the declared publication bound so a command cannot consume
+  its rollback reservation. Dirty token clocks never roll back, but current dirty
+  tokens do. Undo/redo restore captured selection and dirty tokens. History guard
+  revision can change even when the visible history snapshot is equal. Coalescing
+  retains the gesture start and cannot cross a composite entry or redo branch.
+  Entry/estimated-byte retention keeps one oversized newest command, matching
+  the browser. Canonical UTF-16 length is streamed, including nested escaping.
+  Trusted native commands report anticipated failures with Result; panic recovery,
+  nested callback transactions and host callbacks are not a transport contract.
+  Generated plate batches are fully decoded/prepared before entering the bus.
+  An executed batch member failure emits inner and outer project restoration;
+  preparation failure emits neither. Plate duplicate commands compare the complete
+  source plate/G-code/thumbnail scope, share immutable metadata and asset bytes,
+  and preserve the browser's sparse-order source guard. Reorder undo restores
+  logical order with consecutive indices, not the former sparse numeric orders.
+  Full previous states retained by plate duplicate/delete are admitted immutable proofs;
+  their revert publications can reuse admission without a timestamp-service call.
+  Prepared object/volume/instance renames, instance printability and single/batch
+  instance transforms now execute through the same owner. Rename trims exact
+  ECMAScript whitespace; undo distinguishes absent and empty instance names.
+  Batch transforms sort stable UTF-16 IDs, reject duplicate targets, coalesce
+  the same gesture/target set and charge exact canonical UTF-16 history lengths.
+  Single transforms retain their fixed 256-byte history estimate and legacy
+  delimiter coalescing key, including its collision behavior. The existing batch
+  command retains only known transform fields for undo, whereas the single
+  command preserves imported transform extras; the port matches both behaviors.
+  Neither operation copies mesh, paint or configuration payloads. Native object
+  lifecycle commands now delete objects/instances, clear plates, duplicate
+  independent objects, move objects between plates and convert instances to
+  independent objects. They preserve ordered selection repair and exact undo,
+  retain shared assets, and stream canonical UTF-16 history charges. Clearing an
+  empty plate still enters history without a project publication. Object copies
+  preserve unknown metadata; conversion intentionally rebuilds the new instance
+  from its ID, optional name, transform and printable flag, matching the browser's
+  omission of instance extras/extensionData while retaining transform extras.
+  Local native instance creation and paste retain complete captured records,
+  including unknown instance/transform metadata. Native template-only paste owns its template even
+  after source deletion, injects all editable IDs, appends to the destination
+  resolved on apply and retains asset references without inserting asset bytes.
+  Instance insertion preserves array order and the reference's finite-index
+  errors. Both use the same graph admission, rollback and UTF-16 history charges.
+  Budgeted chunked record decoders prove structure, not destination eligibility;
+  graph semantics are checked on apply. They create no session/wire authority.
+  Local batch history preserves arbitrary domain labels and batches larger than
+  64; the generated protocol retains its 64-command and label limits. A host
+  admitting staged transactions must enforce explicit resource budgets before
+  submission. Rust and the local TypeScript endpoint now own measured staged work
+  under explicit resource/command/encoded-UTF-16 limits, disabled by default.
+  Capture fixes all retained arguments before charging; one-use session-local IDs
+  never repeat. The guard captured before preparation must still match owner,
+  project, assets and history at admission and execution. Selection changes alone
+  do not invalidate it. Ready and queued inputs share the aggregate budget;
+  moving work into the queue does not free its charge. Cancel/close drop queued
+  payloads immediately while preserving bounded reply slots. Release addresses
+  only unaccepted input and remains available at queue capacity; it never undoes
+  accepted/committed work. Host cleanup releases unconsumed inputs after failed
+  transport without retrying an uncertain mutation. The small generated envelope
+  adds executeStaged/releaseStaged references; its existing command/batch bounds
+  are unchanged. These additive version-1 operations require a matching host
+  staging implementation; older decoders reject them before mutation. They are
+  not capability negotiation. Parsing/preparation budgets remain separate, and
+  encoded units are not a resident-memory ceiling. WASM/JNI upload adapters now
+  implement the separate version-1 `project-staging` contract. Ordered UTF-8 chunks
+  carry `[version, work]`; work/command arrays use generated numeric tags and exact
+  positional arities. Persisted records keep unknown fields, UTF-16 escapes and
+  last-key-wins objects. Embedded small intents are ASCII JSON strings and still
+  use their strict decoder. Named options explicitly bound bytes, nodes, text,
+  number tokens, depth, command count and finished encoded units. Four preparation
+  permits per core instance cover both reading and sealed input across sessions.
+  The permit survives admission until the destination charges its finished pool;
+  parse/seal/transfer failures and cancel/drop release it. Bad chunk/offset calls
+  preserve progress. Sealing performs synchronous typed decoding and measurement;
+  hosts must schedule it on an owned preparation executor. JNI owners can use
+  separate task threads. WASM handles remain in their originating module and
+  linear memory: calling a separate seal method does not provide worker isolation
+  or interruptible finalization, and uploads cannot move between module instances.
+  Browser task isolation remains open; Kotlin actor scheduling is described below.
+  Transfer performs no parser work and rechecks the original
+  guard. Detached input can outlive a closed source as an immutable capture but
+  cannot attach to another owner. Hosts own cancellation of those preparation
+  tasks; session close only owns accepted ready/queued work. Kotlin consumes upload
+  owners on failed/successful transfer, cleans late results, and exposes a closeable
+  ready reference whose release never cancels a queued command. Waiting for an input
+  call does not hold the session call gate. Native asset import and native editing
+  UI remain open. Kotlin clipboard scheduling is described below. The transitional browser controller now
+  enables four ready/queued resources, 4,096 aggregate commands and 16 Mi encoded
+  input units. Each instance capture separately allows 1,048,576 nodes and depth
+  128. These are explicit logical limits, not device memory/latency qualification.
+  Clone/add-instance use one staged command; fill-bed uses one staged transaction,
+  preserving its one-copy label and the default 64-copy planning limit. Explicit
+  fill requests above 4,096 copies refuse before planning. Aggregate input charges
+  bound capture across the batch; the small wire envelope never contains the records.
+  Guards precede planning/ID allocation, selection alone cannot retarget an edit,
+  and summaries capture original identity/name/transform before submission. UI
+  success awaits acknowledgement; a lost receipt never retries or reverses a commit.
+  Browser preparation and placement planning are still synchronous.
+  Browser clipboard copy retains only the immutable object subtree and an opaque,
+  repository-owned asset subset, bounded to 4,096 assets / 512 MiB per capture.
+  Mesh and editable SVG drawing dependencies are included; missing bytes refuse
+  copy without replacing the previous clipboard. Frozen descriptors are readable;
+  bytes remain private and no project-wide rollback snapshot is retained.
+  Clipboard paste now captures full metadata under the same 16 Mi input-unit limit
+  and queues one guarded local command. It checks asset ownership and exact existing
+  declarations, then restores missing descriptors and shared byte records inside
+  the command rollback boundary. Conflicting assets or dangling material references
+  fail atomically; paste never silently remaps materials or overwrites bytes.
+  Undo removes only assets introduced by that paste and still unreferenced; redo
+  restores their original record identities. History charges captured byte lengths
+  as well as object/descriptor metadata. Late receipts retain the original result
+  and never replace a newer clipboard. Disposal clears the controller's clipboard
+  reference. Rust now implements the matching library operation: capture shares
+  the selected object, typed declarations and immutable byte records, with explicit
+  asset-count/byte limits and a weak repository owner identity. It retains no whole
+  project/repository version. Missing declarations/bytes are restored inside the
+  command rollback boundary; foreign ownership, metadata/byte conflicts and invalid
+  destination graphs refuse atomically. Undo scans references once and removes only
+  introduced assets that remain unused. Native staged measurement includes all
+  object/descriptor metadata and injected IDs; history additionally charges bytes.
+  Seventeen browser-authored traces compare 130 native steps, full contents, ordered
+  effects, asset identities and exact input/history charges. Six native boundary
+  tests include source consistency, concurrent capture limits, sorted query targets
+  and retryable apply/undo/redo failures. WASM/JNI now expose four clipboard owners
+  per core instance, separate from the four command preparation permits. Callers
+  supply asset-count/byte budgets. Capture requires a current session guard and an
+  object query node from the exact current graph/revision; sorted display rows
+  never become stored-array indices. History-only changes require a fresh guard
+  but permit reuse of the unchanged graph query. Root/plate, foreign and stale
+  nodes refuse before capture. The result exposes only five counts: volumes,
+  instances, layer ranges, selected assets and bytes. It retains no query snapshot.
+  A paste upload attaches immutable clipboard data plus a fresh destination guard
+  from the same repository owner. The additive version-1 clipboard command tag
+  carries only injected IDs and nullable destination; selected objects, descriptors
+  and asset bytes are never serialized into command JSON. Full UTF-16 metadata
+  still counts toward finished-input charges. One upload may mix several pastes
+  from its attached capture with other commands in an atomic transaction. Freeing
+  the clipboard releases its owner permit; reading/sealed uploads, accepted work
+  and history retain independently charged data. Cancellation/drop releases an
+  upload's preparation permit and retained data. Kotlin closes late results and
+  never waits on another handle while holding the session call gate. These handles
+  remain module-local in WASM; production scheduling, archive import
+  and native editing UI remain open.
+  Optional wire names/destinations use explicit absent/value variants. Duplicate
+  names trim ECMAScript whitespace; conversion names keep their original text and
+  graph validation decides validity. The browser controller now submits these six
+  lifecycle intents through the guarded asynchronous transport. Selected deletion
+  captures the instance/object scope before queueing; changing selection cannot
+  retarget the edit. Duplicate summaries capture the exact IDs, name and source
+  plate before submission rather than reading newer state after acknowledgement.
+  Cut retains its synchronous copy-first behavior, including when deletion fails
+  or its reply is uncertain; a newer clipboard copy is never replaced on late
+  completion. The controller's existing empty-plate check skips submission and
+  preserves history, distinct from executing the raw empty-plate command. Other
+  command families and production worker/JNI project integration remain open.
+
+- Rust project/selection stores require one exclusive mutation owner. Each
+  accepted project replacement publishes a newer revision, including equal
+  content and exact shared allocations. Restore reuses immutable admission and
+  hashes but never restores an old revision; its default reason is atomic
+  rollback and its dirty-category list is empty. Fresh candidates validate before
+  publication; failed graph admission or timestamp services leave state and
+  revision untouched. Content equality compares the complete typed graph and
+  unknown JSON, not only FNV hashes, and treats signed zeros canonically. Shared
+  JSON is skipped by identity; separate JSON uses depth-sized equality frames.
+  Revision/hash guards intentionally have the browser store's value semantics;
+  the native session additionally checks generation/asset/history guards and
+  uses owner-bound local guards for host operations.
+  Native revision exhaustion refuses before publication at the existing protocol
+  safe-integer maximum, rather than overflowing or repeating a binary64 revision.
+  This is a runtime lifetime bound, not a persisted graph limit. A transaction
+  owner must preflight capacity for all publications and rollback before editing.
+  Changes are immutable receipts returned after publication, without retained
+  event queues or arbitrary host callbacks in the stores. Host dispatch must
+  preserve their order and isolate projection failures; this library does not
+  implement browser subscriptions or revisioned worker/JNI projections yet.
+  Selection keeps the first occurrence of each kind/ID pair in order, accepts
+  dangling references until explicit pruning, and preserves physical/mixed
+  filament membership even when disabled. Exact selection no-ops return no
+  receipt; invalid primaries leave state intact. Restore calls the set semantics:
+  a nonempty selection without a primary selects its last item. Snapshots and
+  receipts retain private UTF-16 text without exposing it in Debug diagnostics.
+  Commands, assets, dirty-token policy, bounded history and session lifecycle
+  remain separate owners; these stores alone do not enable native editing.
+
+- Native document staging receives UTF-8 JSON in ordered chunks of at most 64 KiB.
+  The host explicitly budgets source bytes, decoded value nodes, UTF-16 text units,
+  number-token bytes, nesting, asset count and individual/aggregate asset bytes.
+  Overwritten keys/values still consume parse budgets. The parser retains decoded
+  values, not source chunks; it preserves escaped lone surrogates, NULs, unknown
+  fields, duplicate-property last-wins behavior and canonical number semantics.
+  Invalid UTF-8, nonfinite numbers and malformed/truncated syntax are refused.
+  Syntax/resource failures release staged data and make the input terminal;
+  offset/chunk refusals leave progress intact. The implementation supports at most
+  128 nesting edges so subsequent canonical value encoding/drop stays bounded.
+  This is an operation resource limit, not a new persisted schema constraint or
+  the stateless canonicalizer's small request budget.
+  Typed decoding, explicit timestamp services, semantic graph admission and total
+  declared asset budgets precede payload allocation. Only declared assets can be
+  supplied; one transfer is active at a time and exact offsets/lengths are checked.
+  Digest validation precedes moving the owned buffer into its immutable record.
+  Cancel releases the active buffer; digest failure discards it and permits retry
+  while earlier assets remain staged. A complete bundle consumes all declared assets.
+  Neither a partial document nor a partial bundle can publish a live session.
+  Whole-graph decoding/admission/hashing and digest work still require an owned
+  import task; chunking alone does not make finalization interruptible. A prepared
+  document now checks exact graph/asset membership and metadata and warms its
+  bundle fingerprint before admission into an existing authority. It owns immutable
+  graph/asset records and exposes no mutable access. Open captures the source
+  export identity plus a distinct operation token. Newer Opens supersede older
+  ones even if the newer preparation fails or is cancelled. History-only and
+  selection changes preserve an Open; project/revision/assets changes invalidate
+  it. The session retains only a weak token, while tickets retain their source guard.
+  Dropping all ticket handles abandons that operation. Hosts must still cancel
+  preparation work and classify failure against current lifecycle/cancellation.
+  Prepared input moves into Open/reset under a final source/owner check. Capacity
+  checks precede publication; commit runs no parser, timestamp callback, digest
+  validation or payload copy. Even equal replacement advances the project revision.
+  Project, selection-clear and history receipts preserve browser order, and a clean
+  history root invalidates old history guards. Session nonce/request/staged-ID
+  sequences and destination repository ownership survive replacement. Old snapshots
+  and leases remain immutable; clipboard subsets keep their owner identity. Ready
+  and queued work remain charged until release/settlement and refuse as stale
+  instead of targeting the replacement graph. Failed reset preserves pending Open;
+  completing or failing an Open clears only its own operation. JNI reserves effect
+  capacity before committing and Kotlin consumes document owners on every outcome.
+  WASM consumes the document's contents while retaining an empty closeable wrapper;
+  repeated admission returns invalid_state without poisoning session borrows. Free
+  that wrapper after success or failure. Production archive decoding and
+  application integration, including dirty-confirmation/document UI, remain open; the Kotlin
+  actor described below now owns canonical bundle preparation and guarded commit.
+
+- The optional project WASM host accepts generated version-1 options: ten exact
+  unsigned 32-bit budgets, explicit depth/token limits, and a fresh four-word
+  host nonce. Staged upload is consumed when opening a session, including on
+  failure; successful construction requires the complete admitted bundle. Actual
+  host Date.parse validates lossless UTF-16 timestamps; service exceptions fail
+  admission without leaking their text. Raw bindings are trusted adapter APIs:
+  precheck inputs before wasm-bindgen copies strings/typed arrays into memory.
+  Replies transfer ordered immutable effects, including failure/rollback effects,
+  for dispatch before acknowledgement. Captures and asset leases survive session
+  release; hosts must release every handle, including effect-owned captures.
+  Project JSON export is an explicit synchronous bulk operation with an output
+  budget, separate from future bounded live projections. Reads copy bounded
+  chunks into host-owned buffers. Save acknowledgement still requires a current
+  owner-bound export guard after successful handoff; export alone never saves.
+  Independent Node-worker replay exercises this binding. Production browser
+  authority and subscription dispatch remain open. Android has a separate JNI
+  binding to the same domain owner, described below.
+
+- Android JNI project handles are positive, never reused, and bounded to 4,096
+  live handles including at most four upload/prepared-document/session owners. Opening transitions
+  an admitted upload into a session in its existing owner slot. Kotlin consumes
+  the upload on every open failure as well as success. Response/effect capacity
+  is reserved before draining or mutating, so resource exhaustion cannot discard
+  a committed outcome. A busy or reentrant native call refuses rather than
+  waiting through a host timestamp callback. Registry locks never cover that work.
+  Close invalidates lookup immediately while in-flight references retain memory
+  and admission permits until released. Kotlin serializes ordinary calls, rejects
+  late results and frees any late returned capture. A mutation racing close may
+  have committed; loss of its acknowledgement must not trigger automatic retry.
+  Captures and owned byte arrays survive the original session's close. Raw JNI
+  checks input lengths before copying and returns only bounded, owned arrays.
+  Timestamp callbacks use a retained GlobalRef and redact Java exceptions to
+  timestamp_service; invalid syntax remains invalid_document. The explicit
+  resolver and V8 integer profile are part of admission policy. Actual JVM/JNI
+  replay covers these contracts. A Kotlin actor now owns command/query scheduling
+  and guarded Open/reset and command preparation: one authority worker, two preparation workers and
+  one ordered effect-delivery worker, with at most 32 unsettled requests including
+  undelivered effects. Caller lists are captured as bounded immutable protocol JSON
+  before enqueueing; monotonic request IDs are allocated in authority execution order.
+  A separate host nonce and a checked handshake bind each connection. All effects,
+  including failed-command rollback, are consumed before completing its request.
+  The callback borrows an automatically closed effects owner; retained child captures
+  require their own explicit lifetime. Callback failure cannot undo a confirmed edit.
+  Cancellation prevents queued/preparing work; active mutation cancellation refuses.
+  Close invalidates native owners immediately and reports active missing receipts
+  as uncertain. Already confirmed results retain their outcome with closed projection
+  status. Settlement waits for any already running delivery callback to return;
+  callback code must not synchronously await another request from the actor.
+  Document producers own current/late native handles in a cancellation scope, with
+  two preparation workers outside the authority. Superseded/edited source guards
+  are checked again at commit. Open/reset without a bounded summary remain completed,
+  including when no native handle remains for their optional summary query.
+  Reset uses export identity, ignores history-only
+  changes and preserves pending Open on failure; successful reset invalidates it.
+  Host guards bind a private actor token, monotonic project/history revisions and
+  asset fingerprint. They retain neither full IDs, snapshots nor native handles.
+  All actor project/asset changes publish a new project revision; do not introduce
+  another writer or asset-only mutation path that violates that ownership contract.
+  This local proof avoids the stateless wire ID ceiling. Each bulk task checks it
+  before taking a native guard and immutable source snapshot, then the native guard
+  is rechecked at final admission/execution. Producers borrow the source and an
+  ordered chunk writer; sealing runs on a preparation worker, and no ready staged
+  reference escapes. Finished-pool limits are explicit and disabled by default.
+  Cancellation releases current/late handles, and all settlements release charges.
+  Replies become effects in their already reserved native slot; the consumed reply
+  owner must not be closed again under its former raw handle. Repeated/wrong-kind
+  conversion refuses without changing the effects. Confirmed results remain
+  confirmed when an optional host guard capture fails; authority is then absent,
+  and callers query again after freeing resources rather than retrying the mutation.
+  Copy now starts with an immutable project/asset preparation captured under the
+  original guard. Query selection and object/asset scanning run on a preparation
+  worker without a live-session lock. Preparation and completed captures share
+  four native owner permits; conversion reuses the input slot. Only preparation
+  retains the full source version; a completed clipboard retains selected data.
+  Final publication rechecks the original guard and latest copy/clear request.
+  A failed/cancelled replacement preserves the previous completed clipboard but
+  cannot revive an older pending copy. The actor owns clipboard handles; returned
+  identities contain only bounded metadata and no native handle or actor closure.
+  Paste takes a fresh destination guard and attaches that clipboard's immutable
+  data before its producer starts. Later clear/replacement cannot remove those
+  bytes from accepted preparation/history; new pastes with old identities refuse.
+  Clear is ordered on the authority and immediately supersedes pending copies.
+  Close releases the clipboard and all active preparation owners.
+  Export now captures the admitted project and asset version together under an
+  export guard. History-only changes remain valid; later graph/assets changes
+  cannot retarget reads. A borrowed source streams canonical JSON and assets in
+  declaration order on a preparation worker, with explicit JSON/asset-count/byte
+  budgets. JSON uses at most 64 KiB of native output staging, without building a
+  whole serialized buffer; metadata traversal and destination memory are separate.
+  Each JNI callback owns its bounded byte array. Callback errors stop serialization
+  and become redacted export_service failures. Closing stops subsequent chunks.
+  The source is thread-confined and refuses calls after the callback completes.
+  The host owns archive format, output closure/flushing, durability policy and
+  successful handoff. Complete JSON and every asset must be consumed before save
+  acknowledgement. Export alone never clears dirty state. Save acknowledges only
+  after handoff and rechecks the captured export identity on the authority;
+  concurrent edits yield a confirmed export with a stale checkpoint. History-only
+  changes do not invalidate that save. Output handoff and checkpoint confirmation
+  are separate: resource pressure or close after a known handoff cannot erase it.
+  Checkpoint effects are delivered before completion; projection failure cannot
+  undo a confirmed save. Queued preparation remains cancellable. Once the output
+  callback begins, cancellation refuses, because external writes may have happened.
+  Callback failure, incomplete output or close before confirmed handoff reports
+  uncertainty without checkpoint acknowledgement or automatic retry. Source handles
+  still close immediately; a blocked destination must enforce its own I/O deadline.
+  Archive assembly, storage-provider handoff, app subscriptions and Android runtime
+  qualification remain separate requirements.
+
+- A fresh native session first checks exact asset membership and full canonical
+  descriptor equality, including unknown metadata and optional-field absence.
+  Borrowed typed-to-JSON comparison avoids public payload/metadata copies and
+  never substitutes hashes for content. The caller supplies a semantically
+  admitted graph and an explicit timestamp policy; this is not archive ingestion.
+  Initialization creates the same clean checkpoint/history revision as the browser.
+  The existing generated request/reply contract owns wire shape and resource bounds.
+  The host supplies a fresh 128-bit connection nonce independently of project IDs.
+  Submission and execution are separate: at most 32 requests retain prepared work;
+  close/cancel have a control path even at capacity. Failed preparation retains a
+  small settlement slot until drained. Cancel/close drop other prepared payloads
+  immediately, preserving bounded reply slots and canonical assets. Generation,
+  protocol, disposal, monotonic request IDs and readiness follow browser precedence.
+  Queued mutations check exact project ID/revision/hash, asset fingerprint and
+  history revision before committing. Local guards also bind their authority owner;
+  a foreign but equal-looking snapshot cannot authorize host selection or save.
+  Save acknowledgement deliberately ignores history-only changes, while requiring
+  the captured project/revision/content/assets and a successful host save handoff.
+  Serialization and queries never clear dirty state. A wire summary that cannot
+  fit after commit yields receiptUnavailable with the actual changed flag.
+  Failures still return ordered rollback effects. Hosts must dispatch these before
+  delivering the reply; callbacks cannot reenter a core commit. Returned immutable
+  receipts/leases survive close and disposal. No full graph crosses a session reply.
+  Production worker/JNI integration, bounded renderer/tree projections, archive
+  opening, Android runtime qualification, recovery and remaining command families
+  remain open.
+
+- Project query captures retain one immutable admitted snapshot, with its revision
+  and canonical hash available after session disposal. Private positional addresses
+  are meaningful only within that capture; commands still bind stable IDs and
+  session guards. Project/plate/object child lists preserve canonical array order,
+  except plates sort by order then UTF-16 ID and layer ranges by minimum Z then ID,
+  matching the Objects projection. Only these sorted lists allocate an index, after
+  checking the caller's sort-entry budget. Other lists retain constant-size ownership.
+  Sorting remains synchronous work for an owned projection executor.
+  The versioned query schema defines nine entity kinds, eight relations, numeric
+  fields and text fields. Numeric pages contain at most 64 rows and fit within
+  64 KiB; generated TypeScript/Kotlin validators reject malformed, missing,
+  duplicate, unordered, unknown and out-of-domain numeric fields. Mesh-field
+  groups are atomic; indices/strides require their parent layout, component counts
+  stay in 1–4, and mesh fields require the mesh asset kind. Collection
+  indices/counts stay unsigned 32-bit; authored finite numbers preserve their
+  binary64 values, including large integer order/topology values. Optional text
+  absence differs from an empty string. Unsupported fields/relations refuse;
+  bounded text reads preserve surrogate halves and NULs without truncating IDs.
+  Reads return owned arrays and never include settings values, paint arrays,
+  geometry bytes or a serialized document. Mesh declarations retain authored
+  offsets/strides and are not an attestation of GPU-safe geometry. Production
+  capabilities, paint summaries, resolved settings, renderer packets and
+  subscription/delta dispatch remain separate work.
 
 - Rust settings policy uses a generated projection of the same pinned scope
   extractor as the browser. Project/plate/object/part/height-range precedence and
@@ -157,12 +583,39 @@ are fixture-specific evidence, not device-independent performance guarantees.
   while canonical subscriptions own selection/projection updates. Deletion does
   not clear a newer selection after delivery. Objects reveal awaits activation and
   checks its receipt plus the expected selection before selecting/framing a row;
-  a superseded reveal leaves newer intent intact. Other editing, import, save and
-  slice paths still require migration.
+  a superseded reveal leaves newer intent intact. Object/part renames, instance
+  printability, single/batch transforms and derived placement operations now
+  await the same transport. UI name/transform validation remains in the controller;
+  prepared inputs and guards are captured before queueing. Multi-instance
+  printability validates every ID up front, preserves a separate undo entry per
+  changed instance, chains its own receipts and reports the completed count if a
+  later request fails. No receipt is inferred from a later current snapshot.
+  DOM/XR transform gestures retain at most one dispatched command and one latest
+  immutable full-pose set. Final release awaits the last queued pose. Only an
+  actual acknowledgement advances the gesture guard; intervening edits or
+  checkpoints stop it without rebasing. A selection lifetime invalidates on each
+  real selection change, including away-and-back changes in one task, and sends
+  cancellation immediately through the transport. Tool changes and disposal also
+  cancel. Already committed poses remain undoable, and lost replies never cause
+  retries. The local bridge releases AbortSignal listeners on settlement and
+  preserves authoritative replies when cancellation races a commit observer.
+  Named editing actions, numeric transforms and DOM/XR scene transforms now
+  preserve their results through ActionRegistry. The ordinary boolean invocation
+  delegates to the same result-bearing availability boundary. A result carries
+  the actual command acknowledgement, never a later query or a fabricated guard;
+  denied requests carry the original availability reason. Tool actions with a
+  transform payload commit without reactivating the tool or cancelling its own
+  gesture. Each dispatched pose rechecks availability on the declared inspector
+  or scene surface. DOM lay-on-face commits use the same gateway; no XR scene
+  route is declared for that unfinished interaction. Missing action context
+  refuses edits rather than falling back to a direct controller mutation. Other
+  editing, import, save and slice paths still require migration.
 - `contracts/project-intents.json` owns prepared payloads for plate add,
-  duplicate, delete, activation, rename, reorder and printability. It generates
-  TypeScript, Rust and Kotlin types and conversion checks. Production plate
-  actions capture these intents before queueing through `AsyncEditorSession`;
+  duplicate, delete, activation, rename, reorder and printability, plus object/
+  volume/instance rename, instance printability and single/batch transforms. It generates
+  TypeScript, Rust and Kotlin types and conversion checks. Production plate,
+  object/part rename, printability and transform routes capture these intents
+  before queueing through `AsyncEditorSession`;
   `transactionIntents` captures a bounded list and uses one existing bus transaction.
   Preparation retains injected ID order and allocates no transport nonce from the
   project ID source. The executor validates stable-ID semantics and constructs the
@@ -173,7 +626,12 @@ are fixture-specific evidence, not device-independent performance guarantees.
   The format rejects unknown/duplicate/missing keys, positional objects, invalid
   versions and values outside schema bounds. Limits are 1 MiB, 131,072 value nodes,
   depth 12, 64 batch commands, 36 reordered plates, 160-unit added names and
-  120-unit renamed names.
+  120-unit renamed plate names. Object/part/instance names and gesture text use
+  the aggregate request budget (at most 131,072 units per field); constructors
+  enforce name and gesture semantics. Complete transforms carry exact 3/4/3
+  finite binary64 arrays; scale/quaternion validity belongs to graph admission.
+  These additive union variants keep version 1; older decoders reject unknown
+  commands before execution. No capability is inferred from that version alone.
   Plate order retains the domain’s finite nonnegative integer values, including
   values above the safe-integer range. These are transport limits, not new persisted
   graph limits. Local capture
@@ -212,8 +670,8 @@ are fixture-specific evidence, not device-independent performance guarantees.
   is implemented. Post-commit replies remain valid after close on their original
   connection; existing UI guard checks prevent their use in a newer workspace.
   Production currently exchanges strings in-process with the TypeScript authority.
-  Selection/capability/projection subscriptions remain local. Actual worker/JNI
-  project execution, crash recovery, remaining command families and complete
+  Selection/capability/projection subscriptions remain local. Production worker/JNI
+  project integration, crash recovery, remaining command families and complete
   revisioned projection transport remain Phase 1/4 work. Rust/Kotlin codecs alone
   do not execute a native project.
 - `EditorSession.open` binds its source project/revision/semantic/asset identity
@@ -349,6 +807,56 @@ are fixture-specific evidence, not device-independent performance guarantees.
   child omits its whole refined source root from the standard projection with a
   warning while the canonical envelope remains lossless. BBS has no brim facet
   attribute, and official-Orca colour round-trip remains unproven.
+  Native BBS text primitives now stream UTF-16 XML values under aggregate text and
+  output budgets. Illegal XML controls, unpaired surrogates and U+FFFE/U+FFFF
+  refuse the provisional stream. Any error prevents successful finalization;
+  cancellation covers interrupted writes, and host flush/publication remains
+  separate. Numeric projection preserves compact float32 mesh coordinates and
+  full double precision for transforms, including 3MF's distinct matrix order.
+  The native core-model writer now combines admitted state and captured mesh
+  leases with material slots, sparse paint, plate origins and preserved XML
+  attributes. It verifies supplied full asset descriptors and distinguishes
+  missing/malformed geometry omissions from fatal resource/cancellation failures.
+  Disabled physical materials retain slots; only enabled mixed materials receive
+  slots. An unsupported refined color leaf omits its entire standard root.
+  Regular attribute duplicates refuse output; repeated facet attributes retain
+  the last value after validating every applicable value. Namespace prefixes and
+  attributes use UTF-16 ordering. The prepared model also anchors native model
+  settings, layer ranges/events, brim ears and layer-height profile writers.
+  Model settings use resource IDs; ranges, brim ears and profiles use one-based
+  object ordinals even for omitted meshes. Plate membership uses stable sorted
+  plate order and all instances, with independent instance printability.
+  Configuration streams in UTF-16 key order without cloning payloads; range
+  filament slots replace its configured extruder, while object/part metadata
+  retains the browser's separate declared-slot and configuration rows. Emboss
+  attributes encode newlines, preserve absent optionals and reject illegal XML
+  in both implementations. Six-decimal text matches ECMAScript rounding rather
+  than binary multiplication followed by Rust formatting. SVG gathering follows
+  original plate order; shared paths require identical bytes and cannot replace
+  structural members. Missing drawings omit references with typed warnings even
+  if another part supplies that path. Distinct IDs with equal bytes may share a
+  drawing. Borrowed leases remain provisional until full package finalization.
+  Project settings borrow that same model's physical/mixed slots and sorted
+  plates. Correct-length imported filament vectors take precedence over local
+  values; other known vector fields preserve undefined/null fallback semantics.
+  Reset scripts follow ECMAScript multiline syntax and are appended only in the
+  engine projection. FullSpectrum rows derive slots from the current physical
+  order and retain unsigned 64-bit IDs exactly. Manual groups choose the engine
+  pair independently of UI mode and weight each group equally when deriving the
+  B percentage. Ordinary mixed weights scale only when their original arithmetic
+  overflows; canonical weights remain unchanged. JSON preserves lone surrogates
+  and controls through escaping, independently of XML character restrictions.
+  Complete package assembly now validates exact captured asset membership and
+  descriptors, selects deterministic asset paths, streams the canonical envelope,
+  and reconciles generated/preserved members without buffering complete metadata.
+  Only the four explicitly preservable BBS metadata members may override generated
+  bytes under the preserved-original marker. Equal collisions keep the generated
+  member; other collisions refuse. OPC stages use the browser's exact inventory
+  at each step. Typed package warnings cover all scopes, including missing or
+  disabled filament references, hooks, extensions and dropped relationships.
+  Standalone model diagnostics are collapsed into package-level filament warnings.
+  Warning text ordering/deduplication belongs to the host presentation adapter;
+  native Debug/Display remains redacted. Native save handoff/bindings remain open.
 - Measurement is a read-only port of the pinned `Measure.cpp`, and its plane
   clustering is easy to get wrong: a neighbour facet is *queued* but only
   *claimed* when it is popped and its normal still matches the seed. Claiming at
@@ -369,6 +877,97 @@ are fixture-specific evidence, not device-independent performance guarantees.
   same `ProjectImportCoordinator` as Open Project, so every add is previewed,
   deduplicated, undoable in one command, and leaves canonical state untouched on
   failure or cancel. Never add a second direct scene-insert import path.
+- The shared Rust archive reader now indexes ZIP/ZIP64 under explicit archive,
+  member-count, per-member/aggregate expansion, ratio and path limits. Hosts own
+  immutable staged input; document providers need not support seek. Paths are
+  package names, never filesystem extraction destinations. Member reads verify
+  exact expanded length and CRC through bounded buffers; output remains private
+  until success, since an integrity failure may follow partial output. Cancellation
+  is cooperative around reads, decompression and writes; hosts supply I/O deadlines.
+  Browser and Rust now reject inconsistent classic/ZIP64 counts, invalid ZIP64
+  record extents and nonzero disk fields. Canonical-envelope staging now builds on
+  that reader: explicit JSON/asset budgets, one leading UTF-8 BOM, last-key-wins
+  JSON and unsafe-key rejection precede typed graph admission. Dense facet roots
+  replace their sparse projections; legacy false fuzzy assignments are validated
+  as enabled before removal so invalid triangles/references cannot disappear.
+  Exact asset mappings, structural-path exclusion, lengths/FNV digests and declared
+  blob equality are checked before returning the owning intermediate. Unsupported
+  digest schemes retain source ordinals for warnings; CRC/length checks still run.
+  Every other member is integrity-checked and retained in the immutable archive.
+  A consuming OPC step now merges preserved relationships/content types and
+  revalidates the candidate without changing live authority. It retains unknown
+  members and original asset identities. Canonical completion consumes the
+  intermediate, regenerates every BBS output and compares the four preservable
+  metadata members exactly. A bounded ZIP pull reader verifies unread tails after
+  mismatches; it never substitutes digest equality or a full metadata buffer.
+  Missing printable area permits preservation only after drawing path/collision
+  checks. Browser envelope admission also enforces required SVG recipe field
+  shapes, matching native schema decoding even when regeneration is postponed.
+  Unknown files are adopted in UTF-16 path order using the compressed archive's
+  FNV seed, shared media policy, exact bytes and standard plate PNG recognition.
+  Completed bundles re-admit the graph and enter existing guarded prepared-document
+  Open/reset; foreign BBS parsing, host archive bindings and provider/UI flows
+  remain separate. Three bounded OPC writers preserve deterministic
+  XML bytes and refuse invalid XML text, duplicate relationship IDs and conflicting
+  required types. Root relationships require both canonical and model members.
+  Members whose suffix cannot name a valid default content type receive a
+  per-part override. Import recognizes inferred declarations without adding user
+  metadata; explicit declarations, canonical identity and unknown bytes survive
+  repeated Open/Save.
+  Internal targets use one validated resolver on read and write, preserving query
+  and fragment links to present members. OPC casing is pinned to Unicode 16
+  independently of browser, Android or Rust Unicode upgrades; member names are
+  unchanged. The compatibility scanner matches the existing tag-extraction rules,
+  including legacy comment/prefix behavior; it is not a general XML or BBS parser.
+  The separate BBS facet codec accepts nonempty uppercase hex under explicit byte
+  limits, at most 64 split levels and one million nodes per root. One mutable node
+  budget spans explicit roots/channels; failed decoding does not refund work.
+  Missing attributes consume no nodes. Wire state zero is unpainted; callbacks
+  map states 1–255 to canonical values and enforce channel/slot policy, including
+  the BBS color limit of 64. Brim has no BBS facet attribute. Encoding borrows
+  computation or persisted JSON trees without cloning their paint values, uses
+  bounded provisional writes and checks cancellation between short/interrupted
+  writes. A bounded streaming model-XML scanner validates UTF-8, XML
+  characters/entities, namespaces and tag structure while emitting provisional
+  events; callers must discard them unless finish succeeds. Its one-part structural
+  reader covers basic 3MF units, mesh geometry, materials, build items and component
+  references. A bounded cross-part resolver validates Production paths, part-local
+  references and component cycles, then expands build roots under depth and work
+  budgets. The structural ZIP staging API streams the root and referenced parts
+  under shared geometry, title, encoded-facet, refinement-node and annotation-
+  materialization budgets and invokes that resolver. The part projection decodes
+  BBS color, support, seam and fuzzy-skin roots into sparse canonical channels;
+  color slots remain import placeholders pending model metadata. It also retains
+  bounded unknown object/component/build/facet attributes and keeps component-edge
+  identity through graph expansion. BBS settings, metadata-driven filament
+  resolution, canonical extensionData assembly and admitted foreign import remain open.
+  Graph admission/hash and digest finalization belong on an owned preparation
+  task; cancellation checkpoints do not forcibly interrupt those synchronous calls.
+  Native ZIP authoring streams one member at a time into an empty private seekable
+  destination. It fixes time, permissions, UTF-8 paths and UTF-16 member order;
+  producer chunk boundaries and flush calls cannot change output. Classic/ZIP64
+  headers are patched only within staging, with aggregate/entry/output/index caps.
+  The host owns provider copy, flush/durability, publication and save acknowledgement.
+  Failure or cancellation invalidates all output; Drop never writes. Highly
+  compressible DEFLATE output receives empty stored blocks to remain readable
+  under the same compression-ratio cap, without replaying/copying source payloads.
+  Container determinism does not require compressed-byte identity with fflate;
+  member names, expanded bytes and metadata must agree independently. Package
+  output accepts a frozen ExportCapture and cannot consult or acknowledge live
+  state. A streamed envelope enforces mapping, state-node/depth/output and unsafe-key
+  policies without allocating a second state graph or whole JSON output. The host
+  still owns operation deadlines and private provider staging; partial output is
+  never a successful save. Foreign archive import and application adoption remain separate work.
+  ZIP names preserve literal leading U+FEFF in both readers. Browser expansion
+  uses verified member offsets rather than a filename-keyed decoder dictionary.
+  A one-byte sentinel detects fflate truncation to dishonest declared lengths;
+  the output allocation stays bounded before expansion. Sorted local extents
+  reject overlap before payload decoding without quadratic pairwise searches.
+  Browser ZIP authoring preserves a literal `__proto__` member by temporarily
+  aliasing it through fflate's dictionaries and restoring only the equal-length
+  header names. Aliases cannot collide with declared members. Compression, CRCs,
+  offsets and ordinary archive bytes stay unchanged; unknown members must survive
+  canonical Open/Save with their exact original names and payloads.
 - Smart Paint is a proposal, never a painter. An assistant returns a bounded
   version-1 proposal of normalized-AABB boxes and normal-direction cones;
   `project/painting/aiPaintProposal.ts` projects it against the volume's own

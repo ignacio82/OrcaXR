@@ -128,14 +128,24 @@ reports no leaks. This closes a session lifecycle defect, not the planned
 asynchronous command facade or Rust project migration.
 
 The asynchronous project facade routes production Undo/Redo and the seven plate
-lifecycle operations through authoritative acknowledgements. Other command
-families, import/save and slice capture remain migration work.
+lifecycle operations through authoritative acknowledgements. Object/part rename,
+instance printability, single/batch transforms and derived placement tools now
+use the same generated string transport over the TypeScript authority. DOM/XR
+gestures retain one dispatched edit and one latest pose, chain actual receipts,
+and invalidate on selection/tool/lifetime changes. Multi-instance printability
+keeps separate undo entries and reports partial completion. Numeric transforms,
+DOM/XR gestures and DOM lay-on-face now use declared registry routes. The result
+API preserves actual acknowledgements and original availability reasons, with no
+direct-controller fallback when the action context is absent. An XR event test
+exposed and fixed an ephemeral projection-record membership check that prevented
+drag movement. Other command families, import/save and slice capture remain
+migration work.
 Fifteen focused session cases cover queued ownership, revision/asset/history
 drift, cancellation, reset/disposal, rollback, coalescing, immutable replies,
 capacity and zero asset payload copies. Twelve action cases verify acknowledgement
 and rejection propagation through DOM, keyboard and XR registry routes; the
 workspace test exercises real queued undo/redo and stale/disposed rejection.
-The complete `scripts/quality.sh` gate passes with 265 web unit-test files,
+The earlier facade revision passed `scripts/quality.sh` with 265 web unit-test files,
 95 project test files, production browser/offline/recovery and accessibility
 checks, real slicing, server and HTTP/HTTPS deployment checks, artifact verification
 and all three development-dependency audits. Bundle limits remain unchanged.
@@ -146,8 +156,437 @@ commit, exact undo/redo/no-ops, immutable assets, stale ownership/history/revisi
 rejection propagation, late disposal and newer selection preservation. The XR desk
 composition also checks captured-revision registry routing. The browser plate flow
 holds delivery of a real rename acknowledgement to check busy and success timing.
-These are TypeScript/browser boundaries, not generated project transport or
-native editing qualification. The Phase 4 checklist remains open.
+The object/transform and lifecycle extension now passes 57 canonical edit/gesture
+cases, 60 lifecycle controller cases, 222 registry acknowledgement cases,
+21 transform-routing cases and 56 workspace presentation cases. Selected deletion,
+plate clearing, cut and instance conversion await their actions; independent
+object duplication and plate moves use guarded async controller APIs. Tests cover
+bounded gestures, selection changes, interrupted printability, captured duplicate
+summaries, lost acknowledgements, exact undo/redo, clipboard ownership and disposed
+surfaces. All 33 workspace/action files pass; final action/presentation regressions,
+TypeScript, lint, production build, offline inventory and bundle checks pass.
+The final bundle is 2,117,624 bytes for main and 10,453,184 bytes total JavaScript.
+The redacted scan covers 1,790 UTF-8 sources without findings. The full quality
+attempt passed static checks, encountered `spawnSync git EPERM` and localhost
+`listen EPERM`, then stalled at the calibration Git-stdin check and ended at its
+180-second bound (exit 124). Earlier full-gate passes do not qualify this
+extension. Browser and Android runtime/device verification remain open; these
+are host/controller checks.
+The native prepared-command extension now covers nineteen intents,
+including object/instance deletion, plate clearing, independent duplication,
+plate movement and conversion to an independent object. Its TypeScript reference
+contains 1,108 command steps / 51 traces and 1,380 session requests / 60 traces.
+Rust debug/release, actual Node-worker WASM, and debug/release JNI replay agree
+on full state, selection, ordered effects, history and asset identity. The six
+lifecycle commands add 120 execution/undo pairs to the large-project allocation
+probe. Local instance creation and paste add another 40 pairs: 580 revisions and
+1,520 events retain zero mesh/config payload copies (1,124,220,476 bytes total
+allocation; 217,600 bytes largest allocation). Full Rust workspace/release tests,
+strict Clippy and both command corpora pass.
+Kotlin writers pass twelve lifecycle option/text cases in addition to the numeric
+corpus; 5,987 query packets and 7,576 malformed packets pass shared validator
+checks. Thirty focused browser object/transport test files, TypeScript/static
+checks, production build, offline inventory and bundle limits pass (2,116,556-byte
+main; 10,452,116-byte total JS). The redacted scan covers 1,789 UTF-8 sources with
+no findings. The full web quality attempt again ended at 180 seconds / exit 124
+after Git-pipe and localhost permission errors; a separate broad project run was
+stopped at the unchanged calibration Git-stdin check (exit 130). Fresh web/server/
+wasm dependency audits could not reach the npm registry (`EAI_AGAIN`). None of
+these partial checks closes the full web gate. Instance creation and paste now
+have local full-record Rust commands and budgeted chunked input. A separate
+197-step / 11-trace TypeScript corpus checks full metadata/UTF-16 preservation,
+insertion order, paste after source deletion, exact retention, graph failures,
+and atomic 70-instance batches. Five native staging/ownership tests cover byte
+splits, malformed/incomplete input, explicit limits above the small wire ceiling,
+source-buffer ownership and copy-on-write isolation. Local history accepts domain
+batch sizes/labels; generated wire limits are unchanged. Rust and the local
+TypeScript endpoint now admit full captured commands through session-owned,
+one-use references. A 32-trace / 398-group / 331-request independent replay
+compares guards, quotas, immediate cancel/close release and atomic batches above
+64 commands. Eight native and sixteen TypeScript tests additionally cover large
+records, ownership, lost replies and unavailable post-commit summaries. The
+allocation probe retains an 8 MiB record without a payload copy; cancellation
+destroys it before reply settlement. Finished-input quotas count encoded units,
+not resident memory or in-flight preparation. The generated envelope now carries
+execute/release references, and the ordinary session corpus includes 43 control/
+refusal requests independent of upload admission. WASM/JNI now expose separate
+chunked command upload owners: four preparation permits span parsing, sealing
+and transfer into the session's finished pool. Actual binding replay covers 109
+uploads / 331 requests and 103 shared boundary refusals. Seven Kotlin ownership
+scenarios check consumed inputs, late/closed owners and ready-reference cleanup;
+two native tests cover concurrency, full records beyond the small wire ceilings,
+option bounds and permit release. The generated option encoders pass 148 TypeScript
+shape/ownership/budget checks. Browser clone/add-instance/fill-bed now use the
+local staged transport with explicit input/pool budgets. Twenty-three controller
+cases cover guarded 70-copy transactions, failed-member rollback, quota release,
+stale/closed owners and captured or uncertain results. Registry/presentation
+regressions wait for acknowledgement and suppress late success after disposal.
+Clipboard paste now uses the local staged route and restores descriptors/bytes
+within its rollback boundary. Thirteen controller checks cover source deletion,
+reset, stale/closed requests, held/lost replies and 3MF save/reopen. Eleven asset
+ownership checks cover bounded immutable subsets, SVG drawings, atomic conflicts,
+rollback/retry and twenty 8 MiB paste/undo/redo cycles without mesh payload copies.
+Rust now implements selected clipboard capture and atomic asset-restoring paste:
+17 independent browser traces / 130 steps compare full contents, ordered effects,
+asset identities and exact input/history charges. Six native tests cover capture
+limits, sorted query targets and retryable apply/undo/redo failures. The release clipboard probe runs
+twenty cycles over an 8 MiB asset with no payload-sized allocations; the public
+read control detects one. WASM/JNI now expose four clipboard owners per core
+instance, capturing current object query nodes under explicit asset/byte budgets.
+Paste uploads retain selected immutable data and a fresh destination guard; JSON
+carries only injected IDs and the destination. Ten reference captures, 53 shared
+refusals and six Kotlin ownership scenarios cover sorted rows, stale/foreign
+nodes, quota release, source closure and late-result cleanup. Production archive
+import, preparation scheduling, native UI,
+remaining command families, production worker/JNI integration, current APK
+assembly and Android/device execution remain open. The Phase 4 checklist remains open.
+
+The separate release preparation probe runs twenty capture/upload/seal/stage/release
+cycles with zero payload-sized allocations. Each 139-byte upload charges 8,979,001
+input units; total allocation is 298,300 bytes, with largest allocation 640 bytes.
+Release destroys the capture immediately. These are host ownership measurements,
+not Android device RAM or latency qualification.
+
+Prepared document adoption now implements guarded Open/reset through Rust,
+WASM/JNI and Kotlin. Source identity and operation tokens prevent late/superseded
+input from replacing newer state; failed/cancelled newer Opens never revive older
+ones. Atomic commit transfers admitted records, advances revisions, clears selection
+and establishes clean history while preserving repository and protocol ownership.
+Sixteen browser-authored traces compare 59 steps and four complete states. Three
+native tests check foreign/reused operations, record identity, immediate rejected
+input destruction and stale staged settlement; the history capacity test also
+covers adoption refusal before publication. Both actual host bindings replay the
+corpus plus seven refusal cases. Seven Kotlin ownership scenarios and the
+instrumentation source compilation pass. WASM's consumed-document retry returns
+invalid_state while leaving the session usable; its empty wrapper must be freed.
+
+The Android bridge now owns bounded asynchronous command/query execution, guarded
+Open/reset and staged-command preparation. A single authority executor, two
+preparation workers and ordered effect delivery retain at most 32 unsettled tasks.
+Bulk producers borrow an immutable source and ordered chunk writer; original native
+guards are checked at admission/execution, and ready references never escape.
+Explicit finished-pool limits default to zero. Opaque actor guards bind revisions,
+assets and ownership without retaining large IDs, native handles or source graphs.
+This preserves bulk/reset access to valid projects beyond the small wire ID budget.
+
+The original twelve actor scenarios and sixteen new preparation scenarios pass
+complete debug/release JNI replays from a clean compiled class directory. The new
+checks include twenty staged-edit/undo cycles without remaining
+pool charges, stale/queued/cancelled work, four-upload saturation, malformed input,
+rollback delivery, reset/history rules and close races. A browser-authored 70-instance
+batch matches its complete acknowledgement/effect sequence and one-entry undo/redo.
+Handle saturation during an active mutation reproduced a post-commit reply/effect
+allocation failure. JNI now transfers effects in the already reserved reply slot,
+including at capacity; wrong-kind/repeated conversion leaves effects intact. Three
+additional raw-boundary refusals raise that corpus to 75. Confirmed results survive
+an unavailable optional host guard, and callers query again instead of repeating
+an already completed edit. A second reproduced exhaustion case after document
+adoption is fixed for both Open/reset: an unavailable summary query preserves the
+confirmed result, ordered effects and usable session.
+
+Native clipboard preparation now freezes guarded project/asset ownership before
+running query selection and object/asset scanning on a preparation worker.
+Preparations and finished clipboards share four permits; conversion reuses its
+native slot. The actor checks source/newer-copy identity before publication and
+owns the current clipboard. Paste attaches selected data before its producer
+starts, so clear/replacement cannot discard already prepared work. Thirteen
+shared host/device scenarios pass both full host JNI profiles, exercising repeated cycles, cancellation, stale/foreign
+identities, limits, source closure and late cleanup. Two TypeScript fixture replays
+compare complete acknowledgements/effects and undo/redo, including sorted selection.
+Subscriptions and the application's complete editing workflows remain open.
+
+Native save/export now captures the admitted project and exact immutable asset
+version together. Owned preparation workers stream canonical JSON through JNI with
+64 KiB output staging and read assets in bounded chunks under explicit budgets.
+Captures survive reset/source disposal without copying payloads. Ordinary export
+leaves dirty state unchanged; manual save checkpoints only a confirmed, complete
+handoff whose captured identity remains current. Concurrent edits preserve newer
+dirty state. Confirmed handoff survives checkpoint handle exhaustion and close;
+callback failures remain uncertain, and projection failure preserves an already
+committed checkpoint. The host owns I/O deadlines and publication durability.
+Thirteen shared host/device export scenarios pass both complete host JNI profiles,
+including independent TypeScript byte comparisons, all UTF-16 units, repeated saves,
+budget refusals, stale captures, cancellation and close/capacity races. Rust verifies
+frozen record identity and declaration order. Archive assembly, storage-provider
+handoff, application integration and Android runtime qualification remain open.
+
+Protocol JSON now uses the actual bounded portable Kotlin parser on the host JVM,
+with the existing lexical, byte/node/depth and duplicate-field rules. It passes
+241 accepted round trips and 1,224 refusals, including the entire 969-case corpus,
+structural/escape/budget mutations and all UTF-16 units. Existing numeric/lifecycle/
+staged-reference writer checks remain green. No runtime dependency was added.
+The Android instrumentation sources compile against verified dependencies, but a
+fresh Gradle attempt still fails to obtain a usable wildcard IP before building.
+These results qualify host behavior, not a new APK, Android runtime or device latency.
+
+The release document probe measures twenty bundle-proof/fingerprint/commit cycles
+over an 8 MiB mesh and two 8 MiB metadata strings: 85,328 total allocated bytes,
+largest allocation 640 bytes, zero payload-sized allocations and three positive
+public-copy controls. Graph/payload admission and fixture allocation precede this
+measurement. It does not qualify end-to-end import or device performance.
+
+Workspace tests with all features, strict Clippy, optimized document/session/
+staging/clipboard tests, allocation probes and reference regeneration pass.
+Rebuilt WASM and debug/release JNI retain all existing session/staging/query replay
+results and exercise document adoption and clipboard operations through the actual
+bindings. Both rebuilt Android ABI libraries expose 92 project JNI exports and
+16 KB LOAD alignment. Refreshed browser manifests bind 222 source inputs.
+
+The shared archive crate now indexes bounded ZIP/ZIP64 sources and streams stored
+or DEFLATE members through 64 KiB buffers, checking lengths and CRC before returning
+a receipt. Hosts own immutable staging, provisional output and I/O deadlines.
+Seventy-five independent browser cases, fifteen path cases and four shipped ZIP64
+calibration archives agree; six native debug/release scenarios cover cancellation,
+short reads, dishonest sizes, private errors and hostile mutations. The reference
+corpus reproduced five malformed ZIP64 directory forms accepted by the browser;
+record extents, disk fields and classic/ZIP64 agreement are now checked on both
+paths. Browser ZIP authoring also fixes silent renaming of an exact `__proto__`
+member to `0`: bounded same-length header restoration preserves names without
+changing ordinary deterministic bytes. Canonical Open/Save and alias-collision
+regressions pass. Twenty read cycles at 1 MiB and 16 MiB leave no retained allocations and
+allocate no member-sized buffer. Strict Clippy, all-feature workspace tests,
+three target compilation checks and focused browser suites pass. Five locked
+compression/checksum dependencies are attributed in NOTICE. The cached 2026-10-03
+advisory database reports no vulnerabilities among 66 dependencies; fresh fetch
+fails and yanked-version checks are unqualified. Canonical-envelope staging now
+adds bounded BOM-aware JSON, legacy dense-facet/false-fuzzy migrations with
+validation before removal, typed graph admission, exact asset mappings,
+length/digest checks and declared-blob byte comparison. The owning intermediate
+verifies and retains unknown members for later reconciliation; it cannot be
+consumed as a completed import. Its 109-case production-browser reference has
+46 admitted and 63 refused envelopes, with full-import acceptance recorded
+separately. Five native integration scenarios and a byte-split decoder unit test
+cover reference contents, limits, cancellation, private errors and ownership.
+Twenty success and twenty corrupt-unknown-member cycles over an 8 MiB asset each
+make exactly one payload allocation per load and retain no allocations afterward.
+OPC reconciliation now consumes staged canonical input, streams bounded metadata,
+merges preserved relationships/content types and re-admits the graph without
+replacing live authority. Its three XML writers use bounded provisional output
+and the validated import resolver. Browser Open/Save now retains fragment/query
+relationships and writes safe per-part declarations for nonstandard suffixes;
+three repeated cycles preserve canonical identity and opaque member bytes.
+Ninety-two production-helper cases (71 admitted merges) and thirty resolutions
+compare native state, warnings and exact XML/refusals. Six integration scenarios
+and streaming-scanner mutations cover budgets, cancellation, private errors and
+ownership. Shared Unicode 16 tables match every scalar, isolated surrogate and
+9,986 captured casing contexts; runtime verification prevents Unicode drift.
+The workspace passes 229 tests; the final core-model suite and all 81 release
+archive tests pass, with strict
+Clippy, formatting and checks for WASM/both Android targets. The OPC allocation
+probe retains no allocations: twenty exclusive-metadata cycles allocate 8,922,400
+bytes, with no payload copy and a 65,536-byte maximum allocation; retaining the
+old project snapshot correctly forces one 8 MiB metadata copy per cycle.
+Foreign BBS parsing/component resolution, archive bindings,
+provider integration and application cross-platform round trips remain open.
+
+The BBS facet wire codec now decodes uppercase hex under explicit byte/node/depth
+limits and writes borrowed computation or persisted trees through a 4 KiB buffer.
+Channel mappings retain canonical paint identities; sparse assembly consumes only
+indexed roots, so declared unpainted facets do not allocate dense state. Failed
+decodes spend the same shared budget as the browser. Short/interrupted writes
+remain cancellable and expose only redacted I/O kinds. The independent unchanged
+browser codec supplies 1,594 cases, five shared-budget sequences, eight sparse
+imports and all 69,904 hex streams of lengths one through four. Eight native
+integration tests also cover malformed trees, byte/node limits, cancellation and
+sparse index/value validation. The allocation probe compares two million and two
+billion declared facets with three explicit roots: twenty cycles allocate 27,360
+bytes, largest 632 bytes, with no retained allocations. Borrowed writing of an
+existing 8 MiB paint value allocates 480 bytes across twenty cycles, largest 24
+bytes, for both representations. A deliberate 8 MiB copy verifies the counter.
+These primitives do not implement the full BBS XML/model/metadata projection,
+native Open/Save or device qualification.
+
+The packed Rust mesh codec now validates immutable source bytes without allocating
+decoded vertex/index arrays or rehashing an admitted lease. It preserves strided,
+unaligned, uint16/uint32 and non-indexed layouts, with checked safe-integer addressing
+and explicit limits. Authoring checks supplied metadata before allocating one packed
+output and hashes bytes while writing. Public expansion requires its own byte cap.
+Canonical bounds compare captured descriptors and compose volume/instance transforms
+over actual vertices with role filtering, bounded work and cancellation. Independent
+browser references cover 196 encoding cases, 768 decoding cases and 146 bounds
+cases, comparing exact bytes/float bits and refusals. New browser regressions
+reproduced and fixed finite-double overflow during float32 authoring and silently
+ignored overflowed vertices during bounds calculation. Six native tests cover
+reference/source identity, budgets, cancellation, proof lifetime and output isolation.
+The two-million-vertex / two-million-triangle host probe uses a 48 MB asset plus
+8 MiB metadata: twenty mesh validation/clone/bounds cycles allocate zero bytes;
+twenty canonical bounds queries allocate 86,520 bytes, largest 1,160 bytes, with
+no payload copy. Encoding and explicit expansion each make only their one required
+48 MB or 72 MB output allocation per cycle. All phases release measured allocations.
+Mesh bindings, renderer packets, file import and guarded editing remain open.
+
+Native BBS numeric/XML primitives now preserve exact browser number text,
+float32 mesh-coordinate rounding and double matrix operation/order. Eight browser
+helpers were extracted without changing their syntax. Independent references
+cover 4,419 explicit coordinates, 9,351,846 float32 samples, 2,884 doubles, 2,070
+transforms, 322 XML strings and every single Unicode code point. The fixed 4 KiB
+writer bounds aggregate input/output, rejects illegal XML characters, polls
+cancellation during short/interrupted writes, poisons failed finalization and
+leaves durable flush to the host. Eleven native debug/release tests pass, as do
+37 focused browser BBS tests. Five two-million-vertex writes match the browser's
+116,727,266-byte stream while allocating zero heap bytes; twenty escaped writes
+of an existing 8 MiB UTF-16 value also allocate none. A deliberate clone confirms
+the 8 MiB allocation counter. Rebuilt WASM/glue, host JNI and Android ABI
+libraries remain byte-identical to the qualified mesh build; existing binding
+replay evidence is retained on that identity. New primitives have no bindings yet.
+
+Rust now streams the complete standard BBS core-model member from an admitted
+project and immutable mesh leases, including stable numeric IDs, material slots,
+plate origins, component/build transforms, sparse paint and preserved extension
+attributes. Full descriptor agreement and explicit record/text/geometry/paint
+budgets precede authoring. Missing or malformed geometry gives typed omission
+warnings; limits and cancellation fail the operation. Borrowed paint trees and
+extension values are not copied, and unpainted triangles allocate no paint state.
+The production-browser corpus supplies 212 cases: 172 exact XML outputs and 40
+refusals, including unsorted whole assignments and refined paint. Seven native
+debug/release tests cover references, budgets, cancellation and ownership. Five
+preparations of a two-million-vertex / two-million-triangle, 48 MB source with
+sparse paint and an 8 MiB extension value allocate 34,950 bytes total; five writes
+of its 239,309,686-byte model allocate 1,560 bytes total. Neither phase copies a
+payload or retains allocations. The large native writes have equal hashes;
+independent browser byte agreement is qualified by the smaller reference cases.
+Dense paint indexes remain explicitly bounded. This is host evidence, not Android
+residency or device latency. BBS XML import/reconciliation, native bindings and
+transactional native Open/Save remain open; package output is described below.
+
+Native BBS model settings, layer ranges/events, brim ears and layer-height
+profiles now share the prepared core model's resource IDs and object ordinals.
+Configuration, emboss recipes and SVG leases remain borrowed; recursive JSON
+and semicolon-array settings stream through bounded escape buffers. SVG gathering
+follows original plate order, while model membership follows sorted plate order.
+Shared drawing paths require identical bytes and cannot replace structural members.
+Missing drawings omit their own references even when another part supplies that
+path; browser and native regressions reproduced this bug before correction.
+Preparation bounds records, configuration nodes/depth, UTF-16 text
+and drawing bytes; optional members and each output stream have explicit limits.
+The 259-case browser reference includes 225 exact member sets and 34 refusals;
+4,109 numeric cases independently check six-decimal and emboss rounding. Seven
+native tests cover those references, resource limits, lease identity,
+cancellation and short/private I/O failures. A browser regression reproduced
+illegal XML in emboss text/SVG paths; both writers now refuse it while preserving
+valid output. Canonical-envelope references were regenerated after the helper
+change; all 109 case expectations remain unchanged. A reference-freshness sweep
+also corrected preexisting session/query source hashes without changing their
+reference values. Complete package generation is described below; app publication remains open.
+The metadata probe holds an 8 MiB drawing plus separate 8 MiB configuration and
+emboss strings. Five preparations including the SVG ownership indexes
+allocate 25,040 bytes total, largest 456 bytes;
+five complete writes of 41,944,424 bytes allocate no heap memory. Neither phase
+retains allocations or copies a payload; a deliberate 8 MiB drawing copy is
+detected. Input/admission and core-model preparation are excluded. The repeated
+large native hashes complement the independent smaller browser references;
+these measurements do not qualify Android residency or file providers.
+
+Native project settings now borrow canonical configuration, reset scripts and
+exact FullSpectrum recipes. The 98-key filament-vector policy is generated from
+the browser writer; correct-length imported vectors retain precedence. Slot
+remapping, equal-group B percentages, uint64 IDs, offsets and gradient text match
+508 browser cases (507 exact members and one 65-tool refusal), with 4,108 separate
+four-decimal numeric cases. Four integration tests and one long-reset-line
+cancellation test pass; strict Clippy and optimized archive checks pass. The corpus
+includes a group average immediately below 0.5 that rejects the incorrect
+add-half-then-floor rounding formula. The browser regression also reproduced NaN
+percentages and incorrect gradient endpoints from large finite weights; both
+writers scale only overflowing calculations while preserving canonical weights.
+Sixty focused browser tests across six files passed the settings checkpoint.
+Complete package/envelope assembly and warning inventory are qualified below;
+native bindings and transactional application Open/Save remain open. These
+library checks do not close a migration phase.
+The settings ownership probe holds three separate 8 MiB UTF-16 values and an
+8 MiB exact pattern with 524,288 IDs. Five preparations allocate 20,420 bytes,
+largest 728 bytes; five 38,273,506-byte writes allocate no heap memory. Both
+phases retain zero allocations and make no payload-sized copies; the positive
+copy control detects exactly 8 MiB. These are host measurements after input,
+graph and model preparation, with independent browser identity established by
+the smaller reference corpus. WASM and both Android target checks pass.
+
+The native streaming ZIP/ZIP64 writer now borrows payloads into bounded private
+seekable staging, with deterministic metadata/order, output/index limits and
+cancellable compression. It pads unusually small DEFLATE output with valid empty
+blocks to retain the reader's ratio limit. Six native scenarios cover failures,
+chunk independence, actual ZIP64 counts and a virtual sparse 4 GiB member with a
+following member beyond 32-bit offsets. Independent browser/Python decoders check
+74 emitted archives. The new references reproduced BOM filename collisions and
+dishonest DEFLATE expansion with prefix CRCs; both readers preserve literal names
+and the browser now bounds expansion with an extra sentinel byte. Sorting local
+extents preserves overlap refusal while avoiding quadratic inspection work.
+Bindings and native application Save remain open; these are container-level checks.
+The output probe streams 24 MiB per archive from an existing 8 MiB random payload
+and a zero generator. Five file-backed writes allocate 4,504,940 bytes total,
+largest 85,196 bytes, with no retained allocations or payload-sized copies.
+Each 16,787,249-byte archive has the same hash; an intentional 8 MiB copy is
+detected. Source construction and later verification are excluded. All 63
+optimized archive tests and three target checks pass after rebuilding the
+reference tests against the final browser-reader source hashes.
+
+Complete package authoring now streams BBS members, the canonical envelope,
+captured assets and preserved metadata into private ZIP staging. Exact bundle
+membership/descriptors, deterministic path selection, collision policy, warning
+inventory and OPC stage order match 1,032 browser cases (937 accepted, 95 refused).
+The production browser independently opens 947 emitted native packages, including
+ten native command-bus edits, then saves and reopens them with complete state,
+asset and warning comparison. Only newly imported opaque IDs normalize the
+specified compressed-archive hash seed; existing canonical IDs remain exact.
+Boundary tests cover sixteen budget failures, cancellation, I/O, repeatability
+and export after session replacement/disposal. Foreign import, app
+bindings and file-provider publication remain open; canonical host interchange
+has separate evidence below. The updated metadata probe passes with the figures above. Five complete
+file-backed package writes allocate 26,379,550 bytes total, largest 85,196 bytes,
+with zero payload-sized copies and zero retained allocations. Each archive is
+16,859,744 bytes and expands to 71,311,249 bytes; repeated native SHA-256 agrees
+and the deliberate 8 MiB copy is detected. Construction/admission and final
+integrity verification are excluded. The workspace passes 229 tests and all
+81 optimized archive tests pass, along with strict Clippy, formatting and wasm32/
+both Android target checks. Host checks do not qualify Android memory or lifecycle.
+
+Canonical-envelope completion now reconciles OPC/BBS metadata, compares generated
+members through bounded pull reads and adopts every unowned file before final
+graph admission. It preserves exact browser import IDs, opaque bytes, thumbnails
+and warnings across 385 independent cases (276 accepted / 109 refused). A required
+SVG recipe-field regression failed before the browser envelope validator was
+corrected; valid recipes and unknown fields remain unchanged. Four native tests
+cover full reference contents, original lease identity, eleven budget families,
+cancellation, timestamp failure and guarded adoption through a real project
+session. Five ZIP stream/comparison tests verify unread-tail integrity, partial
+and interrupted reads, cancellation and compressed-input FNV identity. All 229
+workspace tests and 81 optimized archive tests pass, along with strict Clippy,
+formatting and three target checks. The optimized completion probe allocates
+both its declared and newly adopted 8 MiB payload exactly once per load, retaining
+no allocations after five success or five late-admission-failure cycles. Allocation
+totals are 91,804,945 and 91,747,240 bytes. Five equal and five early-mismatch
+comparisons allocate 675,005 and 1,002,685 bytes with no payload-sized allocations;
+the maximum is 65,557 bytes, and both phases release all measured storage.
+The deliberate copy control is detected. The actual interchange harness reuses
+all 385 canonical completion inputs and 937 accepted package inputs. Its debug
+and optimized runs match 109 import refusals, execute 1,213 native session edits, and report
+three matching Save refusals. The remaining 1,210 native archives match every
+browser-written member, open in both readers, receive a real browser command edit
+and Save, then reimport into Rust with exact state/assets/warnings. IDs are never
+normalized for these same-input comparisons. Debug/release reports agree exactly;
+fresh workspace and optimized archive runs pass 229 and 81 tests respectively.
+Foreign formats, archive bindings and provider/application flows remain open.
+
+The earlier command-upload and browser instance/clipboard routes passed eleven
+focused files. The earlier archive/OPC/facet change passed 41 tests across four focused
+files. The mesh change passes 96 tests across nine focused files, TypeScript, lint, formatting, production build, offline inventory and bundle
+budgets. Main JavaScript
+is 2,127,027 bytes and total JavaScript is 10,477,565 bytes. Kotlin writers pass four
+staged-reference boundary cases and six invalid-ID refusals. The redacted scan
+covers 1,957 UTF-8 files without findings. A verified generated-policy checksum
+false positive has an exact-digest/manifest-path exception; controls detect other
+synthetic values at that path and the same digest outside it. Fresh npm audits
+remain blocked by registry DNS (`EAI_AGAIN`); Cargo audit cannot fetch a fresh
+advisory database. The browser WASM attempt exits during Chrome startup
+with a denied Crashpad socket and `Target closed`,
+so it supplies no browser
+execution evidence. These are separate from the passing Node-worker replay.
+The fresh full web gate passes static checks, encounters Git/localhost permission
+errors, and reaches `src/project/calibration/resources.test.ts` before its
+300-second timeout (exit 124).
+Production build, offline inventory and bundle budgets pass.
+The fresh Gradle attempt with a writable temporary cache still cannot
+obtain a usable wildcard IP, so no new APK/JVM-Gradle/lint result is claimed.
+This remains an incomplete gate.
 
 The Rust project-domain foundation now ports stable identifiers without changing
 the existing TypeScript authority. UTF-16 units preserve surrogate halves, NULs,

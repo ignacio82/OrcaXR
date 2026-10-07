@@ -12,7 +12,7 @@ import type { PrimitiveKind } from '../project/objects/primitives';
 import type { EmbossRecipePatch } from '../workspace/OrcaWorkspace';
 import type { AssemblyAlignmentKind } from '../project/objects/assembly';
 import type { SimplifyConfiguration } from '../project/objects/simplify';
-import type { ActionInvocation } from './ActionRegistry';
+import type { ActionInvocation, ActionResult, TransformEditRequest } from './ActionRegistry';
 import type { OrcaWorkspace } from '../workspace/OrcaWorkspace';
 import type { FilamentPalette } from '../workspace/FilamentPalette';
 import type { FilamentId, InstanceId, PlateId } from '../project/domain/ids';
@@ -83,11 +83,11 @@ export class ActionContext {
   addFromLibrary(): void {
     this.workspace.addFromLibrary();
   }
-  deleteSelected(): void {
-    this.workspace.deleteSelectedModel();
+  async deleteSelected(): Promise<void> {
+    await this.workspace.deleteSelectedModel();
   }
-  deleteAll(): void {
-    this.workspace.deleteAllModels();
+  async deleteAll(): Promise<void> {
+    await this.workspace.deleteAllModels();
   }
   setCameraView(view: string): void {
     this.workspace.setCameraView(view);
@@ -95,8 +95,8 @@ export class ActionContext {
   autoOrient(): void {
     this.workspace.autoOrientSelectedModel();
   }
-  dropToBed(): void {
-    this.workspace.dropSelectedToBed();
+  async dropToBed(): Promise<void> {
+    await this.workspace.dropSelectedToBed();
   }
   deselectAll(): void {
     this.workspace.unselectModel();
@@ -112,8 +112,11 @@ export class ActionContext {
   selectObjectsTreeEntities(refs: readonly ObjectTreeEntityRef[], primary?: ObjectTreeEntityRef): void {
     this.workspace.setObjectsTreeSelection(refs, primary);
   }
-  renameObjectsTreeEntity(entity: Extract<ObjectTreeEntityRef, { kind: 'object' | 'volume' }>, name: string): void {
-    this.workspace.renameObjectsTreeEntity(entity, name);
+  async renameObjectsTreeEntity(
+    entity: Extract<ObjectTreeEntityRef, { kind: 'object' | 'volume' }>,
+    name: string,
+  ): Promise<void> {
+    await this.workspace.renameObjectsTreeEntity(entity, name);
   }
   async revealObjectsTreeEntity(entity: ObjectTreeEntityRef): Promise<void> {
     await this.workspace.revealObjectsTreeEntity(entity);
@@ -196,11 +199,11 @@ export class ActionContext {
   boolean(op: BooleanOp): Promise<void> {
     return this.workspace.booleanModels(op);
   }
-  togglePrintable(): boolean {
-    return this.workspace.toggleSelectedPrintable();
+  async togglePrintable(): Promise<void> {
+    await this.workspace.toggleSelectedPrintable();
   }
-  scaleToFitPrintVolume(): boolean {
-    return this.workspace.scaleSelectionToFitPrintVolume();
+  async scaleToFitPrintVolume(): Promise<void> {
+    await this.workspace.scaleSelectionToFitPrintVolume();
   }
   addPrimitive(kind: PrimitiveKind): void {
     this.workspace.addPrimitive(kind);
@@ -299,19 +302,26 @@ export class ActionContext {
     // onPlatesChanged / onSelectionChanged callbacks; clear the slice output.
     if (created) this.ui.update({ gcodeReady: false });
   }
-  cloneSelected(): void {
-    this.workspace.cloneSelectedModel();
+  async cloneSelected(): Promise<void> {
+    await this.workspace.cloneSelectedModel();
   }
   copySelected(): void {
     this.workspace.copySelectedModel();
     this.ui.update({ hasClipboard: this.workspace.hasClipboard });
   }
-  cutSelected(): void {
-    this.workspace.cutSelectedModel();
-    this.ui.update({ hasClipboard: this.workspace.hasClipboard });
+  async cutSelected(): Promise<void> {
+    const pending = this.workspace.cutSelectedModel();
+    // The synchronous copy phase is already complete; deletion still awaits
+    // its receipt. Do not publish stale UI state after a newer copy or disposal.
+    try {
+      this.ui.update({ hasClipboard: this.workspace.hasClipboard });
+    } finally {
+      // A broken clipboard projection must not abandon an in-flight deletion.
+      await pending;
+    }
   }
-  paste(): void {
-    this.workspace.pasteClipboard();
+  async paste(): Promise<void> {
+    await this.workspace.pasteClipboard();
   }
   exportStl(): void {
     this.workspace.exportPlateStl();
@@ -360,8 +370,8 @@ export class ActionContext {
   togglePrintableBox(): void {
     this.workspace.togglePrintableBox();
   }
-  arrangePlate(): void {
-    this.workspace.arrangePlate();
+  async arrangePlate(): Promise<void> {
+    await this.workspace.arrangePlate();
   }
   async duplicatePlate(id?: PlateId, expectedRevision?: number): Promise<void> {
     await this.workspace.duplicatePlate(id, expectedRevision);
@@ -398,16 +408,16 @@ export class ActionContext {
   }
 
   // ---- Instances ------------------------------------------------------
-  addInstance(): void {
-    this.workspace.addInstanceToSelection();
+  async addInstance(): Promise<void> {
+    await this.workspace.addInstanceToSelection();
   }
 
-  convertInstanceToIndependentObject(instanceId?: InstanceId): void {
-    this.workspace.convertInstanceToIndependentObject(instanceId);
+  async convertInstanceToIndependentObject(instanceId?: InstanceId): Promise<void> {
+    await this.workspace.convertInstanceToIndependentObject(instanceId);
   }
 
-  fillBedWithInstances(): void {
-    this.workspace.fillPlateWithSelection();
+  async fillBedWithInstances(): Promise<void> {
+    await this.workspace.fillPlateWithSelection();
   }
 
   // ---- Filaments ------------------------------------------------------
@@ -416,16 +426,16 @@ export class ActionContext {
   }
 
   // ---- Transforms -----------------------------------------------------
-  mirrorSelected(axis: 'x' | 'y' | 'z'): void {
-    this.workspace.mirrorSelected(axis);
+  async mirrorSelected(axis: 'x' | 'y' | 'z'): Promise<void> {
+    await this.workspace.mirrorSelected(axis);
   }
 
-  resetSelectedTransform(target: 'rotation' | 'scale' | 'both'): void {
-    this.workspace.resetSelectedTransform(target);
+  async resetSelectedTransform(target: 'rotation' | 'scale' | 'both'): Promise<void> {
+    await this.workspace.resetSelectedTransform(target);
   }
 
-  centerOnPlate(): void {
-    this.workspace.centerSelectedOnPlate();
+  async centerOnPlate(): Promise<void> {
+    await this.workspace.centerSelectedOnPlate();
   }
 
   // ---- Slicing --------------------------------------------------------
@@ -505,6 +515,16 @@ export class ActionContext {
     this.ui.update({ activeTool: tool });
   }
 
+  /** Registry handler seams; presentation code invokes the tool action. */
+  async applyTransformEdit(request: TransformEditRequest): Promise<ActionResult> {
+    const acknowledgement = await this.workspace.applyTransformEdit(request);
+    return Object.freeze({ kind: 'project-edit', acknowledgement });
+  }
+
+  async applyLayOnFace(request: NonNullable<ActionInvocation['layOnFace']>): Promise<void> {
+    await this.workspace.applyLayOnFace(request);
+  }
+
   /**
    * Compatibility gateway for the legacy XR mode card. Its calls still pass
    * through the composition-root registry, including unavailable-tool guards.
@@ -513,8 +533,8 @@ export class ActionContext {
     const actionId = `tool_${tool}`;
     this.invokeFromXr(actionId, 'xr-toolbar');
   }
-  nudge(dir: -1 | 1): void {
-    this.workspace.nudgeSelected(dir);
+  async nudge(dir: -1 | 1): Promise<void> {
+    await this.workspace.nudgeSelected(dir);
   }
   setMode(mode: WorkspaceMode): void {
     const current = this.ui.get().mode;
@@ -674,8 +694,8 @@ export class ActionContext {
     );
   }
 
-  applyAssemblyAlignment(kind: AssemblyAlignmentKind, parameter?: number): void {
-    this.workspace.applyAssemblyAlignment(kind, parameter);
+  async applyAssemblyAlignment(kind: AssemblyAlignmentKind, parameter?: number): Promise<void> {
+    await this.workspace.applyAssemblyAlignment(kind, parameter);
   }
 
   smartPaint(): void {

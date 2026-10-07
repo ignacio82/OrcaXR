@@ -1,0 +1,375 @@
+/* tslint:disable */
+/* eslint-disable */
+
+export class CapturedHistory {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    dirty_categories(): string;
+    has_label(undo: boolean): boolean;
+    label_length(undo: boolean): number;
+    label_text(undo: boolean, start: number, count: number): Uint16Array;
+    redo_count(): number;
+    undo_count(): number;
+}
+
+export class CapturedProject {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Explicit bulk export, not a per-edit projection. A hard caller-supplied
+     * output budget applies during writing. This synchronous operation must not
+     * run on a production authority worker until task isolation is provided.
+     */
+    export_json(max_bytes: number): ProjectBytes;
+    hash(): string;
+    id(start: number, count: number): Uint16Array;
+    id_length(): number;
+    query(version: number): ProjectQueryNode;
+    revision(): number;
+}
+
+export class CapturedSelection {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    count(): number;
+    id(position: number, start: number, count: number): Uint16Array;
+    id_length(position: number): number;
+    kind(position: number): number;
+    primary_index(): number;
+}
+
+export class ProjectAsset {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    digest(): string;
+    length(): number;
+    metadata(max_bytes: number): ProjectBytes;
+    read(start: number, count: number): Uint8Array;
+}
+
+export class ProjectBytes {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    length(): number;
+    read(start: number, count: number): Uint8Array;
+}
+
+export class ProjectClipboard {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Counts for allocating new editable IDs. Bytes and the source object stay
+     * inside native ownership; free this host handle when replacing the copy.
+     */
+    info(): Float64Array;
+}
+
+/**
+ * Explicit preparation owner. Cancellation drops parsed/sealed input and the
+ * guard immediately; dropping/freeing the owner does the same. Use a separate
+ * task for seal(). Session disposal invalidates admission, not captured input.
+ */
+export class ProjectCommandUpload {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    append(offset: number, bytes: Uint8Array): void;
+    cancel(): void;
+    command_count(): number;
+    seal(): void;
+    units(): number;
+}
+
+/**
+ * Admission consumes the contents on every outcome. Free the empty wrapper
+ * afterwards; reusing its consumed contents returns invalid_state.
+ */
+export class ProjectDocument {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+}
+
+export class ProjectEffects {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    count(): number;
+    dirty_categories(position: number): string;
+    history(position: number, previous: boolean): CapturedHistory;
+    kind(position: number): number;
+    project(position: number, previous: boolean): CapturedProject;
+    reason(position: number, start: number, count: number): Uint16Array;
+    reason_length(position: number): number;
+    selection(position: number, previous: boolean): CapturedSelection;
+}
+
+export class ProjectGuard {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+}
+
+export class ProjectOpen {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+}
+
+export class ProjectQueryList {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    count(): number;
+    node(position: number): ProjectQueryNode;
+    page(start: number, count: number): Float64Array;
+    snapshot(): CapturedProject;
+}
+
+export class ProjectQueryNode {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    children(relation: number, max_sort_entries: number): ProjectQueryList;
+    metadata(): Float64Array;
+    snapshot(): CapturedProject;
+    text(field: number, start: number, count: number): Uint16Array;
+    text_length(field: number): number;
+}
+
+export class ProjectReply {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Consume the response to transfer all effects; retain their order even
+     * when the reply reports commandFailed after rollback.
+     */
+    effects(): ProjectEffects;
+    wire(): string;
+}
+
+export class ProjectSelectionInput {
+    free(): void;
+    [Symbol.dispose](): void;
+    add(kind: number, id: Uint16Array): void;
+    constructor();
+}
+
+export class ProjectSession {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Call only after the host confirms successful save handoff. Merely reading
+     * or serializing a capture never clears dirty state.
+     */
+    acknowledge_checkpoint(guard: ProjectGuard): ProjectEffects;
+    asset(position: number): ProjectAsset;
+    asset_fingerprint(): string;
+    begin_open(): ProjectOpen;
+    cancel_open(ticket: ProjectOpen): boolean;
+    capture_clipboard(guard: ProjectGuard, node: ProjectQueryNode, version: number, options: Float64Array): ProjectClipboard;
+    capture_guard(): ProjectGuard;
+    clipboard_upload(guard: ProjectGuard, clipboard: ProjectClipboard, version: number, bytes: number, options: Float64Array): ProjectCommandUpload;
+    command_upload(guard: ProjectGuard, version: number, bytes: number, options: Float64Array): ProjectCommandUpload;
+    configure_staging(version: number, options: Float64Array): void;
+    dispose(): void;
+    finish_open(ticket: ProjectOpen, document: ProjectDocument): ProjectEffects;
+    history(): CapturedHistory;
+    history_revision(): number;
+    is_current(guard: ProjectGuard): boolean;
+    is_disposed(): boolean;
+    is_export_current(guard: ProjectGuard): boolean;
+    is_open_current(ticket: ProjectOpen): boolean;
+    pending_count(): number;
+    release_staged(id: number): boolean;
+    reset_document(guard: ProjectGuard, document: ProjectDocument): ProjectEffects;
+    run_next(): ProjectReply | undefined;
+    select(guard: ProjectGuard, input: ProjectSelectionInput, primary: number): ProjectEffects;
+    selection(): CapturedSelection;
+    snapshot(): CapturedProject;
+    stage_commands(input: ProjectCommandUpload): number;
+    staging_usage(): Float64Array;
+    submit(request: string): ProjectReply | undefined;
+}
+
+export class ProjectUpload {
+    free(): void;
+    [Symbol.dispose](): void;
+    append_asset(offset: number, bytes: Uint8Array): void;
+    append_document(offset: number, bytes: Uint8Array): void;
+    asset_count(): number;
+    begin_asset(position: number): number;
+    cancel_asset(): void;
+    finish_asset(): void;
+    constructor(version: number, document_bytes: number, options: Float64Array);
+    /**
+     * Takes ownership even on failure. The nonce is fresh host entropy, not
+     * domain-ID entropy. No initial state is published until the bundle is full.
+     */
+    open(generation: Float64Array): ProjectSession;
+    /**
+     * Consumes the upload and verifies a complete immutable replacement bundle.
+     * Preparation belongs to an owned import task; it publishes no live state.
+     */
+    prepare(): ProjectDocument;
+    /**
+     * Consumes staged document input, including on admission failure. This
+     * synchronous finalization belongs to the host's owned opening task.
+     */
+    seal_document(): void;
+}
+
+export function core_info(): string;
+
+export function evaluate(request: string): string;
+
+export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
+
+export interface InitOutput {
+    readonly memory: WebAssembly.Memory;
+    readonly __wbg_capturedhistory_free: (a: number, b: number) => void;
+    readonly __wbg_capturedproject_free: (a: number, b: number) => void;
+    readonly __wbg_capturedselection_free: (a: number, b: number) => void;
+    readonly __wbg_projectasset_free: (a: number, b: number) => void;
+    readonly __wbg_projectbytes_free: (a: number, b: number) => void;
+    readonly __wbg_projectclipboard_free: (a: number, b: number) => void;
+    readonly __wbg_projectcommandupload_free: (a: number, b: number) => void;
+    readonly __wbg_projectdocument_free: (a: number, b: number) => void;
+    readonly __wbg_projecteffects_free: (a: number, b: number) => void;
+    readonly __wbg_projectguard_free: (a: number, b: number) => void;
+    readonly __wbg_projectopen_free: (a: number, b: number) => void;
+    readonly __wbg_projectquerylist_free: (a: number, b: number) => void;
+    readonly __wbg_projectquerynode_free: (a: number, b: number) => void;
+    readonly __wbg_projectreply_free: (a: number, b: number) => void;
+    readonly __wbg_projectselectioninput_free: (a: number, b: number) => void;
+    readonly __wbg_projectsession_free: (a: number, b: number) => void;
+    readonly __wbg_projectupload_free: (a: number, b: number) => void;
+    readonly capturedhistory_dirty_categories: (a: number) => [number, number];
+    readonly capturedhistory_has_label: (a: number, b: number) => number;
+    readonly capturedhistory_label_length: (a: number, b: number) => number;
+    readonly capturedhistory_label_text: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly capturedhistory_redo_count: (a: number) => number;
+    readonly capturedhistory_undo_count: (a: number) => number;
+    readonly capturedproject_export_json: (a: number, b: number) => [number, number, number];
+    readonly capturedproject_hash: (a: number) => [number, number];
+    readonly capturedproject_id: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_id_length: (a: number) => number;
+    readonly capturedproject_query: (a: number, b: number) => [number, number, number];
+    readonly capturedproject_revision: (a: number) => number;
+    readonly capturedselection_count: (a: number) => number;
+    readonly capturedselection_id: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly capturedselection_id_length: (a: number, b: number) => [number, number, number];
+    readonly capturedselection_kind: (a: number, b: number) => [number, number, number];
+    readonly capturedselection_primary_index: (a: number) => number;
+    readonly core_info: () => [number, number];
+    readonly evaluate: (a: number, b: number) => [number, number];
+    readonly projectasset_digest: (a: number) => [number, number];
+    readonly projectasset_length: (a: number) => number;
+    readonly projectasset_metadata: (a: number, b: number) => [number, number, number];
+    readonly projectasset_read: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectbytes_length: (a: number) => number;
+    readonly projectbytes_read: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectclipboard_info: (a: number) => [number, number];
+    readonly projectcommandupload_append: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly projectcommandupload_cancel: (a: number) => void;
+    readonly projectcommandupload_command_count: (a: number) => [number, number, number];
+    readonly projectcommandupload_seal: (a: number) => [number, number];
+    readonly projectcommandupload_units: (a: number) => [number, number, number];
+    readonly projecteffects_count: (a: number) => number;
+    readonly projecteffects_dirty_categories: (a: number, b: number) => [number, number, number, number];
+    readonly projecteffects_history: (a: number, b: number, c: number) => [number, number, number];
+    readonly projecteffects_kind: (a: number, b: number) => [number, number, number];
+    readonly projecteffects_project: (a: number, b: number, c: number) => [number, number, number];
+    readonly projecteffects_reason: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly projecteffects_reason_length: (a: number, b: number) => [number, number, number];
+    readonly projecteffects_selection: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectquerylist_count: (a: number) => number;
+    readonly projectquerylist_node: (a: number, b: number) => [number, number, number];
+    readonly projectquerylist_page: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectquerylist_snapshot: (a: number) => number;
+    readonly projectquerynode_children: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectquerynode_metadata: (a: number) => [number, number, number, number];
+    readonly projectquerynode_snapshot: (a: number) => number;
+    readonly projectquerynode_text: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly projectquerynode_text_length: (a: number, b: number) => [number, number, number];
+    readonly projectreply_effects: (a: number) => number;
+    readonly projectreply_wire: (a: number) => [number, number];
+    readonly projectselectioninput_add: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly projectselectioninput_new: () => number;
+    readonly projectsession_acknowledge_checkpoint: (a: number, b: number) => [number, number, number];
+    readonly projectsession_asset: (a: number, b: number) => [number, number, number];
+    readonly projectsession_asset_fingerprint: (a: number) => [number, number];
+    readonly projectsession_begin_open: (a: number) => [number, number, number];
+    readonly projectsession_cancel_open: (a: number, b: number) => number;
+    readonly projectsession_capture_clipboard: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly projectsession_capture_guard: (a: number) => [number, number, number];
+    readonly projectsession_clipboard_upload: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+    readonly projectsession_command_upload: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly projectsession_configure_staging: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly projectsession_dispose: (a: number) => void;
+    readonly projectsession_finish_open: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectsession_history: (a: number) => number;
+    readonly projectsession_history_revision: (a: number) => number;
+    readonly projectsession_is_current: (a: number, b: number) => number;
+    readonly projectsession_is_disposed: (a: number) => number;
+    readonly projectsession_is_export_current: (a: number, b: number) => number;
+    readonly projectsession_is_open_current: (a: number, b: number) => number;
+    readonly projectsession_pending_count: (a: number) => number;
+    readonly projectsession_release_staged: (a: number, b: number) => [number, number, number];
+    readonly projectsession_reset_document: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectsession_run_next: (a: number) => number;
+    readonly projectsession_select: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly projectsession_selection: (a: number) => number;
+    readonly projectsession_snapshot: (a: number) => number;
+    readonly projectsession_stage_commands: (a: number, b: number) => [number, number, number];
+    readonly projectsession_staging_usage: (a: number) => [number, number];
+    readonly projectsession_submit: (a: number, b: number, c: number) => number;
+    readonly projectupload_append_asset: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly projectupload_append_document: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly projectupload_asset_count: (a: number) => [number, number, number];
+    readonly projectupload_begin_asset: (a: number, b: number) => [number, number, number];
+    readonly projectupload_cancel_asset: (a: number) => [number, number];
+    readonly projectupload_finish_asset: (a: number) => [number, number];
+    readonly projectupload_new: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly projectupload_open: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectupload_prepare: (a: number) => [number, number, number];
+    readonly projectupload_seal_document: (a: number) => [number, number];
+    readonly __wbindgen_exn_store: (a: number) => void;
+    readonly __externref_table_alloc: () => number;
+    readonly __wbindgen_externrefs: WebAssembly.Table;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __externref_table_dealloc: (a: number) => void;
+    readonly __wbindgen_malloc: (a: number, b: number) => number;
+    readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_start: () => void;
+}
+
+export type SyncInitInput = BufferSource | WebAssembly.Module;
+
+/**
+ * Instantiates the given `module`, which can either be bytes or
+ * a precompiled `WebAssembly.Module`.
+ *
+ * @param {{ module: SyncInitInput }} module - Passing `SyncInitInput` directly is deprecated.
+ *
+ * @returns {InitOutput}
+ */
+export function initSync(module: { module: SyncInitInput } | SyncInitInput): InitOutput;
+
+/**
+ * If `module_or_path` is {RequestInfo} or {URL}, makes a request and
+ * for everything else, calls `WebAssembly.instantiate` directly.
+ *
+ * @param {{ module_or_path: InitInput | Promise<InitInput> }} module_or_path - Passing `InitInput` directly is deprecated.
+ *
+ * @returns {Promise<InitOutput>}
+ */
+export default function __wbg_init (module_or_path?: { module_or_path: InitInput | Promise<InitInput> } | InitInput | Promise<InitInput>): Promise<InitOutput>;

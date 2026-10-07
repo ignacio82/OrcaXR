@@ -18,7 +18,10 @@ import { isStableEntityId } from './domain/ids';
 
 export type ProjectSessionOperation = Exclude<
   ProjectSessionOperationWire,
-  { readonly hello: unknown } | { readonly close: unknown } | { readonly cancel: unknown }
+  | { readonly hello: unknown }
+  | { readonly close: unknown }
+  | { readonly cancel: unknown }
+  | { readonly releaseStaged: unknown }
 >;
 export type ProjectSessionExchange = (request: string) => Promise<string>;
 export type ProjectSessionClientErrorCode = ProjectSessionErrorWire | 'outcomeUnknown';
@@ -106,7 +109,7 @@ export class ProjectSessionClient {
         requestId: 1,
         operation,
       }).operation;
-      if ('hello' in captured || 'close' in captured || 'cancel' in captured)
+      if ('hello' in captured || 'close' in captured || 'cancel' in captured || 'releaseStaged' in captured)
         throw new ProjectSessionClientError('invalidRequest');
       this.pending++;
       let cancelled = false;
@@ -163,6 +166,19 @@ export class ProjectSessionClient {
       if (!('closed' in reply.result)) return this.uncertain();
     });
     return this.closing;
+  }
+
+  /** Control lane: releasing an unconsumed input must work at queue capacity. */
+  releaseStaged(stagedId: number): Promise<boolean> {
+    return this.ready
+      .then(() => {
+        this.assertActive();
+        return this.send({ releaseStaged: { stagedId } }).result;
+      })
+      .then((reply) => {
+        if (!('released' in reply.result)) return this.uncertain();
+        return reply.result.released;
+      });
   }
 
   private assertActive(): void {

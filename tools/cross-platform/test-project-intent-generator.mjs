@@ -6,6 +6,8 @@ import {
   readFileSync,
   rmSync,
   writeFileSync,
+  openSync,
+  closeSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +18,10 @@ const original = JSON.parse(
   readFileSync(new URL("contracts/project-intents.json", root)),
 );
 const changes = [
+  s => { s.definitions.Finite.min = null; },
+  s => { s.definitions.Finite.max = null; },
+  s => { s.definitions.Finite.min = 10; s.definitions.Finite.max = 9; },
+  s => { s.definitions.Finite.optional = true; },
   (s) => {
     s.additionalProperties = true;
   },
@@ -123,11 +129,19 @@ try {
       join(directory, "contracts/project-intents.json"),
       JSON.stringify(schema),
     );
-    const result = spawnSync(
-      process.execPath,
-      ["tools/cross-platform/generate-project-intents.mjs"],
-      { cwd: directory, encoding: "utf8", timeout: 10000, maxBuffer: 65536 },
-    );
+    const diagnostics = join(directory, "diagnostics.log");
+    const fd = openSync(diagnostics, "w");
+    let result;
+    try {
+      result = spawnSync(
+        process.execPath,
+        ["tools/cross-platform/generate-project-intents.mjs"],
+        { cwd: directory, timeout: 10000, stdio: ["ignore", fd, fd] },
+      );
+    } finally {
+      closeSync(fd);
+    }
+    const stderr = readFileSync(diagnostics, "utf8");
     assert.equal(
       result.error,
       undefined,
@@ -135,12 +149,12 @@ try {
     );
     assert.notEqual(result.status, 0, `Mutation ${index} accepted`);
     assert.match(
-      result.stderr,
+      stderr,
       /AssertionError/,
       `Mutation ${index} escaped validation`,
     );
     assert.doesNotMatch(
-      result.stderr,
+      stderr,
       /ENOENT/,
       `Mutation ${index} reached output checking`,
     );

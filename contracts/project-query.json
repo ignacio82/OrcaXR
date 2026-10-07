@@ -1,0 +1,341 @@
+{
+  "version": 1,
+  "maxPageRows": 64,
+  "maxTextChunkUnits": 16384,
+  "maxIndex": 4294967295,
+  "numbers": {
+    "settingsCount": "index",
+    "toolCount": "integer",
+    "plateCount": "index",
+    "physicalCount": "index",
+    "mixedCount": "index",
+    "assetCount": "index",
+    "order": "integer",
+    "printable": "boolean",
+    "active": "boolean",
+    "objectCount": "index",
+    "volumeCount": "index",
+    "instanceCount": "index",
+    "rangeCount": "index",
+    "role": [
+      "model",
+      "parameter-modifier",
+      "negative-volume",
+      "support-enforcer",
+      "support-blocker"
+    ],
+    "triangleCount": "integer",
+    "topologyRevision": "integer",
+    "tx": "finite",
+    "ty": "finite",
+    "tz": "finite",
+    "qx": "finite",
+    "qy": "finite",
+    "qz": "finite",
+    "qw": "finite",
+    "sx": "finite",
+    "sy": "finite",
+    "sz": "finite",
+    "effectivePrintable": "boolean",
+    "minZMm": "finite",
+    "maxZMm": "finite",
+    "toolId": "integer",
+    "enabled": "boolean",
+    "nozzleDiameterMm": "finite",
+    "componentCount": "index",
+    "assetKind": [
+      "mesh",
+      "archive",
+      "thumbnail",
+      "extension"
+    ],
+    "byteLength": "integer",
+    "positionsOffset": "finite",
+    "positionsLength": "finite",
+    "positionsType": [
+      "float32",
+      "uint16",
+      "uint32"
+    ],
+    "positionsComponents": "componentCount",
+    "positionsCount": "integer",
+    "positionsStride": "finite",
+    "indicesOffset": "finite",
+    "indicesLength": "finite",
+    "indicesType": [
+      "float32",
+      "uint16",
+      "uint32"
+    ],
+    "indicesComponents": "componentCount",
+    "indicesCount": "integer",
+    "indicesStride": "finite"
+  },
+  "texts": [
+    "id",
+    "name",
+    "localFilamentId",
+    "effectiveFilamentId",
+    "assetId",
+    "color",
+    "material",
+    "profileId",
+    "profileHash",
+    "filename",
+    "mediaType",
+    "digest"
+  ],
+  "nodes": {
+    "project": {
+      "numbers": [
+        "settingsCount",
+        "toolCount",
+        "plateCount",
+        "physicalCount",
+        "mixedCount",
+        "assetCount"
+      ],
+      "optionalNumbers": [],
+      "texts": [
+        "id",
+        "name",
+        "profileId",
+        "profileHash"
+      ],
+      "constraints": []
+    },
+    "plate": {
+      "numbers": [
+        "order",
+        "printable",
+        "active",
+        "settingsCount",
+        "objectCount"
+      ],
+      "optionalNumbers": [],
+      "texts": [
+        "id",
+        "name"
+      ],
+      "constraints": []
+    },
+    "object": {
+      "numbers": [
+        "settingsCount",
+        "volumeCount",
+        "instanceCount",
+        "rangeCount"
+      ],
+      "optionalNumbers": [],
+      "texts": [
+        "id",
+        "name",
+        "localFilamentId",
+        "effectiveFilamentId"
+      ],
+      "constraints": []
+    },
+    "volume": {
+      "numbers": [
+        "settingsCount",
+        "role",
+        "triangleCount",
+        "topologyRevision",
+        "tx",
+        "ty",
+        "tz",
+        "qx",
+        "qy",
+        "qz",
+        "qw",
+        "sx",
+        "sy",
+        "sz"
+      ],
+      "optionalNumbers": [],
+      "texts": [
+        "id",
+        "name",
+        "localFilamentId",
+        "effectiveFilamentId",
+        "assetId"
+      ],
+      "constraints": []
+    },
+    "instance": {
+      "numbers": [
+        "printable",
+        "effectivePrintable",
+        "tx",
+        "ty",
+        "tz",
+        "qx",
+        "qy",
+        "qz",
+        "qw",
+        "sx",
+        "sy",
+        "sz"
+      ],
+      "optionalNumbers": [],
+      "texts": [
+        "id",
+        "name",
+        "effectiveFilamentId"
+      ],
+      "constraints": []
+    },
+    "layerRange": {
+      "numbers": [
+        "minZMm",
+        "maxZMm",
+        "settingsCount"
+      ],
+      "optionalNumbers": [],
+      "texts": [
+        "id",
+        "localFilamentId",
+        "effectiveFilamentId"
+      ],
+      "constraints": []
+    },
+    "physicalFilament": {
+      "numbers": [
+        "toolId",
+        "enabled",
+        "settingsCount"
+      ],
+      "optionalNumbers": [
+        "nozzleDiameterMm"
+      ],
+      "texts": [
+        "id",
+        "name",
+        "color",
+        "material",
+        "profileId",
+        "profileHash"
+      ],
+      "constraints": []
+    },
+    "mixedFilament": {
+      "numbers": [
+        "enabled",
+        "settingsCount",
+        "componentCount"
+      ],
+      "optionalNumbers": [],
+      "texts": [
+        "id",
+        "name",
+        "color"
+      ],
+      "constraints": []
+    },
+    "asset": {
+      "numbers": [
+        "assetKind",
+        "byteLength"
+      ],
+      "optionalNumbers": [
+        "triangleCount",
+        "positionsOffset",
+        "positionsLength",
+        "positionsType",
+        "positionsComponents",
+        "positionsCount",
+        "positionsStride",
+        "indicesOffset",
+        "indicesLength",
+        "indicesType",
+        "indicesComponents",
+        "indicesCount",
+        "indicesStride"
+      ],
+      "texts": [
+        "id",
+        "filename",
+        "mediaType",
+        "digest"
+      ],
+      "constraints": [
+        [
+          "together",
+          [
+            "triangleCount",
+            "positionsOffset",
+            "positionsLength",
+            "positionsType",
+            "positionsComponents",
+            "positionsCount"
+          ]
+        ],
+        [
+          "together",
+          [
+            "indicesOffset",
+            "indicesLength",
+            "indicesType",
+            "indicesComponents",
+            "indicesCount"
+          ]
+        ],
+        [
+          "requires",
+          "positionsStride",
+          "positionsCount"
+        ],
+        [
+          "requires",
+          "indicesCount",
+          "positionsCount"
+        ],
+        [
+          "requires",
+          "indicesStride",
+          "indicesCount"
+        ],
+        [
+          "equalsIfPresent",
+          "positionsCount",
+          "assetKind",
+          0
+        ]
+      ]
+    }
+  },
+  "relations": {
+    "plates": [
+      "project",
+      "plate"
+    ],
+    "objects": [
+      "plate",
+      "object"
+    ],
+    "volumes": [
+      "object",
+      "volume"
+    ],
+    "instances": [
+      "object",
+      "instance"
+    ],
+    "layerRanges": [
+      "object",
+      "layerRange"
+    ],
+    "physicalFilaments": [
+      "project",
+      "physicalFilament"
+    ],
+    "mixedFilaments": [
+      "project",
+      "mixedFilament"
+    ],
+    "sourceAssets": [
+      "project",
+      "asset"
+    ]
+  }
+}

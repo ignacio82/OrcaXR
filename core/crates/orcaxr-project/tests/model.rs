@@ -461,3 +461,38 @@ fn immutable_edit_traces_match_reference_state_and_fingerprint_after_every_step(
         assert_eq!(original.fingerprint(), original_hash);
     }
 }
+
+#[test]
+fn borrowed_json_comparison_matches_independent_full_canonical_contents() {
+    let fixture = fixture();
+    let cases = fixture["cases"].as_array().unwrap();
+    for a in cases {
+        let typed = model(a);
+        for b in cases {
+            let value = parse(b["stateJson"].as_str().unwrap()).unwrap();
+            assert_eq!(
+                typed.matches_value(&value).unwrap(),
+                a["stateJson"] == b["stateJson"],
+                "{} vs {}",
+                a["name"],
+                b["name"]
+            );
+        }
+        let value = parse(a["stateJson"].as_str().unwrap()).unwrap();
+        let Value::Object(fields) = &value else {
+            panic!()
+        };
+        for key in fields.keys() {
+            let mut changed = fields.clone();
+            changed.remove(key);
+            assert!(
+                !typed.matches_value(&Value::Object(changed)).unwrap(),
+                "missing field in {}",
+                a["name"]
+            );
+        }
+        for wrong in [Value::Null, Value::Bool(false), Value::Array(vec![])] {
+            assert!(!typed.matches_value(&wrong).unwrap());
+        }
+    }
+}

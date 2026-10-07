@@ -1,3 +1,4 @@
+import type { AsyncTransformGesture } from './AsyncTransformGesture';
 import { selectionEqual } from '../project/selection';
 import type { FeatureInitializationRegistry } from '../startup/FeatureInitialization';
 import type { ProjectSerializerPort, ProjectRecoveryProof } from '../project/ports';
@@ -170,7 +171,8 @@ import { PaintOverlayRegistry } from './PaintOverlayRegistry';
 
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
-import type { ActionRegistry } from '../actions/ActionRegistry';
+import type { ActionRegistry, ActionSurface, TransformEditRequest, ActionInvocation } from '../actions/ActionRegistry';
+import type { AsyncSessionAcknowledgement } from '../project/AsyncEditorSession';
 import { type ContextTarget } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/ActionContext';
 import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
@@ -669,6 +671,7 @@ type ProjectedModelEntry = {
 };
 
 interface ActiveTransformGesture {
+  readonly owner: AsyncTransformGesture;
   readonly id: string;
   readonly origins: readonly MultiInstanceTransformOrigin[];
   readonly initialPivotTransform: Transform;
@@ -983,6 +986,7 @@ export class OrcaWorkspace extends xb.Script {
   private readonly transformProxy = new THREE.Object3D();
   private transformGestureSequence = 0;
   private activeTransformGesture: ActiveTransformGesture | undefined;
+  private readonly transformGestureOwners = new Set<AsyncTransformGesture>();
   public onStatusChanged: ((text: string, percent?: number) => void) | null = null;
   public onDownloadReady: ((ready: boolean) => void) | null = null;
   /** When true, sliceNow computes wipe_tower_x/y from the plated models. */
@@ -1053,6 +1057,8 @@ export class OrcaWorkspace extends xb.Script {
           this.refreshPaintOverlays();
         }
         if (change.sources.includes('selection') || change.sources.includes('project')) {
+          if ([...this.transformGestureOwners].some((owner) => !owner.selectionCurrent()))
+            this.cancelTransformGestures();
           if (!this.activeTransformGesture) this.syncTransformProxy();
           // Every selection path lands here — click, select-all, the Objects
           // tree, an action — so the outline follows the canonical selection
@@ -1324,12 +1330,12 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Rename only entity kinds with a canonical editable-name command. */
-  public renameObjectsTreeEntity(
+  public async renameObjectsTreeEntity(
     entity: Extract<ObjectTreeEntityRef, { kind: 'object' | 'volume' }>,
     name: string,
-  ): void {
-    if (entity.kind === 'object') this.canonicalProject.renameObject(entity.id, name);
-    else this.canonicalProject.renameVolume(entity.id, name);
+  ): Promise<void> {
+    if (entity.kind === 'object') await this.canonicalProject.renameObject(entity.id, name);
+    else await this.canonicalProject.renameVolume(entity.id, name);
   }
 
   /** Select, activate the owning plate, and frame an Objects row in the DOM scene. */
@@ -1485,7 +1491,7 @@ export class OrcaWorkspace extends xb.Script {
     this.actionContext = undefined;
     this.actionStateRefreshers.clear();
     this.sceneGestureGuard.dispose();
-    this.drag = null;
+    this.cancelTransformGestures();
     this.cancelPaintStroke();
     this.paintOverlays.clear((overlay) => this.disposeOverlayResource(overlay));
     this.paintServiceInstance = null;
@@ -1575,38 +1581,50 @@ export class OrcaWorkspace extends xb.Script {
     const onDraggingChanged = (event: { value: unknown }) => {
       if (this.orbitControls) this.orbitControls.enabled = !event.value;
       if (event.value) {
+        this.cancelTransformGestures();
         this.transformGestureSequence += 1;
         this.syncTransformProxy();
         const selection = this.captureSelectedInstanceOrigins();
-        this.activeTransformGesture = selection
-          ? {
-              id: `transform-controls:${this.transformGestureSequence}`,
-              origins: selection.origins,
-              initialPivotTransform: transformFromObject(this.transformProxy),
-            }
-          : undefined;
+        if (selection) {
+          const id = `transform-controls:${this.transformGestureSequence}`;
+          this.activeTransformGesture = {
+            id,
+            origins: selection.origins,
+            initialPivotTransform: transformFromObject(this.transformProxy),
+            owner: this.ownTransformGesture(
+              selection.origins.map((origin) => origin.instanceId),
+              id,
+              'dom-scene',
+            ),
+          };
+        }
       } else {
+        const gesture = this.activeTransformGesture;
         this.activeTransformGesture = undefined;
-        this.syncTransformProxy();
-        this.revalidatePublishedGcode();
-        this.recomputePreflight();
-        this.onSelectionTransformChanged?.();
+        if (gesture) void this.finishTransformGesture(gesture.owner, this.transformGestureSequence);
+        else this.syncTransformProxy();
       }
     };
     const onTransformChanged = () => {
-      const selected = this.selectedModel;
-      if (!selected) return;
       const gesture = this.activeTransformGesture;
+      if (!gesture) return;
       const current = transformFromObject(this.transformProxy);
-      if (gesture && gesture.origins.length > 1) {
-        this.canonicalProject.setInstanceTransforms(
-          projectMultiInstanceTransform(gesture.origins, gesture.initialPivotTransform, current, this.transformMode()),
-          gesture.id,
+      try {
+        gesture.owner.update(
+          gesture.origins.length > 1
+            ? projectMultiInstanceTransform(
+                gesture.origins,
+                gesture.initialPivotTransform,
+                current,
+                this.transformMode(),
+              )
+            : [{ instanceId: gesture.origins[0].instanceId, transform: current }],
         );
-      } else {
-        this.canonicalProject.setInstanceTransform(selected.instanceId, current, gesture?.id);
+      } catch (error) {
+        this.cancelTransformGestures();
+        this.setStatus(`Transform stopped: ${(error as Error).message}`);
+        this.syncTransformProxy();
       }
-      this.onSelectionTransformChanged?.();
     };
     this.transformControls.addEventListener('dragging-changed', onDraggingChanged);
     this.transformControls.addEventListener('objectChange', onTransformChanged);
@@ -1625,6 +1643,71 @@ export class OrcaWorkspace extends xb.Script {
     }
 
     this.setupSelectionRaycaster(canvas);
+  }
+
+  /** Handler seam: mutations reach this method only after registry availability checks. */
+  public applyTransformEdit(request: TransformEditRequest): Promise<AsyncSessionAcknowledgement<void>> {
+    const { changes, gestureId, guard, signal } = request;
+    return changes.length === 1
+      ? this.canonicalProject.setInstanceTransform(changes[0].instanceId, changes[0].transform, gestureId, {
+          guard,
+          signal,
+        })
+      : this.canonicalProject.setInstanceTransforms(changes, gestureId, { guard, signal });
+  }
+
+  public async applyLayOnFace(request: NonNullable<ActionInvocation['layOnFace']>): Promise<void> {
+    await this.canonicalProject.layInstanceOnFace(request.instanceId, request.localNormal);
+  }
+
+  private async invokeTransformEdit(
+    mode: MultiInstanceTransformMode,
+    request: TransformEditRequest,
+    surface: ActionSurface,
+  ): Promise<AsyncSessionAcknowledgement<void>> {
+    const context = this.actionContext;
+    if (!context || this.disposed) throw new Error('The editing surface is closed.');
+    const completion = await this.actionRegistry.invokeWithResult(`tool_${mode}`, surface, context, context.ui.get(), {
+      transformEdit: request,
+    });
+    if (!completion.invoked) throw new Error(completion.reason);
+    if (!completion.result || completion.result.kind !== 'project-edit')
+      throw new Error('The transform could not be confirmed. Review the current model before editing again.');
+    return completion.result.acknowledgement;
+  }
+
+  private ownTransformGesture(ids: readonly InstanceId[], id: string, surface: ActionSurface): AsyncTransformGesture {
+    const mode = this.transformMode();
+    const owner = this.canonicalProject.beginTransformGesture(ids, id, (changes, guard, signal) =>
+      this.invokeTransformEdit(mode, { changes, gestureId: id, guard, signal }, surface),
+    );
+    this.transformGestureOwners.add(owner);
+    return owner;
+  }
+
+  private cancelTransformGestures(): void {
+    this.transformGestureSequence += 1;
+    for (const owner of this.transformGestureOwners) owner.cancel();
+    this.transformGestureOwners.clear();
+    this.activeTransformGesture = undefined;
+    this.drag = null;
+  }
+
+  private async finishTransformGesture(owner: AsyncTransformGesture, sequence: number): Promise<void> {
+    try {
+      await owner.finish();
+    } catch (error) {
+      if (!this.disposed && sequence === this.transformGestureSequence)
+        this.setStatus(`Transform stopped: ${(error as Error).message}`);
+    } finally {
+      this.transformGestureOwners.delete(owner);
+      if (!this.disposed && sequence === this.transformGestureSequence) {
+        this.syncTransformProxy();
+        this.revalidatePublishedGcode();
+        this.recomputePreflight();
+        this.onSelectionTransformChanged?.();
+      }
+    }
   }
 
   public selectModel(entry: ProjectedModelEntry, extendSelection = false) {
@@ -1678,7 +1761,7 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Drop every selected active-plate instance independently onto canonical Z=0. */
-  public dropSelectedToBed(): void {
+  public async dropSelectedToBed(): Promise<void> {
     const selection = this.captureSelectedInstanceOrigins();
     if (!selection) {
       this.setStatus(
@@ -1686,7 +1769,8 @@ export class OrcaWorkspace extends xb.Script {
       );
       return;
     }
-    const result = this.canonicalProject.dropInstancesToBed(selection.origins.map((origin) => origin.instanceId));
+    const result = await this.canonicalProject.dropInstancesToBed(selection.origins.map((origin) => origin.instanceId));
+    if (this.disposed) return;
     this.syncTransformProxy();
     this.revalidatePublishedGcode();
     this.recomputePreflight();
@@ -1718,48 +1802,51 @@ export class OrcaWorkspace extends xb.Script {
     const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
     return instance ? new THREE.Vector3().fromArray(instance.transform.scale) : null;
   }
-  public setSelectedModelPosition(x: number, y: number, z: number) {
+  public async setSelectedModelPosition(x: number, y: number, z: number) {
     const selected = this.selectedModel;
     const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
     if (!selected || !instance) return;
-    this.commitSelectedPrimaryTransform(
+    await this.commitSelectedPrimaryTransform(
       {
         ...instance.transform,
         translationMm: [x, y, z],
       },
       'move',
     );
+    if (this.disposed) return;
     this.syncTransformProxy();
     this.revalidatePublishedGcode();
     this.onSelectionTransformChanged?.();
   }
-  public setSelectedModelRotation(x: number, y: number, z: number) {
+  public async setSelectedModelRotation(x: number, y: number, z: number) {
     const selected = this.selectedModel;
     const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
     if (!selected || !instance) return;
     const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z)).normalize();
-    this.commitSelectedPrimaryTransform(
+    await this.commitSelectedPrimaryTransform(
       {
         ...instance.transform,
         rotation: [quaternion.x, quaternion.y, quaternion.z, quaternion.w],
       },
       'rotate',
     );
+    if (this.disposed) return;
     this.syncTransformProxy();
     this.revalidatePublishedGcode();
     this.onSelectionTransformChanged?.();
   }
-  public setSelectedModelScale(x: number, y: number, z: number) {
+  public async setSelectedModelScale(x: number, y: number, z: number) {
     const selected = this.selectedModel;
     const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
     if (!selected || !instance) return;
-    this.commitSelectedPrimaryTransform(
+    await this.commitSelectedPrimaryTransform(
       {
         ...instance.transform,
         scale: [x, y, z],
       },
       'scale',
     );
+    if (this.disposed) return;
     this.syncTransformProxy();
     this.revalidatePublishedGcode();
     this.onSelectionTransformChanged?.();
@@ -1827,21 +1914,23 @@ export class OrcaWorkspace extends xb.Script {
     return origins.length > 0 ? { primaryInstanceId, origins: Object.freeze(origins) } : undefined;
   }
 
-  private commitSelectedPrimaryTransform(currentPrimaryTransform: Transform, mode: MultiInstanceTransformMode): void {
+  private async commitSelectedPrimaryTransform(
+    currentPrimaryTransform: Transform,
+    mode: MultiInstanceTransformMode,
+    surface: ActionSurface = 'dom-inspector',
+  ): Promise<void> {
     const selection = this.captureSelectedInstanceOrigins();
     if (!selection) return;
-    if (selection.origins.length === 1) {
-      this.canonicalProject.setInstanceTransform(selection.primaryInstanceId, currentPrimaryTransform);
-      return;
-    }
-    this.canonicalProject.setInstanceTransforms(
-      projectMultiInstancePrimaryTransform(
-        selection.origins,
-        selection.primaryInstanceId,
-        currentPrimaryTransform,
-        mode,
-      ),
-    );
+    const changes =
+      selection.origins.length === 1
+        ? [{ instanceId: selection.primaryInstanceId, transform: currentPrimaryTransform }]
+        : projectMultiInstancePrimaryTransform(
+            selection.origins,
+            selection.primaryInstanceId,
+            currentPrimaryTransform,
+            mode,
+          );
+    await this.invokeTransformEdit(mode, { changes }, surface);
   }
 
   private transformMode(): MultiInstanceTransformMode {
@@ -1958,7 +2047,7 @@ export class OrcaWorkspace extends xb.Script {
       if (this.tool === 'lay_on_face') {
         const dragX = Math.abs(event.clientX - downX);
         const dragY = Math.abs(event.clientY - downY);
-        if (dragX <= 10 && dragY <= 10) this.layPickedFacetOnBed(pointerRay(event));
+        if (dragX <= 10 && dragY <= 10) void this.layPickedFacetOnBed(pointerRay(event));
         return;
       }
       if (this.tool === 'measure') {
@@ -2618,12 +2707,13 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Commit one pinned alignment as a single undoable instance transform. */
-  public applyAssemblyAlignment(kind: AssemblyAlignmentKind, parameter?: number): boolean {
+  public async applyAssemblyAlignment(kind: AssemblyAlignmentKind, parameter?: number): Promise<boolean> {
     if (this.measurePicks.length < 2) {
       this.setStatus(t('workspace.orcaWorkspace.pickTwoFacesBeforeAligning', 'Pick two faces before aligning.'));
       return false;
     }
-    const [first, second] = this.measurePicks;
+    const picks = this.measurePicks;
+    const [first, second] = picks;
     const target = second.instanceId;
     if (!target || target === first.instanceId) {
       this.setStatus(
@@ -2653,7 +2743,8 @@ export class OrcaWorkspace extends xb.Script {
         );
         return false;
       }
-      this.canonicalProject.setInstanceTransform(target, plan.transform);
+      await this.canonicalProject.setInstanceTransform(target, plan.transform);
+      if (this.disposed || this.measurePicks !== picks) return true;
       this.recomputePreflight();
       // The picks describe where the faces *were*; keep them honest.
       this.measurePicks = [];
@@ -2661,6 +2752,7 @@ export class OrcaWorkspace extends xb.Script {
       this.onMeasureStateChanged?.();
       return true;
     } catch (error) {
+      if (this.disposed || this.measurePicks !== picks) return false;
       this.setStatus(`Alignment failed: ${(error as Error).message}`);
       this.onMeasureStateChanged?.();
       return false;
@@ -3904,6 +3996,8 @@ export class OrcaWorkspace extends xb.Script {
     startControllerLocal: THREE.Vector3;
     startTransform: Transform;
     gestureId: string;
+    owner: AsyncTransformGesture;
+    moved: boolean;
   } | null = null;
   private readonly sceneGestureGuard = new SceneGestureGuard<unknown>();
 
@@ -3938,24 +4032,18 @@ export class OrcaWorkspace extends xb.Script {
     // A trigger press on an armed printer control owns the whole gesture: it
     // must not also paint or manipulate through the card behind it.
     if (this.beginPrinterHold(event.target)) {
+      if (this.drag?.controller === event.target) this.cancelTransformGestures();
       this.sceneGestureGuard.begin(event.target, true);
       return;
     }
 
-    if (this.drag?.controller === event.target) this.drag = null;
+    if (this.drag?.controller === event.target) this.cancelTransformGestures();
     this.beginXrLongPress(event.target, ints[0]);
     // A select that lands on UI owns the complete gesture. Remember that
     // decision so later `selecting` frames cannot paint/manipulate through the
     // card after doing their own model-only raycast.
     if (!this.sceneGestureGuard.begin(event.target, this.controllerHitsUi(event.target))) return;
 
-    console.log(
-      '[orcaxr-hit]',
-      ints
-        .slice(0, 3)
-        .map((i) => `${i.object.name || i.object.type}@${i.distance.toFixed(2)}`)
-        .join(' | ') || 'NOTHING',
-    );
     const first = ints[0];
     if (!first) return;
     const entry = this.models.find(({ viewer }) => {
@@ -3972,6 +4060,7 @@ export class OrcaWorkspace extends xb.Script {
     this.selectModel(entry);
     const instance = this.canonicalProject.getInstance(entry.instanceId);
     if (!instance) return;
+    this.cancelTransformGestures();
     this.transformGestureSequence += 1;
     const startControllerLocal = this.workspace.worldToLocal(controller.getWorldPosition(new THREE.Vector3()));
     this.drag = {
@@ -3980,16 +4069,29 @@ export class OrcaWorkspace extends xb.Script {
       startControllerLocal,
       startTransform: instance.transform,
       gestureId: `xr-transform:${this.transformGestureSequence}`,
+      moved: false,
+      owner: this.ownTransformGesture([entry.instanceId], `xr-transform:${this.transformGestureSequence}`, 'xr-scene'),
     };
   }
 
   onSelecting(event: { target: unknown }) {
-    if (!this.sceneGestureGuard.allow(event.target, this.controllerHitsUi(event.target))) return;
+    if (!this.sceneGestureGuard.allow(event.target, this.controllerHitsUi(event.target))) {
+      if (this.drag?.controller === event.target) this.cancelTransformGestures();
+      return;
+    }
 
     const d = this.drag;
     if (!d || event.target !== d.controller) return;
     const entry = d.entry;
-    if (!this.models.includes(entry)) return;
+    // Projection records are rebuilt on every read; their object identity is
+    // not the identity of a model or its currently mounted scene node.
+    if (
+      entry.plateId !== this.activePlateId ||
+      this.canonicalProject.surface.getInstanceGroup(entry.instanceId) !== entry.viewer
+    ) {
+      this.cancelTransformGestures();
+      return;
+    }
     const local = this.workspace.worldToLocal(d.controller.getWorldPosition(new THREE.Vector3()));
     const delta = local.clone().sub(d.startControllerLocal);
     const printerDelta = new THREE.Vector3(
@@ -4038,7 +4140,18 @@ export class OrcaWorkspace extends xb.Script {
         t('workspace.orcaWorkspace.dragScale', 'scale {percent}%').replace('{percent}', (sNew * 100).toFixed(0)),
       );
     }
-    if (next) this.canonicalProject.setInstanceTransform(entry.instanceId, next, d.gestureId);
+    if (next) {
+      d.moved ||=
+        next.translationMm.some((v, i) => Math.abs(v - d.startTransform.translationMm[i]) > 1e-6) ||
+        next.rotation.some((v, i) => Math.abs(v - d.startTransform.rotation[i]) > 1e-6) ||
+        next.scale.some((v, i) => Math.abs(v - d.startTransform.scale[i]) > 1e-6);
+      try {
+        d.owner.update([{ instanceId: entry.instanceId, transform: next }]);
+      } catch (error) {
+        this.cancelTransformGestures();
+        this.setStatus(`Transform stopped: ${(error as Error).message}`);
+      }
+    }
   }
 
   /** After any drag ends, keep models seated on the plate and inside it. */
@@ -4052,7 +4165,7 @@ export class OrcaWorkspace extends xb.Script {
     this.endXrLongPress(event?.target, endedDrag);
     if (!endedDrag || (event && event.target !== endedDrag.controller)) return;
     this.drag = null;
-    this.recomputePreflight();
+    void this.finishTransformGesture(endedDrag.owner, this.transformGestureSequence);
   }
 
   /**
@@ -4088,6 +4201,7 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Whether a drag actually changed the transform it started from. */
   private movedDuringDrag(drag: NonNullable<OrcaWorkspace['drag']>): boolean {
+    if (drag.moved) return true;
     const instance = this.canonicalProject.getInstance(drag.entry.instanceId);
     if (!instance) return false;
     const from = drag.startTransform;
@@ -6801,7 +6915,7 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Apply one stepper increment of the active tool to the target model. */
-  nudgeSelected(dir: -1 | 1) {
+  async nudgeSelected(dir: -1 | 1) {
     const selected = this.selectedModel;
     const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
     if (!selected || !instance) {
@@ -6810,24 +6924,27 @@ export class OrcaWorkspace extends xb.Script {
     }
     let transform = instance.transform;
     let mode: MultiInstanceTransformMode = 'move';
+    let status: string;
     if (this.tool === 'rotate') {
       const delta = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), dir * (Math.PI / 12));
       const rotation = delta.multiply(new THREE.Quaternion().fromArray(transform.rotation)).normalize();
       transform = { ...transform, rotation: [rotation.x, rotation.y, rotation.z, rotation.w] };
       mode = 'rotate';
-      this.setStatus(`rotation step: ${dir > 0 ? '+' : '-'}15°`);
+      status = `rotation step: ${dir > 0 ? '+' : '-'}15°`;
     } else if (this.tool === 'scale') {
       const next = THREE.MathUtils.clamp(transform.scale[0] * (1 + dir * 0.1), 0.05, 40);
       transform = { ...transform, scale: [next, next, next] };
       mode = 'scale';
-      this.setStatus(`scale: ${Math.round(next * 100)}%`);
+      status = `scale: ${Math.round(next * 100)}%`;
     } else {
       const x = THREE.MathUtils.clamp(transform.translationMm[0] + dir * 5, 0, this.bedMm.x);
       transform = { ...transform, translationMm: [x, transform.translationMm[1], transform.translationMm[2]] };
-      this.setStatus(`x: ${Math.round(x)} mm`);
+      status = `x: ${Math.round(x)} mm`;
     }
-    this.commitSelectedPrimaryTransform(transform, mode);
+    await this.commitSelectedPrimaryTransform(transform, mode, 'xr-scene');
+    if (this.disposed) return;
     this.syncTransformProxy();
+    this.setStatus(status);
   }
 
   /** Fires when the filament palette changes (2D UI re-renders). */
@@ -8201,6 +8318,10 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public setTool(tool: WorkspaceGizmoTool) {
+    if (tool !== this.tool) {
+      this.cancelTransformGestures();
+      this.syncTransformProxy();
+    }
     this.tool = tool;
     this.refreshToolButtons();
     // Before any of the early returns below: leaving the brim-ear tool has to
@@ -8248,8 +8369,9 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Add one shared instance of the selected model (upstream "Add instance"). */
-  public addInstanceToSelection(): boolean {
-    const duplicate = this.canonicalProject.duplicateSelectedInstance();
+  public async addInstanceToSelection(): Promise<boolean> {
+    const duplicate = await this.canonicalProject.duplicateSelectedInstance();
+    if (this.disposed) return Boolean(duplicate);
     if (!duplicate) {
       this.setStatus(t('workspace.orcaWorkspace.selectAModelToAdd', 'Select a model to add another instance.'));
       return false;
@@ -8262,17 +8384,18 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Fill the plate's free space with copies of the selected instance. */
-  public fillPlateWithSelection(): number {
+  public async fillPlateWithSelection(): Promise<number> {
     const primary = this.canonicalProject.getSummary().selectedInstanceIds.at(-1);
     if (!primary) {
       this.setStatus(t('workspace.orcaWorkspace.selectAModelToFill', 'Select a model to fill the plate with.'));
       return 0;
     }
     try {
-      const result = this.canonicalProject.fillPlateWithInstances(primary, {
+      const result = await this.canonicalProject.fillPlateWithInstances(primary, {
         bedSizeMm: [this.bedMm.x, this.bedMm.y],
         ...(this.wipeTowerExclusion() ? { exclusions: [this.wipeTowerExclusion() as ArrangeRegion] } : {}),
       });
+      if (this.disposed) return result.created;
       this.recomputePreflight();
       this.setStatus(
         result.created === 0
@@ -8284,19 +8407,20 @@ export class OrcaWorkspace extends xb.Script {
       return result.created;
     } catch (error) {
       this.setStatus(`Fill bed failed: ${(error as Error).message}`);
-      return 0;
+      throw error;
     }
   }
 
   /** Mirror the selection across one printer axis (Edit → Mirror). */
-  public mirrorSelected(axis: 'x' | 'y' | 'z'): boolean {
+  public async mirrorSelected(axis: 'x' | 'y' | 'z'): Promise<boolean> {
     const instances = this.selectedInstanceIdsForTransform();
     if (instances.length === 0) {
       this.setStatus(t('workspace.orcaWorkspace.selectAModelToMirror', 'Select a model to mirror.'));
       return false;
     }
     try {
-      this.canonicalProject.mirrorInstances(instances, axis);
+      await this.canonicalProject.mirrorInstances(instances, axis);
+      if (this.disposed) return true;
       this.recomputePreflight();
       this.setStatus(`Mirrored ${instances.length} model(s) on ${axis.toUpperCase()}.`);
       return true;
@@ -8307,14 +8431,15 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Clear rotation, scale, or both on the selection. */
-  public resetSelectedTransform(target: 'rotation' | 'scale' | 'both'): boolean {
+  public async resetSelectedTransform(target: 'rotation' | 'scale' | 'both'): Promise<boolean> {
     const instances = this.selectedInstanceIdsForTransform();
     if (instances.length === 0) {
       this.setStatus(t('workspace.orcaWorkspace.selectAModelToReset', 'Select a model to reset.'));
       return false;
     }
     try {
-      this.canonicalProject.resetInstanceTransforms(instances, target);
+      await this.canonicalProject.resetInstanceTransforms(instances, target);
+      if (this.disposed) return true;
       this.recomputePreflight();
       this.setStatus(`Reset ${target === 'both' ? 'rotation and scale' : target} on ${instances.length} model(s).`);
       return true;
@@ -8329,7 +8454,7 @@ export class OrcaWorkspace extends xb.Script {
    * volume space and composed with the canonical volume transform, so the
    * canonical command never reads back a rendered matrix.
    */
-  private layPickedFacetOnBed(raycaster: THREE.Raycaster): boolean {
+  private async layPickedFacetOnBed(raycaster: THREE.Raycaster): Promise<boolean> {
     for (const target of this.paintTargets()) {
       const [hit] = raycaster.intersectObject(target.display, false);
       if (!hit?.face) continue;
@@ -8342,7 +8467,13 @@ export class OrcaWorkspace extends xb.Script {
         ? rotateVector([hit.face.normal.x, hit.face.normal.y, hit.face.normal.z], volume.rotation)
         : ([hit.face.normal.x, hit.face.normal.y, hit.face.normal.z] as Vec3);
       try {
-        this.canonicalProject.layInstanceOnFace(instance, normal);
+        const context = this.actionContext;
+        if (!context || this.disposed) return false;
+        const invoked = await this.actionRegistry.invoke('tool_lay_on_face', 'dom-scene', context, context.ui.get(), {
+          layOnFace: { instanceId: instance, localNormal: normal },
+        });
+        if (!invoked) return false;
+        if (this.disposed) return true;
         this.recomputePreflight();
         this.setStatus(t('workspace.orcaWorkspace.laidTheChosenFacetOn', 'Laid the chosen facet on the bed.'));
         return true;
@@ -8362,7 +8493,7 @@ export class OrcaWorkspace extends xb.Script {
    * factor computed against an assumed 100 mm ceiling would confidently scale a
    * model into the gantry of a shorter machine.
    */
-  public scaleSelectionToFitPrintVolume(): boolean {
+  public async scaleSelectionToFitPrintVolume(): Promise<boolean> {
     let instances = this.selectedInstanceIdsForTransform();
     if (instances.length === 0) instances = this.projectedModels(this.activePlateId).map((entry) => entry.instanceId);
     if (instances.length === 0) {
@@ -8384,11 +8515,12 @@ export class OrcaWorkspace extends xb.Script {
       return false;
     }
     try {
-      const changed = this.canonicalProject.scaleInstancesToFitPrintVolume(instances, {
+      const changed = await this.canonicalProject.scaleInstancesToFitPrintVolume(instances, {
         x: this.bedMm.x,
         y: this.bedMm.y,
         z: height,
       });
+      if (this.disposed) return changed > 0;
       this.recomputePreflight();
       this.setStatus(
         changed === 0
@@ -8409,7 +8541,7 @@ export class OrcaWorkspace extends xb.Script {
    * checkbox: the selection's current state decides the direction, and a mixed
    * selection is made printable rather than being half-flipped.
    */
-  public toggleSelectedPrintable(): boolean {
+  public async toggleSelectedPrintable(): Promise<boolean> {
     const instances = this.selectedInstanceIdsForTransform();
     if (instances.length === 0) {
       this.setStatus(
@@ -8419,7 +8551,8 @@ export class OrcaWorkspace extends xb.Script {
     }
     try {
       const printable = !this.canonicalProject.areInstancesPrintable(instances);
-      const changed = this.canonicalProject.setInstancePrintable(instances, printable);
+      const changed = await this.canonicalProject.setInstancePrintable(instances, printable);
+      if (this.disposed) return changed > 0;
       this.recomputePreflight();
       this.setStatus(
         changed === 0
@@ -8434,7 +8567,7 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Centre the selection (or the whole plate) on the printable area. */
-  public centerSelectedOnPlate(): boolean {
+  public async centerSelectedOnPlate(): Promise<boolean> {
     let instances = this.selectedInstanceIdsForTransform();
     if (instances.length === 0) instances = this.projectedModels(this.activePlateId).map((entry) => entry.instanceId);
     if (instances.length === 0) {
@@ -8442,7 +8575,8 @@ export class OrcaWorkspace extends xb.Script {
       return false;
     }
     try {
-      this.canonicalProject.centerInstancesOnPlate(instances, [this.bedMm.x, this.bedMm.y]);
+      await this.canonicalProject.centerInstancesOnPlate(instances, [this.bedMm.x, this.bedMm.y]);
+      if (this.disposed) return true;
       this.recomputePreflight();
       this.setStatus(`Centred ${instances.length} model(s) on the plate.`);
       return true;
@@ -8506,6 +8640,7 @@ export class OrcaWorkspace extends xb.Script {
   // Public so `ActionContext` (the shared shell routing surface) can post
   // status lines — e.g. coming-soon parity placeholders and feature stubs.
   public setStatus(text: string, percent?: number) {
+    if (this.disposed) return;
     this.lastStatusText = text;
     this.lastStatusPercent = percent;
     // Slice progress lives on the desk rather than on a modal panel in the
@@ -8688,16 +8823,17 @@ export class OrcaWorkspace extends xb.Script {
     return changed;
   }
 
-  public deleteSelectedModel() {
-    const deleted = this.canonicalProject.deleteSelectedInstance();
+  public async deleteSelectedModel(): Promise<void> {
+    const deleted = await this.canonicalProject.deleteSelectedInstance();
     if (!deleted) return;
     this.setStatus(deleted.scope === 'object' ? 'Model deleted.' : 'Model instance deleted.');
   }
 
   /** Delete every model on the ACTIVE plate (Orca's Edit → Delete all). */
-  public deleteAllModels(): boolean {
+  public async deleteAllModels(): Promise<boolean> {
     try {
-      const count = this.canonicalProject.deleteAllObjectsOnPlate();
+      const count = await this.canonicalProject.deleteAllObjectsOnPlate();
+      if (this.disposed) return count > 0;
       if (count > 0) {
         this.setStatus(t('workspace.orcaWorkspace.allModelsDeleted', 'All models deleted from active plate.'));
       }
@@ -8706,7 +8842,7 @@ export class OrcaWorkspace extends xb.Script {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.setStatus(`${t('workspace.orcaWorkspace.deleteAllFailed', 'Delete All failed')}: ${message}`);
-      return false;
+      throw error;
     }
   }
 
@@ -8746,12 +8882,13 @@ export class OrcaWorkspace extends xb.Script {
    * Clone the selected model onto the same plate, offset so the copy isn't
    * hidden under the original. Mirrors Orca's Edit → Clone selected.
    */
-  public cloneSelectedModel() {
-    if (!this.selectedModel) {
+  public async cloneSelectedModel(): Promise<void> {
+    const duplicate = await this.canonicalProject.duplicateSelectedInstance();
+    if (this.disposed) return;
+    if (!duplicate) {
       this.setStatus(t('workspace.orcaWorkspace.selectAModelToClone', 'Select a model to clone first.'));
       return;
     }
-    this.canonicalProject.duplicateSelectedInstance();
     this.setStatus(
       t('workspace.orcaWorkspace.modelClonedUseTheMove', 'Model cloned — use the Move tool to reposition the copy.'),
     );
@@ -8927,9 +9064,10 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  public cutSelectedModel(): boolean {
+  public async cutSelectedModel(): Promise<boolean> {
     try {
-      const cut = this.canonicalProject.cutSelectedObject();
+      const cut = await this.canonicalProject.cutSelectedObject();
+      if (this.disposed) return Boolean(cut);
       if (!cut) {
         this.setStatus(t('workspace.orcaWorkspace.noModelSelectedToCut', 'Select a model to cut.'));
         return false;
@@ -8940,13 +9078,14 @@ export class OrcaWorkspace extends xb.Script {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.setStatus(`${t('workspace.orcaWorkspace.cutFailed', 'Cut failed')}: ${message}`);
-      return false;
+      throw error;
     }
   }
 
-  public pasteClipboard(): boolean {
+  public async pasteClipboard(): Promise<boolean> {
     try {
-      const pasted = this.canonicalProject.pasteClipboard();
+      const pasted = await this.canonicalProject.pasteClipboard();
+      if (this.disposed) return Boolean(pasted);
       if (!pasted) {
         this.setStatus(t('workspace.orcaWorkspace.clipboardEmpty', 'Clipboard is empty.'));
         return false;
@@ -8957,7 +9096,7 @@ export class OrcaWorkspace extends xb.Script {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.setStatus(`${t('workspace.orcaWorkspace.pasteFailed', 'Paste failed')}: ${message}`);
-      return false;
+      throw error;
     }
   }
   // --- View overlays (Orca View → Show Wireframe / Printable Box) ------
@@ -9268,7 +9407,7 @@ export class OrcaWorkspace extends xb.Script {
    * The wipe tower, when the project places one, is an exclusion zone so a
    * rearranged plate never collides with it.
    */
-  public arrangePlate(): number {
+  public async arrangePlate(): Promise<number> {
     const summary = this.canonicalProject.getSummary();
     const plate = summary.plates.find((candidate) => candidate.active);
     if (!plate || plate.instanceCount === 0) {
@@ -9276,10 +9415,11 @@ export class OrcaWorkspace extends xb.Script {
       return 0;
     }
     try {
-      const result = this.canonicalProject.arrangePlate(this.activePlateId, {
+      const result = await this.canonicalProject.arrangePlate(this.activePlateId, {
         bedSizeMm: [this.bedMm.x, this.bedMm.y],
         ...(this.wipeTowerExclusion() ? { exclusions: [this.wipeTowerExclusion() as ArrangeRegion] } : {}),
       });
+      if (this.disposed) return result.placements.length;
       const moved = result.placements.length;
       const unplaced = result.unplacedInstanceIds.length;
       this.recomputePreflight();
@@ -9363,14 +9503,15 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  public convertInstanceToIndependentObject(instanceId?: InstanceId): void {
+  public async convertInstanceToIndependentObject(instanceId?: InstanceId): Promise<void> {
     const targetId = instanceId ?? this.canonicalProject.getSummary().selectedInstanceIds[0];
     if (!targetId) return;
     try {
-      this.canonicalProject.convertInstanceToIndependentObject(targetId);
+      await this.canonicalProject.convertInstanceToIndependentObject(targetId);
       this.setStatus(t('workspace.orcaWorkspace.convertedToIndependent', 'Set instance as independent object.'));
-    } catch {
+    } catch (error) {
       this.setStatus(t('workspace.orcaWorkspace.setAsIndependentFailed', 'Set as independent object failed.'));
+      throw error;
     }
   }
 

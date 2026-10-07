@@ -25,8 +25,7 @@ Update triggers (save it here, not as a throwaway comment):
 - **Non-obvious code behavior** — things that surprised you reading the
   code and will surprise the next session too.
 
-Do **not** record things already derivable from reading the code (file
-paths, function signatures, module names) unless they're load-bearing
+Do **not** record things already derivable from code (paths, signatures, module names) unless load-bearing
 *and* easy to get wrong. Keep this file under ~500 lines; split into a
 separate doc if it grows past that.
 
@@ -40,10 +39,10 @@ irreversible action or a specification ambiguity the code cannot
 resolve. The user wants OrcaXR to be the best it can be, period —
 asking for permission to do less work wastes their time.
 
-**For overnight / async work:** ship verified end-to-end commits, not
-plans. Build, run the relevant tests, and iterate until green before
-calling it done. A failing test left for the user to find is a
-half-finished task.
+**For overnight / async work:** ship verified end-to-end commits. Build and
+run relevant tests before calling work done. Keep the implementation plan's
+checkboxes, evidence and next steps current so another AI can resume after a
+token/context handoff; leave incomplete integration and device gates unchecked.
 
 ## Mission
 
@@ -61,25 +60,21 @@ engine (`libslic3r` via WASM) as the computational core.
 - **Under development:** native Android for phones, tablets,
   Googlebook and Android XR, with selective shared Rust migration. See the
   [native Android and Rust plan](docs/android-native-rust-plan.md). The initial
-  Compose shell, Rust canonicalization and G-code computation bindings are
-  development infrastructure, not a usable native slicer. Current release support
-  remains unchanged. The production browser preview worker now uses Rust parsing,
-  projection and inspection behind the existing session interface, with an
-  explicit TypeScript startup rollback. Debug Android builds include a flat
+  Compose shell and Rust computation bindings are development infrastructure,
+  not a usable native slicer. Current release support remains unchanged. Browser
+  preview uses Rust parsing, projection and inspection behind the existing session
+  interface, with TypeScript startup rollback. Debug Android builds include a flat
   Filament fixture workbench; it has no canonical editing or document import.
   A separate SceneCore rc01 experiment APK uses the same packed mesh, with
   bounded immutable chunk replacement for sample paint. SDK contract and
   non-XR startup checks do not qualify its spatial rendering; see native-core
   evidence before selecting an XR renderer.
-  Current-engine Android feasibility tooling has verified TBB allocator/task
-  probes, clean libslic3r builds for both ABIs, and eleven passing x86_64 native
-  fixture comparisons against the published browser engine. No application
-  slicing route or ARM64 execution is qualified. See the slicing document.
-  [Canonical slice reference fixtures](docs/engineering/native-slice-fixtures.md)
-  now exercise eleven authored archive cases through the published browser engine;
-  they provide comparison inputs, not Android slicing evidence.
-  Production native rendering, search and physical-device qualification remain open. Native PCVR
-  remains outside scope.
+  Current-engine Android tooling verifies TBB probes, both-ABI libslic3r builds
+  and eleven x86_64 fixture comparisons against the published browser engine.
+  Application slicing and ARM64 execution remain unqualified; see the slicing document.
+  [Canonical slice fixtures](docs/engineering/native-slice-fixtures.md) exercise eleven
+  authored archives through the browser engine; these are reference inputs.
+  Production rendering, search and device qualification remain open; native PCVR is outside scope.
 
 ## Stack
 
@@ -92,8 +87,7 @@ engine (`libslic3r` via WASM) as the computational core.
 
 ## Read the relevant technical context
 
-This file contains the cross-cutting rules. Before changing an area, read its
-maintained topic document and follow its constraints. Update that document in
+Before changing an area, read its maintained topic document and follow its constraints. Update that document in
 the same commit when behavior changes; do not append a second source of truth.
 
 | Area | Required context |
@@ -164,14 +158,31 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   distinct completed outcome. Plate UI success follows acknowledgement; canonical subscriptions
   own selection and projection updates. Objects reveal checks the activation
   receipt and current selection before applying late camera/selection work.
-  Other command families, remote projections and actual worker/JNI project execution remain migration work.
-- Prepared plate intents use ASCII JSON with UTF-16 unit arrays for all text.
+  Object/part rename, instance printability, single/batch transforms and derived
+  placement tools now use that transport too. A drag owns one dispatched edit
+  and one latest pending pose, advances only from its own receipt, and cancels
+  immediately on selection changes, tool changes or disposal. Cancellation never
+  undoes committed steps. Multi-instance printability preserves separate undo
+  entries and reports a completed count on interruption. Named actions await
+  these results. Numeric transforms, DOM/XR drags and DOM lay-on-face now invoke
+  declared registry routes too; gestures receive the actual command receipt and
+  recheck availability for each dispatched pose. Object/instance deletion,
+  plate clearing, cut and instance conversion now await registered actions too.
+  Independent object copies and plate moves have guarded async controller APIs. Cut
+  publishes its synchronous copy before queued deletion; a failed/uncertain
+  deletion retains that clipboard and late replies never republish clipboard UI.
+  Clone, add-instance, fill-bed and paste await measured staged work, preserving their
+  history boundaries and captured results across late or lost acknowledgements.
+  Clipboard captures share selected immutable asset records; paste restores missing
+  bytes and declarations inside its rollback boundary, including SVG drawings.
+  Other editing routes, remote projections and worker/JNI integration remain open.
+- Prepared command intents use ASCII JSON with UTF-16 unit arrays for all text.
   The shared schema generates TypeScript, Rust and Kotlin types and converters.
   Reject duplicate/unknown/missing fields, positional objects, unsupported versions
   and exhausted byte/node/depth budgets before domain execution. Local submission
   captures data properties without getters or mutable caller-owned descendants.
-  Android JsonReader strict mode still accepts tokens such as `1.`; shared lexical
-  validation is required for intent and G-code metadata decoding.
+  Kotlin protocol JSON uses a portable bounded parser and shared lexical checks.
+  Android JsonReader still needs those checks for G-code metadata decoding.
 - A pending `EditorSession.open` owns its source revision/asset guard and operation
   identity. Newer opens, reset and disposal invalidate it; a failed newer open
   cannot revive an older read. Cooperative cancellation never replaces the final
@@ -207,7 +218,79 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   or become an invalid-data diagnostic. Graph admission uses that explicit policy.
   Unknown paint-channel diagnostics use canonical UTF-16 ordering; layer-range
   diagnostics retain original array positions, including repeated shared records.
-  Both must survive save/reopen. Native store/session execution remains open.
+  Both must survive save/reopen. The native project store now publishes admitted
+  state with monotonic revisions, including equal replacements and rollback.
+  Project/selection changes are immutable receipts returned with native session
+  replies for host dispatch after commit; callbacks do not live in the stores.
+  Selection preserves ordered deduplication, primary fallback and graph pruning.
+  Low-level revision/hash guards are not session ownership or asset/history guards.
+  Native counters stop at the protocol's safe-integer maximum; transaction owners
+  must preflight capacity for their publications and rollback before mutating.
+  A Rust command owner executes seven plate intents plus object/volume/instance
+  rename, instance printability, single/batch transforms, object/instance deletion,
+  plate clearing, independent duplication, plate moves and instance-to-object
+  conversion, with bounded undo/redo, coalescing, dirty checkpoints and atomic project/asset/selection
+  rollback. Local instance creation/paste retain full immutable records; clipboard paste
+  also restores selected assets atomically. Bulk decoders require explicit budgets. Session-owned one-use staging
+  retains preparation guards and charges ready/queued work until release or commit;
+  cancellation drops its payload immediately. Limits count encoded input units,
+  not resident memory. WASM/JNI upload owners now parse bounded UTF-8 separately;
+  four preparation permits cover parsing, sealing and transfer, then the finished
+  pool owns the charge. Detached input owns its original guard, never a live session;
+  hosts cancel preparation tasks on lifetime changes. WASM handles are module-local;
+  separate sealing alone provides neither worker isolation nor interruptibility.
+  Bounded clipboard hosts capture current object queries and paste under fresh guards.
+  Local transactions preserve domain batch sizes/labels; small wire limits apply at admission. Failed outcomes retain ordered rollback receipts; the session
+  must consume them before acknowledging failure. Batch preparation precedes
+  execution; a failing executed member publishes its inner and outer rollback.
+  Plate duplicate/delete history shares admitted snapshots, and plate duplicate source guards
+  compare full canonical content without retaining large serialized strings.
+  A native session now checks exact bundle membership/metadata, owns a bounded
+  request queue and executes the generated string protocol. Nonces are host-owned;
+  queued edits check project, assets and history, while save acknowledgement checks
+  the captured export identity without treating history-only changes as stale.
+  Cancel/close release prepared data immediately but keep bounded settlement slots.
+  Post-commit summary overflow reports receiptUnavailable, never false rollback.
+  Staged native document input now parses bounded UTF-8 chunks under explicit
+  operation budgets, preserving UTF-16 escapes and last-key-wins persisted JSON.
+  It does not inherit the stateless request parser's byte/node ceilings. An admitted
+  graph and its declared asset budgets precede payload transfer; digest-checked
+  owned buffers move into immutable records without a second mesh copy. Staging
+  never replaces live state. Hosts must schedule final graph admission/hash work
+  off authority. Prepared bundles commit under source/operation guards; Open/reset
+  clear history atomically. Rust ZIP/ZIP64, envelope staging and BBS package output are bounded;
+  OPC uses pinned Unicode 16 casing; canonical archive completion reconciles BBS
+  and adopts unknown members; edited canonical interchange has host tests. Bounded
+  native model-XML admission matches 466 production-derived browser cases; ZIP
+  structural staging uses the one-part reader and bounded cross-part resolver for
+  basic 3MF meshes, units, components and build items. It also decodes standard
+  BBS paint roots into sparse facet channels under shared package budgets and
+  retains bounded unknown object/component/build/facet attributes; BBS
+  metadata/settings, canonical projection and foreign import stay open. Project
+  WASM exposes immutable
+  effects/captures; Node-worker replay agrees with the TypeScript session corpus.
+  Browser timestamps use the host's Date.parse with lossless UTF-16 conversion. Hosts must bound inputs before wasm-bindgen copies them and
+  dispatch effects before acknowledgement. Explicit JSON export allocates the
+  whole serialized capture; chunk reads do not make it a live projection or
+  interruptible authority-worker operation. The separate editor package stays
+  outside preview downloads/precache. Android now exposes the same session through
+  JNI and Kotlin owners, with bounded nonreused handles and an explicit ZoneId
+  timestamp resolver. Reserve reply capacity before mutations; refuse reentry
+  during callbacks. Concurrent close invalidates the owner without waiting for
+  work, and Kotlin releases late captures. A mutation racing close may have
+  committed and must not be retried. Debug/release JVM replay qualifies these
+  bindings, not Android runtime behavior. A bounded Kotlin actor now schedules
+  commands, Open/reset, bulk/clipboard preparation, save/export and ordered effects.
+  Opaque actor guards avoid wire ID limits; prepared work keeps its original guard.
+  Reserved reply slots preserve confirmed results at capacity and projection failure.
+  Copy scans frozen input off authority; paste owns its captured data. Save streams
+  frozen bundles; only a successful, still-current handoff clears dirty state.
+  App integration remains open. Captured queries expose bounded pages, transforms,
+  filament inheritance and asset declarations. Read names/IDs in bounded UTF-16 chunks.
+  Query addresses never become command IDs. Plate/range sorting has an explicit
+  entry budget and belongs on an owned projection executor. Authored
+  mesh declarations are not validated GPU buffers. Production subscriptions,
+  worker/JNI integration, other command families and Android editing UI remain open.
 - SHA-256 identifies artifacts/project/config outputs. Canonical FNV-1a64
   identifies source assets and semantic snapshots where explicitly defined.
   Never substitute one for the other or infer engine statistics from observations.
@@ -224,12 +307,13 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Paint stores stable physical/mixed filament IDs and sparse refined-facet
   version-2 state, not palette colors or one canonical object per triangle.
   Topology-changing operations must explicitly remap or reject dependent data.
-  Rust now has the five-channel sparse facet computation model and validator.
-  Normalize/remap the assignments and split trees together so collapsed paint
-  survives. Native dense expansion requires an explicit host root budget; the
+  Rust validates all five sparse channels; BBS hex decoding budgets explicit roots
+  across channels, and writing borrows existing trees. Sparse import assembly never
+  expands unpainted roots. Normalize/remap assignments and splits together so
+  collapsed paint survives. Dense expansion requires an explicit host root budget; the
   stateless canonicalizer's parser limits are not persisted project limits.
   Graph validation now checks annotation/source topology consistency; revision
-  guards for gestures and command execution still belong to the future session.
+  plate requests have native session guards; paint gesture/topology guards and commands remain open.
 - Smart Paint is a validated, bounded proposal plus operator correction and one
   canonical transaction. Check per-provider/payload consent before sending data.
 - Wipe towers reserve their complete printed footprint against the printable
@@ -326,15 +410,17 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 ## Memory and engine gotchas
 
 - Rollback uses opaque repository-owned handles sharing immutable asset records
-  and cached fingerprints. Public mutable reads and untrusted imports still copy
-  and validate. Production `peek()` consumers must never mutate descriptors/bytes.
+  and cached fingerprints. Public mutable reads and borrowed import payloads still
+  copy; consumed native transfers validate before moving their owned buffers.
+  Production `peek()` consumers must never mutate descriptors/bytes.
   The Rust repository shares immutable records through owner-bound snapshots and
   read-only leases. Digest lookup follows insertion order; lists/fingerprints use
   UTF-16 ID order. Public restore validates before publishing and creates fresh
-  record identities even for equal content. Native project execution is still open.
-- Preserve the measured zero-payload-copy command path and bounded worker lifetimes.
-  Read the detailed large-model document before changing mesh parsing/serialization,
-  painting, preview or history. Do not commit private real-world qualification models.
+  record identities even for equal content. The native command owner uses these
+  snapshots for rollback; worker/JNI project integration and editing UI remain open.
+- Preserve zero-payload-copy commands and bounded workers. Native BBS authoring borrows
+  mesh/paint/configuration/emboss/recipe data; resource IDs differ from sidecar ordinals.
+  Read [large-model contracts](docs/engineering/large-models.md) before mesh/paint/preview/history changes; never commit private models.
 - Browser G-code preview indexes in an owned worker before allocating rich columns.
   Each window holds at most 240,000 records; checkpoints inside large layers and
   Previous/Next moves preserve access. Source replacement terminates the worker.

@@ -83,10 +83,10 @@ for (const [name, operation] of Object.entries(operations)) {
 
   for (const drift of ['edit', 'checkpoint', 'reset'] as const) {
     await test(`${name} rejects ${drift} while queued and preserves the newer authority`, async () => {
-      const { controller, first, second, model } = await setup();
+      const { controller, first, second } = await setup();
       try {
         const pending = operation(controller, first, second);
-        if (drift === 'edit') controller.renameObject(model.objectId, 'Newer edit');
+        if (drift === 'edit') controller.setProjectConfig({ async_drift: 'newer' });
         else if (drift === 'checkpoint') controller.acknowledgeProjectExport(controller.captureProjectExportGuard());
         else controller.resetProject();
         const changed = footprint(controller);
@@ -118,7 +118,7 @@ await test('all exact plate no-ops preserve selection, history, dirty state and 
     await controller.setPlatePrintable(first, true);
     assert.deepEqual(footprint(controller), before);
     const pending = controller.activatePlate(first);
-    controller.renameObject(model.objectId, 'No-op source changed');
+    controller.setProjectConfig({ async_drift: 'noop' });
     await assert.rejects(pending, (error) => error instanceof AsyncSessionError && error.code === 'stale');
   } finally {
     controller.dispose();
@@ -165,7 +165,7 @@ await test('displayed revision, invalid names and last-plate protection reject w
 });
 
 await test('activation receipts expire on history, edits, owner replacement and disposal', async () => {
-  const { controller, first, second, model } = await setup();
+  const { controller, first, second } = await setup();
   const other = createController();
   try {
     const receipt = await controller.activatePlate(second);
@@ -175,7 +175,7 @@ await test('activation receipts expire on history, edits, owner replacement and 
     assert.equal(controller.isSessionGuardCurrent(receipt.guard), false);
     const checkpoint = await controller.activatePlate(second);
     assert.equal(controller.isSessionGuardCurrent(checkpoint.guard), true);
-    controller.renameObject(model.objectId, 'Newer edit');
+    controller.setProjectConfig({ async_drift: 'newer' });
     assert.equal(controller.isSessionGuardCurrent(checkpoint.guard), false);
     const edited = await controller.activatePlate(first);
     controller.resetProject();

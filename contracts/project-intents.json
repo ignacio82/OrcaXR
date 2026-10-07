@@ -126,6 +126,162 @@
         "printable": "Flag"
       }
     },
+    "Finite": {
+      "kind": "number",
+      "min": -1.7976931348623157e+308,
+      "max": 1.7976931348623157e+308
+    },
+    "Vector": {
+      "kind": "array",
+      "items": "Finite",
+      "min": 3,
+      "max": 3
+    },
+    "Rotation": {
+      "kind": "array",
+      "items": "Finite",
+      "min": 4,
+      "max": 4
+    },
+    "Transform": {
+      "kind": "object",
+      "fields": {
+        "translationMm": "Vector",
+        "rotation": "Rotation",
+        "scale": "Vector"
+      }
+    },
+    "EditText": {
+      "kind": "array",
+      "items": "Unit",
+      "min": 0,
+      "max": 131072
+    },
+    "RenameObject": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "name": "EditText"
+      }
+    },
+    "RenameVolume": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id",
+        "name": "EditText"
+      }
+    },
+    "RenameInstance": {
+      "kind": "object",
+      "fields": {
+        "instanceId": "Id",
+        "name": "EditText"
+      }
+    },
+    "SetInstancePrintable": {
+      "kind": "object",
+      "fields": {
+        "instanceId": "Id",
+        "printable": "Flag"
+      }
+    },
+    "InstanceTransform": {
+      "kind": "object",
+      "fields": {
+        "instanceId": "Id",
+        "transform": "Transform"
+      }
+    },
+    "InstanceTransforms": {
+      "kind": "array",
+      "items": "InstanceTransform",
+      "min": 0,
+      "max": 131072
+    },
+    "SetInstanceTransform": {
+      "kind": "object",
+      "fields": {
+        "instanceId": "Id",
+        "transform": "Transform",
+        "gestureId": "EditText"
+      }
+    },
+    "SetInstanceTransforms": {
+      "kind": "object",
+      "fields": {
+        "changes": "InstanceTransforms",
+        "gestureId": "EditText"
+      }
+    },
+    "Empty": {
+      "kind": "object",
+      "fields": {}
+    },
+    "OptionalText": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "EditText"
+      }
+    },
+    "OptionalPlate": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "Id"
+      }
+    },
+    "DeleteObject": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id"
+      }
+    },
+    "DeletePlateObjects": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id"
+      }
+    },
+    "DeleteInstance": {
+      "kind": "object",
+      "fields": {
+        "instanceId": "Id"
+      }
+    },
+    "MoveObjectToPlate": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "destinationPlateId": "Id"
+      }
+    },
+    "DuplicateObjectEdit": {
+      "kind": "object",
+      "fields": {
+        "sourceObjectId": "Id",
+        "ids": "DuplicateObject",
+        "destinationPlateId": "OptionalPlate",
+        "name": "OptionalText"
+      }
+    },
+    "IndependentInstanceIds": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "volumeIds": "Ids",
+        "instanceId": "Id",
+        "layerRangeIds": "Ids"
+      }
+    },
+    "ConvertInstanceToObject": {
+      "kind": "object",
+      "fields": {
+        "instanceId": "Id",
+        "ids": "IndependentInstanceIds",
+        "name": "OptionalText"
+      }
+    },
     "Command": {
       "kind": "union",
       "variants": {
@@ -135,7 +291,19 @@
         "activatePlate": "ActivatePlate",
         "renamePlate": "RenamePlate",
         "reorderPlates": "ReorderPlates",
-        "setPlatePrintable": "SetPlatePrintable"
+        "setPlatePrintable": "SetPlatePrintable",
+        "renameObject": "RenameObject",
+        "renameVolume": "RenameVolume",
+        "renameInstance": "RenameInstance",
+        "setInstancePrintable": "SetInstancePrintable",
+        "setInstanceTransform": "SetInstanceTransform",
+        "setInstanceTransforms": "SetInstanceTransforms",
+        "deleteObject": "DeleteObject",
+        "deletePlateObjects": "DeletePlateObjects",
+        "deleteInstance": "DeleteInstance",
+        "moveObjectToPlate": "MoveObjectToPlate",
+        "duplicateObject": "DuplicateObjectEdit",
+        "convertInstanceToObject": "ConvertInstanceToObject"
       }
     },
     "Commands": {
@@ -239,10 +407,6 @@
         "dirtyCategories": "DirtyCategories"
       }
     },
-    "Empty": {
-      "kind": "object",
-      "fields": {}
-    },
     "GuardedIntent": {
       "kind": "object",
       "fields": {
@@ -272,6 +436,12 @@
         "targetRequestId": "RequestId"
       }
     },
+    "StagedReference": {
+      "kind": "object",
+      "fields": {
+        "stagedId": "RequestId"
+      }
+    },
     "SessionOperation": {
       "kind": "union",
       "variants": {
@@ -282,7 +452,9 @@
         "redo": "SessionGuard",
         "query": "Empty",
         "cancel": "Cancel",
-        "close": "Empty"
+        "close": "Empty",
+        "executeStaged": "StagedReference",
+        "releaseStaged": "StagedReference"
       }
     },
     "SessionRequest": {
@@ -344,7 +516,8 @@
         "cancelled": "CancelStatus",
         "closed": "Empty",
         "error": "SessionError",
-        "receiptUnavailable": "Flag"
+        "receiptUnavailable": "Flag",
+        "released": "Flag"
       }
     },
     "SessionReply": {

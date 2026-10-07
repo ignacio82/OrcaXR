@@ -433,6 +433,54 @@ await test('local bridge preserves owner guards, captured history and atomic rol
   foreign.dispose();
   s.session.dispose();
 });
+await test('local AbortSignal cancellation before dispatch prevents edits and releases the listener', async () => {
+  for (const alreadyAborted of [false, true]) {
+    const s = setup();
+    const bridge = new LocalProjectSessionTransport(s.facade, nonce, 1);
+    try {
+      const abort = new AbortController();
+      let listeners = 0;
+      const add = abort.signal.addEventListener.bind(abort.signal);
+      const remove = abort.signal.removeEventListener.bind(abort.signal);
+      abort.signal.addEventListener = (...args: Parameters<typeof add>) => {
+        listeners++;
+        add(...args);
+      };
+      abort.signal.removeEventListener = (...args: Parameters<typeof remove>) => {
+        listeners--;
+        remove(...args);
+      };
+      if (alreadyAborted) abort.abort();
+      const before = s.session.project.getSnapshot();
+      const pending = bridge.executeIntent(s.intent(), { signal: abort.signal });
+      abort.abort();
+      await assert.rejects(pending, { code: 'cancelled' });
+      assert.deepEqual(s.session.project.getSnapshot(), before);
+      assert.equal(listeners, 0);
+      await bridge.executeIntent(s.intent());
+      assert.equal(s.session.commands.getHistorySnapshot().undoCount, 1);
+    } finally {
+      bridge.dispose();
+      s.session.dispose();
+    }
+  }
+});
+await test('local cancellation from a commit observer keeps the authoritative acknowledgement', async () => {
+  const s = setup();
+  const bridge = new LocalProjectSessionTransport(s.facade, nonce, 1);
+  try {
+    const abort = new AbortController();
+    const unsubscribe = s.session.commands.subscribeHistory(() => abort.abort());
+    const receipt = await bridge.executeIntent(s.intent(), { signal: abort.signal });
+    unsubscribe();
+    assert.equal(abort.signal.aborted, true);
+    assert.equal(receipt.history.undoCount, 1);
+    assert.equal(s.facade.isCurrent(receipt.guard), true);
+  } finally {
+    bridge.dispose();
+    s.session.dispose();
+  }
+});
 await test('oversized and getter payloads never execute and subsequent valid requests recover', async () => {
   const s = setup();
   const client = new ProjectSessionClient((text) => s.endpoint.handle(text), nonce, 1);

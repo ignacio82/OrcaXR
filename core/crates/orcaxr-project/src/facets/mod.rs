@@ -13,8 +13,8 @@ pub const MAX_DEPTH: usize = 64;
 pub const MIN_NODE_BUDGET: f64 = 1_000_000.0;
 pub const NODES_PER_TRIANGLE: f64 = 32.0;
 
-/// The reference's per-channel expansion budget. Package-wide import budgets
-/// are independent and belong to the future archive owner.
+/// The reference's per-channel expansion budget. Import owners apply separate
+/// package-wide encoded-byte, refinement-node and annotation budgets.
 pub fn node_budget(triangle_count: f64) -> f64 {
     if triangle_count.is_nan() {
         return f64::NAN;
@@ -374,6 +374,7 @@ pub enum FacetError {
     DepthLimit,
     NodeLimit,
     DenseLimit,
+    MaterializationLimit,
     AllocationFailed,
 }
 impl std::fmt::Display for FacetError {
@@ -385,6 +386,9 @@ impl std::fmt::Display for FacetError {
             Self::DepthLimit => "facet split depth exceeds limit",
             Self::NodeLimit => "facet node expansion exceeds limit",
             Self::DenseLimit => "dense facet roots exceed the host budget",
+            Self::MaterializationLimit => {
+                "facet annotation materialization exceeds the host budget"
+            }
             Self::AllocationFailed => "cannot allocate dense facet roots",
         })
     }
@@ -477,6 +481,29 @@ impl FacetChannel {
         }
         Value::Object(fields)
     }
+    /// Count the sparse records and tree nodes an annotation serializer must
+    /// materialize. This matches the project importer's shared annotation-work
+    /// budget without expanding every mesh triangle into a dense root array.
+    pub fn checked_materialization_units(&self) -> Option<usize> {
+        let assignments = self
+            .assignments
+            .iter()
+            .try_fold(0usize, |total, assignment| {
+                total
+                    .checked_add(1)?
+                    .checked_add(assignment.triangles.len())
+            })?;
+        self.encoding
+            .as_ref()
+            .map_or(Some(assignments), |encoding| {
+                encoding
+                    .splits
+                    .iter()
+                    .try_fold(assignments, |total, split| {
+                        total.checked_add(node_units(&split.node)?)
+                    })
+            })
+    }
     /// Consumes a temporary selector result and preserves every collapsed value.
     pub fn from_roots(
         channel: Channel,
@@ -499,6 +526,84 @@ impl FacetChannel {
                     ..
                 } => {}
                 node => splits.push(Split { triangle, node }),
+            }
+        }
+        Ok(Self {
+            channel,
+            triangle_count,
+            assignments: sorted_groups(groups),
+            encoding: (!splits.is_empty()).then_some(Encoding {
+                triangle_count,
+                splits,
+            }),
+        })
+    }
+    /// Consume only explicitly decoded roots, in strictly increasing source
+    /// triangle order. Missing facets stay unpainted without a dense root array.
+    /// Uniform splits normalize into whole-facet assignments exactly as in the
+    /// dense selector path. Import owners separately budget decoding/expansion.
+    pub fn from_sparse_roots(
+        channel: Channel,
+        triangle_count: Triangle,
+        roots: Vec<Split>,
+        filaments: Option<&BTreeSet<Vec<u16>>>,
+    ) -> Result<Self, FacetError> {
+        Self::from_sparse_roots_with_budget(channel, triangle_count, roots, filaments, usize::MAX)
+    }
+    /// As `from_sparse_roots`, while refusing before sparse annotation records
+    /// exceed the caller's materialization budget.
+    pub fn from_sparse_roots_with_budget(
+        channel: Channel,
+        triangle_count: Triangle,
+        roots: Vec<Split>,
+        filaments: Option<&BTreeSet<Vec<u16>>>,
+        maximum_materialization_units: usize,
+    ) -> Result<Self, FacetError> {
+        let mut previous = None;
+        for root in &roots {
+            if root.triangle >= triangle_count || previous.is_some_and(|p| root.triangle <= p) {
+                return Err(FacetError::InvalidTriangle);
+            }
+            previous = Some(root.triangle);
+        }
+        validate_nodes(
+            channel,
+            roots.iter().map(|r| &r.node),
+            triangle_count.0,
+            filaments,
+        )?;
+        let mut groups = BTreeMap::new();
+        let mut splits = Vec::new();
+        let mut materialization_units = 0usize;
+        for Split { triangle, node } in roots {
+            match node.normalize() {
+                Node {
+                    kind: NodeKind::Leaf(State::Assigned(value)),
+                    ..
+                } => {
+                    let new_group = !groups.contains_key(&value);
+                    charge_materialization(
+                        &mut materialization_units,
+                        1 + usize::from(new_group),
+                        maximum_materialization_units,
+                    )?;
+                    add_group(&mut groups, triangle, value);
+                }
+                Node {
+                    kind: NodeKind::Leaf(State::Unpainted),
+                    ..
+                } => {}
+                node => {
+                    charge_materialization(
+                        &mut materialization_units,
+                        node_units(&node).ok_or(FacetError::MaterializationLimit)?,
+                        maximum_materialization_units,
+                    )?;
+                    splits
+                        .try_reserve(1)
+                        .map_err(|_| FacetError::AllocationFailed)?;
+                    splits.push(Split { triangle, node });
+                }
             }
         }
         Ok(Self {
@@ -651,6 +756,26 @@ fn validate_nodes<'a>(
     }
     Ok(())
 }
+fn node_units(node: &Node) -> Option<usize> {
+    match &node.kind {
+        NodeKind::Leaf(_) => Some(1),
+        NodeKind::Split { children, .. } => children
+            .iter()
+            .try_fold(1usize, |total, child| total.checked_add(node_units(child)?)),
+    }
+}
+fn charge_materialization(
+    used: &mut usize,
+    units: usize,
+    maximum: usize,
+) -> Result<(), FacetError> {
+    *used = used
+        .checked_add(units)
+        .filter(|next| *next <= maximum)
+        .ok_or(FacetError::MaterializationLimit)?;
+    Ok(())
+}
+
 fn add_group(groups: &mut BTreeMap<PaintValue, Assignment>, triangle: Triangle, value: PaintValue) {
     groups
         .entry(value.clone())

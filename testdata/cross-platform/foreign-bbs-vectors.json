@@ -1,0 +1,235 @@
+{
+  "format": 1,
+  "sources": [
+    {
+      "path": "web/src/project/serialization/Bbs3mfProjectSerializer.ts",
+      "sha256": "43d0d198e852d74ca82f30c56b667048620a77c1c0f27becb104c343268665c1"
+    },
+    {
+      "path": "web/src/project/serialization/bbsCore.ts",
+      "sha256": "fdcc9ce48a1e74cb23b53caf7623f5fa0d7b8295e6cd8d82d515e1cd171c4ac6"
+    },
+    {
+      "path": "web/src/project/serialization/bbsXml.ts",
+      "sha256": "783335f452cc1336444fef7545aa7564bd1ec0679ccbf91d251e6a64b628aac4"
+    },
+    {
+      "path": "web/src/project/serialization/deterministicZip.ts",
+      "sha256": "795c5d7ff767ebb8e2097d9181adc7b66fea988d1fe3540f16618934f82b188e"
+    }
+  ],
+  "cases": [
+    {
+      "name": "basic-millimeter",
+      "archiveBytesHex": "504b030414000000080000002100c121852f2e010000050200001000000033442f33646d6f64656c2e6d6f64656c7590516ec3200c86df770a8b87bdad24a9264d1ba1d21e7a82ee0094b82d53800a4894ee14bb41afb823cc218d9a970ac918d9ff67ff88cd605be83144e35dcdca55c1009df68d71c79a7dedb62f6f6c239f84f50db6d039936a664ddb1a8b09030352bb58b3534ae777cea33ea15571658d0e3efa435a696ff9bab1ca7507a5531708cbb50fc8aba27ce545c5400a42a94625054e59acd9cea41699dc9a81fa119e953d7fc0dff5f72af8dc2945c0e8bba0314ae1f7dfa8139886d667902e6762e475d90df8a9a2d1908251ee389269603c4941a693c98431c301869a91fb4b8e3f63e4cb12b11f95261535cc257e67cf631729f465d6f45516f5eb9a5559b5e825abe38e7c3247c9c2f0be336d2385496861aacfde8372f1e083a51714f9dcefb280aa80f5b4df0dc1f33fc97f504b030414000000080000002100dfc0108c1f0000001f000000200000004d657461646174612f70726f6a6563745f73657474696e67732e636f6e666967ab564acbcc49cc4dcd2b894fcecfc92f2d52b28a56527673330002a5d85a00504b0102140314000000080000002100c121852f2e01000005020000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b0102140314000000080000002100dfc0108c1f0000001f000000200000000000000000000000a4015c0100004d657461646174612f70726f6a6563745f73657474696e67732e636f6e666967504b050600000000020002008c000000b90100000000",
+      "archiveSha256": "8caff2eba0e7a5db7c079b7e3b1fa1f18453f084efc9c6dc722bdd2b484f7ff8",
+      "expected": {
+        "accepted": true,
+        "stateJson": "{\"activePlateId\":\"import:3mf:9d473d0e2974616b-plate-1\",\"config\":{\"filament_colour\":[\"#FF0000\"]},\"createdAt\":\"1980-01-01T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[],\"physical\":[{\"color\":\"#FF0000\",\"config\":{},\"enabled\":true,\"id\":\"import:3mf:9d473d0e2974616b-physical-filament-1\",\"material\":\"Unknown\",\"name\":\"Imported tool 1\",\"toolId\":0}]},\"id\":\"import:3mf:9d473d0e2974616b-project-root\",\"name\":\"Fixture & 🐟\",\"plates\":[{\"config\":{},\"id\":\"import:3mf:9d473d0e2974616b-plate-1\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{},\"id\":\"import:3mf:9d473d0e2974616b-object-41e988690ebf9e96-1-1\",\"instances\":[{\"id\":\"import:3mf:9d473d0e2974616b-instance-41e988690ebf9e96-1-1-1\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[10,20,30]}}],\"layerRanges\":[],\"name\":\"Basic triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"import:3mf:9d473d0e2974616b-volume-41e988690ebf9e96-1-41e988690ebf9e96-1-1-1\",\"name\":\"Basic triangle\",\"role\":\"model\",\"source\":{\"assetId\":\"import:3mf:9d473d0e2974616b-asset-41e988690ebf9e96-1\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"toolCount\":1},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":48,\"digest\":\"fnv1a64:8810ae12e1b0c5a6\",\"id\":\"import:3mf:9d473d0e2974616b-asset-41e988690ebf9e96-1\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":12,\"byteOffset\":36,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":3},\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/3dmodel.model#1\"}}],\"thumbnails\":[],\"updatedAt\":\"1980-01-01T00:00:00.000Z\"}",
+        "assets": [
+          {
+            "descriptorJson": "{\"byteLength\":48,\"digest\":\"fnv1a64:8810ae12e1b0c5a6\",\"id\":\"import:3mf:9d473d0e2974616b-asset-41e988690ebf9e96-1\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":12,\"byteOffset\":36,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":3},\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/3dmodel.model#1\"}}",
+            "bytesHex": "0000000000000000000000000000803f0000000000000000000000000000803f00000000000000000100000002000000"
+          }
+        ],
+        "warnings": [
+          "3MF is missing [Content_Types].xml; a valid content-type manifest will be generated on save",
+          "Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and bounded BBS facet trees were recovered; unsupported BBS fields remain preserved as opaque package entries."
+        ],
+        "preserved": []
+      }
+    },
+    {
+      "name": "legacy-project-settings-xml",
+      "archiveBytesHex": "504b0304140000000800000021003c08cae214010000dc0100001000000033442f33646d6f64656c2e6d6f64656c7590bd6ec3300c84f73e85c0bd51e2a04051c8ca96a963fa008acc382af41348b4e1f4e94bcb09eaa58b40e0ee3ef2a40e53f062c45c5c8a2dec365b10186dea5cec5bf83a1d5fdfe1a05f54481d7a3144472d04e7bd0b489841703a9616ae44b70f298bbd623065139ccda9a40b6d6c0a72df0513878bb13464c64a9b32ca66bb7b93db0684568c329d2123a209d8c2c99147d04776b93e8a8b9b38874a3e6d5a652c69c8168b56e9fc8d9684ebf8761074bf31a0de0a0fda27f6c6de454122de5d605e57ae5a71657215314f3889a905ee7eafefcffccab5c4f0ffa425c586a724ffd8949d89bd5f8f62dcd5ccd8d4d0b86fa1a9a99597bbce37caa51d0fabc6e7c1f94e2b4718c4a22fe567c44393f507f42f504b0304140000000800000021007a54e0a0540000006d000000200000004d657461646174612f70726f6a6563745f73657474696e67732e636f6e666967b349cecf4bcb4cb7b3294e2d29c9cc4b57c84eadb4554acbcc49cc4dcd2b894fcecfc92f2d5252284bcc294db5555236307073333050d247539f939a9e985c199f9a979894939a02575e52549a0a52ab0fb50400504b01021403140000000800000021003c08cae214010000dc010000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b01021403140000000800000021007a54e0a0540000006d000000200000000000000000000000a401420100004d657461646174612f70726f6a6563745f73657474696e67732e636f6e666967504b050600000000020002008c000000d40100000000",
+      "archiveSha256": "e10310f9526b060989dc14245cefd9434bc603a814f2b656891d0b03a580f92b",
+      "expected": {
+        "accepted": true,
+        "stateJson": "{\"activePlateId\":\"import:3mf:1ad3c1c9d968e425-plate-1\",\"config\":{\"filament_colour\":\"#00FF00\",\"legacy_enabled\":true},\"createdAt\":\"1980-01-01T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[],\"physical\":[{\"color\":\"#00FF00\",\"config\":{},\"enabled\":true,\"id\":\"import:3mf:1ad3c1c9d968e425-physical-filament-1\",\"material\":\"Unknown\",\"name\":\"Imported tool 1\",\"toolId\":0}]},\"id\":\"import:3mf:1ad3c1c9d968e425-project-root\",\"name\":\"Foreign fixture\",\"plates\":[{\"config\":{},\"id\":\"import:3mf:1ad3c1c9d968e425-plate-1\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{},\"id\":\"import:3mf:1ad3c1c9d968e425-object-41e988690ebf9e96-1-1\",\"instances\":[{\"id\":\"import:3mf:1ad3c1c9d968e425-instance-41e988690ebf9e96-1-1-1\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Legacy settings\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"import:3mf:1ad3c1c9d968e425-volume-41e988690ebf9e96-1-41e988690ebf9e96-1-1-1\",\"name\":\"Legacy settings\",\"role\":\"model\",\"source\":{\"assetId\":\"import:3mf:1ad3c1c9d968e425-asset-41e988690ebf9e96-1\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"toolCount\":1},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":48,\"digest\":\"fnv1a64:8810ae12e1b0c5a6\",\"id\":\"import:3mf:1ad3c1c9d968e425-asset-41e988690ebf9e96-1\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":12,\"byteOffset\":36,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":3},\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/3dmodel.model#1\"}}],\"thumbnails\":[],\"updatedAt\":\"1980-01-01T00:00:00.000Z\"}",
+        "assets": [
+          {
+            "descriptorJson": "{\"byteLength\":48,\"digest\":\"fnv1a64:8810ae12e1b0c5a6\",\"id\":\"import:3mf:1ad3c1c9d968e425-asset-41e988690ebf9e96-1\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":12,\"byteOffset\":36,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":3},\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/3dmodel.model#1\"}}",
+            "bytesHex": "0000000000000000000000000000803f0000000000000000000000000000803f00000000000000000100000002000000"
+          }
+        ],
+        "warnings": [
+          "3MF is missing [Content_Types].xml; a valid content-type manifest will be generated on save",
+          "Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and bounded BBS facet trees were recovered; unsupported BBS fields remain preserved as opaque package entries."
+        ],
+        "preserved": []
+      }
+    },
+    {
+      "name": "centimeter-unit-and-material",
+      "archiveBytesHex": "504b0304140000000800000021006266c0a86c0100008b0200001000000033442f33646d6f64656c2e6d6f64656c85914d6edb301046f73dc560baae284b3152142483b6804f901e80a6c6360bfe082465d8397dc692133bd9045a0c217df366f8249f4ec1c3917271292a5c352d02459b0617f70aff3d6f7efcc427fd4d8634908729baaad052ac2e50a58cc0ddb1283cd43afe12a2d80305539ae06c4e25ed6a635310fd104c9c76c6d6293356d8944974ed6a2dda0e414b4699c15403d10452f8ecaa27d41b4eb97d849d3b711f49f116d332534953b654b4dc9ac2137915677c0137287cc0e5ed95f6c74f8430b8327a73b6c9a7acf07bd73eb4bfdbcd068596e20342cbb4fd4fb6cea847847141728d039d14b29e7a1e993b0bc1eb90bfef466034b9f20681ca414bf65addbce7e5442760c2aae9d60867855dc3f54561df3cae2f8bdc22ddd791774aff29226e332bdf28eefdfd118eabf90ec78e115c7a9e3177dd6559f46577b188e0c3bdeec9f9414b5729c0f2fdeaa96613cb2ee5c05c68e7e7563be8e1e290ff7e355bcfc2dac5fc4213b34bfd0a504b01021403140000000800000021006266c0a86c0100008b020000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b050600000000010001003e0000009a0100000000",
+      "archiveSha256": "3e1b4129ebec3e495fe4a11eb2395bc9cd146e939b8343a589540910a17b3307",
+      "expected": {
+        "accepted": true,
+        "stateJson": "{\"activePlateId\":\"import:3mf:72958cd723e38dd3-plate-1\",\"config\":{},\"createdAt\":\"1980-01-01T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[],\"physical\":[{\"color\":\"#2040A0\",\"config\":{},\"enabled\":true,\"id\":\"import:3mf:72958cd723e38dd3-physical-filament-1\",\"material\":\"Unknown\",\"name\":\"Blue\",\"toolId\":0}]},\"id\":\"import:3mf:72958cd723e38dd3-project-root\",\"name\":\"Foreign fixture\",\"plates\":[{\"config\":{},\"id\":\"import:3mf:72958cd723e38dd3-plate-1\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{},\"id\":\"import:3mf:72958cd723e38dd3-object-41e988690ebf9e96-7-1\",\"instances\":[{\"id\":\"import:3mf:72958cd723e38dd3-instance-41e988690ebf9e96-7-1-1\",\"printable\":false,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[20,30,40]}}],\"layerRanges\":[],\"name\":\"Centimeter part\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"extensionData\":{\"orcaxr:sourceMaterial\":{\"color\":\"#2040A0\",\"format\":\"3mf\",\"name\":\"Blue\"}},\"filamentId\":\"import:3mf:72958cd723e38dd3-physical-filament-1\",\"id\":\"import:3mf:72958cd723e38dd3-volume-41e988690ebf9e96-7-41e988690ebf9e96-7-1-1\",\"name\":\"Centimeter part\",\"role\":\"model\",\"source\":{\"assetId\":\"import:3mf:72958cd723e38dd3-asset-41e988690ebf9e96-7\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"toolCount\":1},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":48,\"digest\":\"fnv1a64:2fb96f9dd969aab7\",\"id\":\"import:3mf:72958cd723e38dd3-asset-41e988690ebf9e96-7\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":12,\"byteOffset\":36,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":3},\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/3dmodel.model#7\"}}],\"thumbnails\":[],\"updatedAt\":\"1980-01-01T00:00:00.000Z\"}",
+        "assets": [
+          {
+            "descriptorJson": "{\"byteLength\":48,\"digest\":\"fnv1a64:2fb96f9dd969aab7\",\"id\":\"import:3mf:72958cd723e38dd3-asset-41e988690ebf9e96-7\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":12,\"byteOffset\":36,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":3},\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/3dmodel.model#7\"}}",
+            "bytesHex": "000048410000c841000016420000b4410000c841000016420000484100000c4200001642000000000100000002000000"
+          }
+        ],
+        "warnings": [
+          "3MF is missing [Content_Types].xml; a valid content-type manifest will be generated on save",
+          "Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and bounded BBS facet trees were recovered; unsupported BBS fields remain preserved as opaque package entries."
+        ],
+        "preserved": []
+      }
+    },
+    {
+      "name": "painted-facets-and-refinement",
+      "archiveBytesHex": "504b0304140000000800000021003b84f98289010000070300001000000033442f33646d6f64656c2e6d6f64656c75524d8fdb2010bdf757a0e9b9c14eb652541956eac1e7aada9e572c4c125a3e2cc051925fdf31649544edfa8061e6cdbc371fc3f3c93b76c4946d0c02fa55070c838ec686bd805f2fe3972d3ccb4f838f061d9b832d02bc75ce7a2c98805174c8020ea54cdf38cffa805ee595b73ac51c7765a5a3e71be35598774a9739515aae6342beeefaafbc5b039303a5524615c582f228e0c51687204742d97d603b7ba2381cf83b4c0e09739c93c62c8737958991a458e532b346c01334eb35db4f34c08ccd9353671d5d4c023e8f6347df38027f807e7733fe836dc886e50f6c72886fbf5197cada032be78992d446c135e30f654359044c4d19fd83c193808e447acc073950eb8bada52c373cb1ea65e77a5e9693886f2ee2f9c8d5a208f051d49d8bdf680b1513f6eefeca8e7d4d775cd7a0e346000d6a5a8a79bdf665a9a5bef33c4d3115da819b099517b07d7feee6cbe5fc9aff58daaf07db12425a1e58173a62ddfc9f75fbd457f5779a692d9636f2360bbadc2fc76c9d91832de859f3b751d551361faff3927f01504b01021403140000000800000021003b84f9828901000007030000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b050600000000010001003e000000b70100000000",
+      "archiveSha256": "03a82e95e2fa53adcec019cf0eef3bdd77cda2f27ea3877335910dc8cf755373",
+      "expected": {
+        "accepted": true,
+        "stateJson": "{\"activePlateId\":\"import:3mf:9aee45916e1cb917-plate-1\",\"config\":{},\"createdAt\":\"1980-01-01T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[],\"physical\":[{\"color\":\"#FF0000\",\"config\":{},\"enabled\":true,\"id\":\"import:3mf:9aee45916e1cb917-physical-filament-1\",\"material\":\"Unknown\",\"name\":\"Red\",\"toolId\":0},{\"color\":\"#0000FF\",\"config\":{},\"enabled\":true,\"id\":\"import:3mf:9aee45916e1cb917-physical-filament-2\",\"material\":\"Unknown\",\"name\":\"Blue\",\"toolId\":1}]},\"id\":\"import:3mf:9aee45916e1cb917-project-root\",\"name\":\"Foreign fixture\",\"plates\":[{\"config\":{},\"id\":\"import:3mf:9aee45916e1cb917-plate-1\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{},\"id\":\"import:3mf:9aee45916e1cb917-object-41e988690ebf9e96-1-1\",\"instances\":[{\"id\":\"import:3mf:9aee45916e1cb917-instance-41e988690ebf9e96-1-1-1\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Painted\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"import:3mf:9aee45916e1cb917-physical-filament-1\"}],\"fuzzySkin\":[{\"triangles\":[0],\"value\":true}],\"refinement\":{\"color\":{\"splits\":[{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"import:3mf:9aee45916e1cb917-physical-filament-2\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"import:3mf:9aee45916e1cb917-physical-filament-1\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":1}],\"triangleCount\":2,\"version\":2}},\"seam\":[{\"triangles\":[0],\"value\":\"avoid\"}],\"support\":[{\"triangles\":[0],\"value\":\"enforce\"}],\"topologyRevision\":0},\"config\":{},\"extensionData\":{\"https://orcaxr.martinez.fyi/3mf/project/1/core-facet-attributes\":[{\"attributes\":[{\"name\":\"paint_fuzzy_skin\",\"namespace\":\"\",\"value\":\"\"}],\"triangle\":0}],\"orcaxr:sourceMaterial\":{\"color\":\"#FF0000\",\"format\":\"3mf\",\"name\":\"Red\"}},\"filamentId\":\"import:3mf:9aee45916e1cb917-physical-filament-1\",\"id\":\"import:3mf:9aee45916e1cb917-volume-41e988690ebf9e96-1-41e988690ebf9e96-1-1-1\",\"name\":\"Painted\",\"role\":\"model\",\"source\":{\"assetId\":\"import:3mf:9aee45916e1cb917-asset-41e988690ebf9e96-1\",\"topologyRevision\":0,\"triangleCount\":2},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":72,\"digest\":\"fnv1a64:a914bdda22340556\",\"id\":\"import:3mf:9aee45916e1cb917-asset-41e988690ebf9e96-1\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":24,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":6},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":2},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/3dmodel.model#1\"}}],\"thumbnails\":[],\"updatedAt\":\"1980-01-01T00:00:00.000Z\"}",
+        "assets": [
+          {
+            "descriptorJson": "{\"byteLength\":72,\"digest\":\"fnv1a64:a914bdda22340556\",\"id\":\"import:3mf:9aee45916e1cb917-asset-41e988690ebf9e96-1\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":24,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":6},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":2},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/3dmodel.model#1\"}}",
+            "bytesHex": "0000000000000000000000000000803f0000000000000000000000000000803f000000000000803f0000803f00000000000000000100000002000000010000000300000002000000"
+          }
+        ],
+        "warnings": [
+          "3MF is missing [Content_Types].xml; a valid content-type manifest will be generated on save",
+          "Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and bounded BBS facet trees were recovered; unsupported BBS fields remain preserved as opaque package entries."
+        ],
+        "preserved": []
+      }
+    },
+    {
+      "name": "internal-component-expansion",
+      "archiveBytesHex": "504b030414000000080000002100120bc75554010000c60200001000000033442f33646d6f64656c2e6d6f64656c9d91db4ec3300c86ef790a2bf72c5d270e426d266ef6028c07c852770bca614ad2aae3e971d31d8a045ca04a892bfbfbeddfa9d68335d06388dabb9a2d17050374ca37daed6bf6bedddc3fb3b5b8abac6fd040e774aa99d5c6688b090303a25dacd921a5e30be7511dd0cab8b05a051f7d9b16ca5bbe6aac745d2b55ea02c972e503f2b2583ef0a264202a92928d4c129cb458b3ad4e0699d85095de3b68f5401c56fc5226aa80d17741611495df7da04aa01b9a9d413a1d4920cfcace6a6f0719b00183b26563ab781015d94d3ae36384030c3523dfa77c7e8e279fa748f8b7d44451c125c56fda2968e9f6661e42bfcc4c5f66a85fd5acccd4ac967c8e33f2c9d9778784fe60f13546b43b73227fb4eea377e812095d6398242e3b0ad2c5d6074b7f50e4ef7697e33d4ef41fb880d504d30bdfc6b81ae1b367db75da34a2d209edbcc1e8efaf0e0ff0084fb9c35980e745882f504b0102140314000000080000002100120bc75554010000c6020000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b050600000000010001003e000000820100000000",
+      "archiveSha256": "aa96c8baaf49288139c8d63aa194ebee52cd20cae25bcf7887b154f319bfff33",
+      "expected": {
+        "accepted": true,
+        "stateJson": "{\"activePlateId\":\"import:3mf:eba4956ef4d5c881-plate-1\",\"config\":{},\"createdAt\":\"1980-01-01T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[],\"physical\":[{\"color\":\"#CCCCCC\",\"config\":{},\"enabled\":true,\"id\":\"import:3mf:eba4956ef4d5c881-physical-filament-1\",\"material\":\"Unknown\",\"name\":\"Imported tool 1\",\"toolId\":0}]},\"id\":\"import:3mf:eba4956ef4d5c881-project-root\",\"name\":\"Foreign fixture\",\"plates\":[{\"config\":{},\"id\":\"import:3mf:eba4956ef4d5c881-plate-1\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{},\"id\":\"import:3mf:eba4956ef4d5c881-object-41e988690ebf9e96-10-1\",\"instances\":[{\"id\":\"import:3mf:eba4956ef4d5c881-instance-41e988690ebf9e96-10-1-1\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[5,6,7]}}],\"layerRanges\":[],\"name\":\"Assembly\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"import:3mf:eba4956ef4d5c881-volume-41e988690ebf9e96-10-41e988690ebf9e96-1-1-1\",\"name\":\"Shared leaf\",\"role\":\"model\",\"source\":{\"assetId\":\"import:3mf:eba4956ef4d5c881-asset-41e988690ebf9e96-1\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[2,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"import:3mf:eba4956ef4d5c881-volume-41e988690ebf9e96-10-41e988690ebf9e96-1-2-1\",\"name\":\"Shared leaf\",\"role\":\"model\",\"source\":{\"assetId\":\"import:3mf:eba4956ef4d5c881-asset-41e988690ebf9e96-1\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,3,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"toolCount\":1},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":48,\"digest\":\"fnv1a64:8810ae12e1b0c5a6\",\"id\":\"import:3mf:eba4956ef4d5c881-asset-41e988690ebf9e96-1\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":12,\"byteOffset\":36,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":3},\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/3dmodel.model#1\"}}],\"thumbnails\":[],\"updatedAt\":\"1980-01-01T00:00:00.000Z\"}",
+        "assets": [
+          {
+            "descriptorJson": "{\"byteLength\":48,\"digest\":\"fnv1a64:8810ae12e1b0c5a6\",\"id\":\"import:3mf:eba4956ef4d5c881-asset-41e988690ebf9e96-1\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":12,\"byteOffset\":36,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":3},\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/3dmodel.model#1\"}}",
+            "bytesHex": "0000000000000000000000000000803f0000000000000000000000000000803f00000000000000000100000002000000"
+          }
+        ],
+        "warnings": [
+          "3MF is missing [Content_Types].xml; a valid content-type manifest will be generated on save",
+          "Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and bounded BBS facet trees were recovered; unsupported BBS fields remain preserved as opaque package entries."
+        ],
+        "preserved": []
+      }
+    },
+    {
+      "name": "extension-attributes-preserved",
+      "archiveBytesHex": "504b0304140000000800000021003b1a274465010000d70200001000000033442f33646d6f64656c2e6d6f64656c75914d6ec3201085f73d059a7d4292aa52651947dd64d5657a0082c70e153f1160cbe9e93bc676ea4aed0610f3e6e3cda33c0ed6b01e43d4de09d86f77c0d0295f6bd70af8389f36af70ac9e4aeb6b34ac733a09b0da186d31610046dd2e0ab8a6742b388fea8a56c6add52af8e89bb455def2e7da4ad73552a52e10962b1f901f76fb17be3bcc84a2d103555140175ce1839243281ad2e9d66de61a54253d2a6b992473d292f6ac93a1ebd3a463b3aee48bac2a0346df0585b12afde5135562baa62981a5fb8d00792a9869ef281b5820c5241760e876d34bd34defc76b55525a4967e678c2810d0228b67b5ebfc695af4bf4da7fa5a98b044b89ffb053d0d2b5667d64fd3ef7f487dcd43f0ba00017c7143092e1bccd8e47e28a43c18cfef934dbef4808fb47266f31a2bd983bcd4e3f79f30e5d22d0e3cc26c41ceae2e4511680758b2b336bc8c3065ffdd2a5d3a6ae4a9dd0aed9e46e81678580bcadc87323cff6ab6f504b01021403140000000800000021003b1a274465010000d7020000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b050600000000010001003e000000930100000000",
+      "archiveSha256": "fc7049fa6879d27be09c6184c6749b51a477e9a0e17d6764b78090850adae275",
+      "expected": {
+        "accepted": true,
+        "stateJson": "{\"activePlateId\":\"import:3mf:fe4178b1ac40eeaf-plate-1\",\"config\":{},\"createdAt\":\"1980-01-01T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[],\"physical\":[{\"color\":\"#CCCCCC\",\"config\":{},\"enabled\":true,\"id\":\"import:3mf:fe4178b1ac40eeaf-physical-filament-1\",\"material\":\"Unknown\",\"name\":\"Imported tool 1\",\"toolId\":0}]},\"id\":\"import:3mf:fe4178b1ac40eeaf-project-root\",\"name\":\"Foreign fixture\",\"plates\":[{\"config\":{},\"id\":\"import:3mf:fe4178b1ac40eeaf-plate-1\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{},\"id\":\"import:3mf:fe4178b1ac40eeaf-object-41e988690ebf9e96-10-1\",\"instances\":[{\"extensionData\":{\"https://orcaxr.martinez.fyi/3mf/project/1/core-build-attributes\":[{\"name\":\"build\",\"namespace\":\"urn:orcaxr:foreign-fixture\",\"value\":\"build-value\"}]},\"id\":\"import:3mf:fe4178b1ac40eeaf-instance-41e988690ebf9e96-10-1-1\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Assembly\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"extensionData\":{\"https://orcaxr.martinez.fyi/3mf/project/1/core-component-attributes\":[{\"name\":\"component\",\"namespace\":\"urn:orcaxr:foreign-fixture\",\"value\":\"edge-value\"}],\"https://orcaxr.martinez.fyi/3mf/project/1/core-facet-attributes\":[{\"attributes\":[{\"name\":\"facet\",\"namespace\":\"urn:orcaxr:foreign-fixture\",\"value\":\"facet-value\"}],\"triangle\":0}],\"https://orcaxr.martinez.fyi/3mf/project/1/core-object-attributes\":[{\"name\":\"object\",\"namespace\":\"urn:orcaxr:foreign-fixture\",\"value\":\"leaf-value\"}]},\"id\":\"import:3mf:fe4178b1ac40eeaf-volume-41e988690ebf9e96-10-41e988690ebf9e96-1-1-1\",\"name\":\"Leaf\",\"role\":\"model\",\"source\":{\"assetId\":\"import:3mf:fe4178b1ac40eeaf-asset-41e988690ebf9e96-1\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"toolCount\":1},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":48,\"digest\":\"fnv1a64:8810ae12e1b0c5a6\",\"id\":\"import:3mf:fe4178b1ac40eeaf-asset-41e988690ebf9e96-1\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":12,\"byteOffset\":36,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":3},\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/3dmodel.model#1\"}}],\"thumbnails\":[],\"updatedAt\":\"1980-01-01T00:00:00.000Z\"}",
+        "assets": [
+          {
+            "descriptorJson": "{\"byteLength\":48,\"digest\":\"fnv1a64:8810ae12e1b0c5a6\",\"id\":\"import:3mf:fe4178b1ac40eeaf-asset-41e988690ebf9e96-1\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":12,\"byteOffset\":36,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":3},\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/3dmodel.model#1\"}}",
+            "bytesHex": "0000000000000000000000000000803f0000000000000000000000000000803f00000000000000000100000002000000"
+          }
+        ],
+        "warnings": [
+          "3MF is missing [Content_Types].xml; a valid content-type manifest will be generated on save",
+          "Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and bounded BBS facet trees were recovered; unsupported BBS fields remain preserved as opaque package entries."
+        ],
+        "preserved": []
+      }
+    },
+    {
+      "name": "external-production-part-alias-prefix",
+      "archiveBytesHex": "504b030414000000080000002100ee07c1ac79010000030300001000000033442f33646d6f64656c2e6d6f64656c9551cd6ac3300cbeef2984efab9b76bf25c9188c9d06bb6c0fe03a4ae311dbc1564abba79fe2a66d06db60041c81f4fd49f9c3ceb6b0c5108d7785c8667301e8b4af8cdb14e2fdedf9f24e3c9417b9f515b6d03b4385b0a66d8d45c22080d12e16a221ea565246dda05571668d0e3efa9a66da5bb9acac727dad34f58169a5f601e5629e5dcbf962645875c157ffa41920bd26f63d92dd8832675baa52a4c0298b857833d4a2289f59d16c1cd466c760cce571accc0346df078db1ccfdfa03358161234b01b4ef9820e51623dbbb0b5863e0fd6005c17b028bb149aab12973de2299c43454b8835d21789dfbf47e0eaf9cb6b2df5b07140f1c5bf2cc4dc128b769a7256cb384d92e1268bb2cc422a126b31c79f0280f21bf85cd18fa43dac718d1aedb3de7e3f577dea123263ad5301c60d5296a0a21974ff2353146f982aa9e8d4c079541842f4d41b958fb605912e6e93bffafe01a6e92e9a9d8c9ae9cdc69dd9bb62a734368270229c55f0ab77007f749612490c964f905504b030414000000080000002100942929da10010000c70100001500000033442f4f626a656374732f4c6561662e6d6f64656c75904d6ec2301085f73d8535fb6202aa4a2bdbacca09e8018c3381a9fc836c07859ebe93d0a8d974e31979e67d7ecf6a3f042f6e980ba5a8a159ad416074a9a578d6f0793c3cef606f9e54482d7ad147aa1a02794f012b6610ac8e45c3a5d6ebbb94c55d30d8b20ae4722aa9ab2b9782dcb6c1c6beb3aef699b1d2a58c72b36e5ee47a03c22846d9d6562ba20da8e148d52398036fd1398a8e06d6a192f39a51194beab3c362543a7da1ab825a0dccaaf72b0326aff04bfb18d867b45e78b41d8c8f958b511cb8d204183b1cc4a0e10dc45dc30ec4b7865790cb51c3bff2dfec21e3731ec93f78cd64e3d92f5b716b3430eeb6612c97ed687c542d7639ea68523ec271b3087ceac9b77c35d729acf901504b0102140314000000080000002100ee07c1ac7901000003030000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b0102140314000000080000002100942929da10010000c7010000150000000000000000000000a401a701000033442f4f626a656374732f4c6561662e6d6f64656c504b0506000000000200020081000000ea0200000000",
+      "archiveSha256": "aa6a4155b910d0b2aa1a183aa12334dfee4ffcb32aacdb97ad47eed00d18724e",
+      "expected": {
+        "accepted": true,
+        "stateJson": "{\"activePlateId\":\"import:3mf:43fadf95e9b9e99e-plate-1\",\"config\":{},\"createdAt\":\"1980-01-01T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[],\"physical\":[{\"color\":\"#CCCCCC\",\"config\":{},\"enabled\":true,\"id\":\"import:3mf:43fadf95e9b9e99e-physical-filament-1\",\"material\":\"Unknown\",\"name\":\"Imported tool 1\",\"toolId\":0}]},\"id\":\"import:3mf:43fadf95e9b9e99e-project-root\",\"name\":\"Foreign fixture\",\"plates\":[{\"config\":{},\"id\":\"import:3mf:43fadf95e9b9e99e-plate-1\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{},\"id\":\"import:3mf:43fadf95e9b9e99e-object-41e988690ebf9e96-10-1\",\"instances\":[{\"id\":\"import:3mf:43fadf95e9b9e99e-instance-41e988690ebf9e96-10-1-1\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[7,8,9]}}],\"layerRanges\":[],\"name\":\"Assembly\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"import:3mf:43fadf95e9b9e99e-volume-41e988690ebf9e96-10-21fb9f73ce672fd9-2-1-1\",\"name\":\"External leaf\",\"role\":\"model\",\"source\":{\"assetId\":\"import:3mf:43fadf95e9b9e99e-asset-21fb9f73ce672fd9-2\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[4,5,6]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"toolCount\":1},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":48,\"digest\":\"fnv1a64:c1350317900bb386\",\"id\":\"import:3mf:43fadf95e9b9e99e-asset-21fb9f73ce672fd9-2\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":12,\"byteOffset\":36,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":3},\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/Objects/Leaf.model#2\"}}],\"thumbnails\":[],\"updatedAt\":\"1980-01-01T00:00:00.000Z\"}",
+        "assets": [
+          {
+            "descriptorJson": "{\"byteLength\":48,\"digest\":\"fnv1a64:c1350317900bb386\",\"id\":\"import:3mf:43fadf95e9b9e99e-asset-21fb9f73ce672fd9-2\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":12,\"byteOffset\":36,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":3},\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"3mf:3D/Objects/Leaf.model#2\"}}",
+            "bytesHex": "00001041000000410000e04000002041000000410000e04000001041000010410000e040000000000100000002000000"
+          }
+        ],
+        "warnings": [
+          "3MF is missing [Content_Types].xml; a valid content-type manifest will be generated on save",
+          "Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and bounded BBS facet trees were recovered; unsupported BBS fields remain preserved as opaque package entries.",
+          "Resolved 1 referenced 3MF Production Extension model part into the generated core model; the original split members are not kept as a second copy"
+        ],
+        "preserved": []
+      }
+    },
+    {
+      "name": "empty-project",
+      "archiveBytesHex": "504b03041400000008000000210054e453ada9000000e20000001000000033442f33646d6f64656c2e6d6f64656c4d8e4d0ac2301484f79e22bcbd4d55049124ee3c811e2026afed83bc44f2233dbe4128b89a6198f918755b39880fe642296a380c23088c2e798ab386e7e3bebfc0cdec14278f41b44855035308c4583183e8eb58342cb5beaf5216b720db3230b99c4a9aeae012cb93671bdb645d6db963a54b19e5713c9ce57804615447596fab15d1326a78500d08e6de5b344731d1da77a8e456332a63492d3b2c46c93fff6a147c8f36fd7d365f504b010214031400000008000000210054e453ada9000000e2000000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b050600000000010001003e000000d70000000000",
+      "archiveSha256": "5b4b5bb1b5e50f5c7e045dc3bdf4256a7f724a23c689d573ba276d85fecea988",
+      "expected": {
+        "accepted": true,
+        "stateJson": "{\"activePlateId\":\"import:3mf:8f6aaf4fd61339de-plate-1\",\"config\":{},\"createdAt\":\"1980-01-01T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[],\"physical\":[{\"color\":\"#CCCCCC\",\"config\":{},\"enabled\":true,\"id\":\"import:3mf:8f6aaf4fd61339de-physical-filament-1\",\"material\":\"Unknown\",\"name\":\"Imported tool 1\",\"toolId\":0}]},\"id\":\"import:3mf:8f6aaf4fd61339de-project-root\",\"name\":\"Foreign fixture\",\"plates\":[{\"config\":{},\"id\":\"import:3mf:8f6aaf4fd61339de-plate-1\",\"name\":\"Plate 1\",\"objects\":[],\"order\":0,\"printable\":true}],\"printer\":{\"toolCount\":1},\"schemaVersion\":1,\"sourceAssets\":[],\"thumbnails\":[],\"updatedAt\":\"1980-01-01T00:00:00.000Z\"}",
+        "assets": [],
+        "warnings": [
+          "3MF is missing [Content_Types].xml; a valid content-type manifest will be generated on save",
+          "Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and bounded BBS facet trees were recovered; unsupported BBS fields remain preserved as opaque package entries."
+        ],
+        "preserved": []
+      }
+    },
+    {
+      "name": "refuse-unknown-unit",
+      "archiveBytesHex": "504b030414000000080000002100c07d383d08010000d10100001000000033442f33646d6f64656c2e6d6f64656c758fcd6ec2300cc7ef7b8ac8f711289a344d49b8f104ec01426a205393a0c4adca9e7e6e4ab55eb85896fe1ff64f1dc6d0890173f1296ad86db62030bad4fa78d5f07d3abe7fc2c1bca9905aec441f3d69b8db5cd081e0642c1a6e44f72f298bbb61b06513bccba9a40b6d5c0a72df061bfb8b75d467ae942e6594cd76f721b70d08a302926d2d59116d400d274f1d8239b2cb5fa3b8f89173a8e462332a63497d76588c4ae71f74247ccb7f83a0c79d0bea9fb0b4656fe3752ae43be566147392afd969c3518c1a18f851e7ef34e55ae2d657d29c62c322c9ff6e7a9e5dad62d8d5ccd0d4d0b0d7d0d4d4cacb90d38f72c6e265857aee7dd71ae5098398f5997aaa786ab2a29b3f504b0102140314000000080000002100c07d383d08010000d1010000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b050600000000010001003e000000360100000000",
+      "archiveSha256": "259f4987e1377ab38d17a9396ea9d8c7bb31755db03ec86a5857d30b91c20dc3",
+      "expected": {
+        "accepted": false
+      }
+    },
+    {
+      "name": "refuse-duplicate-object-id",
+      "archiveBytesHex": "504b030414000000080000002100570714af19010000b50200001000000033442f33646d6f64656c2e6d6f64656cd5914b6ac3301086f73d85987da3c4a1508aac6c4a4e901e409127c9143d8234364e4f5f594ea837856ebb1103ff63e6436a377a27064c99626861b35a83c0606347e1dcc2c761fffc0a3bfda47cecd0893e10b7e0c939f2c898409474c82d5c98af6f52667b416ff2ca934d31c713af6cf472db7913fa93b1dca7522b6d4c289bf5e645ae1b105a952ad3193622188f2d1c881d82de17179d8338d15872a8e4c3a655c21cfb64316b158f9f685950576e07c1b76b29a8b7c2a32d9109e7a9b0ecc917ad0a2b53cd4e138e626ca140dfeafb35bd722995d6dfa439550c0f49fe74f37ded6214c3a66686a686866d0b4d4d2dbc0572ba51ce587fc07befaf8eace17fca27175f79ecc9755a11a317b33e634f15774d5676fd0d504b0102140314000000080000002100570714af19010000b5020000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b050600000000010001003e000000470100000000",
+      "archiveSha256": "2b9568093d849dabd20e5601dc21c551da328200bbac6a28207d2a88b354baf7",
+      "expected": {
+        "accepted": false
+      }
+    },
+    {
+      "name": "refuse-component-cycle",
+      "archiveBytesHex": "504b03041400000008000000210015c5d6c6e4000000a40100001000000033442f33646d6f64656c2e6d6f64656c958ecb4ec3301045f77c85357be224080921c7ddf50bca07b8f6a41de447644f50f97b8696a7108bee469a7bcf3d66734a51bd606d54f20443d783c2ec4ba07c98e069b7bd7d808dbd31a9048c6acdc413248a9112325650d2ce6d8223f3f2a875f3474cae75897c2dadccdcf992f45d482eafb3f3bc56c16a5f2aeab11fee753f82b246502e38762abb8413ec882382dd4a8a0e59cd74921e1afd19b3a6622b6bf5d8ac29fb67f4ac28883b287e5d047076056b647b2919334beeeb5697c67b61046d8dd87ca7f4e5f90b2b8ad76187ffb1fa87f97ea518ac21c6f4a7fcf1d3e749fb06504b010214031400000008000000210015c5d6c6e4000000a4010000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b050600000000010001003e000000120100000000",
+      "archiveSha256": "e24d613c57000cc7abc0204ffc372aa671f081c5e8e0ead2ac5c3cd413bee48e",
+      "expected": {
+        "accepted": false
+      }
+    },
+    {
+      "name": "refuse-missing-component-object",
+      "archiveBytesHex": "504b030414000000080000002100a8284eecdd0000004f0100001000000033442f33646d6f64656c2e6d6f64656c4d8e5d4ec3301084df3985b5efc4492912428efbd6139403b8f6a65de49fc8dea0727b9614dabe8d34f3cd8cd95d52545f581b953cc2d0f5a030fb12289f46f838ec9fdf60679f4c2a01a35a32f1088962a4848c1594d0b98d70669edfb56efe8cc9b52e91afa595893b5f927e09c9e565729e972ab5da978a7ad30fafbadf80b246aa5c70ec5476094738104704bb97149db29ae8221c1afd1fb3a6622b4bf5d8ac29c74ff4ac28c87750fc3d4bc1fa15ac91edb964cc2cb99b5657e217d8f65bd0d6c89f7b4e5f6d110f23c78562b08618d3033eacf09fa7d751fb03504b0102140314000000080000002100a8284eecdd0000004f010000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b050600000000010001003e0000000b0100000000",
+      "archiveSha256": "e5d5707b457b591b622cf8622639951acca347f5000f3df2f9bbd40594820b98",
+      "expected": {
+        "accepted": false
+      }
+    },
+    {
+      "name": "refuse-missing-production-part",
+      "archiveBytesHex": "504b030414000000080000002100e4a247fdff000000b70100001000000033442f33646d6f64656c2e6d6f64656c958fcd4ec3300c80ef3c45e43bcdba0984a634bba0ddb88d07c8526f356a922a71d1787bdc1f60576e91ecefcb6773b8855e7d622e94620375b50185d1a796e2b581f7d3f1f1050ef6c184d462afc648dc40a0bea7808c1994d0b134d0310f7bad8bef30b85205f2399574e1caa7a0776d7071bc38cf6316adf629a3de6eea27bdd9ae86fd9053fb4fcd848c9ea57b953d833592e55ac74e4517b08113718f608ff2235da3bad04d6034fa67cd9a8c258dd963b1269d3fd0b32209a941f1d72082f96ef14ac090224696bddfb79a12f683e3ae01bd7bd56f548a94550ba416dfa4db82b646eefe73e865288fbb80f3487d6b0d31863bb89ee175a667b7fd06504b0102140314000000080000002100e4a247fdff000000b7010000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b050600000000010001003e0000002d0100000000",
+      "archiveSha256": "3ec974171a1fb6740929a2b1e169657ecb94cf53f4d2b88a3753a3f34eda11dd",
+      "expected": {
+        "accepted": false
+      }
+    },
+    {
+      "name": "refuse-invalid-facet-channel-state",
+      "archiveBytesHex": "504b030414000000080000002100bf34f7161a010000e80100001000000033442f33646d6f64656c2e6d6f64656c7590cf6ac3300cc6ef7b0ae3fbeafe613086ed1e067d82ee3c5c476d35623bd84a48f7f4539c96e5d28b107cfa7ed227bd1f432b06c805533472b35a4b01d1a706e3c5c8afe3e1f55deeed8b0ea98156f411c9c8806d8b0108b214ec8ec5c82b51f7a154f15708aeac02fa9c4a3ad3caa7a0764d70b13f3b4f7d66acf22983daae376f6abd95c26a46b9c69113d10530f288d482b4079ec24b14671cd9075a3dc6acce50529f3d14abd3e9073c096cf87629e8d631a0de2a1fb48c2e5e2620ef2957ab392b61f54e1d8c62349243df6afd9daa5a4a4c7d26cd2e1e7848ea9f4df7b58b560c9bea19b6d534ec8ce4f89dc348dfa5efba94893ff959410b3be79ece5673526e16e94f3db68dd54810c4accf8f9810774dd56fd83f504b0102140314000000080000002100bf34f7161a010000e8010000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b050600000000010001003e000000480100000000",
+      "archiveSha256": "846c7bd85f566d93faefc4a6b6badda60b50e5780327241a966afbdfa171ad10",
+      "expected": {
+        "accepted": false
+      }
+    },
+    {
+      "name": "refuse-dtd",
+      "archiveBytesHex": "504b030414000000080000002100a3640aaf99000000b00000001000000033442f33646d6f64656c2e6d6f64656c258dbb0e823014407fa5f603b8807131a50ccae0a20e2cc438407b9126bdade9c3f0f9129dce70927344bb92651f0cd178d7f0aa28792bc5ee7c3bf5c3bd63e4355af610bbeeda5ffa81ad8c4fa3e6f229c55f656752c3c9586b081306ceb69e8b0d5f527a1f01a25a90c6589051c1473fa7427982bda6d1e579542907e35ea07c40a8cbea0065cda508187d0e0a2348316563f546f8fde417504b0102140314000000080000002100a3640aaf99000000b0000000100000000000000000000000a4010000000033442f33646d6f64656c2e6d6f64656c504b050600000000010001003e000000c70000000000",
+      "archiveSha256": "cd8a2419c2eb70e8f7022c87b50c8a42e814e719a9114ae39589b834604199f0",
+      "expected": {
+        "accepted": false
+      }
+    }
+  ]
+}

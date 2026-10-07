@@ -127,6 +127,162 @@ const shapes = {
       "printable": "Flag"
     }
   },
+  "Finite": {
+    "kind": "number",
+    "min": -1.7976931348623157e+308,
+    "max": 1.7976931348623157e+308
+  },
+  "Vector": {
+    "kind": "array",
+    "items": "Finite",
+    "min": 3,
+    "max": 3
+  },
+  "Rotation": {
+    "kind": "array",
+    "items": "Finite",
+    "min": 4,
+    "max": 4
+  },
+  "Transform": {
+    "kind": "object",
+    "fields": {
+      "translationMm": "Vector",
+      "rotation": "Rotation",
+      "scale": "Vector"
+    }
+  },
+  "EditText": {
+    "kind": "array",
+    "items": "Unit",
+    "min": 0,
+    "max": 131072
+  },
+  "RenameObject": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "name": "EditText"
+    }
+  },
+  "RenameVolume": {
+    "kind": "object",
+    "fields": {
+      "volumeId": "Id",
+      "name": "EditText"
+    }
+  },
+  "RenameInstance": {
+    "kind": "object",
+    "fields": {
+      "instanceId": "Id",
+      "name": "EditText"
+    }
+  },
+  "SetInstancePrintable": {
+    "kind": "object",
+    "fields": {
+      "instanceId": "Id",
+      "printable": "Flag"
+    }
+  },
+  "InstanceTransform": {
+    "kind": "object",
+    "fields": {
+      "instanceId": "Id",
+      "transform": "Transform"
+    }
+  },
+  "InstanceTransforms": {
+    "kind": "array",
+    "items": "InstanceTransform",
+    "min": 0,
+    "max": 131072
+  },
+  "SetInstanceTransform": {
+    "kind": "object",
+    "fields": {
+      "instanceId": "Id",
+      "transform": "Transform",
+      "gestureId": "EditText"
+    }
+  },
+  "SetInstanceTransforms": {
+    "kind": "object",
+    "fields": {
+      "changes": "InstanceTransforms",
+      "gestureId": "EditText"
+    }
+  },
+  "Empty": {
+    "kind": "object",
+    "fields": {}
+  },
+  "OptionalText": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "EditText"
+    }
+  },
+  "OptionalPlate": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "Id"
+    }
+  },
+  "DeleteObject": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id"
+    }
+  },
+  "DeletePlateObjects": {
+    "kind": "object",
+    "fields": {
+      "plateId": "Id"
+    }
+  },
+  "DeleteInstance": {
+    "kind": "object",
+    "fields": {
+      "instanceId": "Id"
+    }
+  },
+  "MoveObjectToPlate": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "destinationPlateId": "Id"
+    }
+  },
+  "DuplicateObjectEdit": {
+    "kind": "object",
+    "fields": {
+      "sourceObjectId": "Id",
+      "ids": "DuplicateObject",
+      "destinationPlateId": "OptionalPlate",
+      "name": "OptionalText"
+    }
+  },
+  "IndependentInstanceIds": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "volumeIds": "Ids",
+      "instanceId": "Id",
+      "layerRangeIds": "Ids"
+    }
+  },
+  "ConvertInstanceToObject": {
+    "kind": "object",
+    "fields": {
+      "instanceId": "Id",
+      "ids": "IndependentInstanceIds",
+      "name": "OptionalText"
+    }
+  },
   "Command": {
     "kind": "union",
     "variants": {
@@ -136,7 +292,19 @@ const shapes = {
       "activatePlate": "ActivatePlate",
       "renamePlate": "RenamePlate",
       "reorderPlates": "ReorderPlates",
-      "setPlatePrintable": "SetPlatePrintable"
+      "setPlatePrintable": "SetPlatePrintable",
+      "renameObject": "RenameObject",
+      "renameVolume": "RenameVolume",
+      "renameInstance": "RenameInstance",
+      "setInstancePrintable": "SetInstancePrintable",
+      "setInstanceTransform": "SetInstanceTransform",
+      "setInstanceTransforms": "SetInstanceTransforms",
+      "deleteObject": "DeleteObject",
+      "deletePlateObjects": "DeletePlateObjects",
+      "deleteInstance": "DeleteInstance",
+      "moveObjectToPlate": "MoveObjectToPlate",
+      "duplicateObject": "DuplicateObjectEdit",
+      "convertInstanceToObject": "ConvertInstanceToObject"
     }
   },
   "Commands": {
@@ -240,10 +408,6 @@ const shapes = {
       "dirtyCategories": "DirtyCategories"
     }
   },
-  "Empty": {
-    "kind": "object",
-    "fields": {}
-  },
   "GuardedIntent": {
     "kind": "object",
     "fields": {
@@ -273,6 +437,12 @@ const shapes = {
       "targetRequestId": "RequestId"
     }
   },
+  "StagedReference": {
+    "kind": "object",
+    "fields": {
+      "stagedId": "RequestId"
+    }
+  },
   "SessionOperation": {
     "kind": "union",
     "variants": {
@@ -283,7 +453,9 @@ const shapes = {
       "redo": "SessionGuard",
       "query": "Empty",
       "cancel": "Cancel",
-      "close": "Empty"
+      "close": "Empty",
+      "executeStaged": "StagedReference",
+      "releaseStaged": "StagedReference"
     }
   },
   "SessionRequest": {
@@ -345,7 +517,8 @@ const shapes = {
       "cancelled": "CancelStatus",
       "closed": "Empty",
       "error": "SessionError",
-      "receiptUnavailable": "Flag"
+      "receiptUnavailable": "Flag",
+      "released": "Flag"
     }
   },
   "SessionReply": {
@@ -377,7 +550,30 @@ export interface ProjectActivatePlateWire {readonly plateId: ProjectIdWire;}
 export interface ProjectRenamePlateWire {readonly plateId: ProjectIdWire;readonly name: ProjectNameWire;}
 export interface ProjectReorderPlatesWire {readonly plateIds: ProjectPlateIdsWire;}
 export interface ProjectSetPlatePrintableWire {readonly plateId: ProjectIdWire;readonly printable: ProjectFlagWire;}
-export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire};
+export type ProjectFiniteWire = number;
+export type ProjectVectorWire = readonly ProjectFiniteWire[];
+export type ProjectRotationWire = readonly ProjectFiniteWire[];
+export interface ProjectTransformWire {readonly translationMm: ProjectVectorWire;readonly rotation: ProjectRotationWire;readonly scale: ProjectVectorWire;}
+export type ProjectEditTextWire = readonly ProjectUnitWire[];
+export interface ProjectRenameObjectWire {readonly objectId: ProjectIdWire;readonly name: ProjectEditTextWire;}
+export interface ProjectRenameVolumeWire {readonly volumeId: ProjectIdWire;readonly name: ProjectEditTextWire;}
+export interface ProjectRenameInstanceWire {readonly instanceId: ProjectIdWire;readonly name: ProjectEditTextWire;}
+export interface ProjectSetInstancePrintableWire {readonly instanceId: ProjectIdWire;readonly printable: ProjectFlagWire;}
+export interface ProjectInstanceTransformWire {readonly instanceId: ProjectIdWire;readonly transform: ProjectTransformWire;}
+export type ProjectInstanceTransformsWire = readonly ProjectInstanceTransformWire[];
+export interface ProjectSetInstanceTransformWire {readonly instanceId: ProjectIdWire;readonly transform: ProjectTransformWire;readonly gestureId: ProjectEditTextWire;}
+export interface ProjectSetInstanceTransformsWire {readonly changes: ProjectInstanceTransformsWire;readonly gestureId: ProjectEditTextWire;}
+export interface ProjectEmptyWire {}
+export type ProjectOptionalTextWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectEditTextWire};
+export type ProjectOptionalPlateWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectIdWire};
+export interface ProjectDeleteObjectWire {readonly objectId: ProjectIdWire;}
+export interface ProjectDeletePlateObjectsWire {readonly plateId: ProjectIdWire;}
+export interface ProjectDeleteInstanceWire {readonly instanceId: ProjectIdWire;}
+export interface ProjectMoveObjectToPlateWire {readonly objectId: ProjectIdWire;readonly destinationPlateId: ProjectIdWire;}
+export interface ProjectDuplicateObjectEditWire {readonly sourceObjectId: ProjectIdWire;readonly ids: ProjectDuplicateObjectWire;readonly destinationPlateId: ProjectOptionalPlateWire;readonly name: ProjectOptionalTextWire;}
+export interface ProjectIndependentInstanceIdsWire {readonly objectId: ProjectIdWire;readonly volumeIds: ProjectIdsWire;readonly instanceId: ProjectIdWire;readonly layerRangeIds: ProjectIdsWire;}
+export interface ProjectConvertInstanceToObjectWire {readonly instanceId: ProjectIdWire;readonly ids: ProjectIndependentInstanceIdsWire;readonly name: ProjectOptionalTextWire;}
+export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire};
 export type ProjectCommandsWire = readonly ProjectCommandWire[];
 export interface ProjectIntentWire {readonly version: ProjectVersionWire;readonly command: ProjectCommandWire;}
 export interface ProjectBatchWire {readonly version: ProjectVersionWire;readonly label: ProjectLabelWire;readonly commands: ProjectCommandsWire;}
@@ -393,18 +589,18 @@ export type ProjectDirtyCategoriesWire = readonly ProjectDirtyCategoryWire[];
 export type ProjectSessionVersionWire = number;
 export interface ProjectSessionGuardWire {readonly projectId: ProjectIdWire;readonly revision: ProjectCounterWire;readonly semanticHash: ProjectFingerprintWire;readonly assetFingerprint: ProjectFingerprintWire;readonly historyRevision: ProjectCounterWire;}
 export interface ProjectSessionHistoryWire {readonly undoCount: ProjectCounterWire;readonly redoCount: ProjectCounterWire;readonly undoLabel: ProjectDisplayLabelWire;readonly redoLabel: ProjectDisplayLabelWire;readonly dirtyCategories: ProjectDirtyCategoriesWire;}
-export interface ProjectEmptyWire {}
 export interface ProjectGuardedIntentWire {readonly guard: ProjectSessionGuardWire;readonly intent: ProjectIntentWire;}
 export interface ProjectGuardedBatchWire {readonly guard: ProjectSessionGuardWire;readonly batch: ProjectBatchWire;}
 export interface ProjectHelloWire {readonly minProtocolVersion: ProjectCounterWire;readonly maxProtocolVersion: ProjectCounterWire;readonly projectSchemaVersion: ProjectCounterWire;readonly intentVersion: ProjectCounterWire;}
 export interface ProjectCancelWire {readonly targetRequestId: ProjectRequestIdWire;}
-export type ProjectSessionOperationWire = {readonly hello:ProjectHelloWire} | {readonly execute:ProjectGuardedIntentWire} | {readonly transaction:ProjectGuardedBatchWire} | {readonly undo:ProjectSessionGuardWire} | {readonly redo:ProjectSessionGuardWire} | {readonly query:ProjectEmptyWire} | {readonly cancel:ProjectCancelWire} | {readonly close:ProjectEmptyWire};
+export interface ProjectStagedReferenceWire {readonly stagedId: ProjectRequestIdWire;}
+export type ProjectSessionOperationWire = {readonly hello:ProjectHelloWire} | {readonly execute:ProjectGuardedIntentWire} | {readonly transaction:ProjectGuardedBatchWire} | {readonly undo:ProjectSessionGuardWire} | {readonly redo:ProjectSessionGuardWire} | {readonly query:ProjectEmptyWire} | {readonly cancel:ProjectCancelWire} | {readonly close:ProjectEmptyWire} | {readonly executeStaged:ProjectStagedReferenceWire} | {readonly releaseStaged:ProjectStagedReferenceWire};
 export interface ProjectSessionRequestWire {readonly protocolVersion: ProjectCounterWire;readonly generation: ProjectGenerationWire;readonly requestId: ProjectRequestIdWire;readonly operation: ProjectSessionOperationWire;}
 export interface ProjectSessionAcknowledgementWire {readonly guard: ProjectSessionGuardWire;readonly history: ProjectSessionHistoryWire;readonly changed: ProjectFlagWire;}
 export interface ProjectWelcomeWire {readonly protocolVersion: ProjectSessionVersionWire;readonly projectSchemaVersion: ProjectCounterWire;readonly intentVersion: ProjectVersionWire;readonly maxPending: ProjectCounterWire;readonly maxBytes: ProjectCounterWire;readonly maxNodes: ProjectCounterWire;}
 export type ProjectCancelStatusWire = "requested" | "notPending";
 export type ProjectSessionErrorWire = "invalidRequest" | "unsupportedVersion" | "wrongSession" | "notReady" | "duplicateRequest" | "stale" | "cancelled" | "busy" | "disposed" | "commandFailed" | "resourceLimit";
-export type ProjectSessionResultWire = {readonly acknowledged:ProjectSessionAcknowledgementWire} | {readonly welcome:ProjectWelcomeWire} | {readonly cancelled:ProjectCancelStatusWire} | {readonly closed:ProjectEmptyWire} | {readonly error:ProjectSessionErrorWire} | {readonly receiptUnavailable:ProjectFlagWire};
+export type ProjectSessionResultWire = {readonly acknowledged:ProjectSessionAcknowledgementWire} | {readonly welcome:ProjectWelcomeWire} | {readonly cancelled:ProjectCancelStatusWire} | {readonly closed:ProjectEmptyWire} | {readonly error:ProjectSessionErrorWire} | {readonly receiptUnavailable:ProjectFlagWire} | {readonly released:ProjectFlagWire};
 export interface ProjectSessionReplyWire {readonly protocolVersion: ProjectSessionVersionWire;readonly generation: ProjectGenerationWire;readonly requestId: ProjectCounterWire;readonly result: ProjectSessionResultWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }

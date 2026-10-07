@@ -1,84 +1,134 @@
 package dev.orcaxr.core
 
-import android.util.JsonReader
-import android.util.JsonToken
-import java.io.IOException
-import java.io.StringReader
-import org.json.JSONArray
-import org.json.JSONObject
-
 class InvalidProjectIntent : IllegalArgumentException("Invalid project command intent")
 
 /** Strict, bounded ASCII JSON. User text is carried as UTF-16 integer units. */
 internal object ProjectIntentJson {
+    // Protocol parsing must behave identically on Android and the host JVM.
+    // This is deliberately separate from persisted-document last-key-wins JSON.
     fun parse(text: String): Any {
-        if (text.length > ProjectIntents.MAX_BYTES || text.any { it.code > 127 }) throw InvalidProjectIntent()
-        if (!StrictJsonTokens.valid(text)) throw InvalidProjectIntent()
-        var remaining = ProjectIntents.MAX_NODES
-        fun read(reader: JsonReader, depth: Int): Any {
-            if (--remaining < 0 || depth > ProjectIntents.MAX_DEPTH) throw InvalidProjectIntent()
-            return when (reader.peek()) {
-                JsonToken.BEGIN_OBJECT -> {
-                    val result = JSONObject()
-                    reader.beginObject()
-                    while (reader.hasNext()) {
-                        val key = reader.nextName()
-                        if (result.has(key)) throw InvalidProjectIntent()
-                        result.put(key, read(reader, depth + 1))
-                    }
-                    reader.endObject()
-                    result
-                }
-                JsonToken.BEGIN_ARRAY -> {
-                    val result = JSONArray()
-                    reader.beginArray()
-                    while (reader.hasNext()) result.put(read(reader, depth + 1))
-                    reader.endArray()
-                    result
-                }
-                JsonToken.STRING -> reader.nextString()
-                JsonToken.NUMBER -> {
-                    val number = reader.nextString().toDoubleOrNull()
-                    if (number == null || !number.isFinite()) throw InvalidProjectIntent()
-                    number
-                }
-                JsonToken.BOOLEAN -> reader.nextBoolean()
-                JsonToken.NULL -> { reader.nextNull(); JSONObject.NULL }
-                else -> throw InvalidProjectIntent()
-            }
+        if (text.length > ProjectIntents.MAX_BYTES || text.any { it.code > 127 } || !StrictJsonTokens.valid(text)) throw InvalidProjectIntent()
+        return Parser(text).parse()
+    }
+
+    private object JsonNull
+    private class Parser(private val text: String) {
+        private var offset = 0
+        private var remaining = ProjectIntents.MAX_NODES
+        private fun peek(): Char = text.getOrNull(offset) ?: '\u0000'
+        private fun whitespace() { while (peek() in " \t\r\n") offset++ }
+        private fun take(character: Char): Boolean {
+            if (peek() != character) return false
+            offset++
+            return true
         }
-        try {
-            return JsonReader(StringReader(text)).use { reader ->
-                reader.isLenient = false
-                val result = read(reader, 0)
-                if (reader.peek() != JsonToken.END_DOCUMENT) throw InvalidProjectIntent()
-                result
+        private fun requireCharacter(character: Char) { if (!take(character)) throw InvalidProjectIntent() }
+        fun parse(): Any {
+            val value = read(0)
+            whitespace()
+            if (offset != text.length) throw InvalidProjectIntent()
+            return value
+        }
+        private fun string(): String {
+            requireCharacter('"')
+            val value = StringBuilder()
+            while (offset < text.length) {
+                val character = text[offset++]
+                if (character == '"') return value.toString()
+                if (character != '\\') value.append(character)
+                else when (val escape = text[offset++]) {
+                    'u' -> {
+                        value.append(text.substring(offset, offset + 4).toInt(16).toChar())
+                        offset += 4
+                    }
+                    'b' -> value.append('\b')
+                    'f' -> value.append('\u000c')
+                    'n' -> value.append('\n')
+                    'r' -> value.append('\r')
+                    't' -> value.append('\t')
+                    else -> value.append(escape)
+                }
             }
-        } catch (_: IOException) {
             throw InvalidProjectIntent()
-        } catch (_: IllegalStateException) {
-            throw InvalidProjectIntent()
-        } catch (_: NumberFormatException) {
-            throw InvalidProjectIntent()
+        }
+        private fun read(depth: Int): Any {
+            if (--remaining < 0 || depth > ProjectIntents.MAX_DEPTH) throw InvalidProjectIntent()
+            whitespace()
+            return when (peek()) {
+                '{' -> {
+                    offset++
+                    whitespace()
+                    val entries = linkedMapOf<String, Any>()
+                    if (!take('}')) {
+                        do {
+                            whitespace()
+                            val key = string()
+                            if (entries.containsKey(key)) throw InvalidProjectIntent()
+                            whitespace()
+                            requireCharacter(':')
+                            entries[key] = read(depth + 1)
+                            whitespace()
+                        } while (take(','))
+                        requireCharacter('}')
+                    }
+                    ProjectJsonObject(entries)
+                }
+                '[' -> {
+                    offset++
+                    whitespace()
+                    val entries = arrayListOf<Any>()
+                    if (!take(']')) {
+                        do { entries.add(read(depth + 1)); whitespace() } while (take(','))
+                        requireCharacter(']')
+                    }
+                    ProjectJsonArray(entries)
+                }
+                '"' -> string()
+                else -> {
+                    val start = offset
+                    while (offset < text.length && peek() !in " \t\r\n{}[]:,\"") offset++
+                    when (val token = text.substring(start, offset)) {
+                        "true" -> true
+                        "false" -> false
+                        "null" -> JsonNull
+                        else -> token.toDoubleOrNull()?.takeIf { it.isFinite() } ?: throw InvalidProjectIntent()
+                    }
+                }
+            }
         }
     }
 
-    fun fields(value: Any, names: Set<String>, union: Boolean): JSONObject {
-        val obj = value as? JSONObject ?: throw InvalidProjectIntent()
+    fun fields(value: Any, names: Set<String>, union: Boolean): ProjectJsonObject {
+        val obj = value as? ProjectJsonObject ?: throw InvalidProjectIntent()
         if (obj.length() != (if (union) 1 else names.size) || obj.keys().asSequence().any { it !in names }) throw InvalidProjectIntent()
         return obj
     }
-    fun wholeNumber(value: Any, min: Double, max: Double): Double {
+    fun number(value: Any, min: Double, max: Double): Double {
         val number = (value as? Number)?.toDouble() ?: throw InvalidProjectIntent()
-        if (!number.isFinite() || number % 1.0 != 0.0 || number < min || number > max) throw InvalidProjectIntent()
+        if (!number.isFinite() || number < min || number > max) throw InvalidProjectIntent()
         return if (number == 0.0) 0.0 else number
     }
+    fun wholeNumber(value: Any, min: Double, max: Double): Double {
+        val number = number(value, min, max)
+        if (number % 1.0 != 0.0) throw InvalidProjectIntent()
+        return number
+    }
     fun integer(value: Any, min: Long, max: Long): Long = wholeNumber(value, min.toDouble(), max.toDouble()).toLong()
-    fun list(value: Any, min: Int, max: Int): JSONArray {
-        val array = value as? JSONArray ?: throw InvalidProjectIntent()
+    fun list(value: Any, min: Int, max: Int): ProjectJsonArray {
+        val array = value as? ProjectJsonArray ?: throw InvalidProjectIntent()
         if (array.length() !in min..max) throw InvalidProjectIntent()
         return array
     }
+}
+
+internal class ProjectJsonObject(private val entries: Map<String, Any>) {
+    fun get(key: String): Any = entries[key] ?: throw InvalidProjectIntent()
+    fun length(): Int = entries.size
+    fun keys(): Iterator<String> = entries.keys.iterator()
+}
+internal class ProjectJsonArray(private val entries: List<Any>) {
+    fun get(index: Int): Any = entries[index]
+    fun length(): Int = entries.size
 }
 
 /** Bounded writer for generated types; no user strings or raw JSON fragments. */
@@ -111,6 +161,9 @@ internal class ProjectIntentWriter {
         add("["); depth++
         values.forEachIndexed { index, value -> if (index != 0) add(","); block(value) }
         depth--; add("]")
+    }
+    fun number(value: Double, min: Double, max: Double) {
+        node(); val number = ProjectIntentJson.number(value, min, max); add(number.toString())
     }
     fun wholeNumber(value: Double, min: Double, max: Double) {
         node(); val number = ProjectIntentJson.wholeNumber(value, min, max); add(number.toString())

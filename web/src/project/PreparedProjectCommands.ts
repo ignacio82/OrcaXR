@@ -13,7 +13,23 @@ import {
   ReorderPlatesCommand,
   SetActivePlateCommand,
   SetPlatePrintableCommand,
+  SetInstanceTransformCommand,
+  MoveObjectToPlateCommand,
 } from './commands';
+import {
+  RenameObjectCommand,
+  RenameVolumeCommand,
+  RenameInstanceCommand,
+  SetInstancePrintableCommand,
+  DeleteObjectCommand,
+  DeletePlateObjectsCommand,
+  DeleteInstanceCommand,
+  DuplicateObjectCommand,
+  ConvertInstanceToIndependentObjectCommand,
+} from './objects/commands';
+import { SetInstanceTransformsCommand } from './objects/transformCommands';
+import type { Transform } from './domain/model';
+import type { ProjectTransformWire } from '../../../contracts/generated/project-intents';
 import { entityId, isStableEntityId, type EntityId } from './domain/ids';
 import type { ProjectCommand } from './history/command';
 
@@ -60,6 +76,71 @@ export function prepareProjectBatch(value: unknown): { label: string; commands: 
   return { label, commands: captured.commands.map(command) };
 }
 function command(value: ProjectCommandWire): ProjectCommand {
+  if ('deleteObject' in value) return new DeleteObjectCommand(id<'object'>(value.deleteObject.objectId));
+  if ('deletePlateObjects' in value)
+    return new DeletePlateObjectsCommand(id<'plate'>(value.deletePlateObjects.plateId));
+  if ('deleteInstance' in value) return new DeleteInstanceCommand(id<'instance'>(value.deleteInstance.instanceId));
+  if ('moveObjectToPlate' in value)
+    return new MoveObjectToPlateCommand(
+      id<'object'>(value.moveObjectToPlate.objectId),
+      id<'plate'>(value.moveObjectToPlate.destinationPlateId),
+    );
+  if ('duplicateObject' in value) {
+    const input = value.duplicateObject;
+    return new DuplicateObjectCommand(
+      id<'object'>(input.sourceObjectId),
+      {
+        objectId: id<'object'>(input.ids.objectId),
+        volumeIds: input.ids.volumeIds.map(id<'volume'>),
+        instanceIds: input.ids.instanceIds.map(id<'instance'>),
+        layerRangeIds: input.ids.layerRangeIds.map(id<'layer-range'>),
+      },
+      {
+        ...('value' in input.destinationPlateId
+          ? { destinationPlateId: id<'plate'>(input.destinationPlateId.value) }
+          : {}),
+        ...('value' in input.name ? { name: text(input.name.value) } : {}),
+      },
+    );
+  }
+  if ('convertInstanceToObject' in value) {
+    const input = value.convertInstanceToObject;
+    return new ConvertInstanceToIndependentObjectCommand(
+      id<'instance'>(input.instanceId),
+      {
+        objectId: id<'object'>(input.ids.objectId),
+        volumeIds: input.ids.volumeIds.map(id<'volume'>),
+        instanceId: id<'instance'>(input.ids.instanceId),
+        layerRangeIds: input.ids.layerRangeIds.map(id<'layer-range'>),
+      },
+      'value' in input.name ? text(input.name.value) : undefined,
+    );
+  }
+  if ('renameObject' in value)
+    return new RenameObjectCommand(id<'object'>(value.renameObject.objectId), text(value.renameObject.name));
+  if ('renameVolume' in value)
+    return new RenameVolumeCommand(id<'volume'>(value.renameVolume.volumeId), text(value.renameVolume.name));
+  if ('renameInstance' in value)
+    return new RenameInstanceCommand(id<'instance'>(value.renameInstance.instanceId), text(value.renameInstance.name));
+  if ('setInstancePrintable' in value)
+    return new SetInstancePrintableCommand(
+      id<'instance'>(value.setInstancePrintable.instanceId),
+      value.setInstancePrintable.printable,
+    );
+  if ('setInstanceTransform' in value)
+    return new SetInstanceTransformCommand(
+      id<'instance'>(value.setInstanceTransform.instanceId),
+      transform(value.setInstanceTransform.transform),
+      text(value.setInstanceTransform.gestureId),
+    );
+  if ('setInstanceTransforms' in value)
+    return new SetInstanceTransformsCommand(
+      value.setInstanceTransforms.changes.map((c) => ({
+        instanceId: id<'instance'>(c.instanceId),
+        transform: transform(c.transform),
+      })),
+      text(value.setInstanceTransforms.gestureId),
+    );
   if ('addPlate' in value) {
     const input = value.addPlate;
     return new AddPlateCommand(
@@ -94,4 +175,12 @@ function command(value: ProjectCommandWire): ProjectCommand {
     return new RenamePlateCommand(id<'plate'>(value.renamePlate.plateId), text(value.renamePlate.name));
   if ('reorderPlates' in value) return new ReorderPlatesCommand(value.reorderPlates.plateIds.map(id<'plate'>));
   return new SetPlatePrintableCommand(id<'plate'>(value.setPlatePrintable.plateId), value.setPlatePrintable.printable);
+}
+function transform(value: ProjectTransformWire): Transform {
+  // Tuple lengths and finite numeric values were checked by captureProjectIntent.
+  return {
+    translationMm: [value.translationMm[0], value.translationMm[1], value.translationMm[2]],
+    rotation: [value.rotation[0], value.rotation[1], value.rotation[2], value.rotation[3]],
+    scale: [value.scale[0], value.scale[1], value.scale[2]],
+  };
 }

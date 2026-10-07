@@ -31,7 +31,7 @@ export const objectsActions: Action[] = [
         ctx.reportCapabilityUnavailable('Rename object or part', 'Choose Rename on an object or part row.');
         return;
       }
-      ctx.renameObjectsTreeEntity(request.entity, request.name);
+      return ctx.renameObjectsTreeEntity(request.entity, request.name);
     },
   },
   {

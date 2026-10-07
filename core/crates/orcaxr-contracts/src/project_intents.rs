@@ -110,11 +110,18 @@ pub(crate) fn fields<'a>(
     }
     Ok(object)
 }
+pub(crate) fn number(value: &Value, min: f64, max: f64) -> Result<f64, InvalidIntent> {
+    let number = value.as_f64().ok_or(InvalidIntent)?;
+    if !number.is_finite() || number < min || number > max {
+        return Err(InvalidIntent);
+    }
+    Ok(if number == 0.0 { 0.0 } else { number })
+}
 pub(crate) fn whole_number(value: &Value, min: f64, max: f64) -> Result<f64, InvalidIntent> {
     // Project plate order follows Number.isInteger, not the narrower safe-integer
     // rule used for counters. Persisted large finite integer values remain valid.
-    let number = value.as_f64().ok_or(InvalidIntent)?;
-    if !number.is_finite() || number.fract() != 0.0 || number < min || number > max {
+    let number = number(value, min, max)?;
+    if number.fract() != 0.0 {
         return Err(InvalidIntent);
     }
     Ok(if number == 0.0 { 0.0 } else { number })

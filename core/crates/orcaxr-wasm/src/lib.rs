@@ -1,4 +1,6 @@
 use wasm_bindgen::prelude::*;
+#[cfg(feature = "project")]
+mod project;
 
 #[wasm_bindgen]
 pub fn core_info() -> String {
@@ -10,9 +12,11 @@ pub fn evaluate(request: &str) -> String {
     orcaxr_contracts::evaluate(request)
 }
 
+#[cfg(feature = "gcode")]
 fn gcode_error(error: orcaxr_gcode::SessionError) -> JsValue {
     JsValue::from_str(error.code())
 }
+#[cfg(feature = "gcode")]
 fn gcode_index(value: f64) -> Result<usize, JsValue> {
     if !value.is_finite() || value.fract() != 0.0 || !(0.0..=u32::MAX as f64).contains(&value) {
         Err(JsValue::from_str("invalid_range"))
@@ -23,10 +27,12 @@ fn gcode_index(value: f64) -> Result<usize, JsValue> {
 
 /// Own in a task worker. wasm-bindgen copies each input chunk and each output
 /// packet; callers transfer the resulting owned buffer, never a borrowed view.
+#[cfg(feature = "gcode")]
 #[wasm_bindgen]
 pub struct GcodeSession {
     inner: orcaxr_gcode::Session,
 }
+#[cfg(feature = "gcode")]
 #[wasm_bindgen]
 impl GcodeSession {
     #[wasm_bindgen(constructor)]

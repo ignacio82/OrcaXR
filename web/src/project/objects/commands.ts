@@ -1,6 +1,8 @@
 import { canonicalStringify, cloneJson, cloneProjectState } from '../domain/canonical';
+import type { AssetRepositorySelection } from '../assets';
 import {
   isStableEntityId,
+  type AssetId,
   type InstanceId,
   type LayerRangeId,
   type ObjectId,
@@ -334,6 +336,16 @@ export interface PasteObjectOptions {
   name?: string;
 }
 
+/** Known byte dependencies of an object, including editable SVG drawings. */
+export function objectAssetIds(object: ProjectObject): readonly AssetId[] {
+  const ids = new Set<AssetId>();
+  for (const volume of object.volumes) {
+    ids.add(volume.source.assetId);
+    if (volume.embossSvg) ids.add(volume.embossSvg.drawingAssetId);
+  }
+  return [...ids];
+}
+
 /**
  * Insert a clipboard object template as an independent object with fresh IDs.
  */
@@ -346,8 +358,14 @@ export class PasteObjectCommand extends ObjectLifecycleCommand {
   private readonly objectTemplate: ProjectObject;
   private readonly ids: IndependentObjectIds;
   private readonly options: PasteObjectOptions;
+  private insertedAssetIds: readonly AssetId[] = [];
 
-  constructor(objectTemplate: ProjectObject, ids: IndependentObjectIds, options: PasteObjectOptions = {}) {
+  constructor(
+    objectTemplate: ProjectObject,
+    ids: IndependentObjectIds,
+    options: PasteObjectOptions = {},
+    private readonly capturedAssets?: AssetRepositorySelection,
+  ) {
     super();
     this.objectTemplate = cloneJson(objectTemplate);
     this.ids = {
@@ -366,6 +384,25 @@ export class PasteObjectCommand extends ObjectLifecycleCommand {
     const destination = state.plates.find((plate) => plate.id === destinationId);
     if (!destination) throw new Error(`Unknown destination plate ${destinationId}`);
 
+    const insertedAssets: AssetId[] = [];
+    if (this.capturedAssets) {
+      const captured = context.assets.inspectSelection(this.capturedAssets);
+      const expected = new Set(objectAssetIds(this.objectTemplate));
+      if (captured.descriptors.length !== expected.size || captured.descriptors.some((d) => !expected.has(d.id)))
+        throw new Error('Clipboard assets do not match the object dependencies.');
+      for (const descriptor of captured.descriptors) {
+        const current = state.sourceAssets.find((entry) => entry.id === descriptor.id);
+        if (Boolean(current) !== context.assets.has(descriptor.id))
+          throw new Error(`Asset ${descriptor.id} is not declared consistently in the canonical bundle`);
+        if (current && canonicalStringify(current) !== canonicalStringify(descriptor))
+          throw new Error(`Asset ${descriptor.id} metadata does not match its canonical declaration`);
+        if (!current) {
+          state.sourceAssets.push(cloneJson(descriptor));
+          insertedAssets.push(descriptor.id);
+        }
+      }
+    }
+
     if (!this.inserted) {
       this.inserted = buildIndependentDuplicate(state, this.objectTemplate, this.ids, this.options.name);
     } else {
@@ -374,7 +411,10 @@ export class PasteObjectCommand extends ObjectLifecycleCommand {
     this.resolvedDestinationId = destinationId;
     this.insertionIndex = destination.objects.length;
     destination.objects.push(cloneJson(this.inserted));
+    // CommandBus owns the rollback if graph admission or publication fails.
+    if (this.capturedAssets) context.assets.mergeSelection(this.capturedAssets);
     replaceProject(context, state, this.type);
+    this.insertedAssetIds = insertedAssets;
     const firstInstance = this.inserted.instances[0];
     context.selection.set(
       firstInstance ? [{ kind: 'instance', id: firstInstance.id }] : [{ kind: 'object', id: this.inserted.id }],
@@ -392,12 +432,28 @@ export class PasteObjectCommand extends ObjectLifecycleCommand {
     if (index >= 0) {
       destination.objects.splice(index, 1);
     }
+    const removing = new Set(this.insertedAssetIds.filter((id) => !clipboardAssetReferenced(state, id)));
+    if (removing.size) state.sourceAssets = state.sourceAssets.filter((entry) => !removing.has(entry.id));
+    for (const id of removing) context.assets.remove(id);
     replaceProject(context, state, `revert:${this.type}`);
   }
 
   estimateBytes(): number {
-    return this.inserted ? canonicalStringify(this.inserted).length : 1;
+    return (
+      (this.inserted ? canonicalStringify(this.inserted).length : 1) +
+      (this.capturedAssets
+        ? this.capturedAssets.byteLength + canonicalStringify(this.capturedAssets.descriptors).length
+        : 0)
+    );
   }
+}
+
+function clipboardAssetReferenced(state: ProjectState, id: AssetId): boolean {
+  return (
+    state.plates.some((plate) => plate.objects.some((object) => objectAssetIds(object).includes(id))) ||
+    state.thumbnails.some((entry) => entry.assetId === id) ||
+    state.extensionBlobs.some((entry) => entry.assetId === id)
+  );
 }
 
 export class CreateInstanceCommand extends ObjectLifecycleCommand {

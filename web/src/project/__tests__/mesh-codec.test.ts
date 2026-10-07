@@ -175,4 +175,15 @@ test('rejects malformed views, non-finite coordinates, bad indices, and digest d
   );
 });
 
+test('refuses finite coordinates that overflow the stored float32 format', () => {
+  assert.throws(
+    () =>
+      encodeIndexedMeshAsset({
+        id: entityId<'asset'>('import:test:overflow'),
+        positions: [0, 0, 0, 1e40, 0, 0, 0, 1, 0],
+      }),
+    /finite float32/,
+  );
+});
+
 console.log(`\nCanonical mesh codec: ${passed} tests passed.`);

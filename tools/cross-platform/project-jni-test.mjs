@@ -1,0 +1,221 @@
+import { replayProjectDocuments } from "./project-document-replay.mjs";
+import assert from "node:assert/strict";
+import { readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { startProjectJni, projectJniCore } from "./project-jni-bridge.mjs";
+import { replayProject } from "./project-wasm-replay.mjs";
+import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
+import { replayProjectQueries } from "./project-query-replay.mjs";
+import { replayStagedProject } from "./project-staged-replay.mjs";
+import { projectStagedBoundaries } from "./project-staged-boundaries.mjs";
+import { projectClipboardBoundaries } from "./project-clipboard-boundaries.mjs";
+import { stagedCommandJson } from "./project-staged-replay.mjs";
+const root = new URL("../../", import.meta.url);
+const fixture = JSON.parse(
+  await readFile(
+    new URL("testdata/cross-platform/project-session-vectors.json", root),
+  ),
+);
+const layout = JSON.parse(
+  await readFile(new URL("contracts/project-host.json", root)),
+);
+const model = JSON.parse(
+  await readFile(
+    new URL("testdata/cross-platform/project-model-vectors.json", root),
+  ),
+);
+const times = JSON.parse(
+  await readFile(
+    new URL("testdata/cross-platform/validation-value-vectors.json", root),
+  ),
+);
+assert.ok(process.argv.slice(2).every((arg) => arg === "--release"));
+const profile = process.argv.includes("--release") ? "release" : "debug";
+const jvm = startProjectJni(profile);
+try {
+  const { owned, ...result } = await replayProject(
+    projectJniCore(jvm.call),
+    fixture,
+    layout,
+  );
+  const boundaries = projectJniBoundaries(
+    jvm.call,
+    JSON.parse(model.factories[0].stateJson),
+    times,
+    fixture.generation,
+  );
+  const stagingOwnerChecks = jvm.call(
+    "stagingChecks",
+    model.factories[0].stateJson,
+    stagedCommandJson(
+      {
+        single: {
+          intent: {
+            addPlate: {
+              plateId: Array.from("import:plate:kotlin-upload", (c) =>
+                c.charCodeAt(0),
+              ),
+              name: [78, 101, 119],
+              order: 1,
+              activate: true,
+            },
+          },
+        },
+      },
+      JSON.parse(
+        await readFile(new URL("contracts/project-staging.json", root)),
+      ),
+    ),
+  );
+  assert.equal(stagingOwnerChecks, 7);
+  const stagedFixture = JSON.parse(
+    await readFile(
+      new URL(
+        "testdata/cross-platform/project-staged-session-vectors.json",
+        root,
+      ),
+    ),
+  );
+  const stagingLayout = JSON.parse(
+    await readFile(new URL("contracts/project-staging.json", root)),
+  );
+  const clipboardTrace = stagedFixture.traces.find(
+    (t) => t.name === "clipboard:roundtrip",
+  );
+  const clipboardWork = clipboardTrace.steps
+    .flatMap((g) => g.actions)
+    .find((a) => a.kind === "stage").work;
+  const clipboardOwnerChecks = jvm.call(
+    "clipboardChecks",
+    clipboardTrace.stateJson,
+    stagedCommandJson(clipboardWork, stagingLayout),
+    Uint8Array.from(clipboardTrace.assets[0].bytes),
+    Uint8Array.from(clipboardTrace.assets[1].bytes),
+  );
+  assert.equal(clipboardOwnerChecks, 6);
+  const actorClipboardChecks = jvm.call("actorClipboardChecks", clipboardTrace.stateJson,
+    stagedCommandJson(clipboardWork, stagingLayout), Uint8Array.from(clipboardTrace.assets[0].bytes), Uint8Array.from(clipboardTrace.assets[1].bytes));
+  assert.equal(actorClipboardChecks, 13);
+  let actorClipboardReplays = 0;
+  for (const name of ["clipboard:roundtrip", "clipboard:sorted-projection"]) {
+    const trace = stagedFixture.traces.find(t => t.name === name);
+    const copy = trace.steps[0].actions.find(a => a.kind === "copy");
+    const work = trace.steps.flatMap(g => g.actions).find(a => a.kind === "stage").work;
+    const expected = trace.steps.find(g => g.replies.some(r => r.result.acknowledged));
+    actorClipboardReplays += jvm.call("actorClipboardReplay", trace.stateJson, stagedCommandJson(work, stagingLayout),
+      Uint8Array.from(trace.assets[0].bytes), Uint8Array.from(trace.assets[1].bytes), copy.queryPlate ?? copy.plate,
+      JSON.stringify(expected.replies[0]), expected.effects.map(effect => layout.effects.indexOf(effect.kind)));
+  }
+  assert.equal(actorClipboardReplays, 2);
+  const queryLayout = JSON.parse(
+    await readFile(new URL("contracts/project-query.json", root)),
+  );
+  const documentOwnerChecks = jvm.call(
+    "documentChecks",
+    JSON.parse(
+      await readFile(
+        new URL("testdata/cross-platform/project-model-vectors.json", root),
+      ),
+    ).factories[0].stateJson,
+  );
+  assert.equal(documentOwnerChecks, 7);
+  const actorChecks = jvm.call("actorChecks", JSON.parse(await readFile(new URL("testdata/cross-platform/project-model-vectors.json",root))).factories[0].stateJson);
+  assert.equal(actorChecks, 12);
+  const actorPreparationChecks = jvm.call("actorPreparationChecks", model.factories[0].stateJson);
+  assert.equal(actorPreparationChecks, 16);
+  const exportFixture = JSON.parse(await readFile(new URL("testdata/cross-platform/project-export-vectors.json", root)));
+  const actorExportChecks = jvm.call("actorExportChecks", exportFixture.source, exportFixture.canonical,
+    Uint8Array.from(exportFixture.assets[0].bytes), Uint8Array.from(exportFixture.assets[1].bytes), exportFixture.empty, exportFixture.large, exportFixture.largeCanonical);
+  assert.equal(actorExportChecks, 13);
+  const capturedActorTrace = stagedFixture.traces.find(t => t.name === "captured:capture-batches-exceed-small-wire-command-count");
+  const capturedActorWork = capturedActorTrace.steps.flatMap(g => g.actions).find(a => a.kind === "stage").work;
+  const capturedActorExpected = capturedActorTrace.steps.find(g => g.replies.some(r => r.result.acknowledged));
+  const actorCapturedChecks = jvm.call("actorCapturedChecks", capturedActorTrace.stateJson, stagedCommandJson(capturedActorWork, stagingLayout),
+    Uint8Array.from(capturedActorTrace.asset.bytes), JSON.stringify(capturedActorExpected.replies[0]),
+    capturedActorExpected.effects.map(effect => layout.effects.indexOf(effect.kind)));
+  assert.equal(actorCapturedChecks, 1);
+  const staged = await replayStagedProject(
+    projectJniCore(jvm.call),
+    JSON.parse(
+      await readFile(
+        new URL(
+          "testdata/cross-platform/project-staged-session-vectors.json",
+          root,
+        ),
+      ),
+    ),
+    layout,
+    JSON.parse(await readFile(new URL("contracts/project-staging.json", root))),
+    queryLayout,
+  );
+  Object.assign(
+    staged,
+    replayProjectDocuments(
+      projectJniCore(jvm.call),
+      JSON.parse(
+        await readFile(
+          new URL(
+            "testdata/cross-platform/project-document-vectors.json",
+            root,
+          ),
+        ),
+      ),
+      layout,
+    ),
+    { clipboardOwnerChecks, actorClipboardChecks, actorClipboardReplays, documentOwnerChecks, actorChecks, actorPreparationChecks, actorExportChecks, actorCapturedChecks },
+    projectClipboardBoundaries(
+      projectJniCore(jvm.call),
+      stagedFixture,
+      layout,
+      stagingLayout,
+      queryLayout,
+    ),
+    projectStagedBoundaries(
+      projectJniCore(jvm.call),
+      fixture.traces[0],
+      layout,
+      JSON.parse(
+        await readFile(new URL("contracts/project-staging.json", root)),
+      ),
+    ),
+  );
+  const queryFixture = JSON.parse(
+    await readFile(
+      new URL("testdata/cross-platform/project-query-vectors.json", root),
+    ),
+  );
+  const { ownedQueryText, ownedQueryExpected, ...queries } =
+    replayProjectQueries(projectJniCore(jvm.call), queryFixture, queryLayout);
+  const savedQueryText = Array.from(ownedQueryText);
+  await jvm.close();
+  assert.deepEqual(Array.from(ownedQueryText), savedQueryText);
+  assert.deepEqual(savedQueryText, ownedQueryExpected);
+  assert.deepEqual(Array.from(owned), fixture.traces.at(-1).asset.bytes);
+  const report = {
+    profile,
+    ...result,
+    ...staged,
+    stagingOwnerChecks,
+    ...boundaries,
+    ...queries,
+    ownedQueryTextUnits: ownedQueryText.length,
+    ownedBytes: owned.byteLength,
+    hostJniSha256: createHash("sha256")
+      .update(
+        await readFile(
+          new URL(`core/target/${profile}/liborcaxr_android.so`, root),
+        ),
+      )
+      .digest("hex"),
+  };
+  await writeFile(
+    new URL(
+      `tools/cross-platform/results/project-jni-host-${profile}.json`,
+      root,
+    ),
+    JSON.stringify(report, null, 2) + "\n",
+  );
+  console.log(JSON.stringify(report));
+} finally {
+  await jvm.close();
+}

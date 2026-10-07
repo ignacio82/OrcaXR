@@ -4,6 +4,7 @@ use jni::{
     sys::jstring,
 };
 mod gcode;
+mod project;
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr,

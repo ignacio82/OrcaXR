@@ -19,6 +19,7 @@ assert.doesNotMatch(
   /url:["'][^"']*slicer\/(?:slic3r\.mjs|slic3r\.wasm)/,
   'slicer artifacts must not be precached',
 );
+assert.doesNotMatch(generated, /core-project\//, 'experimental project WASM must not enter the preview precache');
 for (const file of iconFiles) {
   assert(generated.includes(`icons/material/${file}`), `${file} must be available offline`);
 }
@@ -34,6 +35,7 @@ assert.doesNotMatch(staticWorker, /precacheShell\(\)\.then/, 'install must not a
 const preview = JSON.parse(await readFile(join(root, 'dist', 'core-preview-assets.json'), 'utf8'));
 assert.equal(preview.schemaVersion, 1);
 assert.equal(preview.workerProtocol, 2);
+assert.ok(preview.assets.every((asset) => !asset.startsWith('core-project/')));
 assert.ok(preview.assets.some((asset) => /projectArchive\.worker-.*\.js$/.test(asset)));
 assert.ok(preview.assets.some((asset) => /gcodePreview\.worker-.*\.js$/.test(asset)));
 assert.ok(preview.assets.some((asset) => /WorkerGcodePreviewSession-.*\.js$/.test(asset)));
