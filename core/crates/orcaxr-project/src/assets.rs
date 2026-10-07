@@ -79,6 +79,17 @@ impl Record {
 #[derive(Clone)]
 pub struct AssetLease(Arc<Record>);
 impl AssetLease {
+    /// Validate a transfer once (descriptor, length, digest) into an immutable
+    /// record that any repository can adopt by reference: staged command
+    /// payloads are installed again on every redo without copying their bytes.
+    pub fn from_payload(payload: AssetPayload) -> Result<Self, AssetError> {
+        let validated = validate(&payload.descriptor, &payload.bytes)?;
+        Ok(Self(owned_record(
+            validated,
+            payload.descriptor,
+            payload.bytes.into_boxed_slice(),
+        )))
+    }
     pub fn id(&self) -> &AssetId {
         &self.0.id
     }
@@ -253,6 +264,13 @@ impl AssetRepository {
     pub fn capture(&self) -> Vec<AssetPayload> {
         self.list()
     }
+    /// The first asset, in insertion order, declaring `digest`, without copying it.
+    pub fn find_id_by_digest(&self, digest: &[u16]) -> Option<&AssetId> {
+        self.version
+            .insertion_order
+            .iter()
+            .find(|id| self.version.entries[*id].declared_digest == digest)
+    }
     pub fn find_by_digest(&self, digest: &[u16]) -> Option<AssetPayload> {
         self.version.insertion_order.iter().find_map(|id| {
             let entry = &self.version.entries[id];
@@ -307,6 +325,27 @@ impl AssetRepository {
                 payload.bytes.into_boxed_slice(),
             ),
         );
+        self.version = Arc::new(Version {
+            entries,
+            insertion_order,
+            fingerprint: OnceLock::new(),
+        });
+        Ok(true)
+    }
+    /// `put` of an already validated lease: the record is shared, never copied.
+    /// An existing record must have the same descriptor and bytes.
+    pub fn put_lease(&mut self, lease: &AssetLease) -> Result<bool, AssetError> {
+        let record = &lease.0;
+        if let Some(existing) = self.version.entries.get(&record.id) {
+            if existing.descriptor != record.descriptor || existing.bytes != record.bytes {
+                return Err(AssetError::ImmutableConflict);
+            }
+            return Ok(false);
+        }
+        let mut entries = self.version.entries.clone();
+        let mut insertion_order = self.version.insertion_order.clone();
+        insertion_order.push(record.id.clone());
+        entries.insert(record.id.clone(), record.clone());
         self.version = Arc::new(Version {
             entries,
             insertion_order,

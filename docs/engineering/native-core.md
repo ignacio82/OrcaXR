@@ -2797,6 +2797,33 @@ string, plus the identities and both states. Retention traces pin it to the
 unit. Splitting a single volume into components needs staged mesh payloads; it
 moves with the asset-bearing commands.
 
+### Payload-carrying record commands
+
+`AddObjectCommand`, `AddObjectWithAssetCommand` and `AddVolumeCommand` are
+native as `PreparedCommand::add_object`, `add_object_with_asset` and
+`add_volume`. Records decode through the bulk record inputs (`ObjectInput`,
+`VolumeInput`). A payload becomes a `StagedAsset`: its descriptor shape,
+length and digest are validated once into an `AssetLease`.
+`AssetRepository::put_lease` adopts that record by reference, so applying and
+redoing never copy mesh bytes; a test checks the record identity across redo.
+
+The refusals keep the browser's order and text:
+
+- unknown plate or object; duplicate object or volume;
+- an object that does not reference its payload (refused at preparation);
+- a payload declared in state but missing from the repository, or the reverse;
+- descriptor metadata that differs from the declaration;
+- a digest already declared, or held outside the declared bundle (found by
+  insertion order without copying);
+- a different stored record under the same ID.
+
+Volumes are inserted in upstream role order. Undo removes only payloads the
+command inserted and no remaining reference keeps. History charges the
+canonical record plus the payload bytes; a payload-free add charges one.
+`project-asset-command-vectors.mjs` builds these traces from the production
+constructors. They carry repository-only payloads too (`extraAssets`), and the
+Rust replay compares the asset bundle fingerprint at every step.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

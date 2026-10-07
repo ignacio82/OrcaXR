@@ -13,13 +13,13 @@ const ORDER: [VolumeRole; 5] = [
     VolumeRole::SupportBlocker,
     VolumeRole::SupportEnforcer,
 ];
-fn rank(role: VolumeRole) -> usize {
+pub(super) fn rank(role: VolumeRole) -> usize {
     ORDER
         .iter()
         .position(|r| *r == role)
         .expect("every role is ordered")
 }
-fn noun(role: VolumeRole) -> &'static str {
+pub(super) fn noun(role: VolumeRole) -> &'static str {
     match role {
         VolumeRole::Model => "part",
         VolumeRole::NegativeVolume => "negative part",

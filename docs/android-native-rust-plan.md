@@ -148,10 +148,13 @@ Layer ranges, layer events, brim ears, layer-height profiles, physical and
 mixed filaments, project/scoped setting overrides, volume-role conversion and
 whole-facet paint strokes, project rename, plate wipe towers, auto-pair
 reconciliation, model-colour recreation and multi-volume split to objects are
-ported (about 65 of the browser's 78 command classes are now native). Next
-come the asset-bearing commands. They need new captured (staged) command types
-for their mesh payloads: add volume, mesh topology replacement, split to parts
-and single-volume split to objects, SVG and emboss volumes, and mesh booleans. Each family adds intent variants to
+ported. So are the payload-carrying add object / add object with asset / add
+volume commands, which install validated payload leases without copying bytes
+(about 68 of the browser's 78 command classes are now native). Next comes the
+staged upload path for payloads. Command uploads will declare descriptors in
+their JSON and then stream the bytes, as bundle input does. After that come the
+remaining asset-bearing commands: mesh topology replacement, mesh booleans,
+split to parts and single-volume split to objects, then SVG and emboss volumes. Each family adds intent variants to
 `contracts/project-intents.json` (definitions before first use; regenerate with
 `generate-project-intents.mjs --write`), maps them in
 `web/src/project/PreparedProjectCommands.ts`, appends a scenario to
@@ -1133,9 +1136,20 @@ and replay coverage for the complete current command inventory.
     source and identity refusals, transfers instance offsets through
     quaternions, remaps the selection and swaps whole states. The corpus
     (1,659 steps, 45 new) pins the history estimate at the retention boundary.
+  - [x] Port the payload-carrying record commands (`AddObjectCommand`,
+    `AddObjectWithAssetCommand`, `AddVolumeCommand`). Payloads become
+    validated `StagedAsset` leases that the repository adopts by reference on
+    every apply and redo. A new browser-authored corpus
+    (`project-asset-command-vectors`, 6 traces / 87 steps) covers bundle
+    consistency, digest and immutable conflicts, role-ordered volume
+    insertion, shared payloads in transactions, rollback, and history charges
+    at the byte boundary.
+  - [ ] Stage payload-carrying commands through command uploads: descriptors
+    declared in the JSON phase, bytes streamed per declared asset under
+    upload/pool byte budgets, then WASM, JNI and Kotlin actor exposure.
   - [ ] Port and replay every remaining command family before session cutover:
-    add object/volume, mesh replacement, split to parts and component split
-    to objects, SVG/emboss volumes, mesh booleans and refined facet commits.
+    mesh replacement, split to parts and component split to objects,
+    SVG/emboss volumes, mesh booleans and refined facet commits.
 - [ ] Port settings resolution, physical/mixed filament identities, profile
   selection semantics, and canonical slice preflight. Consume the generated
   pinned schema/catalog rather than reconstructing defaults in Kotlin.

@@ -1,6 +1,6 @@
 use orcaxr_contracts::canonical::parse;
 use orcaxr_project::ingress::{
-    command_record::{InstanceInput, ObjectInput},
+    command_record::{InstanceInput, ObjectInput, VolumeInput},
     json::JsonLimits,
 };
 use orcaxr_project::{
@@ -9,6 +9,48 @@ use orcaxr_project::{
 use orcaxr_project::{clipboard::ClipboardData, commands::staged::CapturedCommand};
 use serde_json::{Value, json};
 use std::sync::Arc;
+fn record_limits(record: &[u8]) -> JsonLimits {
+    JsonLimits {
+        max_bytes: record.len(),
+        max_nodes: 100_000,
+        max_text_units: record.len(),
+        max_number_bytes: 128,
+        max_depth: 64,
+    }
+}
+/// The native counterpart of a browser-constructed record command that
+/// carries its own payload (`project-asset-command-vectors.mjs`).
+fn prepare_asset(v: &Value) -> Result<PreparedCommand, PreparationError> {
+    if let Some(intent) = v.get("intent") {
+        return prepare_intent(&json!({"version":1,"command":intent}).to_string());
+    }
+    let record = v["recordJson"].as_str().unwrap().as_bytes();
+    let asset = || StagedAsset::new(payload(&v["asset"])).unwrap();
+    let object = || {
+        let mut input = ObjectInput::new(record.len(), record_limits(record)).unwrap();
+        for (i, chunk) in record.chunks(7).enumerate() {
+            input.append(i * 7, chunk).unwrap();
+        }
+        input.finish().unwrap()
+    };
+    let plate = || PlateId::try_from_utf16(text(&v["plateId"]).units().to_vec()).unwrap();
+    match v["kind"].as_str().unwrap() {
+        "addObject" => Ok(PreparedCommand::add_object(plate(), object())),
+        "addObjectWithAsset" => PreparedCommand::add_object_with_asset(plate(), object(), asset()),
+        "addVolume" => {
+            let mut input = VolumeInput::new(record.len(), record_limits(record)).unwrap();
+            for (i, chunk) in record.chunks(7).enumerate() {
+                input.append(i * 7, chunk).unwrap();
+            }
+            Ok(PreparedCommand::add_volume(
+                ObjectId::try_from_utf16(text(&v["objectId"]).units().to_vec()).unwrap(),
+                input.finish().unwrap(),
+                asset(),
+            ))
+        }
+        kind => panic!("unknown asset command {kind}"),
+    }
+}
 fn fixture() -> Value {
     serde_json::from_str(include_str!(
         "../../../../testdata/cross-platform/project-command-vectors.json"
@@ -169,6 +211,65 @@ fn captured_commands_and_history_match_every_typescript_step() {
     );
 }
 #[test]
+fn asset_commands_and_payloads_match_every_typescript_step() {
+    replay(
+        serde_json::from_str(include_str!(
+            "../../../../testdata/cross-platform/project-asset-command-vectors.json"
+        ))
+        .unwrap(),
+        87,
+    );
+}
+/// Applying and redoing a staged payload installs its validated record by
+/// reference: the repository never holds a copy of the mesh bytes.
+#[test]
+fn staged_payloads_are_shared_not_copied_across_redo() {
+    let f: Value = serde_json::from_str(include_str!(
+        "../../../../testdata/cross-platform/project-asset-command-vectors.json"
+    ))
+    .unwrap();
+    let trace = &f["traces"][1];
+    let state =
+        ProjectState::from_value(parse(trace["stateJson"].as_str().unwrap()).unwrap()).unwrap();
+    let store = ProjectStore::admit(ProjectData::new(state).unwrap(), &mut utc()).unwrap();
+    let mut assets = AssetRepository::new();
+    assets.put_owned(payload(&trace["asset"])).unwrap();
+    let command = &trace["steps"][1]["operation"]["command"];
+    assert_eq!(command["kind"], "addVolume");
+    let staged = StagedAsset::new(payload(&command["asset"])).unwrap();
+    let record = command["recordJson"].as_str().unwrap().as_bytes();
+    let mut input = VolumeInput::new(record.len(), record_limits(record)).unwrap();
+    input.append(0, record).unwrap();
+    let mut bus = CommandBus::<PreparedCommand, _>::new(
+        store,
+        SelectionStore::default(),
+        assets,
+        utc(),
+        HistoryOptions::default(),
+    );
+    let add = PreparedCommand::add_volume(
+        ObjectId::try_from_utf16(text(&command["objectId"]).units().to_vec()).unwrap(),
+        input.finish().unwrap(),
+        staged.clone(),
+    );
+    bus.execute(add, true).result.unwrap();
+    assert!(
+        bus.assets()
+            .peek(staged.id())
+            .unwrap()
+            .same_record(staged.lease())
+    );
+    assert!(bus.undo().result.unwrap());
+    assert!(!bus.assets().has(staged.id()));
+    assert!(bus.redo().result.unwrap());
+    assert!(
+        bus.assets()
+            .peek(staged.id())
+            .unwrap()
+            .same_record(staged.lease())
+    );
+}
+#[test]
 fn clipboard_commands_and_assets_match_every_typescript_step() {
     replay(
         serde_json::from_str(include_str!(
@@ -292,6 +393,9 @@ fn replay(f: Value, expected_steps: usize) {
             let p = payload(&trace["asset"]);
             let id = asset_id(&p.descriptor);
             assets.put_owned(p).unwrap();
+            for extra in trace["extraAssets"].as_array().into_iter().flatten() {
+                assets.put_owned(payload(extra)).unwrap();
+            }
             Some(assets.peek(&id).unwrap())
         } else {
             None
@@ -343,6 +447,26 @@ fn replay(f: Value, expected_steps: usize) {
                             foreign_owner.is_some(),
                         )
                     })
+                    .collect::<Result<Vec<_>, _>>()
+                {
+                    Ok(commands) => Some(bus.execute_batch(text(&op["label"]), commands)),
+                    Err(e) => {
+                        error = json!(e.user_message().units());
+                        None
+                    }
+                },
+                "asset" => match prepare_asset(&op["command"]) {
+                    Ok(c) => Some(bus.execute(c, true)),
+                    Err(e) => {
+                        error = json!(e.user_message().units());
+                        None
+                    }
+                },
+                "assetBatch" => match op["commands"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(prepare_asset)
                     .collect::<Result<Vec<_>, _>>()
                 {
                     Ok(commands) => Some(bus.execute_batch(text(&op["label"]), commands)),

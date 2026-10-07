@@ -1,6 +1,7 @@
 //! Prepared project commands. The shared decoder bounds untrusted messages before
 //! stable-ID/constructor validation; execution belongs to the owned command bus.
 //! No UI, callbacks, random IDs or session ownership is inferred here.
+mod asset_commands;
 mod brim_ears;
 mod duplicate;
 mod facet_stroke;
@@ -20,6 +21,7 @@ mod volume_roles;
 use crate::{
     history::*, ids::*, model::*, selection::SelectionRef, store::DirtyCategory, validation::*,
 };
+pub use asset_commands::StagedAsset;
 use duplicate::*;
 pub use lifecycle::IndependentObjectIds;
 use orcaxr_contracts::{canonical::Value, project_intent_types as wire};
@@ -106,6 +108,8 @@ enum Kind {
     WipeTower(Box<project_plate::PlateWipeTower>),
     ReconcileAutoPairs(Box<project_plate::ReconcileAutoPairs>),
     SeparateObjectVolumes(Box<split_objects::SeparateObjectVolumes>),
+    AddObject(Box<asset_commands::AddObject>),
+    AddVolume(Box<asset_commands::AddVolume>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -567,6 +571,35 @@ impl PreparedCommand {
         Ok(Self { label, kind })
     }
 
+    /// `AddObjectCommand`: a complete object record appended to a plate.
+    pub fn add_object(plate: PlateId, object: Arc<ProjectObject>) -> Self {
+        let (command, label) =
+            asset_commands::AddObject::new(plate, object, None).expect("no payload to reference");
+        Self {
+            label,
+            kind: Kind::AddObject(Box::new(command)),
+        }
+    }
+    /// `AddObjectWithAssetCommand`: the object must reference the payload.
+    pub fn add_object_with_asset(
+        plate: PlateId,
+        object: Arc<ProjectObject>,
+        asset: StagedAsset,
+    ) -> Result<Self, PreparationError> {
+        let (command, label) = asset_commands::AddObject::new(plate, object, Some(asset))?;
+        Ok(Self {
+            label,
+            kind: Kind::AddObject(Box::new(command)),
+        })
+    }
+    /// `AddVolumeCommand`: a volume record and the payload it references.
+    pub fn add_volume(object: ObjectId, volume: Arc<ProjectVolume>, asset: StagedAsset) -> Self {
+        let (command, label) = asset_commands::AddVolume::new(object, volume, asset);
+        Self {
+            label,
+            kind: Kind::AddVolume(Box::new(command)),
+        }
+    }
     pub fn paste_clipboard(
         clipboard: Arc<crate::clipboard::ClipboardData>,
         ids: IndependentObjectIds,
@@ -609,6 +642,9 @@ impl PreparedCommand {
             Kind::WipeTower(_) => "set-plate-wipe-tower",
             Kind::ReconcileAutoPairs(_) => "reconcile-full-spectrum-auto-pairs",
             Kind::SeparateObjectVolumes(_) => "separate-object-volumes",
+            Kind::AddObject(ref c) if c.has_asset() => "add-object-with-asset",
+            Kind::AddObject(_) => "add-object",
+            Kind::AddVolume(_) => "add-volume",
         }
     }
 }
@@ -676,6 +712,8 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::WipeTower(c) => c.apply(context, reason)?,
             Kind::ReconcileAutoPairs(c) => c.apply(context, reason)?,
             Kind::SeparateObjectVolumes(c) => c.apply(context, reason)?,
+            Kind::AddObject(c) => c.apply(context, reason)?,
+            Kind::AddVolume(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
                 activate,
@@ -819,6 +857,8 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::WipeTower(c) => return c.revert(context, reason),
             Kind::ReconcileAutoPairs(c) => return c.revert(context, reason),
             Kind::SeparateObjectVolumes(c) => return c.revert(context, reason),
+            Kind::AddObject(c) => return c.revert(context, reason),
+            Kind::AddVolume(c) => return c.revert(context, reason),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()
@@ -903,6 +943,8 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::WipeTower(_) => Ok(128),
             Kind::ReconcileAutoPairs(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::SeparateObjectVolumes(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::AddObject(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::AddVolume(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),

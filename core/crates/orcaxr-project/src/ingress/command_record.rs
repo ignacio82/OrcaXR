@@ -3,7 +3,7 @@
 //! transforms and paint are validated in the command's destination graph on apply.
 //! This is a local staging API; it creates no session handles or wire authority.
 use super::json::{JsonInput, JsonInputError, JsonLimits};
-use crate::model::{Decode, ProjectInstance, ProjectObject, ShapeError};
+use crate::model::{Decode, ProjectInstance, ProjectObject, ProjectVolume, ShapeError};
 use std::{fmt, sync::Arc};
 
 #[derive(Debug)]
@@ -50,3 +50,4 @@ macro_rules! input {
 }
 input!(InstanceInput, ProjectInstance);
 input!(ObjectInput, ProjectObject);
+input!(VolumeInput, ProjectVolume);
