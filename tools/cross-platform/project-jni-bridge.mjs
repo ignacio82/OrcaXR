@@ -29,6 +29,7 @@ export function startProjectJni(profile = "debug") {
   signatures.actorChecks = ["String"];
   signatures.actorArchiveChecks = ["String", "byte[]", "long"];
   signatures.providerDocumentChecks = ["String", "byte[]", "long"];
+  signatures.actorImportChecks = ["String", "byte[]", "byte[]", "byte[]"];
   signatures.intentCodec = ["String", "String"];
   signatures.resolveLocal = ["String", "long"];
   signatures.ownerChecks = ["String", "String"];
@@ -92,6 +93,7 @@ export function startProjectJni(profile = "debug") {
       return b;
     }
     if (type === "boolean") return Buffer.from([v ? 1 : 0]);
+    if (type === "String" && v === null) return i32(-1);
     if (type === "String" || type === "LocalTimestampResolver")
       return sized(Buffer.from(v, "utf8"));
     if (type === "byte[]") return sized(Buffer.from(v));
@@ -342,6 +344,12 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
         ),
       );
     }
+    capture_import_base() {
+      return new ProjectImportBase(call("importBase", this.handle));
+    }
+    commit_import(preview, acknowledged) {
+      return wrap(ProjectEffects, call("commitImport", this.handle, preview.handle, JSON.stringify(acknowledged)));
+    }
     // The Kotlin export path: guard, immutable capture, then package the capture.
     write_archive(version, policy) {
       const guard = this.capture_guard();
@@ -359,6 +367,37 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
         guard.free();
         throw e;
       }
+    }
+  }
+  class ProjectModelUpload extends Handle {
+    constructor(version, bytes, options) {
+      super(call("modelUploadNew", version, bytes ?? -1, options, zone, profile));
+    }
+    append(offset, bytes) {
+      call("modelUploadAppend", this.handle, offset, bytes);
+    }
+  }
+  class ProjectImportBase extends Handle {
+    // Consumes the upload; its slot becomes the preview.
+    prepare_model(upload, filename, importedAt, bed, dropToBed, idSeed, namespace) {
+      const seed = [];
+      for (let i = 0; i < idSeed.length; i += 8)
+        seed.push(Buffer.from(idSeed.subarray(i, i + 8)).readBigInt64LE());
+      return consumed(upload, (id) => {
+        call("importPrepareModel", id, this.handle, Array.from(filename), Array.from(importedAt), Array.from(bed), dropToBed, seed, namespace ?? null);
+        return new ProjectImportPreview(id);
+      });
+    }
+  }
+  class ProjectImportPreview extends Handle {
+    length() {
+      return call("importPreviewLength", this.handle);
+    }
+    read(start, count) {
+      return call("importPreviewRead", this.handle, start, count);
+    }
+    blocked() {
+      return call("importPreviewBlocked", this.handle);
     }
   }
   class ProjectArchiveUpload extends Handle {
@@ -609,5 +648,5 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return call("historyDirtyCategories", this.handle);
     }
   }
-  return { ProjectUpload, ProjectSelectionInput, ProjectArchiveUpload };
+  return { ProjectUpload, ProjectSelectionInput, ProjectArchiveUpload, ProjectModelUpload };
 }

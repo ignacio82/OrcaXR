@@ -178,6 +178,44 @@ export class ProjectGuard {
     [Symbol.dispose](): void;
 }
 
+/**
+ * The base an import is prepared against: guard, snapshot and asset copies.
+ */
+export class ProjectImportBase {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Consumes the upload on every outcome. `bed` is empty or `[width, depth]`
+     * in millimetres. Production IDs come from a 32-byte random `id_seed`;
+     * `id_namespace` selects deterministic `import:<namespace>:<kind>-<n>` IDs.
+     */
+    prepare_model(upload: ProjectModelUpload, filename: Uint16Array, imported_at: Uint16Array, bed: Float64Array, drop_to_bed: boolean, id_seed: Uint8Array, id_namespace?: string | null): ProjectImportPreview;
+}
+
+/**
+ * The browser's preview (canonical JSON, bounded reads) and its commit token.
+ */
+export class ProjectImportPreview {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    blocked(): boolean;
+    length(): number;
+    read(start: number, count: number): Uint8Array;
+}
+
+export class ProjectModelUpload {
+    free(): void;
+    [Symbol.dispose](): void;
+    append(offset: number, chunk: Uint8Array): void;
+    /**
+     * `model_bytes` is the exact length, or omitted for open-ended input; the
+     * generated options are the browser's model import limits.
+     */
+    constructor(version: number, model_bytes: number | null | undefined, options: Float64Array);
+}
+
 export class ProjectOpen {
     private constructor();
     free(): void;
@@ -239,8 +277,15 @@ export class ProjectSession {
     cancel_open(ticket: ProjectOpen): boolean;
     capture_clipboard(guard: ProjectGuard, node: ProjectQueryNode, version: number, options: Float64Array): ProjectClipboard;
     capture_guard(): ProjectGuard;
+    capture_import_base(): ProjectImportBase;
     clipboard_upload(guard: ProjectGuard, clipboard: ProjectClipboard, version: number, bytes: number, options: Float64Array): ProjectCommandUpload;
     command_upload(guard: ProjectGuard, version: number, bytes: number, options: Float64Array): ProjectCommandUpload;
+    /**
+     * Dispatch the returned effects before reporting success. A refused
+     * confirmation changes nothing and keeps the candidate for a retry; any
+     * later outcome consumes it.
+     */
+    commit_import(preview: ProjectImportPreview, acknowledged: string[]): ProjectEffects;
     configure_staging(version: number, options: Float64Array): void;
     dispose(): void;
     finish_open(ticket: ProjectOpen, document: ProjectDocument): ProjectEffects;
@@ -315,6 +360,9 @@ export interface InitOutput {
     readonly __wbg_projectdocument_free: (a: number, b: number) => void;
     readonly __wbg_projecteffects_free: (a: number, b: number) => void;
     readonly __wbg_projectguard_free: (a: number, b: number) => void;
+    readonly __wbg_projectimportbase_free: (a: number, b: number) => void;
+    readonly __wbg_projectimportpreview_free: (a: number, b: number) => void;
+    readonly __wbg_projectmodelupload_free: (a: number, b: number) => void;
     readonly __wbg_projectopen_free: (a: number, b: number) => void;
     readonly __wbg_projectquerylist_free: (a: number, b: number) => void;
     readonly __wbg_projectquerynode_free: (a: number, b: number) => void;
@@ -375,6 +423,12 @@ export interface InitOutput {
     readonly projecteffects_reason: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly projecteffects_reason_length: (a: number, b: number) => [number, number, number];
     readonly projecteffects_selection: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectimportbase_prepare_model: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number];
+    readonly projectimportpreview_blocked: (a: number) => [number, number, number];
+    readonly projectimportpreview_length: (a: number) => number;
+    readonly projectimportpreview_read: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectmodelupload_append: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly projectmodelupload_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly projectquerylist_count: (a: number) => number;
     readonly projectquerylist_node: (a: number, b: number) => [number, number, number];
     readonly projectquerylist_page: (a: number, b: number, c: number) => [number, number, number, number];
@@ -395,8 +449,10 @@ export interface InitOutput {
     readonly projectsession_cancel_open: (a: number, b: number) => number;
     readonly projectsession_capture_clipboard: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly projectsession_capture_guard: (a: number) => [number, number, number];
+    readonly projectsession_capture_import_base: (a: number) => [number, number, number];
     readonly projectsession_clipboard_upload: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly projectsession_command_upload: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly projectsession_commit_import: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_configure_staging: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectsession_dispose: (a: number) => void;
     readonly projectsession_finish_open: (a: number, b: number, c: number) => [number, number, number];
@@ -427,13 +483,13 @@ export interface InitOutput {
     readonly projectupload_open: (a: number, b: number, c: number) => [number, number, number];
     readonly projectupload_prepare: (a: number) => [number, number, number];
     readonly projectupload_seal_document: (a: number) => [number, number];
+    readonly __wbindgen_malloc: (a: number, b: number) => number;
+    readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;
     readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __externref_table_dealloc: (a: number) => void;
-    readonly __wbindgen_malloc: (a: number, b: number) => number;
-    readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_start: () => void;
 }
 

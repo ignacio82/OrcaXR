@@ -85,6 +85,12 @@ class ProjectSessionTest {
         val (archive, warnings) = archiveCase()
         assertEquals(7L, ProjectActorArchiveChecks.run(base(), archive, warnings))
     }
+    @Test fun actorModelImportCrossesRealJni() {
+        val cases = fixture("model-import-vectors.json").getJSONArray("cases")
+        fun bytes(name: String) = (0 until cases.length()).map { cases.getJSONObject(it) }.single { it.getString("name") == name }
+            .let { java.util.Base64.getDecoder().decode(it.getString("bytesBase64")) }
+        assertEquals(7L, ProjectActorImportChecks.run(base(), bytes("stl-binary/cube"), bytes("obj/mtllib-unresolved"), bytes("detect/step")))
+    }
     @Test fun providerDocumentOpenAndSaveCrossRealJni() {
         val (archive, warnings) = archiveCase()
         assertEquals(6L, ProjectDocumentChecks.run(base(), archive, warnings))

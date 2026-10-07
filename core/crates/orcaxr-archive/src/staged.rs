@@ -15,7 +15,10 @@ pub struct ArchiveInput {
 impl ArchiveInput {
     /// `expected` is the exact archive length, or `None` for open-ended input.
     pub fn new(expected: Option<usize>, policy: &Policy) -> Result<Self, &'static str> {
-        let limit = policy.options().archive_bytes;
+        Self::bounded(expected, policy.options().archive_bytes)
+    }
+    /// The same staging rules under an explicit byte budget (model sources).
+    pub fn bounded(expected: Option<usize>, limit: usize) -> Result<Self, &'static str> {
         let mut bytes = Vec::new();
         if let Some(expected) = expected {
             if expected == 0 || expected > limit {

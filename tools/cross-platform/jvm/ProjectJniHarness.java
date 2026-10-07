@@ -25,6 +25,9 @@ public final class ProjectJniHarness {
     public static long actorArchiveChecks(String source, byte[] archive, long warnings) {
         return ProjectActorArchiveChecks.run(source, archive, warnings);
     }
+    public static long actorImportChecks(String source, byte[] cube, byte[] lossy, byte[] step) {
+        return ProjectActorImportChecks.run(source, cube, lossy, step);
+    }
     public static long providerDocumentChecks(String source, byte[] archive, long warnings) {
         return ProjectDocumentChecks.run(source, archive, warnings);
     }
@@ -88,7 +91,13 @@ public final class ProjectJniHarness {
         if (type == int.class) return in.readInt();
         if (type == long.class) return in.readLong();
         if (type == boolean.class) return in.readBoolean();
-        if (type == String.class) return string();
+        if (type == String.class) {
+            // A negative length is a null reference (optional JNI strings).
+            int length = in.readInt();
+            if (length < 0) return null;
+            byte[] bytes = new byte[length]; in.readFully(bytes);
+            return new String(bytes, StandardCharsets.UTF_8);
+        }
         if (type == LocalTimestampResolver.class) {
             String zone = string();
             if (zone.equals("throw")) return (LocalTimestampResolver) value -> { throw new IllegalStateException("PRIVATE timestamp detail"); };
@@ -126,6 +135,7 @@ public final class ProjectJniHarness {
             if (name.equals("actorCapturedChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, String.class, long[].class);
             if (name.equals("actorChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("actorArchiveChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, long.class);
+            if (name.equals("actorImportChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class);
             if (name.equals("providerDocumentChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, long.class);
             if (name.equals("intentCodec")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class);
             if (name.equals("resolveLocal")) method = ProjectJniHarness.class.getMethod(name, String.class, long.class);

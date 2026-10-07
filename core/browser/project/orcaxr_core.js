@@ -830,6 +830,159 @@ export class ProjectGuard {
 }
 if (Symbol.dispose) ProjectGuard.prototype[Symbol.dispose] = ProjectGuard.prototype.free;
 
+/**
+ * The base an import is prepared against: guard, snapshot and asset copies.
+ */
+export class ProjectImportBase {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectImportBase.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectImportBaseFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectImportBaseFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectimportbase_free(ptr, 0);
+    }
+    /**
+     * Consumes the upload on every outcome. `bed` is empty or `[width, depth]`
+     * in millimetres. Production IDs come from a 32-byte random `id_seed`;
+     * `id_namespace` selects deterministic `import:<namespace>:<kind>-<n>` IDs.
+     * @param {ProjectModelUpload} upload
+     * @param {Uint16Array} filename
+     * @param {Uint16Array} imported_at
+     * @param {Float64Array} bed
+     * @param {boolean} drop_to_bed
+     * @param {Uint8Array} id_seed
+     * @param {string | null} [id_namespace]
+     * @returns {ProjectImportPreview}
+     */
+    prepare_model(upload, filename, imported_at, bed, drop_to_bed, id_seed, id_namespace) {
+        _assertClass(upload, ProjectModelUpload);
+        var ptr0 = upload.__destroy_into_raw();
+        const ptr1 = passArray16ToWasm0(filename, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArray16ToWasm0(imported_at, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ptr3 = passArrayF64ToWasm0(bed, wasm.__wbindgen_malloc);
+        const len3 = WASM_VECTOR_LEN;
+        const ptr4 = passArray8ToWasm0(id_seed, wasm.__wbindgen_malloc);
+        const len4 = WASM_VECTOR_LEN;
+        var ptr5 = isLikeNone(id_namespace) ? 0 : passStringToWasm0(id_namespace, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len5 = WASM_VECTOR_LEN;
+        const ret = wasm.projectimportbase_prepare_model(this.__wbg_ptr, ptr0, ptr1, len1, ptr2, len2, ptr3, len3, drop_to_bed, ptr4, len4, ptr5, len5);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectImportPreview.__wrap(ret[0]);
+    }
+}
+if (Symbol.dispose) ProjectImportBase.prototype[Symbol.dispose] = ProjectImportBase.prototype.free;
+
+/**
+ * The browser's preview (canonical JSON, bounded reads) and its commit token.
+ */
+export class ProjectImportPreview {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectImportPreview.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectImportPreviewFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectImportPreviewFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectimportpreview_free(ptr, 0);
+    }
+    /**
+     * @returns {boolean}
+     */
+    blocked() {
+        const ret = wasm.projectimportpreview_blocked(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] !== 0;
+    }
+    /**
+     * @returns {number}
+     */
+    length() {
+        const ret = wasm.projectimportpreview_length(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} start
+     * @param {number} count
+     * @returns {Uint8Array}
+     */
+    read(start, count) {
+        const ret = wasm.projectimportpreview_read(this.__wbg_ptr, start, count);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+}
+if (Symbol.dispose) ProjectImportPreview.prototype[Symbol.dispose] = ProjectImportPreview.prototype.free;
+
+export class ProjectModelUpload {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectModelUploadFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectmodelupload_free(ptr, 0);
+    }
+    /**
+     * @param {number} offset
+     * @param {Uint8Array} chunk
+     */
+    append(offset, chunk) {
+        const ptr0 = passArray8ToWasm0(chunk, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectmodelupload_append(this.__wbg_ptr, offset, ptr0, len0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * `model_bytes` is the exact length, or omitted for open-ended input; the
+     * generated options are the browser's model import limits.
+     * @param {number} version
+     * @param {number | null | undefined} model_bytes
+     * @param {Float64Array} options
+     */
+    constructor(version, model_bytes, options) {
+        const ptr0 = passArrayF64ToWasm0(options, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectmodelupload_new(version, !isLikeNone(model_bytes), isLikeNone(model_bytes) ? 0 : model_bytes, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0];
+        ProjectModelUploadFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+}
+if (Symbol.dispose) ProjectModelUpload.prototype[Symbol.dispose] = ProjectModelUpload.prototype.free;
+
 export class ProjectOpen {
     static __wrap(ptr) {
         const obj = Object.create(ProjectOpen.prototype);
@@ -1168,6 +1321,16 @@ export class ProjectSession {
         return ProjectGuard.__wrap(ret[0]);
     }
     /**
+     * @returns {ProjectImportBase}
+     */
+    capture_import_base() {
+        const ret = wasm.projectsession_capture_import_base(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectImportBase.__wrap(ret[0]);
+    }
+    /**
      * @param {ProjectGuard} guard
      * @param {ProjectClipboard} clipboard
      * @param {number} version
@@ -1202,6 +1365,24 @@ export class ProjectSession {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ProjectCommandUpload.__wrap(ret[0]);
+    }
+    /**
+     * Dispatch the returned effects before reporting success. A refused
+     * confirmation changes nothing and keeps the candidate for a retry; any
+     * later outcome consumes it.
+     * @param {ProjectImportPreview} preview
+     * @param {string[]} acknowledged
+     * @returns {ProjectEffects}
+     */
+    commit_import(preview, acknowledged) {
+        _assertClass(preview, ProjectImportPreview);
+        const ptr0 = passArrayJsValueToWasm0(acknowledged, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectsession_commit_import(this.__wbg_ptr, preview.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectEffects.__wrap(ret[0]);
     }
     /**
      * @param {number} version
@@ -1563,6 +1744,14 @@ export function evaluate(request) {
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbg___wbindgen_string_get_0380ccaa2f57f0d9: function(arg0, arg1) {
+            const obj = arg1;
+            const ret = typeof(obj) === 'string' ? obj : undefined;
+            var ptr1 = isLikeNone(ret) ? 0 : passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            var len1 = WASM_VECTOR_LEN;
+            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+        },
         __wbg___wbindgen_throw_41e9ee4f547fc59a: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
@@ -1638,6 +1827,15 @@ const ProjectEffectsFinalization = (typeof FinalizationRegistry === 'undefined')
 const ProjectGuardFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectguard_free(ptr, 1));
+const ProjectImportBaseFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectimportbase_free(ptr, 1));
+const ProjectImportPreviewFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectimportpreview_free(ptr, 1));
+const ProjectModelUploadFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectmodelupload_free(ptr, 1));
 const ProjectOpenFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectopen_free(ptr, 1));
@@ -1685,6 +1883,14 @@ function getArrayU16FromWasm0(ptr, len) {
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
+}
+
+let cachedDataViewMemory0 = null;
+function getDataViewMemory0() {
+    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
+        cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
+    }
+    return cachedDataViewMemory0;
 }
 
 let cachedFloat64ArrayMemory0 = null;
@@ -1746,6 +1952,16 @@ function passArrayF64ToWasm0(arg, malloc) {
     const ptr = malloc(arg.length * 8, 8) >>> 0;
     getFloat64ArrayMemory0().set(arg, ptr / 8);
     WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+function passArrayJsValueToWasm0(array, malloc) {
+    const ptr = malloc(array.length * 4, 4) >>> 0;
+    for (let i = 0; i < array.length; i++) {
+        const add = addToExternrefTable0(array[i]);
+        getDataViewMemory0().setUint32(ptr + 4 * i, add, true);
+    }
+    WASM_VECTOR_LEN = array.length;
     return ptr;
 }
 
@@ -1826,6 +2042,7 @@ function __wbg_finalize_init(instance, module) {
     wasmInstance = instance;
     wasm = instance.exports;
     wasmModule = module;
+    cachedDataViewMemory0 = null;
     cachedFloat64ArrayMemory0 = null;
     cachedUint16ArrayMemory0 = null;
     cachedUint8ArrayMemory0 = null;

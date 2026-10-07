@@ -9,6 +9,8 @@
 //! cooperatively cancellable: run it on an owned import task.
 mod amf;
 mod detect;
+pub mod host;
+pub mod layout;
 mod mesh;
 mod obj;
 pub mod stage;

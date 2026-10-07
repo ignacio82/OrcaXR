@@ -36,13 +36,29 @@ sealed interface ProjectOutcome {
     data class OpenedWithoutSummary(val projection: ProjectProjection, val authority: ProjectActorGuard?) : ProjectOutcome
     data class Reset(val guard: ProjectIntents.SessionGuard, val history: ProjectIntents.SessionHistory, val projection: ProjectProjection, val authority: ProjectActorGuard?) : ProjectOutcome
     data class ResetWithoutSummary(val projection: ProjectProjection, val authority: ProjectActorGuard?) : ProjectOutcome
+    /** A prepared import: show [ProjectActorImport.preview], then commit or close it. */
+    data class ImportPrepared(val candidate: ProjectActorImport, val projection: ProjectProjection) : ProjectOutcome
+    /** A committed import: one undoable `Import <filename>` history entry. */
+    data class Imported(val projection: ProjectProjection, val authority: ProjectActorGuard?) : ProjectOutcome
     data class NotStarted(val reason: ProjectRefusal) : ProjectOutcome
     /** No retry is safe: the operation may have changed the project or handed off output. */
     data object Uncertain : ProjectOutcome
 }
 enum class ProjectProjection { DELIVERED, FAILED, CLOSED }
 enum class ProjectCheckpoint { NOT_REQUESTED, SAVED, STALE, UNAVAILABLE }
-enum class ProjectRefusal { NOT_READY, BUSY, CLOSED, CANCELLED, INVALID_REQUEST, PREPARATION_FAILED, STALE, RESOURCE_LIMIT }
+enum class ProjectRefusal { NOT_READY, BUSY, CLOSED, CANCELLED, INVALID_REQUEST, PREPARATION_FAILED, STALE, RESOURCE_LIMIT, UNCONFIRMED }
+
+/** An import candidate and the browser's preview JSON. The caller owns it: commit
+ * it through the actor that prepared it, or close it. A refused confirmation
+ * (blocked preview or missing acknowledgements) keeps it for a retry. */
+class ProjectActorImport internal constructor(
+    internal val owner: Any,
+    val preview: String,
+    val blocked: Boolean,
+    internal val native: ProjectImportPreview,
+) : AutoCloseable {
+    override fun close() = native.close()
+}
 
 class ProjectRequest internal constructor(cancelAction: () -> Boolean) {
     private val cancellation = AtomicReference<(() -> Boolean)?>(cancelAction)
@@ -110,12 +126,15 @@ class ProjectActor private constructor(
         data class Document(val mode: DocumentMode, val expected: ProjectActorGuard?, val produce: (ProjectPreparation) -> ProjectDocument) : Work
         data class Commands(val expected: ProjectActorGuard, val clipboard: ProjectActorClipboard?, val bytes: Long, val options: ProjectStagingInputOptions,
             val write: (ProjectPreparation, ProjectSnapshot, ProjectCommandWriter) -> Unit) : Work
+        data class Import(val expected: ProjectActorGuard, val prepare: (ProjectPreparation, ProjectImportBase) -> ProjectImportPreview) : Work
+        data class CommitImport(val candidate: ProjectActorImport, val acknowledged: List<String>) : Work
     }
     private sealed interface Prepared {
         data class Export(val source: ProjectActorGuard, val guard: ProjectGuard, val save: Boolean) : Prepared
         data class Copy(val epoch: Any, val guard: ProjectGuard, val clipboard: ProjectClipboard, val info: ProjectClipboardInfo) : Prepared
         data class Document(val mode: DocumentMode, val document: ProjectDocument, val ticket: ProjectOpen?, val guard: ProjectGuard?) : Prepared
         data class Commands(val upload: ProjectCommandUpload) : Prepared
+        data class Import(val preview: ProjectImportPreview) : Prepared
     }
     private class Refusal(val reason: ProjectRefusal) : IllegalStateException()
     private data class NativeResult(val outcome: ProjectOutcome, val effects: ProjectEffects?)
@@ -295,6 +314,24 @@ class ProjectActor private constructor(
         enqueue(Work.Commands(expected, source, bytes, options, write))
     }
 
+    /** Capture the import base on the authority (the expected guard must be
+     * export-current), then decode, stage and preview on a preparation worker,
+     * e.g. `base.prepareModel(ProjectDocuments.stageModel(scope, …), …)`. */
+    fun prepareImport(expected: ProjectActorGuard, prepare: (ProjectPreparation, ProjectImportBase) -> ProjectImportPreview): ProjectRequest = synchronized(gate) {
+        refusal()?.let { return refused(it) }
+        if (expected.owner !== guardOwner) return refused(ProjectRefusal.STALE)
+        enqueue(Work.Import(expected, prepare))
+    }
+
+    /** Commit a candidate from [prepareImport] with the operator's acknowledgements.
+     * A blocked preview or missing acknowledgement refuses with UNCONFIRMED and a
+     * changed base with STALE, keeping the candidate; success consumes it. */
+    fun commitImport(candidate: ProjectActorImport, acknowledged: List<String>): ProjectRequest = synchronized(gate) {
+        refusal()?.let { return refused(it) }
+        if (candidate.owner !== guardOwner) return refused(ProjectRefusal.STALE)
+        enqueue(Work.CommitImport(candidate, acknowledged.toList()))
+    }
+
     private fun enqueue(work: Work) = Task().also { it.work = work; tasks.add(it); authority.execute(it) }.request
     private fun refusal(): ProjectRefusal? = when {
         closed -> ProjectRefusal.CLOSED
@@ -432,7 +469,15 @@ class ProjectActor private constructor(
                     } finally { writer.invalidate() }
                 })
             }
-            is Work.Message, Work.ClearClipboard -> error("unexpected_preparation")
+            is Work.Import -> {
+                checkGuard(value, work.expected, true)
+                val base = task.scope.own(value.importBase())
+                ({
+                    task.scope.checkActive()
+                    Prepared.Import(task.scope.own(work.prepare(task.scope, base)))
+                })
+            }
+            is Work.Message, Work.ClearClipboard, is Work.CommitImport -> error("unexpected_preparation")
         }
     }
 
@@ -462,6 +507,15 @@ class ProjectActor private constructor(
                 clipboard = Clipboard(identity, owned)
                 previous?.native?.close()
                 NativeResult(ProjectOutcome.Copied(identity, ProjectProjection.DELIVERED), null)
+            }
+        }
+        is Prepared.Import -> {
+            val preview = prepared.preview.json()
+            val blocked = prepared.preview.blocked()
+            synchronized(gate) {
+                if (closed || task.phase != Phase.EXECUTING) throw Refusal(ProjectRefusal.CLOSED)
+                val native = task.scope.transfer(prepared.preview)
+                NativeResult(ProjectOutcome.ImportPrepared(ProjectActorImport(guardOwner, preview, blocked, native), ProjectProjection.DELIVERED), null)
             }
         }
         is Prepared.Commands -> {
@@ -514,9 +568,9 @@ class ProjectActor private constructor(
             value = session ?: return
             work = task.work
             prepared = task.prepared
-            preparing = prepared == null && work !is Work.Message && work != Work.ClearClipboard
+            preparing = prepared == null && work !is Work.Message && work != Work.ClearClipboard && work !is Work.CommitImport
             task.phase = if (preparing) Phase.PREPARING else Phase.EXECUTING
-            task.mayCommit = !preparing && task !== startup && prepared !is Prepared.Copy && work != Work.ClearClipboard
+            task.mayCommit = !preparing && task !== startup && prepared !is Prepared.Copy && prepared !is Prepared.Import && work != Work.ClearClipboard
             task.work = null
         }
         try {
@@ -530,7 +584,23 @@ class ProjectActor private constructor(
                 }
                 return
             }
-            val result = if (prepared != null) commit(task, value, prepared) else if (work == Work.ClearClipboard) {
+            val result = if (prepared != null) commit(task, value, prepared) else if (work is Work.CommitImport) {
+                if (work.candidate.owner !== guardOwner) throw Refusal(ProjectRefusal.STALE)
+                val effects = try { value.commitImport(work.candidate.native, work.acknowledged) }
+                    catch (failure: IllegalStateException) {
+                        throw when (failure.message) {
+                            "stale" -> Refusal(ProjectRefusal.STALE)
+                            "import_blocked", "missing_acknowledgements" -> Refusal(ProjectRefusal.UNCONFIRMED)
+                            // The caller closed or already committed this candidate.
+                            "closed", "invalid_state" -> Refusal(ProjectRefusal.CANCELLED)
+                            else -> failure
+                        }
+                    }
+                try {
+                    work.candidate.close()
+                    NativeResult(ProjectOutcome.Imported(ProjectProjection.DELIVERED, optionalAuthority(value)), effects)
+                } catch (failure: Throwable) { effects.close(); throw failure }
+            } else if (work == Work.ClearClipboard) {
                 synchronized(gate) {
                     clipboard?.native?.close()
                     clipboard = null
@@ -615,6 +685,8 @@ class ProjectActor private constructor(
                 is ProjectOutcome.OpenedWithoutSummary -> outcome.copy(projection = delivered)
                 is ProjectOutcome.Reset -> outcome.copy(projection = delivered)
                 is ProjectOutcome.ResetWithoutSummary -> outcome.copy(projection = delivered)
+                is ProjectOutcome.ImportPrepared -> outcome.copy(projection = delivered)
+                is ProjectOutcome.Imported -> outcome.copy(projection = delivered)
                 else -> outcome
             }
         }

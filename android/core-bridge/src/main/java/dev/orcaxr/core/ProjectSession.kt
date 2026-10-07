@@ -172,6 +172,15 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun captureGuard(): ProjectGuard = read { own(NativeProject.captureGuard(it), ::ProjectGuard) }
     fun isCurrent(guard: ProjectGuard): Boolean = read { NativeProject.isCurrent(it, guard.reference(), false) }
     fun isExportCurrent(guard: ProjectGuard): Boolean = read { NativeProject.isCurrent(it, guard.reference(), true) }
+    /** Capture the base a model import is prepared against (guard, snapshot and
+     * asset copies). Preparation then runs off the authority. */
+    fun importBase(): ProjectImportBase = read { own(NativeProject.importBase(it), ::ProjectImportBase) }
+    /** Commit a previewed import as one undoable `Import <filename>`. A refused
+     * confirmation (`import_blocked`, `missing_acknowledgements`, `stale`) keeps
+     * the candidate; dispatch the effects before reporting success. */
+    fun commitImport(preview: ProjectImportPreview, acknowledged: List<String>): ProjectEffects = read {
+        own(NativeProject.commitImport(it, preview.reference(), jsonStrings(acknowledged)), ::ProjectEffects)
+    }
     /** Invoke only after successful save handoff for this captured identity. */
     fun acknowledgeCheckpoint(guard: ProjectGuard): ProjectEffects = read {
         own(NativeProject.acknowledgeCheckpoint(it, guard.reference()), ::ProjectEffects)

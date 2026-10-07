@@ -41,6 +41,18 @@ final class NativeProject {
     static native long exportArchive(long handle, int version, double[] options);
     static native long archiveLength(long handle);
     static native byte[] archiveRead(long handle, long start, long count);
+    // Model import: stage source bytes (-1 for open-ended), capture the base on
+    // the authority, prepare the browser's preview privately (consuming the
+    // upload in place), then commit with a JSON array of acknowledged notice IDs.
+    static native long modelUploadNew(int version, long modelBytes, double[] options, LocalTimestampResolver resolver, int integerMode);
+    static native void modelUploadAppend(long handle, long offset, byte[] bytes);
+    static native long importBase(long handle);
+    static native void importPrepareModel(long handle, long base, char[] filename, char[] importedAt, double[] bed, boolean dropToBed, long[] idSeed, String idNamespace);
+    static native long importPreviewLength(long handle);
+    static native byte[] importPreviewRead(long handle, long start, long count);
+    static native boolean importPreviewBlocked(long handle);
+    // A refused confirmation keeps the candidate; success consumes it.
+    static native long commitImport(long handle, long preview, String acknowledged);
     // Import or output warnings: the browser's sorted, unique UTF-16 texts.
     static native long archiveWarningCount(long handle);
     static native long archiveWarningLength(long handle, long position);

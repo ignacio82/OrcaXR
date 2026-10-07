@@ -615,7 +615,7 @@ impl ProjectReply {
 }
 #[wasm_bindgen]
 pub struct ProjectEffects {
-    events: Vec<DomainEvent>,
+    pub(crate) events: Vec<DomainEvent>,
 }
 impl ProjectEffects {
     fn event(&self, position: f64) -> Result<&DomainEvent, JsValue> {

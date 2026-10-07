@@ -2566,7 +2566,25 @@ restores the exact repository version it produced, undo the previous one.
 refusals, committed state, ID-ordered assets and history, and undo/redo through
 the session wire protocol restore the exact base and committed states, including
 a deliberately colliding ID namespace that blocks the commit and a stale base.
-Host bindings for model import remain open.
+Model import is bound to hosts through one shared task
+(`orcaxr_archive::models::host`): the base (guard, snapshot, asset copies) is
+captured on the authority, decoding, staging and preview run privately, and
+`commit_import` runs on the authority. Limits come from the generated
+`contracts/project-model-import.json` (defaults asserted equal to the browser's);
+source bytes stage exactly or open-ended like archives; production IDs are
+UUIDv4 from host-seeded entropy, replay IDs a deterministic counter namespace;
+failures are bounded `unsupported-format:*`/`malformed-model:*` codes. WASM
+exposes `ProjectModelUpload`, `capture_import_base`, `prepare_model` and
+`commit_import`; JNI keeps each step in one registry slot (upload, then preview)
+and cancels cooperatively on close; Kotlin adds `ProjectModelUpload`,
+`ProjectImportBase.prepareModel`, `ProjectDocuments.stageModel` and the actor's
+two-phase `prepareImport`/`commitImport` (`ImportPrepared` and `Imported`
+outcomes, `UNCONFIRMED` for a blocked or unacknowledged preview; a refused
+confirmation keeps the candidate). `model-import-replay.mjs` replays all 21
+browser transactions identically in Node WASM, a Chrome 150 worker and host
+JNI (debug and release), and `ProjectActorImportChecks` passes seven actor
+journeys (preview, acknowledgement gating, undo, stale and closed candidates,
+unsupported sources, foreign candidates, direct session refusal codes).
 
 ## Edited canonical archive interchange
 
@@ -2955,6 +2973,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/projec
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-query.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-host.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-archive.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-model-import.mjs
 node tools/cross-platform/generate-setting-scopes.mjs
 node tools/cross-platform/test-project-intent-generator.mjs
 node tools/cross-platform/project-intent-vectors.mjs
@@ -3065,6 +3084,7 @@ node tools/cross-platform/project-wasm-browser.mjs
 node tools/cross-platform/wasm-smoke.mjs
 node tools/cross-platform/generate-project-jni.mjs
 node tools/cross-platform/generate-project-archive.mjs
+node tools/cross-platform/generate-project-model-import.mjs
 cargo build --manifest-path core/Cargo.toml -p orcaxr-android --locked --jobs 1
 cargo build --manifest-path core/Cargo.toml -p orcaxr-android --release --locked --jobs 1
 python3 tools/cross-platform/build-project-jvm.py

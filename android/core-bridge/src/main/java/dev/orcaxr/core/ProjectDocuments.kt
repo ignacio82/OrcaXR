@@ -56,6 +56,31 @@ object ProjectDocuments {
         return input.use { ProjectArchiveUpload.prepare(scope, ReadFailures(it), length, options, resolver, profile) }
     }
 
+    /** Stage a provider document as model source bytes (STL/OBJ/AMF/ZIP) for
+     * [ProjectImportBase.prepareModel], with the same size and failure rules. */
+    fun stageModel(
+        scope: ProjectPreparation,
+        document: ProjectDocumentInput,
+        options: ProjectModelImportOptions,
+        resolver: LocalTimestampResolver,
+        profile: ProjectIntegerProfile,
+    ): ProjectModelUpload {
+        val reported = provider("document_read_failed") { document.reportedLength }?.takeIf { it in 1..options.maxBytes }
+        val stream = { length: Long? ->
+            provider("document_read_failed") { document.openInput() }.use {
+                ProjectModelUpload.stream(scope, ReadFailures(it), length, options, resolver, profile)
+            }
+        }
+        if (reported != null) {
+            try {
+                return stream(reported)
+            } catch (failure: IllegalStateException) {
+                if (failure.message != "incomplete_archive" && failure.message != "archive_length_mismatch") throw failure
+            }
+        }
+        return stream(null)
+    }
+
     /** Callback body for [ProjectActor.saveDocument] (or exportDocument). The
      * package is built completely before the destination opens, so a refused Save
      * (unsavable project, budget, cancellation) never truncates the user's file.

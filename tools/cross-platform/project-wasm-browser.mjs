@@ -33,6 +33,11 @@ const [
   archiveLayoutText,
   canonicalArchivesText,
   foreignArchivesText,
+  modelReplay,
+  modelLayoutText,
+  modelTransactionsText,
+  modelStagingText,
+  modelDecodingText,
   wasm,
 ] = await Promise.all([
   read("core/dist/project-wasm/orcaxr_core.js"),
@@ -56,17 +61,25 @@ const [
   read("contracts/project-archive.json"),
   read("testdata/cross-platform/canonical-complete-vectors.json"),
   read("testdata/cross-platform/foreign-import-vectors.json"),
+  read("tools/cross-platform/model-import-replay.mjs"),
+  read("contracts/project-model-import.json"),
+  read("testdata/cross-platform/model-transaction-vectors.json"),
+  read("testdata/cross-platform/model-stage-vectors.json"),
+  read("testdata/cross-platform/model-import-vectors.json"),
   readFile(new URL("core/dist/project-wasm/orcaxr_core_bg.wasm", root)),
 ]);
-// Real archives referenced by the foreign corpus, delivered as bytes.
+// Real archives and models referenced by the corpora, delivered as bytes.
+const modelDecoding = JSON.parse(modelDecodingText);
+const transactionModels = new Set(JSON.parse(modelTransactionsText).cases.map((c) => c.decode));
 const archiveFiles = Object.fromEntries(
   await Promise.all(
     [
-      ...new Set(
-        JSON.parse(foreignArchivesText)
+      ...new Set([
+        ...JSON.parse(foreignArchivesText)
           .cases.map((c) => c.archivePath)
           .filter(Boolean),
-      ),
+        ...modelDecoding.cases.filter((c) => c.path && transactionModels.has(c.name)).map((c) => c.path),
+      ]),
     ].map(async (path) => [
       path,
       (await readFile(new URL(path, root))).toString("base64"),
@@ -121,6 +134,11 @@ try {
       canonicalArchives,
       foreignArchives,
       archiveFiles,
+      modelReplay,
+      modelLayout,
+      modelTransactions,
+      modelStaging,
+      modelDecoding,
       wasm,
     }) => {
       const coreUrl = URL.createObjectURL(
@@ -129,7 +147,7 @@ try {
       const workerUrl = URL.createObjectURL(
         new Blob(
           [
-            `import * as core from '${coreUrl}';\n${replay}\n${boundaries}\n${queryReplay}\n${stagedReplay}\n${stagedBoundaries}\n${clipboardBoundaries}\n${documentReplay}\n${archiveReplay}\nconst b64=(t)=>Uint8Array.from(atob(t),(c)=>c.charCodeAt(0));const sha256=async(b)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",b)),(x)=>x.toString(16).padStart(2,"0")).join("");self.onmessage=async({data})=>{try{await core.default({module_or_path:data.wasm});const result=await replayProject(core,data.fixture,data.layout);result.archives=await replayArchives(core,data.layout,data.archiveLayout,archiveCases(JSON.parse(data.canonicalArchives),JSON.parse(data.foreignArchives),(p)=>b64(data.archiveFiles[p]),b64),sha256);Object.assign(result,replayProjectDocuments(core,data.documentFixture,data.layout),await replayStagedProject(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectStagedBoundaries(core,data.stagedFixture.traces[0],data.layout,data.stagingLayout),projectClipboardBoundaries(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectBoundaries(core,data.base,data.layout,data.timestamps),replayProjectQueries(core,data.queryFixture,data.queryLayout));self.postMessage({ok:true,result},[result.owned.buffer,result.ownedQueryText.buffer]);}catch(e){self.postMessage({ok:false,error:String(e)});}};`,
+            `import * as core from '${coreUrl}';\n${replay}\n${boundaries}\n${queryReplay}\n${stagedReplay}\n${stagedBoundaries}\n${clipboardBoundaries}\n${documentReplay}\n${archiveReplay}\n${modelReplay}\nconst b64=(t)=>Uint8Array.from(atob(t),(c)=>c.charCodeAt(0));const sha256=async(b)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",b)),(x)=>x.toString(16).padStart(2,"0")).join("");self.onmessage=async({data})=>{try{await core.default({module_or_path:data.wasm});const result=await replayProject(core,data.fixture,data.layout);result.archives=await replayArchives(core,data.layout,data.archiveLayout,archiveCases(JSON.parse(data.canonicalArchives),JSON.parse(data.foreignArchives),(p)=>b64(data.archiveFiles[p]),b64),sha256);result.models=await replayModelImports(core,data.layout,data.modelLayout,JSON.parse(data.modelTransactions),JSON.parse(data.modelStaging),JSON.parse(data.modelDecoding),sha256,(p)=>b64(data.archiveFiles[p]),b64);Object.assign(result,replayProjectDocuments(core,data.documentFixture,data.layout),await replayStagedProject(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectStagedBoundaries(core,data.stagedFixture.traces[0],data.layout,data.stagingLayout),projectClipboardBoundaries(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectBoundaries(core,data.base,data.layout,data.timestamps),replayProjectQueries(core,data.queryFixture,data.queryLayout));self.postMessage({ok:true,result},[result.owned.buffer,result.ownedQueryText.buffer]);}catch(e){self.postMessage({ok:false,error:String(e)});}};`,
           ],
           { type: "text/javascript" },
         ),
@@ -162,6 +180,10 @@ try {
               canonicalArchives,
               foreignArchives,
               archiveFiles,
+              modelLayout,
+              modelTransactions,
+              modelStaging,
+              modelDecoding,
             },
             [bytes.buffer],
           );
@@ -198,6 +220,7 @@ try {
           queryEngineRefusals: result.engineRefusals,
           ownedQueryTextUnits: result.ownedQueryText.length,
           archives: result.archives,
+          models: result.models,
           owned: Array.from(result.owned),
           isolated: crossOriginIsolated,
         };
@@ -230,6 +253,11 @@ try {
       canonicalArchives: canonicalArchivesText,
       foreignArchives: foreignArchivesText,
       archiveFiles,
+      modelReplay,
+      modelLayout: JSON.parse(modelLayoutText),
+      modelTransactions: modelTransactionsText,
+      modelStaging: modelStagingText,
+      modelDecoding: modelDecodingText,
       fixture: JSON.parse(fixtureText),
       layout: JSON.parse(layoutText),
       base: JSON.parse(JSON.parse(modelText).factories[0].stateJson),
@@ -242,6 +270,7 @@ try {
     [result.archives.cases, result.archives.accepted, result.archives.saves],
     [1341, 1225, 1223],
   );
+  assert.deepEqual([result.models.cases, result.models.committed], [21, 15]);
   assert.deepEqual(
     result.owned,
     JSON.parse(fixtureText).traces.at(-1).asset.bytes,

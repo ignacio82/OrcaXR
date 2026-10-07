@@ -10,6 +10,7 @@ import { replayStagedProject } from "./project-staged-replay.mjs";
 import { projectStagedBoundaries } from "./project-staged-boundaries.mjs";
 import { projectClipboardBoundaries } from "./project-clipboard-boundaries.mjs";
 import { replayArchives, archiveCases } from "./archive-wasm-replay.mjs";
+import { replayModelImports } from "./model-import-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 if (isMainThread) {
@@ -35,6 +36,8 @@ if (isMainThread) {
       [result.archives.cases, result.archives.accepted, result.archives.saves],
       [1341, 1225, 1223],
     );
+    // The browser's model import transactions, including undo/redo.
+    assert.deepEqual([result.models.cases, result.models.committed], [21, 15]);
     assert.ok(
       result.ownedQueryText instanceof Uint16Array &&
         result.ownedQueryText.length > 0,
@@ -110,6 +113,18 @@ if (isMainThread) {
       (text) => new Uint8Array(Buffer.from(text, "base64")),
     ),
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
+  const json = async (path) => JSON.parse(await readFile(new URL(path, root)));
+  metrics.models = await replayModelImports(
+    core,
+    layout,
+    await json("contracts/project-model-import.json"),
+    await json("testdata/cross-platform/model-transaction-vectors.json"),
+    await json("testdata/cross-platform/model-stage-vectors.json"),
+    await json("testdata/cross-platform/model-import-vectors.json"),
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    (path) => new Uint8Array(readFileSync(new URL(path, root))),
+    (text) => new Uint8Array(Buffer.from(text, "base64")),
   );
   const queryLayout = JSON.parse(
     await readFile(new URL("contracts/project-query.json", root)),

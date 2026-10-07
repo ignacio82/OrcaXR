@@ -1,0 +1,1 @@
+{"version":1,"maxChunkBytes":65536,"maxBudget":4294967295,"options":["maxBytes","maxTriangles","maxVertices","maxObjects","maxVolumesPerObject","maxInstancesPerObject","maxArchiveMembers","maxNameLength","maxXmlDepth"],"defaults":[536870912,8000000,24000000,4096,512,4096,512,200,64]}

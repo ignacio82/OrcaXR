@@ -123,9 +123,12 @@ Detailed evidence and reproducible commands live in
   undoable `Import <filename>` commit (`ProjectSession::commit_import`): 21
   browser transactions agree on preview, confirmation refusals, committed
   state/assets/history and undo/redo.
-- [ ] Bind model import to WASM/JNI host tasks and the Kotlin actor; wire
-  provider Open/Save into the application UI (pickers, persisted grants, recent
-  files, share intents) in Phase 7.
+- [x] Bind model import to WASM/JNI host tasks and the Kotlin actor
+  (`prepareImport`/`commitImport`): the 21 browser transactions replay in Node,
+  Chrome 150 and host JNI; seven actor journeys pass. Instrumented tests compile
+  but have not run on a device.
+- [ ] Wire provider Open/Save and model import into the application UI
+  (pickers, persisted grants, recent files, share intents) in Phase 7.
 - [x] Share bounded G-code text windows and case-insensitive line search through
   Rust, WASM and JNI (Phase 3). Browser, host and Chrome WASM replays agree on
   18,710 searches; the Android instrumented replay has not run on a device yet.
@@ -137,28 +140,14 @@ Detailed evidence and reproducible commands live in
   finish remaining command/query coverage and production session integration,
   then continue the app/device gates.
 
-**Resume here:** bind model import to host tasks. The shared core decodes
-(260 cases), stages (237) and previews/commits (21 transactions) exactly like
-the browser ([native-core](engineering/native-core.md#signature-first-model-decoding)).
-Next: a bounded WASM/JNI model-import task (staged bytes → decode → stage →
-`import::prepare` on the preparation worker with the guard and asset snapshot
-captured on the authority; preview JSON and required acknowledgement IDs to the
-host; `commit_import` on the authority), a Kotlin actor operation with
-`ProjectDocuments` input, replayed over the transaction corpus in Node, Chrome
-and host JNI; then the remaining command families. Archive Open/Save already run as owned
-WASM/JNI tasks under one generated host policy, and `ProjectDocuments` adapts
-provider documents (see
-[native-core](engineering/native-core.md#archive-open-and-save-host-tasks)): an
-app calls `ProjectDocuments.prepare` inside a `ProjectActor` `openDocument`/
-`resetDocument` producer and `ProjectDocuments.save` inside `saveDocument`, sizing
-`ProjectArchiveOptions` from the device memory budget. After STL/OBJ/AMF, finish
-the remaining command families; application pickers, grants and recent files
-are Phase 7. Replay evidence: `archive-wasm-replay.mjs` in
-`project-wasm-test.mjs`, `project-wasm-browser.mjs` and `project-jni-test.mjs`
-(1,341 archives each, half open-ended), plus `ProjectActorArchiveChecks` and
-`ProjectDocumentChecks`. The interchange harness still passes 2,159 edited
-journeys from 2,278 archives
-([native-core](engineering/native-core.md#edited-canonical-archive-interchange)).
+**Resume here:** finish the remaining command families. Archive Open/Save,
+provider documents and STL/OBJ/AMF/ZIP model import (decode, stage, preview,
+undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
+actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
+Next: inventory the browser commands not yet ported (`web/src/project/commands.ts`
+and siblings against `core/crates/orcaxr-project/src/commands/`), port them with
+browser-derived vectors, then continue Phase 6 (native slicing) and the Phase 7
+application shell (pickers, grants, recent files, import preview UI).
 Retain earlier binding replay evidence only when executable and JVM input
 identities still agree; otherwise rerun it. This host can run headless Chrome,
 git and memory-capped Gradle compiles; the full web quality gate, emulator runs
@@ -1153,7 +1142,8 @@ painting, and FullSpectrum operations that can support real native projects.
     on 260 cases.
   - [x] Stage decoded models as merges with exact browser parity (237 cases).
   - [x] Port the import preview and undoable commit (21 transactions agree).
-  - [ ] Bind model import and provider lifetimes to host tasks.
+  - [x] Bind model import to WASM/JNI host tasks and the Kotlin actor.
+  - [ ] Provider lifetimes and import UI in the application (Phase 7).
 - [ ] Port canonical-envelope and BBS authoring, scoped overrides, plate origins,
   assembly transforms, custom G-code, modifier/negative volumes, annotations,
   mixed recipes, and unknown metadata preservation. A consumed metadata member

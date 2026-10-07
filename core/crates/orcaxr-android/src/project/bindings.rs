@@ -196,6 +196,63 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
+    version: jint,
+    model_bytes: jlong,
+    options: JDoubleArray<'local>,
+    resolver: JObject<'local>,
+    integer_mode: jint,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_modelUploadAppend, model_upload_append, (),
+    handle: jlong,
+    offset: jlong,
+    bytes: JByteArray<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_importBase, import_base, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_importPrepareModel, import_prepare_model, (),
+    handle: jlong,
+    base: jlong,
+    filename: JCharArray<'local>,
+    imported_at: JCharArray<'local>,
+    bed: JDoubleArray<'local>,
+    drop_to_bed: jboolean,
+    id_seed: JLongArray<'local>,
+    id_namespace: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_importPreviewLength, import_preview_length, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_importPreviewRead, import_preview_read, jbyteArray,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_importPreviewBlocked, import_preview_blocked, jboolean,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_commitImport, commit_import, jlong,
+    handle: jlong,
+    preview: jlong,
+    acknowledged: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_archiveWarningCount, archive_warning_count, jlong,
     handle: jlong,
 }

@@ -15,6 +15,7 @@ macro_rules! export {
 mod archive;
 mod bindings;
 mod json_sink;
+mod model;
 mod registry;
 mod timestamps;
 use archive::*;
@@ -23,6 +24,7 @@ use jni::{
     objects::{JByteArray, JCharArray, JClass, JDoubleArray, JLongArray, JObject, JString},
     sys::{jboolean, jbyteArray, jcharArray, jdoubleArray, jint, jlong, jstring},
 };
+use model::*;
 use orcaxr_project::{
     assets::AssetLease,
     clipboard::{ClipboardCapture, ClipboardPreparation},
@@ -88,6 +90,9 @@ enum Record {
     ArchiveUpload(Box<archive::Upload>),
     ArchiveImport(Box<archive::Import>),
     ArchiveOutput(Box<archive::Output>),
+    ModelUpload(Box<model::Upload>),
+    ImportBase(Box<orcaxr_archive::models::host::Base>),
+    ImportPreview(Box<model::Preview>),
 }
 fn registry() -> &'static Registry<Record> {
     static REGISTRY: OnceLock<Registry<Record>> = OnceLock::new();
@@ -141,6 +146,8 @@ access!(with_open, Open, DocumentOpen);
 access!(with_archive_upload, ArchiveUpload, Box<archive::Upload>);
 access!(with_archive_import, ArchiveImport, Box<archive::Import>);
 access!(with_archive_output, ArchiveOutput, Box<archive::Output>);
+access!(with_model_upload, ModelUpload, Box<model::Upload>);
+access!(with_import_preview, ImportPreview, Box<model::Preview>);
 fn option_values<const N: usize>(
     env: &mut JNIEnv<'_>,
     values: &JDoubleArray<'_>,

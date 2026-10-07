@@ -11,6 +11,7 @@ import { projectStagedBoundaries } from "./project-staged-boundaries.mjs";
 import { projectClipboardBoundaries } from "./project-clipboard-boundaries.mjs";
 import { stagedCommandJson } from "./project-staged-replay.mjs";
 import { replayArchives, archiveCases } from "./archive-wasm-replay.mjs";
+import { replayModelImports } from "./model-import-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -205,6 +206,30 @@ try {
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
   );
   assert.deepEqual([archives.cases, archives.accepted, archives.saves], [1341, 1225, 1223]);
+  // The browser's model import transactions through the real JNI exports.
+  const json = async (path) => JSON.parse(await readFile(new URL(path, root)));
+  const models = await replayModelImports(
+    projectJniCore(jvm.call),
+    layout,
+    await json("contracts/project-model-import.json"),
+    await json("testdata/cross-platform/model-transaction-vectors.json"),
+    await json("testdata/cross-platform/model-stage-vectors.json"),
+    await json("testdata/cross-platform/model-import-vectors.json"),
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    (path) => new Uint8Array(readFileSync(new URL(path, root))),
+    (text) => new Uint8Array(Buffer.from(text, "base64")),
+  );
+  assert.deepEqual([models.cases, models.committed], [21, 15]);
+  const decodeRows = new Map((await json("testdata/cross-platform/model-import-vectors.json")).cases.map((c) => [c.name, c]));
+  const decodeBytes = (name) => Buffer.from(decodeRows.get(name).bytesBase64, "base64");
+  const actorImportChecks = jvm.call(
+    "actorImportChecks",
+    model.factories[0].stateJson,
+    decodeBytes("stl-binary/cube"),
+    decodeBytes("obj/mtllib-unresolved"),
+    decodeBytes("detect/step"),
+  );
+  assert.equal(actorImportChecks, 7);
   const archiveCase = JSON.parse(
     await readFile(new URL("testdata/cross-platform/foreign-import-vectors.json", root)),
   ).cases.find((c) => c.name === ACTOR_ARCHIVE_CASE);
@@ -235,6 +260,8 @@ try {
     ...boundaries,
     ...queries,
     archives,
+    models,
+    actorImportChecks,
     actorArchiveChecks,
     providerDocumentChecks,
     ownedQueryTextUnits: ownedQueryText.length,
