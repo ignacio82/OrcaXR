@@ -399,4 +399,31 @@ await test('fails closed on lossy metadata, modifiers, stale guards, IDs, and ti
   assertUnchanged(single, singleBefore);
 });
 
+await test('refuses invalid prepared parts before opening the transaction', () => {
+  const source = tetrahedra('invalid-parts', true);
+  const h = harness(source);
+  const volume = h.project.getSnapshot().state.plates[0].objects[0].volumes[0];
+  const parts = preparedParts(source, 'invalid');
+  const duplicated = [parts[0], { ...parts[1], volumeId: parts[0].volumeId }, ...parts.slice(2)];
+  const revision = h.project.getSnapshot().revision;
+  const before = capture(h);
+  assert.throws(
+    () =>
+      commitPreparedVolumeSplitToObjects(
+        h.bus,
+        captureVolumeSplitGuard(h.project.getSnapshot().state, volume.id),
+        duplicated,
+        identities(
+          parts.map((part) => part.volumeId),
+          1,
+          'invalid',
+        ),
+      ),
+    /is duplicated/,
+  );
+  assertUnchanged(h, before);
+  // Input validation needs no state, so nothing was published or rolled back.
+  assert.equal(h.project.getSnapshot().revision, revision);
+});
+
 console.log(`\nSplit-to-objects commands: ${passed} tests passed.`);

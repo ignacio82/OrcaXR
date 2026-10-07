@@ -47,7 +47,7 @@
     },
     {
       "path": "web/src/project/objects/splitToObjectsCommands.ts",
-      "sha256": "64f20769a34624ff73ab87042c81e1c2eef29a1f3ebc5b2955bb37b6ff608301"
+      "sha256": "dc70ea9430e44cdac9d29d8272aa30b68c34f203c586114fd3cd88316210fdba"
     },
     {
       "path": "web/src/project/filaments/autoPairReconciliation.ts",

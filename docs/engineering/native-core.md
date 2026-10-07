@@ -2856,6 +2856,37 @@ present. Three browser defects were fixed before porting:
 
 `meshBooleanCommands.test.ts` covers each fix.
 
+### Split to parts and single-volume split to objects
+
+`SplitVolumeToPartsCommand` is native as `PreparedCommand::split_volume_to_parts`.
+Guard and parts arrive as received (`VolumeSplitGuard` with the source volume's
+canonical text; `SplitPart` with a staged payload), and construction normalizes
+them like `normalizePreparedParts`:
+
+- guard shape, then at least two parts with fresh, unique, stable volume IDs;
+- transforms with non-zero scale and rotation;
+- part payloads that differ from the source and decode to non-empty meshes;
+- source-triangle maps that are a lossless, non-overlapping partition;
+- one payload per asset ID and one asset ID per digest.
+
+Apply follows the browser. It checks staleness, comparing the volume's
+canonical text with the fingerprint by streaming it, never by building the
+string. It refuses opaque core-facet 3MF metadata. It then classifies payloads
+as already declared, colliding or owned, and generates role-preserving parts
+named `<name>_<n>`. Owned descriptors take the source's place in the declared
+asset list. A selected source volume becomes every part, and undo is the exact
+inverse.
+
+`prepare_split_to_objects` is `commitPreparedVolumeSplitToObjects`. Its checks
+(source found, exactly one volume, no component under three facets) run against
+live state and refuse without publishing. Constructing the split also refuses
+before any transaction. The browser now does the same: it used to build the
+split inside its transaction and publish a rollback for bad input. The result
+is a "Split to objects" batch: the split, then a `SeparateObjectVolumes` whose
+source is the object holding the first part, fingerprinted after the split
+commits. That matches the browser's in-transaction guard capture, including
+the three publications of a promotion that fails inside the transaction.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

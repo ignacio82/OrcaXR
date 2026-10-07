@@ -18,6 +18,62 @@ fn record_limits(record: &[u8]) -> JsonLimits {
         max_depth: 64,
     }
 }
+fn utf16(value: &Value) -> Vec<u16> {
+    value
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n.as_u64().unwrap() as u16)
+        .collect()
+}
+fn split_guard(guard: &Value) -> VolumeSplitGuard {
+    VolumeSplitGuard {
+        volume_id: utf16(&guard["volumeId"]),
+        asset_id: utf16(&guard["assetId"]),
+        asset_digest: utf16(&guard["assetDigest"]),
+        topology_revision: guard["topologyRevision"].as_f64().unwrap(),
+        triangle_count: guard["triangleCount"].as_f64().unwrap(),
+        volume_fingerprint: utf16(&guard["volumeFingerprint"]),
+    }
+}
+fn split_parts(parts: &Value) -> Vec<SplitPart> {
+    parts
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|part| SplitPart {
+            volume_id: utf16(&part["volumeId"]),
+            asset: StagedAsset::new(payload(&part["asset"])).unwrap(),
+            transform: Transform::from_value(
+                parse(part["transformJson"].as_str().unwrap()).unwrap(),
+            )
+            .unwrap(),
+            source_triangles: part["sourceTriangleIndices"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|n| n.as_f64().unwrap())
+                .collect(),
+        })
+        .collect()
+}
+fn separated(identities: &Value) -> Vec<SeparatedObject> {
+    identities
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|identity| SeparatedObject {
+            source_volume: VolumeId::try_from_utf16(utf16(&identity["sourceVolumeId"])).unwrap(),
+            object: ObjectId::try_from_utf16(utf16(&identity["objectId"])).unwrap(),
+            instances: identity["instanceIds"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|id| InstanceId::try_from_utf16(utf16(id)).unwrap())
+                .collect(),
+        })
+        .collect()
+}
 /// The native counterpart of a browser-constructed record command that
 /// carries its own payload (`project-asset-command-vectors.mjs`).
 fn prepare_asset(v: &Value) -> Result<PreparedCommand, PreparationError> {
@@ -46,6 +102,12 @@ fn prepare_asset(v: &Value) -> Result<PreparedCommand, PreparationError> {
                     triangle_count: number("triangleCount"),
                 },
                 asset(),
+            );
+        }
+        "splitVolumeToParts" => {
+            return PreparedCommand::split_volume_to_parts(
+                split_guard(&v["guard"]),
+                split_parts(&v["parts"]),
             );
         }
         "meshBoolean" => {
@@ -261,7 +323,7 @@ fn asset_commands_and_payloads_match_every_typescript_step() {
             "../../../../testdata/cross-platform/project-asset-command-vectors.json"
         ))
         .unwrap(),
-        177,
+        250,
     );
 }
 /// Applying and redoing a staged payload installs its validated record by
@@ -514,6 +576,18 @@ fn replay(f: Value, expected_steps: usize) {
                     .collect::<Result<Vec<_>, _>>()
                 {
                     Ok(commands) => Some(bus.execute_batch(text(&op["label"]), commands)),
+                    Err(e) => {
+                        error = json!(e.user_message().units());
+                        None
+                    }
+                },
+                "splitToObjects" => match prepare_split_to_objects(
+                    bus.snapshot().state(),
+                    split_guard(&op["guard"]),
+                    split_parts(&op["parts"]),
+                    separated(&op["identities"]),
+                ) {
+                    Ok(batch) => Some(bus.execute_batch(batch.label, batch.commands)),
                     Err(e) => {
                         error = json!(e.user_message().units());
                         None

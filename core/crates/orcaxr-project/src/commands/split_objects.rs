@@ -32,6 +32,7 @@ impl From<SelectionSnapshot> for Selection {
 
 #[derive(Clone)]
 struct Applied {
+    object: ObjectId,
     plate: PlateId,
     source: Arc<ProjectObject>,
     before: ValidatedProject,
@@ -40,11 +41,24 @@ struct Applied {
     after_selection: Selection,
 }
 
+/// How the first apply finds its source object.
+#[derive(Clone)]
+enum Source {
+    /// `SeparateObjectVolumesRequestCommand`: the revision the host saw.
+    Guarded {
+        revision: u64,
+        hash: Vec<u16>,
+        object: ObjectId,
+    },
+    /// The second step of a single-volume split to objects: the object that
+    /// holds this part once the component split has committed, fingerprinted
+    /// there exactly as `commitPreparedVolumeSplitToObjects` does.
+    AfterSplit { part: VolumeId },
+}
+
 #[derive(Clone)]
 pub(super) struct SeparateObjectVolumes {
-    revision: u64,
-    hash: Vec<u16>,
-    object: ObjectId,
+    source: Source,
     identities: Vec<Identity>,
     applied: Option<Box<Applied>>,
 }
@@ -63,18 +77,32 @@ impl SeparateObjectVolumes {
             })
             .collect::<Result<Vec<_>, PreparationError>>()?;
         Ok(Self {
-            revision: v.guard.source_revision,
-            hash: v.guard.source_hash,
-            object: id(v.object_id)?,
+            source: Source::Guarded {
+                revision: v.guard.source_revision,
+                hash: v.guard.source_hash,
+                object: id(v.object_id)?,
+            },
             identities,
             applied: None,
         })
     }
+    /// The promotion step after a component split that produced `part`.
+    pub(super) fn after_split(part: VolumeId, identities: Vec<SeparatedObject>) -> Self {
+        Self {
+            source: Source::AfterSplit { part },
+            identities: identities
+                .into_iter()
+                .map(|identity| Identity {
+                    source: identity.source_volume,
+                    object: identity.object,
+                    instances: identity.instances,
+                })
+                .collect(),
+            applied: None,
+        }
+    }
     pub(super) fn label(&self) -> Text {
         Text::from_utf8("Split to objects")
-    }
-    fn message<E>(&self, prefix: &str, suffix: &str) -> CommandError<E> {
-        CommandError::Domain(text_parts(prefix, self.object.as_utf16(), suffix))
     }
 
     pub(super) fn apply<P: TimestampPolicy>(
@@ -84,20 +112,48 @@ impl SeparateObjectVolumes {
     ) -> Result<(), CommandError<P::Error>> {
         if let Some(applied) = &self.applied {
             if context.snapshot().state() != applied.before.state() {
-                return Err(self.message("Split-to-objects source ", " changed before redo"));
+                return Err(message(
+                    "Split-to-objects source ",
+                    &applied.object,
+                    " changed before redo",
+                ));
             }
             context.replace_validated(applied.after.clone(), reason, PROJECT)?;
             return restore(context, &applied.after_selection);
         }
         let snapshot = context.snapshot();
-        if snapshot.revision() != self.revision
-            || !self.hash.iter().copied().eq(snapshot.hash().encode_utf16())
-        {
-            return Err(self.message("Split-to-objects source ", " is stale"));
-        }
         let state = snapshot.state();
-        let Some((p, o)) = locate_object(state, &self.object) else {
-            return Err(self.message("Unknown object ", ""));
+        let (p, o) = match &self.source {
+            Source::Guarded {
+                revision,
+                hash,
+                object,
+            } => {
+                if snapshot.revision() != *revision
+                    || !hash.iter().copied().eq(snapshot.hash().encode_utf16())
+                {
+                    return Err(message("Split-to-objects source ", object, " is stale"));
+                }
+                let Some(found) = locate_object(state, object) else {
+                    return Err(message("Unknown object ", object, ""));
+                };
+                found
+            }
+            Source::AfterSplit { part } => {
+                let found = state.plates.iter().enumerate().find_map(|(p, plate)| {
+                    plate
+                        .objects
+                        .iter()
+                        .position(|o| o.volumes.iter().any(|v| v.id == *part))
+                        .map(|o| (p, o))
+                });
+                let Some(found) = found else {
+                    return Err(CommandError::domain(
+                        "Prepared split-to-objects output is missing after component commit",
+                    ));
+                };
+                found
+            }
         };
         let source = state.plates[p].objects[o].clone();
         validate_source(&source)?;
@@ -123,6 +179,7 @@ impl SeparateObjectVolumes {
         context.replace_validated(after.clone(), reason, PROJECT)?;
         restore(context, &after_selection)?;
         self.applied = Some(Box::new(Applied {
+            object: source.id.clone(),
             plate: state.plates[p].id.clone(),
             source,
             before: snapshot.project().clone(),
@@ -144,7 +201,11 @@ impl SeparateObjectVolumes {
             ));
         };
         if context.snapshot().state() != applied.after.state() {
-            return Err(self.message("Generated split objects for ", " changed before undo"));
+            return Err(message(
+                "Generated split objects for ",
+                &applied.object,
+                " changed before undo",
+            ));
         }
         context.replace_validated(applied.before.clone(), reason, PROJECT)?;
         restore(context, &applied.before_selection)
@@ -163,7 +224,7 @@ impl SeparateObjectVolumes {
         applied.source.write_json(&mut count)?;
         count.nested_string = false;
         count.write_all(b"\",\"objectId\":")?;
-        self.object.write_json(&mut count)?;
+        applied.object.write_json(&mut count)?;
         count.write_all(b",\"plateId\":")?;
         applied.plate.write_json(&mut count)?;
         count.write_all(b"}[")?;
@@ -195,6 +256,16 @@ impl SeparateObjectVolumes {
     }
 }
 
+fn message<E>(prefix: &str, object: &ObjectId, suffix: &str) -> CommandError<E> {
+    CommandError::Domain(text_parts(prefix, object.as_utf16(), suffix))
+}
+/// One promoted volume's caller-chosen identities (`SeparatedObjectIdentity`).
+#[derive(Clone)]
+pub struct SeparatedObject {
+    pub source_volume: VolumeId,
+    pub object: ObjectId,
+    pub instances: Vec<InstanceId>,
+}
 fn restore<P: TimestampPolicy>(
     context: &mut CommandContext<'_, P>,
     selection: &Selection,

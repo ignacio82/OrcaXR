@@ -12,33 +12,33 @@ use std::io::{self, Write};
 
 const MAX_SAFE: f64 = 9_007_199_254_740_991.0;
 
-fn u(text: &str) -> Vec<u16> {
+pub(super) fn u(text: &str) -> Vec<u16> {
     text.encode_utf16().collect()
 }
-fn safe_integer(n: f64) -> bool {
+pub(super) fn safe_integer(n: f64) -> bool {
     n.is_finite() && n.fract() == 0.0 && n.abs() <= MAX_SAFE
 }
-fn trimmed_empty(units: &[u16]) -> bool {
+pub(super) fn trimmed_empty(units: &[u16]) -> bool {
     units.iter().all(|&c| crate::ids::ecmascript_whitespace(c))
 }
-fn prepared(message: &str) -> PreparationError {
+pub(super) fn prepared(message: &str) -> PreparationError {
     PreparationError::Domain(Text::from_utf8(message))
 }
-fn prepared_parts(prefix: &str, units: &[u16], suffix: &str) -> PreparationError {
+pub(super) fn prepared_parts(prefix: &str, units: &[u16], suffix: &str) -> PreparationError {
     PreparationError::Domain(text_parts(prefix, units, suffix))
 }
-fn domain<E>(prefix: &str, units: &[u16], suffix: &str) -> CommandError<E> {
+pub(super) fn domain<E>(prefix: &str, units: &[u16], suffix: &str) -> CommandError<E> {
     CommandError::Domain(text_parts(prefix, units, suffix))
 }
-fn stable<K>(units: &[u16]) -> Option<EntityId<K>> {
+pub(super) fn stable<K>(units: &[u16]) -> Option<EntityId<K>> {
     crate::ids::is_stable_entity_id(units)
         .then(|| EntityId::try_from_utf16(units.to_vec()).ok())
         .flatten()
 }
-fn string(units: &[u16]) -> Value {
+pub(super) fn string(units: &[u16]) -> Value {
     Value::String(units.to_vec())
 }
-fn object(fields: Vec<(&str, Value)>) -> Value {
+pub(super) fn object(fields: Vec<(&str, Value)>) -> Value {
     Value::Object(
         fields
             .into_iter()
@@ -46,18 +46,20 @@ fn object(fields: Vec<(&str, Value)>) -> Value {
             .collect::<BTreeMap<_, _>>(),
     )
 }
-fn length(value: &Value) -> io::Result<u64> {
+pub(super) fn length(value: &Value) -> io::Result<u64> {
     let mut count = Length::default();
     value.write_canonical(&mut count)?;
     Ok(count.units)
 }
 /// A payload's history charge: canonical descriptor plus byte length.
-fn payload_bytes(lease: &AssetLease) -> io::Result<u64> {
+pub(super) fn payload_bytes(lease: &AssetLease) -> io::Result<u64> {
     Ok(length(lease.descriptor())? + lease.bytes().len() as u64)
 }
 
 /// `emptyFacetAnnotations(revision)`.
-fn empty_annotations<E>(revision: f64) -> Result<Arc<FacetAnnotations>, CommandError<E>> {
+pub(super) fn empty_annotations<E>(
+    revision: f64,
+) -> Result<Arc<FacetAnnotations>, CommandError<E>> {
     let empty = Value::Array(Vec::new());
     FacetAnnotations::from_value(object(vec![
         ("topologyRevision", Value::Number(revision)),
@@ -87,7 +89,7 @@ fn replacement_triangles(asset: &StagedAsset) -> Result<f64, PreparationError> {
 
 /// `requireCanonicalMeshAsset`: declared once, stored with the same metadata,
 /// and a decodable indexed mesh.
-fn canonical_mesh<P: TimestampPolicy>(
+pub(super) fn canonical_mesh<P: TimestampPolicy>(
     context: &CommandContext<'_, P>,
     state: &ProjectState,
     id: &AssetId,
@@ -158,7 +160,7 @@ fn assert_available<P: TimestampPolicy>(
 }
 
 /// `projectReferencesAsset`.
-fn references(state: &ProjectState, id: &AssetId) -> bool {
+pub(super) fn references(state: &ProjectState, id: &AssetId) -> bool {
     state
         .plates
         .iter()
@@ -168,7 +170,7 @@ fn references(state: &ProjectState, id: &AssetId) -> bool {
         || state.thumbnails.iter().any(|t| t.asset_id == *id)
         || state.extension_blobs.iter().any(|b| b.asset_id == *id)
 }
-fn put<P: TimestampPolicy>(
+pub(super) fn put<P: TimestampPolicy>(
     context: &mut CommandContext<'_, P>,
     lease: &AssetLease,
 ) -> Result<(), CommandError<P::Error>> {
@@ -204,11 +206,11 @@ fn remove_descriptor(state: &mut ProjectState, index: usize) {
     assets.remove(index);
     state.source_assets = assets.into();
 }
-fn position(state: &ProjectState, id: &AssetId) -> Option<usize> {
+pub(super) fn position(state: &ProjectState, id: &AssetId) -> Option<usize> {
     state.source_assets.iter().position(|d| d.id == *id)
 }
 /// The volume `id` in plate/object order, as the browser's `findVolume`.
-fn locate_volume(state: &ProjectState, id: &VolumeId) -> Option<(usize, usize, usize)> {
+pub(super) fn locate_volume(state: &ProjectState, id: &VolumeId) -> Option<(usize, usize, usize)> {
     state.plates.iter().enumerate().find_map(|(p, plate)| {
         plate.objects.iter().enumerate().find_map(|(o, object)| {
             object
@@ -232,7 +234,7 @@ fn locate_instance(state: &ProjectState, id: &InstanceId) -> Option<(usize, usiz
     })
 }
 /// Edit one object of a cloned state in place (copy-on-write).
-fn with_object<R>(
+pub(super) fn with_object<R>(
     state: &mut ProjectState,
     p: usize,
     o: usize,

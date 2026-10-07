@@ -149,12 +149,12 @@ mixed filaments, project/scoped setting overrides, volume-role conversion and
 whole-facet paint strokes, project rename, plate wipe towers, auto-pair
 reconciliation, model-colour recreation and multi-volume split to objects are
 ported. So are the payload-carrying commands for add object, add object with
-asset, add volume, mesh topology replacement and mesh booleans. They install
-validated payload leases without copying bytes (about 70 of the browser's 78
-command classes are now native). Next come split to parts and single-volume
-split to objects, then SVG and emboss volumes. The staged upload path follows
-for every payload-carrying kind at once: command uploads will declare
-descriptors in their JSON and then stream the bytes, as bundle input does. Each family adds intent variants to
+asset, add volume, mesh topology replacement, mesh booleans, split to parts and
+single-volume split to objects. They install validated payload leases without
+copying bytes (about 71 of the browser's 78 command classes are now native).
+Next come SVG and emboss volumes. The staged upload path follows for every
+payload-carrying kind at once: command uploads will declare descriptors in
+their JSON and then stream the bytes, as bundle input does. Each family adds intent variants to
 `contracts/project-intents.json` (definitions before first use; regenerate with
 `generate-project-intents.mjs --write`), maps them in
 `web/src/project/PreparedProjectCommands.ts`, appends a scenario to
@@ -1155,9 +1155,17 @@ and replay coverage for the complete current command inventory.
     asset order exactly, a boolean of an instance with itself is refused, and
     history no longer stringifies payload bytes as index-keyed objects. The
     asset corpus is now 13 traces / 177 steps.
+  - [x] Port split to parts (`SplitVolumeToPartsCommand`) and the
+    single-volume split to objects (`commitPreparedVolumeSplitToObjects`).
+    The native preparation runs the browser's checks against live state
+    without publishing, then batches the split with a promotion that
+    fingerprints its source after the split commits. The browser now
+    validates prepared parts before opening its transaction, so invalid input
+    no longer publishes a rollback (regression-tested). Traces come from the
+    browser's real shared-edge preparation (asset corpus: 18 traces / 250
+    steps).
   - [ ] Port and replay every remaining command family before session cutover:
-    split to parts and component split to objects, SVG/emboss volumes and
-    refined facet commits.
+    SVG/emboss volumes and refined facet commits.
 - [ ] Port settings resolution, physical/mixed filament identities, profile
   selection semantics, and canonical slice preflight. Consume the generated
   pinned schema/catalog rather than reconstructing defaults in Kotlin.

@@ -201,8 +201,11 @@ export function commitPreparedVolumeSplitToObjects(
     );
   }
 
+  // Validating the staged parts needs no project state: refuse bad input
+  // before opening the transaction rather than publishing a rollback for it.
+  const split = new SplitVolumeToPartsCommand(guard, parts);
   commands.transaction('Split to objects', () => {
-    commands.execute(new SplitVolumeToPartsCommand(guard, parts), { coalesce: false });
+    commands.execute(split, { coalesce: false });
     const splitState = commands.context.project.getSnapshot().state;
     const splitObject = findVolume(splitState, parts[0].volumeId)?.object;
     if (!splitObject) throw new Error('Prepared split-to-objects output is missing after component commit');

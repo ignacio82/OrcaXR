@@ -13,6 +13,9 @@ import { AddObjectCommand, AddObjectWithAssetCommand } from "../../web/src/proje
 import { AddVolumeCommand } from "../../web/src/project/objects/semanticVolumeCommands.ts";
 import { ReplaceVolumeMeshCommand } from "../../web/src/project/objects/topologyCommands.ts";
 import { MeshBooleanCommand } from "../../web/src/project/objects/meshBooleanCommands.ts";
+import { SplitVolumeToPartsCommand, captureVolumeSplitGuard } from "../../web/src/project/objects/splitCommands.ts";
+import { prepareVolumeSplitParts } from "../../web/src/project/objects/splitPreparation.ts";
+import { commitPreparedVolumeSplitToObjects } from "../../web/src/project/objects/splitToObjectsCommands.ts";
 import { InMemoryAssetRepository, assetBundleFingerprint } from "../../web/src/project/assets.ts";
 import { createProjectFixture } from "../../web/src/project/__tests__/fixtures.ts";
 import { canonicalStringify, cloneJson } from "../../web/src/project/domain/canonical.ts";
@@ -38,6 +41,10 @@ const payload = w => ({ descriptor: JSON.parse(w.descriptorJson), bytes: Uint8Ar
 /** Guards travel with UTF-16 strings, so their exact text reaches both sides. */
 const guardTo = g => Object.fromEntries(Object.entries(g).map(([k, v]) => [k, typeof v === "string" ? units(v) : v]));
 const guardFrom = g => Object.fromEntries(Object.entries(g).map(([k, v]) => [k, Array.isArray(v) ? string(v) : v]));
+const partsTo = parts => parts.map(p => ({ volumeId: units(p.volumeId), asset: wirePayload(p.asset), transformJson: canonicalStringify(p.transform), sourceTriangleIndices: [...p.sourceTriangleIndices] }));
+const partsFrom = parts => parts.map(p => ({ volumeId: string(p.volumeId), asset: payload(p.asset), transform: JSON.parse(p.transformJson), sourceTriangleIndices: p.sourceTriangleIndices }));
+const identitiesTo = identities => identities.map(i => ({ sourceVolumeId: units(i.sourceVolumeId), objectId: units(i.objectId), instanceIds: i.instanceIds.map(units) }));
+const identitiesFrom = identities => identities.map(i => ({ sourceVolumeId: string(i.sourceVolumeId), objectId: string(i.objectId), instanceIds: i.instanceIds.map(string) }));
 function prepare(c) {
   const record = c.recordJson === undefined ? undefined : JSON.parse(c.recordJson);
   switch (c.kind) {
@@ -46,6 +53,7 @@ function prepare(c) {
     case "addVolume": return new AddVolumeCommand(string(c.objectId), record, payload(c.asset));
     case "replaceVolumeMesh": return new ReplaceVolumeMeshCommand(guardFrom(c.guard), payload(c.asset));
     case "meshBoolean": return new MeshBooleanCommand(guardFrom(c.guard), payload(c.asset), c.op);
+    case "splitVolumeToParts": return new SplitVolumeToPartsCommand(guardFrom(c.guard), partsFrom(c.parts));
     default: throw new Error("unknown captured kind");
   }
 }
@@ -71,6 +79,7 @@ function scenario(name, options, mutate, work) {
         case "asset": bus.execute(prepare(operation.command), { coalesce: true }); break;
         case "assetBatch": { const commands = operation.commands.map(c => (c.intent ? prepareProjectIntent({ version: 1, command: c.intent }) : prepare(c))); bus.transaction(string(operation.label), () => { for (const c of commands) bus.execute(c); }); break; }
         case "intent": bus.execute(prepareProjectIntent(JSON.parse(operation.json)), { coalesce: operation.coalesce }); break;
+        case "splitToObjects": commitPreparedVolumeSplitToObjects(bus, guardFrom(operation.guard), partsFrom(operation.parts), identitiesFrom(operation.identities)); break;
         case "undo": result = bus.undo(); break;
         case "redo": result = bus.redo(); break;
         case "checkpoint": bus.markCheckpoint(); break;
@@ -175,6 +184,7 @@ const topologyGuard = (state, volumeId) => {
   return { volumeId, assetId: volume.source.assetId, assetDigest: descriptor.digest, topologyRevision: volume.source.topologyRevision, triangleCount: volume.source.triangleCount };
 };
 const withMeshDescriptor = (p, edit) => withDescriptor(p, d => edit(d.mesh));
+const CORE_FACET_ATTRIBUTES = "https://orcaxr.martinez.fyi/3mf/project/1/core-facet-attributes";
 
 scenario("replace-volume-mesh", {}, (s, f, extra) => {
   // A second volume shares the fixture mesh, so the first replacement keeps it.
@@ -260,6 +270,121 @@ scenario("mesh-boolean-shared-target-mesh", {}, (s, f, extra) => {
   run({ kind: "undo" }); run({ kind: "redo" });
 });
 
+// Split to parts / split to objects, from the browser's own preparation.
+const tetraPositions = (x, y, z, size) => [x, y, z, x + size, y, z, x, y + size, z, x, y, z + size];
+const tetraIndices = base => [0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 2, 3].map(i => i + base);
+/** Three shared-edge components; the first two are congruent, so preparation
+ * gives them one asset. */
+const splitSourceMesh = id => encodeIndexedMeshAsset({ id, positions: [...tetraPositions(0, 0, 0, 10), ...tetraPositions(30, 0, 0, 10), ...tetraPositions(0, 30, 0, 6)],
+  indices: [...tetraIndices(0), ...tetraIndices(4), ...tetraIndices(8)] });
+/** A tetrahedron plus a lone triangle: one component is below three facets. */
+const lonerMesh = id => encodeIndexedMeshAsset({ id, positions: [...tetraPositions(0, 0, 0, 10), 40, 0, 0, 50, 0, 0, 40, 10, 0], indices: [...tetraIndices(0), 4, 5, 6] });
+function prepareSplit(state, repository, volumeId, prefix) {
+  const guard = captureVolumeSplitGuard(state, volumeId);
+  const volume = state.plates.flatMap(p => p.objects).flatMap(o => o.volumes).find(v => v.id === volumeId);
+  const assetIds = new Map();
+  const parts = prepareVolumeSplitParts({ sourceAsset: repository.get(volume.source.assetId), sourceTransform: volume.transform,
+    idsForPart: ({ partIndex, geometryDigest }) => {
+      if (!assetIds.has(geometryDigest)) assetIds.set(geometryDigest, `import:asset:${prefix}-${assetIds.size}`);
+      return { volumeId: `import:volume:${prefix}-${partIndex}`, assetId: assetIds.get(geometryDigest) };
+    } });
+  return { guard, parts };
+}
+const splitParts = (guard, parts) => ({ kind: "splitVolumeToParts", guard: guardTo(guard), parts: partsTo(parts) });
+const splitToObjects = (guard, parts, identities) => ({ kind: "splitToObjects", guard: guardTo(guard), parts: partsTo(parts), identities: identitiesTo(identities) });
+const reId = (p, id) => withDescriptor(p, d => (d.id = id));
+function splitFixture(s, f, extra) {
+  f.asset = splitSourceMesh(f.ids.asset);
+  s.sourceAssets = s.sourceAssets.map(a => (a.id === f.asset.descriptor.id ? f.asset.descriptor : a));
+  const volume = s.plates[0].objects[0].volumes[0];
+  volume.source.triangleCount = 12;
+  volume.transform = { translationMm: [5, 5, 0], rotation: [0, 0, 0.6, 0.8], scale: [1, 2, 1] };
+  volume.extensionData = { "orcaxr:kept": { source: "body" } };
+  // A declared payload and a repository-only payload for collision checks.
+  const declared = mesh("import:asset:declared-extra", 61), stored = mesh("import:asset:repository-extra", 62);
+  s.sourceAssets.push(declared.descriptor);
+  extra.push(declared, stored);
+}
+scenario("split-volume-to-parts", {}, splitFixture, ({ execute, run, intent, state, repository, ids }) => {
+  run({ kind: "selection", refs: [{ kind: "instance", id: units(ids.instance) }, { kind: "volume", id: units(ids.volume) }] });
+  const { guard, parts } = prepareSplit(state(), repository, ids.volume, "part");
+  assert.equal(parts.length, 3);
+  assert.equal(parts[0].asset.descriptor.id, parts[1].asset.descriptor.id);
+  const editPart = (index, change) => parts.map((p, i) => (i === index ? change({ ...p, asset: payload(wirePayload(p.asset)) }) : p));
+  for (const bad of [{ volumeId: "bad" }, { assetId: "bad" }, { assetDigest: " " }, { volumeFingerprint: "" }, { topologyRevision: -1 }, { triangleCount: 0 }])
+    execute(splitParts({ ...guard, ...bad }, parts));
+  for (const bad of [parts.slice(0, 1), editPart(0, p => ({ ...p, volumeId: "bad" })), editPart(0, p => ({ ...p, volumeId: ids.volume })), editPart(1, p => ({ ...p, volumeId: parts[0].volumeId })),
+    editPart(2, p => ({ ...p, transform: { ...p.transform, scale: [1, 0, 1] } })), editPart(2, p => ({ ...p, transform: { ...p.transform, rotation: [0, 0, 0, 1e-7] } })),
+    editPart(2, p => ({ ...p, asset: reId(p.asset, ids.asset) })), editPart(2, p => ({ ...p, asset: withDescriptor(p.asset, d => (d.digest = " ")) })),
+    editPart(2, p => ({ ...p, asset: encodeIndexedMeshAsset({ id: "import:asset:empty-part", positions: [] }) })), editPart(2, p => ({ ...p, sourceTriangleIndices: p.sourceTriangleIndices.slice(1) })),
+    editPart(2, p => ({ ...p, sourceTriangleIndices: [...p.sourceTriangleIndices.slice(1), 12] })), editPart(2, p => ({ ...p, sourceTriangleIndices: [...p.sourceTriangleIndices.slice(1), 1.5] })),
+    editPart(2, p => ({ ...p, sourceTriangleIndices: [...p.sourceTriangleIndices.slice(1), parts[0].sourceTriangleIndices[0]] })),
+    editPart(1, p => ({ ...p, asset: reId(parts[2].asset, parts[0].asset.descriptor.id) })), editPart(1, p => ({ ...p, asset: reId(p.asset, "import:asset:part-twin") })),
+    parts.slice(0, 2), editPart(2, p => ({ ...p, asset: reId(p.asset, parts[0].volumeId) }))])
+    execute(splitParts(guard, bad));
+  for (const stale of [{ volumeId: "import:volume:missing" }, { topologyRevision: 5 }, { assetDigest: "fnv1a64:0000000000000000" }])
+    execute(splitParts({ ...guard, ...stale }, parts));
+  intent({ renameVolume: { volumeId: units(ids.volume), name: units("Renamed") } });
+  execute(splitParts(guard, parts));
+  run({ kind: "undo" });
+  for (const bad of [editPart(2, p => ({ ...p, volumeId: ids.object })), editPart(2, p => ({ ...p, asset: reId(p.asset, "import:asset:repository-extra") })),
+    editPart(2, p => ({ ...p, asset: reId(p.asset, "import:asset:declared-extra") })), editPart(2, p => ({ ...p, asset: reId(p.asset, ids.instance) })),
+    editPart(2, p => ({ ...p, asset: reId(mesh("import:asset:declared-twin", 61), p.asset.descriptor.id) })),
+    editPart(2, p => ({ ...p, asset: reId(mesh("import:asset:repository-twin", 62), p.asset.descriptor.id) })),
+    editPart(2, p => ({ ...p, sourceTriangleIndices: [...p.sourceTriangleIndices.slice(1), -1] }))])
+    execute(splitParts(guard, bad));
+  roundtrip(execute, run, splitParts(guard, parts));
+  execute(splitParts(guard, parts));
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+scenario("split-volume-to-parts-shared-source", {}, (s, f, extra) => {
+  splitFixture(s, f, extra);
+  // A second volume keeps the source mesh, and the third part's mesh is
+  // already declared: the split owns only the shared congruent mesh.
+  const object = s.plates[0].objects[0];
+  object.volumes.push({ ...cloneJson(object.volumes[0]), id: "import:volume:keeper", name: "Keeper", extensionData: { [CORE_FACET_ATTRIBUTES]: { opaque: true } } });
+  const probe = createProjectFixture(), store = new InMemoryAssetRepository(), probeExtra = [];
+  splitFixture(probe.state, probe, probeExtra);
+  store.put(probe.asset.descriptor, probe.asset.bytes);
+  const third = prepareSplit(probe.state, store, probe.ids.volume, "part").parts[2].asset;
+  s.sourceAssets.push(third.descriptor);
+  extra.push(third);
+}, ({ execute, run, state, repository, ids }) => {
+  execute(splitParts(...Object.values(prepareSplit(state(), repository, "import:volume:keeper", "keeper"))));
+  const { guard, parts } = prepareSplit(state(), repository, ids.volume, "part");
+  roundtrip(execute, run, splitParts(guard, parts));
+  execute(splitParts(guard, parts));
+});
+scenario("split-volume-to-objects", {}, (s, f, extra) => {
+  splitFixture(s, f, extra);
+  const object = s.plates[0].objects[0];
+  object.layerRanges = [];
+  object.instances.push({ ...cloneJson(object.instances[0]), id: "import:instance:second", transform: { translationMm: [80, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } });
+  const loner = lonerMesh("import:asset:loner");
+  s.sourceAssets.push(loner.descriptor);
+  extra.push(loner);
+  s.plates[0].objects.push({ ...objectFor("loner", loner), volumes: [{ ...volumeFor("import:volume:loner", loner), annotations: { ...object.volumes[0].annotations, color: [] } }] });
+  s.plates[0].objects.push({ ...objectFor("pair", f.asset), volumes: ["a", "b"].map(k => ({ ...volumeFor(`import:volume:pair-${k}`, f.asset), annotations: { ...object.volumes[0].annotations, color: [] } })) });
+}, ({ run, state, repository, ids }) => {
+  const objectsOf = (prefix, n, instances) => Array.from({ length: n }, (_, i) => ({ sourceVolumeId: `import:volume:${prefix}-${i}`, objectId: `import:object:${prefix}-out-${i}`,
+    instanceIds: instances.map((_, j) => `import:instance:${prefix}-out-${i}-${j}`) }));
+  const source = state().plates[0].objects[0];
+  run({ kind: "selection", refs: [{ kind: "object", id: units(ids.object) }, { kind: "instance", id: units("import:instance:second") }] });
+  const { guard, parts } = prepareSplit(state(), repository, ids.volume, "part");
+  const identities = objectsOf("part", 3, source.instances);
+  run(splitToObjects({ ...guard, volumeId: "import:volume:missing" }, parts, identities));
+  const pair = prepareSplit(state(), repository, "import:volume:pair-a", "pair");
+  run(splitToObjects(pair.guard, pair.parts, objectsOf("pair", 3, [0])));
+  const loner = prepareSplit(state(), repository, "import:volume:loner", "loner");
+  run(splitToObjects(loner.guard, loner.parts, objectsOf("loner", 2, [0])));
+  run(splitToObjects(guard, [parts[0], { ...parts[1], volumeId: parts[0].volumeId }, parts[2]], identities));
+  run(splitToObjects(guard, parts, identities.slice(0, 2)));
+  run(splitToObjects(guard, parts, identities.map((identity, i) => (i === 1 ? { ...identity, objectId: ids.object } : identity))));
+  run(splitToObjects(guard, parts, identities));
+  assert.equal(state().plates[0].objects.length, 5);
+  run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "undo" });
+});
+
 // History charges the canonical record plus the payload bytes; a following
 // rename moves each across the boundary.
 const probe = createProjectFixture();
@@ -279,8 +404,17 @@ const booleanProbe = createProjectFixture(); booleanProbe.extra = []; booleanFix
 const replaceCommand = (ids, state) => replaceMesh(topologyGuard(state, ids.volume), mesh("import:asset:retained-mesh", 51));
 const booleanCommand = (ids, state) => meshBoolean(booleanGuard(state, ids.instance, "import:instance:other"), mesh("import:asset:retained-boolean", 52));
 const replaceBytes = probeRun(createProjectFixture(), replaceCommand), booleanBytes = probeRun(booleanProbe, booleanCommand);
+const splitProbe = createProjectFixture(); splitProbe.extra = []; splitFixture(splitProbe.state, splitProbe, splitProbe.extra);
+const splitCommand = (ids, state) => {
+  const store = new InMemoryAssetRepository();
+  for (const p of [splitProbe.asset, ...splitProbe.extra]) store.put(p.descriptor, p.bytes);
+  const { guard, parts } = prepareSplit(state, store, ids.volume, "part");
+  return splitParts(guard, parts);
+};
+const splitBytes = probeRun(splitProbe, splitCommand);
 for (const [label, bytes, command, mutate] of [["object", objectBytes, ids => addObjectWithAsset(ids.plate, probeObject, probeAsset)], ["volume", volumeBytes, ids => addVolume(ids.object, probeVolume, probeAsset)],
-  ["replace", replaceBytes, (ids, state) => replaceCommand(ids, state)], ["boolean", booleanBytes, (ids, state) => booleanCommand(ids, state), booleanFixture]])
+  ["replace", replaceBytes, (ids, state) => replaceCommand(ids, state)], ["boolean", booleanBytes, (ids, state) => booleanCommand(ids, state), booleanFixture],
+  ["split", splitBytes, (ids, state) => splitCommand(ids, state), splitFixture]])
   for (const delta of [0, -1])
     scenario(`asset-retention-${label}-${delta}`, { maxEstimatedBytes: bytes + 1 + delta }, mutate ?? (() => {}), ({ execute, intent, run, ids, state }) => {
       execute(command(ids, state()));
@@ -289,7 +423,8 @@ for (const [label, bytes, command, mutate] of [["object", objectBytes, ids => ad
     });
 
 const sources = ["tools/cross-platform/project-asset-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/semanticVolumeCommands.ts",
-  "web/src/project/objects/topologyCommands.ts", "web/src/project/objects/meshBooleanCommands.ts", "web/src/project/PreparedProjectCommands.ts",
+  "web/src/project/objects/topologyCommands.ts", "web/src/project/objects/meshBooleanCommands.ts", "web/src/project/objects/splitCommands.ts",
+  "web/src/project/objects/splitPreparation.ts", "web/src/project/objects/splitToObjectsCommands.ts", "web/src/project/PreparedProjectCommands.ts",
   "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/meshCodec.ts",
   "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";

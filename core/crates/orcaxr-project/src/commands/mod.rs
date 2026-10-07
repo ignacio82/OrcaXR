@@ -15,6 +15,7 @@ mod objects;
 mod project_plate;
 mod settings_overrides;
 mod split_objects;
+mod split_parts;
 pub mod staged;
 mod topology;
 mod transforms;
@@ -26,6 +27,8 @@ pub use asset_commands::StagedAsset;
 use duplicate::*;
 pub use lifecycle::IndependentObjectIds;
 use orcaxr_contracts::{canonical::Value, project_intent_types as wire};
+pub use split_objects::SeparatedObject;
+pub use split_parts::{SplitPart, VolumeSplitGuard};
 use std::{collections::BTreeSet, fmt, sync::Arc};
 pub use topology::{BooleanGuard, BooleanOp, TopologyGuard};
 
@@ -114,6 +117,7 @@ enum Kind {
     AddVolume(Box<asset_commands::AddVolume>),
     ReplaceMesh(Box<topology::ReplaceVolumeMesh>),
     MeshBoolean(Box<topology::MeshBoolean>),
+    SplitParts(Box<split_parts::SplitVolumeToParts>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -169,6 +173,61 @@ pub(crate) fn prepare_decoded_batch(batch: wire::Batch) -> Result<PreparedBatch,
             .into_iter()
             .map(prepare_decoded)
             .collect::<Result<_, _>>()?,
+    })
+}
+/// `commitPreparedVolumeSplitToObjects` for one single-volume object: its checks
+/// against the live `state` (refusing without publishing anything), then the
+/// component split and the promotion of its parts as one transaction. The
+/// promotion fingerprints its source after the split has committed.
+pub fn prepare_split_to_objects(
+    state: &ProjectState,
+    guard: VolumeSplitGuard,
+    parts: Vec<SplitPart>,
+    identities: Vec<SeparatedObject>,
+) -> Result<PreparedBatch, PreparationError> {
+    let source = state
+        .plates
+        .iter()
+        .flat_map(|plate| plate.objects.iter())
+        .find(|object| {
+            object
+                .volumes
+                .iter()
+                .any(|v| v.id.as_utf16() == guard.volume_id)
+        });
+    let Some(source) = source else {
+        return Err(PreparationError::Domain(text_parts(
+            "Unknown split-to-objects source volume ",
+            &guard.volume_id,
+            "",
+        )));
+    };
+    if source.volumes.len() != 1 {
+        return Err(PreparationError::Domain(Text::from_utf8(
+            "Prepared component split-to-objects requires an object with exactly one volume",
+        )));
+    }
+    if let Some(undersized) = parts.iter().find(|part| part.source_triangles.len() < 3) {
+        return Err(PreparationError::Domain(text_parts(
+            "Split-to-objects component for ",
+            &undersized.volume_id,
+            " has fewer than three facets; refusing the pinned lossy discard",
+        )));
+    }
+    let first = parts.first().map(|part| part.volume_id.clone());
+    let split = PreparedCommand::split_volume_to_parts(guard, parts)?;
+    // Construction proved the first part's ID stable.
+    let part = id(first.expect("a split has parts")).expect("stable part ID");
+    let separate = split_objects::SeparateObjectVolumes::after_split(part, identities);
+    Ok(PreparedBatch {
+        label: Text::from_utf8("Split to objects"),
+        commands: vec![
+            split,
+            PreparedCommand {
+                label: separate.label(),
+                kind: Kind::SeparateObjectVolumes(Box::new(separate)),
+            },
+        ],
     })
 }
 fn id<K>(units: Vec<u16>) -> Result<EntityId<K>, PreparationError> {
@@ -627,6 +686,17 @@ impl PreparedCommand {
             kind: Kind::MeshBoolean(Box::new(command)),
         })
     }
+    /// `SplitVolumeToPartsCommand`.
+    pub fn split_volume_to_parts(
+        guard: VolumeSplitGuard,
+        parts: Vec<SplitPart>,
+    ) -> Result<Self, PreparationError> {
+        let command = split_parts::SplitVolumeToParts::new(guard, parts)?;
+        Ok(Self {
+            label: Text::from_utf8("Split volume to parts"),
+            kind: Kind::SplitParts(Box::new(command)),
+        })
+    }
     pub fn paste_clipboard(
         clipboard: Arc<crate::clipboard::ClipboardData>,
         ids: IndependentObjectIds,
@@ -674,6 +744,7 @@ impl PreparedCommand {
             Kind::AddVolume(_) => "add-volume",
             Kind::ReplaceMesh(_) => "replace-volume-mesh",
             Kind::MeshBoolean(_) => "mesh-boolean",
+            Kind::SplitParts(_) => "split-volume-to-parts",
         }
     }
 }
@@ -745,6 +816,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::AddVolume(c) => c.apply(context, reason)?,
             Kind::ReplaceMesh(c) => c.apply(context, reason)?,
             Kind::MeshBoolean(c) => c.apply(context, reason)?,
+            Kind::SplitParts(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
                 activate,
@@ -892,6 +964,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::AddVolume(c) => return c.revert(context, reason),
             Kind::ReplaceMesh(c) => return c.revert(context, reason),
             Kind::MeshBoolean(c) => return c.revert(context, reason),
+            Kind::SplitParts(c) => return c.revert(context, reason),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()
@@ -980,6 +1053,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::AddVolume(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::ReplaceMesh(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::MeshBoolean(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::SplitParts(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),
