@@ -2905,6 +2905,16 @@ Reverts publish the browser's `<type>:undo` reasons rather than
 browser's own "Canonical JSON cannot contain undefined". None of the four has
 a history estimate, so each charges one.
 
+### Whole-project replacement
+
+`ReplaceProjectCommand` is `PreparedCommand::replace_project(next, label)`,
+labelled "Replace project" by default. The next state is admitted on every
+apply, so an invalid one fails with the browser's validation message. The
+selection is pruned against the new state, and undo restores the exact prior
+validated project, pruning again. History charges the canonical length of both
+states. The browser's bus also restores each entry's recorded selection on
+undo and redo, and the native bus matches it.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

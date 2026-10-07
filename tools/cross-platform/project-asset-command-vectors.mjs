@@ -9,7 +9,7 @@ import { ProjectStore } from "../../web/src/project/store.ts";
 import { SelectionStore } from "../../web/src/project/selection.ts";
 import { CommandBus } from "../../web/src/project/history/commandBus.ts";
 import { prepareProjectIntent } from "../../web/src/project/PreparedProjectCommands.ts";
-import { AddObjectCommand, AddObjectWithAssetCommand } from "../../web/src/project/commands.ts";
+import { AddObjectCommand, AddObjectWithAssetCommand, ReplaceProjectCommand } from "../../web/src/project/commands.ts";
 import { AddVolumeCommand } from "../../web/src/project/objects/semanticVolumeCommands.ts";
 import { ReplaceVolumeMeshCommand } from "../../web/src/project/objects/topologyCommands.ts";
 import { MeshBooleanCommand } from "../../web/src/project/objects/meshBooleanCommands.ts";
@@ -57,6 +57,7 @@ function prepare(c) {
     case "replaceVolumeMesh": return new ReplaceVolumeMeshCommand(guardFrom(c.guard), payload(c.asset));
     case "meshBoolean": return new MeshBooleanCommand(guardFrom(c.guard), payload(c.asset), c.op);
     case "splitVolumeToParts": return new SplitVolumeToPartsCommand(guardFrom(c.guard), partsFrom(c.parts));
+    case "replaceProject": return c.label === null ? new ReplaceProjectCommand(JSON.parse(c.stateJson)) : new ReplaceProjectCommand(JSON.parse(c.stateJson), string(c.label));
     case "addSvgPart": return new AddSvgPartCommand(placementFrom(c.placement), { asset: payload(c.asset), drawing: payload(c.drawing), mesh: { triangleCount: c.triangleCount }, part: JSON.parse(c.partJson) }, string(c.name));
     case "editSvgPart": return new EditSvgPartCommand(string(c.volumeId), { asset: payload(c.asset), drawing: payload(c.drawing), mesh: { triangleCount: c.triangleCount }, part: JSON.parse(c.partJson) });
     case "addEmbossText": return new AddEmbossTextCommand(placementFrom(c.placement), JSON.parse(c.configurationJson), { asset: payload(c.asset), mesh: { triangleCount: c.triangleCount } });
@@ -458,6 +459,21 @@ scenario("emboss-text", {}, () => {}, ({ execute, run, ids }) => {
   for (let i = 0; i < 4; i++) run({ kind: "undo" });
 });
 
+// Whole-project replacement: validated on apply, selection pruned both ways.
+const replaceProject = (next, label = null) => ({ kind: "replaceProject", stateJson: canonicalStringify(next), label: label === null ? null : units(label) });
+const replacedState = (state, edit) => { const next = cloneJson(state); edit(next); return next; };
+scenario("replace-project", {}, () => {}, ({ execute, run, state, ids }) => {
+  run({ kind: "selection", refs: [{ kind: "plate", id: units(ids.plate) }, { kind: "object", id: units(ids.object) }, { kind: "instance", id: units(ids.instance) }] });
+  const emptied = replacedState(state(), next => { next.name = "Emptied\u0000\ud800"; next.plates[0].objects = []; next.config = { ...next.config, layer_height: 0.16 }; });
+  roundtrip(execute, run, replaceProject(emptied));
+  run({ kind: "redo" });
+  execute(replaceProject(replacedState(state(), next => (next.activePlateId = "import:plate:missing"))));
+  execute(replaceProject(replacedState(state(), next => (next.name = "Configured")), "Update project configuration"));
+  run({ kind: "undo" }); run({ kind: "undo" });
+  execute(replaceProject(state(), "Same project"));
+  run({ kind: "undo" });
+});
+
 // History charges the canonical record plus the payload bytes; a following
 // rename moves each across the boundary.
 const probe = createProjectFixture();
@@ -485,9 +501,11 @@ const splitCommand = (ids, state) => {
   return splitParts(guard, parts);
 };
 const splitBytes = probeRun(splitProbe, splitCommand);
+const replaceProjectCommand = (ids, state) => replaceProject(replacedState(state, next => (next.name = "Retained replacement")));
+const replaceProjectBytes = probeRun(createProjectFixture(), replaceProjectCommand);
 for (const [label, bytes, command, mutate] of [["object", objectBytes, ids => addObjectWithAsset(ids.plate, probeObject, probeAsset)], ["volume", volumeBytes, ids => addVolume(ids.object, probeVolume, probeAsset)],
   ["replace", replaceBytes, (ids, state) => replaceCommand(ids, state)], ["boolean", booleanBytes, (ids, state) => booleanCommand(ids, state), booleanFixture],
-  ["split", splitBytes, (ids, state) => splitCommand(ids, state), splitFixture]])
+  ["split", splitBytes, (ids, state) => splitCommand(ids, state), splitFixture], ["project", replaceProjectBytes, (ids, state) => replaceProjectCommand(ids, state)]])
   for (const delta of [0, -1])
     scenario(`asset-retention-${label}-${delta}`, { maxEstimatedBytes: bytes + 1 + delta }, mutate ?? (() => {}), ({ execute, intent, run, ids, state }) => {
       execute(command(ids, state()));

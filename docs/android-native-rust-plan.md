@@ -151,11 +151,12 @@ reconciliation, model-colour recreation and multi-volume split to objects are
 ported. So are the payload-carrying commands for add object, add object with
 asset, add volume, mesh topology replacement, mesh booleans, split to parts,
 single-volume split to objects, and SVG and embossed-text parts. They install
-validated payload leases without copying bytes (about 75 of the browser's 78
-command classes are now native). Next comes the staged upload path for every
-payload-carrying kind at once: command uploads will declare descriptors in
-their JSON and then stream the bytes, as bundle input does. Whole-project
-replacement and refined (dense-root) facet commits follow. Each family adds intent variants to
+validated payload leases without copying bytes. Whole-project replacement is
+native too (76 of the browser's 78 command classes; the transaction composite
+and import were already native). Next comes the staged upload path for every
+payload-carrying kind at once: command uploads will declare descriptors in their
+JSON and then stream the bytes, as bundle input does. Refined (dense-root) facet
+commits then join it as a bulk record kind. Each family adds intent variants to
 `contracts/project-intents.json` (definitions before first use; regenerate with
 `generate-project-intents.mjs --write`), maps them in
 `web/src/project/PreparedProjectCommands.ts`, appends a scenario to
@@ -1171,8 +1172,13 @@ and replay coverage for the complete current command inventory.
     `<type>:undo` revert reasons, its refusals and its mesh-only reference
     check. Traces come from the browser's real SVG and glyph preparation
     (asset corpus: 20 traces / 301 steps).
-  - [ ] Port and replay every remaining command family before session cutover:
-    whole-project replacement and refined facet commits.
+  - [x] Port whole-project replacement (`ReplaceProjectCommand`): validated
+    on every apply, the selection pruned against each side, and history
+    charged for both states. Traces cover pruning, refusal, labels and
+    retention (asset corpus: 23 traces / 325 steps).
+  - [ ] Port refined facet commits (`commitFacetRefinement`): dense roots
+    collapsed into sparse assignments and split trees, checked against live
+    state without publishing. They travel as a staged bulk record.
 - [ ] Port settings resolution, physical/mixed filament identities, profile
   selection semantics, and canonical slice preflight. Consume the generated
   pinned schema/catalog rather than reconstructing defaults in Kotlin.

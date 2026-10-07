@@ -122,6 +122,11 @@ enum Kind {
     SplitParts(Box<split_parts::SplitVolumeToParts>),
     AddDrawn(Box<drawn_parts::AddDrawnPart>),
     Recut(Box<drawn_parts::RecutPart>),
+    /// `ReplaceProjectCommand`: a whole next state, validated on every apply.
+    ReplaceProject {
+        next: Arc<ProjectState>,
+        previous: Option<ValidatedProject>,
+    },
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -718,6 +723,16 @@ impl PreparedCommand {
             kind: Kind::Recut(Box::new(command)),
         })
     }
+    /// `ReplaceProjectCommand`: the whole project becomes `next`.
+    pub fn replace_project(next: ProjectState, label: Option<Text>) -> Self {
+        Self {
+            label: label.unwrap_or_else(|| Text::from_utf8("Replace project")),
+            kind: Kind::ReplaceProject {
+                next: Arc::new(next),
+                previous: None,
+            },
+        }
+    }
     /// `SplitVolumeToPartsCommand`.
     pub fn split_volume_to_parts(
         guard: VolumeSplitGuard,
@@ -777,6 +792,7 @@ impl PreparedCommand {
             Kind::ReplaceMesh(_) => "replace-volume-mesh",
             Kind::MeshBoolean(_) => "mesh-boolean",
             Kind::SplitParts(_) => "split-volume-to-parts",
+            Kind::ReplaceProject { .. } => "replace-project",
             Kind::AddDrawn(ref c) => c.reason(),
             Kind::Recut(ref c) => c.reason(),
         }
@@ -852,6 +868,11 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::MeshBoolean(c) => c.apply(context, reason)?,
             Kind::SplitParts(c) => c.apply(context, reason)?,
             Kind::AddDrawn(c) => c.apply(context, reason)?,
+            Kind::ReplaceProject { next, previous } => {
+                *previous = Some(before.project().clone());
+                context.replace((**next).clone(), reason, PROJECT)?;
+                context.prune_selection();
+            }
             Kind::Recut(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
@@ -1003,6 +1024,14 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::SplitParts(c) => return c.revert(context, reason),
             // These browser commands publish `<type>:undo`, not `revert:<type>`.
             Kind::AddDrawn(c) => return c.revert(context),
+            Kind::ReplaceProject { previous, .. } => {
+                let previous = previous.clone().ok_or_else(|| {
+                    CommandError::domain("ReplaceProjectCommand has not been applied")
+                })?;
+                context.replace_validated(previous, reason, PROJECT)?;
+                context.prune_selection();
+                return Ok(());
+            }
             Kind::Recut(c) => return c.revert(context),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
@@ -1093,6 +1122,13 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::ReplaceMesh(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::MeshBoolean(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::SplitParts(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::ReplaceProject { next, previous } => {
+                let previous = match previous {
+                    Some(p) => canonical_length(p.state()).map_err(|_| CommandError::Encoding)?,
+                    None => 0,
+                };
+                Ok(canonical_length(next.as_ref()).map_err(|_| CommandError::Encoding)? + previous)
+            }
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),

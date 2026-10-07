@@ -146,6 +146,12 @@ fn prepare_asset(v: &Value) -> Result<PreparedCommand, PreparationError> {
                 recipe,
             );
         }
+        "replaceProject" => {
+            return Ok(PreparedCommand::replace_project(
+                ProjectState::from_value(parse(v["stateJson"].as_str().unwrap()).unwrap()).unwrap(),
+                (!v["label"].is_null()).then(|| Text::new(utf16(&v["label"]))),
+            ));
+        }
         "splitVolumeToParts" => {
             return PreparedCommand::split_volume_to_parts(
                 split_guard(&v["guard"]),
@@ -365,7 +371,7 @@ fn asset_commands_and_payloads_match_every_typescript_step() {
             "../../../../testdata/cross-platform/project-asset-command-vectors.json"
         ))
         .unwrap(),
-        301,
+        325,
     );
 }
 /// Applying and redoing a staged payload installs its validated record by
