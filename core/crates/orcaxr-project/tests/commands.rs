@@ -104,6 +104,48 @@ fn prepare_asset(v: &Value) -> Result<PreparedCommand, PreparationError> {
                 asset(),
             );
         }
+        "addSvgPart" | "editSvgPart" | "addEmbossText" | "editEmbossText" => {
+            let triangles = v["triangleCount"].as_f64().unwrap();
+            let recipe = if v.get("partJson").is_some() {
+                Recipe::Svg {
+                    drawing: Some(StagedAsset::new(payload(&v["drawing"])).unwrap()),
+                    part: Arc::new(
+                        EmbossSvgPart::from_value(parse(v["partJson"].as_str().unwrap()).unwrap())
+                            .unwrap(),
+                    ),
+                }
+            } else {
+                Recipe::Text(Arc::new(
+                    EmbossTextConfiguration::from_value(
+                        parse(v["configurationJson"].as_str().unwrap()).unwrap(),
+                    )
+                    .unwrap(),
+                ))
+            };
+            if let Some(placement) = v.get("placement") {
+                return PreparedCommand::add_drawn_part(
+                    PartPlacement {
+                        object: ObjectId::try_from_utf16(utf16(&placement["objectId"])).unwrap(),
+                        volume: VolumeId::try_from_utf16(utf16(&placement["volumeId"])).unwrap(),
+                        asset: AssetId::try_from_utf16(utf16(&placement["assetId"])).unwrap(),
+                        transform: Transform::from_value(
+                            parse(placement["transformJson"].as_str().unwrap()).unwrap(),
+                        )
+                        .unwrap(),
+                    },
+                    asset(),
+                    triangles,
+                    recipe,
+                    v.get("name").map(|name| Text::new(utf16(name))),
+                );
+            }
+            return PreparedCommand::recut_part(
+                VolumeId::try_from_utf16(utf16(&v["volumeId"])).unwrap(),
+                asset(),
+                triangles,
+                recipe,
+            );
+        }
         "splitVolumeToParts" => {
             return PreparedCommand::split_volume_to_parts(
                 split_guard(&v["guard"]),
@@ -323,7 +365,7 @@ fn asset_commands_and_payloads_match_every_typescript_step() {
             "../../../../testdata/cross-platform/project-asset-command-vectors.json"
         ))
         .unwrap(),
-        250,
+        301,
     );
 }
 /// Applying and redoing a staged payload installs its validated record by

@@ -16,6 +16,9 @@ import { MeshBooleanCommand } from "../../web/src/project/objects/meshBooleanCom
 import { SplitVolumeToPartsCommand, captureVolumeSplitGuard } from "../../web/src/project/objects/splitCommands.ts";
 import { prepareVolumeSplitParts } from "../../web/src/project/objects/splitPreparation.ts";
 import { commitPreparedVolumeSplitToObjects } from "../../web/src/project/objects/splitToObjectsCommands.ts";
+import { AddSvgPartCommand, EditSvgPartCommand, prepareSvgPart } from "../../web/src/project/objects/svgCommands.ts";
+import { AddEmbossTextCommand, EditEmbossTextCommand, prepareEmbossedVolume } from "../../web/src/project/objects/embossCommands.ts";
+import { DEFAULT_EMBOSS_FONT_PROPERTY } from "../../web/src/project/objects/emboss.ts";
 import { InMemoryAssetRepository, assetBundleFingerprint } from "../../web/src/project/assets.ts";
 import { createProjectFixture } from "../../web/src/project/__tests__/fixtures.ts";
 import { canonicalStringify, cloneJson } from "../../web/src/project/domain/canonical.ts";
@@ -54,6 +57,10 @@ function prepare(c) {
     case "replaceVolumeMesh": return new ReplaceVolumeMeshCommand(guardFrom(c.guard), payload(c.asset));
     case "meshBoolean": return new MeshBooleanCommand(guardFrom(c.guard), payload(c.asset), c.op);
     case "splitVolumeToParts": return new SplitVolumeToPartsCommand(guardFrom(c.guard), partsFrom(c.parts));
+    case "addSvgPart": return new AddSvgPartCommand(placementFrom(c.placement), { asset: payload(c.asset), drawing: payload(c.drawing), mesh: { triangleCount: c.triangleCount }, part: JSON.parse(c.partJson) }, string(c.name));
+    case "editSvgPart": return new EditSvgPartCommand(string(c.volumeId), { asset: payload(c.asset), drawing: payload(c.drawing), mesh: { triangleCount: c.triangleCount }, part: JSON.parse(c.partJson) });
+    case "addEmbossText": return new AddEmbossTextCommand(placementFrom(c.placement), JSON.parse(c.configurationJson), { asset: payload(c.asset), mesh: { triangleCount: c.triangleCount } });
+    case "editEmbossText": return new EditEmbossTextCommand(string(c.volumeId), JSON.parse(c.configurationJson), { asset: payload(c.asset), mesh: { triangleCount: c.triangleCount } });
     default: throw new Error("unknown captured kind");
   }
 }
@@ -385,6 +392,72 @@ scenario("split-volume-to-objects", {}, (s, f, extra) => {
   run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "undo" });
 });
 
+// SVG parts and embossed text, cut by the browser's own preparation.
+const SQUARE_GLYPH = { advance: 1000, contours: [{ points: [[0, 0], [1000, 0], [1000, 1000], [0, 1000]] }] };
+const squareFont = { unitsPerEm: 1000, outline: () => SQUARE_GLYPH };
+const recipe = (text, o = {}) => ({ text, styleName: "Fixture", fontDescriptor: "fixture.ttf", fontDescriptorType: "file_name", font: DEFAULT_EMBOSS_FONT_PROPERTY,
+  projection: { depthMm: 2, useSurface: false }, ...o });
+const SVG = (w, h) => `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}"/><circle cx="2" cy="2" r="1"/></svg>`;
+const placementTo = p => ({ objectId: units(p.objectId), volumeId: units(p.volumeId), assetId: units(p.assetId), transformJson: canonicalStringify(p.transform) });
+const placementFrom = p => ({ objectId: string(p.objectId), volumeId: string(p.volumeId), assetId: string(p.assetId), transform: JSON.parse(p.transformJson) });
+const cutSvg = (suffix, o = {}) => prepareSvgPart(o.source ?? SVG(20, 10), { fileName: o.fileName ?? `${suffix}.svg`, volumeId: `import:volume:${suffix}`, assetId: o.assetId ?? `import:asset:${suffix}`,
+  drawingAssetId: o.drawingAssetId ?? `import:asset:${suffix}-drawing`, depthMm: o.depthMm ?? 2, ...(o.widthMm ? { widthMm: o.widthMm } : {}) });
+const addSvg = (placement, prepared, name) => ({ kind: "addSvgPart", placement: placementTo(placement), asset: wirePayload(prepared.asset), drawing: wirePayload(prepared.drawing),
+  triangleCount: prepared.mesh.triangleCount, partJson: canonicalStringify(prepared.part), name: units(name) });
+const editSvg = (volumeId, prepared) => ({ kind: "editSvgPart", volumeId: units(volumeId), asset: wirePayload(prepared.asset), drawing: wirePayload(prepared.drawing),
+  triangleCount: prepared.mesh.triangleCount, partJson: canonicalStringify(prepared.part) });
+const addText = (placement, configuration, prepared) => ({ kind: "addEmbossText", placement: placementTo(placement), configurationJson: canonicalStringify(configuration),
+  asset: wirePayload(prepared.asset), triangleCount: prepared.mesh.triangleCount });
+const editText = (volumeId, configuration, prepared) => ({ kind: "editEmbossText", volumeId: units(volumeId), configurationJson: canonicalStringify(configuration),
+  asset: wirePayload(prepared.asset), triangleCount: prepared.mesh.triangleCount });
+const placed = (objectId, suffix, assetId = `import:asset:${suffix}`) => ({ objectId, volumeId: `import:volume:${suffix}`, assetId, transform: { translationMm: [0, 0, 5], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } });
+
+scenario("svg-parts", {}, (s, f, extra) => {
+  extra.push(mesh("import:asset:svg-conflict", 71));
+}, ({ execute, run, ids }) => {
+  const logo = cutSvg("logo");
+  roundtrip(execute, run, addSvg(placed(ids.object, "logo"), logo, "  Logo  "));
+  execute(addSvg(placed(ids.object, "logo"), logo, " \n "));
+  execute(addSvg(placed(ids.object, "mismatch"), cutSvg("mismatch-cut"), "Mismatch"));
+  execute(addSvg(placed("import:object:missing", "orphan"), cutSvg("orphan"), "Orphan"));
+  execute(addSvg(placed(ids.object, "logo"), cutSvg("logo"), "Again"));
+  execute(addSvg(placed(ids.object, "reused", ids.asset), cutSvg("reused", { assetId: ids.asset }), "Reused"));
+  execute(addSvg(placed(ids.object, "conflict", "import:asset:svg-conflict"), cutSvg("conflict", { assetId: "import:asset:svg-conflict" }), "Conflict"));
+  const wider = cutSvg("logo", { assetId: "import:asset:logo-wide", widthMm: 40, depthMm: 3 });
+  roundtrip(execute, run, editSvg("import:volume:logo", wider));
+  execute(editSvg("import:volume:logo", wider));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(editSvg(ids.volume, wider));
+  execute(editSvg("import:volume:missing", wider));
+  // A re-cut to a mesh another volume still uses keeps that mesh declared.
+  execute(addSvg(placed(ids.object, "twin", "import:asset:twin-mesh"), cutSvg("twin", { assetId: "import:asset:twin-mesh", drawingAssetId: "import:asset:twin-drawing" }), "Twin"));
+  execute(editSvg("import:volume:twin", cutSvg("logo", { assetId: "import:asset:logo-wide", widthMm: 40, depthMm: 3 })));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  for (let i = 0; i < 3; i++) run({ kind: "undo" });
+});
+scenario("emboss-text", {}, () => {}, ({ execute, run, ids }) => {
+  const hello = recipe("  Hello world  \nsecond line");
+  const cut = (configuration, assetId) => prepareEmbossedVolume(configuration, squareFont, assetId);
+  roundtrip(execute, run, addText(placed(ids.object, "hello"), hello, cut(hello, "import:asset:hello")));
+  execute(addText(placed(ids.object, "hello"), hello, cut(hello, "import:asset:hello")));
+  const long = recipe("😀".repeat(40));
+  execute(addText(placed(ids.object, "long"), long, cut(long, "import:asset:long")));
+  const blank = recipe(" \nbody");
+  execute(addText(placed(ids.object, "blank"), blank, cut(recipe("X"), "import:asset:blank")));
+  execute(addText(placed(ids.object, "empty"), hello, { asset: mesh("import:asset:empty", 72), mesh: { triangleCount: 0 } }));
+  execute(addText(placed(ids.object, "mismatch"), hello, cut(hello, "import:asset:other")));
+  execute(addText(placed(ids.object, "duplicate", "import:asset:hello"), hello, cut(recipe("Dup"), "import:asset:hello")));
+  execute(addText(placed("import:object:missing", "orphan"), hello, cut(hello, "import:asset:orphan")));
+  const goodbye = recipe("Goodbye");
+  roundtrip(execute, run, editText("import:volume:hello", goodbye, cut(goodbye, "import:asset:goodbye")));
+  execute(editText("import:volume:hello", goodbye, cut(goodbye, "import:asset:goodbye")));
+  execute(editText("import:volume:hello", goodbye, { asset: mesh("import:asset:none", 73), mesh: { triangleCount: 0 } }));
+  execute(editText(ids.volume, goodbye, cut(goodbye, "import:asset:not-text")));
+  execute(editText("import:volume:missing", goodbye, cut(goodbye, "import:asset:missing-text")));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  for (let i = 0; i < 4; i++) run({ kind: "undo" });
+});
+
 // History charges the canonical record plus the payload bytes; a following
 // rename moves each across the boundary.
 const probe = createProjectFixture();
@@ -424,7 +497,8 @@ for (const [label, bytes, command, mutate] of [["object", objectBytes, ids => ad
 
 const sources = ["tools/cross-platform/project-asset-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/semanticVolumeCommands.ts",
   "web/src/project/objects/topologyCommands.ts", "web/src/project/objects/meshBooleanCommands.ts", "web/src/project/objects/splitCommands.ts",
-  "web/src/project/objects/splitPreparation.ts", "web/src/project/objects/splitToObjectsCommands.ts", "web/src/project/PreparedProjectCommands.ts",
+  "web/src/project/objects/splitPreparation.ts", "web/src/project/objects/splitToObjectsCommands.ts", "web/src/project/objects/svgCommands.ts",
+  "web/src/project/objects/embossCommands.ts", "web/src/project/objects/emboss.ts", "web/src/project/PreparedProjectCommands.ts",
   "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/meshCodec.ts",
   "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";

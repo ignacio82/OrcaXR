@@ -3,6 +3,7 @@
 //! No UI, callbacks, random IDs or session ownership is inferred here.
 mod asset_commands;
 mod brim_ears;
+mod drawn_parts;
 mod duplicate;
 mod facet_stroke;
 mod filaments;
@@ -24,6 +25,7 @@ use crate::{
     history::*, ids::*, model::*, selection::SelectionRef, store::DirtyCategory, validation::*,
 };
 pub use asset_commands::StagedAsset;
+pub use drawn_parts::{PartPlacement, Recipe};
 use duplicate::*;
 pub use lifecycle::IndependentObjectIds;
 use orcaxr_contracts::{canonical::Value, project_intent_types as wire};
@@ -118,6 +120,8 @@ enum Kind {
     ReplaceMesh(Box<topology::ReplaceVolumeMesh>),
     MeshBoolean(Box<topology::MeshBoolean>),
     SplitParts(Box<split_parts::SplitVolumeToParts>),
+    AddDrawn(Box<drawn_parts::AddDrawnPart>),
+    Recut(Box<drawn_parts::RecutPart>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -686,6 +690,34 @@ impl PreparedCommand {
             kind: Kind::MeshBoolean(Box::new(command)),
         })
     }
+    /// `AddSvgPartCommand` (an SVG recipe) or `AddEmbossTextCommand`.
+    pub fn add_drawn_part(
+        placement: PartPlacement,
+        asset: StagedAsset,
+        triangles: f64,
+        recipe: Recipe,
+        name: Option<Text>,
+    ) -> Result<Self, PreparationError> {
+        let (command, label) =
+            drawn_parts::AddDrawnPart::new(placement, asset, triangles, recipe, name)?;
+        Ok(Self {
+            label,
+            kind: Kind::AddDrawn(Box::new(command)),
+        })
+    }
+    /// `EditSvgPartCommand` (an SVG recipe) or `EditEmbossTextCommand`.
+    pub fn recut_part(
+        volume: VolumeId,
+        asset: StagedAsset,
+        triangles: f64,
+        recipe: Recipe,
+    ) -> Result<Self, PreparationError> {
+        let (command, label) = drawn_parts::RecutPart::new(volume, asset, triangles, recipe)?;
+        Ok(Self {
+            label,
+            kind: Kind::Recut(Box::new(command)),
+        })
+    }
     /// `SplitVolumeToPartsCommand`.
     pub fn split_volume_to_parts(
         guard: VolumeSplitGuard,
@@ -745,6 +777,8 @@ impl PreparedCommand {
             Kind::ReplaceMesh(_) => "replace-volume-mesh",
             Kind::MeshBoolean(_) => "mesh-boolean",
             Kind::SplitParts(_) => "split-volume-to-parts",
+            Kind::AddDrawn(ref c) => c.reason(),
+            Kind::Recut(ref c) => c.reason(),
         }
     }
 }
@@ -817,6 +851,8 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::ReplaceMesh(c) => c.apply(context, reason)?,
             Kind::MeshBoolean(c) => c.apply(context, reason)?,
             Kind::SplitParts(c) => c.apply(context, reason)?,
+            Kind::AddDrawn(c) => c.apply(context, reason)?,
+            Kind::Recut(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
                 activate,
@@ -965,6 +1001,9 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::ReplaceMesh(c) => return c.revert(context, reason),
             Kind::MeshBoolean(c) => return c.revert(context, reason),
             Kind::SplitParts(c) => return c.revert(context, reason),
+            // These browser commands publish `<type>:undo`, not `revert:<type>`.
+            Kind::AddDrawn(c) => return c.revert(context),
+            Kind::Recut(c) => return c.revert(context),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()

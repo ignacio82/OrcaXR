@@ -2887,6 +2887,24 @@ source is the object holding the first part, fingerprinted after the split
 commits. That matches the browser's in-transaction guard capture, including
 the three publications of a promotion that fails inside the transaction.
 
+### SVG and embossed-text parts
+
+The four recipe-carrying commands are two native kinds:
+`PreparedCommand::add_drawn_part` and `recut_part`, each with a `Recipe` that is
+either an SVG part (its drawing payload and `EmbossSvgPart`) or an
+`EmbossTextConfiguration`. Adding places a model volume carrying its recipe.
+SVG parts declare and store the mesh and the drawing. Text refuses an
+already-declared asset and is named from its first line (JavaScript `trim`,
+at most 60 UTF-16 units, else "Text"). A re-cut replaces the mesh at the next
+topology revision with annotations reset. It drops the old mesh only when no
+volume references it; these commands check volume meshes only, unlike the
+topology commands.
+
+Reverts publish the browser's `<type>:undo` reasons rather than
+`revert:<type>`. An undo that finds the recipe missing fails with the
+browser's own "Canonical JSON cannot contain undefined". None of the four has
+a history estimate, so each charges one.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

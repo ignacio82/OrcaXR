@@ -149,12 +149,13 @@ mixed filaments, project/scoped setting overrides, volume-role conversion and
 whole-facet paint strokes, project rename, plate wipe towers, auto-pair
 reconciliation, model-colour recreation and multi-volume split to objects are
 ported. So are the payload-carrying commands for add object, add object with
-asset, add volume, mesh topology replacement, mesh booleans, split to parts and
-single-volume split to objects. They install validated payload leases without
-copying bytes (about 71 of the browser's 78 command classes are now native).
-Next come SVG and emboss volumes. The staged upload path follows for every
+asset, add volume, mesh topology replacement, mesh booleans, split to parts,
+single-volume split to objects, and SVG and embossed-text parts. They install
+validated payload leases without copying bytes (about 75 of the browser's 78
+command classes are now native). Next comes the staged upload path for every
 payload-carrying kind at once: command uploads will declare descriptors in
-their JSON and then stream the bytes, as bundle input does. Each family adds intent variants to
+their JSON and then stream the bytes, as bundle input does. Whole-project
+replacement and refined (dense-root) facet commits follow. Each family adds intent variants to
 `contracts/project-intents.json` (definitions before first use; regenerate with
 `generate-project-intents.mjs --write`), maps them in
 `web/src/project/PreparedProjectCommands.ts`, appends a scenario to
@@ -1164,8 +1165,14 @@ and replay coverage for the complete current command inventory.
     no longer publishes a rollback (regression-tested). Traces come from the
     browser's real shared-edge preparation (asset corpus: 18 traces / 250
     steps).
+  - [x] Port SVG and embossed-text parts (`AddSvgPartCommand`,
+    `EditSvgPartCommand`, `AddEmbossTextCommand`, `EditEmbossTextCommand`) as
+    two native kinds keyed by recipe. They keep the browser's naming rules, its
+    `<type>:undo` revert reasons, its refusals and its mesh-only reference
+    check. Traces come from the browser's real SVG and glyph preparation
+    (asset corpus: 20 traces / 301 steps).
   - [ ] Port and replay every remaining command family before session cutover:
-    SVG/emboss volumes and refined facet commits.
+    whole-project replacement and refined facet commits.
 - [ ] Port settings resolution, physical/mixed filament identities, profile
   selection semantics, and canonical slice preflight. Consume the generated
   pinned schema/catalog rather than reconstructing defaults in Kotlin.
