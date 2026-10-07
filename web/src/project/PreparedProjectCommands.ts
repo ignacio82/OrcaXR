@@ -28,6 +28,13 @@ import {
   ConvertInstanceToIndependentObjectCommand,
 } from './objects/commands';
 import { SetInstanceTransformsCommand } from './objects/transformCommands';
+import {
+  AddLayerRangeCommand,
+  DeleteLayerRangeCommand,
+  EditLayerRangeBoundsCommand,
+  MergeLayerRangesCommand,
+  SplitLayerRangeCommand,
+} from './objects/layerRangeCommands';
 import type { Transform } from './domain/model';
 import type { ProjectTransformWire } from '../../../contracts/generated/project-intents';
 import { entityId, isStableEntityId, type EntityId } from './domain/ids';
@@ -116,6 +123,46 @@ function command(value: ProjectCommandWire): ProjectCommand {
       'value' in input.name ? text(input.name.value) : undefined,
     );
   }
+  // Layer ranges are created empty; settings and filament assignments use
+  // their scoped commands.
+  if ('addLayerRange' in value) {
+    const input = value.addLayerRange;
+    return new AddLayerRangeCommand(id<'object'>(input.objectId), {
+      id: id<'layer-range'>(input.layerRangeId),
+      minZMm: input.minZMm,
+      maxZMm: input.maxZMm,
+      config: {},
+    });
+  }
+  if ('editLayerRangeBounds' in value) {
+    const input = value.editLayerRangeBounds;
+    return new EditLayerRangeBoundsCommand(id<'object'>(input.objectId), id<'layer-range'>(input.layerRangeId), {
+      ...('value' in input.minZMm ? { minZMm: input.minZMm.value } : {}),
+      ...('value' in input.maxZMm ? { maxZMm: input.maxZMm.value } : {}),
+    });
+  }
+  if ('splitLayerRange' in value) {
+    const input = value.splitLayerRange;
+    return new SplitLayerRangeCommand(
+      id<'object'>(input.objectId),
+      id<'layer-range'>(input.layerRangeId),
+      input.splitZMm,
+      id<'layer-range'>(input.upperRangeId),
+    );
+  }
+  if ('mergeLayerRanges' in value) {
+    const input = value.mergeLayerRanges;
+    return new MergeLayerRangesCommand(
+      id<'object'>(input.objectId),
+      id<'layer-range'>(input.firstRangeId),
+      id<'layer-range'>(input.secondRangeId),
+    );
+  }
+  if ('deleteLayerRange' in value)
+    return new DeleteLayerRangeCommand(
+      id<'object'>(value.deleteLayerRange.objectId),
+      id<'layer-range'>(value.deleteLayerRange.layerRangeId),
+    );
   if ('renameObject' in value)
     return new RenameObjectCommand(id<'object'>(value.renameObject.objectId), text(value.renameObject.name));
   if ('renameVolume' in value)

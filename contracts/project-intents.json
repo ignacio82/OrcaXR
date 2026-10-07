@@ -282,6 +282,55 @@
         "name": "OptionalText"
       }
     },
+    "OptionalFinite": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "Finite"
+      }
+    },
+    "AddLayerRange": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "layerRangeId": "Id",
+        "minZMm": "Finite",
+        "maxZMm": "Finite"
+      }
+    },
+    "EditLayerRangeBounds": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "layerRangeId": "Id",
+        "minZMm": "OptionalFinite",
+        "maxZMm": "OptionalFinite"
+      }
+    },
+    "SplitLayerRange": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "layerRangeId": "Id",
+        "splitZMm": "Finite",
+        "upperRangeId": "Id"
+      }
+    },
+    "MergeLayerRanges": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "firstRangeId": "Id",
+        "secondRangeId": "Id"
+      }
+    },
+    "DeleteLayerRange": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "layerRangeId": "Id"
+      }
+    },
     "Command": {
       "kind": "union",
       "variants": {
@@ -303,7 +352,12 @@
         "deleteInstance": "DeleteInstance",
         "moveObjectToPlate": "MoveObjectToPlate",
         "duplicateObject": "DuplicateObjectEdit",
-        "convertInstanceToObject": "ConvertInstanceToObject"
+        "convertInstanceToObject": "ConvertInstanceToObject",
+        "addLayerRange": "AddLayerRange",
+        "editLayerRangeBounds": "EditLayerRangeBounds",
+        "splitLayerRange": "SplitLayerRange",
+        "mergeLayerRanges": "MergeLayerRanges",
+        "deleteLayerRange": "DeleteLayerRange"
       }
     },
     "Commands": {

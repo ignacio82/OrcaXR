@@ -453,6 +453,104 @@ fn read_convert_instance_to_object(v: &Value) -> Result<ConvertInstanceToObject,
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub enum OptionalFinite {
+    Absent(Empty),
+    Value(Finite),
+}
+fn read_optional_finite(v: &Value) -> Result<OptionalFinite, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalFinite::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalFinite::Value(read_finite(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddLayerRange {
+    pub object_id: Id,
+    pub layer_range_id: Id,
+    pub min_z_mm: Finite,
+    pub max_z_mm: Finite,
+}
+fn read_add_layer_range(v: &Value) -> Result<AddLayerRange, InvalidIntent> {
+    let object = fields(v, &["objectId", "layerRangeId", "minZMm", "maxZMm"], false)?;
+    Ok(AddLayerRange {
+        object_id: read_id(&object["objectId"])?,
+        layer_range_id: read_id(&object["layerRangeId"])?,
+        min_z_mm: read_finite(&object["minZMm"])?,
+        max_z_mm: read_finite(&object["maxZMm"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditLayerRangeBounds {
+    pub object_id: Id,
+    pub layer_range_id: Id,
+    pub min_z_mm: OptionalFinite,
+    pub max_z_mm: OptionalFinite,
+}
+fn read_edit_layer_range_bounds(v: &Value) -> Result<EditLayerRangeBounds, InvalidIntent> {
+    let object = fields(v, &["objectId", "layerRangeId", "minZMm", "maxZMm"], false)?;
+    Ok(EditLayerRangeBounds {
+        object_id: read_id(&object["objectId"])?,
+        layer_range_id: read_id(&object["layerRangeId"])?,
+        min_z_mm: read_optional_finite(&object["minZMm"])?,
+        max_z_mm: read_optional_finite(&object["maxZMm"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SplitLayerRange {
+    pub object_id: Id,
+    pub layer_range_id: Id,
+    pub split_z_mm: Finite,
+    pub upper_range_id: Id,
+}
+fn read_split_layer_range(v: &Value) -> Result<SplitLayerRange, InvalidIntent> {
+    let object = fields(
+        v,
+        &["objectId", "layerRangeId", "splitZMm", "upperRangeId"],
+        false,
+    )?;
+    Ok(SplitLayerRange {
+        object_id: read_id(&object["objectId"])?,
+        layer_range_id: read_id(&object["layerRangeId"])?,
+        split_z_mm: read_finite(&object["splitZMm"])?,
+        upper_range_id: read_id(&object["upperRangeId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeLayerRanges {
+    pub object_id: Id,
+    pub first_range_id: Id,
+    pub second_range_id: Id,
+}
+fn read_merge_layer_ranges(v: &Value) -> Result<MergeLayerRanges, InvalidIntent> {
+    let object = fields(v, &["objectId", "firstRangeId", "secondRangeId"], false)?;
+    Ok(MergeLayerRanges {
+        object_id: read_id(&object["objectId"])?,
+        first_range_id: read_id(&object["firstRangeId"])?,
+        second_range_id: read_id(&object["secondRangeId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteLayerRange {
+    pub object_id: Id,
+    pub layer_range_id: Id,
+}
+fn read_delete_layer_range(v: &Value) -> Result<DeleteLayerRange, InvalidIntent> {
+    let object = fields(v, &["objectId", "layerRangeId"], false)?;
+    Ok(DeleteLayerRange {
+        object_id: read_id(&object["objectId"])?,
+        layer_range_id: read_id(&object["layerRangeId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Command {
     AddPlate(AddPlate),
     DuplicatePlate(DuplicatePlate),
@@ -473,6 +571,11 @@ pub enum Command {
     MoveObjectToPlate(MoveObjectToPlate),
     DuplicateObject(DuplicateObjectEdit),
     ConvertInstanceToObject(ConvertInstanceToObject),
+    AddLayerRange(AddLayerRange),
+    EditLayerRangeBounds(EditLayerRangeBounds),
+    SplitLayerRange(SplitLayerRange),
+    MergeLayerRanges(MergeLayerRanges),
+    DeleteLayerRange(DeleteLayerRange),
 }
 fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
     let object = fields(
@@ -497,6 +600,11 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             "moveObjectToPlate",
             "duplicateObject",
             "convertInstanceToObject",
+            "addLayerRange",
+            "editLayerRangeBounds",
+            "splitLayerRange",
+            "mergeLayerRanges",
+            "deleteLayerRange",
         ],
         true,
     )?;
@@ -533,6 +641,13 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
         "convertInstanceToObject" => Ok(Command::ConvertInstanceToObject(
             read_convert_instance_to_object(value)?,
         )),
+        "addLayerRange" => Ok(Command::AddLayerRange(read_add_layer_range(value)?)),
+        "editLayerRangeBounds" => Ok(Command::EditLayerRangeBounds(read_edit_layer_range_bounds(
+            value,
+        )?)),
+        "splitLayerRange" => Ok(Command::SplitLayerRange(read_split_layer_range(value)?)),
+        "mergeLayerRanges" => Ok(Command::MergeLayerRanges(read_merge_layer_ranges(value)?)),
+        "deleteLayerRange" => Ok(Command::DeleteLayerRange(read_delete_layer_range(value)?)),
         _ => Err(InvalidIntent),
     }
 }

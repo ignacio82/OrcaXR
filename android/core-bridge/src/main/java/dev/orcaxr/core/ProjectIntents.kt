@@ -421,6 +421,86 @@ object ProjectIntents {
             w.field("name") { writeOptionalText(w, v.name) }
         }
     }
+    sealed interface OptionalFinite {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalFinite
+        data class Value(val value: Double) : OptionalFinite
+    }
+    private fun readOptionalFinite(v: Any): OptionalFinite {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalFinite.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalFinite.Value(readFinite(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalFinite(w: ProjectIntentWriter, v: OptionalFinite) {
+        w.obj { when(v) {
+            is OptionalFinite.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalFinite.Value -> w.field("value") { writeFinite(w, v.value) }
+        } }
+    }
+    data class AddLayerRange(val objectId: List<Int>, val layerRangeId: List<Int>, val minZMm: Double, val maxZMm: Double)
+    private fun readAddLayerRange(v: Any): AddLayerRange {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "layerRangeId", "minZMm", "maxZMm"), false)
+        return AddLayerRange(readId(obj.get("objectId")), readId(obj.get("layerRangeId")), readFinite(obj.get("minZMm")), readFinite(obj.get("maxZMm")))
+    }
+    private fun writeAddLayerRange(w: ProjectIntentWriter, v: AddLayerRange) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("layerRangeId") { writeId(w, v.layerRangeId) }
+            w.field("minZMm") { writeFinite(w, v.minZMm) }
+            w.field("maxZMm") { writeFinite(w, v.maxZMm) }
+        }
+    }
+    data class EditLayerRangeBounds(val objectId: List<Int>, val layerRangeId: List<Int>, val minZMm: OptionalFinite, val maxZMm: OptionalFinite)
+    private fun readEditLayerRangeBounds(v: Any): EditLayerRangeBounds {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "layerRangeId", "minZMm", "maxZMm"), false)
+        return EditLayerRangeBounds(readId(obj.get("objectId")), readId(obj.get("layerRangeId")), readOptionalFinite(obj.get("minZMm")), readOptionalFinite(obj.get("maxZMm")))
+    }
+    private fun writeEditLayerRangeBounds(w: ProjectIntentWriter, v: EditLayerRangeBounds) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("layerRangeId") { writeId(w, v.layerRangeId) }
+            w.field("minZMm") { writeOptionalFinite(w, v.minZMm) }
+            w.field("maxZMm") { writeOptionalFinite(w, v.maxZMm) }
+        }
+    }
+    data class SplitLayerRange(val objectId: List<Int>, val layerRangeId: List<Int>, val splitZMm: Double, val upperRangeId: List<Int>)
+    private fun readSplitLayerRange(v: Any): SplitLayerRange {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "layerRangeId", "splitZMm", "upperRangeId"), false)
+        return SplitLayerRange(readId(obj.get("objectId")), readId(obj.get("layerRangeId")), readFinite(obj.get("splitZMm")), readId(obj.get("upperRangeId")))
+    }
+    private fun writeSplitLayerRange(w: ProjectIntentWriter, v: SplitLayerRange) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("layerRangeId") { writeId(w, v.layerRangeId) }
+            w.field("splitZMm") { writeFinite(w, v.splitZMm) }
+            w.field("upperRangeId") { writeId(w, v.upperRangeId) }
+        }
+    }
+    data class MergeLayerRanges(val objectId: List<Int>, val firstRangeId: List<Int>, val secondRangeId: List<Int>)
+    private fun readMergeLayerRanges(v: Any): MergeLayerRanges {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "firstRangeId", "secondRangeId"), false)
+        return MergeLayerRanges(readId(obj.get("objectId")), readId(obj.get("firstRangeId")), readId(obj.get("secondRangeId")))
+    }
+    private fun writeMergeLayerRanges(w: ProjectIntentWriter, v: MergeLayerRanges) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("firstRangeId") { writeId(w, v.firstRangeId) }
+            w.field("secondRangeId") { writeId(w, v.secondRangeId) }
+        }
+    }
+    data class DeleteLayerRange(val objectId: List<Int>, val layerRangeId: List<Int>)
+    private fun readDeleteLayerRange(v: Any): DeleteLayerRange {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "layerRangeId"), false)
+        return DeleteLayerRange(readId(obj.get("objectId")), readId(obj.get("layerRangeId")))
+    }
+    private fun writeDeleteLayerRange(w: ProjectIntentWriter, v: DeleteLayerRange) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("layerRangeId") { writeId(w, v.layerRangeId) }
+        }
+    }
     sealed interface Command {
         data class AddPlate(val value: ProjectIntents.AddPlate) : Command
         data class DuplicatePlate(val value: ProjectIntents.DuplicatePlate) : Command
@@ -441,9 +521,14 @@ object ProjectIntents {
         data class MoveObjectToPlate(val value: ProjectIntents.MoveObjectToPlate) : Command
         data class DuplicateObject(val value: ProjectIntents.DuplicateObjectEdit) : Command
         data class ConvertInstanceToObject(val value: ProjectIntents.ConvertInstanceToObject) : Command
+        data class AddLayerRange(val value: ProjectIntents.AddLayerRange) : Command
+        data class EditLayerRangeBounds(val value: ProjectIntents.EditLayerRangeBounds) : Command
+        data class SplitLayerRange(val value: ProjectIntents.SplitLayerRange) : Command
+        data class MergeLayerRanges(val value: ProjectIntents.MergeLayerRanges) : Command
+        data class DeleteLayerRange(val value: ProjectIntents.DeleteLayerRange) : Command
     }
     private fun readCommand(v: Any): Command {
-        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject"), true)
+        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange"), true)
         return when(val key = obj.keys().next()) {
             "addPlate" -> Command.AddPlate(readAddPlate(obj.get(key)))
             "duplicatePlate" -> Command.DuplicatePlate(readDuplicatePlate(obj.get(key)))
@@ -464,6 +549,11 @@ object ProjectIntents {
             "moveObjectToPlate" -> Command.MoveObjectToPlate(readMoveObjectToPlate(obj.get(key)))
             "duplicateObject" -> Command.DuplicateObject(readDuplicateObjectEdit(obj.get(key)))
             "convertInstanceToObject" -> Command.ConvertInstanceToObject(readConvertInstanceToObject(obj.get(key)))
+            "addLayerRange" -> Command.AddLayerRange(readAddLayerRange(obj.get(key)))
+            "editLayerRangeBounds" -> Command.EditLayerRangeBounds(readEditLayerRangeBounds(obj.get(key)))
+            "splitLayerRange" -> Command.SplitLayerRange(readSplitLayerRange(obj.get(key)))
+            "mergeLayerRanges" -> Command.MergeLayerRanges(readMergeLayerRanges(obj.get(key)))
+            "deleteLayerRange" -> Command.DeleteLayerRange(readDeleteLayerRange(obj.get(key)))
             else -> throw InvalidProjectIntent()
         }
     }
@@ -488,6 +578,11 @@ object ProjectIntents {
             is Command.MoveObjectToPlate -> w.field("moveObjectToPlate") { writeMoveObjectToPlate(w, v.value) }
             is Command.DuplicateObject -> w.field("duplicateObject") { writeDuplicateObjectEdit(w, v.value) }
             is Command.ConvertInstanceToObject -> w.field("convertInstanceToObject") { writeConvertInstanceToObject(w, v.value) }
+            is Command.AddLayerRange -> w.field("addLayerRange") { writeAddLayerRange(w, v.value) }
+            is Command.EditLayerRangeBounds -> w.field("editLayerRangeBounds") { writeEditLayerRangeBounds(w, v.value) }
+            is Command.SplitLayerRange -> w.field("splitLayerRange") { writeSplitLayerRange(w, v.value) }
+            is Command.MergeLayerRanges -> w.field("mergeLayerRanges") { writeMergeLayerRanges(w, v.value) }
+            is Command.DeleteLayerRange -> w.field("deleteLayerRange") { writeDeleteLayerRange(w, v.value) }
         } }
     }
     private fun readCommands(v: Any): List<Command> {

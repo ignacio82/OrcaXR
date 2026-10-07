@@ -2586,6 +2586,19 @@ JNI (debug and release), and `ProjectActorImportChecks` passes seven actor
 journeys (preview, acknowledgement gating, undo, stale and closed candidates,
 unsupported sources, foreign candidates, direct session refusal codes).
 
+### Layer-range commands
+
+The five layer-range commands (`objects/layerRangeCommands.ts`) are native:
+add (an empty-config range over the wire), bounds edits with absent/present
+fields, split (the upper half inherits settings and filament), merge (only
+consecutive touching ranges with equal settings and filament) and delete. Ranges
+stay sorted by height then UTF-16 ID; refusal messages format heights as
+ECMAScript numbers; add/split select the new range, merge/delete repair the
+selection exactly like the browser (fallback to the merged range, the neighbouring
+range or the object). A layer-range scenario in `project-command-vectors.mjs`
+(54 steps, including transactions and rollbacks) is replayed by the Rust command
+tests, and the regenerated session traces by the WASM and JNI replays.
+
 ## Edited canonical archive interchange
 
 `archive_interchange` and `test-archive-interchange.mjs` exercise actual archive

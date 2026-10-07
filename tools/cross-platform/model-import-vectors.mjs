@@ -15,6 +15,10 @@ import {
   UnsupportedModelFormatError,
 } from "../../web/src/project/import/formats/index.ts";
 
+// fflate stamps ZIP members (local DOS time) and gzip headers with the clock;
+// pin both so the corpus is reproducible.
+process.env.TZ = "UTC";
+const MTIME = new Date("2026-01-01T00:00:00Z");
 const root = new URL("../../", import.meta.url);
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const utf8 = (text) => new TextEncoder().encode(text);
@@ -139,7 +143,8 @@ const amfObject = (id, { volumes = [{ faces: FACES }], metadata = "", corners = 
     .join("")}</mesh></object>`;
 const amf = (body, { unit, declaration = '<?xml version="1.0" encoding="UTF-8"?>\n', rootName = "amf" } = {}) =>
   utf8(`${declaration}<${rootName}${unit === undefined ? "" : ` unit="${unit}"`}>${body}</${rootName}>`);
-const zip = (files, level = 6) => zipSync(Object.fromEntries(Object.entries(files)), { level });
+const zip = (files, level = 6) => zipSync(Object.fromEntries(Object.entries(files)), { level, mtime: MTIME });
+const gzip = (bytes, options = {}) => gzipSync(bytes, { mtime: MTIME, ...options });
 
 // ---- Detection ---------------------------------------------------------------
 add("detect/empty", new Uint8Array(0), "empty.stl");
@@ -185,7 +190,7 @@ add("detect/obj-unknown-line", utf8("v 0 0 0\nv 1 0 0\nfoo\nf 1 2 3\n"), "tri.ob
 add("detect/obj-uppercase", utf8("V 0 0 0\nV 1 0 0\nV 0 1 0\nF 1 2 3\n"), "tri.obj");
 add("detect/obj-past-probe", utf8(`${"# padding comment line\n".repeat(400)}v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n`), "late.obj");
 add("detect/text-probe-utf8-split", utf8(`${"#".repeat(8191)}é\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n`), "split.obj");
-add("detect/gzip-no-extension", gzipSync(amf(amfObject("1"))), "blob");
+add("detect/gzip-no-extension", gzip(amf(amfObject("1"))), "blob");
 add("detect/zip-as-stl", zip({ "a.stl": binaryStl(CUBE) }), "pack.stl");
 
 // ---- Binary STL --------------------------------------------------------------
@@ -390,36 +395,36 @@ add("amf/single-quotes-and-spacing", utf8(`<amf  unit = 'mm' ><object id = '7' >
 
 // ---- Compressed AMF ----------------------------------------------------------
 const amfDoc = amf(amfObject("1", { metadata: '<metadata type="name">Packed</metadata>' }), { unit: "cm" });
-add("amf-gzip/basic", gzipSync(amfDoc), "packed.amfz");
-add("amf-gzip/gz-extension", gzipSync(amfDoc), "Packed.AMF.GZ");
-add("amf-gzip/amf-extension", gzipSync(amfDoc), "packed.amf");
-add("amf-gzip/fname", gzipSync(amfDoc, { filename: "inner.amf", mtime: 0 }), "packed.amfz");
+add("amf-gzip/basic", gzip(amfDoc), "packed.amfz");
+add("amf-gzip/gz-extension", gzip(amfDoc), "Packed.AMF.GZ");
+add("amf-gzip/amf-extension", gzip(amfDoc), "packed.amf");
+add("amf-gzip/fname", gzip(amfDoc, { filename: "inner.amf", mtime: 0 }), "packed.amfz");
 // fflate never checks the CRC and sizes its output by the trailer length.
 const withTrailer = (bytes, edit) => {
   const copy = Uint8Array.from(bytes);
   edit(new DataView(copy.buffer), copy.length);
   return copy;
 };
-add("amf-gzip/bad-crc", withTrailer(gzipSync(amfDoc), (v, n) => v.setUint32(n - 8, 0xdeadbeef, true)), "packed.amfz");
-add("amf-gzip/length-larger", withTrailer(gzipSync(amfDoc), (v, n) => v.setUint32(n - 4, amfDoc.length + 1000, true)), "packed.amfz");
-add("amf-gzip/length-smaller", withTrailer(gzipSync(amfDoc), (v, n) => v.setUint32(n - 4, 50, true)), "packed.amfz");
+add("amf-gzip/bad-crc", withTrailer(gzip(amfDoc), (v, n) => v.setUint32(n - 8, 0xdeadbeef, true)), "packed.amfz");
+add("amf-gzip/length-larger", withTrailer(gzip(amfDoc), (v, n) => v.setUint32(n - 4, amfDoc.length + 1000, true)), "packed.amfz");
+add("amf-gzip/length-smaller", withTrailer(gzip(amfDoc), (v, n) => v.setUint32(n - 4, 50, true)), "packed.amfz");
 const spaced = Uint8Array.from([...amfDoc, ...utf8(" ".repeat(300))]);
-add("amf-gzip/length-cuts-trailing-space", withTrailer(gzipSync(spaced), (v, n) => v.setUint32(n - 4, amfDoc.length + 10, true)), "packed.amfz");
+add("amf-gzip/length-cuts-trailing-space", withTrailer(gzip(spaced), (v, n) => v.setUint32(n - 4, amfDoc.length + 10, true)), "packed.amfz");
 add("amf-gzip/empty-body", Uint8Array.from([0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 16, 0, 0, 0]), "zeros.amfz");
 add("amf-gzip/empty-body-over-limit", Uint8Array.from([0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 1, 0]), "zeros.amfz", { maxBytes: 1000 });
-const corrupt = gzipSync(amfDoc);
+const corrupt = gzip(amfDoc);
 corrupt[12] = 0xff;
 corrupt[13] = 0xff;
 add("amf-gzip/corrupt-deflate", corrupt, "packed.amfz");
 // FEXTRA, FCOMMENT and FHCRC header fields are skipped like fflate does.
 const flagged = Uint8Array.from([0x1f, 0x8b, 0x08, 0x04 | 0x10 | 0x02, 0, 0, 0, 0, 0, 3, 3, 0, 1, 2, 3, ...utf8("note"), 0, 0xaa, 0xbb, ...deflateSync(amfDoc), 1, 2, 3, 4, 5, 6, 7, 8]);
 add("amf-gzip/header-fields", flagged, "flags.amfz");
-add("amf-gzip/second-member", Uint8Array.from([...gzipSync(amfDoc), ...gzipSync(utf8("<amf/>"))]), "two.amfz");
-add("amf-gzip/truncated", gzipSync(amfDoc).subarray(0, 14), "packed.amfz");
+add("amf-gzip/second-member", Uint8Array.from([...gzip(amfDoc), ...gzip(utf8("<amf/>"))]), "two.amfz");
+add("amf-gzip/truncated", gzip(amfDoc).subarray(0, 14), "packed.amfz");
 add("amf-gzip/header-only", Uint8Array.from([0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 3]), "packed.amfz");
-add("amf-gzip/expansion-limit", gzipSync(amf(amfObject("1", { metadata: `<metadata type="pad">${"x".repeat(5000)}</metadata>` }))), "packed.amfz", { maxBytes: 4000 });
-add("amf-gzip/not-amf-inside", gzipSync(binaryStl(CUBE)), "packed.amfz");
-add("amf-gzip/as-stl", gzipSync(amfDoc), "packed.stl");
+add("amf-gzip/expansion-limit", gzip(amf(amfObject("1", { metadata: `<metadata type="pad">${"x".repeat(5000)}</metadata>` }))), "packed.amfz", { maxBytes: 4000 });
+add("amf-gzip/not-amf-inside", gzip(binaryStl(CUBE)), "packed.amfz");
+add("amf-gzip/as-stl", gzip(amfDoc), "packed.stl");
 add("amf-zip/single", zip({ "dir/model.amf": amfDoc, "readme.txt": utf8("hi") }), "packed.amf");
 add("amf-zip/two-members", zip({ "a.amf": amfDoc, "b.AMF": amfDoc }), "packed.amfz");
 add("amf-zip/no-member", zip({ "a.stl": binaryStl(CUBE) }), "packed.amf");

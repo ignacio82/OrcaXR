@@ -144,10 +144,17 @@ Detailed evidence and reproducible commands live in
 provider documents and STL/OBJ/AMF/ZIP model import (decode, stage, preview,
 undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
 actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
-Next: inventory the browser commands not yet ported (`web/src/project/commands.ts`
-and siblings against `core/crates/orcaxr-project/src/commands/`), port them with
-browser-derived vectors, then continue Phase 6 (native slicing) and the Phase 7
-application shell (pickers, grants, recent files, import preview UI).
+Layer ranges are ported (roughly a third of the browser's 78 command classes are now native). Next families,
+in order: layer heights and brim ears (object-local, like layer ranges), layer
+events, filaments and mixed filaments, settings/scoped overrides, volumes
+(SVG/emboss/semantic), split/boolean, then facet paint strokes. Each family adds
+intent variants to `contracts/project-intents.json` (definitions before first
+use; regenerate with `generate-project-intents.mjs --write`), maps them in
+`web/src/project/PreparedProjectCommands.ts`, appends a scenario to
+`project-command-vectors.mjs`, regenerates the dependent session/staged/query/
+document/clipboard corpora, and ports the command under
+`core/crates/orcaxr-project/src/commands/`. Then continue Phase 6 (native
+slicing) and the Phase 7 application shell.
 Retain earlier binding replay evidence only when executable and JVM input
 identities still agree; otherwise rerun it. This host can run headless Chrome,
 git and memory-capped Gradle compiles; the full web quality gate, emulator runs
@@ -1042,7 +1049,16 @@ and replay coverage for the complete current command inventory.
     including asset-bearing clipboard restoration, undo/redo and rollback.
   - [x] Replay the ported session/staged families through WASM and host JNI and
     verify bounded upload/clipboard ownership and failure settlement.
-  - [ ] Port and replay every remaining command family before session cutover.
+  - [x] Port the five layer-range intents (`addLayerRange`,
+    `editLayerRangeBounds`, `splitLayerRange`, `mergeLayerRanges`,
+    `deleteLayerRange`): the browser command corpus (1,162 steps, 54 new) and
+    session/WASM/JNI replays agree, including refusal messages and selection
+    repair. Ranges are created empty over the wire; settings and filaments stay
+    with their scoped commands.
+  - [ ] Port and replay every remaining command family before session cutover
+    (filaments and mixed filaments, layer heights, brim ears, layer events,
+    settings/scoped overrides, SVG/emboss/semantic volumes, split/boolean,
+    facet paint strokes, recreate model colours).
 - [ ] Port settings resolution, physical/mixed filament identities, profile
   selection semantics, and canonical slice preflight. Consume the generated
   pinned schema/catalog rather than reconstructing defaults in Kotlin.

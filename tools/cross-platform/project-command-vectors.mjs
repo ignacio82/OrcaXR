@@ -386,7 +386,60 @@ for(const size of lifecycleSizes)for(const delta of [-1,0,1]) {
   });
 }
 
-const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
+// Layer ranges: lifecycle, bounds edits, split/merge rules and selection repair.
+const addRange = (objectId, id, minZMm, maxZMm) => ({ addLayerRange: { objectId: units(objectId), layerRangeId: units(id), minZMm, maxZMm } });
+const optionalZ = (value) => (value === undefined ? { absent: {} } : { value });
+const editRange = (objectId, id, minZMm, maxZMm) => ({ editLayerRangeBounds: { objectId: units(objectId), layerRangeId: units(id), minZMm: optionalZ(minZMm), maxZMm: optionalZ(maxZMm) } });
+const splitRange = (objectId, id, splitZMm, upper) => ({ splitLayerRange: { objectId: units(objectId), layerRangeId: units(id), splitZMm, upperRangeId: units(upper) } });
+const mergeRanges = (objectId, first, second) => ({ mergeLayerRanges: { objectId: units(objectId), firstRangeId: units(first), secondRangeId: units(second) } });
+const deleteRange = (objectId, id) => ({ deleteLayerRange: { objectId: units(objectId), layerRangeId: units(id) } });
+scenario("layer-ranges", {}, s => {
+  const o = s.plates[0].objects[0];
+  o.layerRanges = [
+    { id: "import:range:b", minZMm: 1, maxZMm: 2.5, config: { layer_height: 0.1 } },
+    { id: "import:range:a", minZMm: 0.2, maxZMm: 1, config: { layer_height: 0.1 }, foreign: { kept: "\ud800" } },
+    { id: "import:range:c", minZMm: 3, maxZMm: 4, config: {}, filamentId: s.filaments.physical[0].id },
+    { id: "import:range:d", minZMm: 4, maxZMm: 5, config: {}, filamentId: s.filaments.physical[1].id },
+  ];
+}, ({ execute, batch, run, ids }) => {
+  const o = ids.object;
+  execute(addRange(o, "import:range:new", 6, 7.25));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  for (const bad of [addRange(o, "import:range:x", 4.5, 5.5), addRange(o, "import:range:x", -1, 0.1), addRange(o, "import:range:x", 2, 2),
+    addRange(o, "import:range:a", 8, 9), addRange(o, ids.plate, 8, 9), addRange(o, "bad", 8, 9), addRange("import:missing:object", "import:range:x", 8, 9),
+    addRange(o, "import:range:x", 0.1 + 0.2, 0.3), addRange(o, "import:range:x", 1e308, 1.7976931348623157e308)])
+    execute(bad);
+  execute(editRange(o, "import:range:new", 5.5)); execute(editRange(o, "import:range:new", undefined, 8));
+  execute(editRange(o, "import:range:new", 5.5, 8)); execute(editRange(o, "import:range:new"));
+  for (const bad of [editRange(o, "import:range:new", 4.9), editRange(o, "import:range:new", 9, 8), editRange(o, "import:range:missing", 1, 2), editRange("import:missing:object", "import:range:new", 1)])
+    execute(bad);
+  execute(splitRange(o, "import:range:b", 1.75, "import:range:b-upper"));
+  for (const bad of [splitRange(o, "import:range:b", 1, "import:range:y"), splitRange(o, "import:range:b", 1.75, "import:range:y"), splitRange(o, "import:range:a", 0.5, "import:range:b-upper"), splitRange(o, "import:range:a", 0.5, "bad")])
+    execute(bad);
+  execute(mergeRanges(o, "import:range:b-upper", "import:range:b"));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  for (const bad of [mergeRanges(o, "import:range:a", "import:range:a"), mergeRanges(o, "import:range:b", "import:range:c"), mergeRanges(o, "import:range:c", "import:range:d"),
+    mergeRanges(o, "import:range:a", "import:range:new"), mergeRanges(o, "import:range:missing", "import:range:a"), mergeRanges(o, "import:range:a", "import:range:missing")])
+    execute(bad);
+  execute(mergeRanges(o, "import:range:a", "import:range:b"));
+  run({ kind: "selection", refs: [{ kind: "layer-range", id: units("import:range:c") }, { kind: "object", id: units(o) }] });
+  execute(deleteRange(o, "import:range:c"));
+  run({ kind: "selection", refs: [{ kind: "object", id: units(o) }, { kind: "layer-range", id: units("import:range:new") }] });
+  execute(deleteRange(o, "import:range:new"));
+  run({ kind: "undo" }); run({ kind: "undo" });
+  execute(deleteRange(o, "import:range:missing"));
+  for (const id of ["import:range:a", "import:range:c", "import:range:d"]) {
+    run({ kind: "selection", refs: [{ kind: "layer-range", id: units(id) }] });
+    execute(deleteRange(o, id));
+  }
+  run({ kind: "selection", refs: [{ kind: "layer-range", id: units("import:range:new") }] });
+  execute(deleteRange(o, "import:range:new"));
+  batch([addRange(o, "import:range:t1", 0, 1), addRange(o, "import:range:t2", 1, 2), mergeRanges(o, "import:range:t1", "import:range:t2")], "Layer range transaction");
+  batch([addRange(o, "import:range:t3", 10, 11), addRange(o, "import:range:t4", 10.5, 12)], "Rolled back layer ranges");
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+
+const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";
 const path = new URL("testdata/cross-platform/project-command-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);

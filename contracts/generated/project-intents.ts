@@ -283,6 +283,55 @@ const shapes = {
       "name": "OptionalText"
     }
   },
+  "OptionalFinite": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "Finite"
+    }
+  },
+  "AddLayerRange": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "layerRangeId": "Id",
+      "minZMm": "Finite",
+      "maxZMm": "Finite"
+    }
+  },
+  "EditLayerRangeBounds": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "layerRangeId": "Id",
+      "minZMm": "OptionalFinite",
+      "maxZMm": "OptionalFinite"
+    }
+  },
+  "SplitLayerRange": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "layerRangeId": "Id",
+      "splitZMm": "Finite",
+      "upperRangeId": "Id"
+    }
+  },
+  "MergeLayerRanges": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "firstRangeId": "Id",
+      "secondRangeId": "Id"
+    }
+  },
+  "DeleteLayerRange": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "layerRangeId": "Id"
+    }
+  },
   "Command": {
     "kind": "union",
     "variants": {
@@ -304,7 +353,12 @@ const shapes = {
       "deleteInstance": "DeleteInstance",
       "moveObjectToPlate": "MoveObjectToPlate",
       "duplicateObject": "DuplicateObjectEdit",
-      "convertInstanceToObject": "ConvertInstanceToObject"
+      "convertInstanceToObject": "ConvertInstanceToObject",
+      "addLayerRange": "AddLayerRange",
+      "editLayerRangeBounds": "EditLayerRangeBounds",
+      "splitLayerRange": "SplitLayerRange",
+      "mergeLayerRanges": "MergeLayerRanges",
+      "deleteLayerRange": "DeleteLayerRange"
     }
   },
   "Commands": {
@@ -573,7 +627,13 @@ export interface ProjectMoveObjectToPlateWire {readonly objectId: ProjectIdWire;
 export interface ProjectDuplicateObjectEditWire {readonly sourceObjectId: ProjectIdWire;readonly ids: ProjectDuplicateObjectWire;readonly destinationPlateId: ProjectOptionalPlateWire;readonly name: ProjectOptionalTextWire;}
 export interface ProjectIndependentInstanceIdsWire {readonly objectId: ProjectIdWire;readonly volumeIds: ProjectIdsWire;readonly instanceId: ProjectIdWire;readonly layerRangeIds: ProjectIdsWire;}
 export interface ProjectConvertInstanceToObjectWire {readonly instanceId: ProjectIdWire;readonly ids: ProjectIndependentInstanceIdsWire;readonly name: ProjectOptionalTextWire;}
-export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire};
+export type ProjectOptionalFiniteWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectFiniteWire};
+export interface ProjectAddLayerRangeWire {readonly objectId: ProjectIdWire;readonly layerRangeId: ProjectIdWire;readonly minZMm: ProjectFiniteWire;readonly maxZMm: ProjectFiniteWire;}
+export interface ProjectEditLayerRangeBoundsWire {readonly objectId: ProjectIdWire;readonly layerRangeId: ProjectIdWire;readonly minZMm: ProjectOptionalFiniteWire;readonly maxZMm: ProjectOptionalFiniteWire;}
+export interface ProjectSplitLayerRangeWire {readonly objectId: ProjectIdWire;readonly layerRangeId: ProjectIdWire;readonly splitZMm: ProjectFiniteWire;readonly upperRangeId: ProjectIdWire;}
+export interface ProjectMergeLayerRangesWire {readonly objectId: ProjectIdWire;readonly firstRangeId: ProjectIdWire;readonly secondRangeId: ProjectIdWire;}
+export interface ProjectDeleteLayerRangeWire {readonly objectId: ProjectIdWire;readonly layerRangeId: ProjectIdWire;}
+export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire};
 export type ProjectCommandsWire = readonly ProjectCommandWire[];
 export interface ProjectIntentWire {readonly version: ProjectVersionWire;readonly command: ProjectCommandWire;}
 export interface ProjectBatchWire {readonly version: ProjectVersionWire;readonly label: ProjectLabelWire;readonly commands: ProjectCommandsWire;}
