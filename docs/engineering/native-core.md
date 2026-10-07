@@ -2534,8 +2534,20 @@ matches all **116 accepted** results (format, units, names, roles, colours,
 materials, transform bits, mesh digests and the exact notice list) and all
 **144 refusals** (class, reason and format). Mutating one expected notice or
 mesh digest fails the comparison, and a cancellation test publishes nothing.
-Staging decoded models into a project merge transaction and binding it to host
-tasks remain open.
+`models::stage::stage` then ports `ModelImportParser`'s merge staging: positions
+scaled to millimetres, packed mesh assets (`mesh::encode`) deduplicated against
+the project's existing meshes by digest and mesh layout, unique object names
+(`name (2)` …), group placement centred on the bed and/or dropped to it from the
+bounds of every instance, `orcaxr:importSource`/`orcaxr:sourceMaterial`
+extension data, and every decoder notice as an import repair, dropped field or
+diagnostic with the browser's identifiers. The host supplies the stable-ID source
+and timestamp; staging is private and returns the candidate state, the new asset
+payloads and the notices. `model-stage-vectors.mjs` stages every decoded corpus
+case into an empty project (with and without bed placement), plus chained imports
+into projects that already hold the same mesh and names and into a non-first
+active plate: **237 cases** (235 staged, 2 Float32-overflow refusals) agree on
+ID requests, complete state, asset descriptors and bytes, imported IDs and
+notices. The import preview, the undoable commit and host bindings remain open.
 
 ## Edited canonical archive interchange
 
@@ -2961,6 +2973,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/foreign-bbs-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/foreign-import-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/model-import-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/model-stage-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/view-vectors.mjs

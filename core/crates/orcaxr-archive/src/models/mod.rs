@@ -11,6 +11,7 @@ mod amf;
 mod detect;
 mod mesh;
 mod obj;
+pub mod stage;
 mod stl;
 mod text;
 mod xml;

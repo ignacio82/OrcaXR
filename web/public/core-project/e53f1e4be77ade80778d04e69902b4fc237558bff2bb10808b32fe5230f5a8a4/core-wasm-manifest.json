@@ -1,8 +1,8 @@
 {
   "cargo": "cargo 1.94.1 (29ea6fb6a 2026-03-24)",
-  "defaultFeatures": true,
+  "defaultFeatures": false,
   "features": [
-    "gcode"
+    "project"
   ],
   "inputs": {
     "contracts/core-protocol.json": "63e7ed821d0da12f863004109a41f5dbfd00b73a2c29584ae2b3a3a6b1320f7a",
@@ -89,8 +89,9 @@
     "core/crates/orcaxr-archive/src/models/amf.rs": "ce4c6018b95cffeb1ed3fc07b854d5b37b063af56e6b0b5910bd85dcd43f5548",
     "core/crates/orcaxr-archive/src/models/detect.rs": "5b21056e73ded5a70c297ffd64bdf257c4ac7f5a811742ad60b1d1bd1ea8510f",
     "core/crates/orcaxr-archive/src/models/mesh.rs": "f4bdf1e48ce71596db634f8b7f075d1815fe9193c1af5be85e2dfe628bce130b",
-    "core/crates/orcaxr-archive/src/models/mod.rs": "0d166234b86bebedeecbdeaf99291d16b07eac7b48b39d8d094b79351490261f",
+    "core/crates/orcaxr-archive/src/models/mod.rs": "881c29bd2ea5a16415c646f2e3894e4f72d71a9beb1c482315477a69c7a66b3f",
     "core/crates/orcaxr-archive/src/models/obj.rs": "08c51a07cec87098c41a6f6bec0cbbd21bab9274108578162bbcbb90bf7d40e7",
+    "core/crates/orcaxr-archive/src/models/stage.rs": "7429156811fef1e83b224d490228c192609bb2ab1b88d9937dc554993c4e7b55",
     "core/crates/orcaxr-archive/src/models/stl.rs": "4628bae3d8fb41a6dd27c4c380d2225a856327539bbe57847e90da34ac491794",
     "core/crates/orcaxr-archive/src/models/text.rs": "83be9fe2cf3372c66d47844abea3b51dedc483e69fd4333ae9e5d46b1808f706",
     "core/crates/orcaxr-archive/src/models/xml.rs": "d14473df19d664ef666d306237e010cf78f0d6154956f0b1440ada1a80bc2717",
@@ -122,6 +123,7 @@
     "core/crates/orcaxr-archive/tests/foreign_bbs_vectors.rs": "7f8bdbe319ab4500dbdef4def523ffbb3963289ba4c39e1e1c0513dac076dd35",
     "core/crates/orcaxr-archive/tests/foreign_import.rs": "13c4ee3a97f532b17668b2247cdd0a0b8abd657f5c8c52cd153e3b3a2dbb2d58",
     "core/crates/orcaxr-archive/tests/model_import.rs": "0756182addbefc8473cf5b267d4a9e78480f67e83653753ecc5d7448e0ec79b6",
+    "core/crates/orcaxr-archive/tests/model_stage.rs": "f39fa96eb11da5922771906b97025725c05be9862eae3ddd39e9a888e65ce0d7",
     "core/crates/orcaxr-archive/tests/opc.rs": "77d420d7acf6500023949b240cf02329b520cb1d67286982704f47102c2b54fc",
     "core/crates/orcaxr-archive/tests/package.rs": "1f899a426b6a466711d88f618f6d19b55a33d5da52db16650e78e3cc73e7af78",
     "core/crates/orcaxr-archive/tests/package_boundary.rs": "ffc31b63dc4fb974895ce52681efc4601fbdaa7564629b168a62fd3f96c10e52",
@@ -265,12 +267,12 @@
     "tools/cross-platform/test-zip-write.py": "af58df31f97dc99c8c644c4e820878265d9ebf5a0d2a0d622b00b63b11b5a2a0",
     "tools/cross-platform/verify-artifacts.py": "a6500d8080ca8cd7a4579e54854ec72e44b0bd38320209df750f9b539c4fd1c5"
   },
-  "kind": "browser-wasm",
+  "kind": "browser-project-wasm",
   "outputs": {
-    "orcaxr_core.d.ts": "c28428ccc28d67f9f93ad250d025d51becf5457a4c5887bf671b22a623cf2e08",
-    "orcaxr_core.js": "839ef54779f11f04d758abccb81644a2018d36dc4015ad500e7d940ab2b0f54b",
-    "orcaxr_core_bg.wasm": "a624fddfb44da4151ed5ebf307fb4eb2b93666f2848fd88391ec71f7be9f7e54",
-    "orcaxr_core_bg.wasm.d.ts": "b04678c581b5240329deecede9af99ec58c1183e19bc8097e875fa5af5b634ed"
+    "orcaxr_core.d.ts": "0415b7b0b4c15eeaa2a0cfe93a3caf401054af888c9a509132d27c06e0b911fc",
+    "orcaxr_core.js": "a55a88fd5061da2d9772f16aa18e511b460dbd9e060ec3c89405579261223e46",
+    "orcaxr_core_bg.wasm": "9316087cb5273f37c66a60150baa38829dd51c39cdfcf9ea66c2802528048b05",
+    "orcaxr_core_bg.wasm.d.ts": "c5dd6ce8de1ff881db59d6a400bc44b40ddfabe5e20e5c92da4cce136c021bee"
   },
   "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",
   "schemaVersion": 1,
