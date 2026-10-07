@@ -102,6 +102,13 @@ impl Pending {
     }
 }
 
+/// Why an import commit was refused before anything changed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ImportCommitError {
+    Disposed,
+    Confirmation(crate::import::ConfirmError),
+}
+
 pub struct ProjectSession<P> {
     owner: Arc<()>,
     bus: CommandBus<PreparedCommand, P>,
@@ -253,6 +260,28 @@ impl<P: TimestampPolicy> ProjectSession<P> {
         let result = self.bus.mark_checkpoint();
         result.result.map_err(command_error)?;
         Ok(result.events)
+    }
+    /// Commit a previewed import after the browser's confirmation checks, as one
+    /// undoable `Import <filename>` entry. `guard` was captured with the base the
+    /// preview was prepared from; history-only changes do not make it stale.
+    pub fn commit_import(
+        &mut self,
+        guard: &LocalGuard,
+        prepared: crate::import::Prepared,
+        acknowledged: &[Vec<u16>],
+    ) -> Result<CommandOutcome<P::Error>, ImportCommitError> {
+        if self.disposed {
+            return Err(ImportCommitError::Disposed);
+        }
+        crate::import::check_confirmation(&prepared, acknowledged, self.is_export_current(guard))
+            .map_err(ImportCommitError::Confirmation)?;
+        let (project, payloads, label) = crate::import::into_commit(prepared).ok_or(
+            ImportCommitError::Confirmation(crate::import::ConfirmError::Blocked),
+        )?;
+        Ok(self.bus.execute(
+            PreparedCommand::import(Text::new(label), project, payloads),
+            false,
+        ))
     }
     /// Host-local selection is guard-bound to its source projection. It does not
     /// change the project/history guard, matching the canonical selection owner.

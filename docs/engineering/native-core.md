@@ -2547,7 +2547,26 @@ case into an empty project (with and without bed placement), plus chained import
 into projects that already hold the same mesh and names and into a non-first
 active plate: **237 cases** (235 staged, 2 Float32-overflow refusals) agree on
 ID requests, complete state, asset descriptors and bytes, imported IDs and
-notices. The import preview, the undoable commit and host bindings remain open.
+notices.
+
+`orcaxr_project::import` ports `ProjectImportCoordinator`: `prepare` checks
+declarations against payloads (duplicates, undeclared or missing payloads,
+metadata/length/digest mismatches, unknown imported IDs), completes imported
+provenance, consolidates byte-identical assets with alias rewriting (keeping a
+base asset's ID when its content matches), validates the final graph under the
+host's timestamp policy, replays the browser repository's restore checks, and
+builds the browser's preview (counts, blocked state, sorted required
+acknowledgements, every notice with its `coordinator:` identifier, stale-base
+diagnostic). `ProjectSession::commit_import` applies the browser's confirmation
+order (blocked, missing acknowledgements, stale base) and executes one undoable
+`Import <filename>` command that replaces the project and asset repository; redo
+restores the exact repository version it produced, undo the previous one.
+`model-transaction-vectors.mjs` runs the real coordinator and parser over a real
+`CommandBus`: **21 transactions** agree on preview, staged bundle, confirmation
+refusals, committed state, ID-ordered assets and history, and undo/redo through
+the session wire protocol restore the exact base and committed states, including
+a deliberately colliding ID namespace that blocks the commit and a stale base.
+Host bindings for model import remain open.
 
 ## Edited canonical archive interchange
 
@@ -2974,6 +2993,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/foreig
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/foreign-import-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/model-import-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/model-stage-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/model-transaction-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/view-vectors.mjs

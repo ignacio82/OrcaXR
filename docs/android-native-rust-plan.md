@@ -119,9 +119,13 @@ Detailed evidence and reproducible commands live in
   (prototype keys as extensions/units/attributes) was fixed on the way.
 - [x] Stage decoded models as a project merge (`models::stage`): 237 browser
   cases agree on IDs, state, assets and notices, including chained imports.
-- [ ] Port the import preview/normalization and the undoable commit, then bind
-  model import to host tasks; wire provider Open/Save into the application UI
-  (pickers, persisted grants, recent files, share intents) in Phase 7.
+- [x] Port the import preview/normalization (`orcaxr_project::import`) and the
+  undoable `Import <filename>` commit (`ProjectSession::commit_import`): 21
+  browser transactions agree on preview, confirmation refusals, committed
+  state/assets/history and undo/redo.
+- [ ] Bind model import to WASM/JNI host tasks and the Kotlin actor; wire
+  provider Open/Save into the application UI (pickers, persisted grants, recent
+  files, share intents) in Phase 7.
 - [x] Share bounded G-code text windows and case-insensitive line search through
   Rust, WASM and JNI (Phase 3). Browser, host and Chrome WASM replays agree on
   18,710 searches; the Android instrumented replay has not run on a device yet.
@@ -133,14 +137,15 @@ Detailed evidence and reproducible commands live in
   finish remaining command/query coverage and production session integration,
   then continue the app/device gates.
 
-**Resume here:** port the import transaction. `orcaxr_archive::models` decodes
-(260 cases) and stages (237 cases) exactly like the browser
-([native-core](engineering/native-core.md#signature-first-model-decoding)); next
-port `ProjectImportCoordinator` normalization and preview (asset grouping and
-aliases, validation diagnostics, required acknowledgements, stale-base checks)
-and an undoable session command equivalent to `ImportProjectCommand` (state and
-asset repository replaced as one history entry), then bind model import to
-WASM/JNI tasks like archive Open. Archive Open/Save already run as owned
+**Resume here:** bind model import to host tasks. The shared core decodes
+(260 cases), stages (237) and previews/commits (21 transactions) exactly like
+the browser ([native-core](engineering/native-core.md#signature-first-model-decoding)).
+Next: a bounded WASM/JNI model-import task (staged bytes → decode → stage →
+`import::prepare` on the preparation worker with the guard and asset snapshot
+captured on the authority; preview JSON and required acknowledgement IDs to the
+host; `commit_import` on the authority), a Kotlin actor operation with
+`ProjectDocuments` input, replayed over the transaction corpus in Node, Chrome
+and host JNI; then the remaining command families. Archive Open/Save already run as owned
 WASM/JNI tasks under one generated host policy, and `ProjectDocuments` adapts
 provider documents (see
 [native-core](engineering/native-core.md#archive-open-and-save-host-tasks)): an
@@ -1147,8 +1152,8 @@ painting, and FullSpectrum operations that can support real native projects.
   - [x] Port STL/OBJ/AMF/ZIP detection and decoding with exact browser parity
     on 260 cases.
   - [x] Stage decoded models as merges with exact browser parity (237 cases).
-  - [ ] Port the import preview and undoable commit; bind model import and
-    provider lifetimes.
+  - [x] Port the import preview and undoable commit (21 transactions agree).
+  - [ ] Bind model import and provider lifetimes to host tasks.
 - [ ] Port canonical-envelope and BBS authoring, scoped overrides, plate origins,
   assembly transforms, custom G-code, modifier/negative volumes, annotations,
   mixed recipes, and unknown metadata preservation. A consumed metadata member

@@ -9,6 +9,7 @@ pub mod facets;
 pub mod history;
 pub mod host_layout;
 pub mod ids;
+pub mod import;
 pub mod ingress;
 pub mod mesh;
 pub mod model;

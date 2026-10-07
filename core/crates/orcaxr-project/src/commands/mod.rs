@@ -80,6 +80,38 @@ enum Kind {
         ids: Arc<[PlateId]>,
         previous: Option<Arc<[PlateId]>>,
     },
+    Import(Box<Import>),
+}
+/// `ImportProjectCommand`: the project and its asset repository are replaced as
+/// one history entry. The first apply crosses the validating payload boundary;
+/// redo restores the exact repository version it produced.
+#[derive(Clone)]
+struct Import {
+    next: ValidatedProject,
+    payloads: Option<Arc<[crate::assets::AssetPayload]>>,
+    next_version: Option<crate::assets::AssetSnapshot>,
+    previous: Option<(ValidatedProject, crate::assets::AssetSnapshot)>,
+    next_bytes: u64,
+}
+impl PreparedCommand {
+    /// A committed import, labelled `Import <filename>` by the caller.
+    pub(crate) fn import(
+        label: Text,
+        next: ValidatedProject,
+        payloads: Vec<crate::assets::AssetPayload>,
+    ) -> Self {
+        let next_bytes = payloads.iter().map(|p| p.bytes.len() as u64).sum();
+        Self {
+            label,
+            kind: Kind::Import(Box::new(Import {
+                next,
+                payloads: Some(payloads.into()),
+                next_version: None,
+                previous: None,
+                next_bytes,
+            })),
+        }
+    }
 }
 pub struct PreparedBatch {
     pub label: Text,
@@ -342,6 +374,7 @@ impl PreparedCommand {
             Kind::Rename { .. } => "rename-plate",
             Kind::Printable { .. } => "set-plate-printable",
             Kind::Reorder { .. } => "reorder-plates",
+            Kind::Import(_) => "import-project",
         }
     }
 }
@@ -471,6 +504,34 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
                 reorder(&mut state, ids)?;
                 context.replace(state, reason, PROJECT)?;
             }
+            Kind::Import(import) => {
+                let restore_error =
+                    |e: crate::assets::AssetError| CommandError::domain(e.to_string());
+                import.previous = Some((
+                    before.project().clone(),
+                    context.assets().capture_internal(),
+                ));
+                match &import.next_version {
+                    Some(version) => context
+                        .assets_mut()
+                        .restore_internal(version)
+                        .map_err(restore_error)?,
+                    None => {
+                        let payloads = import
+                            .payloads
+                            .as_deref()
+                            .ok_or_else(|| unapplied("ImportProjectCommand"))?;
+                        context
+                            .assets_mut()
+                            .restore(payloads)
+                            .map_err(restore_error)?;
+                        import.next_version = Some(context.assets().capture_internal());
+                        import.payloads = None;
+                    }
+                }
+                context.replace_validated(import.next.clone(), reason, PROJECT)?;
+                context.clear_selection();
+            }
         }
         Ok(())
     }
@@ -530,6 +591,17 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
                     .as_ref()
                     .ok_or_else(|| unapplied("ReorderPlatesCommand"))?,
             )?,
+            Kind::Import(import) => {
+                let (project, assets) = import
+                    .previous
+                    .clone()
+                    .ok_or_else(|| unapplied("ImportProjectCommand"))?;
+                context
+                    .assets_mut()
+                    .restore_internal(&assets)
+                    .map_err(|e| CommandError::domain(e.to_string()))?;
+                return context.replace_validated(project, reason, PROJECT);
+            }
         }
         context.replace(state, reason, PROJECT)
     }
@@ -541,6 +613,20 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),
+            // Canonical state units plus new payload bytes plus the previous
+            // project's declared asset bytes, like the browser's estimate.
+            Kind::Import(import) => {
+                let state =
+                    canonical_length(import.next.state()).map_err(|_| CommandError::Encoding)?;
+                let previous: u64 = import.previous.as_ref().map_or(0, |(p, _)| {
+                    p.state()
+                        .source_assets
+                        .iter()
+                        .map(|a| a.byte_length.get() as u64)
+                        .sum()
+                });
+                Ok((state + import.next_bytes + previous).max(1))
+            }
             _ => Ok(1),
         }
     }
