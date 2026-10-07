@@ -741,6 +741,77 @@ fn read_delete_layer_event(v: &Value) -> Result<DeleteLayerEvent, InvalidIntent>
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BrimEar {
+    pub position_mm: Vector,
+    pub head_front_radius_mm: Finite,
+}
+fn read_brim_ear(v: &Value) -> Result<BrimEar, InvalidIntent> {
+    let object = fields(v, &["positionMm", "headFrontRadiusMm"], false)?;
+    Ok(BrimEar {
+        position_mm: read_vector(&object["positionMm"])?,
+        head_front_radius_mm: read_finite(&object["headFrontRadiusMm"])?,
+    })
+}
+pub type BrimEarList = Vec<BrimEar>;
+fn read_brim_ear_list(v: &Value) -> Result<BrimEarList, InvalidIntent> {
+    list(v, 0, 131072)?.iter().map(read_brim_ear).collect()
+}
+pub type EarIndex = u64;
+fn read_ear_index(v: &Value) -> Result<EarIndex, InvalidIntent> {
+    Ok(integer(v, 0, 9007199254740991)? as EarIndex)
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddBrimEar {
+    pub object_id: Id,
+    pub ear: BrimEar,
+}
+fn read_add_brim_ear(v: &Value) -> Result<AddBrimEar, InvalidIntent> {
+    let object = fields(v, &["objectId", "ear"], false)?;
+    Ok(AddBrimEar {
+        object_id: read_id(&object["objectId"])?,
+        ear: read_brim_ear(&object["ear"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddBrimEars {
+    pub object_id: Id,
+    pub ears: BrimEarList,
+}
+fn read_add_brim_ears(v: &Value) -> Result<AddBrimEars, InvalidIntent> {
+    let object = fields(v, &["objectId", "ears"], false)?;
+    Ok(AddBrimEars {
+        object_id: read_id(&object["objectId"])?,
+        ears: read_brim_ear_list(&object["ears"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveBrimEar {
+    pub object_id: Id,
+    pub index: EarIndex,
+}
+fn read_remove_brim_ear(v: &Value) -> Result<RemoveBrimEar, InvalidIntent> {
+    let object = fields(v, &["objectId", "index"], false)?;
+    Ok(RemoveBrimEar {
+        object_id: read_id(&object["objectId"])?,
+        index: read_ear_index(&object["index"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClearBrimEars {
+    pub object_id: Id,
+}
+fn read_clear_brim_ears(v: &Value) -> Result<ClearBrimEars, InvalidIntent> {
+    let object = fields(v, &["objectId"], false)?;
+    Ok(ClearBrimEars {
+        object_id: read_id(&object["objectId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Command {
     AddPlate(AddPlate),
     DuplicatePlate(DuplicatePlate),
@@ -769,6 +840,10 @@ pub enum Command {
     AddLayerEvent(AddLayerEvent),
     EditLayerEvent(EditLayerEvent),
     DeleteLayerEvent(DeleteLayerEvent),
+    AddBrimEar(AddBrimEar),
+    AddBrimEars(AddBrimEars),
+    RemoveBrimEar(RemoveBrimEar),
+    ClearBrimEars(ClearBrimEars),
 }
 fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
     let object = fields(
@@ -801,6 +876,10 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             "addLayerEvent",
             "editLayerEvent",
             "deleteLayerEvent",
+            "addBrimEar",
+            "addBrimEars",
+            "removeBrimEar",
+            "clearBrimEars",
         ],
         true,
     )?;
@@ -847,6 +926,10 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
         "addLayerEvent" => Ok(Command::AddLayerEvent(read_add_layer_event(value)?)),
         "editLayerEvent" => Ok(Command::EditLayerEvent(read_edit_layer_event(value)?)),
         "deleteLayerEvent" => Ok(Command::DeleteLayerEvent(read_delete_layer_event(value)?)),
+        "addBrimEar" => Ok(Command::AddBrimEar(read_add_brim_ear(value)?)),
+        "addBrimEars" => Ok(Command::AddBrimEars(read_add_brim_ears(value)?)),
+        "removeBrimEar" => Ok(Command::RemoveBrimEar(read_remove_brim_ear(value)?)),
+        "clearBrimEars" => Ok(Command::ClearBrimEars(read_clear_brim_ears(value)?)),
         _ => Err(InvalidIntent),
     }
 }

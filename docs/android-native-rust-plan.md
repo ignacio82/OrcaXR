@@ -144,9 +144,10 @@ Detailed evidence and reproducible commands live in
 provider documents and STL/OBJ/AMF/ZIP model import (decode, stage, preview,
 undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
 actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
-Layer ranges and layer events are ported (roughly a third of the browser's 78
-command classes are now native). Next families, in order: layer heights and brim
-ears (object-local, like layer ranges), filaments and mixed filaments, settings/scoped overrides, volumes
+Layer ranges, layer events and brim ears are ported (roughly 40% of the browser's
+78 command classes are now native). Next families, in order: layer-height
+profiles (object-local; the adaptive variant reads the first volume's mesh in the
+session rather than carrying it on the wire), filaments and mixed filaments, settings/scoped overrides, volumes
 (SVG/emboss/semantic), split/boolean, then facet paint strokes. Each family adds
 intent variants to `contracts/project-intents.json` (definitions before first
 use; regenerate with `generate-project-intents.mjs --write`), maps them in
@@ -1060,8 +1061,13 @@ and replay coverage for the complete current command inventory.
     steps, 64 new) covers every event type, graph-validation refusals (height,
     duplicate height key, tool index, custom code, plate, ID reuse), foreign-field
     stripping on edit, plate deletion and transactions; session/WASM/JNI agree.
+  - [x] Port the four brim-ear intents (`addBrimEar`, `addBrimEars`,
+    `removeBrimEar`, `clearBrimEars`): the corpus (1,267 steps, 41 new) keeps the
+    browser's undo quirks (undoing one placement pops the last ear; undoing a
+    clear that removed nothing publishes no project change; an emptied list drops
+    the key) and its radius/index/object refusals; session/WASM/JNI agree.
   - [ ] Port and replay every remaining command family before session cutover
-    (filaments and mixed filaments, layer heights, brim ears,
+    (filaments and mixed filaments, layer heights,
     settings/scoped overrides, SVG/emboss/semantic volumes, split/boolean,
     facet paint strokes, recreate model colours).
 - [ ] Port settings resolution, physical/mixed filament identities, profile

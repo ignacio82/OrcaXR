@@ -413,6 +413,51 @@ const shapes = {
       "customGcodeId": "Id"
     }
   },
+  "BrimEar": {
+    "kind": "object",
+    "fields": {
+      "positionMm": "Vector",
+      "headFrontRadiusMm": "Finite"
+    }
+  },
+  "BrimEarList": {
+    "kind": "array",
+    "items": "BrimEar",
+    "min": 0,
+    "max": 131072
+  },
+  "EarIndex": {
+    "kind": "integer",
+    "min": 0,
+    "max": 9007199254740991
+  },
+  "AddBrimEar": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "ear": "BrimEar"
+    }
+  },
+  "AddBrimEars": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "ears": "BrimEarList"
+    }
+  },
+  "RemoveBrimEar": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "index": "EarIndex"
+    }
+  },
+  "ClearBrimEars": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id"
+    }
+  },
   "Command": {
     "kind": "union",
     "variants": {
@@ -442,7 +487,11 @@ const shapes = {
       "deleteLayerRange": "DeleteLayerRange",
       "addLayerEvent": "AddLayerEvent",
       "editLayerEvent": "EditLayerEvent",
-      "deleteLayerEvent": "DeleteLayerEvent"
+      "deleteLayerEvent": "DeleteLayerEvent",
+      "addBrimEar": "AddBrimEar",
+      "addBrimEars": "AddBrimEars",
+      "removeBrimEar": "RemoveBrimEar",
+      "clearBrimEars": "ClearBrimEars"
     }
   },
   "Commands": {
@@ -726,7 +775,14 @@ export type ProjectPatchTextWire = {readonly keep:ProjectEmptyWire} | {readonly 
 export interface ProjectAddLayerEventWire {readonly customGcodeId: ProjectIdWire;readonly plateId: ProjectIdWire;readonly eventType: ProjectLayerEventTypeWire;readonly topZMm: ProjectFiniteWire;readonly toolIndex: ProjectOptionalFiniteWire;readonly filamentId: ProjectOptionalIdWire;readonly color: ProjectOptionalTextWire;readonly message: ProjectOptionalTextWire;readonly code: ProjectOptionalTextWire;}
 export interface ProjectEditLayerEventWire {readonly customGcodeId: ProjectIdWire;readonly eventType: ProjectOptionalLayerEventTypeWire;readonly topZMm: ProjectOptionalFiniteWire;readonly toolIndex: ProjectPatchFiniteWire;readonly filamentId: ProjectPatchIdWire;readonly color: ProjectPatchTextWire;readonly message: ProjectPatchTextWire;readonly code: ProjectOptionalTextWire;}
 export interface ProjectDeleteLayerEventWire {readonly customGcodeId: ProjectIdWire;}
-export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire} | {readonly addLayerEvent:ProjectAddLayerEventWire} | {readonly editLayerEvent:ProjectEditLayerEventWire} | {readonly deleteLayerEvent:ProjectDeleteLayerEventWire};
+export interface ProjectBrimEarWire {readonly positionMm: ProjectVectorWire;readonly headFrontRadiusMm: ProjectFiniteWire;}
+export type ProjectBrimEarListWire = readonly ProjectBrimEarWire[];
+export type ProjectEarIndexWire = number;
+export interface ProjectAddBrimEarWire {readonly objectId: ProjectIdWire;readonly ear: ProjectBrimEarWire;}
+export interface ProjectAddBrimEarsWire {readonly objectId: ProjectIdWire;readonly ears: ProjectBrimEarListWire;}
+export interface ProjectRemoveBrimEarWire {readonly objectId: ProjectIdWire;readonly index: ProjectEarIndexWire;}
+export interface ProjectClearBrimEarsWire {readonly objectId: ProjectIdWire;}
+export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire} | {readonly addLayerEvent:ProjectAddLayerEventWire} | {readonly editLayerEvent:ProjectEditLayerEventWire} | {readonly deleteLayerEvent:ProjectDeleteLayerEventWire} | {readonly addBrimEar:ProjectAddBrimEarWire} | {readonly addBrimEars:ProjectAddBrimEarsWire} | {readonly removeBrimEar:ProjectRemoveBrimEarWire} | {readonly clearBrimEars:ProjectClearBrimEarsWire};
 export type ProjectCommandsWire = readonly ProjectCommandWire[];
 export interface ProjectIntentWire {readonly version: ProjectVersionWire;readonly command: ProjectCommandWire;}
 export interface ProjectBatchWire {readonly version: ProjectVersionWire;readonly label: ProjectLabelWire;readonly commands: ProjectCommandsWire;}

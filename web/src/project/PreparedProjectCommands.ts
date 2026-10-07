@@ -41,8 +41,15 @@ import {
   EditLayerEventCommand,
   type LayerEventPatch,
 } from './layerEventCommands';
-import type { LayerEventType, Transform } from './domain/model';
+import {
+  AddBrimEarCommand,
+  AddBrimEarsCommand,
+  ClearBrimEarsCommand,
+  RemoveBrimEarCommand,
+} from './objects/brimEarCommands';
+import type { BrimEarPoint, LayerEventType, Transform } from './domain/model';
 import type {
+  ProjectBrimEarWire,
   ProjectLayerEventTypeWire,
   ProjectTransformWire,
 } from '../../../contracts/generated/project-intents';
@@ -208,6 +215,13 @@ function command(value: ProjectCommandWire): ProjectCommand {
   }
   if ('deleteLayerEvent' in value)
     return new DeleteLayerEventCommand(id<'custom-gcode'>(value.deleteLayerEvent.customGcodeId));
+  if ('addBrimEar' in value)
+    return new AddBrimEarCommand(id<'object'>(value.addBrimEar.objectId), brimEar(value.addBrimEar.ear));
+  if ('addBrimEars' in value)
+    return new AddBrimEarsCommand(id<'object'>(value.addBrimEars.objectId), value.addBrimEars.ears.map(brimEar));
+  if ('removeBrimEar' in value)
+    return new RemoveBrimEarCommand(id<'object'>(value.removeBrimEar.objectId), value.removeBrimEar.index);
+  if ('clearBrimEars' in value) return new ClearBrimEarsCommand(id<'object'>(value.clearBrimEars.objectId));
   if ('renameObject' in value)
     return new RenameObjectCommand(id<'object'>(value.renameObject.objectId), text(value.renameObject.name));
   if ('renameVolume' in value)
@@ -275,6 +289,12 @@ const LAYER_EVENT_TYPES: Readonly<Record<ProjectLayerEventTypeWire, LayerEventTy
   template: 'template',
   custom: 'custom',
 });
+function brimEar(value: ProjectBrimEarWire): BrimEarPoint {
+  return {
+    positionMm: [value.positionMm[0], value.positionMm[1], value.positionMm[2]],
+    headFrontRadiusMm: value.headFrontRadiusMm,
+  };
+}
 function transform(value: ProjectTransformWire): Transform {
   // Tuple lengths and finite numeric values were checked by captureProjectIntent.
   return {

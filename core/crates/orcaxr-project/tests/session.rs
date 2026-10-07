@@ -245,7 +245,7 @@ fn owned_session_matches_typescript_queue_protocol_commands_and_effects() {
         drop(session);
         assert_eq!(asset.bytes().len(), 36);
     }
-    assert_eq!((groups, requests), (1430, 1498));
+    assert_eq!((groups, requests), (1474, 1542));
 }
 #[test]
 fn local_guards_are_owner_bound_and_checkpoints_invalidate_old_work() {

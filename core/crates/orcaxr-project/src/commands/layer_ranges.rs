@@ -65,20 +65,11 @@ fn compare(a: &LayerRange, b: &LayerRange) -> std::cmp::Ordering {
         .or_else(|| a_max.partial_cmp(&b_max).filter(|o| o.is_ne()))
         .unwrap_or_else(|| a.id.as_utf16().cmp(b.id.as_utf16()))
 }
-fn locate(state: &ProjectState, id: &ObjectId) -> Option<(usize, usize)> {
-    state.plates.iter().enumerate().find_map(|(p, plate)| {
-        plate
-            .objects
-            .iter()
-            .position(|o| &o.id == id)
-            .map(|o| (p, o))
-    })
-}
 fn require_object<E>(
     state: &ProjectState,
     id: &ObjectId,
 ) -> Result<(usize, usize), CommandError<E>> {
-    locate(state, id).ok_or_else(|| domain(message(&[&u("Unknown object "), id.as_utf16()])))
+    locate_object(state, id).ok_or_else(|| domain(message(&[&u("Unknown object "), id.as_utf16()])))
 }
 fn owned<E>(
     object: &ProjectObject,
@@ -384,7 +375,7 @@ impl LayerRangeCommand {
                     .iter()
                     .position(|r| &r.id == id)
                     .expect("owned range");
-                let (p, o) = locate(after, &self.object).expect("object retained");
+                let (p, o) = locate_object(after, &self.object).expect("object retained");
                 let remaining = &after.plates[p].objects[o].layer_ranges;
                 let fallback = if remaining.is_empty() {
                     SelectionRef::Object(self.object.clone())
@@ -425,15 +416,7 @@ impl LayerRangeCommand {
 }
 
 fn set_ranges(state: &mut ProjectState, p: usize, o: usize, ranges: List<Arc<LayerRange>>) {
-    let mut plates = state.plates.to_vec();
-    let mut plate = plates[p].as_ref().clone();
-    let mut objects = plate.objects.to_vec();
-    let mut object = objects[o].as_ref().clone();
-    object.layer_ranges = ranges;
-    objects[o] = Arc::new(object);
-    plate.objects = objects.into();
-    plates[p] = Arc::new(plate);
-    state.plates = plates.into();
+    update_object(state, (p, o), |object| object.layer_ranges = ranges);
 }
 
 /// `repairSelectionAfterRemoval`: prune, then reselect the fallback as primary

@@ -1,6 +1,7 @@
 //! Prepared project commands. The shared decoder bounds untrusted messages before
 //! stable-ID/constructor validation; execution belongs to the owned command bus.
 //! No UI, callbacks, random IDs or session ownership is inferred here.
+mod brim_ears;
 mod duplicate;
 mod layer_events;
 mod layer_ranges;
@@ -85,6 +86,7 @@ enum Kind {
     Import(Box<Import>),
     LayerRange(Box<layer_ranges::LayerRangeCommand>),
     LayerEvent(Box<layer_events::LayerEventCommand>),
+    BrimEar(Box<brim_ears::BrimEarCommand>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -226,6 +228,10 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
             id(v.object_id)?,
             id(v.layer_range_id)?,
         )),
+        wire::Command::AddBrimEar(v) => brim_ear(brim_ears::BrimEarCommand::add(v)?),
+        wire::Command::AddBrimEars(v) => brim_ear(brim_ears::BrimEarCommand::add_many(v)?),
+        wire::Command::RemoveBrimEar(v) => brim_ear(brim_ears::BrimEarCommand::remove(v)?),
+        wire::Command::ClearBrimEars(v) => brim_ear(brim_ears::BrimEarCommand::clear(v)?),
         wire::Command::AddLayerEvent(v) => layer_event(layer_events::LayerEventCommand::add(v)?),
         wire::Command::EditLayerEvent(v) => layer_event(layer_events::LayerEventCommand::edit(v)?),
         wire::Command::DeleteLayerEvent(v) => {
@@ -342,6 +348,9 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
     };
     Ok(PreparedCommand { label, kind })
 }
+fn brim_ear(c: brim_ears::BrimEarCommand) -> (Text, Kind) {
+    (c.label(), Kind::BrimEar(Box::new(c)))
+}
 fn layer_event(c: layer_events::LayerEventCommand) -> (Text, Kind) {
     (c.label(), Kind::LayerEvent(Box::new(c)))
 }
@@ -358,6 +367,33 @@ fn transform_command(c: transforms::TransformCommand) -> (Text, Kind) {
     (c.label(), Kind::Transform(c))
 }
 const PROJECT: &[DirtyCategory] = &[DirtyCategory::ProjectData];
+/// The plate and object positions of `id`: the first match in plate order, like
+/// the browser's object walks.
+fn locate_object(state: &ProjectState, id: &ObjectId) -> Option<(usize, usize)> {
+    state.plates.iter().enumerate().find_map(|(p, plate)| {
+        plate
+            .objects
+            .iter()
+            .position(|o| &o.id == id)
+            .map(|o| (p, o))
+    })
+}
+/// Edit one located object, copying only its plate and object lists.
+fn update_object(
+    state: &mut ProjectState,
+    (p, o): (usize, usize),
+    edit: impl FnOnce(&mut ProjectObject),
+) {
+    let mut plates = state.plates.to_vec();
+    let mut plate = plates[p].as_ref().clone();
+    let mut objects = plate.objects.to_vec();
+    let mut object = objects[o].as_ref().clone();
+    edit(&mut object);
+    objects[o] = Arc::new(object);
+    plate.objects = objects.into();
+    plates[p] = Arc::new(plate);
+    state.plates = plates.into();
+}
 impl PreparedCommand {
     /// Capture a complete immutable record. The command bus validates the edited
     /// graph on application. This local API is not a generated wire intent;
@@ -425,6 +461,7 @@ impl PreparedCommand {
             Kind::Import(_) => "import-project",
             Kind::LayerRange(ref c) => c.reason(),
             Kind::LayerEvent(ref c) => c.reason(),
+            Kind::BrimEar(ref c) => c.reason(),
         }
     }
 }
@@ -467,6 +504,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::Transform(c) => c.apply(context, reason)?,
             Kind::LayerRange(c) => c.apply(context, reason)?,
             Kind::LayerEvent(c) => c.apply(context, reason)?,
+            Kind::BrimEar(c) => c.apply(context)?,
             Kind::Add {
                 plate,
                 activate,
@@ -598,6 +636,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
         match &self.kind {
             Kind::Lifecycle(c) => return c.revert(context, reason),
             Kind::LayerEvent(c) => return c.revert(context, reason),
+            Kind::BrimEar(c) => return c.revert(context),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()

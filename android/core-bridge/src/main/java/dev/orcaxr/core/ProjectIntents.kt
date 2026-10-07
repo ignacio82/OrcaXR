@@ -652,6 +652,73 @@ object ProjectIntents {
             w.field("customGcodeId") { writeId(w, v.customGcodeId) }
         }
     }
+    data class BrimEar(val positionMm: List<Double>, val headFrontRadiusMm: Double)
+    private fun readBrimEar(v: Any): BrimEar {
+        val obj = ProjectIntentJson.fields(v, setOf("positionMm", "headFrontRadiusMm"), false)
+        return BrimEar(readVector(obj.get("positionMm")), readFinite(obj.get("headFrontRadiusMm")))
+    }
+    private fun writeBrimEar(w: ProjectIntentWriter, v: BrimEar) {
+        w.obj {
+            w.field("positionMm") { writeVector(w, v.positionMm) }
+            w.field("headFrontRadiusMm") { writeFinite(w, v.headFrontRadiusMm) }
+        }
+    }
+    private fun readBrimEarList(v: Any): List<BrimEar> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readBrimEar(array.get(it)) }
+    }
+    private fun writeBrimEarList(w: ProjectIntentWriter, v: List<BrimEar>) {
+        w.array(v, 0, 131072) { writeBrimEar(w, it) }
+    }
+    private fun readEarIndex(v: Any): Long {
+        return ProjectIntentJson.integer(v, 0L, 9007199254740991L)
+    }
+    private fun writeEarIndex(w: ProjectIntentWriter, v: Long) {
+        w.integer(v.toLong(), 0L, 9007199254740991L)
+    }
+    data class AddBrimEar(val objectId: List<Int>, val ear: BrimEar)
+    private fun readAddBrimEar(v: Any): AddBrimEar {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "ear"), false)
+        return AddBrimEar(readId(obj.get("objectId")), readBrimEar(obj.get("ear")))
+    }
+    private fun writeAddBrimEar(w: ProjectIntentWriter, v: AddBrimEar) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("ear") { writeBrimEar(w, v.ear) }
+        }
+    }
+    data class AddBrimEars(val objectId: List<Int>, val ears: List<BrimEar>)
+    private fun readAddBrimEars(v: Any): AddBrimEars {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "ears"), false)
+        return AddBrimEars(readId(obj.get("objectId")), readBrimEarList(obj.get("ears")))
+    }
+    private fun writeAddBrimEars(w: ProjectIntentWriter, v: AddBrimEars) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("ears") { writeBrimEarList(w, v.ears) }
+        }
+    }
+    data class RemoveBrimEar(val objectId: List<Int>, val index: Long)
+    private fun readRemoveBrimEar(v: Any): RemoveBrimEar {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "index"), false)
+        return RemoveBrimEar(readId(obj.get("objectId")), readEarIndex(obj.get("index")))
+    }
+    private fun writeRemoveBrimEar(w: ProjectIntentWriter, v: RemoveBrimEar) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("index") { writeEarIndex(w, v.index) }
+        }
+    }
+    data class ClearBrimEars(val objectId: List<Int>)
+    private fun readClearBrimEars(v: Any): ClearBrimEars {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId"), false)
+        return ClearBrimEars(readId(obj.get("objectId")))
+    }
+    private fun writeClearBrimEars(w: ProjectIntentWriter, v: ClearBrimEars) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+        }
+    }
     sealed interface Command {
         data class AddPlate(val value: ProjectIntents.AddPlate) : Command
         data class DuplicatePlate(val value: ProjectIntents.DuplicatePlate) : Command
@@ -680,9 +747,13 @@ object ProjectIntents {
         data class AddLayerEvent(val value: ProjectIntents.AddLayerEvent) : Command
         data class EditLayerEvent(val value: ProjectIntents.EditLayerEvent) : Command
         data class DeleteLayerEvent(val value: ProjectIntents.DeleteLayerEvent) : Command
+        data class AddBrimEar(val value: ProjectIntents.AddBrimEar) : Command
+        data class AddBrimEars(val value: ProjectIntents.AddBrimEars) : Command
+        data class RemoveBrimEar(val value: ProjectIntents.RemoveBrimEar) : Command
+        data class ClearBrimEars(val value: ProjectIntents.ClearBrimEars) : Command
     }
     private fun readCommand(v: Any): Command {
-        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent"), true)
+        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars"), true)
         return when(val key = obj.keys().next()) {
             "addPlate" -> Command.AddPlate(readAddPlate(obj.get(key)))
             "duplicatePlate" -> Command.DuplicatePlate(readDuplicatePlate(obj.get(key)))
@@ -711,6 +782,10 @@ object ProjectIntents {
             "addLayerEvent" -> Command.AddLayerEvent(readAddLayerEvent(obj.get(key)))
             "editLayerEvent" -> Command.EditLayerEvent(readEditLayerEvent(obj.get(key)))
             "deleteLayerEvent" -> Command.DeleteLayerEvent(readDeleteLayerEvent(obj.get(key)))
+            "addBrimEar" -> Command.AddBrimEar(readAddBrimEar(obj.get(key)))
+            "addBrimEars" -> Command.AddBrimEars(readAddBrimEars(obj.get(key)))
+            "removeBrimEar" -> Command.RemoveBrimEar(readRemoveBrimEar(obj.get(key)))
+            "clearBrimEars" -> Command.ClearBrimEars(readClearBrimEars(obj.get(key)))
             else -> throw InvalidProjectIntent()
         }
     }
@@ -743,6 +818,10 @@ object ProjectIntents {
             is Command.AddLayerEvent -> w.field("addLayerEvent") { writeAddLayerEvent(w, v.value) }
             is Command.EditLayerEvent -> w.field("editLayerEvent") { writeEditLayerEvent(w, v.value) }
             is Command.DeleteLayerEvent -> w.field("deleteLayerEvent") { writeDeleteLayerEvent(w, v.value) }
+            is Command.AddBrimEar -> w.field("addBrimEar") { writeAddBrimEar(w, v.value) }
+            is Command.AddBrimEars -> w.field("addBrimEars") { writeAddBrimEars(w, v.value) }
+            is Command.RemoveBrimEar -> w.field("removeBrimEar") { writeRemoveBrimEar(w, v.value) }
+            is Command.ClearBrimEars -> w.field("clearBrimEars") { writeClearBrimEars(w, v.value) }
         } }
     }
     private fun readCommands(v: Any): List<Command> {

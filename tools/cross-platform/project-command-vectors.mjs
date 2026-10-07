@@ -499,7 +499,51 @@ scenario("layer-events", {}, s => {
   run({ kind: "undo" }); run({ kind: "redo" });
 });
 
-const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
+const ear = (positionMm, headFrontRadiusMm) => ({ positionMm, headFrontRadiusMm });
+const addEar = (objectId, positionMm, radius) => ({ addBrimEar: { objectId: units(objectId), ear: ear(positionMm, radius) } });
+const addEars = (objectId, ears) => ({ addBrimEars: { objectId: units(objectId), ears } });
+const removeEar = (objectId, index) => ({ removeBrimEar: { objectId: units(objectId), index } });
+const clearEars = objectId => ({ clearBrimEars: { objectId: units(objectId) } });
+scenario("brim-ears", {}, s => {
+  const first = s.plates[0].objects[0];
+  first.brimEars = [{ positionMm: [1, 2, 0], headFrontRadiusMm: 3, foreign: { kept: "\ud800" } }];
+  const second = JSON.parse(JSON.stringify(first));
+  Object.assign(second, { id: "import:object:second", layerRanges: [], brimEars: [] });
+  second.volumes[0].id = "import:volume:second"; second.instances[0].id = "import:instance:second";
+  s.plates[0].objects.push(second);
+}, ({ execute, batch, run, ids }) => {
+  const o = ids.object, second = "import:object:second";
+  execute(addEar(o, [5, -2.5, 0.25], 2));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(addEar(o, [0, 0, 0], 0.1)); execute(addEar(o, [-0, 1e-300, 1e300], 20));
+  for (const bad of [addEar(o, [0, 0, 0], 0.0999), addEar(o, [0, 0, 0], 20.0001), addEar(o, [0, 0, 0], -1),
+    addEar("import:missing:object", [0, 0, 0], 1), addEar("bad", [0, 0, 0], 1)])
+    execute(bad);
+  execute(addEars(o, [ear([7, 7, 0], 1.5), ear([8, 8, 0], 2.5)]));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  for (const bad of [addEars(o, []), addEars(o, [ear([1, 1, 0], 1), ear([2, 2, 0], 25)]), addEars("import:missing:object", [ear([1, 1, 0], 1)])])
+    execute(bad);
+  execute(removeEar(o, 0));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  for (const bad of [removeEar(o, 99), removeEar(o, 9007199254740991), removeEar(second, 0), removeEar("import:missing:object", 0)])
+    execute(bad);
+  execute(addEar(second, [3, 3, 0], 1));
+  run({ kind: "undo" });
+  execute(clearEars(second));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(clearEars(o));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(clearEars(o));
+  run({ kind: "undo" });
+  execute(addEars(second, [ear([4, 4, 0], 1)]));
+  execute(removeEar(second, 0));
+  run({ kind: "undo" }); run({ kind: "undo" });
+  batch([addEar(o, [9, 9, 0], 1), removeEar(o, 0), clearEars(second)], "Brim ear transaction");
+  batch([addEar(o, [10, 10, 0], 1), removeEar(second, 5)], "Rolled back brim ears");
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+
+const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";
 const path = new URL("testdata/cross-platform/project-command-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);

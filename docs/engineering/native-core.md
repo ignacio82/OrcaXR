@@ -2617,6 +2617,20 @@ browser's `assertValidProjectState`. The 64-step `layer-events` scenario covers
 every type, those refusals, transport refusals for non-stable IDs, no-op edits,
 plate deletion with events, and transactions.
 
+### Brim-ear commands
+
+The four brim-ear commands (`objects/brimEarCommands.ts`) are native:
+`addBrimEar`, `addBrimEars` (one entry for a detected set; an empty set is
+refused), `removeBrimEar` (a non-negative integer index) and `clearBrimEars`.
+Preparation refuses a head radius outside the pinned 0.1–20 mm gizmo bounds with
+the browser's message. The browser's undo behaviour is reproduced rather than
+normalised: undoing a single placement pops the last ear (an emptied list removes
+the `brimEars` key, even when the object started with an empty list); undo
+publishes under the command's own reason with no `revert:` prefix; and undoing a
+clear that removed nothing records history without a project publication. None of
+these commands has a no-op check, so clearing an object without ears is still an
+undoable entry.
+
 ## Edited canonical archive interchange
 
 `archive_interchange` and `test-archive-interchange.mjs` exercise actual archive

@@ -412,6 +412,51 @@
         "customGcodeId": "Id"
       }
     },
+    "BrimEar": {
+      "kind": "object",
+      "fields": {
+        "positionMm": "Vector",
+        "headFrontRadiusMm": "Finite"
+      }
+    },
+    "BrimEarList": {
+      "kind": "array",
+      "items": "BrimEar",
+      "min": 0,
+      "max": 131072
+    },
+    "EarIndex": {
+      "kind": "integer",
+      "min": 0,
+      "max": 9007199254740991
+    },
+    "AddBrimEar": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "ear": "BrimEar"
+      }
+    },
+    "AddBrimEars": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "ears": "BrimEarList"
+      }
+    },
+    "RemoveBrimEar": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "index": "EarIndex"
+      }
+    },
+    "ClearBrimEars": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id"
+      }
+    },
     "Command": {
       "kind": "union",
       "variants": {
@@ -441,7 +486,11 @@
         "deleteLayerRange": "DeleteLayerRange",
         "addLayerEvent": "AddLayerEvent",
         "editLayerEvent": "EditLayerEvent",
-        "deleteLayerEvent": "DeleteLayerEvent"
+        "deleteLayerEvent": "DeleteLayerEvent",
+        "addBrimEar": "AddBrimEar",
+        "addBrimEars": "AddBrimEars",
+        "removeBrimEar": "RemoveBrimEar",
+        "clearBrimEars": "ClearBrimEars"
       }
     },
     "Commands": {
