@@ -907,6 +907,81 @@
         "role": "VolumeRoleName"
       }
     },
+    "TriangleIndex": {
+      "kind": "integer",
+      "min": 0,
+      "max": 9007199254740991
+    },
+    "TriangleRangeInput": {
+      "kind": "object",
+      "fields": {
+        "start": "TriangleIndex",
+        "endExclusive": "TriangleIndex"
+      }
+    },
+    "TriangleRanges": {
+      "kind": "array",
+      "items": "TriangleRangeInput",
+      "min": 0,
+      "max": 65536
+    },
+    "PaintValueInput": {
+      "kind": "union",
+      "variants": {
+        "text": "EditText",
+        "flag": "Flag"
+      }
+    },
+    "FacetChannelName": {
+      "kind": "enum",
+      "values": [
+        "color",
+        "support",
+        "seam",
+        "fuzzySkin",
+        "brim"
+      ]
+    },
+    "FacetPaintStroke": {
+      "kind": "object",
+      "fields": {
+        "ranges": "TriangleRanges",
+        "value": "PaintValueInput"
+      }
+    },
+    "FacetEraseStroke": {
+      "kind": "object",
+      "fields": {
+        "ranges": "TriangleRanges"
+      }
+    },
+    "FacetStrokeOperationInput": {
+      "kind": "union",
+      "variants": {
+        "paint": "FacetPaintStroke",
+        "erase": "FacetEraseStroke",
+        "reset": "Empty"
+      }
+    },
+    "FacetGuard": {
+      "kind": "object",
+      "fields": {
+        "revision": "SourceRevision",
+        "hash": "SourceHash",
+        "volumeId": "Id",
+        "topologyRevision": "TriangleIndex",
+        "triangleCount": "TriangleIndex"
+      }
+    },
+    "FacetStroke": {
+      "kind": "object",
+      "fields": {
+        "guard": "FacetGuard",
+        "channel": "FacetChannelName",
+        "operation": "FacetStrokeOperationInput",
+        "label": "OptionalText"
+      }
+    },
     "Command": {
       "kind": "union",
       "variants": {
@@ -960,7 +1035,8 @@
         "removeMixedFilament": "RemoveMixedFilament",
         "setProjectSettingsOverrides": "SetProjectSettingsOverrides",
         "setScopedOverrides": "SetScopedOverrides",
-        "convertVolumeRole": "ConvertVolumeRole"
+        "convertVolumeRole": "ConvertVolumeRole",
+        "facetStroke": "FacetStroke"
       }
     },
     "Commands": {

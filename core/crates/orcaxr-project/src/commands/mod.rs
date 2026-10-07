@@ -3,6 +3,7 @@
 //! No UI, callbacks, random IDs or session ownership is inferred here.
 mod brim_ears;
 mod duplicate;
+mod facet_stroke;
 mod filaments;
 mod layer_events;
 mod layer_heights;
@@ -98,6 +99,7 @@ enum Kind {
     ProjectSettings(Box<settings_overrides::ProjectSettings>),
     ScopedSettings(Box<settings_overrides::Scoped>),
     VolumeRole(Box<volume_roles::ConvertVolumeRole>),
+    FacetStroke(Box<facet_stroke::FacetStroke>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -239,6 +241,10 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
             id(v.object_id)?,
             id(v.layer_range_id)?,
         )),
+        wire::Command::FacetStroke(v) => {
+            let command = facet_stroke::FacetStroke::new(v)?;
+            (command.label(), Kind::FacetStroke(Box::new(command)))
+        }
         wire::Command::ConvertVolumeRole(v) => {
             let command = volume_roles::ConvertVolumeRole::new(v)?;
             (command.label(), Kind::VolumeRole(Box::new(command)))
@@ -572,6 +578,7 @@ impl PreparedCommand {
             Kind::ProjectSettings(_) => "set-project-settings-overrides",
             Kind::ScopedSettings(_) => "set-scoped-overrides",
             Kind::VolumeRole(_) => "convert-volume-role",
+            Kind::FacetStroke(_) => "facet-annotation-stroke",
         }
     }
 }
@@ -600,6 +607,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::LayerEvent(c) => c.is_noop(state)?,
             Kind::VolumeRole(c) => c.is_noop(state)?,
             Kind::ProjectSettings(c) => return c.is_noop(context),
+            Kind::FacetStroke(c) => return c.is_noop(context),
             Kind::ScopedSettings(c) => return c.is_noop(context),
             Kind::Activate { id, .. } => &state.active_plate_id == id,
             Kind::Rename { id, name, .. } => &plate(state, id)?.name == name,
@@ -631,6 +639,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::ProjectSettings(c) => c.apply(context, reason)?,
             Kind::ScopedSettings(c) => c.apply(context, reason)?,
             Kind::VolumeRole(c) => c.apply(context, reason)?,
+            Kind::FacetStroke(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
                 activate,
@@ -769,6 +778,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::ProjectSettings(c) => return c.revert(context, reason),
             Kind::ScopedSettings(c) => return c.revert(context, reason),
             Kind::VolumeRole(c) => return c.revert(context, reason),
+            Kind::FacetStroke(c) => return c.revert(context, reason),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()
@@ -849,6 +859,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::ProjectSettings(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::ScopedSettings(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::VolumeRole(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::FacetStroke(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),

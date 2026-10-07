@@ -908,7 +908,61 @@ scenario("volume-roles", {}, (s) => {
   run({ kind: "undo" }); run({ kind: "redo" });
 });
 
-const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/objects/semanticVolumeCommands.ts", "web/src/project/settingsOverrides.ts", "web/src/project/scopedOverrides.ts", "web/src/project/domain/settingScopes.ts", "web/src/project/filaments/commands.ts", "web/src/project/filaments/mixedCommands.ts", "web/src/project/filaments/fullSpectrumRecipe.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
+const facetGuard = (snap, volumeId, o = {}) => {
+  const volume = snap.state.plates.flatMap(p => p.objects).flatMap(o => o.volumes).find(v => v.id === volumeId);
+  return { revision: snap.revision, hash: units(snap.hash), volumeId: units(volumeId), topologyRevision: volume ? volume.source.topologyRevision : 0,
+    triangleCount: volume ? volume.source.triangleCount : 1, ...o };
+};
+const strokeRanges = ranges => ranges.map(([start, endExclusive]) => ({ start, endExclusive }));
+const paintStroke = (guard, channel, ranges, value, label) => ({ facetStroke: { guard, channel,
+  operation: { paint: { ranges: strokeRanges(ranges), value: typeof value === "string" ? { text: units(value) } : { flag: value } } }, label: optionalValue(label, units) } });
+const eraseStroke = (guard, channel, ranges) => ({ facetStroke: { guard, channel, operation: { erase: { ranges: strokeRanges(ranges) } }, label: { absent: {} } } });
+const resetStroke = (guard, channel) => ({ facetStroke: { guard, channel, operation: { reset: {} }, label: { absent: {} } } });
+scenario("facet-strokes", {}, (s, f) => {
+  f.asset = coneAsset(f.ids.asset);
+  s.sourceAssets = s.sourceAssets.map(a => (a.id === f.asset.descriptor.id ? f.asset.descriptor : a));
+  const [p0, p1] = s.filaments.physical.map(p => p.id);
+  const object = s.plates[0].objects[0], volume = object.volumes[0];
+  volume.source.triangleCount = f.asset.descriptor.mesh.triangleCount;
+  volume.annotations = { topologyRevision: 0, color: [{ value: p1, triangles: [30, 31] }], support: [{ value: "block", triangles: [40] }],
+    seam: [], fuzzySkin: [], brim: [],
+    refinement: { color: { version: 2, triangleCount: 48, splits: [{ triangle: 3, node: facetSplit([facetLeaf(p0), facetLeaf(p1)]) },
+      { triangle: 25, node: facetSplit([facetLeaf(p0), facetLeaf()]) }] } } };
+  const modifier = JSON.parse(JSON.stringify(volume));
+  Object.assign(modifier, { id: "import:volume:modifier", name: "Modifier", role: "parameter-modifier",
+    annotations: { topologyRevision: 0, color: [], support: [], seam: [], fuzzySkin: [], brim: [] } });
+  delete modifier.filamentId;
+  object.volumes.push(modifier);
+}, ({ execute, batch, run, ids, state, snapshot }) => {
+  const [p0, p1] = state().filaments.physical.map(p => p.id), v = ids.volume;
+  const g = (o) => facetGuard(snapshot(), v, o);
+  execute(paintStroke(g(), "color", [[0, 5]], p0));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(paintStroke(g(), "color", [[20, 22], [3, 8], [6, 7]], p1, "Paint the band"));
+  execute(eraseStroke(g(), "color", [[2, 4]]));
+  execute(paintStroke(g(), "support", [[10, 12]], "enforce"));
+  execute(paintStroke(g(), "seam", [[12, 14]], "avoid"));
+  execute(paintStroke(g(), "fuzzySkin", [[14, 15]], true));
+  execute(paintStroke(g(), "brim", [[15, 17]], false));
+  execute(eraseStroke(g(), "seam", [[40, 42]]));
+  execute(paintStroke(g(), "support", [[10, 12]], "enforce"));
+  execute(eraseStroke(g(), "support", []));
+  const stale = g();
+  execute(resetStroke(g(), "color"));
+  run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "undo" });
+  for (const bad of [() => paintStroke(g(), "color", [[0, 1]], "import:filament:missing"), () => paintStroke(g(), "support", [[0, 1]], "bogus"),
+    () => paintStroke(g(), "fuzzySkin", [[0, 1]], false), () => paintStroke(g(), "brim", [[0, 1]], "true"),
+    () => paintStroke(g(), "color", [[5, 5]], p0), () => paintStroke(g(), "color", [[5, 5], [40, 49]], p0),
+    () => paintStroke(stale, "color", [[0, 1]], p0), () => paintStroke(g({ topologyRevision: 1 }), "color", [[0, 1]], p0),
+    () => paintStroke(g({ triangleCount: 47 }), "color", [[0, 1]], p0), () => paintStroke(facetGuard(snapshot(), "import:volume:modifier"), "color", [[0, 1]], p0),
+    () => paintStroke(g({ volumeId: units("import:volume:missing") }), "color", [[0, 1]], p0), () => paintStroke(g({ volumeId: units("bad") }), "color", [[0, 1]], p0)])
+    execute(bad());
+  batch([paintStroke(g(), "seam", [[20, 21]], "prefer"), convertRole("import:volume:modifier", "supportBlocker")], "Stroke transaction");
+  batch([paintStroke(g(), "seam", [[22, 23]], "prefer"), paintStroke(g(), "seam", [[23, 24]], "avoid")], "Stale stroke transaction");
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+
+const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/annotations/FacetAnnotationStrokeCommand.ts", "web/src/project/annotations/sparse.ts", "web/src/project/annotations/types.ts", "web/src/project/objects/semanticVolumeCommands.ts", "web/src/project/settingsOverrides.ts", "web/src/project/scopedOverrides.ts", "web/src/project/domain/settingScopes.ts", "web/src/project/filaments/commands.ts", "web/src/project/filaments/mixedCommands.ts", "web/src/project/filaments/fullSpectrumRecipe.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";
 const path = new URL("testdata/cross-platform/project-command-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);

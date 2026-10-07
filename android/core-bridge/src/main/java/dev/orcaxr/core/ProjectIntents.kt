@@ -1416,6 +1416,124 @@ object ProjectIntents {
             w.field("role") { writeVolumeRoleName(w, v.role) }
         }
     }
+    private fun readTriangleIndex(v: Any): Long {
+        return ProjectIntentJson.integer(v, 0L, 9007199254740991L)
+    }
+    private fun writeTriangleIndex(w: ProjectIntentWriter, v: Long) {
+        w.integer(v.toLong(), 0L, 9007199254740991L)
+    }
+    data class TriangleRangeInput(val start: Long, val endExclusive: Long)
+    private fun readTriangleRangeInput(v: Any): TriangleRangeInput {
+        val obj = ProjectIntentJson.fields(v, setOf("start", "endExclusive"), false)
+        return TriangleRangeInput(readTriangleIndex(obj.get("start")), readTriangleIndex(obj.get("endExclusive")))
+    }
+    private fun writeTriangleRangeInput(w: ProjectIntentWriter, v: TriangleRangeInput) {
+        w.obj {
+            w.field("start") { writeTriangleIndex(w, v.start) }
+            w.field("endExclusive") { writeTriangleIndex(w, v.endExclusive) }
+        }
+    }
+    private fun readTriangleRanges(v: Any): List<TriangleRangeInput> {
+        val array = ProjectIntentJson.list(v, 0, 65536)
+        return List(array.length()) { readTriangleRangeInput(array.get(it)) }
+    }
+    private fun writeTriangleRanges(w: ProjectIntentWriter, v: List<TriangleRangeInput>) {
+        w.array(v, 0, 65536) { writeTriangleRangeInput(w, it) }
+    }
+    sealed interface PaintValueInput {
+        data class Text(val value: List<Int>) : PaintValueInput
+        data class Flag(val value: Boolean) : PaintValueInput
+    }
+    private fun readPaintValueInput(v: Any): PaintValueInput {
+        val obj = ProjectIntentJson.fields(v, setOf("text", "flag"), true)
+        return when(val key = obj.keys().next()) {
+            "text" -> PaintValueInput.Text(readEditText(obj.get(key)))
+            "flag" -> PaintValueInput.Flag(readFlag(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePaintValueInput(w: ProjectIntentWriter, v: PaintValueInput) {
+        w.obj { when(v) {
+            is PaintValueInput.Text -> w.field("text") { writeEditText(w, v.value) }
+            is PaintValueInput.Flag -> w.field("flag") { writeFlag(w, v.value) }
+        } }
+    }
+    enum class FacetChannelName {Color,Support,Seam,FuzzySkin,Brim}
+    private fun readFacetChannelName(v: Any): FacetChannelName {
+        return when(v) {"color" -> FacetChannelName.Color;"support" -> FacetChannelName.Support;"seam" -> FacetChannelName.Seam;"fuzzySkin" -> FacetChannelName.FuzzySkin;"brim" -> FacetChannelName.Brim; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeFacetChannelName(w: ProjectIntentWriter, v: FacetChannelName) {
+        w.literal(when(v) {FacetChannelName.Color -> "color";FacetChannelName.Support -> "support";FacetChannelName.Seam -> "seam";FacetChannelName.FuzzySkin -> "fuzzySkin";FacetChannelName.Brim -> "brim";})
+    }
+    data class FacetPaintStroke(val ranges: List<TriangleRangeInput>, val value: PaintValueInput)
+    private fun readFacetPaintStroke(v: Any): FacetPaintStroke {
+        val obj = ProjectIntentJson.fields(v, setOf("ranges", "value"), false)
+        return FacetPaintStroke(readTriangleRanges(obj.get("ranges")), readPaintValueInput(obj.get("value")))
+    }
+    private fun writeFacetPaintStroke(w: ProjectIntentWriter, v: FacetPaintStroke) {
+        w.obj {
+            w.field("ranges") { writeTriangleRanges(w, v.ranges) }
+            w.field("value") { writePaintValueInput(w, v.value) }
+        }
+    }
+    data class FacetEraseStroke(val ranges: List<TriangleRangeInput>)
+    private fun readFacetEraseStroke(v: Any): FacetEraseStroke {
+        val obj = ProjectIntentJson.fields(v, setOf("ranges"), false)
+        return FacetEraseStroke(readTriangleRanges(obj.get("ranges")))
+    }
+    private fun writeFacetEraseStroke(w: ProjectIntentWriter, v: FacetEraseStroke) {
+        w.obj {
+            w.field("ranges") { writeTriangleRanges(w, v.ranges) }
+        }
+    }
+    sealed interface FacetStrokeOperationInput {
+        data class Paint(val value: ProjectIntents.FacetPaintStroke) : FacetStrokeOperationInput
+        data class Erase(val value: ProjectIntents.FacetEraseStroke) : FacetStrokeOperationInput
+        data class Reset(val value: ProjectIntents.Empty) : FacetStrokeOperationInput
+    }
+    private fun readFacetStrokeOperationInput(v: Any): FacetStrokeOperationInput {
+        val obj = ProjectIntentJson.fields(v, setOf("paint", "erase", "reset"), true)
+        return when(val key = obj.keys().next()) {
+            "paint" -> FacetStrokeOperationInput.Paint(readFacetPaintStroke(obj.get(key)))
+            "erase" -> FacetStrokeOperationInput.Erase(readFacetEraseStroke(obj.get(key)))
+            "reset" -> FacetStrokeOperationInput.Reset(readEmpty(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeFacetStrokeOperationInput(w: ProjectIntentWriter, v: FacetStrokeOperationInput) {
+        w.obj { when(v) {
+            is FacetStrokeOperationInput.Paint -> w.field("paint") { writeFacetPaintStroke(w, v.value) }
+            is FacetStrokeOperationInput.Erase -> w.field("erase") { writeFacetEraseStroke(w, v.value) }
+            is FacetStrokeOperationInput.Reset -> w.field("reset") { writeEmpty(w, v.value) }
+        } }
+    }
+    data class FacetGuard(val revision: Long, val hash: List<Int>, val volumeId: List<Int>, val topologyRevision: Long, val triangleCount: Long)
+    private fun readFacetGuard(v: Any): FacetGuard {
+        val obj = ProjectIntentJson.fields(v, setOf("revision", "hash", "volumeId", "topologyRevision", "triangleCount"), false)
+        return FacetGuard(readSourceRevision(obj.get("revision")), readSourceHash(obj.get("hash")), readId(obj.get("volumeId")), readTriangleIndex(obj.get("topologyRevision")), readTriangleIndex(obj.get("triangleCount")))
+    }
+    private fun writeFacetGuard(w: ProjectIntentWriter, v: FacetGuard) {
+        w.obj {
+            w.field("revision") { writeSourceRevision(w, v.revision) }
+            w.field("hash") { writeSourceHash(w, v.hash) }
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("topologyRevision") { writeTriangleIndex(w, v.topologyRevision) }
+            w.field("triangleCount") { writeTriangleIndex(w, v.triangleCount) }
+        }
+    }
+    data class FacetStroke(val guard: FacetGuard, val channel: FacetChannelName, val operation: FacetStrokeOperationInput, val label: OptionalText)
+    private fun readFacetStroke(v: Any): FacetStroke {
+        val obj = ProjectIntentJson.fields(v, setOf("guard", "channel", "operation", "label"), false)
+        return FacetStroke(readFacetGuard(obj.get("guard")), readFacetChannelName(obj.get("channel")), readFacetStrokeOperationInput(obj.get("operation")), readOptionalText(obj.get("label")))
+    }
+    private fun writeFacetStroke(w: ProjectIntentWriter, v: FacetStroke) {
+        w.obj {
+            w.field("guard") { writeFacetGuard(w, v.guard) }
+            w.field("channel") { writeFacetChannelName(w, v.channel) }
+            w.field("operation") { writeFacetStrokeOperationInput(w, v.operation) }
+            w.field("label") { writeOptionalText(w, v.label) }
+        }
+    }
     sealed interface Command {
         data class AddPlate(val value: ProjectIntents.AddPlate) : Command
         data class DuplicatePlate(val value: ProjectIntents.DuplicatePlate) : Command
@@ -1468,9 +1586,10 @@ object ProjectIntents {
         data class SetProjectSettingsOverrides(val value: ProjectIntents.SetProjectSettingsOverrides) : Command
         data class SetScopedOverrides(val value: ProjectIntents.SetScopedOverrides) : Command
         data class ConvertVolumeRole(val value: ProjectIntents.ConvertVolumeRole) : Command
+        data class FacetStroke(val value: ProjectIntents.FacetStroke) : Command
     }
     private fun readCommand(v: Any): Command {
-        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments", "addMixedFilament", "editMixedFilament", "duplicateMixedFilament", "setMixedFilamentEnabled", "tombstoneMixedFilament", "removeMixedFilament", "setProjectSettingsOverrides", "setScopedOverrides", "convertVolumeRole"), true)
+        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments", "addMixedFilament", "editMixedFilament", "duplicateMixedFilament", "setMixedFilamentEnabled", "tombstoneMixedFilament", "removeMixedFilament", "setProjectSettingsOverrides", "setScopedOverrides", "convertVolumeRole", "facetStroke"), true)
         return when(val key = obj.keys().next()) {
             "addPlate" -> Command.AddPlate(readAddPlate(obj.get(key)))
             "duplicatePlate" -> Command.DuplicatePlate(readDuplicatePlate(obj.get(key)))
@@ -1523,6 +1642,7 @@ object ProjectIntents {
             "setProjectSettingsOverrides" -> Command.SetProjectSettingsOverrides(readSetProjectSettingsOverrides(obj.get(key)))
             "setScopedOverrides" -> Command.SetScopedOverrides(readSetScopedOverrides(obj.get(key)))
             "convertVolumeRole" -> Command.ConvertVolumeRole(readConvertVolumeRole(obj.get(key)))
+            "facetStroke" -> Command.FacetStroke(readFacetStroke(obj.get(key)))
             else -> throw InvalidProjectIntent()
         }
     }
@@ -1579,6 +1699,7 @@ object ProjectIntents {
             is Command.SetProjectSettingsOverrides -> w.field("setProjectSettingsOverrides") { writeSetProjectSettingsOverrides(w, v.value) }
             is Command.SetScopedOverrides -> w.field("setScopedOverrides") { writeSetScopedOverrides(w, v.value) }
             is Command.ConvertVolumeRole -> w.field("convertVolumeRole") { writeConvertVolumeRole(w, v.value) }
+            is Command.FacetStroke -> w.field("facetStroke") { writeFacetStroke(w, v.value) }
         } }
     }
     private fun readCommands(v: Any): List<Command> {

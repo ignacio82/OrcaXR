@@ -145,10 +145,10 @@ provider documents and STL/OBJ/AMF/ZIP model import (decode, stage, preview,
 undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
 actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
 Layer ranges, layer events, brim ears, layer-height profiles, physical and
-mixed filaments, project/scoped setting overrides and volume-role conversion are
-ported (roughly 60% of the browser's 78 command classes are now native). Next
-families, in order: facet paint strokes, model-colour recreation and auto-pair
-reconciliation (intent-only), then the asset-bearing commands, which need new
+mixed filaments, project/scoped setting overrides, volume-role conversion and
+whole-facet paint strokes are ported (about 60 of the browser's 78 command
+classes are now native). Next families, in order: project rename, plate wipe
+tower and auto-pair reconciliation, model-colour recreation (intent-only), then the asset-bearing commands, which need new
 captured (staged) command types for their mesh payloads: add volume, mesh
 topology replacement, split and split-to-objects, SVG and emboss volumes, and
 mesh booleans. Each family adds intent variants to
@@ -1108,6 +1108,13 @@ and replay coverage for the complete current command inventory.
     last model part, facet paint, local filament) and upstream role order on
     every conversion; the corpus (1,537 steps, 21 new) covers each refusal,
     re-sorting, no-ops and transactions.
+  - [x] Port whole-facet paint strokes (`facetStroke`): the browser's
+    preparation is now shared by its commit function and a request-driven
+    command, and the native port matches it (guards, range normalization,
+    canonical regrouping, refinement roots, sparse-validation issue counts). The
+    corpus (1,569 steps, 32 new) covers every channel, invalid values and
+    ranges, stale guards and topology, non-model volumes and transactions.
+    Dense refined-root commits will use the staged path.
   - [ ] Port and replay every remaining command family before session cutover
     (
     settings/scoped overrides, SVG/emboss/semantic volumes, split/boolean,

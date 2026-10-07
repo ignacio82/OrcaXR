@@ -1715,6 +1715,157 @@ fn read_convert_volume_role(v: &Value) -> Result<ConvertVolumeRole, InvalidInten
         role: read_volume_role_name(&object["role"])?,
     })
 }
+pub type TriangleIndex = u64;
+fn read_triangle_index(v: &Value) -> Result<TriangleIndex, InvalidIntent> {
+    Ok(integer(v, 0, 9007199254740991)? as TriangleIndex)
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TriangleRangeInput {
+    pub start: TriangleIndex,
+    pub end_exclusive: TriangleIndex,
+}
+fn read_triangle_range_input(v: &Value) -> Result<TriangleRangeInput, InvalidIntent> {
+    let object = fields(v, &["start", "endExclusive"], false)?;
+    Ok(TriangleRangeInput {
+        start: read_triangle_index(&object["start"])?,
+        end_exclusive: read_triangle_index(&object["endExclusive"])?,
+    })
+}
+pub type TriangleRanges = Vec<TriangleRangeInput>;
+fn read_triangle_ranges(v: &Value) -> Result<TriangleRanges, InvalidIntent> {
+    list(v, 0, 65536)?
+        .iter()
+        .map(read_triangle_range_input)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PaintValueInput {
+    Text(EditText),
+    Flag(Flag),
+}
+fn read_paint_value_input(v: &Value) -> Result<PaintValueInput, InvalidIntent> {
+    let object = fields(v, &["text", "flag"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "text" => Ok(PaintValueInput::Text(read_edit_text(value)?)),
+        "flag" => Ok(PaintValueInput::Flag(read_flag(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FacetChannelName {
+    Color,
+    Support,
+    Seam,
+    FuzzySkin,
+    Brim,
+}
+fn read_facet_channel_name(v: &Value) -> Result<FacetChannelName, InvalidIntent> {
+    match v.as_str() {
+        Some("color") => Ok(FacetChannelName::Color),
+        Some("support") => Ok(FacetChannelName::Support),
+        Some("seam") => Ok(FacetChannelName::Seam),
+        Some("fuzzySkin") => Ok(FacetChannelName::FuzzySkin),
+        Some("brim") => Ok(FacetChannelName::Brim),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetPaintStroke {
+    pub ranges: TriangleRanges,
+    pub value: PaintValueInput,
+}
+fn read_facet_paint_stroke(v: &Value) -> Result<FacetPaintStroke, InvalidIntent> {
+    let object = fields(v, &["ranges", "value"], false)?;
+    Ok(FacetPaintStroke {
+        ranges: read_triangle_ranges(&object["ranges"])?,
+        value: read_paint_value_input(&object["value"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetEraseStroke {
+    pub ranges: TriangleRanges,
+}
+fn read_facet_erase_stroke(v: &Value) -> Result<FacetEraseStroke, InvalidIntent> {
+    let object = fields(v, &["ranges"], false)?;
+    Ok(FacetEraseStroke {
+        ranges: read_triangle_ranges(&object["ranges"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FacetStrokeOperationInput {
+    Paint(FacetPaintStroke),
+    Erase(FacetEraseStroke),
+    Reset(Empty),
+}
+fn read_facet_stroke_operation_input(
+    v: &Value,
+) -> Result<FacetStrokeOperationInput, InvalidIntent> {
+    let object = fields(v, &["paint", "erase", "reset"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "paint" => Ok(FacetStrokeOperationInput::Paint(read_facet_paint_stroke(
+            value,
+        )?)),
+        "erase" => Ok(FacetStrokeOperationInput::Erase(read_facet_erase_stroke(
+            value,
+        )?)),
+        "reset" => Ok(FacetStrokeOperationInput::Reset(read_empty(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetGuard {
+    pub revision: SourceRevision,
+    pub hash: SourceHash,
+    pub volume_id: Id,
+    pub topology_revision: TriangleIndex,
+    pub triangle_count: TriangleIndex,
+}
+fn read_facet_guard(v: &Value) -> Result<FacetGuard, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "revision",
+            "hash",
+            "volumeId",
+            "topologyRevision",
+            "triangleCount",
+        ],
+        false,
+    )?;
+    Ok(FacetGuard {
+        revision: read_source_revision(&object["revision"])?,
+        hash: read_source_hash(&object["hash"])?,
+        volume_id: read_id(&object["volumeId"])?,
+        topology_revision: read_triangle_index(&object["topologyRevision"])?,
+        triangle_count: read_triangle_index(&object["triangleCount"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetStroke {
+    pub guard: FacetGuard,
+    pub channel: FacetChannelName,
+    pub operation: FacetStrokeOperationInput,
+    pub label: OptionalText,
+}
+fn read_facet_stroke(v: &Value) -> Result<FacetStroke, InvalidIntent> {
+    let object = fields(v, &["guard", "channel", "operation", "label"], false)?;
+    Ok(FacetStroke {
+        guard: read_facet_guard(&object["guard"])?,
+        channel: read_facet_channel_name(&object["channel"])?,
+        operation: read_facet_stroke_operation_input(&object["operation"])?,
+        label: read_optional_text(&object["label"])?,
+    })
+}
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Command {
@@ -1769,6 +1920,7 @@ pub enum Command {
     SetProjectSettingsOverrides(SetProjectSettingsOverrides),
     SetScopedOverrides(SetScopedOverrides),
     ConvertVolumeRole(ConvertVolumeRole),
+    FacetStroke(FacetStroke),
 }
 fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
     let object = fields(
@@ -1825,6 +1977,7 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             "setProjectSettingsOverrides",
             "setScopedOverrides",
             "convertVolumeRole",
+            "facetStroke",
         ],
         true,
     )?;
@@ -1923,6 +2076,7 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             value,
         )?)),
         "convertVolumeRole" => Ok(Command::ConvertVolumeRole(read_convert_volume_role(value)?)),
+        "facetStroke" => Ok(Command::FacetStroke(read_facet_stroke(value)?)),
         _ => Err(InvalidIntent),
     }
 }

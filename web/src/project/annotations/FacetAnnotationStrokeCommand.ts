@@ -120,6 +120,25 @@ export function commitFacetAnnotationStroke<Channel extends FacetAnnotationChann
     return { status: 'cancelled', ...(request.cancellation.reason ? { reason: request.cancellation.reason } : {}) };
   }
   const context = commands.context;
+  const prepared = prepareFacetAnnotationStroke(context, request);
+  if (prepared === 'noop') return { status: 'noop' };
+  commands.execute(
+    new FacetAnnotationStrokeCommand(request.guard, prepared.before, prepared.after, strokeLabel(request)),
+    { coalesce: false },
+  );
+  const committed = context.project.getSnapshot();
+  return { status: 'applied', revision: committed.revision, hash: committed.hash };
+}
+
+/**
+ * The before/after annotations one stroke produces against the current state,
+ * or `'noop'`. Every refusal a stroke can meet happens here: a stale guard or
+ * topology, a non-model volume, invalid stored or resulting annotations.
+ */
+export function prepareFacetAnnotationStroke<Channel extends FacetAnnotationChannel>(
+  context: CommandContext,
+  request: Pick<FacetStrokeRequest<Channel>, 'guard' | 'channel' | 'operation'>,
+): { before: FacetAnnotations; after: FacetAnnotations } | 'noop' {
   if (!context.project.isCurrent(request.guard)) throw new StaleFacetAnnotationResultError('project');
   const found = findVolume(context.project.getSnapshot().state, request.guard.volumeId);
   if (!found) throw new StaleFacetAnnotationResultError('project');
@@ -188,24 +207,60 @@ export function commitFacetAnnotationStroke<Channel extends FacetAnnotationChann
       request.operation,
       request.guard.triangleCount,
     );
-    if (canonicalStringify(normalizedBeforeChannel) === canonicalStringify(afterChannel)) {
-      return { status: 'noop' };
-    }
+    if (canonicalStringify(normalizedBeforeChannel) === canonicalStringify(afterChannel)) return 'noop';
     after[request.channel] = afterChannel;
   }
-  if (facetAnnotationsBytes(before) === facetAnnotationsBytes(after)) return { status: 'noop' };
+  if (facetAnnotationsBytes(before) === facetAnnotationsBytes(after)) return 'noop';
   const afterIssues = validateFacetAnnotations(after, {
     topologyRevision: request.guard.topologyRevision,
     triangleCount: request.guard.triangleCount,
     filamentIds,
   });
   if (afterIssues.length > 0) throw new FacetAnnotationValidationError(afterIssues);
-  const label = request.label ?? defaultStrokeLabel(request.channel, request.operation.mode);
-  commands.execute(new FacetAnnotationStrokeCommand(request.guard, before, after, label), {
-    coalesce: false,
-  });
-  const committed = context.project.getSnapshot();
-  return { status: 'applied', revision: committed.revision, hash: committed.hash };
+  return { before, after };
+}
+
+/**
+ * A stroke described by its request rather than by precomputed annotations, for
+ * hosts that send intents. The first apply prepares it against the current
+ * state exactly as `commitFacetAnnotationStroke` does; later applies and
+ * reverts are those of the resulting `FacetAnnotationStrokeCommand`.
+ */
+export class FacetStrokeRequestCommand<Channel extends FacetAnnotationChannel> implements ProjectCommand {
+  readonly type = 'facet-annotation-stroke';
+  readonly dirtyCategories = ['projectData'] as const;
+  readonly label: string;
+  private stroke?: FacetAnnotationStrokeCommand;
+
+  constructor(private readonly request: Pick<FacetStrokeRequest<Channel>, 'guard' | 'channel' | 'operation' | 'label'>) {
+    this.label = strokeLabel(request);
+  }
+
+  isNoop(context: CommandContext): boolean {
+    return !this.stroke && prepareFacetAnnotationStroke(context, this.request) === 'noop';
+  }
+
+  apply(context: CommandContext): void {
+    if (!this.stroke) {
+      const prepared = prepareFacetAnnotationStroke(context, this.request);
+      if (prepared === 'noop') throw new StaleFacetAnnotationResultError('annotations');
+      this.stroke = new FacetAnnotationStrokeCommand(this.request.guard, prepared.before, prepared.after, this.label);
+    }
+    this.stroke.apply(context);
+  }
+
+  revert(context: CommandContext): void {
+    if (!this.stroke) throw new Error('FacetStrokeRequestCommand has not been applied');
+    this.stroke.revert(context);
+  }
+
+  estimateBytes(): number {
+    return this.stroke ? this.stroke.estimateBytes() : 1;
+  }
+}
+
+function strokeLabel(request: Pick<FacetStrokeRequest<FacetAnnotationChannel>, 'channel' | 'operation' | 'label'>): string {
+  return request.label ?? defaultStrokeLabel(request.channel, request.operation.mode);
 }
 
 export interface FacetRefinementCommitRequest<Channel extends FacetAnnotationChannel> {

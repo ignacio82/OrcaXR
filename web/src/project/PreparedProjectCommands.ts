@@ -76,6 +76,8 @@ import {
 import { assertCanonicalSerializable } from './domain/canonical';
 import { SetProjectSettingsOverridesCommand } from './settingsOverrides';
 import { ConvertVolumeRoleCommand } from './objects/semanticVolumeCommands';
+import { FacetStrokeRequestCommand } from './annotations/FacetAnnotationStrokeCommand';
+import type { FacetAnnotationChannel, FacetStrokeOperation } from './annotations/types';
 import { SetScopedOverridesCommand, type ScopedOverrideTarget } from './scopedOverrides';
 import type {
   BrimEarPoint,
@@ -90,6 +92,7 @@ import type {
   Transform,
 } from './domain/model';
 import type {
+  ProjectFacetStrokeOperationInputWire,
   ProjectVolumeRoleNameWire,
   ProjectScopedTargetWire,
   ProjectSettingsGuardWire,
@@ -267,6 +270,21 @@ function command(value: ProjectCommandWire): ProjectCommand {
   }
   if ('deleteLayerEvent' in value)
     return new DeleteLayerEventCommand(id<'custom-gcode'>(value.deleteLayerEvent.customGcodeId));
+  if ('facetStroke' in value) {
+    const input = value.facetStroke;
+    return new FacetStrokeRequestCommand({
+      guard: {
+        revision: input.guard.revision,
+        hash: text(input.guard.hash),
+        volumeId: id<'volume'>(input.guard.volumeId),
+        topologyRevision: input.guard.topologyRevision,
+        triangleCount: input.guard.triangleCount,
+      },
+      channel: input.channel,
+      operation: facetStrokeOperation(input.operation),
+      ...('value' in input.label ? { label: text(input.label.value) } : {}),
+    });
+  }
   if ('convertVolumeRole' in value)
     return new ConvertVolumeRoleCommand(
       id<'volume'>(value.convertVolumeRole.volumeId),
@@ -503,6 +521,19 @@ function jsonObject(units: readonly number[]): ConfigMap {
   if (jsonDepth(parsed) > JSON_TEXT_MAX_DEPTH) throw new InvalidProjectIntent();
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new InvalidProjectIntent();
   return parsed as ConfigMap;
+}
+/** Paint values travel untyped; the stroke's validation refuses one its channel cannot hold. */
+function facetStrokeOperation(value: ProjectFacetStrokeOperationInputWire): FacetStrokeOperation<FacetAnnotationChannel> {
+  const ranges = (input: readonly { start: number; endExclusive: number }[]) =>
+    input.map((range) => ({ start: range.start, endExclusive: range.endExclusive }));
+  if ('reset' in value) return { mode: 'reset' };
+  if ('erase' in value) return { mode: 'erase', ranges: ranges(value.erase.ranges) };
+  const paint = value.paint.value;
+  return {
+    mode: 'paint',
+    ranges: ranges(value.paint.ranges),
+    value: ('text' in paint ? text(paint.text) : paint.flag) as never,
+  };
 }
 const VOLUME_ROLES: Readonly<Record<ProjectVolumeRoleNameWire, VolumeRole>> = Object.freeze({
   model: 'model',

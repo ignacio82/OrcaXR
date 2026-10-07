@@ -2725,6 +2725,24 @@ on a role that cannot carry one. The object's volumes are re-sorted into
 upstream Orca's role order with a stable sort, and undo restores the previous
 list exactly.
 
+### Facet paint strokes
+
+Whole-facet strokes are native as `facetStroke` intents. The browser's commit
+path is now split: `prepareFacetAnnotationStroke` derives the before/after
+annotations from the session state, and `FacetStrokeRequestCommand` prepares on
+its first apply and then behaves exactly like `FacetAnnotationStrokeCommand`.
+The workspace's commit function and native intents run the same preparation.
+That preparation refuses a stale revision/hash or topology guard
+(`Facet annotation result is stale (…)`), a non-model volume, and invalid
+stored or resulting annotations (`Invalid facet annotations (N issues)`, the
+sparse validator's count). Ranges are normalized (sorted, merged, refused when
+outside the mesh), and painting regroups the channel by canonical value in
+canonical-text order. A stroke over a refined channel drops the subdivision of
+every covered facet; remaining splits that collapse to one leaf are dropped, as
+`normalizeFacetRefinementEncoding` does. Strokes that change nothing are no-ops.
+Dense refined-root commits (`commitFacetRefinement`) can exceed intent limits on
+real meshes and will move to the staged path with the asset-bearing commands.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

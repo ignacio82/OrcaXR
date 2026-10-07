@@ -1,6 +1,7 @@
 //! Sparse facet paint and bounded subdivision trees. Canonical storage keeps
 //! only subdivided source facets; dense roots are an explicitly budgeted,
 //! temporary editing representation. This is computation, not a project codec.
+pub mod stroke;
 mod validation;
 pub use validation::{Issue, ValidationOptions, validate_refinement};
 
@@ -92,7 +93,7 @@ impl PaintValue {
             Self::Bool(v) => Value::Bool(*v),
         }
     }
-    fn from_value(value: &Value) -> Option<Self> {
+    pub fn from_value(value: &Value) -> Option<Self> {
         match value {
             Value::String(v) => Some(Self::Text(v.as_slice().into())),
             Value::Bool(v) => Some(Self::Bool(*v)),

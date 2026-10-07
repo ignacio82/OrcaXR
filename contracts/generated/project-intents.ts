@@ -908,6 +908,81 @@ const shapes = {
       "role": "VolumeRoleName"
     }
   },
+  "TriangleIndex": {
+    "kind": "integer",
+    "min": 0,
+    "max": 9007199254740991
+  },
+  "TriangleRangeInput": {
+    "kind": "object",
+    "fields": {
+      "start": "TriangleIndex",
+      "endExclusive": "TriangleIndex"
+    }
+  },
+  "TriangleRanges": {
+    "kind": "array",
+    "items": "TriangleRangeInput",
+    "min": 0,
+    "max": 65536
+  },
+  "PaintValueInput": {
+    "kind": "union",
+    "variants": {
+      "text": "EditText",
+      "flag": "Flag"
+    }
+  },
+  "FacetChannelName": {
+    "kind": "enum",
+    "values": [
+      "color",
+      "support",
+      "seam",
+      "fuzzySkin",
+      "brim"
+    ]
+  },
+  "FacetPaintStroke": {
+    "kind": "object",
+    "fields": {
+      "ranges": "TriangleRanges",
+      "value": "PaintValueInput"
+    }
+  },
+  "FacetEraseStroke": {
+    "kind": "object",
+    "fields": {
+      "ranges": "TriangleRanges"
+    }
+  },
+  "FacetStrokeOperationInput": {
+    "kind": "union",
+    "variants": {
+      "paint": "FacetPaintStroke",
+      "erase": "FacetEraseStroke",
+      "reset": "Empty"
+    }
+  },
+  "FacetGuard": {
+    "kind": "object",
+    "fields": {
+      "revision": "SourceRevision",
+      "hash": "SourceHash",
+      "volumeId": "Id",
+      "topologyRevision": "TriangleIndex",
+      "triangleCount": "TriangleIndex"
+    }
+  },
+  "FacetStroke": {
+    "kind": "object",
+    "fields": {
+      "guard": "FacetGuard",
+      "channel": "FacetChannelName",
+      "operation": "FacetStrokeOperationInput",
+      "label": "OptionalText"
+    }
+  },
   "Command": {
     "kind": "union",
     "variants": {
@@ -961,7 +1036,8 @@ const shapes = {
       "removeMixedFilament": "RemoveMixedFilament",
       "setProjectSettingsOverrides": "SetProjectSettingsOverrides",
       "setScopedOverrides": "SetScopedOverrides",
-      "convertVolumeRole": "ConvertVolumeRole"
+      "convertVolumeRole": "ConvertVolumeRole",
+      "facetStroke": "FacetStroke"
     }
   },
   "Commands": {
@@ -1310,7 +1386,17 @@ export type ProjectScopedTargetWire = {readonly plate:ProjectPlateScopeWire} | {
 export interface ProjectSetScopedOverridesWire {readonly guard: ProjectSettingsGuardWire;readonly target: ProjectScopedTargetWire;readonly overridesJson: ProjectJsonTextWire;}
 export type ProjectVolumeRoleNameWire = "model" | "negativeVolume" | "parameterModifier" | "supportBlocker" | "supportEnforcer";
 export interface ProjectConvertVolumeRoleWire {readonly volumeId: ProjectIdWire;readonly role: ProjectVolumeRoleNameWire;}
-export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire} | {readonly addLayerEvent:ProjectAddLayerEventWire} | {readonly editLayerEvent:ProjectEditLayerEventWire} | {readonly deleteLayerEvent:ProjectDeleteLayerEventWire} | {readonly addBrimEar:ProjectAddBrimEarWire} | {readonly addBrimEars:ProjectAddBrimEarsWire} | {readonly removeBrimEar:ProjectRemoveBrimEarWire} | {readonly clearBrimEars:ProjectClearBrimEarsWire} | {readonly adjustLayerHeightProfile:ProjectAdjustLayerHeightProfileWire} | {readonly smoothLayerHeightProfile:ProjectSmoothLayerHeightProfileWire} | {readonly adaptiveLayerHeightProfile:ProjectAdaptiveLayerHeightProfileWire} | {readonly resetLayerHeightProfile:ProjectResetLayerHeightProfileWire} | {readonly setFilamentAssignments:ProjectSetFilamentAssignmentsWire} | {readonly setObjectFilament:ProjectSetObjectFilamentWire} | {readonly setVolumeFilament:ProjectSetVolumeFilamentWire} | {readonly setLayerRangeFilament:ProjectSetLayerRangeFilamentWire} | {readonly remapFilaments:ProjectRemapFilamentsWire} | {readonly setFilamentEnabled:ProjectSetFilamentEnabledWire} | {readonly syncPhysicalFilaments:ProjectSyncPhysicalFilamentsWire} | {readonly addMixedFilament:ProjectAddMixedFilamentWire} | {readonly editMixedFilament:ProjectEditMixedFilamentWire} | {readonly duplicateMixedFilament:ProjectDuplicateMixedFilamentWire} | {readonly setMixedFilamentEnabled:ProjectSetMixedFilamentEnabledWire} | {readonly tombstoneMixedFilament:ProjectTombstoneMixedFilamentWire} | {readonly removeMixedFilament:ProjectRemoveMixedFilamentWire} | {readonly setProjectSettingsOverrides:ProjectSetProjectSettingsOverridesWire} | {readonly setScopedOverrides:ProjectSetScopedOverridesWire} | {readonly convertVolumeRole:ProjectConvertVolumeRoleWire};
+export type ProjectTriangleIndexWire = number;
+export interface ProjectTriangleRangeInputWire {readonly start: ProjectTriangleIndexWire;readonly endExclusive: ProjectTriangleIndexWire;}
+export type ProjectTriangleRangesWire = readonly ProjectTriangleRangeInputWire[];
+export type ProjectPaintValueInputWire = {readonly text:ProjectEditTextWire} | {readonly flag:ProjectFlagWire};
+export type ProjectFacetChannelNameWire = "color" | "support" | "seam" | "fuzzySkin" | "brim";
+export interface ProjectFacetPaintStrokeWire {readonly ranges: ProjectTriangleRangesWire;readonly value: ProjectPaintValueInputWire;}
+export interface ProjectFacetEraseStrokeWire {readonly ranges: ProjectTriangleRangesWire;}
+export type ProjectFacetStrokeOperationInputWire = {readonly paint:ProjectFacetPaintStrokeWire} | {readonly erase:ProjectFacetEraseStrokeWire} | {readonly reset:ProjectEmptyWire};
+export interface ProjectFacetGuardWire {readonly revision: ProjectSourceRevisionWire;readonly hash: ProjectSourceHashWire;readonly volumeId: ProjectIdWire;readonly topologyRevision: ProjectTriangleIndexWire;readonly triangleCount: ProjectTriangleIndexWire;}
+export interface ProjectFacetStrokeWire {readonly guard: ProjectFacetGuardWire;readonly channel: ProjectFacetChannelNameWire;readonly operation: ProjectFacetStrokeOperationInputWire;readonly label: ProjectOptionalTextWire;}
+export type ProjectCommandWire = {readonly addPlate:ProjectAddPlateWire} | {readonly duplicatePlate:ProjectDuplicatePlateWire} | {readonly deletePlate:ProjectDeletePlateWire} | {readonly activatePlate:ProjectActivatePlateWire} | {readonly renamePlate:ProjectRenamePlateWire} | {readonly reorderPlates:ProjectReorderPlatesWire} | {readonly setPlatePrintable:ProjectSetPlatePrintableWire} | {readonly renameObject:ProjectRenameObjectWire} | {readonly renameVolume:ProjectRenameVolumeWire} | {readonly renameInstance:ProjectRenameInstanceWire} | {readonly setInstancePrintable:ProjectSetInstancePrintableWire} | {readonly setInstanceTransform:ProjectSetInstanceTransformWire} | {readonly setInstanceTransforms:ProjectSetInstanceTransformsWire} | {readonly deleteObject:ProjectDeleteObjectWire} | {readonly deletePlateObjects:ProjectDeletePlateObjectsWire} | {readonly deleteInstance:ProjectDeleteInstanceWire} | {readonly moveObjectToPlate:ProjectMoveObjectToPlateWire} | {readonly duplicateObject:ProjectDuplicateObjectEditWire} | {readonly convertInstanceToObject:ProjectConvertInstanceToObjectWire} | {readonly addLayerRange:ProjectAddLayerRangeWire} | {readonly editLayerRangeBounds:ProjectEditLayerRangeBoundsWire} | {readonly splitLayerRange:ProjectSplitLayerRangeWire} | {readonly mergeLayerRanges:ProjectMergeLayerRangesWire} | {readonly deleteLayerRange:ProjectDeleteLayerRangeWire} | {readonly addLayerEvent:ProjectAddLayerEventWire} | {readonly editLayerEvent:ProjectEditLayerEventWire} | {readonly deleteLayerEvent:ProjectDeleteLayerEventWire} | {readonly addBrimEar:ProjectAddBrimEarWire} | {readonly addBrimEars:ProjectAddBrimEarsWire} | {readonly removeBrimEar:ProjectRemoveBrimEarWire} | {readonly clearBrimEars:ProjectClearBrimEarsWire} | {readonly adjustLayerHeightProfile:ProjectAdjustLayerHeightProfileWire} | {readonly smoothLayerHeightProfile:ProjectSmoothLayerHeightProfileWire} | {readonly adaptiveLayerHeightProfile:ProjectAdaptiveLayerHeightProfileWire} | {readonly resetLayerHeightProfile:ProjectResetLayerHeightProfileWire} | {readonly setFilamentAssignments:ProjectSetFilamentAssignmentsWire} | {readonly setObjectFilament:ProjectSetObjectFilamentWire} | {readonly setVolumeFilament:ProjectSetVolumeFilamentWire} | {readonly setLayerRangeFilament:ProjectSetLayerRangeFilamentWire} | {readonly remapFilaments:ProjectRemapFilamentsWire} | {readonly setFilamentEnabled:ProjectSetFilamentEnabledWire} | {readonly syncPhysicalFilaments:ProjectSyncPhysicalFilamentsWire} | {readonly addMixedFilament:ProjectAddMixedFilamentWire} | {readonly editMixedFilament:ProjectEditMixedFilamentWire} | {readonly duplicateMixedFilament:ProjectDuplicateMixedFilamentWire} | {readonly setMixedFilamentEnabled:ProjectSetMixedFilamentEnabledWire} | {readonly tombstoneMixedFilament:ProjectTombstoneMixedFilamentWire} | {readonly removeMixedFilament:ProjectRemoveMixedFilamentWire} | {readonly setProjectSettingsOverrides:ProjectSetProjectSettingsOverridesWire} | {readonly setScopedOverrides:ProjectSetScopedOverridesWire} | {readonly convertVolumeRole:ProjectConvertVolumeRoleWire} | {readonly facetStroke:ProjectFacetStrokeWire};
 export type ProjectCommandsWire = readonly ProjectCommandWire[];
 export interface ProjectIntentWire {readonly version: ProjectVersionWire;readonly command: ProjectCommandWire;}
 export interface ProjectBatchWire {readonly version: ProjectVersionWire;readonly label: ProjectLabelWire;readonly commands: ProjectCommandsWire;}
