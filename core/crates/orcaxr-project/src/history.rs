@@ -97,10 +97,17 @@ impl<P: TimestampPolicy> CommandContext<'_, P> {
         reason: Text,
         categories: &[DirtyCategory],
     ) -> Result<(), CommandError<P::Error>> {
-        let data = ProjectData::new(candidate).map_err(|_| CommandError::Encoding)?;
-        let admitted =
-            ValidatedProject::new(data, self.timestamps).map_err(CommandError::Admission)?;
+        let admitted = self.admit(candidate)?;
         self.replace_validated(admitted, reason, categories)
+    }
+    /// Graph-validate a candidate without publishing it (the browser's
+    /// `assertValidProjectState` on a command's next state).
+    pub fn admit(
+        &mut self,
+        candidate: ProjectState,
+    ) -> Result<ValidatedProject, CommandError<P::Error>> {
+        let data = ProjectData::new(candidate).map_err(|_| CommandError::Encoding)?;
+        ValidatedProject::new(data, self.timestamps).map_err(CommandError::Admission)
     }
     pub fn replace_validated(
         &mut self,
@@ -160,7 +167,12 @@ pub trait ProjectCommand<P: TimestampPolicy>: Clone {
     fn publication_bound(&self) -> u64 {
         1
     }
-    fn is_noop(&self, _context: &CommandContext<'_, P>) -> Result<bool, CommandError<P::Error>> {
+    /// May validate a candidate (hence the mutable context) and may record
+    /// state the command must reuse on apply and redo.
+    fn is_noop(
+        &mut self,
+        _context: &mut CommandContext<'_, P>,
+    ) -> Result<bool, CommandError<P::Error>> {
         Ok(false)
     }
     fn apply(&mut self, context: &mut CommandContext<'_, P>) -> Result<(), CommandError<P::Error>>;
@@ -529,7 +541,7 @@ impl<C: ProjectCommand<P>, P: TimestampPolicy> CommandBus<C, P> {
         let result = (|| {
             let bound = command.publication_bound();
             let mut context = self.context(events, bound);
-            if command.is_noop(&context)? {
+            if command.is_noop(&mut context)? {
                 return Ok(None);
             }
             command.apply(&mut context)?;

@@ -57,7 +57,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for Command {
     fn coalesce_key(&self) -> Option<&Text> {
         self.key.as_ref()
     }
-    fn is_noop(&self, _: &CommandContext<'_, P>) -> Result<bool, CommandError<P::Error>> {
+    fn is_noop(&mut self, _: &mut CommandContext<'_, P>) -> Result<bool, CommandError<P::Error>> {
         if self.failure.get() == Failure::Noop {
             Err(failed())
         } else {

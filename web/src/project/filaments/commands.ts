@@ -117,6 +117,13 @@ export class SyncPhysicalFilamentsFromPrinterCommand extends SnapshotFilamentCom
   readonly type = 'sync-physical-filaments-from-printer';
   readonly label = 'Sync filaments from printer';
   readonly dirtyCategories = ['projectData'] as const;
+  /**
+   * The ID each adopted slot received, drawn once per tool. The bus builds the
+   * next state for the no-op check and again for every apply and redo; a fresh
+   * ID on redo would orphan any later assignment that referenced the adopted
+   * tool when that assignment is redone too.
+   */
+  private readonly adoptedIds = new Map<number, PhysicalFilamentId>();
 
   /**
    * @param ids Supplying an id source lets a reported slot with no canonical
@@ -235,8 +242,10 @@ export class SyncPhysicalFilamentsFromPrinterCommand extends SnapshotFilamentCom
       const name = printerFilamentSlotName(slot);
       if (!filament) {
         if (!this.ids) continue;
+        const id = this.adoptedIds.get(slot.toolId) ?? this.ids.next<'physical-filament'>('physical-filament');
+        this.adoptedIds.set(slot.toolId, id);
         state.filaments.physical.push({
-          id: this.ids.next<'physical-filament'>('physical-filament'),
+          id,
           name: name || `Tool ${slot.toolId + 1}`,
           toolId: slot.toolId,
           material: slot.material,
@@ -430,7 +439,10 @@ export class SetFilamentEnabledCommand extends SnapshotFilamentCommand {
       if (filament.extensionData?.orcaxrFilamentLifecycle !== undefined) {
         const extensionData = { ...filament.extensionData };
         delete extensionData.orcaxrFilamentLifecycle;
-        filament.extensionData = Object.keys(extensionData).length > 0 ? extensionData : undefined;
+        // Remove the key rather than storing `undefined`, which canonical JSON
+        // refuses: re-enabling a disabled filament would otherwise always fail.
+        if (Object.keys(extensionData).length > 0) filament.extensionData = extensionData;
+        else delete filament.extensionData;
       }
     } else {
       filament.extensionData = {

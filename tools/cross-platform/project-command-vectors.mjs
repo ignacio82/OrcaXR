@@ -629,7 +629,103 @@ scenario("layer-heights-flat-mesh", {}, noop, ({ execute, run, ids }) => {
   run({ kind: "undo" }); run({ kind: "undo" }); run({ kind: "redo" });
 });
 
-const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
+const optionalId = id => (id === null ? { absent: {} } : { value: units(id) });
+const assignment = (target, filamentId) => ({ target, filamentId: optionalId(filamentId) });
+const objectTarget = objectId => ({ object: { objectId: units(objectId) } });
+const volumeTarget = (objectId, volumeId) => ({ volume: { objectId: units(objectId), volumeId: units(volumeId) } });
+const rangeTarget = (objectId, layerRangeId) => ({ layerRange: { objectId: units(objectId), layerRangeId: units(layerRangeId) } });
+const assignFilaments = assignments => ({ setFilamentAssignments: { assignments } });
+const objectFilament = (objectId, filamentId) => ({ setObjectFilament: { objectId: units(objectId), filamentId: optionalId(filamentId) } });
+const volumeFilament = (objectId, volumeId, filamentId) => ({ setVolumeFilament: { objectId: units(objectId), volumeId: units(volumeId), filamentId: optionalId(filamentId) } });
+const rangeFilament = (objectId, layerRangeId, filamentId) => ({ setLayerRangeFilament: { objectId: units(objectId), layerRangeId: units(layerRangeId), filamentId: optionalId(filamentId) } });
+const remapFilaments = (sourceIds, destinationId) => ({ remapFilaments: { sourceIds: sourceIds.map(units), destinationId: units(destinationId) } });
+const filamentEnabled = (filamentId, enabled, reason) => ({ setFilamentEnabled: { filamentId: units(filamentId), enabled, reason: optionalValue(reason, units) } });
+const printerSlot = (toolId, color, material, o = {}) => ({ toolId, color: units(color), material: units(material), subType: optionalValue(o.subType, units), vendor: optionalValue(o.vendor, units) });
+const syncFilaments = (slots, newFilamentIds) => ({ syncPhysicalFilaments: { slots, newFilamentIds: newFilamentIds === undefined ? { absent: {} } : { value: newFilamentIds.map(units) } } });
+const facetLeaf = value => ({ kind: "leaf", state: value === undefined ? { kind: "unpainted" } : { kind: "assigned", value } });
+const facetSplit = children => ({ kind: "split", splitSides: children.length - 1, specialSide: 0, children });
+scenario("filaments", {}, (s, f) => {
+  f.asset = coneAsset(f.ids.asset);
+  s.sourceAssets = s.sourceAssets.map(a => (a.id === f.asset.descriptor.id ? f.asset.descriptor : a));
+  const [p0, p1] = s.filaments.physical.map(p => p.id), mixed = s.filaments.mixed[0].id;
+  const first = s.plates[0].objects[0], volume = first.volumes[0];
+  volume.source.triangleCount = f.asset.descriptor.mesh.triangleCount;
+  volume.filamentId = p1;
+  first.layerRanges[0].filamentId = p1;
+  // A recipe-free tool: remapping it onto p0 collapses splits and merges groups.
+  const third = "import:filament:third";
+  volume.annotations.color = [{ value: p0, triangles: [1, 2, 3] }, { value: mixed, triangles: [4] }, { value: third, triangles: [5, 6] }, { value: p1, triangles: [9] }];
+  volume.annotations.refinement = { color: { version: 2, triangleCount: 48, splits: [
+    { triangle: 0, node: facetSplit([facetLeaf(p0), facetLeaf(third)]) },
+    { triangle: 7, node: facetSplit([facetLeaf(third), facetLeaf()]) },
+    { triangle: 8, node: facetSplit([facetLeaf(mixed), facetLeaf(p0), facetLeaf(third)]) },
+    { triangle: 10, node: facetSplit([facetSplit([facetLeaf(third), facetLeaf(p0)]), facetLeaf(p0)]) },
+  ] } };
+  volume.extensionData = { "orcaxr:sourceMaterial": { color: "", name: "Imported" }, kept: [1, "😀"] };
+  const second = cloneObject(first, "second", {});
+  delete second.filamentId;
+  second.volumes[0].filamentId = p0;
+  second.volumes[0].annotations = { ...second.volumes[0].annotations, color: [{ value: p1, triangles: [0] }] };
+  delete second.volumes[0].annotations.refinement;
+  second.volumes[0].extensionData = { "orcaxr:sourceMaterial": "legacy", "orcaxr:originalFilamentColors": ["#123456"] };
+  s.plates[0].objects.push(second);
+  s.plates[0].wipeTower = { enabled: true, positionMm: [10, 20], rotationDeg: 0, filamentId: p1 };
+  s.printer.toolCount = 4;
+  s.filaments.physical.push({ id: third, name: "Head 4 PLA", toolId: 3, material: "PLA", color: "#ffff00", config: {}, enabled: true });
+  s.filaments.physical.push({ id: "import:filament:disabled", name: "Spare PETG", toolId: 2, material: "PETG", color: "#00ff00", config: {}, enabled: false,
+    extensionData: { orcaxrFilamentLifecycle: { state: "disabled", reason: "user", semantics: "tombstone-preserve-references" }, kept: true } });
+  s.filaments.mixed.push({ id: "import:mixed:gradient", name: "Gradient", displayColor: "#808080",
+    components: [{ filamentId: p0, weight: 1 }, { filamentId: p1, weight: 2 }],
+    distribution: { mode: "gradient", startWeights: [1, 0.25], endWeights: [0, 1] }, config: {}, enabled: true });
+}, ({ execute, batch, run, ids, state }) => {
+  const o = ids.object, v = ids.volume, r = ids.range, second = "import:object:second", secondVolume = "import:volume:second";
+  const [p0, p1] = state().filaments.physical.map(p => p.id), mixed = state().filaments.mixed[0].id, spare = "import:filament:disabled";
+  execute(objectFilament(o, p1));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(objectFilament(o, p1));
+  execute(objectFilament(o, null)); execute(objectFilament(o, mixed));
+  execute(volumeFilament(o, v, p0)); execute(volumeFilament(o, v, null));
+  execute(rangeFilament(o, r, p0)); execute(rangeFilament(o, r, null));
+  for (const bad of [volumeFilament(o, secondVolume, p0), volumeFilament(o, "import:volume:missing", p0), objectFilament(o, spare),
+    objectFilament(o, "import:filament:missing"), objectFilament("import:object:missing", p0), rangeFilament(second, r, p0),
+    rangeFilament(o, "import:range:missing", p0), objectFilament("bad", p0), objectFilament(o, "bad"),
+    assignFilaments([assignment(objectTarget(o), p0), assignment(objectTarget(o), p1)])])
+    execute(bad);
+  execute(assignFilaments([]));
+  execute(assignFilaments([assignment(objectTarget(o), p0), assignment(volumeTarget(second, secondVolume), p1), assignment(rangeTarget(o, r), null)]));
+  execute(assignFilaments([assignment(volumeTarget(o, v), p1)]));
+  run({ kind: "undo" }); run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "redo" });
+  execute(remapFilaments([p1], p0));
+  execute(remapFilaments(["import:filament:third"], p0));
+  run({ kind: "undo" }); run({ kind: "redo" }); run({ kind: "undo" });
+  execute(remapFilaments([mixed], p1));
+  run({ kind: "undo" });
+  for (const bad of [remapFilaments([], p0), remapFilaments([p1, p1], p0), remapFilaments([p0], p0), remapFilaments([p1], spare),
+    remapFilaments(["import:filament:missing"], p0), remapFilaments([p1], mixed), remapFilaments([p0, "bad"], p1)])
+    execute(bad);
+  execute(remapFilaments([spare], p0));
+  execute(filamentEnabled(spare, true)); execute(filamentEnabled(spare, true));
+  execute(filamentEnabled(p1, false)); execute(filamentEnabled(p1, false, "printer-missing")); execute(filamentEnabled(p1, true));
+  execute(filamentEnabled(mixed, false, "")); execute(filamentEnabled("import:mixed:gradient", false));
+  execute(filamentEnabled("import:filament:missing", true));
+  run({ kind: "undo" }); run({ kind: "undo" });
+  const slots = [printerSlot(0, "#1E88E5", "PLA", { subType: "Matte", vendor: "Snapmaker" }), printerSlot(1, "#000000", "PETG", { vendor: "  " }),
+    printerSlot(5, "#E2DEDB", "PLA", { subType: "SnapSpeed" })];
+  execute(syncFilaments(slots));
+  run({ kind: "undo" });
+  execute(syncFilaments(slots, ["import:filament:adopt-5", "import:filament:unused"]));
+  run({ kind: "undo" }); run({ kind: "redo" });
+  execute(syncFilaments(slots, ["import:filament:adopt-5-again"]));
+  for (const bad of [syncFilaments([printerSlot(0, "#12345", "PLA")]), syncFilaments([printerSlot(9007199254740991, "red", "PLA")]),
+    syncFilaments([printerSlot(3, "#abcdef", " \n")]), syncFilaments([printerSlot(6, "#abcdef", "PLA"), printerSlot(7, "#abcdef", "PLA")], ["import:filament:only-one"]),
+    syncFilaments([printerSlot(6, "#abcdef", "PLA")], [p0]), syncFilaments([printerSlot(6, "#abcdef", "PLA")], ["bad"])])
+    execute(bad);
+  batch([objectFilament(o, "import:filament:third"), remapFilaments(["import:filament:third"], p0), filamentEnabled("import:filament:third", false)], "Filament transaction");
+  batch([objectFilament(o, p0), filamentEnabled("import:filament:missing", false)], "Rolled back filaments");
+  run({ kind: "undo" }); run({ kind: "redo" });
+});
+
+const sources = ["tools/cross-platform/project-command-vectors.mjs", "web/src/project/commands.ts", "web/src/project/objects/commands.ts", "web/src/project/objects/transformCommands.ts", "web/src/project/objects/layerRangeCommands.ts", "web/src/project/layerEventCommands.ts", "web/src/project/objects/brimEarCommands.ts", "web/src/project/objects/layerHeightCommands.ts", "web/src/project/objects/layerHeightProfile.ts", "web/src/project/meshCodec.ts", "web/src/project/filaments/commands.ts", "web/src/project/domain/facetRefinement.ts", "web/src/project/domain/selectors.ts", "web/src/project/PreparedProjectCommands.ts", "web/src/project/history/command.ts", "web/src/project/history/commandBus.ts", "web/src/project/store.ts", "web/src/project/selection.ts", "web/src/project/assets.ts", "web/src/project/domain/canonical.ts", "web/src/project/domain/model.ts", "web/src/project/domain/ids.ts", "web/src/project/domain/validation.ts", "web/src/project/__tests__/fixtures.ts", "contracts/generated/project-intents.ts", "contracts/runtime/project-intents.ts", "contracts/project-intents.json"];
 const output = JSON.stringify({ schemaVersion: 1, sources: sources.map(path => ({ path, sha256: createHash("sha256").update(read(path)).digest("hex") })), contents, traces }, null, 2) + "\n";
 const path = new URL("testdata/cross-platform/project-command-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);

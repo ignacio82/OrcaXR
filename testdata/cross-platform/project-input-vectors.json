@@ -11,7 +11,7 @@
     },
     {
       "path": "testdata/cross-platform/canonical-vectors.json",
-      "sha256": "719a8c15ce9c8e99ec65651f3614632a1e4dbc8105fab4dd54c3f02c72a57928"
+      "sha256": "81bb698d80eaacb1cbff32cfc756844b89a7c3ad1399f55430e741dde6bc8e2b"
     }
   ],
   "cases": [

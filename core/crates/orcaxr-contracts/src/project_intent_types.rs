@@ -948,6 +948,223 @@ fn read_reset_layer_height_profile(v: &Value) -> Result<ResetLayerHeightProfile,
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub enum OptionalIds {
+    Absent(Empty),
+    Value(Ids),
+}
+fn read_optional_ids(v: &Value) -> Result<OptionalIds, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalIds::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalIds::Value(read_ids(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectTarget {
+    pub object_id: Id,
+}
+fn read_object_target(v: &Value) -> Result<ObjectTarget, InvalidIntent> {
+    let object = fields(v, &["objectId"], false)?;
+    Ok(ObjectTarget {
+        object_id: read_id(&object["objectId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeTarget {
+    pub object_id: Id,
+    pub volume_id: Id,
+}
+fn read_volume_target(v: &Value) -> Result<VolumeTarget, InvalidIntent> {
+    let object = fields(v, &["objectId", "volumeId"], false)?;
+    Ok(VolumeTarget {
+        object_id: read_id(&object["objectId"])?,
+        volume_id: read_id(&object["volumeId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayerRangeTarget {
+    pub object_id: Id,
+    pub layer_range_id: Id,
+}
+fn read_layer_range_target(v: &Value) -> Result<LayerRangeTarget, InvalidIntent> {
+    let object = fields(v, &["objectId", "layerRangeId"], false)?;
+    Ok(LayerRangeTarget {
+        object_id: read_id(&object["objectId"])?,
+        layer_range_id: read_id(&object["layerRangeId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AssignmentTarget {
+    Object(ObjectTarget),
+    Volume(VolumeTarget),
+    LayerRange(LayerRangeTarget),
+}
+fn read_assignment_target(v: &Value) -> Result<AssignmentTarget, InvalidIntent> {
+    let object = fields(v, &["object", "volume", "layerRange"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "object" => Ok(AssignmentTarget::Object(read_object_target(value)?)),
+        "volume" => Ok(AssignmentTarget::Volume(read_volume_target(value)?)),
+        "layerRange" => Ok(AssignmentTarget::LayerRange(read_layer_range_target(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FilamentAssignment {
+    pub target: AssignmentTarget,
+    pub filament_id: OptionalId,
+}
+fn read_filament_assignment(v: &Value) -> Result<FilamentAssignment, InvalidIntent> {
+    let object = fields(v, &["target", "filamentId"], false)?;
+    Ok(FilamentAssignment {
+        target: read_assignment_target(&object["target"])?,
+        filament_id: read_optional_id(&object["filamentId"])?,
+    })
+}
+pub type FilamentAssignments = Vec<FilamentAssignment>;
+fn read_filament_assignments(v: &Value) -> Result<FilamentAssignments, InvalidIntent> {
+    list(v, 0, 131072)?
+        .iter()
+        .map(read_filament_assignment)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetFilamentAssignments {
+    pub assignments: FilamentAssignments,
+}
+fn read_set_filament_assignments(v: &Value) -> Result<SetFilamentAssignments, InvalidIntent> {
+    let object = fields(v, &["assignments"], false)?;
+    Ok(SetFilamentAssignments {
+        assignments: read_filament_assignments(&object["assignments"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetObjectFilament {
+    pub object_id: Id,
+    pub filament_id: OptionalId,
+}
+fn read_set_object_filament(v: &Value) -> Result<SetObjectFilament, InvalidIntent> {
+    let object = fields(v, &["objectId", "filamentId"], false)?;
+    Ok(SetObjectFilament {
+        object_id: read_id(&object["objectId"])?,
+        filament_id: read_optional_id(&object["filamentId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetVolumeFilament {
+    pub object_id: Id,
+    pub volume_id: Id,
+    pub filament_id: OptionalId,
+}
+fn read_set_volume_filament(v: &Value) -> Result<SetVolumeFilament, InvalidIntent> {
+    let object = fields(v, &["objectId", "volumeId", "filamentId"], false)?;
+    Ok(SetVolumeFilament {
+        object_id: read_id(&object["objectId"])?,
+        volume_id: read_id(&object["volumeId"])?,
+        filament_id: read_optional_id(&object["filamentId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetLayerRangeFilament {
+    pub object_id: Id,
+    pub layer_range_id: Id,
+    pub filament_id: OptionalId,
+}
+fn read_set_layer_range_filament(v: &Value) -> Result<SetLayerRangeFilament, InvalidIntent> {
+    let object = fields(v, &["objectId", "layerRangeId", "filamentId"], false)?;
+    Ok(SetLayerRangeFilament {
+        object_id: read_id(&object["objectId"])?,
+        layer_range_id: read_id(&object["layerRangeId"])?,
+        filament_id: read_optional_id(&object["filamentId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemapFilaments {
+    pub source_ids: Ids,
+    pub destination_id: Id,
+}
+fn read_remap_filaments(v: &Value) -> Result<RemapFilaments, InvalidIntent> {
+    let object = fields(v, &["sourceIds", "destinationId"], false)?;
+    Ok(RemapFilaments {
+        source_ids: read_ids(&object["sourceIds"])?,
+        destination_id: read_id(&object["destinationId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetFilamentEnabled {
+    pub filament_id: Id,
+    pub enabled: Flag,
+    pub reason: OptionalText,
+}
+fn read_set_filament_enabled(v: &Value) -> Result<SetFilamentEnabled, InvalidIntent> {
+    let object = fields(v, &["filamentId", "enabled", "reason"], false)?;
+    Ok(SetFilamentEnabled {
+        filament_id: read_id(&object["filamentId"])?,
+        enabled: read_flag(&object["enabled"])?,
+        reason: read_optional_text(&object["reason"])?,
+    })
+}
+pub type ToolSlot = u64;
+fn read_tool_slot(v: &Value) -> Result<ToolSlot, InvalidIntent> {
+    Ok(integer(v, 0, 9007199254740991)? as ToolSlot)
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterSlot {
+    pub tool_id: ToolSlot,
+    pub color: EditText,
+    pub material: EditText,
+    pub sub_type: OptionalText,
+    pub vendor: OptionalText,
+}
+fn read_printer_slot(v: &Value) -> Result<PrinterSlot, InvalidIntent> {
+    let object = fields(
+        v,
+        &["toolId", "color", "material", "subType", "vendor"],
+        false,
+    )?;
+    Ok(PrinterSlot {
+        tool_id: read_tool_slot(&object["toolId"])?,
+        color: read_edit_text(&object["color"])?,
+        material: read_edit_text(&object["material"])?,
+        sub_type: read_optional_text(&object["subType"])?,
+        vendor: read_optional_text(&object["vendor"])?,
+    })
+}
+pub type PrinterSlots = Vec<PrinterSlot>;
+fn read_printer_slots(v: &Value) -> Result<PrinterSlots, InvalidIntent> {
+    list(v, 0, 1024)?.iter().map(read_printer_slot).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPhysicalFilaments {
+    pub slots: PrinterSlots,
+    pub new_filament_ids: OptionalIds,
+}
+fn read_sync_physical_filaments(v: &Value) -> Result<SyncPhysicalFilaments, InvalidIntent> {
+    let object = fields(v, &["slots", "newFilamentIds"], false)?;
+    Ok(SyncPhysicalFilaments {
+        slots: read_printer_slots(&object["slots"])?,
+        new_filament_ids: read_optional_ids(&object["newFilamentIds"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Command {
     AddPlate(AddPlate),
     DuplicatePlate(DuplicatePlate),
@@ -984,6 +1201,13 @@ pub enum Command {
     SmoothLayerHeightProfile(SmoothLayerHeightProfile),
     AdaptiveLayerHeightProfile(AdaptiveLayerHeightProfile),
     ResetLayerHeightProfile(ResetLayerHeightProfile),
+    SetFilamentAssignments(SetFilamentAssignments),
+    SetObjectFilament(SetObjectFilament),
+    SetVolumeFilament(SetVolumeFilament),
+    SetLayerRangeFilament(SetLayerRangeFilament),
+    RemapFilaments(RemapFilaments),
+    SetFilamentEnabled(SetFilamentEnabled),
+    SyncPhysicalFilaments(SyncPhysicalFilaments),
 }
 fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
     let object = fields(
@@ -1024,6 +1248,13 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
             "smoothLayerHeightProfile",
             "adaptiveLayerHeightProfile",
             "resetLayerHeightProfile",
+            "setFilamentAssignments",
+            "setObjectFilament",
+            "setVolumeFilament",
+            "setLayerRangeFilament",
+            "remapFilaments",
+            "setFilamentEnabled",
+            "syncPhysicalFilaments",
         ],
         true,
     )?;
@@ -1085,6 +1316,21 @@ fn read_command(v: &Value) -> Result<Command, InvalidIntent> {
         )),
         "resetLayerHeightProfile" => Ok(Command::ResetLayerHeightProfile(
             read_reset_layer_height_profile(value)?,
+        )),
+        "setFilamentAssignments" => Ok(Command::SetFilamentAssignments(
+            read_set_filament_assignments(value)?,
+        )),
+        "setObjectFilament" => Ok(Command::SetObjectFilament(read_set_object_filament(value)?)),
+        "setVolumeFilament" => Ok(Command::SetVolumeFilament(read_set_volume_filament(value)?)),
+        "setLayerRangeFilament" => Ok(Command::SetLayerRangeFilament(
+            read_set_layer_range_filament(value)?,
+        )),
+        "remapFilaments" => Ok(Command::RemapFilaments(read_remap_filaments(value)?)),
+        "setFilamentEnabled" => Ok(Command::SetFilamentEnabled(read_set_filament_enabled(
+            value,
+        )?)),
+        "syncPhysicalFilaments" => Ok(Command::SyncPhysicalFilaments(
+            read_sync_physical_filaments(value)?,
         )),
         _ => Err(InvalidIntent),
     }

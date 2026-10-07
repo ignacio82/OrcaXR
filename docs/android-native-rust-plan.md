@@ -144,9 +144,10 @@ Detailed evidence and reproducible commands live in
 provider documents and STL/OBJ/AMF/ZIP model import (decode, stage, preview,
 undoable commit) now run in the shared core with owned WASM/JNI tasks and Kotlin
 actor operations ([native-core](engineering/native-core.md#signature-first-model-decoding)).
-Layer ranges, layer events, brim ears and layer-height profiles are ported
-(roughly 45% of the browser's 78 command classes are now native). Next families,
-in order: filaments and mixed filaments, settings/scoped overrides, volumes
+Layer ranges, layer events, brim ears, layer-height profiles and the physical
+filament commands (assignment, remap, enablement, printer sync) are ported
+(roughly half of the browser's 78 command classes are now native). Next
+families, in order: mixed filaments, settings/scoped overrides, volumes
 (SVG/emboss/semantic), split/boolean, then facet paint strokes. Each family adds
 intent variants to `contracts/project-intents.json` (definitions before first
 use; regenerate with `generate-project-intents.mjs --write`), maps them in
@@ -1076,8 +1077,17 @@ and replay coverage for the complete current command inventory.
     The corpus (1,338 steps, 71 new) matches bit for bit through a V8-exact
     `js_math` (fdlibm sin/cos/exp, V8 hypot), which also corrects the AMF
     rotation decoder; session/WASM/JNI agree.
+  - [x] Port the seven filament intents (`setFilamentAssignments`,
+    `setObjectFilament`, `setVolumeFilament`, `setLayerRangeFilament`,
+    `remapFilaments`, `setFilamentEnabled`, `syncPhysicalFilaments`) as
+    validated whole-state snapshot commands. The corpus (1,406 steps, 68 new)
+    covers scoped assignment, many-to-one remap through facet refinement
+    collapse and mixed-recipe merges, tombstone enable/disable and printer
+    adoption with caller-supplied IDs. Two browser bugs were fixed on the way:
+    re-enabling a disabled filament failed validation, and printer sync drew a
+    fresh adopted-tool ID on every apply, orphaning redone references.
   - [ ] Port and replay every remaining command family before session cutover
-    (filaments and mixed filaments,
+    (mixed filaments,
     settings/scoped overrides, SVG/emboss/semantic volumes, split/boolean,
     facet paint strokes, recreate model colours).
 - [ ] Port settings resolution, physical/mixed filament identities, profile

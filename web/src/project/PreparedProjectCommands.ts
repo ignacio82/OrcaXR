@@ -54,15 +54,27 @@ import {
   SmoothLayerHeightProfileCommand,
 } from './objects/layerHeightCommands';
 import type { LayerHeightLimits, LayerHeightSlicingParameters } from './objects/layerHeightProfile';
+import {
+  RemapFilamentsCommand,
+  SetFilamentAssignmentsCommand,
+  SetFilamentEnabledCommand,
+  SetLayerRangeFilamentCommand,
+  SetObjectFilamentCommand,
+  SetVolumeFilamentCommand,
+  SyncPhysicalFilamentsFromPrinterCommand,
+  type FilamentAssignmentTarget,
+} from './filaments/commands';
 import type { BrimEarPoint, LayerEventType, Transform } from './domain/model';
 import type {
+  ProjectAssignmentTargetWire,
   ProjectBrimEarWire,
+  ProjectOptionalIdWire,
   ProjectLayerHeightLimitsWire,
   ProjectLayerHeightParametersWire,
   ProjectLayerEventTypeWire,
   ProjectTransformWire,
 } from '../../../contracts/generated/project-intents';
-import { entityId, isStableEntityId, type EntityId, type FilamentId } from './domain/ids';
+import { entityId, isStableEntityId, type EntityId, type FilamentId, type IdSource } from './domain/ids';
 import type { ProjectCommand } from './history/command';
 
 /** UTF-16 code units, never code points or lossy UTF-8. */
@@ -224,6 +236,61 @@ function command(value: ProjectCommandWire): ProjectCommand {
   }
   if ('deleteLayerEvent' in value)
     return new DeleteLayerEventCommand(id<'custom-gcode'>(value.deleteLayerEvent.customGcodeId));
+  if ('setFilamentAssignments' in value)
+    return new SetFilamentAssignmentsCommand(
+      value.setFilamentAssignments.assignments.map((assignment) => ({
+        target: assignmentTarget(assignment.target),
+        filamentId: optionalFilament(assignment.filamentId),
+      })),
+    );
+  if ('setObjectFilament' in value)
+    return new SetObjectFilamentCommand(
+      id<'object'>(value.setObjectFilament.objectId),
+      optionalFilament(value.setObjectFilament.filamentId),
+    );
+  if ('setVolumeFilament' in value) {
+    const input = value.setVolumeFilament;
+    return new SetVolumeFilamentCommand(
+      id<'object'>(input.objectId),
+      id<'volume'>(input.volumeId),
+      optionalFilament(input.filamentId),
+    );
+  }
+  if ('setLayerRangeFilament' in value) {
+    const input = value.setLayerRangeFilament;
+    return new SetLayerRangeFilamentCommand(
+      id<'object'>(input.objectId),
+      id<'layer-range'>(input.layerRangeId),
+      optionalFilament(input.filamentId),
+    );
+  }
+  if ('remapFilaments' in value)
+    return new RemapFilamentsCommand(
+      value.remapFilaments.sourceIds.map(filament),
+      filament(value.remapFilaments.destinationId),
+    );
+  if ('setFilamentEnabled' in value) {
+    const input = value.setFilamentEnabled;
+    return new SetFilamentEnabledCommand(
+      filament(input.filamentId),
+      input.enabled,
+      'value' in input.reason ? text(input.reason.value) : undefined,
+    );
+  }
+  if ('syncPhysicalFilaments' in value) {
+    const input = value.syncPhysicalFilaments;
+    const slots = input.slots.map((slot) => ({
+      toolId: slot.toolId,
+      color: text(slot.color),
+      material: text(slot.material),
+      ...('value' in slot.subType ? { subType: text(slot.subType.value) } : {}),
+      ...('value' in slot.vendor ? { vendor: text(slot.vendor.value) } : {}),
+    }));
+    return new SyncPhysicalFilamentsFromPrinterCommand(
+      slots,
+      'value' in input.newFilamentIds ? listedIds(input.newFilamentIds.value.map(id<'physical-filament'>)) : undefined,
+    );
+  }
   if ('adjustLayerHeightProfile' in value) {
     const input = value.adjustLayerHeightProfile;
     return new AdjustLayerHeightProfileCommand(id<'object'>(input.objectId), layerHeightParameters(input.parameters), {
@@ -324,6 +391,30 @@ const LAYER_EVENT_TYPES: Readonly<Record<ProjectLayerEventTypeWire, LayerEventTy
   template: 'template',
   custom: 'custom',
 });
+function assignmentTarget(value: ProjectAssignmentTargetWire): FilamentAssignmentTarget {
+  if ('object' in value) return { kind: 'object', objectId: id<'object'>(value.object.objectId) };
+  if ('volume' in value)
+    return { kind: 'volume', objectId: id<'object'>(value.volume.objectId), volumeId: id<'volume'>(value.volume.volumeId) };
+  return {
+    kind: 'layer-range',
+    objectId: id<'object'>(value.layerRange.objectId),
+    layerRangeId: id<'layer-range'>(value.layerRange.layerRangeId),
+  };
+}
+/** `absent` clears the local value so child scopes inherit. */
+function optionalFilament(value: ProjectOptionalIdWire): FilamentId | null {
+  return 'value' in value ? filament(value.value) : null;
+}
+/** Hands out caller-chosen IDs in order; running out is a refusal, not a guess. */
+function listedIds(ids: readonly EntityId<'physical-filament'>[]): IdSource {
+  let next = 0;
+  return {
+    next<Kind extends string>(): EntityId<Kind> {
+      if (next >= ids.length) throw new Error('Printer sync needs more new filament IDs');
+      return ids[next++] as unknown as EntityId<Kind>;
+    },
+  };
+}
 function layerHeightLimits(value: ProjectLayerHeightLimitsWire): LayerHeightLimits {
   return {
     layerHeightMm: value.layerHeightMm,

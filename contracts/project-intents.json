@@ -517,6 +517,126 @@
         "objectId": "Id"
       }
     },
+    "OptionalIds": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "Ids"
+      }
+    },
+    "ObjectTarget": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id"
+      }
+    },
+    "VolumeTarget": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "volumeId": "Id"
+      }
+    },
+    "LayerRangeTarget": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "layerRangeId": "Id"
+      }
+    },
+    "AssignmentTarget": {
+      "kind": "union",
+      "variants": {
+        "object": "ObjectTarget",
+        "volume": "VolumeTarget",
+        "layerRange": "LayerRangeTarget"
+      }
+    },
+    "FilamentAssignment": {
+      "kind": "object",
+      "fields": {
+        "target": "AssignmentTarget",
+        "filamentId": "OptionalId"
+      }
+    },
+    "FilamentAssignments": {
+      "kind": "array",
+      "items": "FilamentAssignment",
+      "min": 0,
+      "max": 131072
+    },
+    "SetFilamentAssignments": {
+      "kind": "object",
+      "fields": {
+        "assignments": "FilamentAssignments"
+      }
+    },
+    "SetObjectFilament": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "filamentId": "OptionalId"
+      }
+    },
+    "SetVolumeFilament": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "volumeId": "Id",
+        "filamentId": "OptionalId"
+      }
+    },
+    "SetLayerRangeFilament": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "layerRangeId": "Id",
+        "filamentId": "OptionalId"
+      }
+    },
+    "RemapFilaments": {
+      "kind": "object",
+      "fields": {
+        "sourceIds": "Ids",
+        "destinationId": "Id"
+      }
+    },
+    "SetFilamentEnabled": {
+      "kind": "object",
+      "fields": {
+        "filamentId": "Id",
+        "enabled": "Flag",
+        "reason": "OptionalText"
+      }
+    },
+    "ToolSlot": {
+      "kind": "integer",
+      "min": 0,
+      "max": 9007199254740991
+    },
+    "PrinterSlot": {
+      "kind": "object",
+      "fields": {
+        "toolId": "ToolSlot",
+        "color": "EditText",
+        "material": "EditText",
+        "subType": "OptionalText",
+        "vendor": "OptionalText"
+      }
+    },
+    "PrinterSlots": {
+      "kind": "array",
+      "items": "PrinterSlot",
+      "min": 0,
+      "max": 1024
+    },
+    "SyncPhysicalFilaments": {
+      "kind": "object",
+      "fields": {
+        "slots": "PrinterSlots",
+        "newFilamentIds": "OptionalIds"
+      }
+    },
     "Command": {
       "kind": "union",
       "variants": {
@@ -554,7 +674,14 @@
         "adjustLayerHeightProfile": "AdjustLayerHeightProfile",
         "smoothLayerHeightProfile": "SmoothLayerHeightProfile",
         "adaptiveLayerHeightProfile": "AdaptiveLayerHeightProfile",
-        "resetLayerHeightProfile": "ResetLayerHeightProfile"
+        "resetLayerHeightProfile": "ResetLayerHeightProfile",
+        "setFilamentAssignments": "SetFilamentAssignments",
+        "setObjectFilament": "SetObjectFilament",
+        "setVolumeFilament": "SetVolumeFilament",
+        "setLayerRangeFilament": "SetLayerRangeFilament",
+        "remapFilaments": "RemapFilaments",
+        "setFilamentEnabled": "SetFilamentEnabled",
+        "syncPhysicalFilaments": "SyncPhysicalFilaments"
       }
     },
     "Commands": {

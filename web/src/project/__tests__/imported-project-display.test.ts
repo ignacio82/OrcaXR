@@ -15,7 +15,7 @@ import { CommandBus } from '../history/commandBus';
 import { encodeIndexedMeshAsset } from '../meshCodec';
 import { SelectionStore } from '../selection';
 import { ProjectStore } from '../store';
-import { SyncPhysicalFilamentsFromPrinterCommand } from '../filaments/commands';
+import { SetObjectFilamentCommand, SyncPhysicalFilamentsFromPrinterCommand } from '../filaments/commands';
 
 let passed = 0;
 function test(name: string, run: () => void): void {
@@ -129,6 +129,35 @@ test('syncing from the printer rewrites exactly the reported tools and undoes', 
 
   assert.equal(h.commands.undo(), true);
   assert.deepEqual(renderColors(h.project.getSnapshot().state), before);
+});
+
+test('an adopted tool keeps its ID through undo and redo', () => {
+  const h = harness();
+  const ids = new UuidIdSource(seededRandom(11));
+  const state = cloneProjectState(h.project.getSnapshot().state);
+  state.filaments.physical = state.filaments.physical.slice(0, 1);
+  for (const plate of state.plates) {
+    for (const object of plate.objects) {
+      object.filamentId = state.filaments.physical[0].id;
+      for (const volume of object.volumes) delete volume.filamentId;
+    }
+  }
+  h.project.replaceState(state, { reason: 'test', dirtyCategories: ['projectData'] });
+  const slots = [
+    { toolId: 0, color: '#1E88E5', material: 'PLA' },
+    { toolId: 1, color: '#000000', material: 'PLA' },
+  ];
+  h.commands.execute(new SyncPhysicalFilamentsFromPrinterCommand(slots, ids));
+  const adopted = h.project.getSnapshot().state.filaments.physical[1].id;
+  // A later edit that references the adopted tool must survive a full replay.
+  const objectId = h.project.getSnapshot().state.plates[0].objects[0].id;
+  h.commands.execute(new SetObjectFilamentCommand(objectId, adopted));
+  assert.equal(h.commands.undo(), true);
+  assert.equal(h.commands.undo(), true);
+  assert.equal(h.commands.redo(), true);
+  assert.equal(h.project.getSnapshot().state.filaments.physical[1].id, adopted);
+  assert.equal(h.commands.redo(), true);
+  assert.equal(h.project.getSnapshot().state.plates[0].objects[0].filamentId, adopted);
 });
 
 test('syncing twice changes nothing the second time', () => {

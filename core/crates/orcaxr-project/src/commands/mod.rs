@@ -3,6 +3,7 @@
 //! No UI, callbacks, random IDs or session ownership is inferred here.
 mod brim_ears;
 mod duplicate;
+mod filaments;
 mod layer_events;
 mod layer_heights;
 mod layer_ranges;
@@ -89,6 +90,7 @@ enum Kind {
     LayerEvent(Box<layer_events::LayerEventCommand>),
     BrimEar(Box<brim_ears::BrimEarCommand>),
     LayerHeight(Box<layer_heights::LayerHeightCommand>),
+    Filament(Box<filaments::FilamentCommand>),
 }
 /// `ImportProjectCommand`: the project and its asset repository are replaced as
 /// one history entry. The first apply crosses the validating payload boundary;
@@ -230,6 +232,17 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
             id(v.object_id)?,
             id(v.layer_range_id)?,
         )),
+        wire::Command::SetFilamentAssignments(v) => {
+            filament(filaments::FilamentCommand::assignments(v)?)
+        }
+        wire::Command::SetObjectFilament(v) => filament(filaments::FilamentCommand::object(v)?),
+        wire::Command::SetVolumeFilament(v) => filament(filaments::FilamentCommand::volume(v)?),
+        wire::Command::SetLayerRangeFilament(v) => {
+            filament(filaments::FilamentCommand::layer_range(v)?)
+        }
+        wire::Command::RemapFilaments(v) => filament(filaments::FilamentCommand::remap(v)?),
+        wire::Command::SetFilamentEnabled(v) => filament(filaments::FilamentCommand::enabled(v)?),
+        wire::Command::SyncPhysicalFilaments(v) => filament(filaments::FilamentCommand::sync(v)?),
         wire::Command::AdjustLayerHeightProfile(v) => {
             layer_height(layer_heights::LayerHeightCommand::adjust(v)?)
         }
@@ -362,6 +375,9 @@ pub(crate) fn prepare_decoded(command: wire::Command) -> Result<PreparedCommand,
     };
     Ok(PreparedCommand { label, kind })
 }
+fn filament(c: filaments::FilamentCommand) -> (Text, Kind) {
+    (c.label(), Kind::Filament(Box::new(c)))
+}
 fn layer_height(c: layer_heights::LayerHeightCommand) -> (Text, Kind) {
     (c.label(), Kind::LayerHeight(Box::new(c)))
 }
@@ -487,6 +503,7 @@ impl PreparedCommand {
             Kind::LayerEvent(ref c) => c.reason(),
             Kind::BrimEar(ref c) => c.reason(),
             Kind::LayerHeight(ref c) => c.reason(),
+            Kind::Filament(ref c) => c.reason(),
         }
     }
 }
@@ -497,7 +514,14 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
     fn dirty_categories(&self) -> &[DirtyCategory] {
         PROJECT
     }
-    fn is_noop(&self, context: &CommandContext<'_, P>) -> Result<bool, CommandError<P::Error>> {
+    fn is_noop(
+        &mut self,
+        context: &mut CommandContext<'_, P>,
+    ) -> Result<bool, CommandError<P::Error>> {
+        // Snapshot commands build and validate their next state here.
+        if let Kind::Filament(c) = &mut self.kind {
+            return c.is_noop(context);
+        }
         let snapshot = context.snapshot();
         let state = snapshot.state();
         Ok(match &self.kind {
@@ -531,6 +555,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::LayerEvent(c) => c.apply(context, reason)?,
             Kind::BrimEar(c) => c.apply(context)?,
             Kind::LayerHeight(c) => c.apply(context)?,
+            Kind::Filament(c) => c.apply(context, reason)?,
             Kind::Add {
                 plate,
                 activate,
@@ -664,6 +689,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::LayerEvent(c) => return c.revert(context, reason),
             Kind::BrimEar(c) => return c.revert(context),
             Kind::LayerHeight(c) => return c.revert(context),
+            Kind::Filament(c) => return c.revert(context, reason),
             Kind::LayerRange(_) => {
                 let Kind::LayerRange(c) = &mut self.kind else {
                     unreachable!()
@@ -739,6 +765,7 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
             Kind::Duplicate(command) => command.estimate().map_err(|_| CommandError::Encoding),
             Kind::LayerRange(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::LayerEvent(c) => c.estimate().map_err(|_| CommandError::Encoding),
+            Kind::Filament(c) => c.estimate().map_err(|_| CommandError::Encoding),
             Kind::Delete {
                 previous: Some(p), ..
             } => canonical_length(p.state()).map_err(|_| CommandError::Encoding),

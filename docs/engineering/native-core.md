@@ -2655,6 +2655,30 @@ produces a non-finite number (from extreme imported profiles) is refused exactly
 as the browser's validation refuses it: `Invalid project state (1 errors):
 Canonical JSON cannot contain non-finite numbers at $`.
 
+### Filament commands
+
+The physical-filament commands (`filaments/commands.ts`) are native as validated
+whole-state snapshot commands: each builds its next state and graph-validates it
+(the browser's `assertValidProjectState`) for the no-op check and again on apply,
+undo restores the exact previous state, and the history estimate counts both
+canonical states. The bus's no-op check therefore takes the mutable context
+(`CommandContext::admit` validates without publishing) and may record state the
+command reuses on apply and redo.
+
+Assignments set or clear an object, volume or layer-range filament (duplicate
+targets are refused by the browser's exact string keys). Remap rewrites every
+reference to one enabled destination: wipe towers, scoped assignments, layer
+ranges, colour paint through `FacetChannel::remap` (a split whose leaves become
+uniform moves into the whole-facet assignments) and mixed recipes, whose
+colliding components merge in first-seen order with summed weights. Enablement
+is a reversible tombstone in `extensionData.orcaxrFilamentLifecycle`. Printer
+sync reproduces the browser's JavaScript object semantics (`trim`, truthiness and
+`{...value}` spread of arbitrary JSON) when it preserves pre-sync colours, and
+adopts unmatched slots with caller-supplied IDs (`newFilamentIds`) drawn once per
+tool; running out is refused. The browser now also draws adopted IDs once per
+tool, so redo recreates the same filament, and re-enabling removes an emptied
+`extensionData` instead of storing `undefined`.
+
 ### JavaScript `Math` parity
 
 Ported arithmetic that the browser performs with `Math` goes through

@@ -801,6 +801,201 @@ object ProjectIntents {
             w.field("objectId") { writeId(w, v.objectId) }
         }
     }
+    sealed interface OptionalIds {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalIds
+        data class Value(val value: List<List<Int>>) : OptionalIds
+    }
+    private fun readOptionalIds(v: Any): OptionalIds {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalIds.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalIds.Value(readIds(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalIds(w: ProjectIntentWriter, v: OptionalIds) {
+        w.obj { when(v) {
+            is OptionalIds.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalIds.Value -> w.field("value") { writeIds(w, v.value) }
+        } }
+    }
+    data class ObjectTarget(val objectId: List<Int>)
+    private fun readObjectTarget(v: Any): ObjectTarget {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId"), false)
+        return ObjectTarget(readId(obj.get("objectId")))
+    }
+    private fun writeObjectTarget(w: ProjectIntentWriter, v: ObjectTarget) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+        }
+    }
+    data class VolumeTarget(val objectId: List<Int>, val volumeId: List<Int>)
+    private fun readVolumeTarget(v: Any): VolumeTarget {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "volumeId"), false)
+        return VolumeTarget(readId(obj.get("objectId")), readId(obj.get("volumeId")))
+    }
+    private fun writeVolumeTarget(w: ProjectIntentWriter, v: VolumeTarget) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("volumeId") { writeId(w, v.volumeId) }
+        }
+    }
+    data class LayerRangeTarget(val objectId: List<Int>, val layerRangeId: List<Int>)
+    private fun readLayerRangeTarget(v: Any): LayerRangeTarget {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "layerRangeId"), false)
+        return LayerRangeTarget(readId(obj.get("objectId")), readId(obj.get("layerRangeId")))
+    }
+    private fun writeLayerRangeTarget(w: ProjectIntentWriter, v: LayerRangeTarget) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("layerRangeId") { writeId(w, v.layerRangeId) }
+        }
+    }
+    sealed interface AssignmentTarget {
+        data class Object(val value: ProjectIntents.ObjectTarget) : AssignmentTarget
+        data class Volume(val value: ProjectIntents.VolumeTarget) : AssignmentTarget
+        data class LayerRange(val value: ProjectIntents.LayerRangeTarget) : AssignmentTarget
+    }
+    private fun readAssignmentTarget(v: Any): AssignmentTarget {
+        val obj = ProjectIntentJson.fields(v, setOf("object", "volume", "layerRange"), true)
+        return when(val key = obj.keys().next()) {
+            "object" -> AssignmentTarget.Object(readObjectTarget(obj.get(key)))
+            "volume" -> AssignmentTarget.Volume(readVolumeTarget(obj.get(key)))
+            "layerRange" -> AssignmentTarget.LayerRange(readLayerRangeTarget(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeAssignmentTarget(w: ProjectIntentWriter, v: AssignmentTarget) {
+        w.obj { when(v) {
+            is AssignmentTarget.Object -> w.field("object") { writeObjectTarget(w, v.value) }
+            is AssignmentTarget.Volume -> w.field("volume") { writeVolumeTarget(w, v.value) }
+            is AssignmentTarget.LayerRange -> w.field("layerRange") { writeLayerRangeTarget(w, v.value) }
+        } }
+    }
+    data class FilamentAssignment(val target: AssignmentTarget, val filamentId: OptionalId)
+    private fun readFilamentAssignment(v: Any): FilamentAssignment {
+        val obj = ProjectIntentJson.fields(v, setOf("target", "filamentId"), false)
+        return FilamentAssignment(readAssignmentTarget(obj.get("target")), readOptionalId(obj.get("filamentId")))
+    }
+    private fun writeFilamentAssignment(w: ProjectIntentWriter, v: FilamentAssignment) {
+        w.obj {
+            w.field("target") { writeAssignmentTarget(w, v.target) }
+            w.field("filamentId") { writeOptionalId(w, v.filamentId) }
+        }
+    }
+    private fun readFilamentAssignments(v: Any): List<FilamentAssignment> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readFilamentAssignment(array.get(it)) }
+    }
+    private fun writeFilamentAssignments(w: ProjectIntentWriter, v: List<FilamentAssignment>) {
+        w.array(v, 0, 131072) { writeFilamentAssignment(w, it) }
+    }
+    data class SetFilamentAssignments(val assignments: List<FilamentAssignment>)
+    private fun readSetFilamentAssignments(v: Any): SetFilamentAssignments {
+        val obj = ProjectIntentJson.fields(v, setOf("assignments"), false)
+        return SetFilamentAssignments(readFilamentAssignments(obj.get("assignments")))
+    }
+    private fun writeSetFilamentAssignments(w: ProjectIntentWriter, v: SetFilamentAssignments) {
+        w.obj {
+            w.field("assignments") { writeFilamentAssignments(w, v.assignments) }
+        }
+    }
+    data class SetObjectFilament(val objectId: List<Int>, val filamentId: OptionalId)
+    private fun readSetObjectFilament(v: Any): SetObjectFilament {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "filamentId"), false)
+        return SetObjectFilament(readId(obj.get("objectId")), readOptionalId(obj.get("filamentId")))
+    }
+    private fun writeSetObjectFilament(w: ProjectIntentWriter, v: SetObjectFilament) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("filamentId") { writeOptionalId(w, v.filamentId) }
+        }
+    }
+    data class SetVolumeFilament(val objectId: List<Int>, val volumeId: List<Int>, val filamentId: OptionalId)
+    private fun readSetVolumeFilament(v: Any): SetVolumeFilament {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "volumeId", "filamentId"), false)
+        return SetVolumeFilament(readId(obj.get("objectId")), readId(obj.get("volumeId")), readOptionalId(obj.get("filamentId")))
+    }
+    private fun writeSetVolumeFilament(w: ProjectIntentWriter, v: SetVolumeFilament) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("filamentId") { writeOptionalId(w, v.filamentId) }
+        }
+    }
+    data class SetLayerRangeFilament(val objectId: List<Int>, val layerRangeId: List<Int>, val filamentId: OptionalId)
+    private fun readSetLayerRangeFilament(v: Any): SetLayerRangeFilament {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "layerRangeId", "filamentId"), false)
+        return SetLayerRangeFilament(readId(obj.get("objectId")), readId(obj.get("layerRangeId")), readOptionalId(obj.get("filamentId")))
+    }
+    private fun writeSetLayerRangeFilament(w: ProjectIntentWriter, v: SetLayerRangeFilament) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("layerRangeId") { writeId(w, v.layerRangeId) }
+            w.field("filamentId") { writeOptionalId(w, v.filamentId) }
+        }
+    }
+    data class RemapFilaments(val sourceIds: List<List<Int>>, val destinationId: List<Int>)
+    private fun readRemapFilaments(v: Any): RemapFilaments {
+        val obj = ProjectIntentJson.fields(v, setOf("sourceIds", "destinationId"), false)
+        return RemapFilaments(readIds(obj.get("sourceIds")), readId(obj.get("destinationId")))
+    }
+    private fun writeRemapFilaments(w: ProjectIntentWriter, v: RemapFilaments) {
+        w.obj {
+            w.field("sourceIds") { writeIds(w, v.sourceIds) }
+            w.field("destinationId") { writeId(w, v.destinationId) }
+        }
+    }
+    data class SetFilamentEnabled(val filamentId: List<Int>, val enabled: Boolean, val reason: OptionalText)
+    private fun readSetFilamentEnabled(v: Any): SetFilamentEnabled {
+        val obj = ProjectIntentJson.fields(v, setOf("filamentId", "enabled", "reason"), false)
+        return SetFilamentEnabled(readId(obj.get("filamentId")), readFlag(obj.get("enabled")), readOptionalText(obj.get("reason")))
+    }
+    private fun writeSetFilamentEnabled(w: ProjectIntentWriter, v: SetFilamentEnabled) {
+        w.obj {
+            w.field("filamentId") { writeId(w, v.filamentId) }
+            w.field("enabled") { writeFlag(w, v.enabled) }
+            w.field("reason") { writeOptionalText(w, v.reason) }
+        }
+    }
+    private fun readToolSlot(v: Any): Long {
+        return ProjectIntentJson.integer(v, 0L, 9007199254740991L)
+    }
+    private fun writeToolSlot(w: ProjectIntentWriter, v: Long) {
+        w.integer(v.toLong(), 0L, 9007199254740991L)
+    }
+    data class PrinterSlot(val toolId: Long, val color: List<Int>, val material: List<Int>, val subType: OptionalText, val vendor: OptionalText)
+    private fun readPrinterSlot(v: Any): PrinterSlot {
+        val obj = ProjectIntentJson.fields(v, setOf("toolId", "color", "material", "subType", "vendor"), false)
+        return PrinterSlot(readToolSlot(obj.get("toolId")), readEditText(obj.get("color")), readEditText(obj.get("material")), readOptionalText(obj.get("subType")), readOptionalText(obj.get("vendor")))
+    }
+    private fun writePrinterSlot(w: ProjectIntentWriter, v: PrinterSlot) {
+        w.obj {
+            w.field("toolId") { writeToolSlot(w, v.toolId) }
+            w.field("color") { writeEditText(w, v.color) }
+            w.field("material") { writeEditText(w, v.material) }
+            w.field("subType") { writeOptionalText(w, v.subType) }
+            w.field("vendor") { writeOptionalText(w, v.vendor) }
+        }
+    }
+    private fun readPrinterSlots(v: Any): List<PrinterSlot> {
+        val array = ProjectIntentJson.list(v, 0, 1024)
+        return List(array.length()) { readPrinterSlot(array.get(it)) }
+    }
+    private fun writePrinterSlots(w: ProjectIntentWriter, v: List<PrinterSlot>) {
+        w.array(v, 0, 1024) { writePrinterSlot(w, it) }
+    }
+    data class SyncPhysicalFilaments(val slots: List<PrinterSlot>, val newFilamentIds: OptionalIds)
+    private fun readSyncPhysicalFilaments(v: Any): SyncPhysicalFilaments {
+        val obj = ProjectIntentJson.fields(v, setOf("slots", "newFilamentIds"), false)
+        return SyncPhysicalFilaments(readPrinterSlots(obj.get("slots")), readOptionalIds(obj.get("newFilamentIds")))
+    }
+    private fun writeSyncPhysicalFilaments(w: ProjectIntentWriter, v: SyncPhysicalFilaments) {
+        w.obj {
+            w.field("slots") { writePrinterSlots(w, v.slots) }
+            w.field("newFilamentIds") { writeOptionalIds(w, v.newFilamentIds) }
+        }
+    }
     sealed interface Command {
         data class AddPlate(val value: ProjectIntents.AddPlate) : Command
         data class DuplicatePlate(val value: ProjectIntents.DuplicatePlate) : Command
@@ -837,9 +1032,16 @@ object ProjectIntents {
         data class SmoothLayerHeightProfile(val value: ProjectIntents.SmoothLayerHeightProfile) : Command
         data class AdaptiveLayerHeightProfile(val value: ProjectIntents.AdaptiveLayerHeightProfile) : Command
         data class ResetLayerHeightProfile(val value: ProjectIntents.ResetLayerHeightProfile) : Command
+        data class SetFilamentAssignments(val value: ProjectIntents.SetFilamentAssignments) : Command
+        data class SetObjectFilament(val value: ProjectIntents.SetObjectFilament) : Command
+        data class SetVolumeFilament(val value: ProjectIntents.SetVolumeFilament) : Command
+        data class SetLayerRangeFilament(val value: ProjectIntents.SetLayerRangeFilament) : Command
+        data class RemapFilaments(val value: ProjectIntents.RemapFilaments) : Command
+        data class SetFilamentEnabled(val value: ProjectIntents.SetFilamentEnabled) : Command
+        data class SyncPhysicalFilaments(val value: ProjectIntents.SyncPhysicalFilaments) : Command
     }
     private fun readCommand(v: Any): Command {
-        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile"), true)
+        val obj = ProjectIntentJson.fields(v, setOf("addPlate", "duplicatePlate", "deletePlate", "activatePlate", "renamePlate", "reorderPlates", "setPlatePrintable", "renameObject", "renameVolume", "renameInstance", "setInstancePrintable", "setInstanceTransform", "setInstanceTransforms", "deleteObject", "deletePlateObjects", "deleteInstance", "moveObjectToPlate", "duplicateObject", "convertInstanceToObject", "addLayerRange", "editLayerRangeBounds", "splitLayerRange", "mergeLayerRanges", "deleteLayerRange", "addLayerEvent", "editLayerEvent", "deleteLayerEvent", "addBrimEar", "addBrimEars", "removeBrimEar", "clearBrimEars", "adjustLayerHeightProfile", "smoothLayerHeightProfile", "adaptiveLayerHeightProfile", "resetLayerHeightProfile", "setFilamentAssignments", "setObjectFilament", "setVolumeFilament", "setLayerRangeFilament", "remapFilaments", "setFilamentEnabled", "syncPhysicalFilaments"), true)
         return when(val key = obj.keys().next()) {
             "addPlate" -> Command.AddPlate(readAddPlate(obj.get(key)))
             "duplicatePlate" -> Command.DuplicatePlate(readDuplicatePlate(obj.get(key)))
@@ -876,6 +1078,13 @@ object ProjectIntents {
             "smoothLayerHeightProfile" -> Command.SmoothLayerHeightProfile(readSmoothLayerHeightProfile(obj.get(key)))
             "adaptiveLayerHeightProfile" -> Command.AdaptiveLayerHeightProfile(readAdaptiveLayerHeightProfile(obj.get(key)))
             "resetLayerHeightProfile" -> Command.ResetLayerHeightProfile(readResetLayerHeightProfile(obj.get(key)))
+            "setFilamentAssignments" -> Command.SetFilamentAssignments(readSetFilamentAssignments(obj.get(key)))
+            "setObjectFilament" -> Command.SetObjectFilament(readSetObjectFilament(obj.get(key)))
+            "setVolumeFilament" -> Command.SetVolumeFilament(readSetVolumeFilament(obj.get(key)))
+            "setLayerRangeFilament" -> Command.SetLayerRangeFilament(readSetLayerRangeFilament(obj.get(key)))
+            "remapFilaments" -> Command.RemapFilaments(readRemapFilaments(obj.get(key)))
+            "setFilamentEnabled" -> Command.SetFilamentEnabled(readSetFilamentEnabled(obj.get(key)))
+            "syncPhysicalFilaments" -> Command.SyncPhysicalFilaments(readSyncPhysicalFilaments(obj.get(key)))
             else -> throw InvalidProjectIntent()
         }
     }
@@ -916,6 +1125,13 @@ object ProjectIntents {
             is Command.SmoothLayerHeightProfile -> w.field("smoothLayerHeightProfile") { writeSmoothLayerHeightProfile(w, v.value) }
             is Command.AdaptiveLayerHeightProfile -> w.field("adaptiveLayerHeightProfile") { writeAdaptiveLayerHeightProfile(w, v.value) }
             is Command.ResetLayerHeightProfile -> w.field("resetLayerHeightProfile") { writeResetLayerHeightProfile(w, v.value) }
+            is Command.SetFilamentAssignments -> w.field("setFilamentAssignments") { writeSetFilamentAssignments(w, v.value) }
+            is Command.SetObjectFilament -> w.field("setObjectFilament") { writeSetObjectFilament(w, v.value) }
+            is Command.SetVolumeFilament -> w.field("setVolumeFilament") { writeSetVolumeFilament(w, v.value) }
+            is Command.SetLayerRangeFilament -> w.field("setLayerRangeFilament") { writeSetLayerRangeFilament(w, v.value) }
+            is Command.RemapFilaments -> w.field("remapFilaments") { writeRemapFilaments(w, v.value) }
+            is Command.SetFilamentEnabled -> w.field("setFilamentEnabled") { writeSetFilamentEnabled(w, v.value) }
+            is Command.SyncPhysicalFilaments -> w.field("syncPhysicalFilaments") { writeSyncPhysicalFilaments(w, v.value) }
         } }
     }
     private fun readCommands(v: Any): List<Command> {

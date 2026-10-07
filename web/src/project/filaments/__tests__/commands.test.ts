@@ -7,6 +7,7 @@ import {
   RemapFilamentsCommand,
   SelectionStore,
   SetFilamentAssignmentsCommand,
+  SetFilamentEnabledCommand,
   SetLayerRangeFilamentCommand,
   SetObjectFilamentCommand,
   SetVolumeFilamentCommand,
@@ -344,6 +345,21 @@ test('disables referenced filaments as reversible tombstones instead of deleting
   bus.redo();
   assert.equal(bytes(project), disabledBytes);
   assert.deepEqual(assets.capture(), assetsBefore);
+});
+
+test('re-enabling a disabled filament restores it exactly', () => {
+  const { fixture, project, bus } = harness();
+  const before = bytes(project);
+  bus.execute(new DisableFilamentCommand(fixture.ids.physical0));
+  // The tombstone was the only extension data, so enabling removes the key
+  // instead of leaving `undefined`, which canonical JSON cannot encode.
+  bus.execute(new SetFilamentEnabledCommand(fixture.ids.physical0, true));
+  assert.equal(bytes(project), before);
+  assert.equal(
+    project.getSnapshot().state.filaments.physical.find((candidate) => candidate.id === fixture.ids.physical0)!
+      .extensionData,
+    undefined,
+  );
 });
 
 console.log(`\nFilament commands: ${passed} tests passed.`);
