@@ -121,7 +121,8 @@ function parseOpeningTag(source: string, depth: number, path: string, format: Mo
   const name = source.slice(nameStart, cursor);
   if (!/^[A-Za-z_][\w.:-]*$/.test(name)) fail(`invalid element name "${name}"`);
 
-  const attributes: Record<string, string> = {};
+  // No prototype: `toString`/`__proto__` attributes are ordinary names.
+  const attributes: Record<string, string> = Object.create(null) as Record<string, string>;
   let selfClosing = false;
   while (cursor < source.length) {
     skipSpace();

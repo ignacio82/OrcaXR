@@ -80,7 +80,7 @@ export function decodeAmf(bytes: Uint8Array, options: AmfDecodeOptions): Decoded
       switch (element.localName) {
         case 'amf': {
           const declared = (element.attributes.unit ?? 'millimeter').trim().toLowerCase();
-          if (!(declared in UNIT_SCALE_TO_MM)) fail(`unsupported unit "${declared}"`);
+          if (!Object.hasOwn(UNIT_SCALE_TO_MM, declared)) fail(`unsupported unit "${declared}"`);
           unit = declared;
           break;
         }

@@ -113,7 +113,12 @@ Detailed evidence and reproducible commands live in
   checkpoint only after provider close, and a `ContentResolver` adapter. Six
   actor journeys pass over real JNI; 670 of the 1,341 replayed archives use the
   open-ended path in every host. Instrumented tests compile but have not run.
-- [ ] Add STL/OBJ/AMF import; wire provider Open/Save into the application UI
+- [x] Port signature-first STL/OBJ/AMF/compressed-AMF/ZIP model decoding
+  (`orcaxr_archive::models`): all 260 browser cases agree exactly (116 decoded,
+  144 refusals), including the six shipped model files. One browser defect
+  (prototype keys as extensions/units/attributes) was fixed on the way.
+- [ ] Stage decoded models into the project merge transaction and bind model
+  import to host tasks; wire provider Open/Save into the application UI
   (pickers, persisted grants, recent files, share intents) in Phase 7.
 - [x] Share bounded G-code text windows and case-insensitive line search through
   Rust, WASM and JNI (Phase 3). Browser, host and Chrome WASM replays agree on
@@ -126,9 +131,13 @@ Detailed evidence and reproducible commands live in
   finish remaining command/query coverage and production session integration,
   then continue the app/device gates.
 
-**Resume here:** port signature-first STL/OBJ/AMF import from
-`web/src/project/import/` into the shared core with an independent browser
-corpus, then bind it like archive Open. Archive Open/Save already run as owned
+**Resume here:** stage decoded models into a project merge. `orcaxr_archive::
+models::decode` already matches the browser's `decodeModelImport` on 260 cases
+([native-core](engineering/native-core.md#signature-first-model-decoding)); next
+port `ModelImportParser.stage` (unit scaling, asset encoding and deduplication,
+placement, naming, notices) and the transaction preview/commit from
+`web/src/project/import/` with an independent corpus, then bind model import to
+WASM/JNI tasks like archive Open. Archive Open/Save already run as owned
 WASM/JNI tasks under one generated host policy, and `ProjectDocuments` adapts
 provider documents (see
 [native-core](engineering/native-core.md#archive-open-and-save-host-tasks)): an
@@ -1132,7 +1141,10 @@ painting, and FullSpectrum operations that can support real native projects.
     tasks under one generated host policy, with guarded actor adoption, Save
     checkpoint handoff, cooperative JNI cancellation and shared redacted codes;
     replayed over 1,341 browser archives in three hosts.
-  - [ ] Add STL/OBJ/AMF detection/parsing and provider lifetimes.
+  - [x] Port STL/OBJ/AMF/ZIP detection and decoding with exact browser parity
+    on 260 cases.
+  - [ ] Stage decoded models as merge transactions; bind model import and
+    provider lifetimes.
 - [ ] Port canonical-envelope and BBS authoring, scoped overrides, plate origins,
   assembly transforms, custom G-code, modifier/negative volumes, annotations,
   mixed recipes, and unknown metadata preservation. A consumed metadata member

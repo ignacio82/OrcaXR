@@ -1,7 +1,7 @@
 //! Canonical-package OPC metadata compatibility. The legacy tag scanner matches
 //! the existing browser contract; it is not a general XML parser or BBS loader.
 //! It never resolves external entities or performs network/filesystem extraction.
-mod case;
+pub(crate) mod case;
 mod case_data;
 mod scan;
 mod write;

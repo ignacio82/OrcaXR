@@ -371,6 +371,29 @@ test('enforces the triangle import limit', () => {
   );
 });
 
+test('prototype names are ordinary extensions, units and attributes', () => {
+  // `.constructor` declares no format, so the STL signature decides.
+  assert.equal(decodeModelImport(binaryStl(CUBE_TRIANGLES), { filename: 'cube.constructor' }).format, 'stl-binary');
+  const amf = (unit: string, attributes = ''): Uint8Array =>
+    utf8(
+      `<amf unit="${unit}"${attributes}><object id="1"><mesh><vertices>` +
+        '<vertex><coordinates><x>0</x><y>0</y><z>0</z></coordinates></vertex>' +
+        '<vertex><coordinates><x>1</x><y>0</y><z>0</z></coordinates></vertex>' +
+        '<vertex><coordinates><x>0</x><y>1</y><z>0</z></coordinates></vertex>' +
+        '</vertices><volume><triangle><v1>0</v1><v2>1</v2><v3>2</v3></triangle></volume></mesh></object></amf>',
+    );
+  for (const unit of ['constructor', '__proto__']) {
+    assert.throws(
+      () => decodeModelImport(amf(unit), { filename: 'proto.amf' }),
+      (error: unknown) => error instanceof MalformedModelSourceError && error.reasonCode === 'invalid-syntax',
+    );
+  }
+  assert.equal(
+    decodeModelImport(amf('mm', ' toString="x" __proto__="y"'), { filename: 'attributes.amf' }).sourceUnit,
+    'mm',
+  );
+});
+
 test('publishes the supported extension list used by pickers and drag/drop', () => {
   assert.deepEqual([...SUPPORTED_MODEL_IMPORT_EXTENSIONS].sort(), ['amf', 'amfz', 'obj', 'stl', 'zip']);
 });

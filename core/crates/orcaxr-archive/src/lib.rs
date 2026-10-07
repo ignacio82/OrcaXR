@@ -5,6 +5,7 @@ pub mod archive_layout;
 pub mod bbs;
 pub mod canonical;
 mod index;
+pub mod models;
 pub mod opc;
 pub mod open;
 pub mod package;

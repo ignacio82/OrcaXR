@@ -2499,6 +2499,44 @@ the real-browser project replay. Its query replay treats `Date.parse` as the
 engine oracle, because Chromium's 31-bit Smi parser refuses one legacy offset
 (`Jan 1 1970 GMT+500000:00`) that Node accepts.
 
+### Signature-first model decoding
+
+`orcaxr_archive::models::decode` ports the production browser's
+`decodeModelImport`: binary/ASCII STL, Wavefront OBJ (with `mtllib` colours from
+archive siblings), AMF (units, materials, `slic3r.modifier` roles, constellation
+instances), gzip or single-member ZIP compressed AMF, and ZIP archives that
+decode every supported member as one atomic import. Content signatures choose
+the decoder; an extension only breaks ties and a contradiction is refused.
+STEP, SVG, G-code and 3MF packages are recognised and refused with the browser's
+machine-readable reason. Vertices weld on exact Float32 bits in first-seen
+order, so one source always yields identical meshes. Every decoder observation
+is a notice with the browser's exact UTF-16 text; errors carry its reason and
+format codes. Decoding is synchronous and cooperatively cancellable.
+
+The port reproduces the browser's JavaScript semantics where they decide
+outcomes: `TextDecoder` replacement and BOM handling, `split(/\r?\n/)` and
+`\s`, `Number`/`parseInt`, `toLowerCase` (a Kelvin-sign `Kd` in a material
+library and a Kelvin-sign closing tag both match), UTF-16 name slicing that can
+leave a lone surrogate, the XML scanner's entity grammar and attribute quirks,
+V8's fdlibm `sin`/`cos` for AMF instance rotations (`libm`), and fflate's gzip
+behaviour (no CRC check, output sized by the trailer length, an empty body as
+that many zero bytes). The trailer never sizes an allocation natively; one
+refusal differs only in its format code (a stored block that overflows the
+trailer length). Building the corpus exposed a browser defect, fixed in the same
+change: prototype keys were treated as declared extensions, AMF units and XML
+attributes, so `cube.constructor` was refused and `unit="constructor"` produced
+a non-numeric scale.
+
+`tools/cross-platform/model-import-vectors.mjs` records **260 cases**: authored
+detection, STL, OBJ, AMF, compressed-AMF, ZIP and limit cases plus the six model
+files shipped in this repository (including the 11 MB Benchy). Native decoding
+matches all **116 accepted** results (format, units, names, roles, colours,
+materials, transform bits, mesh digests and the exact notice list) and all
+**144 refusals** (class, reason and format). Mutating one expected notice or
+mesh digest fails the comparison, and a cancellation test publishes nothing.
+Staging decoded models into a project merge transaction and binding it to host
+tasks remain open.
+
 ## Edited canonical archive interchange
 
 `archive_interchange` and `test-archive-interchange.mjs` exercise actual archive
@@ -2922,6 +2960,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-document-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/foreign-bbs-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/foreign-import-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/model-import-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/view-vectors.mjs

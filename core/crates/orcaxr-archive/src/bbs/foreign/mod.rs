@@ -8,7 +8,7 @@
 //! reads them, including its JavaScript number/string conversions, so accepted
 //! files import identically on both hosts. Nothing escapes on any failure.
 mod assemble;
-mod js;
+pub(crate) mod js;
 mod metadata;
 mod mixed;
 mod plates;

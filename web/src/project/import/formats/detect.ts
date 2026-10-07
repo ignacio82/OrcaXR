@@ -70,7 +70,7 @@ export function detectModelFormat(bytes: Uint8Array, filename: string): ModelFor
   const signature = detectBySignature(bytes, extension);
   if (signature) return finish(signature.format, extension, signature.evidence, signature.detail);
 
-  const extensionFormat = EXTENSION_FORMATS[extension];
+  const extensionFormat = declaredFormat(extension);
   if (extensionFormat) {
     throw new UnsupportedModelFormatError(
       `${filename} does not contain valid ${extension.toUpperCase()} content`,
@@ -157,7 +157,7 @@ function finish(
   evidence: ModelFormatDetection['evidence'],
   detail?: string,
 ): ModelFormatDetection {
-  const declared = EXTENSION_FORMATS[extension];
+  const declared = declaredFormat(extension);
   if (declared && !isCompatibleExtension(declared, format)) {
     throw new UnsupportedModelFormatError(
       `A .${extension} file cannot contain ${describeFormat(format)} content`,
@@ -175,6 +175,11 @@ function finish(
     unsupportedReason,
     detail: detail ?? UNSUPPORTED_DETAIL[format],
   });
+}
+
+/** Own entries only: an extension such as `.constructor` declares nothing. */
+function declaredFormat(extension: string): ModelImportFormat | undefined {
+  return Object.hasOwn(EXTENSION_FORMATS, extension) ? EXTENSION_FORMATS[extension] : undefined;
 }
 
 function isCompatibleExtension(declared: ModelImportFormat, detected: ModelImportFormat): boolean {

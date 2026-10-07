@@ -266,7 +266,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   basic 3MF meshes, units, components and build items. It also decodes standard
   BBS paint roots into sparse facet channels under shared package budgets and
   retains bounded unknown object/component/build/facet attributes. `bbs::foreign` matches browser
-  foreign import. Archive Open/Save are owned WASM/JNI tasks; all limits derive from
+  foreign import; `models` matches its STL/OBJ/AMF/ZIP decoding. Archive Open/Save are owned WASM/JNI tasks; all limits derive from
   `contracts/project-archive.json`; Kotlin `ProjectDocuments` adapts provider streams (truncates only
   after packaging). Project WASM exposes immutable effects/captures; Node-worker replay agrees.
   Browser timestamps use the host's Date.parse with lossless UTF-16 conversion. Hosts must bound inputs before wasm-bindgen copies them and

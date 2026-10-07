@@ -21,7 +21,7 @@ fn emit(cp: u32, output: &mut Vec<u16>) {
     }
 }
 
-pub(super) fn lower(input: &[u16]) -> Vec<u16> {
+pub(crate) fn lower(input: &[u16]) -> Vec<u16> {
     let mut output = Vec::with_capacity(input.len());
     let mut before = false;
     let mut chars = points(input);
