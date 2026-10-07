@@ -79,7 +79,7 @@
     },
     {
       "path": "web/src/project/serialization/bbsCore.ts",
-      "sha256": "fdcc9ce48a1e74cb23b53caf7623f5fa0d7b8295e6cd8d82d515e1cd171c4ac6"
+      "sha256": "c51122f801dcb71fa079c033d9400293774420ef6e24592f54c0931228a115dd"
     },
     {
       "path": "web/src/project/serialization/bbsFacetCodec.test.ts",

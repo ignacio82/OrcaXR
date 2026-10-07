@@ -936,7 +936,14 @@ await test('rejects reserved and duplicate-expanded XML namespace bindings durin
   };
 
   await assert.rejects(
-    serializer.deserialize(mutateCore((xml) => xml.replace('xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06"', 'xmlns:xml="urn:invalid"'))),
+    serializer.deserialize(
+      mutateCore((xml) =>
+        xml.replace(
+          'xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06"',
+          'xmlns:xml="urn:invalid"',
+        ),
+      ),
+    ),
     /invalid XML namespace binding/i,
   );
   await assert.rejects(
@@ -1783,6 +1790,81 @@ await test('canonical import refuses incomplete or mistyped persisted SVG recipe
     { ...recipe, sourcePath: null },
   ])
     await assert.rejects(open(invalid), /Invalid SVG emboss recipe/);
+});
+
+/** A standard BBS package: the same archive without OrcaXR's envelope or assets. */
+function withoutEnvelope(bytes: Uint8Array): Uint8Array {
+  const files = readSafeZip(bytes);
+  for (const path of [...files.keys()]) if (path.startsWith('Metadata/orcaxr/')) files.delete(path);
+  return writeDeterministicZip(files);
+}
+
+await test('an empty project saved as standard BBS reopens with its plates', async () => {
+  // An empty build used to be rejected as contradictory plate membership, so
+  // a new or cleared project could not be reopened from a plain BBS package.
+  const snapshot = archiveFixture();
+  const plate = snapshot.state.plates[0];
+  snapshot.state.plates = [
+    { ...plate, objects: [], name: 'First' },
+    { ...structuredClone(plate), id: entityId('import:plate:second'), order: 1, name: 'Second', objects: [] },
+  ];
+  snapshot.state.activePlateId = plate.id;
+  snapshot.state.customGcode = [];
+  snapshot.sourceHash = projectFingerprint(snapshot.state);
+  const serializer = new Bbs3mfProjectSerializer();
+  const saved = await serializer.serialize(snapshot);
+  const reopened = await serializer.deserialize(withoutEnvelope(saved.bytes));
+  assert.deepEqual(
+    reopened.state.plates.map((entry) => [entry.name, entry.objects.length]),
+    [
+      ['First', 0],
+      ['Second', 0],
+    ],
+  );
+});
+
+await test('an imported SVG part declares its drawing and keeps it through save and reopen', async () => {
+  // The drawing used to be returned without a sourceAssets entry, so the next
+  // save treated it as missing and silently dropped the part's SVG reference.
+  const snapshot = archiveFixture();
+  const drawing = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>');
+  const descriptor = {
+    id: entityId<'asset'>('import:asset:svg-drawing'),
+    kind: 'extension' as const,
+    digest: contentDigest(drawing),
+    byteLength: drawing.byteLength,
+    mediaType: 'image/svg+xml',
+  };
+  snapshot.state.sourceAssets.push(descriptor);
+  snapshot.assets.push({ descriptor, bytes: drawing });
+  snapshot.state.plates[0].objects[0].volumes[0].embossSvg = {
+    pathIn3mf: 'Metadata/drawing.svg',
+    drawingAssetId: descriptor.id,
+    depthMm: 2,
+    useSurface: false,
+    widthMm: 20,
+  };
+  snapshot.sourceHash = projectFingerprint(snapshot.state);
+  const serializer = new Bbs3mfProjectSerializer();
+  const imported = await serializer.deserialize(withoutEnvelope((await serializer.serialize(snapshot)).bytes));
+  const svg = imported.state.plates[0].objects[0].volumes[0].embossSvg!;
+  assert.ok(imported.state.sourceAssets.some((entry) => entry.id === svg.drawingAssetId));
+  assert.deepEqual(
+    imported.assets.map((asset) => asset.descriptor.id).sort(),
+    imported.state.sourceAssets.map((entry) => entry.id).sort(),
+    'returned assets and declared sourceAssets agree',
+  );
+  const resaved = await serializer.serialize({
+    state: imported.state,
+    assets: imported.assets,
+    sourceRevision: 1,
+    sourceHash: projectFingerprint(imported.state),
+  });
+  const files = readSafeZip(resaved.bytes);
+  assert.deepEqual([...files.get('Metadata/drawing.svg')!], [...drawing]);
+  assert.match(text(files.get('Metadata/model_settings.config')!), /filepath3mf="Metadata\/drawing\.svg"/);
+  const reopened = await serializer.deserialize(resaved.bytes);
+  assert.equal(reopened.state.plates[0].objects[0].volumes[0].embossSvg?.pathIn3mf, 'Metadata/drawing.svg');
 });
 
 console.log(`\nBBS-compatible 3MF serializer: ${passed} tests passed.`);

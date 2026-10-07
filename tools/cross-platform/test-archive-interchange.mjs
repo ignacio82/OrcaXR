@@ -125,6 +125,15 @@ if (mode === "prepare") {
     assert.ok(saved.result, `${c.source}/${c.name}: ${saved.error}`);
     add(`package/${c.source}/${c.name}`, saved.result.bytes);
   }
+  // Standard BBS packages without the OrcaXR envelope take the foreign path on
+  // both sides: envelope-stripped browser packages, real Orca/BBS archives and
+  // authored metadata cases.
+  for (const c of read(new URL("foreign-import-vectors.json", corpus)).cases) {
+    const bytes = c.archiveBase64
+      ? Buffer.from(c.archiveBase64, "base64")
+      : readFileSync(new URL(`../../${c.archivePath}`, import.meta.url));
+    add(`foreign/${c.name}`, bytes);
+  }
   write(join(root, "input.json"), rows);
   console.log(JSON.stringify({ browserInputs: rows.length }));
 } else if (mode === "exchange") {

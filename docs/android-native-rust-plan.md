@@ -89,51 +89,47 @@ Detailed evidence and reproducible commands live in
   Browser-authored expected state and archive tests cover all four element types;
   graph leaves identify their source component edge without copying attributes
   across expanded occurrences. Canonical extensionData assembly remains open.
-- [ ] Complete foreign BBS/3MF and STL/OBJ/AMF import, then expose archive work
+- [x] Complete native foreign BBS/3MF import in `bbs::foreign::import`: metadata
+  members read with the browser's exact expression/number semantics, physical and
+  FullSpectrum filament identities, paint-slot resolution, plate membership and
+  origins, canonical assembly, OPC, regenerated-member exclusion, adoption and
+  admission. All 956 browser-derived archives agree (949 accepted / 7 refused:
+  envelope-stripped package corpus, 11 real Orca/BBS files, 8 authored metadata
+  cases), as do the 15 authored foreign references. Three browser defects found
+  on the way were fixed: empty builds, undeclared SVG drawings and unrepresentable
+  layer events. Library scope only; bindings and adoption remain open below.
+- [ ] Add STL/OBJ/AMF import, then expose canonical and foreign archive work
   through owned WASM/JNI tasks and Android document-provider Open/Save.
 - [x] Share bounded G-code text windows and case-insensitive line search through
   Rust, WASM and JNI (Phase 3). Browser, host and Chrome WASM replays agree on
   18,710 searches; the Android instrumented replay has not run on a device yet.
-- [x] Exercise edited canonical archive interchange through guarded native Open,
-  native session commands and browser commands: 1,210 complete journeys in the
-  debug and optimized host harness. Foreign/application journeys remain open.
+- [x] Exercise edited archive interchange through guarded native Open, native
+  session commands and browser commands: 2,159 complete journeys from 2,278
+  canonical and foreign archives (949 foreign) in the optimized host harness.
+  Application/provider journeys remain open.
 - [ ] Extend round trips to foreign formats and application/provider bindings,
   finish remaining command/query coverage and production session integration,
   then continue the app/device gates.
 
-**Resume here:** integrate `read_xml::package::read_model_structure` with canonical
-archive staging, then complete BBS model metadata/settings and extension handling.
-The structural ZIP stage invokes the checked reader and resolver, but canonical
-archive import does not yet consume its result. The XML scanner and
-`read_xml::part::Builder` provide provisional events and one-part structural
-projections under explicit object/mesh/component/build/material/title budgets;
-callers must discard projections unless scanner `finish()` succeeds. The graph
-resolver validates part-local IDs, Production paths, references and bounded
-component expansion. Standard BBS paint roots now decode into sparse canonical
-channels; ZIP staging shares encoded-byte, refinement-node and annotation-
-materialization budgets across model parts. Color paint currently uses explicit
-`import:3mf:paint-slot-N` placeholders because BBS model metadata has not yet been
-projected. Unknown object/component/build/facet extension attributes are retained
-under shared count/text limits; graph leaves point back to their source component
-edge without copying those attributes per occurrence. Still open are
-metadata/settings and real filament-ID resolution, Float32-compatible asset
-assembly, canonical extensionData/candidate construction and guarded archive
-adoption. Port the browser
-reference in `bbsCore.ts` incrementally, preserving exact plate metadata and
-consumed-versus-absorbed paths. Use the
-browser-authored input/result fixtures in
-`testdata/cross-platform/foreign-bbs-vectors.json` as independent expectations;
-extend them before adding semantic coverage. Extend `archive_interchange` only
-after the parser can produce complete candidates. The debug and optimized harness passes 1,210 complete edited journeys
-from 1,322 initial archives (109 import refusals and three Save refusals are separate).
-Use the Rust `archive_interchange` example and
-`tools/cross-platform/test-archive-interchange.mjs`; reproducible commands live in
+**Resume here:** expose archive work through owned host tasks. Foreign import now produces the same
+`CompletedCanonicalArchive` as canonical completion (`bbs::foreign::import`, see
+[native-core](engineering/native-core.md#complete-foreign-bbs3mf-import)); its
+browser corpus is `testdata/cross-platform/foreign-import-vectors.json`, generated
+by `tools/cross-platform/foreign-import-vectors.mjs`; `orcaxr_archive::open`
+dispatches like the browser's `deserialize`. Next, in order: (1) add bounded
+WASM/JNI archive tasks for Open (`open::open`) and package Save, driven by one
+generated host policy contract from which every detailed archive limit derives,
+scheduled by the Kotlin actor with guarded prepared-document adoption, never
+bypassing the original Open guard; (2) Android document-provider Open/Save with
+checkpoint acknowledgement; (3) port signature-first STL/OBJ/AMF import from
+`web/src/project/import/`. The interchange harness passes 2,159 complete edited
+journeys from 2,278 canonical and foreign archives (116 import refusals and three
+Save refusals are separate); reproducible commands live in
 [native-core](engineering/native-core.md#edited-canonical-archive-interchange).
 Retain earlier binding replay evidence only when executable and JVM input
-identities still agree; otherwise rerun it. Full web quality did not finish
-within the 300-second bound in this
-restricted environment (`git`/localhost `EPERM`); fresh dependency advisory
-fetches also failed. These gates need a capable environment and remain open.
+identities still agree; otherwise rerun it. This host can now run headless Chrome
+and git; the full web quality gate and fresh dependency advisories still need a
+run on an unloaded machine.
 
 `CanonicalArchiveSource::complete` now performs OPC/BBS reconciliation and adoption;
 only its completed result can produce the prepared document for guarded Open/reset.
@@ -141,8 +137,8 @@ Exact regenerated-member comparison uses the bounded ZIP pull reader and verifie
 unread tails even after a mismatch. SVG path/collision checks still run when missing
 printable area allows metadata preservation. Browser envelope admission now also
 rejects missing/mistyped required SVG recipe fields, matching the native schema.
-The interchange harness preserves these semantics; foreign XML/component
-resolution is next. Archive bindings, provider tasks and native UI
+The interchange harness preserves these semantics; foreign import now shares
+the completed-archive result. Archive bindings, provider tasks and native UI
 remain unfinished; library prepared-document tests do not qualify those flows.
 
 The interchange harness now executes the previously planned three-step journey:
@@ -166,10 +162,8 @@ completed format adapters; do not bypass guarded prepared-document adoption.
 
 Use `cargo +1.94.1` from the repository root, or run Cargo inside `core/`;
 `--manifest-path core/Cargo.toml` alone does not select its pinned toolchain.
-The current work is uncommitted on `main` at base `637963c`; the last GitHub
-fast-forward pull was already up to date. Preserve existing tracked and untracked
-work. Temporary `/tmp/orcaxr-interchange-*` logs can help resume this environment,
-but repository tests, generators and maintained evidence are the durable record.
+Work is committed on `main`; repository tests, generators and maintained evidence
+are the durable record.
 
 ## Implementation status
 
@@ -1115,12 +1109,13 @@ painting, and FullSpectrum operations that can support real native projects.
   - [x] Retain bounded unknown extension attributes on objects, components,
     build items and facets, with namespace resolution and shared package count/
     text budgets; preserve component-edge identity through graph expansion.
-  - [ ] Complete foreign format detection/parsing and transactional application
-    import, then bind owned work to provider lifetimes. Bounded one-part structural
-    parsing, standard facet projection, bounded extension-attribute retention and
-    cross-part component-reference resolution are implemented, but BBS metadata/
-    settings, filament-ID resolution, canonical extensionData/candidate assembly
-    and archive-task integration are open.
+  - [x] Complete native foreign BBS/3MF import: BBS metadata/settings with the
+    browser's exact expression and number semantics, filament/FullSpectrum and
+    paint-slot resolution, plate origins, canonical extensionData and candidate
+    assembly, OPC, regenerated-member exclusion, adoption and admission. 956
+    browser-derived archives and 15 authored references agree exactly.
+  - [ ] Add STL/OBJ/AMF detection/parsing, then bind canonical and foreign
+    import to owned host tasks and provider lifetimes.
 - [ ] Port canonical-envelope and BBS authoring, scoped overrides, plate origins,
   assembly transforms, custom G-code, modifier/negative volumes, annotations,
   mixed recipes, and unknown metadata preservation. A consumed metadata member
@@ -1184,7 +1179,9 @@ painting, and FullSpectrum operations that can support real native projects.
     saves on each side: 1,210 debug/release host journeys preserve exact full state,
     asset IDs/bytes and warnings through both implementations. The initial
     109 import refusals and three Save refusals remain separate.
-  - [ ] Qualify foreign-format and application/provider round trips, including
+  - [x] Repeat the edited journeys from 956 foreign BBS/3MF archives: 949
+    native foreign Opens, edits, Saves and browser returns agree exactly.
+  - [ ] Qualify STL/OBJ/AMF and application/provider round trips, including
     WASM/JNI task ownership, publication and physical-device execution.
 - [ ] Port measured geometry operations in order: packed mesh codec/bounds,
   picking and region selection, paint/refined-facet computation, then preparation

@@ -2355,7 +2355,7 @@ hash, which differs between encoders. Existing canonical IDs are never normalize
 This proves native authoring and browser consumption, not native archive import
 or Android application Save. The file-backed package allocation probe and these
 independent checks run in CI; application bindings, provider publication and
-foreign import and application adoption remain open.
+application adoption remain open. Foreign import is described below.
 
 The optimized complete-package probe reuses an **8 MiB SVG asset** in drawing and
 canonical asset members, with separate **8 MiB UTF-16 configuration and emboss
@@ -2368,12 +2368,65 @@ post-write hashing/integrity checks are excluded. Independent browser agreement
 comes from the separate reference corpus; this measures host allocator behavior,
 not peak RSS, Android residency or provider/device performance.
 
+### Complete foreign BBS/3MF import
+
+`orcaxr_archive::bbs::foreign::import` completes a standard BBS/3MF package that
+has no OrcaXR envelope, porting the production browser's `deserializeForeign` and
+`importBbsCore`. It streams the root and referenced model parts through
+`read_model_structure`, reads `project_settings.config` (JSON or legacy XML),
+`model_settings.config`, layer ranges/events, brim ears and layer-height profiles
+under one per-member byte limit, then resolves physical and FullSpectrum filament
+identities, color paint slots, plate membership and plate-local origins, and
+assembles the canonical state, mesh assets and SVG drawings. OPC metadata merges
+before graph admission; the native BBS writer then decides which consumed members
+the next save regenerates, every other member is adopted exactly like canonical
+import (shared `adopt_unowned`, identical budget order), and the final bundle is
+admitted again. The result is a `CompletedCanonicalArchive`; guarded adoption still
+belongs to the host's Open/reset. Warnings are typed and carry the browser's exact
+UTF-16 text, because several quote file content.
+
+Metadata members are small and buffered, and the browser reads them with
+case-insensitive regular expressions, `Number`, `parseInt`, `parseFloat`,
+`String`, `trim` and a twice-applied `decodeXml`. `foreign::scan` and
+`foreign::js` reproduce those exact match positions and conversions (Unicode
+`\s`, ASCII-only case folding and `\w`, lone surrogates from numeric entities,
+`String.fromCodePoint` range failures), so unusual but accepted files import
+identically. The model XML itself stays on the validating streaming reader; the
+browser's model regexes agree with it for well-formed parts. One documented
+difference remains: native project-settings JSON is limited to 128 levels of
+nesting (the shared JSON reader's maximum), where the browser allows 256.
+
+Building the corpus exposed three browser defects, fixed in the same change:
+an empty build (a new or cleared project) was rejected as contradictory plate
+membership; an imported SVG drawing was returned without a `sourceAssets` entry,
+so the next save dropped the part's drawing; and one layer event the canonical
+model cannot hold (a color change without a tool, an empty custom event, an
+out-of-range or repeated height) failed validation and made the whole archive
+unopenable. Plate membership is now checked against the build list the import
+actually parsed, drawings are declared, and unrepresentable layer events are
+dropped with a warning while IDs keep their source positions.
+
+`tools/cross-platform/foreign-import-vectors.mjs` records **956 archives**: every
+browser-written package from the BBS model/metadata/settings and package-input
+corpora with the `Metadata/orcaxr/` tree removed, eleven real Orca/BBS archives
+shipped in this repository (FullSpectrum, Production Extension parts, calibration
+models and parity fixtures) and eight authored metadata cases. Native import
+matches **949 accepted** opens (complete state digests, or full canonical JSON for
+real and authored cases, every asset descriptor and byte digest, and the sorted
+warning set) and all **7 refusals**. The fifteen authored foreign references also
+match complete state, and a cancellation test publishes nothing. Mutating one
+warning string or one state field makes every affected comparison fail. Bindings,
+application adoption, provider Open and STL/OBJ/AMF import remain open.
+
 ## Edited canonical archive interchange
 
 `archive_interchange` and `test-archive-interchange.mjs` exercise actual archive
 bytes through both readers and real commands, without normalizing imported IDs.
-The harness reuses all 385 canonical completion inputs and the 937 accepted package
-inputs. For each initial browser archive, native preparation begins under an Open
+The harness reuses all 385 canonical completion inputs, the 937 accepted package
+inputs and all 956 foreign-import archives. Native Open goes through
+`orcaxr_archive::open`, which completes envelope packages canonically and imports
+every other 3MF as foreign BBS, like the browser's `deserialize`. For each initial
+browser archive, native preparation begins under an Open
 guard, completes import privately, then transfers immutable asset records into
 `ProjectSession`. A guarded wire rename executes only after adoption and produces
 one undo entry. The browser applies the same rename through its real `CommandBus`.
@@ -2386,17 +2439,17 @@ browser rename and Save supplies the exact returned bytes for guarded native
 reimport. The harness checks all existing payloads and IDs survive native Save;
 fixture reports deliberately copy small payloads and supply no allocation evidence.
 
-Debug and optimized runs cover **1,322 initial archives**: **109 matching import
-refusals**, **1,213 native edits**, **three matching Save refusals**, and **1,210
-complete native/browser edited journeys**. All 1,210 browser outputs reimport in
-Rust with exact state/assets/warnings. The two unresolved-origin cases and the
-preserved model-settings collision are reported separately; they are accepted
-imports but do not count as successful Save journeys. The complete debug/release
-reports agree byte-for-byte. Fresh workspace and optimized archive runs pass all
-229 and 81 tests respectively, with strict Clippy and formatting. The harness
-runs in CI alongside the package references; foreign formats, WASM/JNI archive
-tasks, provider publication and
-application UI/device execution remain open.
+The optimized run covers **2,278 initial archives** (1,322 canonical and 956
+foreign): **116 matching import refusals** (109 canonical, 7 foreign), **2,162
+native edits**, **three matching Save refusals**, and **2,159 complete
+native/browser edited journeys**, 949 of them starting from foreign packages. All
+2,159 browser outputs reimport in Rust with exact state/assets/warnings. The two
+unresolved-origin cases and the preserved model-settings collision are reported
+separately; they are accepted imports but do not count as successful Save
+journeys. Earlier canonical-only debug and optimized reports agreed byte-for-byte.
+The harness runs in CI alongside the package references; STL/OBJ/AMF, WASM/JNI
+archive tasks, provider publication and application UI/device execution remain
+open.
 
 ## G-code computation and ownership
 
@@ -2785,6 +2838,8 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/mesh-v
 node web/scripts/run-tests.mjs bbs3mf-serializer.test.ts zip64-archive.test.ts deterministic-zip.test.ts
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-document-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/foreign-bbs-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/foreign-import-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/view-vectors.mjs

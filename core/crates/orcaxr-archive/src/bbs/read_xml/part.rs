@@ -555,9 +555,9 @@ impl Builder {
             Some(name) => self.owned_text(name)?,
             None => format!("Object {id}"),
         };
-        let material_index = attribute(tag, "pindex", None)
-            .map(parse_index)
-            .transpose()?;
+        // An unusable pindex is ignored, not fatal: the browser keeps a material
+        // index only for a nonnegative integer and otherwise uses none.
+        let material_index = attribute(tag, "pindex", None).and_then(|v| parse_index(v).ok());
         let extension_attributes = self.retain_extension_attributes(
             tag,
             &[
@@ -710,7 +710,14 @@ impl Builder {
         let fuzzy = attribute(tag, "paint_fuzzy_skin", None)
             .filter(|value| !value.is_empty())
             .map(|_| "paint_fuzzy_skin")
-            .or_else(|| attribute(tag, "paint_fuzzy", None).map(|_| "paint_fuzzy"));
+            .or_else(|| {
+                // Both spellings are read only when non-empty, exactly like the
+                // browser's truthiness checks; an empty legacy alias is retained
+                // as an ordinary unknown attribute rather than decoded.
+                attribute(tag, "paint_fuzzy", None)
+                    .filter(|value| !value.is_empty())
+                    .map(|_| "paint_fuzzy")
+            });
         let roots = [
             self.decode_facet(tag, "paint_color", Channel::Color, cancelled)?,
             self.decode_facet(tag, "paint_supports", Channel::Support, cancelled)?,

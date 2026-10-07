@@ -2,7 +2,6 @@ use orcaxr_archive::{
     Archive, ZipLimits,
     bbs::read_xml::{Limits, Scanner, graph, package, part},
 };
-use orcaxr_project::ingress::json::JsonLimits;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, io::Cursor};
@@ -53,14 +52,6 @@ fn package_limits() -> package::Limits {
         graph: graph::Limits::default(),
         model_parts: 32,
         model_bytes: 8 << 20,
-        project_settings_bytes: 1 << 20,
-        project_settings_json: JsonLimits {
-            max_bytes: 1 << 20,
-            max_nodes: 100_000,
-            max_text_units: 1 << 20,
-            max_number_bytes: 128,
-            max_depth: 64,
-        },
     }
 }
 fn canonical_json(value: orcaxr_contracts::canonical::Value) -> serde_json::Value {
@@ -357,35 +348,6 @@ fn browser_authored_foreign_archives_stream_through_zip_and_xml_admission() {
                 package::read_model_structure(&mut archive, low_materialization, || false),
                 Err(package::Error::Part(part::Error::Limits))
             ));
-        }
-        if name == "basic-millimeter" {
-            let settings = structural
-                .as_ref()
-                .unwrap()
-                .project_settings
-                .as_ref()
-                .unwrap();
-            assert_eq!(
-                canonical_json(settings.config.clone())["filament_colour"],
-                json!(["#FF0000"])
-            );
-            let mut small = package_limits();
-            small.project_settings_bytes = 10;
-            assert!(matches!(
-                package::read_model_structure(&mut archive, small, || false),
-                Err(package::Error::Limits)
-            ));
-        }
-        if name == "legacy-project-settings-xml" {
-            let settings = structural
-                .as_ref()
-                .unwrap()
-                .project_settings
-                .as_ref()
-                .unwrap();
-            let config = canonical_json(settings.config.clone());
-            assert_eq!(config["filament_colour"], "#00FF00");
-            assert_eq!(config["legacy_enabled"], true);
         }
         if name == "extension-attributes-preserved" {
             let staged = structural.as_ref().unwrap();

@@ -5,6 +5,7 @@ pub mod bbs;
 pub mod canonical;
 mod index;
 pub mod opc;
+pub mod open;
 pub mod package;
 mod read;
 pub mod write;

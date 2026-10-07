@@ -4,9 +4,8 @@
 //! asset construction remain owned by later stages. Parsed paint and unknown
 //! extension attributes stay bounded. No result escapes unless every required
 //! model part's archive integrity, XML stream and cross-part graph pass limits.
-use super::{Failure, Limits as XmlLimits, Scanner, graph, part, project_settings};
+use super::{Failure, Limits as XmlLimits, Scanner, graph, part};
 use crate::{Archive, Error as ArchiveError};
-use orcaxr_project::ingress::json::JsonLimits;
 use std::{
     cell::RefCell,
     collections::BTreeMap,
@@ -14,8 +13,6 @@ use std::{
 };
 
 pub const ROOT_MODEL_PATH: &str = "3D/3dmodel.model";
-pub const PROJECT_SETTINGS_PATH: &str = "Metadata/project_settings.config";
-pub use super::project_settings::ProjectSettings;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -26,10 +23,6 @@ pub struct Limits {
     pub graph: graph::Limits,
     pub model_parts: usize,
     pub model_bytes: u64,
-    /// Maximum expanded bytes retained from `project_settings.config`.
-    pub project_settings_bytes: usize,
-    /// Explicit JSON node/text/depth limits for project settings.
-    pub project_settings_json: JsonLimits,
 }
 
 #[derive(Debug)]
@@ -39,8 +32,6 @@ pub struct Package {
     pub parts: BTreeMap<String, part::Part>,
     pub graph: graph::ResolvedGraph,
     pub model_bytes: u64,
-    /// Parsed BBS project configuration, when the standard member is present.
-    pub project_settings: Option<ProjectSettings>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,7 +43,6 @@ pub enum Error {
     Limits,
     MissingRootPart,
     ModelPathMismatch,
-    ProjectSettings(project_settings::Error),
     Allocation,
     Cancelled,
 }
@@ -244,47 +234,10 @@ pub fn read_model_structure<R: Read + Seek, C: FnMut() -> bool>(
         parts.insert(path, parsed);
     }
     let graph = graph::resolve(ROOT_MODEL_PATH, &parts, limits.graph).map_err(Error::Graph)?;
-    let project_settings = read_project_settings(archive, limits, &cancel)?;
     Ok(Package {
         parts,
         graph,
         model_bytes: bytes,
-        project_settings,
-    })
-}
-
-fn read_project_settings<R: Read + Seek, C: FnMut() -> bool>(
-    archive: &mut Archive<R>,
-    limits: Limits,
-    cancelled: &RefCell<C>,
-) -> Result<Option<ProjectSettings>, Error> {
-    let Some(index) = archive
-        .entries()
-        .iter()
-        .position(|entry| !entry.is_directory() && entry.path() == PROJECT_SETTINGS_PATH)
-    else {
-        return Ok(None);
-    };
-    let length = usize::try_from(archive.entries()[index].bytes()).map_err(|_| Error::Limits)?;
-    if length > limits.project_settings_bytes {
-        return Err(Error::Limits);
-    }
-    let mut bytes = Vec::new();
-    bytes
-        .try_reserve_exact(length)
-        .map_err(|_| Error::Allocation)?;
-    match archive.read_entry(index, &mut bytes, || (cancelled.borrow_mut())()) {
-        Ok(_) => {}
-        Err(ArchiveError::Cancelled) => return Err(Error::Cancelled),
-        Err(error) => return Err(Error::Archive(error)),
-    }
-    project_settings::parse(&bytes, limits.project_settings_json, limits.xml, || {
-        (cancelled.borrow_mut())()
-    })
-    .map(Some)
-    .map_err(|error| match error {
-        project_settings::Error::Cancelled => Error::Cancelled,
-        error => Error::ProjectSettings(error),
     })
 }
 

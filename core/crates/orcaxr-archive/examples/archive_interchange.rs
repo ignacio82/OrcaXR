@@ -3,7 +3,7 @@
 #[allow(dead_code)]
 #[path = "../tests/support/canonical_complete.rs"]
 mod support;
-use orcaxr_archive::{Archive, ZipLimits, canonical::CanonicalArchiveSource, package};
+use orcaxr_archive::{Archive, ZipLimits, open, package};
 use orcaxr_project::{
     assets::AssetRepository,
     history::HistoryOptions,
@@ -22,13 +22,9 @@ use support::package_support;
 fn read(path: &Path) -> Result<orcaxr_archive::canonical::CompletedCanonicalArchive, String> {
     let archive = Archive::open(File::open(path).unwrap(), ZipLimits::default(), || false)
         .map_err(|e| format!("{e:?}"))?;
-    CanonicalArchiveSource::decode(
-        archive,
-        support::input_limits(),
-        &mut support::utc(),
-        || false,
-    )
-    .and_then(|s| s.complete(support::limits(), &mut support::utc(), || false))
+    open::open(archive, support::open_limits(), &mut support::utc(), || {
+        false
+    })
     .map_err(|e| format!("{e:?}"))
 }
 fn owner() -> ProjectSession<impl TimestampPolicy<Error = ()>> {

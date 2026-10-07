@@ -1,7 +1,7 @@
 //! Canonical-envelope staging and completion. The intermediate retains all
 //! members until `complete` reconciles/adopts them into a prepared document.
 //! Admission/hashing belongs on the host's preparation task, off live authority.
-mod complete;
+pub(crate) mod complete;
 mod legacy;
 mod stream;
 pub use complete::{CompleteLimits, CompletedCanonicalArchive, ImportWarning};
@@ -69,6 +69,8 @@ pub enum Failure {
     ResourceLimit,
     Bbs(crate::bbs::model::Error),
     Settings(crate::bbs::model::settings::Error),
+    /// Foreign BBS/3MF import without an OrcaXR envelope.
+    Foreign(crate::bbs::foreign::Failure),
     Bundle,
     Cancelled,
 }

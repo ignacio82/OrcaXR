@@ -87,6 +87,8 @@ const PRODUCTION_NAMESPACE = 'http://schemas.microsoft.com/3dmanufacturing/produ
 const MAX_COMPONENT_GRAPH_DEPTH = 64;
 const MAX_COMPONENT_GRAPH_EXPANSION = 16_384;
 const MAX_BBS_COLOR_STATE = 64;
+/** Project validation's highest layer-event height (domain/validation.ts). */
+const MAX_LAYER_EVENT_Z_MM = 10_000;
 
 export type BbsPlateCoordinateErrorCode = 'invalid-plate-metadata' | 'missing-printable-area' | 'unassigned-build-item';
 
@@ -157,8 +159,17 @@ export function extractBbsPlateLayout(files: ReadonlyMap<string, Uint8Array>): B
   return extractBbsPlateLayoutResult(files).layout;
 }
 
-/** Distinguish an ordinary file with no plate declarations from metadata we cannot trust. */
-export function extractBbsPlateLayoutResult(files: ReadonlyMap<string, Uint8Array>): BbsPlateLayoutExtraction {
+/**
+ * Distinguish an ordinary file with no plate declarations from metadata we cannot trust.
+ *
+ * Import passes the build list from its own validated model parse, so plate
+ * membership is checked against exactly the items it imports. Without one, the
+ * core model's build section is scanned directly.
+ */
+export function extractBbsPlateLayoutResult(
+  files: ReadonlyMap<string, Uint8Array>,
+  buildObjectIds?: readonly number[],
+): BbsPlateLayoutExtraction {
   const settingsBytes = files.get(MODEL_SETTINGS_PATH);
   if (!settingsBytes) return { status: 'absent', layout: null };
 
@@ -172,7 +183,7 @@ export function extractBbsPlateLayoutResult(files: ReadonlyMap<string, Uint8Arra
   if (declaredPlateCount === 0) return { status: 'absent', layout: null };
 
   try {
-    const layout = extractBbsPlateLayoutUnchecked(files);
+    const layout = extractBbsPlateLayoutUnchecked(files, buildObjectIds);
     if (!layout || layout.plates.length !== declaredPlateCount) return { status: 'invalid', layout: null };
     return { status: 'valid', layout };
   } catch {
@@ -180,19 +191,16 @@ export function extractBbsPlateLayoutResult(files: ReadonlyMap<string, Uint8Arra
   }
 }
 
-function extractBbsPlateLayoutUnchecked(files: ReadonlyMap<string, Uint8Array>): BbsPlateLayout | null {
-  const modelBytes = files.get(CORE_MODEL_PATH);
+function extractBbsPlateLayoutUnchecked(
+  files: ReadonlyMap<string, Uint8Array>,
+  parsedBuildObjectIds?: readonly number[],
+): BbsPlateLayout | null {
   const settingsBytes = files.get(MODEL_SETTINGS_PATH);
-  if (!modelBytes || !settingsBytes) return null;
-
-  const modelXml = decodeText(modelBytes, CORE_MODEL_PATH);
-  const buildBody = /<build\b[^>]*>([\s\S]*?)<\/build>/i.exec(modelXml)?.[1];
-  if (buildBody === undefined) return null;
-  const buildObjectIds = [...buildBody.matchAll(/<item\b([^>]*)\/?\s*>/gi)].map((item) => {
-    const objectId = Number(parseAttributes(item[1]).objectid);
-    return Number.isInteger(objectId) && objectId >= 1 ? objectId : undefined;
-  });
-  if (buildObjectIds.length === 0 || buildObjectIds.some((objectId) => objectId === undefined)) return null;
+  if (!settingsBytes) return null;
+  const buildObjectIds = parsedBuildObjectIds ? [...parsedBuildObjectIds] : scannedBuildObjectIds(files);
+  // An empty build is a valid layout: the declared plates simply hold nothing.
+  // Rejecting it made every empty or not-yet-populated BBS project unopenable.
+  if (!buildObjectIds || buildObjectIds.some((objectId) => objectId === undefined)) return null;
 
   const metadata = parseModelSettings(settingsBytes);
   if (metadata.plates.length === 0) return null;
@@ -259,6 +267,21 @@ function extractBbsPlateLayoutUnchecked(files: ReadonlyMap<string, Uint8Array>):
     plates,
     unassignedBuildItemIndices,
   };
+}
+
+/** The core model's build object IDs, scanned directly; `<build/>` is empty. */
+function scannedBuildObjectIds(files: ReadonlyMap<string, Uint8Array>): Array<number | undefined> | null {
+  const modelBytes = files.get(CORE_MODEL_PATH);
+  if (!modelBytes) return null;
+  const modelXml = decodeText(modelBytes, CORE_MODEL_PATH);
+  const buildBody =
+    /<build\b[^>]*>([\s\S]*?)<\/build>/i.exec(modelXml)?.[1] ??
+    (/<build\b[^>]*\/\s*>/i.test(modelXml) ? '' : undefined);
+  if (buildBody === undefined) return null;
+  return [...buildBody.matchAll(/<item\b([^>]*)\/?\s*>/gi)].map((item) => {
+    const objectId = Number(parseAttributes(item[1]).objectid);
+    return Number.isInteger(objectId) && objectId >= 1 ? objectId : undefined;
+  });
 }
 
 interface VolumeMapping {
@@ -1505,9 +1528,10 @@ interface ImportedPlateCoordinates {
 function importedPlateCoordinates(
   files: ReadonlyMap<string, Uint8Array>,
   metadata: ParsedModelMetadata,
-  buildItemCount: number,
+  buildObjectIds: readonly number[],
 ): ImportedPlateCoordinates {
-  const extraction = extractBbsPlateLayoutResult(files);
+  const buildItemCount = buildObjectIds.length;
+  const extraction = extractBbsPlateLayoutResult(files, buildObjectIds);
   if (extraction.status === 'invalid') {
     throw new BbsPlateCoordinateError(
       'invalid-plate-metadata',
@@ -1637,7 +1661,11 @@ export function importBbsCore(
     'Imported a 3MF without OrcaXR canonical metadata. Core geometry, transforms, basic BBS settings, plates, and bounded BBS facet trees were recovered; unsupported BBS fields remain preserved as opaque package entries.',
   ];
   const modelMetadata = parseModelSettings(files.get(MODEL_SETTINGS_PATH), warnings);
-  const plateCoordinates = importedPlateCoordinates(files, modelMetadata, parsed.build.length);
+  const plateCoordinates = importedPlateCoordinates(
+    files,
+    modelMetadata,
+    parsed.build.map((item) => item.reference.objectId),
+  );
   const layerRanges = parseLayerRanges(files.get(LAYER_RANGES_PATH));
   const makeId = <Kind extends string>(kind: Kind, suffix: string) =>
     entityId<Kind>(`import:3mf:${archiveHash}-${kind}-${suffix}`);
@@ -1899,6 +1927,9 @@ export function importBbsCore(
                 sourceFilename: part.embossSvg.pathIn3mf.split('/').pop() ?? 'drawing.svg',
               };
               assets.push({ descriptor, bytes: drawingBytes });
+              // Declared like every other source asset: an undeclared drawing was
+              // dropped from the next save, losing the SVG part's reference.
+              sourceAssets.push(descriptor);
             }
             embossSvg = { ...part.embossSvg, drawingAssetId: drawingId };
             consumedSvgPaths.add(part.embossSvg.pathIn3mf);
@@ -2941,13 +2972,31 @@ function importedLayerEvents(
   if (byPlateIndex.size === 0) return [];
   const events: CustomGcode[] = [];
   let dropped = 0;
+  let unrepresentable = 0;
   for (const [plateIndex, entries] of [...byPlateIndex].sort(([left], [right]) => left - right)) {
     const plate = plates[plateIndex - 1];
     if (!plate) {
       dropped += entries.length;
       continue;
     }
+    const heights = new Set<string>();
     entries.forEach((entry, position) => {
+      // Only events the canonical model can hold are imported. One colour change
+      // without a tool, an empty custom event or a repeated height used to fail
+      // project validation and make the whole archive unopenable. IDs keep the
+      // source position so they do not depend on which neighbours were dropped.
+      const event = entry.layerEvent!;
+      const height = event.topZMm.toFixed(4);
+      if (
+        event.topZMm > MAX_LAYER_EVENT_Z_MM ||
+        (event.type === 'custom' && entry.code.trim().length === 0) ||
+        ((event.type === 'color-change' || event.type === 'tool-change') && event.toolIndex === undefined) ||
+        heights.has(height)
+      ) {
+        unrepresentable += 1;
+        return;
+      }
+      heights.add(height);
       events.push({
         ...entry,
         id: makeId('custom-gcode', `${plateIndex}-${position + 1}`) as CustomGcodeId,
@@ -2958,6 +3007,11 @@ function importedLayerEvents(
   if (dropped > 0) {
     warnings.push(
       `${dropped} layer event${dropped === 1 ? '' : 's'} named a plate this project does not contain and were not imported; the original file remains preserved`,
+    );
+  }
+  if (unrepresentable > 0) {
+    warnings.push(
+      `${unrepresentable} layer event${unrepresentable === 1 ? '' : 's'} could not be represented (a colour or tool change without a tool, a custom event without G-code, or an out-of-range or repeated height) and ${unrepresentable === 1 ? 'was' : 'were'} not imported`,
     );
   }
   return events;
@@ -3312,8 +3366,7 @@ function validatedXmlMarkup(xml: string, path: string): string {
         if (attribute.name === 'xmlns') {
           assertXmlNamespaceBinding('', attribute.value, path);
           namespaces.set('', attribute.value);
-        }
-        else if (attribute.name.startsWith('xmlns:')) {
+        } else if (attribute.name.startsWith('xmlns:')) {
           const prefix = attribute.name.slice(6);
           assertXmlNamespaceBinding(prefix, attribute.value, path);
           namespaces.set(prefix, attribute.value);

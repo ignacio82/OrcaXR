@@ -3,7 +3,6 @@
 pub mod graph;
 pub mod package;
 pub mod part;
-mod project_settings;
 mod tag;
 mod text;
 use std::{

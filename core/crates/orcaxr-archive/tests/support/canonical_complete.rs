@@ -3,7 +3,12 @@
 pub mod package_support;
 use orcaxr_archive::{
     Archive, ZipLimits,
+    bbs::{
+        foreign,
+        read_xml::{Limits as XmlLimits, graph, package, part},
+    },
     canonical::{CanonicalArchiveSource, CompleteLimits, CompletedCanonicalArchive, ImportWarning},
+    open,
 };
 use orcaxr_project::{
     ingress::{ProjectInputLimits, json::JsonLimits},
@@ -115,6 +120,7 @@ pub fn warnings(source: &CompletedCanonicalArchive) -> Vec<Vec<u16>> {
                 "Preserved {n} package entr{} as opaque canonical assets",
                 if *n == 1 { "y" } else { "ies" }
             )),
+            ImportWarning::Foreign(w) => w.text.clone(),
             ImportWarning::Opc(o) => match o {
                 O::IncompleteRelationship { source } => units(&format!(
                     "Ignored an incomplete OPC relationship in {}",
@@ -144,4 +150,54 @@ pub fn warnings(source: &CompletedCanonicalArchive) -> Vec<Vec<u16>> {
     result.sort();
     result.dedup();
     result
+}
+/// Foreign import budgets large enough for the real archives in the corpus.
+pub fn foreign_limits() -> foreign::Limits {
+    foreign::Limits {
+        model: package::Limits {
+            xml: XmlLimits {
+                input_bytes: 256 << 20,
+                text_units: 256 << 20,
+                token_bytes: 1 << 20,
+                elements: 64 << 20,
+                attributes: 256 << 20,
+                depth: 128,
+            },
+            part: part::Limits {
+                objects: 100_000,
+                vertices: 16_000_000,
+                triangles: 16_000_000,
+                components: 1_000_000,
+                build_items: 100_000,
+                materials: 4096,
+                title_text_units: 1 << 20,
+                facet_encoded_bytes: 256 << 20,
+                facet_refinement_nodes: 256_000_000,
+                facet_materialization_units: 256_000_000,
+                extension_attribute_count: 16_000_000,
+                extension_attribute_text_units: 256 << 20,
+            },
+            graph: graph::Limits::default(),
+            model_parts: 1024,
+            model_bytes: 1 << 30,
+        },
+        metadata_bytes: 64 << 20,
+        project_json: JsonLimits {
+            max_bytes: 64 << 20,
+            max_nodes: 2_000_000,
+            max_text_units: 64 << 20,
+            max_number_bytes: 1024,
+            max_depth: 128,
+        },
+        materialization_units: 256_000_000,
+        complete: limits(),
+    }
+}
+/// One host Open policy over both archive paths.
+pub fn open_limits() -> open::Limits {
+    open::Limits {
+        canonical: input_limits(),
+        complete: limits(),
+        foreign: foreign_limits(),
+    }
 }

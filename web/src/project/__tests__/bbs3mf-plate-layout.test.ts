@@ -142,4 +142,35 @@ test('rejects duplicate, non-contiguous, and contradictory source plate IDs', ()
   });
 });
 
+test('an empty build is a valid layout, whether paired or self-closing', () => {
+  // Rejecting an empty build made every empty BBS project, and every project
+  // whose plates were not yet populated, impossible to reopen.
+  const settings = `<config>
+    <plate><metadata key="plater_id" value="1"/></plate>
+    <plate><metadata key="plater_id" value="2"/></plate>
+  </config>`;
+  for (const build of ['<build>\n </build>', '<build/>']) {
+    const extraction = extractBbsPlateLayoutResult(files(`<model><resources/>${build}</model>`, settings));
+    assert.strictEqual(extraction.status, 'valid');
+    assert.strictEqual(extraction.layout!.buildItemCount, 0);
+    assert.deepStrictEqual(
+      extraction.layout!.plates.map((plate) => plate.buildItemIndices),
+      [[], []],
+    );
+  }
+});
+
+test('import binds plate membership to the build list it actually parsed', () => {
+  // A commented-out item is not a build item; the parsed list, not a raw
+  // rescan of the model text, decides how many items the plates must cover.
+  const model = `<model><resources/><build><item objectid="7"/><!-- <item objectid="9"/> --></build></model>`;
+  const settings = `<config><plate><metadata key="plater_id" value="1"/>
+    <model_instance object_id="7" instance_id="0"/></plate></config>`;
+  assert.strictEqual(extractBbsPlateLayoutResult(files(model, settings)).layout!.buildItemCount, 2);
+  const parsed = extractBbsPlateLayoutResult(files(model, settings), [7]);
+  assert.strictEqual(parsed.status, 'valid');
+  assert.strictEqual(parsed.layout!.buildItemCount, 1);
+  assert.deepStrictEqual(parsed.layout!.plates[0].buildItemIndices, [0]);
+});
+
 console.log(`\nBBS plate layout: ${passed} tests passed.`);
