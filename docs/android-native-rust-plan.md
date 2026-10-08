@@ -1672,12 +1672,33 @@ painting, and FullSpectrum operations that can support real native projects.
     every binding.
   - [ ] Wire mesh packets into the flat and spatial renderers and qualify
     them on devices.
-- [ ] Preserve topology-change remap/rejection rules for every paint channel,
+- [x] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
-  mirrored/instance transforms, and bounded overlay memory.
-- [ ] Preserve current measurement, emboss/SVG, split/merge, simplify, assembly,
+  mirrored/instance transforms, and bounded overlay memory. Audited against the
+  shipped ports, each replayed from browser traces: every topology change (mesh
+  replacement, which simplify and repair results go through, Booleans, split to
+  parts, SVG and embossed-text re-cuts) clears all five channels at the next
+  revision and generated parts start at revision 0. Strokes, region requests
+  and overlays carry a `FacetGuard` (topology revision and triangle count), and
+  a stale one refuses, including a stroke that goes stale in a commit race.
+  Colour paint holds stable physical or mixed filament IDs, which filament edits
+  and `recreateModelColors` remap by ID across both refinement halves. Each
+  stroke commits one guarded intent or staged work, and a Smart Paint mask is
+  one labelled transaction. Picking and region selection run under rotated,
+  non-uniform and mirrored instance transforms. Overlays page by range, with at
+  most 4,096 region states per summary, as 40-byte facet packets.
+- [x] Preserve current measurement, emboss/SVG, split/merge, simplify, assembly,
   variable-layer-height, brim-ear, and wipe-tower behavior and explicit limitations.
   Maintain the exact footprint/origin safety contract for placement/preflight.
+  Each is ported above with the browser's refusals as its limitations:
+  `measure`, `mesh::triangulate`/`extrude` and `svg`, `mesh::split` and split
+  to parts or objects (a merge is a Boolean union, `MeshBooleanCommand`),
+  `mesh::simplify`, `assembly`, the four layer-height intents with the pinned
+  `Slicing.cpp` algorithms, `brim_ears`, and `placement::wipe_tower`.
+  Placement and arrangement plan from exact transformed bounds, and canonical
+  slice preflight (`slicing::preflight`) reports instances outside the build
+  volume or below the plate, overlapping instance bounds and an out-of-volume
+  wipe tower from the same bounds, as the browser does.
 - [ ] Route retained C++ geometry-kernel operations through the owned native job
   service, with the same input identity and cancellation checks as slicing.
   Serialize incompatible kernel/slice jobs and bound their shared resource use;
