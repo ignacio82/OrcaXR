@@ -764,15 +764,29 @@ workspace, versioned protocol, CI jobs, and cross-language test runner.
 - [ ] Add pinned Gradle wrapper/toolchain, version catalog, dependency verification,
   Cargo lockfile/toolchain, Android manifests, and release/debug configuration.
   Build `arm64-v8a` and `x86_64`; qualify each actual device ABI before claiming it.
-- [ ] Create a minimal Compose Activity and an optional XR feature boundary.
+- [x] Create a minimal Compose Activity and an optional XR feature boundary.
   Verify installation and startup on a non-XR emulator without loading XR runtime
   services, model files, or the slicing engine. Check manifest feature declarations
   and package filtering so optional XR/camera capabilities do not exclude phones
   or Googlebook from installation.
-- [ ] Implement a small Rust operation through Android JNI and browser WASM.
+  The flat shell installs and cold-starts three times on an owned API 34 x86_64
+  emulator through its real JNI handshake (2026-10-08); it has no XR dependency,
+  model file or engine, and the separate SceneCore module starts without XR
+  services on the same emulator image (2026-10-05). `aapt2 dump badging` of
+  the debug and release APKs shows minimum SDK 31, target 37, only an optional
+  touchscreen feature, no implied features and no camera, network or XR
+  permission, so nothing filters out phones or Googlebook.
+- [x] Implement a small Rust operation through Android JNI and browser WASM.
   Use direct JNI for the initial narrow Android boundary and wasm-bindgen for
   browser exports; pin binding tools and generated artifacts together. Validate
   error propagation, disposal, cancellation tokens, and buffer accounting.
+  Far beyond one operation: G-code and project sessions run through direct JNI
+  and wasm-bindgen with pinned tool versions and artifact manifests; refusals
+  carry stable codes without private text, handles fail closed after disposal,
+  cancellation settles in-flight work, and returned buffers own their memory.
+  The real-JNI instrumentation (41 tests, including protocol mismatch,
+  oversized input and cancellation) passes on the emulator, and the same
+  corpora replay through WASM in Node and Chrome.
 - [x] Define versioned command/result/error schemas and generate TypeScript and
   Kotlin types. Keep runtime validation at untrusted boundaries; generated types
   alone do not validate messages. Unknown protocol versions fail explicitly.
