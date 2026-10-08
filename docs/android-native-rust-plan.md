@@ -1269,8 +1269,10 @@ and replay coverage for the complete current command inventory.
     targets, node override snapshots with foreign keys and the chain,
     explanations and the project override snapshot (17 targets, 119
     explanations).
-  - [ ] Expose the settings projection on project captures, and add paint,
-    capability and renderer projections and revisioned deltas.
+  - [x] Expose the settings projection on project captures, with settings
+    sessions that open a node's editor and turn its commit into the guarded
+    project intent (275 replies per binding; intents execute natively).
+  - [ ] Add paint, capability and renderer projections and revisioned deltas.
 - [ ] Make worker/service generation changes invalidate pending replies. Implement
   explicit session disposal and recovery after the core worker fails; recover
   only from acknowledged snapshots/journal entries, never an optimistic UI view.

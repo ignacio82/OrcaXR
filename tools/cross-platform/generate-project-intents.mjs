@@ -82,6 +82,13 @@ assert.deepEqual(schema.roots, [
   "EditorRuleRequest",
   "EditorRules",
   "EditorFieldRef",
+  "SettingsTargetPageRequest",
+  "SettingsTargetPage",
+  "SettingsTargetRequest",
+  "SettingsSnapshotResult",
+  "SettingsExplainRequest",
+  "SettingsExplainResult",
+  "SettingsSessionRequest",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

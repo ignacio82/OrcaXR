@@ -783,6 +783,28 @@ impl CapturedProject {
     pub fn id(&self, start: f64, count: f64) -> Result<Vec<u16>, JsValue> {
         text_read(self.inner.state().id.as_utf16(), start, count)
     }
+    /// A `SettingsTargetPageRequest`; returns a `SettingsTargetPage`.
+    pub fn settings_targets(&self, request: &str) -> Result<String, JsValue> {
+        crate::editor::projection(&self.inner, crate::editor::Projection::Targets, request)
+    }
+    /// A `SettingsTargetRequest`; returns a `SettingsSnapshotResult`.
+    pub fn settings_snapshot(&self, request: &str) -> Result<String, JsValue> {
+        crate::editor::projection(&self.inner, crate::editor::Projection::Snapshot, request)
+    }
+    /// A `SettingsExplainRequest`; returns a `SettingsExplainResult`.
+    pub fn settings_explain(&self, request: &str) -> Result<String, JsValue> {
+        crate::editor::projection(&self.inner, crate::editor::Projection::Explain, request)
+    }
+    /// A `SettingsSessionRequest`: the settings editor for one node, whose
+    /// commits become guarded project intents.
+    pub fn settings_editor(
+        &self,
+        request: &str,
+        collator: Option<crate::catalog::PresetCollator>,
+        folder: Option<crate::editor::SearchFolder>,
+    ) -> Result<crate::editor::SettingsEditor, JsValue> {
+        crate::editor::open(&self.inner, request, collator, folder)
+    }
     /// Explicit bulk export, not a per-edit projection. A hard caller-supplied
     /// output budget applies during writing. This synchronous operation must not
     /// run on a production authority worker until task isolation is provided.

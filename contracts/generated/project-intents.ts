@@ -2488,6 +2488,150 @@ const shapes = {
       "crossField": "OptionalText",
       "structuredEditor": "OptionalText"
     }
+  },
+  "SettingsTarget": {
+    "kind": "union",
+    "variants": {
+      "project": "Empty",
+      "plate": "PlateScope",
+      "object": "ObjectTarget",
+      "part": "PartScope",
+      "layerRange": "LayerRangeScope"
+    }
+  },
+  "SettingsTargetPageRequest": {
+    "kind": "object",
+    "fields": {
+      "start": "Counter",
+      "count": "Counter"
+    }
+  },
+  "SettingsTargetOption": {
+    "kind": "object",
+    "fields": {
+      "id": "EditText",
+      "target": "SettingsTarget",
+      "label": "EditText",
+      "path": "EditText",
+      "overrideCount": "Counter"
+    }
+  },
+  "SettingsTargetOptions": {
+    "kind": "array",
+    "items": "SettingsTargetOption",
+    "min": 0,
+    "max": 64
+  },
+  "SettingsTargetPage": {
+    "kind": "object",
+    "fields": {
+      "total": "Counter",
+      "targets": "SettingsTargetOptions"
+    }
+  },
+  "SettingsTargetRequest": {
+    "kind": "object",
+    "fields": {
+      "target": "SettingsTarget"
+    }
+  },
+  "SettingsScopeIssue": {
+    "kind": "object",
+    "fields": {
+      "code": "EditText",
+      "path": "EditText",
+      "scope": "EditText",
+      "key": "EditText",
+      "message": "EditText"
+    }
+  },
+  "SettingsScopeIssues": {
+    "kind": "array",
+    "items": "SettingsScopeIssue",
+    "min": 0,
+    "max": 4096
+  },
+  "SettingsChainEntry": {
+    "kind": "object",
+    "fields": {
+      "scope": "EditorScope",
+      "id": "OptionalText",
+      "label": "EditText",
+      "overridesJson": "JsonText",
+      "isTarget": "Flag"
+    }
+  },
+  "SettingsChain": {
+    "kind": "array",
+    "items": "SettingsChainEntry",
+    "min": 0,
+    "max": 8
+  },
+  "SettingsSnapshot": {
+    "kind": "object",
+    "fields": {
+      "sourceRevision": "Counter",
+      "sourceHash": "EditText",
+      "label": "EditText",
+      "overridesJson": "JsonText",
+      "foreignJson": "JsonText",
+      "foreignIssues": "SettingsScopeIssues",
+      "chain": "SettingsChain",
+      "inheritedConfigJson": "JsonText",
+      "effectiveConfigJson": "JsonText"
+    }
+  },
+  "SettingsSnapshotResult": {
+    "kind": "union",
+    "variants": {
+      "snapshot": "SettingsSnapshot",
+      "unknown": "EditText"
+    }
+  },
+  "SettingsExplainRequest": {
+    "kind": "object",
+    "fields": {
+      "target": "SettingsTarget",
+      "key": "EditText"
+    }
+  },
+  "SettingsShadowed": {
+    "kind": "object",
+    "fields": {
+      "scope": "EditorScope",
+      "id": "OptionalText",
+      "valueJson": "JsonText"
+    }
+  },
+  "SettingsShadowedList": {
+    "kind": "array",
+    "items": "SettingsShadowed",
+    "min": 0,
+    "max": 8
+  },
+  "SettingsExplanation": {
+    "kind": "object",
+    "fields": {
+      "valueJson": "OptionalJsonText",
+      "source": "OptionalEditorScope",
+      "sourceId": "OptionalText",
+      "shadowed": "SettingsShadowedList"
+    }
+  },
+  "SettingsExplainResult": {
+    "kind": "union",
+    "variants": {
+      "explanation": "SettingsExplanation",
+      "unknown": "EditText"
+    }
+  },
+  "SettingsSessionRequest": {
+    "kind": "object",
+    "fields": {
+      "target": "SettingsTarget",
+      "mode": "EditorMode",
+      "technology": "EditorTechnology"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -2789,6 +2933,24 @@ export interface ProjectEditorExpansionWire {readonly effectiveJson: ProjectJson
 export type ProjectEditorExpansionResultWire = {readonly expanded:ProjectEditorExpansionWire} | {readonly refused:ProjectEditTextWire};
 export type ProjectEditorDependencyWire = {readonly unmanaged:ProjectEmptyWire} | {readonly enabled:ProjectFlagWire};
 export interface ProjectEditorRulesWire {readonly expansion: ProjectEditorExpansionResultWire;readonly dependency: ProjectEditorDependencyWire;readonly crossField: ProjectOptionalTextWire;readonly structuredEditor: ProjectOptionalTextWire;}
+export type ProjectSettingsTargetWire = {readonly project:ProjectEmptyWire} | {readonly plate:ProjectPlateScopeWire} | {readonly object:ProjectObjectTargetWire} | {readonly part:ProjectPartScopeWire} | {readonly layerRange:ProjectLayerRangeScopeWire};
+export interface ProjectSettingsTargetPageRequestWire {readonly start: ProjectCounterWire;readonly count: ProjectCounterWire;}
+export interface ProjectSettingsTargetOptionWire {readonly id: ProjectEditTextWire;readonly target: ProjectSettingsTargetWire;readonly label: ProjectEditTextWire;readonly path: ProjectEditTextWire;readonly overrideCount: ProjectCounterWire;}
+export type ProjectSettingsTargetOptionsWire = readonly ProjectSettingsTargetOptionWire[];
+export interface ProjectSettingsTargetPageWire {readonly total: ProjectCounterWire;readonly targets: ProjectSettingsTargetOptionsWire;}
+export interface ProjectSettingsTargetRequestWire {readonly target: ProjectSettingsTargetWire;}
+export interface ProjectSettingsScopeIssueWire {readonly code: ProjectEditTextWire;readonly path: ProjectEditTextWire;readonly scope: ProjectEditTextWire;readonly key: ProjectEditTextWire;readonly message: ProjectEditTextWire;}
+export type ProjectSettingsScopeIssuesWire = readonly ProjectSettingsScopeIssueWire[];
+export interface ProjectSettingsChainEntryWire {readonly scope: ProjectEditorScopeWire;readonly id: ProjectOptionalTextWire;readonly label: ProjectEditTextWire;readonly overridesJson: ProjectJsonTextWire;readonly isTarget: ProjectFlagWire;}
+export type ProjectSettingsChainWire = readonly ProjectSettingsChainEntryWire[];
+export interface ProjectSettingsSnapshotWire {readonly sourceRevision: ProjectCounterWire;readonly sourceHash: ProjectEditTextWire;readonly label: ProjectEditTextWire;readonly overridesJson: ProjectJsonTextWire;readonly foreignJson: ProjectJsonTextWire;readonly foreignIssues: ProjectSettingsScopeIssuesWire;readonly chain: ProjectSettingsChainWire;readonly inheritedConfigJson: ProjectJsonTextWire;readonly effectiveConfigJson: ProjectJsonTextWire;}
+export type ProjectSettingsSnapshotResultWire = {readonly snapshot:ProjectSettingsSnapshotWire} | {readonly unknown:ProjectEditTextWire};
+export interface ProjectSettingsExplainRequestWire {readonly target: ProjectSettingsTargetWire;readonly key: ProjectEditTextWire;}
+export interface ProjectSettingsShadowedWire {readonly scope: ProjectEditorScopeWire;readonly id: ProjectOptionalTextWire;readonly valueJson: ProjectJsonTextWire;}
+export type ProjectSettingsShadowedListWire = readonly ProjectSettingsShadowedWire[];
+export interface ProjectSettingsExplanationWire {readonly valueJson: ProjectOptionalJsonTextWire;readonly source: ProjectOptionalEditorScopeWire;readonly sourceId: ProjectOptionalTextWire;readonly shadowed: ProjectSettingsShadowedListWire;}
+export type ProjectSettingsExplainResultWire = {readonly explanation:ProjectSettingsExplanationWire} | {readonly unknown:ProjectEditTextWire};
+export interface ProjectSettingsSessionRequestWire {readonly target: ProjectSettingsTargetWire;readonly mode: ProjectEditorModeWire;readonly technology: ProjectEditorTechnologyWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -2924,3 +3086,24 @@ export function encodeProjectEditorRules(value:ProjectEditorRulesWire):string { 
 export function captureProjectEditorFieldRef(value:unknown):ProjectEditorFieldRefWire { return captureIntent("EditorFieldRef",value,shapes,limits) as ProjectEditorFieldRefWire; }
 export function decodeProjectEditorFieldRef(text:string):ProjectEditorFieldRefWire { return captureProjectEditorFieldRef(parseIntentJson(text,limits)); }
 export function encodeProjectEditorFieldRef(value:ProjectEditorFieldRefWire):string { return JSON.stringify(captureProjectEditorFieldRef(value)); }
+export function captureProjectSettingsTargetPageRequest(value:unknown):ProjectSettingsTargetPageRequestWire { return captureIntent("SettingsTargetPageRequest",value,shapes,limits) as ProjectSettingsTargetPageRequestWire; }
+export function decodeProjectSettingsTargetPageRequest(text:string):ProjectSettingsTargetPageRequestWire { return captureProjectSettingsTargetPageRequest(parseIntentJson(text,limits)); }
+export function encodeProjectSettingsTargetPageRequest(value:ProjectSettingsTargetPageRequestWire):string { return JSON.stringify(captureProjectSettingsTargetPageRequest(value)); }
+export function captureProjectSettingsTargetPage(value:unknown):ProjectSettingsTargetPageWire { return captureIntent("SettingsTargetPage",value,shapes,limits) as ProjectSettingsTargetPageWire; }
+export function decodeProjectSettingsTargetPage(text:string):ProjectSettingsTargetPageWire { return captureProjectSettingsTargetPage(parseIntentJson(text,limits)); }
+export function encodeProjectSettingsTargetPage(value:ProjectSettingsTargetPageWire):string { return JSON.stringify(captureProjectSettingsTargetPage(value)); }
+export function captureProjectSettingsTargetRequest(value:unknown):ProjectSettingsTargetRequestWire { return captureIntent("SettingsTargetRequest",value,shapes,limits) as ProjectSettingsTargetRequestWire; }
+export function decodeProjectSettingsTargetRequest(text:string):ProjectSettingsTargetRequestWire { return captureProjectSettingsTargetRequest(parseIntentJson(text,limits)); }
+export function encodeProjectSettingsTargetRequest(value:ProjectSettingsTargetRequestWire):string { return JSON.stringify(captureProjectSettingsTargetRequest(value)); }
+export function captureProjectSettingsSnapshotResult(value:unknown):ProjectSettingsSnapshotResultWire { return captureIntent("SettingsSnapshotResult",value,shapes,limits) as ProjectSettingsSnapshotResultWire; }
+export function decodeProjectSettingsSnapshotResult(text:string):ProjectSettingsSnapshotResultWire { return captureProjectSettingsSnapshotResult(parseIntentJson(text,limits)); }
+export function encodeProjectSettingsSnapshotResult(value:ProjectSettingsSnapshotResultWire):string { return JSON.stringify(captureProjectSettingsSnapshotResult(value)); }
+export function captureProjectSettingsExplainRequest(value:unknown):ProjectSettingsExplainRequestWire { return captureIntent("SettingsExplainRequest",value,shapes,limits) as ProjectSettingsExplainRequestWire; }
+export function decodeProjectSettingsExplainRequest(text:string):ProjectSettingsExplainRequestWire { return captureProjectSettingsExplainRequest(parseIntentJson(text,limits)); }
+export function encodeProjectSettingsExplainRequest(value:ProjectSettingsExplainRequestWire):string { return JSON.stringify(captureProjectSettingsExplainRequest(value)); }
+export function captureProjectSettingsExplainResult(value:unknown):ProjectSettingsExplainResultWire { return captureIntent("SettingsExplainResult",value,shapes,limits) as ProjectSettingsExplainResultWire; }
+export function decodeProjectSettingsExplainResult(text:string):ProjectSettingsExplainResultWire { return captureProjectSettingsExplainResult(parseIntentJson(text,limits)); }
+export function encodeProjectSettingsExplainResult(value:ProjectSettingsExplainResultWire):string { return JSON.stringify(captureProjectSettingsExplainResult(value)); }
+export function captureProjectSettingsSessionRequest(value:unknown):ProjectSettingsSessionRequestWire { return captureIntent("SettingsSessionRequest",value,shapes,limits) as ProjectSettingsSessionRequestWire; }
+export function decodeProjectSettingsSessionRequest(text:string):ProjectSettingsSessionRequestWire { return captureProjectSettingsSessionRequest(parseIntentJson(text,limits)); }
+export function encodeProjectSettingsSessionRequest(value:ProjectSettingsSessionRequestWire):string { return JSON.stringify(captureProjectSettingsSessionRequest(value)); }

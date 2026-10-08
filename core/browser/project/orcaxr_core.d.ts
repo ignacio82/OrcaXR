@@ -28,6 +28,23 @@ export class CapturedProject {
     id_length(): number;
     query(version: number): ProjectQueryNode;
     revision(): number;
+    /**
+     * A `SettingsSessionRequest`: the settings editor for one node, whose
+     * commits become guarded project intents.
+     */
+    settings_editor(request: string, collator?: any | null, folder?: any | null): SettingsEditor;
+    /**
+     * A `SettingsExplainRequest`; returns a `SettingsExplainResult`.
+     */
+    settings_explain(request: string): string;
+    /**
+     * A `SettingsTargetRequest`; returns a `SettingsSnapshotResult`.
+     */
+    settings_snapshot(request: string): string;
+    /**
+     * A `SettingsTargetPageRequest`; returns a `SettingsTargetPage`.
+     */
+    settings_targets(request: string): string;
 }
 
 export class CapturedSelection {
@@ -507,6 +524,11 @@ export class SettingsEditor {
      */
     field(position: number): string;
     /**
+     * For an editor opened on a project node: the project `Intent` that
+     * applies its latest commit, guarded by the captured snapshot.
+     */
+    intent(): string;
+    /**
      * An `EditorCreate`. Without a collator or folder the exact ASCII
      * policies apply and refuse other text.
      */
@@ -604,6 +626,10 @@ export interface InitOutput {
     readonly capturedproject_id_length: (a: number) => number;
     readonly capturedproject_query: (a: number, b: number) => [number, number, number];
     readonly capturedproject_revision: (a: number) => number;
+    readonly capturedproject_settings_editor: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly capturedproject_settings_explain: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_settings_snapshot: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_settings_targets: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedselection_count: (a: number) => number;
     readonly capturedselection_id: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly capturedselection_id_length: (a: number, b: number) => [number, number, number];
@@ -752,6 +778,7 @@ export interface InitOutput {
     readonly settingseditor_compare: (a: number, b: number, c: number) => [number, number, number, number];
     readonly settingseditor_edit: (a: number, b: number, c: number) => [number, number, number, number];
     readonly settingseditor_field: (a: number, b: number) => [number, number, number, number];
+    readonly settingseditor_intent: (a: number) => [number, number, number, number];
     readonly settingseditor_new: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly settingseditor_overrides: (a: number) => [number, number];
     readonly settingseditor_query: (a: number, b: number, c: number) => [number, number, number];

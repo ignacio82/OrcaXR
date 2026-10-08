@@ -5165,6 +5165,295 @@ fn read_editor_rules(v: &Value) -> Result<EditorRules, InvalidIntent> {
         structured_editor: read_optional_text(&object["structuredEditor"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SettingsTarget {
+    Project(Empty),
+    Plate(PlateScope),
+    Object(ObjectTarget),
+    Part(PartScope),
+    LayerRange(LayerRangeScope),
+}
+fn read_settings_target(v: &Value) -> Result<SettingsTarget, InvalidIntent> {
+    let object = fields(
+        v,
+        &["project", "plate", "object", "part", "layerRange"],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "project" => Ok(SettingsTarget::Project(read_empty(value)?)),
+        "plate" => Ok(SettingsTarget::Plate(read_plate_scope(value)?)),
+        "object" => Ok(SettingsTarget::Object(read_object_target(value)?)),
+        "part" => Ok(SettingsTarget::Part(read_part_scope(value)?)),
+        "layerRange" => Ok(SettingsTarget::LayerRange(read_layer_range_scope(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsTargetPageRequest {
+    pub start: Counter,
+    pub count: Counter,
+}
+fn read_settings_target_page_request(
+    v: &Value,
+) -> Result<SettingsTargetPageRequest, InvalidIntent> {
+    let object = fields(v, &["start", "count"], false)?;
+    Ok(SettingsTargetPageRequest {
+        start: read_counter(&object["start"])?,
+        count: read_counter(&object["count"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsTargetOption {
+    pub id: EditText,
+    pub target: SettingsTarget,
+    pub label: EditText,
+    pub path: EditText,
+    pub override_count: Counter,
+}
+fn read_settings_target_option(v: &Value) -> Result<SettingsTargetOption, InvalidIntent> {
+    let object = fields(
+        v,
+        &["id", "target", "label", "path", "overrideCount"],
+        false,
+    )?;
+    Ok(SettingsTargetOption {
+        id: read_edit_text(&object["id"])?,
+        target: read_settings_target(&object["target"])?,
+        label: read_edit_text(&object["label"])?,
+        path: read_edit_text(&object["path"])?,
+        override_count: read_counter(&object["overrideCount"])?,
+    })
+}
+pub type SettingsTargetOptions = Vec<SettingsTargetOption>;
+fn read_settings_target_options(v: &Value) -> Result<SettingsTargetOptions, InvalidIntent> {
+    list(v, 0, 64)?
+        .iter()
+        .map(read_settings_target_option)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsTargetPage {
+    pub total: Counter,
+    pub targets: SettingsTargetOptions,
+}
+fn read_settings_target_page(v: &Value) -> Result<SettingsTargetPage, InvalidIntent> {
+    let object = fields(v, &["total", "targets"], false)?;
+    Ok(SettingsTargetPage {
+        total: read_counter(&object["total"])?,
+        targets: read_settings_target_options(&object["targets"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsTargetRequest {
+    pub target: SettingsTarget,
+}
+fn read_settings_target_request(v: &Value) -> Result<SettingsTargetRequest, InvalidIntent> {
+    let object = fields(v, &["target"], false)?;
+    Ok(SettingsTargetRequest {
+        target: read_settings_target(&object["target"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsScopeIssue {
+    pub code: EditText,
+    pub path: EditText,
+    pub scope: EditText,
+    pub key: EditText,
+    pub message: EditText,
+}
+fn read_settings_scope_issue(v: &Value) -> Result<SettingsScopeIssue, InvalidIntent> {
+    let object = fields(v, &["code", "path", "scope", "key", "message"], false)?;
+    Ok(SettingsScopeIssue {
+        code: read_edit_text(&object["code"])?,
+        path: read_edit_text(&object["path"])?,
+        scope: read_edit_text(&object["scope"])?,
+        key: read_edit_text(&object["key"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+pub type SettingsScopeIssues = Vec<SettingsScopeIssue>;
+fn read_settings_scope_issues(v: &Value) -> Result<SettingsScopeIssues, InvalidIntent> {
+    list(v, 0, 4096)?
+        .iter()
+        .map(read_settings_scope_issue)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsChainEntry {
+    pub scope: EditorScope,
+    pub id: OptionalText,
+    pub label: EditText,
+    pub overrides_json: JsonText,
+    pub is_target: Flag,
+}
+fn read_settings_chain_entry(v: &Value) -> Result<SettingsChainEntry, InvalidIntent> {
+    let object = fields(
+        v,
+        &["scope", "id", "label", "overridesJson", "isTarget"],
+        false,
+    )?;
+    Ok(SettingsChainEntry {
+        scope: read_editor_scope(&object["scope"])?,
+        id: read_optional_text(&object["id"])?,
+        label: read_edit_text(&object["label"])?,
+        overrides_json: read_json_text(&object["overridesJson"])?,
+        is_target: read_flag(&object["isTarget"])?,
+    })
+}
+pub type SettingsChain = Vec<SettingsChainEntry>;
+fn read_settings_chain(v: &Value) -> Result<SettingsChain, InvalidIntent> {
+    list(v, 0, 8)?
+        .iter()
+        .map(read_settings_chain_entry)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsSnapshot {
+    pub source_revision: Counter,
+    pub source_hash: EditText,
+    pub label: EditText,
+    pub overrides_json: JsonText,
+    pub foreign_json: JsonText,
+    pub foreign_issues: SettingsScopeIssues,
+    pub chain: SettingsChain,
+    pub inherited_config_json: JsonText,
+    pub effective_config_json: JsonText,
+}
+fn read_settings_snapshot(v: &Value) -> Result<SettingsSnapshot, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "sourceRevision",
+            "sourceHash",
+            "label",
+            "overridesJson",
+            "foreignJson",
+            "foreignIssues",
+            "chain",
+            "inheritedConfigJson",
+            "effectiveConfigJson",
+        ],
+        false,
+    )?;
+    Ok(SettingsSnapshot {
+        source_revision: read_counter(&object["sourceRevision"])?,
+        source_hash: read_edit_text(&object["sourceHash"])?,
+        label: read_edit_text(&object["label"])?,
+        overrides_json: read_json_text(&object["overridesJson"])?,
+        foreign_json: read_json_text(&object["foreignJson"])?,
+        foreign_issues: read_settings_scope_issues(&object["foreignIssues"])?,
+        chain: read_settings_chain(&object["chain"])?,
+        inherited_config_json: read_json_text(&object["inheritedConfigJson"])?,
+        effective_config_json: read_json_text(&object["effectiveConfigJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SettingsSnapshotResult {
+    Snapshot(SettingsSnapshot),
+    Unknown(EditText),
+}
+fn read_settings_snapshot_result(v: &Value) -> Result<SettingsSnapshotResult, InvalidIntent> {
+    let object = fields(v, &["snapshot", "unknown"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "snapshot" => Ok(SettingsSnapshotResult::Snapshot(read_settings_snapshot(
+            value,
+        )?)),
+        "unknown" => Ok(SettingsSnapshotResult::Unknown(read_edit_text(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsExplainRequest {
+    pub target: SettingsTarget,
+    pub key: EditText,
+}
+fn read_settings_explain_request(v: &Value) -> Result<SettingsExplainRequest, InvalidIntent> {
+    let object = fields(v, &["target", "key"], false)?;
+    Ok(SettingsExplainRequest {
+        target: read_settings_target(&object["target"])?,
+        key: read_edit_text(&object["key"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsShadowed {
+    pub scope: EditorScope,
+    pub id: OptionalText,
+    pub value_json: JsonText,
+}
+fn read_settings_shadowed(v: &Value) -> Result<SettingsShadowed, InvalidIntent> {
+    let object = fields(v, &["scope", "id", "valueJson"], false)?;
+    Ok(SettingsShadowed {
+        scope: read_editor_scope(&object["scope"])?,
+        id: read_optional_text(&object["id"])?,
+        value_json: read_json_text(&object["valueJson"])?,
+    })
+}
+pub type SettingsShadowedList = Vec<SettingsShadowed>;
+fn read_settings_shadowed_list(v: &Value) -> Result<SettingsShadowedList, InvalidIntent> {
+    list(v, 0, 8)?.iter().map(read_settings_shadowed).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsExplanation {
+    pub value_json: OptionalJsonText,
+    pub source: OptionalEditorScope,
+    pub source_id: OptionalText,
+    pub shadowed: SettingsShadowedList,
+}
+fn read_settings_explanation(v: &Value) -> Result<SettingsExplanation, InvalidIntent> {
+    let object = fields(v, &["valueJson", "source", "sourceId", "shadowed"], false)?;
+    Ok(SettingsExplanation {
+        value_json: read_optional_json_text(&object["valueJson"])?,
+        source: read_optional_editor_scope(&object["source"])?,
+        source_id: read_optional_text(&object["sourceId"])?,
+        shadowed: read_settings_shadowed_list(&object["shadowed"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SettingsExplainResult {
+    Explanation(SettingsExplanation),
+    Unknown(EditText),
+}
+fn read_settings_explain_result(v: &Value) -> Result<SettingsExplainResult, InvalidIntent> {
+    let object = fields(v, &["explanation", "unknown"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "explanation" => Ok(SettingsExplainResult::Explanation(
+            read_settings_explanation(value)?,
+        )),
+        "unknown" => Ok(SettingsExplainResult::Unknown(read_edit_text(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsSessionRequest {
+    pub target: SettingsTarget,
+    pub mode: EditorMode,
+    pub technology: EditorTechnology,
+}
+fn read_settings_session_request(v: &Value) -> Result<SettingsSessionRequest, InvalidIntent> {
+    let object = fields(v, &["target", "mode", "technology"], false)?;
+    Ok(SettingsSessionRequest {
+        target: read_settings_target(&object["target"])?,
+        mode: read_editor_mode(&object["mode"])?,
+        technology: read_editor_technology(&object["technology"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -5539,5 +5828,81 @@ pub fn decode_editor_field_ref(text: &str) -> Result<EditorFieldRef, InvalidInte
 pub fn encode_editor_field_ref(value: &EditorFieldRef) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_editor_field_ref(&text)?;
+    Ok(text)
+}
+pub fn decode_settings_target_page_request(
+    text: &str,
+) -> Result<SettingsTargetPageRequest, InvalidIntent> {
+    read_settings_target_page_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_settings_target_page_request(
+    value: &SettingsTargetPageRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_settings_target_page_request(&text)?;
+    Ok(text)
+}
+pub fn decode_settings_target_page(text: &str) -> Result<SettingsTargetPage, InvalidIntent> {
+    read_settings_target_page(&super::project_intents::parse(text)?)
+}
+pub fn encode_settings_target_page(value: &SettingsTargetPage) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_settings_target_page(&text)?;
+    Ok(text)
+}
+pub fn decode_settings_target_request(text: &str) -> Result<SettingsTargetRequest, InvalidIntent> {
+    read_settings_target_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_settings_target_request(
+    value: &SettingsTargetRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_settings_target_request(&text)?;
+    Ok(text)
+}
+pub fn decode_settings_snapshot_result(
+    text: &str,
+) -> Result<SettingsSnapshotResult, InvalidIntent> {
+    read_settings_snapshot_result(&super::project_intents::parse(text)?)
+}
+pub fn encode_settings_snapshot_result(
+    value: &SettingsSnapshotResult,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_settings_snapshot_result(&text)?;
+    Ok(text)
+}
+pub fn decode_settings_explain_request(
+    text: &str,
+) -> Result<SettingsExplainRequest, InvalidIntent> {
+    read_settings_explain_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_settings_explain_request(
+    value: &SettingsExplainRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_settings_explain_request(&text)?;
+    Ok(text)
+}
+pub fn decode_settings_explain_result(text: &str) -> Result<SettingsExplainResult, InvalidIntent> {
+    read_settings_explain_result(&super::project_intents::parse(text)?)
+}
+pub fn encode_settings_explain_result(
+    value: &SettingsExplainResult,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_settings_explain_result(&text)?;
+    Ok(text)
+}
+pub fn decode_settings_session_request(
+    text: &str,
+) -> Result<SettingsSessionRequest, InvalidIntent> {
+    read_settings_session_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_settings_session_request(
+    value: &SettingsSessionRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_settings_session_request(&text)?;
     Ok(text)
 }

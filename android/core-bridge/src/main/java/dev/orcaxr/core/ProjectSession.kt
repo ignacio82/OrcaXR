@@ -317,6 +317,32 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
     fun query(): ProjectQueryNode = read { own(NativeProject.queryRoot(it, ProjectQuery.VERSION), ::ProjectQueryNode) }
     fun revision(): Long = read { NativeProject.projectRevision(it) }
     fun hash(): String = read { NativeProject.projectHash(it) }
+    /** One page of the nodes a scoped settings edit can address. */
+    fun settingsTargets(request: ProjectIntents.SettingsTargetPageRequest): ProjectIntents.SettingsTargetPage = read {
+        ProjectIntents.decodeSettingsTargetPage(
+            NativeProject.projectSettingsTargets(it, ProjectIntents.encodeSettingsTargetPageRequest(request)),
+        )
+    }
+    /** A node's overrides, foreign keys, chain and resolved configurations. */
+    fun settingsSnapshot(request: ProjectIntents.SettingsTargetRequest): ProjectIntents.SettingsSnapshotResult = read {
+        ProjectIntents.decodeSettingsSnapshotResult(
+            NativeProject.projectSettingsSnapshot(it, ProjectIntents.encodeSettingsTargetRequest(request)),
+        )
+    }
+    /** Why one key has its value at a node, and what it shadowed. */
+    fun settingsExplain(request: ProjectIntents.SettingsExplainRequest): ProjectIntents.SettingsExplainResult = read {
+        ProjectIntents.decodeSettingsExplainResult(
+            NativeProject.projectSettingsExplain(it, ProjectIntents.encodeSettingsExplainRequest(request)),
+        )
+    }
+    /** The settings editor a panel opens for one node; see [SettingsEditor.intent]. */
+    fun settingsEditor(
+        request: ProjectIntents.SettingsSessionRequest,
+        collator: PresetCollator? = null,
+        folder: SearchFolding? = SearchFolding.PLATFORM,
+    ): SettingsEditor = read {
+        own(NativeProject.projectSettingsEditor(it, ProjectIntents.encodeSettingsSessionRequest(request), collator, folder), ::SettingsEditor)
+    }
     fun idLength(): Long = read { NativeProject.projectIdLength(it) }
     fun id(start: Long, count: Long): CharArray = read { NativeProject.projectId(it, start, count) }
     /** Explicit full serialization under an output bound. Reading in chunks

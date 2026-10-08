@@ -10,6 +10,7 @@ use orcaxr_project::settings::{
         exchange::{self, HostEditor, Refusal},
     },
     presets::{AsciiRootCollation, Collation},
+    projection_exchange,
 };
 use std::cmp::Ordering;
 
@@ -113,14 +114,14 @@ fn with_editor<R>(
     })
 }
 
-/// A null collator or folder uses the exact ASCII policy.
-pub(super) fn editor_new(
+/// A host collator and search folder, held across calls.
+type Policies = (Option<GlobalRef>, Option<(JavaVM, GlobalRef)>);
+/// The host's collator and folder, checked and held across calls.
+fn policies(
     env: &mut JNIEnv<'_>,
-    create: JString<'_>,
-    collator: JObject<'_>,
-    folder: JObject<'_>,
-) -> Result<jlong> {
-    let create = decoded(env, &create, wire::decode_editor_create)?;
+    collator: &JObject<'_>,
+    folder: &JObject<'_>,
+) -> Result<Policies> {
     let mut global =
         |object: &JObject<'_>, class: &str, code: &'static str| -> Result<Option<GlobalRef>> {
             if object.is_null() {
@@ -132,22 +133,127 @@ pub(super) fn editor_new(
             env.new_global_ref(object).map(Some).map_err(|_| code)
         };
     let collator = global(
-        &collator,
+        collator,
         "dev/orcaxr/core/PresetCollator",
         "collation_failed",
     )?;
-    let folder = global(&folder, "dev/orcaxr/core/SearchFolding", "folding_failed")?;
+    let folder = global(folder, "dev/orcaxr/core/SearchFolding", "folding_failed")?;
     let folder = match folder {
         Some(folder) => Some((env.get_java_vm().map_err(|_| "folding_failed")?, folder)),
         None => None,
     };
-    let inner = HostEditor::create::<&'static str>(&create).map_err(refused)?;
+    Ok((collator, folder))
+}
+fn insert(
+    inner: HostEditor,
+    policies: (Option<GlobalRef>, Option<(JavaVM, GlobalRef)>),
+) -> Result<jlong> {
+    let (collator, folder) = policies;
     let reserved = registry().reserve(false)?;
     reserved.insert(Record::Editor(Box::new(Editor {
         inner,
         collator,
         folder,
     })))
+}
+/// A null collator or folder uses the exact ASCII policy.
+pub(super) fn editor_new(
+    env: &mut JNIEnv<'_>,
+    create: JString<'_>,
+    collator: JObject<'_>,
+    folder: JObject<'_>,
+) -> Result<jlong> {
+    let create = decoded(env, &create, wire::decode_editor_create)?;
+    let policies = policies(env, &collator, &folder)?;
+    let inner = HostEditor::create::<&'static str>(&create).map_err(refused)?;
+    insert(inner, policies)
+}
+/// The settings editor for one node of a captured project.
+pub(super) fn project_settings_editor(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+    collator: JObject<'_>,
+    folder: JObject<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_settings_session_request)?;
+    let policies = policies(env, &collator, &folder)?;
+    let inner = with_project(handle, |p| {
+        HostEditor::open::<&'static str>(p, &request).map_err(refused)
+    })?;
+    insert(inner, policies)
+}
+/// The project intent of the editor's latest commit.
+pub(super) fn editor_intent(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_editor(env, handle, |e, _, _| {
+        encoded(e.intent().ok_or("no_commit")?, wire::encode_intent)
+    })?;
+    string(env, json)
+}
+fn projection<T>(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+    decode: fn(&str) -> std::result::Result<T, InvalidIntent>,
+    read: impl FnOnce(&ProjectSnapshot, &T) -> Result<String>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, decode)?;
+    let json = with_project(handle, |p| read(p, &request))?;
+    string(env, json)
+}
+pub(super) fn project_settings_targets(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    projection(
+        env,
+        handle,
+        request,
+        wire::decode_settings_target_page_request,
+        |p, r| {
+            encoded(
+                &projection_exchange::target_page(p, r).map_err(|e| e.code())?,
+                wire::encode_settings_target_page,
+            )
+        },
+    )
+}
+pub(super) fn project_settings_snapshot(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    projection(
+        env,
+        handle,
+        request,
+        wire::decode_settings_target_request,
+        |p, r| {
+            encoded(
+                &projection_exchange::snapshot(p, r).map_err(|e| e.code())?,
+                wire::encode_settings_snapshot_result,
+            )
+        },
+    )
+}
+pub(super) fn project_settings_explain(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    projection(
+        env,
+        handle,
+        request,
+        wire::decode_settings_explain_request,
+        |p, r| {
+            encoded(
+                &projection_exchange::explain(p, r).map_err(|e| e.code())?,
+                wire::encode_settings_explain_result,
+            )
+        },
+    )
 }
 pub(super) fn editor_query(
     env: &mut JNIEnv<'_>,

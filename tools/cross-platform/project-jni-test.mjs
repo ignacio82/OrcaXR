@@ -8,6 +8,7 @@ import { replayPreflights } from "./project-preflight-replay.mjs";
 import { replayCatalogs } from "./catalog-replay.mjs";
 import { replayLibrary } from "./library-replay.mjs";
 import { replayEditor } from "./editor-replay.mjs";
+import { replayProjection } from "./projection-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -397,6 +398,22 @@ try {
     ].join("\n"),
   );
   assert.equal(editorChecks, 24);
+  // Settings projection and sessions on captured projects (platform folding).
+  const projections = replayProjection(
+    projectJniCore(jvm.call),
+    JSON.parse(
+      await readFile(
+        new URL("testdata/cross-platform/settings-projection-vectors.json", root),
+      ),
+    ),
+    layout,
+    fixture.generation,
+    [undefined, "platform"],
+  );
+  assert.deepEqual(
+    [projections.projectionReplies, projections.projectionRefusals],
+    [275, 36],
+  );
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);
@@ -422,6 +439,7 @@ try {
     libraryChecks,
     ...editors,
     editorChecks,
+    ...projections,
     ownedQueryTextUnits: ownedQueryText.length,
     ownedBytes: owned.byteLength,
     hostJniSha256: createHash("sha256")

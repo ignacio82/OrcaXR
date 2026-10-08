@@ -590,6 +590,21 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     query(version) {
       return wrap(ProjectQueryNode, call("queryRoot", this.handle, version));
     }
+    settings_targets(request) {
+      return call("projectSettingsTargets", this.handle, request);
+    }
+    settings_snapshot(request) {
+      return call("projectSettingsSnapshot", this.handle, request);
+    }
+    settings_explain(request) {
+      return call("projectSettingsExplain", this.handle, request);
+    }
+    settings_editor(request, collator, folder) {
+      return wrap(
+        SettingsEditor,
+        call("projectSettingsEditor", this.handle, request, collator, folder),
+      );
+    }
     revision() {
       return call("projectRevision", this.handle);
     }
@@ -804,8 +819,13 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
   }
   class SettingsEditor extends Handle {
+    // A handle number wraps an editor opened on a project node.
     constructor(create, collator, folder) {
-      super(call("editorNew", create, collator, folder));
+      super(
+        typeof create === "number"
+          ? create
+          : call("editorNew", create, collator, folder),
+      );
     }
     query(query) {
       return call("editorQuery", this.handle, query);
@@ -839,6 +859,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     row(i) {
       return call("editorRow", this.handle, i);
+    }
+    intent() {
+      return call("editorIntent", this.handle);
     }
   }
   return {

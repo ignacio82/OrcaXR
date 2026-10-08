@@ -8,6 +8,7 @@ import { replayPreflights } from "./project-preflight-replay.mjs";
 import { replayCatalogs } from "./catalog-replay.mjs";
 import { replayLibrary } from "./library-replay.mjs";
 import { replayEditor } from "./editor-replay.mjs";
+import { replayProjection } from "./projection-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -51,6 +52,10 @@ if (isMainThread) {
     assert.deepEqual(
       [result.editorReplies, result.editorRefusals],
       [14938, 78],
+    );
+    assert.deepEqual(
+      [result.projectionReplies, result.projectionRefusals],
+      [275, 36],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -265,6 +270,24 @@ if (isMainThread) {
       new URL("testdata/cross-platform/settings-editor-vectors.json", root),
     ),
   );
+  const projections = replayProjection(
+    core,
+    JSON.parse(
+      await readFile(
+        new URL("testdata/cross-platform/settings-projection-vectors.json", root),
+      ),
+    ),
+    layout,
+    fixture.generation,
+    [collator, {
+      fold: (units) => {
+        const s = String.fromCharCode(...units)
+          .normalize("NFKD")
+          .toLocaleLowerCase("en-US");
+        return Uint16Array.from({ length: s.length }, (_, i) => s.charCodeAt(i));
+      },
+    }],
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -283,6 +306,7 @@ if (isMainThread) {
       ...catalogs,
       ...libraries,
       ...editors,
+      ...projections,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

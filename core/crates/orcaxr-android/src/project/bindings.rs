@@ -477,6 +477,37 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_projectSettingsTargets, project_settings_targets, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectSettingsSnapshot, project_settings_snapshot, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectSettingsExplain, project_settings_explain, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectSettingsEditor, project_settings_editor, jlong,
+    handle: jlong,
+    request: JString<'local>,
+    collator: JObject<'local>,
+    folder: JObject<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorIntent, editor_intent, jstring,
+    handle: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

@@ -2487,6 +2487,150 @@
         "crossField": "OptionalText",
         "structuredEditor": "OptionalText"
       }
+    },
+    "SettingsTarget": {
+      "kind": "union",
+      "variants": {
+        "project": "Empty",
+        "plate": "PlateScope",
+        "object": "ObjectTarget",
+        "part": "PartScope",
+        "layerRange": "LayerRangeScope"
+      }
+    },
+    "SettingsTargetPageRequest": {
+      "kind": "object",
+      "fields": {
+        "start": "Counter",
+        "count": "Counter"
+      }
+    },
+    "SettingsTargetOption": {
+      "kind": "object",
+      "fields": {
+        "id": "EditText",
+        "target": "SettingsTarget",
+        "label": "EditText",
+        "path": "EditText",
+        "overrideCount": "Counter"
+      }
+    },
+    "SettingsTargetOptions": {
+      "kind": "array",
+      "items": "SettingsTargetOption",
+      "min": 0,
+      "max": 64
+    },
+    "SettingsTargetPage": {
+      "kind": "object",
+      "fields": {
+        "total": "Counter",
+        "targets": "SettingsTargetOptions"
+      }
+    },
+    "SettingsTargetRequest": {
+      "kind": "object",
+      "fields": {
+        "target": "SettingsTarget"
+      }
+    },
+    "SettingsScopeIssue": {
+      "kind": "object",
+      "fields": {
+        "code": "EditText",
+        "path": "EditText",
+        "scope": "EditText",
+        "key": "EditText",
+        "message": "EditText"
+      }
+    },
+    "SettingsScopeIssues": {
+      "kind": "array",
+      "items": "SettingsScopeIssue",
+      "min": 0,
+      "max": 4096
+    },
+    "SettingsChainEntry": {
+      "kind": "object",
+      "fields": {
+        "scope": "EditorScope",
+        "id": "OptionalText",
+        "label": "EditText",
+        "overridesJson": "JsonText",
+        "isTarget": "Flag"
+      }
+    },
+    "SettingsChain": {
+      "kind": "array",
+      "items": "SettingsChainEntry",
+      "min": 0,
+      "max": 8
+    },
+    "SettingsSnapshot": {
+      "kind": "object",
+      "fields": {
+        "sourceRevision": "Counter",
+        "sourceHash": "EditText",
+        "label": "EditText",
+        "overridesJson": "JsonText",
+        "foreignJson": "JsonText",
+        "foreignIssues": "SettingsScopeIssues",
+        "chain": "SettingsChain",
+        "inheritedConfigJson": "JsonText",
+        "effectiveConfigJson": "JsonText"
+      }
+    },
+    "SettingsSnapshotResult": {
+      "kind": "union",
+      "variants": {
+        "snapshot": "SettingsSnapshot",
+        "unknown": "EditText"
+      }
+    },
+    "SettingsExplainRequest": {
+      "kind": "object",
+      "fields": {
+        "target": "SettingsTarget",
+        "key": "EditText"
+      }
+    },
+    "SettingsShadowed": {
+      "kind": "object",
+      "fields": {
+        "scope": "EditorScope",
+        "id": "OptionalText",
+        "valueJson": "JsonText"
+      }
+    },
+    "SettingsShadowedList": {
+      "kind": "array",
+      "items": "SettingsShadowed",
+      "min": 0,
+      "max": 8
+    },
+    "SettingsExplanation": {
+      "kind": "object",
+      "fields": {
+        "valueJson": "OptionalJsonText",
+        "source": "OptionalEditorScope",
+        "sourceId": "OptionalText",
+        "shadowed": "SettingsShadowedList"
+      }
+    },
+    "SettingsExplainResult": {
+      "kind": "union",
+      "variants": {
+        "explanation": "SettingsExplanation",
+        "unknown": "EditText"
+      }
+    },
+    "SettingsSessionRequest": {
+      "kind": "object",
+      "fields": {
+        "target": "SettingsTarget",
+        "mode": "EditorMode",
+        "technology": "EditorTechnology"
+      }
     }
   },
   "roots": [
@@ -2534,7 +2678,14 @@
     "EditorRowsRequest",
     "EditorRuleRequest",
     "EditorRules",
-    "EditorFieldRef"
+    "EditorFieldRef",
+    "SettingsTargetPageRequest",
+    "SettingsTargetPage",
+    "SettingsTargetRequest",
+    "SettingsSnapshotResult",
+    "SettingsExplainRequest",
+    "SettingsExplainResult",
+    "SettingsSessionRequest"
   ],
   "sessionVersion": 1
 }

@@ -13,6 +13,7 @@ use orcaxr_project::settings::{
     },
     presets::{AsciiRootCollation, Collation},
 };
+use orcaxr_project::store::ProjectSnapshot;
 use std::cmp::Ordering;
 use wasm_bindgen::prelude::*;
 
@@ -174,6 +175,66 @@ impl SettingsEditor {
             .ok_or_else(|| error("invalid_range"))?;
         encode(&row, wire::encode_editor_row)
     }
+    /// For an editor opened on a project node: the project `Intent` that
+    /// applies its latest commit, guarded by the captured snapshot.
+    pub fn intent(&self) -> Result<String, JsValue> {
+        let intent = self.inner.intent().ok_or_else(|| error("no_commit"))?;
+        encode(intent, wire::encode_intent)
+    }
+}
+
+/// `CapturedProject.settings_editor`: the editor a settings panel opens for
+/// one node of the captured project.
+pub(crate) fn open(
+    snapshot: &ProjectSnapshot,
+    request: &str,
+    collator: Option<PresetCollator>,
+    folder: Option<SearchFolder>,
+) -> Result<SettingsEditor, JsValue> {
+    let request = self::request(request, wire::decode_settings_session_request)?;
+    let inner = HostEditor::open::<&'static str>(snapshot, &request).map_err(refused)?;
+    Ok(SettingsEditor {
+        inner,
+        collator,
+        folder,
+    })
+}
+/// The settings projection of a captured project, as contract JSON.
+pub(crate) fn projection(
+    snapshot: &ProjectSnapshot,
+    kind: Projection,
+    request: &str,
+) -> Result<String, JsValue> {
+    use orcaxr_project::settings::projection_exchange as p;
+    let refused = |e: p::Refusal| error(e.code());
+    match kind {
+        Projection::Targets => {
+            let request = self::request(request, wire::decode_settings_target_page_request)?;
+            encode(
+                &p::target_page(snapshot, &request).map_err(refused)?,
+                wire::encode_settings_target_page,
+            )
+        }
+        Projection::Snapshot => {
+            let request = self::request(request, wire::decode_settings_target_request)?;
+            encode(
+                &p::snapshot(snapshot, &request).map_err(refused)?,
+                wire::encode_settings_snapshot_result,
+            )
+        }
+        Projection::Explain => {
+            let request = self::request(request, wire::decode_settings_explain_request)?;
+            encode(
+                &p::explain(snapshot, &request).map_err(refused)?,
+                wire::encode_settings_explain_result,
+            )
+        }
+    }
+}
+pub(crate) enum Projection {
+    Targets,
+    Snapshot,
+    Explain,
 }
 
 /// `stepSettingValue`: an `EditorStepRequest` to an `EditorStep`.

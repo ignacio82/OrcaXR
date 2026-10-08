@@ -18,6 +18,26 @@ import {
   scopedOverrideTargets,
 } from "../../web/src/project/scopedOverrides.ts";
 import { projectSettingsOverrideSnapshot } from "../../web/src/project/settingsOverrides.ts";
+import { createEngineOptionCatalog } from "../../web/src/settings/generated/loader.ts";
+import { SettingsDraftEditor } from "../../web/src/settings/editor/SettingsDraftEditor.ts";
+import {
+  applySettingsCommitToConfig,
+  decodeSettingsConfig,
+} from "../../web/src/settings/editor/configBridge.ts";
+import { guiSurfaceForScope } from "../../web/src/settings/editor/scopedStepper.ts";
+import {
+  encodeProjectEditorCommitResult,
+  encodeProjectEditorEdit,
+  encodeProjectEditorEditResult,
+  encodeProjectIntent,
+  encodeProjectSettingsExplainRequest,
+  encodeProjectSettingsExplainResult,
+  encodeProjectSettingsSessionRequest,
+  encodeProjectSettingsSnapshotResult,
+  encodeProjectSettingsTargetPage,
+  encodeProjectSettingsTargetPageRequest,
+  encodeProjectSettingsTargetRequest,
+} from "../../contracts/generated/project-intents.ts";
 
 const root = new URL("../../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
@@ -170,12 +190,293 @@ const states = Object.entries({ fixture, full, empty }).map(([name, state]) => {
   };
 });
 
+// The host exchange, encoded by the generated TypeScript codecs.
+const units = (value) =>
+  Array.from({ length: value.length }, (_, i) => value.charCodeAt(i));
+const wireTarget = (t) =>
+  t.scope === "project"
+    ? { project: {} }
+    : t.scope === "plate"
+      ? { plate: { plateId: units(t.plateId) } }
+      : t.scope === "object"
+        ? { object: { objectId: units(t.objectId) } }
+        : t.scope === "part"
+          ? { part: { volumeId: units(t.volumeId) } }
+          : { layerRange: { layerRangeId: units(t.layerRangeId) } };
+const optionalText = (v) =>
+  v === undefined ? { absent: {} } : { value: units(v) };
+const wireSnapshot = (s) => ({
+  snapshot: {
+    sourceRevision: s.sourceRevision,
+    sourceHash: units(s.sourceHash),
+    label: units(s.label),
+    overridesJson: units(json(s.overrides)),
+    foreignJson: units(json(s.foreign)),
+    foreignIssues: s.foreignIssues.map((i) => ({
+      code: units(i.code),
+      path: units(i.path),
+      scope: units(i.scope),
+      key: units(i.key),
+      message: units(i.message),
+    })),
+    chain: s.chain.map((c) => ({
+      scope: c.scope,
+      id: optionalText(c.id),
+      label: units(c.label),
+      overridesJson: units(json(c.overrides)),
+      isTarget: c.isTarget,
+    })),
+    inheritedConfigJson: units(json(s.inheritedConfig)),
+    effectiveConfigJson: units(json(s.effectiveConfig)),
+  },
+});
+const wireExplanation = (e) => ({
+  explanation: {
+    valueJson:
+      e.value === undefined ? { absent: {} } : { value: units(json(e.value)) },
+    source: e.source === "base" ? { absent: {} } : { value: e.source },
+    sourceId: optionalText(e.sourceId),
+    shadowed: e.shadowed.map((x) => ({
+      scope: x.scope,
+      id: optionalText(x.id),
+      valueJson: units(json(x.value)),
+    })),
+  },
+});
+for (const [n, [name, state]] of Object.entries({
+  fixture,
+  full,
+  empty,
+}).entries()) {
+  const snapshot = new ProjectStore(state).getSnapshot();
+  const targets = scopedOverrideTargets(snapshot.state);
+  const record = states[n];
+  assert.equal(record.name, name);
+  record.wire = {
+    pages: [
+      [0, 64],
+      [1, 2],
+      [99, 5],
+    ].map(([start, count]) => ({
+      requestJson: encodeProjectSettingsTargetPageRequest({ start, count }),
+      replyJson: encodeProjectSettingsTargetPage({
+        total: targets.length,
+        targets: targets.slice(start, start + count).map((t) => ({
+          id: units(t.id),
+          target: wireTarget(t.target),
+          label: units(t.label),
+          path: units(t.path),
+          overrideCount: t.overrideCount,
+        })),
+      }),
+    })),
+    snapshots: targets.map((t) => ({
+      requestJson: encodeProjectSettingsTargetRequest({
+        target: wireTarget(t.target),
+      }),
+      replyJson: encodeProjectSettingsSnapshotResult(
+        wireSnapshot(scopedOverrideSnapshot(snapshot, t.target)),
+      ),
+    })),
+    explanations: targets.flatMap((t) =>
+      keys.map((key) => ({
+        requestJson: encodeProjectSettingsExplainRequest({
+          target: wireTarget(t.target),
+          key: units(key),
+        }),
+        replyJson: encodeProjectSettingsExplainResult(
+          wireExplanation(explainScopedSetting(snapshot, t.target, key)),
+        ),
+      })),
+    ),
+    unknown: record.unknown.map((u) => {
+      const target = {
+        scope: u.scope,
+        ...{
+          plate: { plateId: u.targetId },
+          object: { objectId: u.targetId },
+          part: { volumeId: u.targetId },
+          layerRange: { layerRangeId: u.targetId },
+        }[u.scope],
+      };
+      return {
+        requestJson: encodeProjectSettingsTargetRequest({
+          target: wireTarget(target),
+        }),
+        replyJson: encodeProjectSettingsSnapshotResult({
+          unknown: units(u.message),
+        }),
+      };
+    }),
+  };
+}
+
+// Settings sessions: the editor the browser's project and node adapters open
+// for each target, a scripted draft, and the intent its commit becomes.
+const catalog = createEngineOptionCatalog(
+  JSON.parse(read("web/src/settings/generated/engine-options.schema.json")),
+);
+const edits = {
+  project: [
+    ["layer_height", "0.28"],
+    ["sparse_infill_density", "30%"],
+    ["enable_support", "1"],
+  ],
+  plate: [
+    ["print_sequence", "by layer"],
+    ["wall_loops", "3"],
+  ],
+  object: [
+    ["brim_type", "no_brim"],
+    ["layer_height", "0.3"],
+  ],
+  part: [
+    ["wall_loops", "6"],
+    ["layer_height", "0.1"],
+  ],
+  layerRange: [["layer_height", "0.06"]],
+};
+const sessions = [];
+for (const [name, state] of Object.entries({ fixture, full })) {
+  const snapshot = new ProjectStore(state).getSnapshot();
+  for (const option of scopedOverrideTargets(snapshot.state)) {
+    const scope = option.scope;
+    const raw =
+      scope === "project"
+        ? projectSettingsOverrideSnapshot(snapshot)
+        : scopedOverrideSnapshot(snapshot, option.target);
+    for (const mode of ["simple", "develop"]) {
+      const editor = new SettingsDraftEditor(catalog, {
+        mode,
+        technology: "fff",
+        guiSurface: guiSurfaceForScope(scope),
+        ...(scope === "project" ? {} : { scope }),
+        inherited: decodeSettingsConfig(catalog, raw.inheritedConfig).values,
+        overrides: decodeSettingsConfig(catalog, raw.overrides).values,
+      });
+      const steps = edits[scope].map(([key, value]) => {
+        const editJson = encodeProjectEditorEdit({
+          set: { fieldId: units(catalog.get(key).id), raw: units(value) },
+        });
+        try {
+          editor.setDraft(catalog.get(key).id, value);
+          return {
+            key,
+            value,
+            editJson,
+            resultJson: encodeProjectEditorEditResult({ applied: {} }),
+          };
+        } catch (error) {
+          return {
+            key,
+            value,
+            error: error.message,
+            editJson,
+            resultJson: encodeProjectEditorEditResult({
+              refused: { message: units(error.message), issues: [] },
+            }),
+          };
+        }
+      });
+      const states = ["layer_height", "wall_loops", "print_sequence"].map(
+        (key) => {
+          const s = editor.getFieldState(catalog.get(key).id);
+          return {
+            key,
+            ...(s.serializedValue !== undefined
+              ? { serialized: s.serializedValue }
+              : {}),
+            origin: s.origin,
+          };
+        },
+      );
+      const commit = editor.commit();
+      const commitJson = encodeProjectEditorCommitResult({
+        committed: {
+          baseRevision: commit.baseRevision,
+          revision: commit.revision,
+          changes: commit.changes.map((ch) => ({
+            fieldId: units(ch.fieldId),
+            key: units(ch.key),
+            owner: units(ch.owner),
+            action: ch.action,
+            previousJson:
+              ch.previousValue === undefined
+                ? { absent: {} }
+                : { value: units(json(ch.previousValue)) },
+            valueJson:
+              ch.value === undefined
+                ? { absent: {} }
+                : { value: units(json(ch.value)) },
+            serialized:
+              ch.serialized === undefined
+                ? { absent: {} }
+                : { value: units(ch.serialized) },
+          })),
+          nextOverridesJson: units(json(commit.nextOverrides)),
+        },
+      });
+      const next = applySettingsCommitToConfig(raw.overrides, commit);
+      const guard = {
+        sourceRevision: raw.sourceRevision,
+        sourceHash: units(raw.sourceHash),
+      };
+      const target = option.target;
+      const command =
+        scope === "project"
+          ? {
+              setProjectSettingsOverrides: {
+                guard,
+                inheritedConfigJson: units(json(raw.inheritedConfig)),
+                overridesJson: units(json(next)),
+              },
+            }
+          : {
+              setScopedOverrides: {
+                guard,
+                target:
+                  scope === "plate"
+                    ? { plate: { plateId: units(target.plateId) } }
+                    : scope === "object"
+                      ? { object: { objectId: units(target.objectId) } }
+                      : scope === "part"
+                        ? { part: { volumeId: units(target.volumeId) } }
+                        : {
+                            layerRange: {
+                              layerRangeId: units(target.layerRangeId),
+                            },
+                          },
+                overridesJson: units(json(next)),
+              },
+            };
+      sessions.push({
+        state: name,
+        target: option.id,
+        mode,
+        steps,
+        states,
+        changes: commit.changes.length,
+        requestJson: encodeProjectSettingsSessionRequest({
+          target: wireTarget(option.target),
+          mode,
+          technology: "fff",
+        }),
+        commitJson,
+        intentJson: encodeProjectIntent({ version: 1, command }),
+      });
+    }
+  }
+}
+
 const sources = [
   "tools/cross-platform/settings-projection-vectors.mjs",
   "web/src/project/scopedOverrides.ts",
   "web/src/project/settingsOverrides.ts",
   "web/src/project/domain/settingScopes.ts",
   "web/src/project/__tests__/fixtures.ts",
+  "web/src/settings/editor/configBridge.ts",
+  "web/src/ui/dom/mountSettingsEditors.ts",
+  "contracts/project-intents.json",
 ];
 const output =
   JSON.stringify(
@@ -187,6 +488,13 @@ const output =
       })),
       keys,
       states,
+      sessions,
+      assets: [
+        {
+          descriptorJson: json(createProjectFixture().asset.descriptor),
+          bytes: Array.from(createProjectFixture().asset.bytes),
+        },
+      ],
     },
     null,
     2,

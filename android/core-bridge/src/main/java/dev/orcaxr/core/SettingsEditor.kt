@@ -4,11 +4,13 @@ package dev.orcaxr.core
  * overrides: the field list a surface renders, field states, drafts, atomic
  * commits and keyboard-free rows. Sorting uses [collator] and search uses
  * [folder]; without them the exact ASCII policies apply and refuse other text. */
-class SettingsEditor(
-    create: ProjectIntents.EditorCreate,
-    collator: PresetCollator? = null,
-    folder: SearchFolding? = SearchFolding.PLATFORM,
-) : ProjectHandle(NativeProject.editorNew(ProjectIntents.encodeEditorCreate(create), collator, folder)) {
+class SettingsEditor internal constructor(handle: Long) : ProjectHandle(handle) {
+    constructor(
+        create: ProjectIntents.EditorCreate,
+        collator: PresetCollator? = null,
+        folder: SearchFolding? = SearchFolding.PLATFORM,
+    ) : this(NativeProject.editorNew(ProjectIntents.encodeEditorCreate(create), collator, folder))
+
     /** The fields a surface shows for [query]; read them with [field]. */
     fun query(query: ProjectIntents.EditorQuery): Long = read {
         NativeProject.editorQuery(it, ProjectIntents.encodeEditorQuery(query))
@@ -42,6 +44,10 @@ class SettingsEditor(
     fun row(position: Long): ProjectIntents.EditorRow = read {
         ProjectIntents.decodeEditorRow(NativeProject.editorRow(it, position))
     }
+    /** For an editor opened on a project node: the intent that applies its
+     * latest commit, guarded by the captured snapshot. Submit it to the
+     * session, then reopen the editor on the new snapshot. */
+    fun intent(): ProjectIntents.Intent = read { ProjectIntents.decodeIntent(NativeProject.editorIntent(it)) }
 
     companion object {
         /** One press up or down, or why the setting cannot be stepped. */

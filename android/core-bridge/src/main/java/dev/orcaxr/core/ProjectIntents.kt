@@ -3737,6 +3737,237 @@ object ProjectIntents {
             w.field("structuredEditor") { writeOptionalText(w, v.structuredEditor) }
         }
     }
+    sealed interface SettingsTarget {
+        data class Project(val value: ProjectIntents.Empty) : SettingsTarget
+        data class Plate(val value: ProjectIntents.PlateScope) : SettingsTarget
+        data class Object(val value: ProjectIntents.ObjectTarget) : SettingsTarget
+        data class Part(val value: ProjectIntents.PartScope) : SettingsTarget
+        data class LayerRange(val value: ProjectIntents.LayerRangeScope) : SettingsTarget
+    }
+    private fun readSettingsTarget(v: Any): SettingsTarget {
+        val obj = ProjectIntentJson.fields(v, setOf("project", "plate", "object", "part", "layerRange"), true)
+        return when(val key = obj.keys().next()) {
+            "project" -> SettingsTarget.Project(readEmpty(obj.get(key)))
+            "plate" -> SettingsTarget.Plate(readPlateScope(obj.get(key)))
+            "object" -> SettingsTarget.Object(readObjectTarget(obj.get(key)))
+            "part" -> SettingsTarget.Part(readPartScope(obj.get(key)))
+            "layerRange" -> SettingsTarget.LayerRange(readLayerRangeScope(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeSettingsTarget(w: ProjectIntentWriter, v: SettingsTarget) {
+        w.obj { when(v) {
+            is SettingsTarget.Project -> w.field("project") { writeEmpty(w, v.value) }
+            is SettingsTarget.Plate -> w.field("plate") { writePlateScope(w, v.value) }
+            is SettingsTarget.Object -> w.field("object") { writeObjectTarget(w, v.value) }
+            is SettingsTarget.Part -> w.field("part") { writePartScope(w, v.value) }
+            is SettingsTarget.LayerRange -> w.field("layerRange") { writeLayerRangeScope(w, v.value) }
+        } }
+    }
+    data class SettingsTargetPageRequest(val start: Long, val count: Long)
+    private fun readSettingsTargetPageRequest(v: Any): SettingsTargetPageRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("start", "count"), false)
+        return SettingsTargetPageRequest(readCounter(obj.get("start")), readCounter(obj.get("count")))
+    }
+    private fun writeSettingsTargetPageRequest(w: ProjectIntentWriter, v: SettingsTargetPageRequest) {
+        w.obj {
+            w.field("start") { writeCounter(w, v.start) }
+            w.field("count") { writeCounter(w, v.count) }
+        }
+    }
+    data class SettingsTargetOption(val id: List<Int>, val target: SettingsTarget, val label: List<Int>, val path: List<Int>, val overrideCount: Long)
+    private fun readSettingsTargetOption(v: Any): SettingsTargetOption {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "target", "label", "path", "overrideCount"), false)
+        return SettingsTargetOption(readEditText(obj.get("id")), readSettingsTarget(obj.get("target")), readEditText(obj.get("label")), readEditText(obj.get("path")), readCounter(obj.get("overrideCount")))
+    }
+    private fun writeSettingsTargetOption(w: ProjectIntentWriter, v: SettingsTargetOption) {
+        w.obj {
+            w.field("id") { writeEditText(w, v.id) }
+            w.field("target") { writeSettingsTarget(w, v.target) }
+            w.field("label") { writeEditText(w, v.label) }
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("overrideCount") { writeCounter(w, v.overrideCount) }
+        }
+    }
+    private fun readSettingsTargetOptions(v: Any): List<SettingsTargetOption> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readSettingsTargetOption(array.get(it)) }
+    }
+    private fun writeSettingsTargetOptions(w: ProjectIntentWriter, v: List<SettingsTargetOption>) {
+        w.array(v, 0, 64) { writeSettingsTargetOption(w, it) }
+    }
+    data class SettingsTargetPage(val total: Long, val targets: List<SettingsTargetOption>)
+    private fun readSettingsTargetPage(v: Any): SettingsTargetPage {
+        val obj = ProjectIntentJson.fields(v, setOf("total", "targets"), false)
+        return SettingsTargetPage(readCounter(obj.get("total")), readSettingsTargetOptions(obj.get("targets")))
+    }
+    private fun writeSettingsTargetPage(w: ProjectIntentWriter, v: SettingsTargetPage) {
+        w.obj {
+            w.field("total") { writeCounter(w, v.total) }
+            w.field("targets") { writeSettingsTargetOptions(w, v.targets) }
+        }
+    }
+    data class SettingsTargetRequest(val target: SettingsTarget)
+    private fun readSettingsTargetRequest(v: Any): SettingsTargetRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("target"), false)
+        return SettingsTargetRequest(readSettingsTarget(obj.get("target")))
+    }
+    private fun writeSettingsTargetRequest(w: ProjectIntentWriter, v: SettingsTargetRequest) {
+        w.obj {
+            w.field("target") { writeSettingsTarget(w, v.target) }
+        }
+    }
+    data class SettingsScopeIssue(val code: List<Int>, val path: List<Int>, val scope: List<Int>, val key: List<Int>, val message: List<Int>)
+    private fun readSettingsScopeIssue(v: Any): SettingsScopeIssue {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "path", "scope", "key", "message"), false)
+        return SettingsScopeIssue(readEditText(obj.get("code")), readEditText(obj.get("path")), readEditText(obj.get("scope")), readEditText(obj.get("key")), readEditText(obj.get("message")))
+    }
+    private fun writeSettingsScopeIssue(w: ProjectIntentWriter, v: SettingsScopeIssue) {
+        w.obj {
+            w.field("code") { writeEditText(w, v.code) }
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("scope") { writeEditText(w, v.scope) }
+            w.field("key") { writeEditText(w, v.key) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    private fun readSettingsScopeIssues(v: Any): List<SettingsScopeIssue> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readSettingsScopeIssue(array.get(it)) }
+    }
+    private fun writeSettingsScopeIssues(w: ProjectIntentWriter, v: List<SettingsScopeIssue>) {
+        w.array(v, 0, 4096) { writeSettingsScopeIssue(w, it) }
+    }
+    data class SettingsChainEntry(val scope: EditorScope, val id: OptionalText, val label: List<Int>, val overridesJson: List<Int>, val isTarget: Boolean)
+    private fun readSettingsChainEntry(v: Any): SettingsChainEntry {
+        val obj = ProjectIntentJson.fields(v, setOf("scope", "id", "label", "overridesJson", "isTarget"), false)
+        return SettingsChainEntry(readEditorScope(obj.get("scope")), readOptionalText(obj.get("id")), readEditText(obj.get("label")), readJsonText(obj.get("overridesJson")), readFlag(obj.get("isTarget")))
+    }
+    private fun writeSettingsChainEntry(w: ProjectIntentWriter, v: SettingsChainEntry) {
+        w.obj {
+            w.field("scope") { writeEditorScope(w, v.scope) }
+            w.field("id") { writeOptionalText(w, v.id) }
+            w.field("label") { writeEditText(w, v.label) }
+            w.field("overridesJson") { writeJsonText(w, v.overridesJson) }
+            w.field("isTarget") { writeFlag(w, v.isTarget) }
+        }
+    }
+    private fun readSettingsChain(v: Any): List<SettingsChainEntry> {
+        val array = ProjectIntentJson.list(v, 0, 8)
+        return List(array.length()) { readSettingsChainEntry(array.get(it)) }
+    }
+    private fun writeSettingsChain(w: ProjectIntentWriter, v: List<SettingsChainEntry>) {
+        w.array(v, 0, 8) { writeSettingsChainEntry(w, it) }
+    }
+    data class SettingsSnapshot(val sourceRevision: Long, val sourceHash: List<Int>, val label: List<Int>, val overridesJson: List<Int>, val foreignJson: List<Int>, val foreignIssues: List<SettingsScopeIssue>, val chain: List<SettingsChainEntry>, val inheritedConfigJson: List<Int>, val effectiveConfigJson: List<Int>)
+    private fun readSettingsSnapshot(v: Any): SettingsSnapshot {
+        val obj = ProjectIntentJson.fields(v, setOf("sourceRevision", "sourceHash", "label", "overridesJson", "foreignJson", "foreignIssues", "chain", "inheritedConfigJson", "effectiveConfigJson"), false)
+        return SettingsSnapshot(readCounter(obj.get("sourceRevision")), readEditText(obj.get("sourceHash")), readEditText(obj.get("label")), readJsonText(obj.get("overridesJson")), readJsonText(obj.get("foreignJson")), readSettingsScopeIssues(obj.get("foreignIssues")), readSettingsChain(obj.get("chain")), readJsonText(obj.get("inheritedConfigJson")), readJsonText(obj.get("effectiveConfigJson")))
+    }
+    private fun writeSettingsSnapshot(w: ProjectIntentWriter, v: SettingsSnapshot) {
+        w.obj {
+            w.field("sourceRevision") { writeCounter(w, v.sourceRevision) }
+            w.field("sourceHash") { writeEditText(w, v.sourceHash) }
+            w.field("label") { writeEditText(w, v.label) }
+            w.field("overridesJson") { writeJsonText(w, v.overridesJson) }
+            w.field("foreignJson") { writeJsonText(w, v.foreignJson) }
+            w.field("foreignIssues") { writeSettingsScopeIssues(w, v.foreignIssues) }
+            w.field("chain") { writeSettingsChain(w, v.chain) }
+            w.field("inheritedConfigJson") { writeJsonText(w, v.inheritedConfigJson) }
+            w.field("effectiveConfigJson") { writeJsonText(w, v.effectiveConfigJson) }
+        }
+    }
+    sealed interface SettingsSnapshotResult {
+        data class Snapshot(val value: ProjectIntents.SettingsSnapshot) : SettingsSnapshotResult
+        data class Unknown(val value: List<Int>) : SettingsSnapshotResult
+    }
+    private fun readSettingsSnapshotResult(v: Any): SettingsSnapshotResult {
+        val obj = ProjectIntentJson.fields(v, setOf("snapshot", "unknown"), true)
+        return when(val key = obj.keys().next()) {
+            "snapshot" -> SettingsSnapshotResult.Snapshot(readSettingsSnapshot(obj.get(key)))
+            "unknown" -> SettingsSnapshotResult.Unknown(readEditText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeSettingsSnapshotResult(w: ProjectIntentWriter, v: SettingsSnapshotResult) {
+        w.obj { when(v) {
+            is SettingsSnapshotResult.Snapshot -> w.field("snapshot") { writeSettingsSnapshot(w, v.value) }
+            is SettingsSnapshotResult.Unknown -> w.field("unknown") { writeEditText(w, v.value) }
+        } }
+    }
+    data class SettingsExplainRequest(val target: SettingsTarget, val key: List<Int>)
+    private fun readSettingsExplainRequest(v: Any): SettingsExplainRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("target", "key"), false)
+        return SettingsExplainRequest(readSettingsTarget(obj.get("target")), readEditText(obj.get("key")))
+    }
+    private fun writeSettingsExplainRequest(w: ProjectIntentWriter, v: SettingsExplainRequest) {
+        w.obj {
+            w.field("target") { writeSettingsTarget(w, v.target) }
+            w.field("key") { writeEditText(w, v.key) }
+        }
+    }
+    data class SettingsShadowed(val scope: EditorScope, val id: OptionalText, val valueJson: List<Int>)
+    private fun readSettingsShadowed(v: Any): SettingsShadowed {
+        val obj = ProjectIntentJson.fields(v, setOf("scope", "id", "valueJson"), false)
+        return SettingsShadowed(readEditorScope(obj.get("scope")), readOptionalText(obj.get("id")), readJsonText(obj.get("valueJson")))
+    }
+    private fun writeSettingsShadowed(w: ProjectIntentWriter, v: SettingsShadowed) {
+        w.obj {
+            w.field("scope") { writeEditorScope(w, v.scope) }
+            w.field("id") { writeOptionalText(w, v.id) }
+            w.field("valueJson") { writeJsonText(w, v.valueJson) }
+        }
+    }
+    private fun readSettingsShadowedList(v: Any): List<SettingsShadowed> {
+        val array = ProjectIntentJson.list(v, 0, 8)
+        return List(array.length()) { readSettingsShadowed(array.get(it)) }
+    }
+    private fun writeSettingsShadowedList(w: ProjectIntentWriter, v: List<SettingsShadowed>) {
+        w.array(v, 0, 8) { writeSettingsShadowed(w, it) }
+    }
+    data class SettingsExplanation(val valueJson: OptionalJsonText, val source: OptionalEditorScope, val sourceId: OptionalText, val shadowed: List<SettingsShadowed>)
+    private fun readSettingsExplanation(v: Any): SettingsExplanation {
+        val obj = ProjectIntentJson.fields(v, setOf("valueJson", "source", "sourceId", "shadowed"), false)
+        return SettingsExplanation(readOptionalJsonText(obj.get("valueJson")), readOptionalEditorScope(obj.get("source")), readOptionalText(obj.get("sourceId")), readSettingsShadowedList(obj.get("shadowed")))
+    }
+    private fun writeSettingsExplanation(w: ProjectIntentWriter, v: SettingsExplanation) {
+        w.obj {
+            w.field("valueJson") { writeOptionalJsonText(w, v.valueJson) }
+            w.field("source") { writeOptionalEditorScope(w, v.source) }
+            w.field("sourceId") { writeOptionalText(w, v.sourceId) }
+            w.field("shadowed") { writeSettingsShadowedList(w, v.shadowed) }
+        }
+    }
+    sealed interface SettingsExplainResult {
+        data class Explanation(val value: ProjectIntents.SettingsExplanation) : SettingsExplainResult
+        data class Unknown(val value: List<Int>) : SettingsExplainResult
+    }
+    private fun readSettingsExplainResult(v: Any): SettingsExplainResult {
+        val obj = ProjectIntentJson.fields(v, setOf("explanation", "unknown"), true)
+        return when(val key = obj.keys().next()) {
+            "explanation" -> SettingsExplainResult.Explanation(readSettingsExplanation(obj.get(key)))
+            "unknown" -> SettingsExplainResult.Unknown(readEditText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeSettingsExplainResult(w: ProjectIntentWriter, v: SettingsExplainResult) {
+        w.obj { when(v) {
+            is SettingsExplainResult.Explanation -> w.field("explanation") { writeSettingsExplanation(w, v.value) }
+            is SettingsExplainResult.Unknown -> w.field("unknown") { writeEditText(w, v.value) }
+        } }
+    }
+    data class SettingsSessionRequest(val target: SettingsTarget, val mode: EditorMode, val technology: EditorTechnology)
+    private fun readSettingsSessionRequest(v: Any): SettingsSessionRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("target", "mode", "technology"), false)
+        return SettingsSessionRequest(readSettingsTarget(obj.get("target")), readEditorMode(obj.get("mode")), readEditorTechnology(obj.get("technology")))
+    }
+    private fun writeSettingsSessionRequest(w: ProjectIntentWriter, v: SettingsSessionRequest) {
+        w.obj {
+            w.field("target") { writeSettingsTarget(w, v.target) }
+            w.field("mode") { writeEditorMode(w, v.mode) }
+            w.field("technology") { writeEditorTechnology(w, v.technology) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -3827,4 +4058,18 @@ object ProjectIntents {
     fun encodeEditorRules(value: EditorRules): String = ProjectIntentWriter().also { writeEditorRules(it, value) }.finish()
     fun decodeEditorFieldRef(text: String): EditorFieldRef = readEditorFieldRef(ProjectIntentJson.parse(text))
     fun encodeEditorFieldRef(value: EditorFieldRef): String = ProjectIntentWriter().also { writeEditorFieldRef(it, value) }.finish()
+    fun decodeSettingsTargetPageRequest(text: String): SettingsTargetPageRequest = readSettingsTargetPageRequest(ProjectIntentJson.parse(text))
+    fun encodeSettingsTargetPageRequest(value: SettingsTargetPageRequest): String = ProjectIntentWriter().also { writeSettingsTargetPageRequest(it, value) }.finish()
+    fun decodeSettingsTargetPage(text: String): SettingsTargetPage = readSettingsTargetPage(ProjectIntentJson.parse(text))
+    fun encodeSettingsTargetPage(value: SettingsTargetPage): String = ProjectIntentWriter().also { writeSettingsTargetPage(it, value) }.finish()
+    fun decodeSettingsTargetRequest(text: String): SettingsTargetRequest = readSettingsTargetRequest(ProjectIntentJson.parse(text))
+    fun encodeSettingsTargetRequest(value: SettingsTargetRequest): String = ProjectIntentWriter().also { writeSettingsTargetRequest(it, value) }.finish()
+    fun decodeSettingsSnapshotResult(text: String): SettingsSnapshotResult = readSettingsSnapshotResult(ProjectIntentJson.parse(text))
+    fun encodeSettingsSnapshotResult(value: SettingsSnapshotResult): String = ProjectIntentWriter().also { writeSettingsSnapshotResult(it, value) }.finish()
+    fun decodeSettingsExplainRequest(text: String): SettingsExplainRequest = readSettingsExplainRequest(ProjectIntentJson.parse(text))
+    fun encodeSettingsExplainRequest(value: SettingsExplainRequest): String = ProjectIntentWriter().also { writeSettingsExplainRequest(it, value) }.finish()
+    fun decodeSettingsExplainResult(text: String): SettingsExplainResult = readSettingsExplainResult(ProjectIntentJson.parse(text))
+    fun encodeSettingsExplainResult(value: SettingsExplainResult): String = ProjectIntentWriter().also { writeSettingsExplainResult(it, value) }.finish()
+    fun decodeSettingsSessionRequest(text: String): SettingsSessionRequest = readSettingsSessionRequest(ProjectIntentJson.parse(text))
+    fun encodeSettingsSessionRequest(value: SettingsSessionRequest): String = ProjectIntentWriter().also { writeSettingsSessionRequest(it, value) }.finish()
 }

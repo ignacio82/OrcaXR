@@ -3123,6 +3123,38 @@ names, fractional heights, an empty plate) and pins 17 targets, their
 snapshots, 119 explanations and the unknown-node refusals. Rust matches all
 of them.
 
+### Settings sessions and their host exchange
+
+`settings::session` opens the editor a browser settings panel opens for one
+node (`mountSettingsEditors.ts`). The project node edits its raw explicit
+overrides over the inherited preset configuration with an unscoped editor;
+any other node edits its in-scope overrides over the chain above it, scoped,
+on its scope's GUI surface. Values are decoded with
+`decode_settings_config`, and a commit is applied with
+`apply_settings_commit`, so foreign, unknown and read-only values survive.
+The commit becomes the browser's `setProjectSettingsOverrides` or
+`setScopedOverrides` intent, guarded by the snapshot the editor was opened
+from.
+
+`settings::projection_exchange` serves the projection on captured projects:
+target pages of at most 64, node snapshots and explanations, with the
+browser's unknown-node message as a result rather than a refusal. A captured
+project also opens settings editors (`HostEditor::open`), whose `intent`
+returns the guarded intent of the latest commit for the host to execute.
+
+Bindings: WASM `CapturedProject.settings_targets`, `settings_snapshot`,
+`settings_explain` and `settings_editor`, plus `SettingsEditor.intent`; five
+JNI exports; Kotlin `ProjectSnapshot.settingsTargets`, `settingsSnapshot`,
+`settingsExplain`, `settingsEditor` and `SettingsEditor.intent`.
+
+The projection corpus adds 30 sessions (every node of two states in two
+modes, with in-scope and refused edits) and the exchange's encodings. Rust,
+WASM in Node and Chrome and JNI open each state as a real project session
+and match 275 replies, including every commit and intent, with 36 refusals.
+A Rust test closes the loop: each node's intent executes in a native
+session, and the node then stores exactly the committed overrides with its
+foreign keys intact.
+
 ### Preset graph and profile catalog
 
 `settings::presets` ports `PresetGraph`, the pinned v2.3.4 preset semantics:

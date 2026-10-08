@@ -165,6 +165,98 @@ export class CapturedProject {
         const ret = wasm.capturedproject_revision(this.__wbg_ptr);
         return ret;
     }
+    /**
+     * A `SettingsSessionRequest`: the settings editor for one node, whose
+     * commits become guarded project intents.
+     * @param {string} request
+     * @param {any | null} [collator]
+     * @param {any | null} [folder]
+     * @returns {SettingsEditor}
+     */
+    settings_editor(request, collator, folder) {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.capturedproject_settings_editor(this.__wbg_ptr, ptr0, len0, isLikeNone(collator) ? 0 : addToExternrefTable0(collator), isLikeNone(folder) ? 0 : addToExternrefTable0(folder));
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return SettingsEditor.__wrap(ret[0]);
+    }
+    /**
+     * A `SettingsExplainRequest`; returns a `SettingsExplainResult`.
+     * @param {string} request
+     * @returns {string}
+     */
+    settings_explain(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.capturedproject_settings_explain(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * A `SettingsTargetRequest`; returns a `SettingsSnapshotResult`.
+     * @param {string} request
+     * @returns {string}
+     */
+    settings_snapshot(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.capturedproject_settings_snapshot(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * A `SettingsTargetPageRequest`; returns a `SettingsTargetPage`.
+     * @param {string} request
+     * @returns {string}
+     */
+    settings_targets(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.capturedproject_settings_targets(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
 }
 if (Symbol.dispose) CapturedProject.prototype[Symbol.dispose] = CapturedProject.prototype.free;
 
@@ -2498,6 +2590,12 @@ if (Symbol.dispose) ProjectUpload.prototype[Symbol.dispose] = ProjectUpload.prot
  * A settings draft over inherited values and one node's overrides.
  */
 export class SettingsEditor {
+    static __wrap(ptr) {
+        const obj = Object.create(SettingsEditor.prototype);
+        obj.__wbg_ptr = ptr;
+        SettingsEditorFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
@@ -2590,6 +2688,29 @@ export class SettingsEditor {
         let deferred2_1;
         try {
             const ret = wasm.settingseditor_field(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * For an editor opened on a project node: the project `Intent` that
+     * applies its latest commit, guarded by the captured snapshot.
+     * @returns {string}
+     */
+    intent() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.settingseditor_intent(this.__wbg_ptr);
             var ptr1 = ret[0];
             var len1 = ret[1];
             if (ret[3]) {

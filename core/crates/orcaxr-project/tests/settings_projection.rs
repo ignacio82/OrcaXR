@@ -228,3 +228,381 @@ fn settings_projection_matches_the_browser() {
     }
     assert_eq!(checked, 17);
 }
+
+/// Settings sessions open the editor the browser's adapters open for every
+/// node, and turn a commit into the browser's intent.
+#[test]
+fn settings_sessions_match_the_browser() {
+    use orcaxr_contracts::project_intent_types as wire;
+    use orcaxr_project::settings::{
+        editor::{Mode, Requested},
+        options::DEFINITIONS,
+        presets::{AsciiRootCollation, NonAsciiText},
+        session::SettingsSession,
+    };
+    let f = corpus();
+    let snapshots: Vec<(String, orcaxr_project::store::ProjectSnapshot)> = f["states"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|case| {
+            let state =
+                ProjectState::from_value(parse(case["stateJson"].as_str().unwrap()).unwrap())
+                    .unwrap();
+            let store = ProjectStore::new(
+                ValidatedProject::new(ProjectData::new(state).unwrap(), &mut utc()).unwrap(),
+            );
+            (case["name"].as_str().unwrap().to_owned(), store.snapshot())
+        })
+        .collect();
+    let id_of = |key: &str| DEFINITIONS.iter().find(|d| d.key == key).unwrap().id;
+    let mut sessions = 0;
+    for case in f["sessions"].as_array().unwrap() {
+        let (_, snapshot) = snapshots
+            .iter()
+            .find(|(name, _)| name == case["state"].as_str().unwrap())
+            .unwrap();
+        let option = targets(snapshot.state())
+            .into_iter()
+            .find(|t| utf16(&t.id) == case["target"].as_str().unwrap())
+            .unwrap();
+        let mode = if case["mode"] == "simple" {
+            Mode::Simple
+        } else {
+            Mode::Develop
+        };
+        let label = format!("{} {} {:?}", case["state"], case["target"], mode);
+        let mut session =
+            SettingsSession::open::<NonAsciiText>(snapshot, &option.target, mode, Requested::Fff)
+                .unwrap();
+        for step in case["steps"].as_array().unwrap() {
+            let key = step["key"].as_str().unwrap();
+            let result = session
+                .editor
+                .set_draft::<NonAsciiText>(id_of(key), &units(step["value"].as_str().unwrap()));
+            match step["error"].as_str() {
+                Some(message) => {
+                    assert_eq!(utf16(&result.unwrap_err().message()), message, "{label}")
+                }
+                None => result.unwrap(),
+            }
+        }
+        for state in case["states"].as_array().unwrap() {
+            let s = session
+                .editor
+                .field_state::<NonAsciiText>(id_of(state["key"].as_str().unwrap()))
+                .unwrap();
+            assert_eq!(
+                s.serialized.as_deref().map(utf16).as_deref(),
+                state["serialized"].as_str(),
+                "{label}"
+            );
+            assert_eq!(
+                s.origin.as_str(),
+                state["origin"].as_str().unwrap(),
+                "{label}"
+            );
+        }
+        let commit = session.editor.commit(&mut AsciiRootCollation).unwrap();
+        assert_eq!(
+            commit.changes.len() as u64,
+            case["changes"].as_u64().unwrap(),
+            "{label}"
+        );
+        let intent = session.binding.intent(&commit).unwrap();
+        assert_eq!(
+            wire::encode_intent(&intent).unwrap(),
+            case["intentJson"].as_str().unwrap(),
+            "{label}"
+        );
+        sessions += 1;
+    }
+    assert_eq!(sessions, 30);
+}
+
+/// The projection and session exchange answer with the browser's encodings,
+/// as the bindings do.
+#[test]
+fn host_exchange_matches_the_browser_codecs() {
+    use orcaxr_contracts::project_intent_types as wire;
+    use orcaxr_project::settings::{
+        editor::exchange::HostEditor,
+        presets::{AsciiRootCollation, NonAsciiText},
+        projection_exchange as p,
+    };
+    let f = corpus();
+    let mut replies = 0;
+    for case in f["states"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let state =
+            ProjectState::from_value(parse(case["stateJson"].as_str().unwrap()).unwrap()).unwrap();
+        let store = ProjectStore::new(
+            ValidatedProject::new(ProjectData::new(state).unwrap(), &mut utc()).unwrap(),
+        );
+        let snapshot = store.snapshot();
+        let w = &case["wire"];
+        let text = |v: &Json| v.as_str().unwrap().to_owned();
+        for page in w["pages"].as_array().unwrap() {
+            let request =
+                wire::decode_settings_target_page_request(&text(&page["requestJson"])).unwrap();
+            let reply = p::target_page(&snapshot, &request).unwrap();
+            assert_eq!(
+                wire::encode_settings_target_page(&reply).unwrap(),
+                text(&page["replyJson"]),
+                "{name}"
+            );
+            replies += 1;
+        }
+        for kind in ["snapshots", "unknown"] {
+            for s in w[kind].as_array().unwrap() {
+                let request =
+                    wire::decode_settings_target_request(&text(&s["requestJson"])).unwrap();
+                let reply = p::snapshot(&snapshot, &request).unwrap();
+                assert_eq!(
+                    wire::encode_settings_snapshot_result(&reply).unwrap(),
+                    text(&s["replyJson"]),
+                    "{name}"
+                );
+                replies += 1;
+            }
+        }
+        for e in w["explanations"].as_array().unwrap() {
+            let request = wire::decode_settings_explain_request(&text(&e["requestJson"])).unwrap();
+            let reply = p::explain(&snapshot, &request).unwrap();
+            assert_eq!(
+                wire::encode_settings_explain_result(&reply).unwrap(),
+                text(&e["replyJson"]),
+                "{name}"
+            );
+            replies += 1;
+        }
+        assert!(
+            p::target_page(
+                &snapshot,
+                &wire::SettingsTargetPageRequest {
+                    start: 0,
+                    count: 65
+                }
+            )
+            .is_err()
+        );
+        for session in f["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|s| s["state"] == name)
+        {
+            let request =
+                wire::decode_settings_session_request(&text(&session["requestJson"])).unwrap();
+            let mut editor = HostEditor::open::<NonAsciiText>(&snapshot, &request).unwrap();
+            assert!(editor.intent().is_none());
+            for step in session["steps"].as_array().unwrap() {
+                let edit = wire::decode_editor_edit(&text(&step["editJson"])).unwrap();
+                let reply = editor.edit::<NonAsciiText>(&edit);
+                assert_eq!(
+                    wire::encode_editor_edit_result(&reply).unwrap(),
+                    text(&step["resultJson"])
+                );
+                replies += 1;
+            }
+            let commit = editor.commit(&mut AsciiRootCollation).unwrap();
+            assert_eq!(
+                wire::encode_editor_commit_result(&commit).unwrap(),
+                text(&session["commitJson"])
+            );
+            let intent = editor.intent().unwrap();
+            assert_eq!(
+                wire::encode_intent(intent).unwrap(),
+                text(&session["intentJson"])
+            );
+            replies += 2;
+        }
+    }
+    println!("projection exchange: {replies} replies");
+}
+
+/// The loop closes natively: a node's editor commits, its intent executes in a
+/// real session, and the node then stores exactly the committed overrides
+/// while keeping the keys its scope does not own.
+#[test]
+fn session_intents_apply_in_a_native_session() {
+    use orcaxr_contracts::project_intent_types as wire;
+    use orcaxr_project::{
+        assets::AssetRepository,
+        history::HistoryOptions,
+        selection::SelectionStore,
+        session::{ProjectSession, Submission},
+        settings::{
+            editor::{Mode, Requested},
+            options::DEFINITIONS,
+            presets::{AsciiRootCollation, NonAsciiText},
+            session::SettingsSession,
+        },
+    };
+    let f = corpus();
+    let asset = &f["assets"][0];
+    let generation = [0, 1, 2147483648, 4294967295];
+    let mut applied = 0;
+    for session_case in f["sessions"].as_array().unwrap() {
+        if session_case["mode"] != "develop" {
+            continue;
+        }
+        let case = f["states"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["name"] == session_case["state"])
+            .unwrap();
+        let state =
+            ProjectState::from_value(parse(case["stateJson"].as_str().unwrap()).unwrap()).unwrap();
+        let project = ValidatedProject::new(ProjectData::new(state).unwrap(), &mut utc()).unwrap();
+        let mut assets = AssetRepository::new();
+        assets
+            .put(
+                &parse(asset["descriptorJson"].as_str().unwrap()).unwrap(),
+                &asset["bytes"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|b| b.as_u64().unwrap() as u8)
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+        let mut session = ProjectSession::new(
+            project,
+            SelectionStore::default(),
+            assets,
+            utc(),
+            HistoryOptions {
+                max_entries: 16,
+                max_estimated_bytes: 1 << 20,
+            },
+            generation,
+        )
+        .unwrap();
+        let mut request_id = 0;
+        let mut submit = |session: &mut ProjectSession<_>, operation: wire::SessionOperation| {
+            request_id += 1;
+            let request = wire::encode_session_request(&wire::SessionRequest {
+                protocol_version: 1,
+                generation: generation.iter().map(|g| u64::from(*g)).collect(),
+                request_id,
+                operation,
+            })
+            .unwrap();
+            let wire_reply = match session.submit(&request) {
+                Submission::Ready(response) => response.wire().to_owned(),
+                // Queued work completes on the session's own turn.
+                Submission::Queued { .. } => session.run_next().unwrap().wire().to_owned(),
+            };
+            wire::decode_session_reply(&wire_reply).unwrap().result
+        };
+        let ack = |result: wire::SessionResult| match result {
+            wire::SessionResult::Acknowledged(ack) => ack,
+            other => panic!("{other:?}"),
+        };
+        let welcome = submit(
+            &mut session,
+            wire::SessionOperation::Hello(wire::Hello {
+                min_protocol_version: 1,
+                max_protocol_version: 1,
+                project_schema_version: 1,
+                intent_version: 1,
+            }),
+        );
+        assert!(
+            matches!(welcome, wire::SessionResult::Welcome(_)),
+            "{welcome:?}"
+        );
+        let guard = ack(submit(
+            &mut session,
+            wire::SessionOperation::Query(wire::Empty {}),
+        ))
+        .guard;
+        let snapshot = session.snapshot();
+        let option = targets(snapshot.state())
+            .into_iter()
+            .find(|t| utf16(&t.id) == session_case["target"].as_str().unwrap())
+            .unwrap();
+        let mut settings = SettingsSession::open::<NonAsciiText>(
+            &snapshot,
+            &option.target,
+            Mode::Develop,
+            Requested::Fff,
+        )
+        .unwrap();
+        for step in session_case["steps"].as_array().unwrap() {
+            let id = DEFINITIONS
+                .iter()
+                .find(|d| d.key == step["key"].as_str().unwrap())
+                .unwrap()
+                .id;
+            let _ = settings
+                .editor
+                .set_draft::<NonAsciiText>(id, &units(step["value"].as_str().unwrap()));
+        }
+        let commit = settings.editor.commit(&mut AsciiRootCollation).unwrap();
+        let intent = settings.binding.intent(&commit).unwrap();
+        let ack = ack(submit(
+            &mut session,
+            wire::SessionOperation::Execute(wire::GuardedIntent { guard, intent }),
+        ));
+        assert_eq!(
+            ack.changed,
+            !commit.changes.is_empty(),
+            "{}",
+            session_case["target"]
+        );
+        let after = session.snapshot();
+        let node = scoped::snapshot(&after, &option.target).unwrap();
+        let before = scoped::snapshot(&snapshot, &option.target).unwrap();
+        // The node's in-scope overrides are the commit's; foreign keys stay.
+        let expected: Json = serde_json::from_str(&canonical(
+            &orcaxr_project::settings::options::apply_settings_commit(
+                // The project panel commits over the raw overrides, foreign
+                // keys included; a node over its in-scope overrides.
+                &if matches!(option.target, Target::Project) {
+                    project_overrides(&snapshot).overrides
+                } else {
+                    before.overrides.clone()
+                },
+                &commit
+                    .changes
+                    .iter()
+                    .map(|c| match c {
+                        orcaxr_project::settings::editor::Change::Set {
+                            key, serialized, ..
+                        } => orcaxr_project::settings::options::Change::Set {
+                            key: units(key),
+                            serialized: Some(serialized.clone()),
+                        },
+                        orcaxr_project::settings::editor::Change::Remove { key, .. } => {
+                            orcaxr_project::settings::options::Change::Remove { key: units(key) }
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .map(Value::Object)
+            .unwrap(),
+        ))
+        .unwrap();
+        if matches!(option.target, Target::Project) {
+            let project = project_overrides(&after);
+            assert_eq!(
+                serde_json::from_str::<Json>(&canonical(&config(&project.overrides))).unwrap(),
+                expected
+            );
+        } else {
+            assert_eq!(
+                serde_json::from_str::<Json>(&canonical(&config(&node.overrides))).unwrap(),
+                expected
+            );
+            assert_eq!(
+                canonical(&config(&node.foreign)),
+                canonical(&config(&before.foreign))
+            );
+        }
+        applied += 1;
+    }
+    assert_eq!(applied, 15);
+}

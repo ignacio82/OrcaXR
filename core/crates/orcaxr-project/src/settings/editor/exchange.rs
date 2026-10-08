@@ -13,7 +13,10 @@ use crate::settings::{
     SettingScope,
     options::{Issue, OptionValue, enum_choices, option_value},
     presets::Collation,
+    projection_exchange,
+    session::{Binding, OpenError, SettingsSession},
 };
+use crate::store::ProjectSnapshot;
 use orcaxr_contracts::{canonical::Value, project_intent_types as wire};
 
 /// Why an exchange call was refused. Refusals change nothing.
@@ -253,6 +256,8 @@ pub struct HostEditor {
     editor: DraftEditor,
     fields: Vec<Field>,
     rows: Rows,
+    binding: Option<Binding>,
+    intent: Option<wire::Intent>,
 }
 
 impl HostEditor {
@@ -268,14 +273,44 @@ impl HostEditor {
             values(&request.overrides_json)?,
         )
         .map_err(|e| Refusal::InvalidEditor(e.message()))?;
-        Ok(Self {
+        Ok(Self::with(editor, None))
+    }
+    fn with(editor: DraftEditor, binding: Option<Binding>) -> Self {
+        Self {
             editor,
             fields: Vec::new(),
             rows: Rows {
                 rows: Vec::new(),
                 unavailable: 0,
             },
-        })
+            binding,
+            intent: None,
+        }
+    }
+    /// The editor a browser settings panel opens for one node of a captured
+    /// project. An unknown node refuses with the browser's message.
+    pub fn open<E>(
+        snapshot: &ProjectSnapshot,
+        request: &wire::SettingsSessionRequest,
+    ) -> Result<Self, Refusal<E>> {
+        let node =
+            projection_exchange::target(&request.target).map_err(|_| Refusal::InvalidRequest)?;
+        let session = SettingsSession::open::<E>(
+            snapshot,
+            &node,
+            mode(&request.mode),
+            requested(&request.technology),
+        )
+        .map_err(|e| match e {
+            OpenError::UnknownTarget(unknown) => Refusal::InvalidEditor(unknown.message()),
+            OpenError::Editor(e) => Refusal::InvalidEditor(e.message()),
+        })?;
+        Ok(Self::with(session.editor, Some(session.binding)))
+    }
+    /// The project intent of this editor's latest commit, for an editor
+    /// opened on a project node.
+    pub fn intent(&self) -> Option<&wire::Intent> {
+        self.intent.as_ref()
     }
     pub fn editor(&self) -> &DraftEditor {
         &self.editor
@@ -390,50 +425,62 @@ impl HostEditor {
         match self.editor.commit(collation) {
             Err(EditorError::Collation(e)) => Err(Refusal::Host(e)),
             Err(e) => Ok(wire::EditorCommitResult::Refused(refusal(&e))),
-            Ok(c) => Ok(wire::EditorCommitResult::Committed(wire::EditorCommit {
-                base_revision: c.base_revision,
-                revision: c.revision,
-                changes: c
-                    .changes
-                    .iter()
-                    .map(|change| match change {
-                        Change::Set {
-                            field_id,
-                            key,
-                            owner,
-                            previous,
-                            value,
-                            serialized,
-                        } => wire::EditorChange {
-                            field_id: units(field_id),
-                            key: units(key),
-                            owner: units(owner),
-                            action: wire::EditorChangeAction::Set,
-                            previous_json: value_json(previous.as_ref()),
-                            value_json: value_json(Some(value)),
-                            serialized: optional_units(Some(serialized)),
-                        },
-                        Change::Remove {
-                            field_id,
-                            key,
-                            owner,
-                            previous,
-                        } => wire::EditorChange {
-                            field_id: units(field_id),
-                            key: units(key),
-                            owner: units(owner),
-                            action: wire::EditorChangeAction::Remove,
-                            previous_json: value_json(Some(previous)),
-                            value_json: value_json(None),
-                            serialized: optional_units(None),
-                        },
-                    })
-                    .collect(),
-                next_overrides_json: map_json(&c.next_overrides),
-            })),
+            Ok(c) => {
+                if let Some(binding) = &self.binding {
+                    // Editor commits change each key once with its wire text.
+                    self.intent = Some(binding.intent(&c).expect("editor commits apply"));
+                }
+                Ok(committed(c))
+            }
         }
     }
+}
 
+fn committed(c: super::draft::Commit) -> wire::EditorCommitResult {
+    wire::EditorCommitResult::Committed(wire::EditorCommit {
+        base_revision: c.base_revision,
+        revision: c.revision,
+        changes: c
+            .changes
+            .iter()
+            .map(|change| match change {
+                Change::Set {
+                    field_id,
+                    key,
+                    owner,
+                    previous,
+                    value,
+                    serialized,
+                } => wire::EditorChange {
+                    field_id: units(field_id),
+                    key: units(key),
+                    owner: units(owner),
+                    action: wire::EditorChangeAction::Set,
+                    previous_json: value_json(previous.as_ref()),
+                    value_json: value_json(Some(value)),
+                    serialized: optional_units(Some(serialized)),
+                },
+                Change::Remove {
+                    field_id,
+                    key,
+                    owner,
+                    previous,
+                } => wire::EditorChange {
+                    field_id: units(field_id),
+                    key: units(key),
+                    owner: units(owner),
+                    action: wire::EditorChangeAction::Remove,
+                    previous_json: value_json(Some(previous)),
+                    value_json: value_json(None),
+                    serialized: optional_units(None),
+                },
+            })
+            .collect(),
+        next_overrides_json: map_json(&c.next_overrides),
+    })
+}
+
+impl HostEditor {
     /// `ScopedSettingsStepper.build` for this editor; rows are then read one
     /// at a time.
     pub fn rows<E, C, F>(
