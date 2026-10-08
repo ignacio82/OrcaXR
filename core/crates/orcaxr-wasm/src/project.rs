@@ -1403,6 +1403,16 @@ impl CapturedProject {
         wire::encode_paint_palette(&orcaxr_project::facets::palette::wire_palette(&palette))
             .map_err(|_| error("output_limit"))
     }
+    /// An `ObjectTreeRequest`; returns an `ObjectTreeReply`: one page of the
+    /// Objects tree's visible rows, or the selection activating a row commits.
+    /// The folder folds non-ASCII search text as the settings search does.
+    pub fn object_tree(
+        &self,
+        request: &str,
+        folder: Option<crate::editor::SearchFolder>,
+    ) -> Result<String, JsValue> {
+        crate::editor::object_tree(&self.inner, request, folder.as_ref())
+    }
     /// A `SettingsTargetPageRequest`; returns a `SettingsTargetPage`.
     pub fn settings_targets(&self, request: &str) -> Result<String, JsValue> {
         crate::editor::projection(&self.inner, crate::editor::Projection::Targets, request)

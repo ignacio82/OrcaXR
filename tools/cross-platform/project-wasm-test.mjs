@@ -24,6 +24,7 @@ import { replayBrimEars } from "./brim-ear-replay.mjs";
 import { replayEmboss } from "./emboss-replay.mjs";
 import { replaySvgParts } from "./svg-part-replay.mjs";
 import { replayMeshPackets } from "./mesh-packet-replay.mjs";
+import { replayObjectTree } from "./object-tree-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -198,6 +199,17 @@ if (isMainThread) {
         result.assemblyExplosions,
       ],
       [55, 525, 246, 7],
+    );
+    // The Objects tree: pages, selections and refusals on captured projects.
+    assert.deepEqual(
+      [
+        result.objectTreeStates,
+        result.objectTreePages,
+        result.objectTreeSelections,
+        result.objectTreeIgnored,
+        result.objectTreeRefusals,
+      ],
+      [5, 367, 546, 21, 9],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -579,6 +591,22 @@ if (isMainThread) {
       await readFile(new URL("testdata/cross-platform/assembly-vectors.json", root)),
     ),
   );
+  const trees = replayObjectTree(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/object-tree-vectors.json", root)),
+    ),
+    layout,
+    fixture.generation,
+    {
+      fold: (units) => {
+        const s = String.fromCharCode(...units)
+          .normalize("NFKD")
+          .toLocaleLowerCase("en-US");
+        return Uint16Array.from({ length: s.length }, (_, i) => s.charCodeAt(i));
+      },
+    },
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -614,6 +642,7 @@ if (isMainThread) {
       ...svgParts,
       ...packets,
       ...assembled,
+      ...trees,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

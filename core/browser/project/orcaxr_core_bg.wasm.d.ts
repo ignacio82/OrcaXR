@@ -52,6 +52,7 @@ export const capturedproject_export_json: (a: number, b: number) => [number, num
 export const capturedproject_hash: (a: number) => [number, number];
 export const capturedproject_id: (a: number, b: number, c: number) => [number, number, number, number];
 export const capturedproject_id_length: (a: number) => number;
+export const capturedproject_object_tree: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const capturedproject_paint_palette: (a: number, b: number, c: number) => [number, number, number, number];
 export const capturedproject_query: (a: number, b: number) => [number, number, number];
 export const capturedproject_revision: (a: number) => number;

@@ -145,6 +145,8 @@ assert.deepEqual(schema.roots, [
   "AssemblyAlignmentReply",
   "ExplosionRequest",
   "ExplosionReply",
+  "ObjectTreeRequest",
+  "ObjectTreeReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

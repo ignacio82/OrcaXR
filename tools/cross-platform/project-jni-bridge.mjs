@@ -43,6 +43,7 @@ export function startProjectJni(profile = "debug") {
   signatures.svgPartChecks = ["String", "byte[]", "String"];
   signatures.meshPacketChecks = ["String", "byte[]", "String", "String"];
   signatures.assemblyChecks = ["String"];
+  signatures.objectTreeChecks = ["String", "byte[]", "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -694,6 +695,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     paint_palette(request) {
       return call("projectPaintPalette", this.handle, request);
+    }
+    object_tree(request, folder) {
+      return call("projectObjectTree", this.handle, request, folder);
     }
     settings_targets(request) {
       return call("projectSettingsTargets", this.handle, request);

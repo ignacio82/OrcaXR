@@ -100,6 +100,7 @@ final class NativeProject {
     static native long projectSettingsEditor(long handle, String request, PresetCollator collator, SearchFolding folder);
     static native String editorIntent(long handle);
     static native String projectPaintPalette(long handle, String request);
+    static native String projectObjectTree(long handle, String request, SearchFolding folder);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

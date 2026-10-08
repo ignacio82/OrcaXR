@@ -148,6 +148,34 @@ export class CapturedProject {
         return ret >>> 0;
     }
     /**
+     * An `ObjectTreeRequest`; returns an `ObjectTreeReply`: one page of the
+     * Objects tree's visible rows, or the selection activating a row commits.
+     * The folder folds non-ASCII search text as the settings search does.
+     * @param {string} request
+     * @param {any | null} [folder]
+     * @returns {string}
+     */
+    object_tree(request, folder) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.capturedproject_object_tree(this.__wbg_ptr, ptr0, len0, isLikeNone(folder) ? 0 : addToExternrefTable0(folder));
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * A `PaintPaletteRequest`; returns the project's `PaintPalette`.
      * @param {string} request
      * @returns {string}

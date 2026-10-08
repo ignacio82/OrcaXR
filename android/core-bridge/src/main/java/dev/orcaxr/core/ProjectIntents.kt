@@ -6737,6 +6737,396 @@ object ProjectIntents {
             is ExplosionReply.Refused -> w.field("refused") { writeAssemblyRefusal(w, v.value) }
         } }
     }
+    sealed interface SelectionEntity {
+        data class Project(val value: ProjectIntents.Empty) : SelectionEntity
+        data class Plate(val value: List<Int>) : SelectionEntity
+        data class Object(val value: List<Int>) : SelectionEntity
+        data class Volume(val value: List<Int>) : SelectionEntity
+        data class Instance(val value: List<Int>) : SelectionEntity
+        data class LayerRange(val value: List<Int>) : SelectionEntity
+        data class Filament(val value: List<Int>) : SelectionEntity
+    }
+    private fun readSelectionEntity(v: Any): SelectionEntity {
+        val obj = ProjectIntentJson.fields(v, setOf("project", "plate", "object", "volume", "instance", "layerRange", "filament"), true)
+        return when(val key = obj.keys().next()) {
+            "project" -> SelectionEntity.Project(readEmpty(obj.get(key)))
+            "plate" -> SelectionEntity.Plate(readId(obj.get(key)))
+            "object" -> SelectionEntity.Object(readId(obj.get(key)))
+            "volume" -> SelectionEntity.Volume(readId(obj.get(key)))
+            "instance" -> SelectionEntity.Instance(readId(obj.get(key)))
+            "layerRange" -> SelectionEntity.LayerRange(readId(obj.get(key)))
+            "filament" -> SelectionEntity.Filament(readId(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeSelectionEntity(w: ProjectIntentWriter, v: SelectionEntity) {
+        w.obj { when(v) {
+            is SelectionEntity.Project -> w.field("project") { writeEmpty(w, v.value) }
+            is SelectionEntity.Plate -> w.field("plate") { writeId(w, v.value) }
+            is SelectionEntity.Object -> w.field("object") { writeId(w, v.value) }
+            is SelectionEntity.Volume -> w.field("volume") { writeId(w, v.value) }
+            is SelectionEntity.Instance -> w.field("instance") { writeId(w, v.value) }
+            is SelectionEntity.LayerRange -> w.field("layerRange") { writeId(w, v.value) }
+            is SelectionEntity.Filament -> w.field("filament") { writeId(w, v.value) }
+        } }
+    }
+    private fun readSelectionEntities(v: Any): List<SelectionEntity> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readSelectionEntity(array.get(it)) }
+    }
+    private fun writeSelectionEntities(w: ProjectIntentWriter, v: List<SelectionEntity>) {
+        w.array(v, 0, 131072) { writeSelectionEntity(w, it) }
+    }
+    sealed interface OptionalSelectionEntity {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalSelectionEntity
+        data class Value(val value: ProjectIntents.SelectionEntity) : OptionalSelectionEntity
+    }
+    private fun readOptionalSelectionEntity(v: Any): OptionalSelectionEntity {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalSelectionEntity.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalSelectionEntity.Value(readSelectionEntity(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalSelectionEntity(w: ProjectIntentWriter, v: OptionalSelectionEntity) {
+        w.obj { when(v) {
+            is OptionalSelectionEntity.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalSelectionEntity.Value -> w.field("value") { writeSelectionEntity(w, v.value) }
+        } }
+    }
+    sealed interface ObjectTreeEntity {
+        data class Plate(val value: List<Int>) : ObjectTreeEntity
+        data class Object(val value: List<Int>) : ObjectTreeEntity
+        data class Volume(val value: List<Int>) : ObjectTreeEntity
+        data class Instance(val value: List<Int>) : ObjectTreeEntity
+        data class LayerRange(val value: List<Int>) : ObjectTreeEntity
+    }
+    private fun readObjectTreeEntity(v: Any): ObjectTreeEntity {
+        val obj = ProjectIntentJson.fields(v, setOf("plate", "object", "volume", "instance", "layerRange"), true)
+        return when(val key = obj.keys().next()) {
+            "plate" -> ObjectTreeEntity.Plate(readId(obj.get(key)))
+            "object" -> ObjectTreeEntity.Object(readId(obj.get(key)))
+            "volume" -> ObjectTreeEntity.Volume(readId(obj.get(key)))
+            "instance" -> ObjectTreeEntity.Instance(readId(obj.get(key)))
+            "layerRange" -> ObjectTreeEntity.LayerRange(readId(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeObjectTreeEntity(w: ProjectIntentWriter, v: ObjectTreeEntity) {
+        w.obj { when(v) {
+            is ObjectTreeEntity.Plate -> w.field("plate") { writeId(w, v.value) }
+            is ObjectTreeEntity.Object -> w.field("object") { writeId(w, v.value) }
+            is ObjectTreeEntity.Volume -> w.field("volume") { writeId(w, v.value) }
+            is ObjectTreeEntity.Instance -> w.field("instance") { writeId(w, v.value) }
+            is ObjectTreeEntity.LayerRange -> w.field("layerRange") { writeId(w, v.value) }
+        } }
+    }
+    private fun readObjectTreeEntities(v: Any): List<ObjectTreeEntity> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readObjectTreeEntity(array.get(it)) }
+    }
+    private fun writeObjectTreeEntities(w: ProjectIntentWriter, v: List<ObjectTreeEntity>) {
+        w.array(v, 0, 131072) { writeObjectTreeEntity(w, it) }
+    }
+    sealed interface OptionalObjectTreeEntity {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalObjectTreeEntity
+        data class Value(val value: ProjectIntents.ObjectTreeEntity) : OptionalObjectTreeEntity
+    }
+    private fun readOptionalObjectTreeEntity(v: Any): OptionalObjectTreeEntity {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalObjectTreeEntity.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalObjectTreeEntity.Value(readObjectTreeEntity(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalObjectTreeEntity(w: ProjectIntentWriter, v: OptionalObjectTreeEntity) {
+        w.obj { when(v) {
+            is OptionalObjectTreeEntity.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalObjectTreeEntity.Value -> w.field("value") { writeObjectTreeEntity(w, v.value) }
+        } }
+    }
+    private fun readObjectTreeKeys(v: Any): List<List<Int>> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readEditText(array.get(it)) }
+    }
+    private fun writeObjectTreeKeys(w: ProjectIntentWriter, v: List<List<Int>>) {
+        w.array(v, 0, 131072) { writeEditText(w, it) }
+    }
+    sealed interface ObjectTreeExpansion {
+        data class Default(val value: ProjectIntents.Empty) : ObjectTreeExpansion
+        data class Keys(val value: List<List<Int>>) : ObjectTreeExpansion
+    }
+    private fun readObjectTreeExpansion(v: Any): ObjectTreeExpansion {
+        val obj = ProjectIntentJson.fields(v, setOf("default", "keys"), true)
+        return when(val key = obj.keys().next()) {
+            "default" -> ObjectTreeExpansion.Default(readEmpty(obj.get(key)))
+            "keys" -> ObjectTreeExpansion.Keys(readObjectTreeKeys(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeObjectTreeExpansion(w: ProjectIntentWriter, v: ObjectTreeExpansion) {
+        w.obj { when(v) {
+            is ObjectTreeExpansion.Default -> w.field("default") { writeEmpty(w, v.value) }
+            is ObjectTreeExpansion.Keys -> w.field("keys") { writeObjectTreeKeys(w, v.value) }
+        } }
+    }
+    data class ObjectTreePageRequest(val start: Long, val count: Long)
+    private fun readObjectTreePageRequest(v: Any): ObjectTreePageRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("start", "count"), false)
+        return ObjectTreePageRequest(readCounter(obj.get("start")), readCounter(obj.get("count")))
+    }
+    private fun writeObjectTreePageRequest(w: ProjectIntentWriter, v: ObjectTreePageRequest) {
+        w.obj {
+            w.field("start") { writeCounter(w, v.start) }
+            w.field("count") { writeCounter(w, v.count) }
+        }
+    }
+    enum class ObjectTreeSelectionMode {Replace,Toggle,Range}
+    private fun readObjectTreeSelectionMode(v: Any): ObjectTreeSelectionMode {
+        return when(v) {"replace" -> ObjectTreeSelectionMode.Replace;"toggle" -> ObjectTreeSelectionMode.Toggle;"range" -> ObjectTreeSelectionMode.Range; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeObjectTreeSelectionMode(w: ProjectIntentWriter, v: ObjectTreeSelectionMode) {
+        w.literal(when(v) {ObjectTreeSelectionMode.Replace -> "replace";ObjectTreeSelectionMode.Toggle -> "toggle";ObjectTreeSelectionMode.Range -> "range";})
+    }
+    data class ObjectTreeSelect(val key: List<Int>, val mode: ObjectTreeSelectionMode, val anchorKey: OptionalText)
+    private fun readObjectTreeSelect(v: Any): ObjectTreeSelect {
+        val obj = ProjectIntentJson.fields(v, setOf("key", "mode", "anchorKey"), false)
+        return ObjectTreeSelect(readEditText(obj.get("key")), readObjectTreeSelectionMode(obj.get("mode")), readOptionalText(obj.get("anchorKey")))
+    }
+    private fun writeObjectTreeSelect(w: ProjectIntentWriter, v: ObjectTreeSelect) {
+        w.obj {
+            w.field("key") { writeEditText(w, v.key) }
+            w.field("mode") { writeObjectTreeSelectionMode(w, v.mode) }
+            w.field("anchorKey") { writeOptionalText(w, v.anchorKey) }
+        }
+    }
+    sealed interface ObjectTreeOperation {
+        data class Page(val value: ProjectIntents.ObjectTreePageRequest) : ObjectTreeOperation
+        data class Select(val value: ProjectIntents.ObjectTreeSelect) : ObjectTreeOperation
+    }
+    private fun readObjectTreeOperation(v: Any): ObjectTreeOperation {
+        val obj = ProjectIntentJson.fields(v, setOf("page", "select"), true)
+        return when(val key = obj.keys().next()) {
+            "page" -> ObjectTreeOperation.Page(readObjectTreePageRequest(obj.get(key)))
+            "select" -> ObjectTreeOperation.Select(readObjectTreeSelect(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeObjectTreeOperation(w: ProjectIntentWriter, v: ObjectTreeOperation) {
+        w.obj { when(v) {
+            is ObjectTreeOperation.Page -> w.field("page") { writeObjectTreePageRequest(w, v.value) }
+            is ObjectTreeOperation.Select -> w.field("select") { writeObjectTreeSelect(w, v.value) }
+        } }
+    }
+    data class ObjectTreeRequest(val expansion: ObjectTreeExpansion, val filterQuery: List<Int>, val selection: List<SelectionEntity>, val primary: OptionalSelectionEntity, val focusedKey: OptionalText, val operation: ObjectTreeOperation)
+    private fun readObjectTreeRequest(v: Any): ObjectTreeRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("expansion", "filterQuery", "selection", "primary", "focusedKey", "operation"), false)
+        return ObjectTreeRequest(readObjectTreeExpansion(obj.get("expansion")), readEditText(obj.get("filterQuery")), readSelectionEntities(obj.get("selection")), readOptionalSelectionEntity(obj.get("primary")), readOptionalText(obj.get("focusedKey")), readObjectTreeOperation(obj.get("operation")))
+    }
+    private fun writeObjectTreeRequest(w: ProjectIntentWriter, v: ObjectTreeRequest) {
+        w.obj {
+            w.field("expansion") { writeObjectTreeExpansion(w, v.expansion) }
+            w.field("filterQuery") { writeEditText(w, v.filterQuery) }
+            w.field("selection") { writeSelectionEntities(w, v.selection) }
+            w.field("primary") { writeOptionalSelectionEntity(w, v.primary) }
+            w.field("focusedKey") { writeOptionalText(w, v.focusedKey) }
+            w.field("operation") { writeObjectTreeOperation(w, v.operation) }
+        }
+    }
+    enum class ObjectTreeRowKind {Plate,Object,Volume,InstanceGroup,Instance,Settings,LayerGroup,LayerRange}
+    private fun readObjectTreeRowKind(v: Any): ObjectTreeRowKind {
+        return when(v) {"plate" -> ObjectTreeRowKind.Plate;"object" -> ObjectTreeRowKind.Object;"volume" -> ObjectTreeRowKind.Volume;"instanceGroup" -> ObjectTreeRowKind.InstanceGroup;"instance" -> ObjectTreeRowKind.Instance;"settings" -> ObjectTreeRowKind.Settings;"layerGroup" -> ObjectTreeRowKind.LayerGroup;"layerRange" -> ObjectTreeRowKind.LayerRange; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeObjectTreeRowKind(w: ProjectIntentWriter, v: ObjectTreeRowKind) {
+        w.literal(when(v) {ObjectTreeRowKind.Plate -> "plate";ObjectTreeRowKind.Object -> "object";ObjectTreeRowKind.Volume -> "volume";ObjectTreeRowKind.InstanceGroup -> "instanceGroup";ObjectTreeRowKind.Instance -> "instance";ObjectTreeRowKind.Settings -> "settings";ObjectTreeRowKind.LayerGroup -> "layerGroup";ObjectTreeRowKind.LayerRange -> "layerRange";})
+    }
+    enum class ObjectTreeRowExpansion {Leaf,Collapsed,Expanded}
+    private fun readObjectTreeRowExpansion(v: Any): ObjectTreeRowExpansion {
+        return when(v) {"leaf" -> ObjectTreeRowExpansion.Leaf;"collapsed" -> ObjectTreeRowExpansion.Collapsed;"expanded" -> ObjectTreeRowExpansion.Expanded; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeObjectTreeRowExpansion(w: ProjectIntentWriter, v: ObjectTreeRowExpansion) {
+        w.literal(when(v) {ObjectTreeRowExpansion.Leaf -> "leaf";ObjectTreeRowExpansion.Collapsed -> "collapsed";ObjectTreeRowExpansion.Expanded -> "expanded";})
+    }
+    enum class ObjectTreePrintable {Unknown,Printable,NotPrintable}
+    private fun readObjectTreePrintable(v: Any): ObjectTreePrintable {
+        return when(v) {"unknown" -> ObjectTreePrintable.Unknown;"printable" -> ObjectTreePrintable.Printable;"notPrintable" -> ObjectTreePrintable.NotPrintable; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeObjectTreePrintable(w: ProjectIntentWriter, v: ObjectTreePrintable) {
+        w.literal(when(v) {ObjectTreePrintable.Unknown -> "unknown";ObjectTreePrintable.Printable -> "printable";ObjectTreePrintable.NotPrintable -> "notPrintable";})
+    }
+    data class ObjectTreeFilament(val id: List<Int>, val name: List<Int>, val color: List<Int>, val mixed: Boolean, val inherited: Boolean)
+    private fun readObjectTreeFilament(v: Any): ObjectTreeFilament {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "name", "color", "mixed", "inherited"), false)
+        return ObjectTreeFilament(readId(obj.get("id")), readEditText(obj.get("name")), readEditText(obj.get("color")), readFlag(obj.get("mixed")), readFlag(obj.get("inherited")))
+    }
+    private fun writeObjectTreeFilament(w: ProjectIntentWriter, v: ObjectTreeFilament) {
+        w.obj {
+            w.field("id") { writeId(w, v.id) }
+            w.field("name") { writeEditText(w, v.name) }
+            w.field("color") { writeEditText(w, v.color) }
+            w.field("mixed") { writeFlag(w, v.mixed) }
+            w.field("inherited") { writeFlag(w, v.inherited) }
+        }
+    }
+    sealed interface OptionalObjectTreeFilament {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalObjectTreeFilament
+        data class Value(val value: ProjectIntents.ObjectTreeFilament) : OptionalObjectTreeFilament
+    }
+    private fun readOptionalObjectTreeFilament(v: Any): OptionalObjectTreeFilament {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalObjectTreeFilament.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalObjectTreeFilament.Value(readObjectTreeFilament(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalObjectTreeFilament(w: ProjectIntentWriter, v: OptionalObjectTreeFilament) {
+        w.obj { when(v) {
+            is OptionalObjectTreeFilament.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalObjectTreeFilament.Value -> w.field("value") { writeObjectTreeFilament(w, v.value) }
+        } }
+    }
+    data class ObjectTreePaint(val colorFacetCount: Long, val supportFacetCount: Long)
+    private fun readObjectTreePaint(v: Any): ObjectTreePaint {
+        val obj = ProjectIntentJson.fields(v, setOf("colorFacetCount", "supportFacetCount"), false)
+        return ObjectTreePaint(readCounter(obj.get("colorFacetCount")), readCounter(obj.get("supportFacetCount")))
+    }
+    private fun writeObjectTreePaint(w: ProjectIntentWriter, v: ObjectTreePaint) {
+        w.obj {
+            w.field("colorFacetCount") { writeCounter(w, v.colorFacetCount) }
+            w.field("supportFacetCount") { writeCounter(w, v.supportFacetCount) }
+        }
+    }
+    sealed interface OptionalObjectTreePaint {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalObjectTreePaint
+        data class Value(val value: ProjectIntents.ObjectTreePaint) : OptionalObjectTreePaint
+    }
+    private fun readOptionalObjectTreePaint(v: Any): OptionalObjectTreePaint {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalObjectTreePaint.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalObjectTreePaint.Value(readObjectTreePaint(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalObjectTreePaint(w: ProjectIntentWriter, v: OptionalObjectTreePaint) {
+        w.obj { when(v) {
+            is OptionalObjectTreePaint.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalObjectTreePaint.Value -> w.field("value") { writeObjectTreePaint(w, v.value) }
+        } }
+    }
+    sealed interface OptionalVolumeRoleName {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalVolumeRoleName
+        data class Value(val value: ProjectIntents.VolumeRoleName) : OptionalVolumeRoleName
+    }
+    private fun readOptionalVolumeRoleName(v: Any): OptionalVolumeRoleName {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalVolumeRoleName.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalVolumeRoleName.Value(readVolumeRoleName(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalVolumeRoleName(w: ProjectIntentWriter, v: OptionalVolumeRoleName) {
+        w.obj { when(v) {
+            is OptionalVolumeRoleName.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalVolumeRoleName.Value -> w.field("value") { writeVolumeRoleName(w, v.value) }
+        } }
+    }
+    data class ObjectTreeIndicators(val printable: ObjectTreePrintable, val filament: OptionalObjectTreeFilament, val paint: OptionalObjectTreePaint, val editable: Boolean, val settingsCount: OptionalCounter, val volumeRole: OptionalVolumeRoleName)
+    private fun readObjectTreeIndicators(v: Any): ObjectTreeIndicators {
+        val obj = ProjectIntentJson.fields(v, setOf("printable", "filament", "paint", "editable", "settingsCount", "volumeRole"), false)
+        return ObjectTreeIndicators(readObjectTreePrintable(obj.get("printable")), readOptionalObjectTreeFilament(obj.get("filament")), readOptionalObjectTreePaint(obj.get("paint")), readFlag(obj.get("editable")), readOptionalCounter(obj.get("settingsCount")), readOptionalVolumeRoleName(obj.get("volumeRole")))
+    }
+    private fun writeObjectTreeIndicators(w: ProjectIntentWriter, v: ObjectTreeIndicators) {
+        w.obj {
+            w.field("printable") { writeObjectTreePrintable(w, v.printable) }
+            w.field("filament") { writeOptionalObjectTreeFilament(w, v.filament) }
+            w.field("paint") { writeOptionalObjectTreePaint(w, v.paint) }
+            w.field("editable") { writeFlag(w, v.editable) }
+            w.field("settingsCount") { writeOptionalCounter(w, v.settingsCount) }
+            w.field("volumeRole") { writeOptionalVolumeRoleName(w, v.volumeRole) }
+        }
+    }
+    data class ObjectTreeRow(val key: List<Int>, val kind: ObjectTreeRowKind, val parentKey: OptionalText, val label: List<Int>, val description: OptionalText, val entity: OptionalObjectTreeEntity, val owner: OptionalObjectTreeEntity, val indicators: ObjectTreeIndicators, val matchedFilter: Boolean, val focused: Boolean, val selected: Boolean, val level: Long, val positionInSet: Long, val setSize: Long, val expansion: ObjectTreeRowExpansion)
+    private fun readObjectTreeRow(v: Any): ObjectTreeRow {
+        val obj = ProjectIntentJson.fields(v, setOf("key", "kind", "parentKey", "label", "description", "entity", "owner", "indicators", "matchedFilter", "focused", "selected", "level", "positionInSet", "setSize", "expansion"), false)
+        return ObjectTreeRow(readEditText(obj.get("key")), readObjectTreeRowKind(obj.get("kind")), readOptionalText(obj.get("parentKey")), readEditText(obj.get("label")), readOptionalText(obj.get("description")), readOptionalObjectTreeEntity(obj.get("entity")), readOptionalObjectTreeEntity(obj.get("owner")), readObjectTreeIndicators(obj.get("indicators")), readFlag(obj.get("matchedFilter")), readFlag(obj.get("focused")), readFlag(obj.get("selected")), readCounter(obj.get("level")), readCounter(obj.get("positionInSet")), readCounter(obj.get("setSize")), readObjectTreeRowExpansion(obj.get("expansion")))
+    }
+    private fun writeObjectTreeRow(w: ProjectIntentWriter, v: ObjectTreeRow) {
+        w.obj {
+            w.field("key") { writeEditText(w, v.key) }
+            w.field("kind") { writeObjectTreeRowKind(w, v.kind) }
+            w.field("parentKey") { writeOptionalText(w, v.parentKey) }
+            w.field("label") { writeEditText(w, v.label) }
+            w.field("description") { writeOptionalText(w, v.description) }
+            w.field("entity") { writeOptionalObjectTreeEntity(w, v.entity) }
+            w.field("owner") { writeOptionalObjectTreeEntity(w, v.owner) }
+            w.field("indicators") { writeObjectTreeIndicators(w, v.indicators) }
+            w.field("matchedFilter") { writeFlag(w, v.matchedFilter) }
+            w.field("focused") { writeFlag(w, v.focused) }
+            w.field("selected") { writeFlag(w, v.selected) }
+            w.field("level") { writeCounter(w, v.level) }
+            w.field("positionInSet") { writeCounter(w, v.positionInSet) }
+            w.field("setSize") { writeCounter(w, v.setSize) }
+            w.field("expansion") { writeObjectTreeRowExpansion(w, v.expansion) }
+        }
+    }
+    private fun readObjectTreeRows(v: Any): List<ObjectTreeRow> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readObjectTreeRow(array.get(it)) }
+    }
+    private fun writeObjectTreeRows(w: ProjectIntentWriter, v: List<ObjectTreeRow>) {
+        w.array(v, 0, 64) { writeObjectTreeRow(w, it) }
+    }
+    data class ObjectTreePage(val totalRows: Long, val focusKey: OptionalText, val filterActive: Boolean, val rows: List<ObjectTreeRow>)
+    private fun readObjectTreePage(v: Any): ObjectTreePage {
+        val obj = ProjectIntentJson.fields(v, setOf("totalRows", "focusKey", "filterActive", "rows"), false)
+        return ObjectTreePage(readCounter(obj.get("totalRows")), readOptionalText(obj.get("focusKey")), readFlag(obj.get("filterActive")), readObjectTreeRows(obj.get("rows")))
+    }
+    private fun writeObjectTreePage(w: ProjectIntentWriter, v: ObjectTreePage) {
+        w.obj {
+            w.field("totalRows") { writeCounter(w, v.totalRows) }
+            w.field("focusKey") { writeOptionalText(w, v.focusKey) }
+            w.field("filterActive") { writeFlag(w, v.filterActive) }
+            w.field("rows") { writeObjectTreeRows(w, v.rows) }
+        }
+    }
+    data class ObjectTreeSelection(val refs: List<ObjectTreeEntity>, val primary: OptionalObjectTreeEntity, val anchorKey: OptionalText)
+    private fun readObjectTreeSelection(v: Any): ObjectTreeSelection {
+        val obj = ProjectIntentJson.fields(v, setOf("refs", "primary", "anchorKey"), false)
+        return ObjectTreeSelection(readObjectTreeEntities(obj.get("refs")), readOptionalObjectTreeEntity(obj.get("primary")), readOptionalText(obj.get("anchorKey")))
+    }
+    private fun writeObjectTreeSelection(w: ProjectIntentWriter, v: ObjectTreeSelection) {
+        w.obj {
+            w.field("refs") { writeObjectTreeEntities(w, v.refs) }
+            w.field("primary") { writeOptionalObjectTreeEntity(w, v.primary) }
+            w.field("anchorKey") { writeOptionalText(w, v.anchorKey) }
+        }
+    }
+    sealed interface ObjectTreeReply {
+        data class Page(val value: ProjectIntents.ObjectTreePage) : ObjectTreeReply
+        data class Selected(val value: ProjectIntents.ObjectTreeSelection) : ObjectTreeReply
+        data class Ignored(val value: ProjectIntents.Empty) : ObjectTreeReply
+    }
+    private fun readObjectTreeReply(v: Any): ObjectTreeReply {
+        val obj = ProjectIntentJson.fields(v, setOf("page", "selected", "ignored"), true)
+        return when(val key = obj.keys().next()) {
+            "page" -> ObjectTreeReply.Page(readObjectTreePage(obj.get(key)))
+            "selected" -> ObjectTreeReply.Selected(readObjectTreeSelection(obj.get(key)))
+            "ignored" -> ObjectTreeReply.Ignored(readEmpty(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeObjectTreeReply(w: ProjectIntentWriter, v: ObjectTreeReply) {
+        w.obj { when(v) {
+            is ObjectTreeReply.Page -> w.field("page") { writeObjectTreePage(w, v.value) }
+            is ObjectTreeReply.Selected -> w.field("selected") { writeObjectTreeSelection(w, v.value) }
+            is ObjectTreeReply.Ignored -> w.field("ignored") { writeEmpty(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -6953,4 +7343,8 @@ object ProjectIntents {
     fun encodeExplosionRequest(value: ExplosionRequest): String = ProjectIntentWriter().also { writeExplosionRequest(it, value) }.finish()
     fun decodeExplosionReply(text: String): ExplosionReply = readExplosionReply(ProjectIntentJson.parse(text))
     fun encodeExplosionReply(value: ExplosionReply): String = ProjectIntentWriter().also { writeExplosionReply(it, value) }.finish()
+    fun decodeObjectTreeRequest(text: String): ObjectTreeRequest = readObjectTreeRequest(ProjectIntentJson.parse(text))
+    fun encodeObjectTreeRequest(value: ObjectTreeRequest): String = ProjectIntentWriter().also { writeObjectTreeRequest(it, value) }.finish()
+    fun decodeObjectTreeReply(text: String): ObjectTreeReply = readObjectTreeReply(ProjectIntentJson.parse(text))
+    fun encodeObjectTreeReply(value: ObjectTreeReply): String = ProjectIntentWriter().also { writeObjectTreeReply(it, value) }.finish()
 }

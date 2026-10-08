@@ -2,11 +2,13 @@ import {
   ObjectTreeExpansionState,
   buildObjectTreeView,
   computeFixedVirtualWindow,
+  objectTreeSelectionRequest,
   scrollOffsetToRevealRow,
   type ObjectTreeEntityRef,
   type ObjectTreeProjection,
   type ObjectTreeRowKey,
   type ObjectTreeSelectionMode,
+  type ObjectTreeSelectionRequest,
   type ObjectTreeSelectionSnapshot,
   type ObjectTreeView,
   type ObjectTreeVisibleRow,
@@ -24,15 +26,7 @@ export interface ObjectsPanelSnapshot {
   readonly selection: ObjectTreeSelectionSnapshot;
 }
 
-export interface ObjectsPanelSelectionRequest {
-  readonly mode: ObjectTreeSelectionMode;
-  readonly rowKey: ObjectTreeRowKey;
-  readonly target: ObjectTreeEntityRef;
-  /** The prior replace/toggle target when it remains visible. */
-  readonly anchor?: ObjectTreeEntityRef;
-  /** Exact visible entity range, populated only for range selection. */
-  readonly range?: readonly ObjectTreeEntityRef[];
-}
+export type ObjectsPanelSelectionRequest = ObjectTreeSelectionRequest;
 
 export interface ObjectsPanelRenameRequest {
   readonly rowKey: ObjectTreeRowKey;
@@ -674,34 +668,9 @@ export class ObjectsPanel {
   }
 
   private emitSelection(row: ObjectTreeVisibleRow, mode: ObjectTreeSelectionMode, view: ObjectTreeView): void {
-    if (!row.entity) return;
-    const anchorRow = this.anchorKey ? view.rowsByKey.get(this.anchorKey) : undefined;
-    let range: ObjectTreeEntityRef[] | undefined;
-    if (mode === 'range') {
-      const anchorIndex = this.anchorKey ? view.indexByKey.get(this.anchorKey) : undefined;
-      const targetIndex = view.indexByKey.get(row.key);
-      if (anchorIndex === undefined || targetIndex === undefined) {
-        range = [cloneEntity(row.entity)];
-      } else {
-        const start = Math.min(anchorIndex, targetIndex);
-        const end = Math.max(anchorIndex, targetIndex);
-        range = deduplicateEntities(
-          view.rows
-            .slice(start, end + 1)
-            .flatMap((candidate) => (candidate.entity ? [cloneEntity(candidate.entity)] : [])),
-        );
-      }
-    } else {
-      this.anchorKey = row.key;
-    }
-    const request: ObjectsPanelSelectionRequest = {
-      mode,
-      rowKey: row.key,
-      target: cloneEntity(row.entity),
-      ...(anchorRow?.entity ? { anchor: cloneEntity(anchorRow.entity) } : {}),
-      ...(range ? { range } : {}),
-    };
-    this.invokeAdapter(() => this.adapter.onSelectionRequest(request));
+    const { request, anchorKey } = objectTreeSelectionRequest(view, row, mode, this.anchorKey);
+    this.anchorKey = anchorKey;
+    if (request) this.invokeAdapter(() => this.adapter.onSelectionRequest(request));
   }
 
   private beginRename(row: ObjectTreeVisibleRow): void {
@@ -853,16 +822,6 @@ function isRenameable(row: ObjectTreeVisibleRow): boolean {
 
 function cloneEntity<T extends ObjectTreeEntityRef>(entity: T): T {
   return { ...entity };
-}
-
-function deduplicateEntities(entities: readonly ObjectTreeEntityRef[]): ObjectTreeEntityRef[] {
-  const seen = new Set<string>();
-  return entities.filter((entity) => {
-    const key = `${entity.kind}:${entity.id}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function positiveFinite(value: number, name: string): number {

@@ -574,6 +574,15 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
     fun paintPalette(request: ProjectIntents.PaintPaletteRequest): ProjectIntents.PaintPalette = read {
         ProjectIntents.decodePaintPalette(NativeProject.projectPaintPalette(it, ProjectIntents.encodePaintPaletteRequest(request)))
     }
+    /** One page of the Objects tree's visible rows under the host's expansion,
+     * filter, selection and focus, or the selection activating a row commits.
+     * [folder] folds non-ASCII search text; without one such text is refused. */
+    fun objectTree(
+        request: ProjectIntents.ObjectTreeRequest,
+        folder: SearchFolding? = SearchFolding.PLATFORM,
+    ): ProjectIntents.ObjectTreeReply = read {
+        ProjectIntents.decodeObjectTreeReply(NativeProject.projectObjectTree(it, ProjectIntents.encodeObjectTreeRequest(request), folder))
+    }
     /** One page of the nodes a scoped settings edit can address. */
     fun settingsTargets(request: ProjectIntents.SettingsTargetPageRequest): ProjectIntents.SettingsTargetPage = read {
         ProjectIntents.decodeSettingsTargetPage(

@@ -100,7 +100,29 @@ export function entityRowKey(ref: ObjectTreeEntityRef): ObjectTreeRowKey {
 }
 
 export function objectTreeRowId(key: ObjectTreeRowKey): string {
-  return `orcaxr-object-row-${encodeURIComponent(key)}`;
+  return `orcaxr-object-row-${encodeRowKey(key)}`;
+}
+
+/**
+ * `encodeURIComponent`, except that a lone surrogate (which stable imported
+ * IDs may carry) becomes `%uXXXX` instead of throwing. That form cannot occur
+ * in `encodeURIComponent` output, so distinct keys keep distinct encodings.
+ */
+export function encodeRowKey(key: string): string {
+  let encoded = '';
+  let start = 0;
+  for (let i = 0; i < key.length; i += 1) {
+    const unit = key.charCodeAt(i);
+    if (unit < 0xd800 || unit > 0xdfff) continue;
+    const next = key.charCodeAt(i + 1);
+    if (unit <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) {
+      i += 1;
+      continue;
+    }
+    encoded += `${encodeURIComponent(key.slice(start, i))}%u${unit.toString(16).toUpperCase()}`;
+    start = i + 1;
+  }
+  return encoded + encodeURIComponent(key.slice(start));
 }
 
 function projectObject(
@@ -310,7 +332,7 @@ function addDiagnostic(
     diagnostic.parentKey ?? (diagnostic.entity ? entityRows.get(selectionKey(diagnostic.entity)) : undefined);
   const parentKey = requestedParent && rows.has(requestedParent) ? requestedParent : undefined;
   const kind = diagnostic.severity === 'error' ? 'error' : 'info';
-  const key = `diagnostic:${encodeURIComponent(parentKey ?? 'root')}:${kind}:${encodeURIComponent(diagnostic.id)}`;
+  const key = `diagnostic:${encodeRowKey(parentKey ?? 'root')}:${kind}:${encodeRowKey(diagnostic.id)}`;
   add(
     row({
       key,
@@ -401,11 +423,17 @@ function row(input: {
   };
 }
 
+/**
+ * Tree search text: folded as the settings search folds it (NFKD, then
+ * US-English lowercase, so the host's locale never changes what matches),
+ * without combining diacritics, trimmed, with whitespace runs as one space.
+ * The native core applies the same steps to a host's folding.
+ */
 export function normalizeSearch(value: string): string {
   return value
     .normalize('NFKD')
+    .toLocaleLowerCase('en-US')
     .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase()
     .trim()
     .replace(/\s+/g, ' ');
 }

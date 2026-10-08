@@ -223,6 +223,28 @@ pub(super) fn project_paint_palette(
         },
     )
 }
+/// An `ObjectTreeRequest` on a captured project. A null folder refuses
+/// non-ASCII search text.
+pub(super) fn project_object_tree(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+    folder: JObject<'_>,
+) -> Result<jstring> {
+    use orcaxr_project::objects_tree::{self, Refusal};
+    let request = decoded(env, &request, wire::decode_object_tree_request)?;
+    let (_, folder) = policies(env, &JObject::null(), &folder)?;
+    let json =
+        with_project(handle, |p| {
+            let reply = objects_tree::answer(p.state(), &request, &mut Fold(folder.as_ref()))
+                .map_err(|e| match e {
+                    Refusal::Host(code) => code,
+                    other => other.code(),
+                })?;
+            encoded(&reply, wire::encode_object_tree_reply)
+        })?;
+    string(env, json)
+}
 pub(super) fn session_capabilities(
     env: &mut JNIEnv<'_>,
     handle: jlong,

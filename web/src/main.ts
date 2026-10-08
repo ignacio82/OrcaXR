@@ -74,7 +74,7 @@ import { buildShortcutCatalog, isShortcutEditingTarget, matchShortcut } from './
 import { DomShell } from './ui/dom/DomShell';
 import { CommandPalette } from './ui/dom/CommandPalette';
 import { ContextMenu, contextMenuGroups } from './ui/dom/ContextMenu';
-import { ObjectsPanel, type ObjectsPanelSelectionRequest } from './ui/dom/ObjectsPanel';
+import { ObjectsPanel } from './ui/dom/ObjectsPanel';
 import { FilamentAssignmentSelector } from './ui/dom/FilamentAssignmentSelector';
 import { SelectionFilamentBar } from './ui/dom/SelectionFilamentBar';
 import { askThreeMfIntake } from './ui/dom/FileIntakeDialog';
@@ -150,7 +150,7 @@ import {
 } from './filaments/FullSpectrumAutoPairPreferences';
 import { AiConfigDialog } from './ui/dom/AiConfigDialog';
 import { showProjectImportPreviewDialog } from './import/ProjectImportPreviewDialog';
-import type { ObjectTreeEntityRef } from './project/objects';
+import { resolveObjectTreeSelection } from './project/objects/selectionRequest';
 import { t } from './l10n/t';
 import { diagnoseLocalNetwork, normalizeHttpEndpoint } from './net/LocalNetworkAccess';
 
@@ -329,41 +329,6 @@ const PRINT_JOB_OUTCOMES: Readonly<Record<PrintJobCommand, string>> = Object.fre
   'emergency-stop': 'Emergency stop sent. Klipper is halted and needs a firmware restart before it accepts work.',
   'firmware-restart': 'Firmware restart requested.',
 });
-
-function objectsEntityKey(entity: ObjectTreeEntityRef): string {
-  return `${entity.kind}:${entity.id}`;
-}
-
-function cloneObjectsEntity<T extends ObjectTreeEntityRef>(entity: T): T {
-  return { ...entity };
-}
-
-function objectsSelectionForRequest(
-  snapshot: ReturnType<OrcaWorkspace['getObjectsTreeSnapshot']>,
-  request: ObjectsPanelSelectionRequest,
-): { readonly refs: readonly ObjectTreeEntityRef[]; readonly primary?: ObjectTreeEntityRef } {
-  if (request.mode === 'replace') {
-    return { refs: [cloneObjectsEntity(request.target)], primary: cloneObjectsEntity(request.target) };
-  }
-  if (request.mode === 'range') {
-    const refs = (request.range ?? [request.target]).map(cloneObjectsEntity);
-    return { refs, primary: cloneObjectsEntity(request.target) };
-  }
-
-  const targetKey = objectsEntityKey(request.target);
-  const refs = snapshot.selection.refs.map(cloneObjectsEntity);
-  const index = refs.findIndex((candidate) => objectsEntityKey(candidate) === targetKey);
-  if (index >= 0) refs.splice(index, 1);
-  else refs.push(cloneObjectsEntity(request.target));
-  const existingPrimary = snapshot.selection.primary;
-  const primary =
-    index < 0
-      ? cloneObjectsEntity(request.target)
-      : existingPrimary && refs.some((candidate) => objectsEntityKey(candidate) === objectsEntityKey(existingPrimary))
-        ? cloneObjectsEntity(existingPrimary)
-        : refs.at(-1);
-  return { refs, ...(primary ? { primary } : {}) };
-}
 
 /** 2D-page UI wiring for standard web slicer mode. */
 /**
@@ -3093,7 +3058,7 @@ function setupDomUI(
       getSnapshot: () => workspace.getObjectsTreeSnapshot(),
       subscribe: (listener) => workspace.subscribeCanonicalState(listener),
       onSelectionRequest: async (request) => {
-        const selection = objectsSelectionForRequest(workspace.getObjectsTreeSnapshot(), request);
+        const selection = resolveObjectTreeSelection(workspace.getObjectsTreeSnapshot().selection, request);
         await registry.invoke('objects_select', 'dom-inspector', actionCtx, uiState.get(), {
           objectsSelection: selection,
         });

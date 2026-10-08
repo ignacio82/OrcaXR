@@ -9268,6 +9268,511 @@ fn read_explosion_reply(v: &Value) -> Result<ExplosionReply, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SelectionEntity {
+    Project(Empty),
+    Plate(Id),
+    Object(Id),
+    Volume(Id),
+    Instance(Id),
+    LayerRange(Id),
+    Filament(Id),
+}
+fn read_selection_entity(v: &Value) -> Result<SelectionEntity, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "project",
+            "plate",
+            "object",
+            "volume",
+            "instance",
+            "layerRange",
+            "filament",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "project" => Ok(SelectionEntity::Project(read_empty(value)?)),
+        "plate" => Ok(SelectionEntity::Plate(read_id(value)?)),
+        "object" => Ok(SelectionEntity::Object(read_id(value)?)),
+        "volume" => Ok(SelectionEntity::Volume(read_id(value)?)),
+        "instance" => Ok(SelectionEntity::Instance(read_id(value)?)),
+        "layerRange" => Ok(SelectionEntity::LayerRange(read_id(value)?)),
+        "filament" => Ok(SelectionEntity::Filament(read_id(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type SelectionEntities = Vec<SelectionEntity>;
+fn read_selection_entities(v: &Value) -> Result<SelectionEntities, InvalidIntent> {
+    list(v, 0, 131072)?
+        .iter()
+        .map(read_selection_entity)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalSelectionEntity {
+    Absent(Empty),
+    Value(SelectionEntity),
+}
+fn read_optional_selection_entity(v: &Value) -> Result<OptionalSelectionEntity, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalSelectionEntity::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalSelectionEntity::Value(read_selection_entity(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ObjectTreeEntity {
+    Plate(Id),
+    Object(Id),
+    Volume(Id),
+    Instance(Id),
+    LayerRange(Id),
+}
+fn read_object_tree_entity(v: &Value) -> Result<ObjectTreeEntity, InvalidIntent> {
+    let object = fields(
+        v,
+        &["plate", "object", "volume", "instance", "layerRange"],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "plate" => Ok(ObjectTreeEntity::Plate(read_id(value)?)),
+        "object" => Ok(ObjectTreeEntity::Object(read_id(value)?)),
+        "volume" => Ok(ObjectTreeEntity::Volume(read_id(value)?)),
+        "instance" => Ok(ObjectTreeEntity::Instance(read_id(value)?)),
+        "layerRange" => Ok(ObjectTreeEntity::LayerRange(read_id(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type ObjectTreeEntities = Vec<ObjectTreeEntity>;
+fn read_object_tree_entities(v: &Value) -> Result<ObjectTreeEntities, InvalidIntent> {
+    list(v, 0, 131072)?
+        .iter()
+        .map(read_object_tree_entity)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalObjectTreeEntity {
+    Absent(Empty),
+    Value(ObjectTreeEntity),
+}
+fn read_optional_object_tree_entity(v: &Value) -> Result<OptionalObjectTreeEntity, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalObjectTreeEntity::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalObjectTreeEntity::Value(read_object_tree_entity(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type ObjectTreeKeys = Vec<EditText>;
+fn read_object_tree_keys(v: &Value) -> Result<ObjectTreeKeys, InvalidIntent> {
+    list(v, 0, 131072)?.iter().map(read_edit_text).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ObjectTreeExpansion {
+    Default(Empty),
+    Keys(ObjectTreeKeys),
+}
+fn read_object_tree_expansion(v: &Value) -> Result<ObjectTreeExpansion, InvalidIntent> {
+    let object = fields(v, &["default", "keys"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "default" => Ok(ObjectTreeExpansion::Default(read_empty(value)?)),
+        "keys" => Ok(ObjectTreeExpansion::Keys(read_object_tree_keys(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectTreePageRequest {
+    pub start: Counter,
+    pub count: Counter,
+}
+fn read_object_tree_page_request(v: &Value) -> Result<ObjectTreePageRequest, InvalidIntent> {
+    let object = fields(v, &["start", "count"], false)?;
+    Ok(ObjectTreePageRequest {
+        start: read_counter(&object["start"])?,
+        count: read_counter(&object["count"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ObjectTreeSelectionMode {
+    Replace,
+    Toggle,
+    Range,
+}
+fn read_object_tree_selection_mode(v: &Value) -> Result<ObjectTreeSelectionMode, InvalidIntent> {
+    match v.as_str() {
+        Some("replace") => Ok(ObjectTreeSelectionMode::Replace),
+        Some("toggle") => Ok(ObjectTreeSelectionMode::Toggle),
+        Some("range") => Ok(ObjectTreeSelectionMode::Range),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectTreeSelect {
+    pub key: EditText,
+    pub mode: ObjectTreeSelectionMode,
+    pub anchor_key: OptionalText,
+}
+fn read_object_tree_select(v: &Value) -> Result<ObjectTreeSelect, InvalidIntent> {
+    let object = fields(v, &["key", "mode", "anchorKey"], false)?;
+    Ok(ObjectTreeSelect {
+        key: read_edit_text(&object["key"])?,
+        mode: read_object_tree_selection_mode(&object["mode"])?,
+        anchor_key: read_optional_text(&object["anchorKey"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ObjectTreeOperation {
+    Page(ObjectTreePageRequest),
+    Select(ObjectTreeSelect),
+}
+fn read_object_tree_operation(v: &Value) -> Result<ObjectTreeOperation, InvalidIntent> {
+    let object = fields(v, &["page", "select"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "page" => Ok(ObjectTreeOperation::Page(read_object_tree_page_request(
+            value,
+        )?)),
+        "select" => Ok(ObjectTreeOperation::Select(read_object_tree_select(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectTreeRequest {
+    pub expansion: ObjectTreeExpansion,
+    pub filter_query: EditText,
+    pub selection: SelectionEntities,
+    pub primary: OptionalSelectionEntity,
+    pub focused_key: OptionalText,
+    pub operation: ObjectTreeOperation,
+}
+fn read_object_tree_request(v: &Value) -> Result<ObjectTreeRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "expansion",
+            "filterQuery",
+            "selection",
+            "primary",
+            "focusedKey",
+            "operation",
+        ],
+        false,
+    )?;
+    Ok(ObjectTreeRequest {
+        expansion: read_object_tree_expansion(&object["expansion"])?,
+        filter_query: read_edit_text(&object["filterQuery"])?,
+        selection: read_selection_entities(&object["selection"])?,
+        primary: read_optional_selection_entity(&object["primary"])?,
+        focused_key: read_optional_text(&object["focusedKey"])?,
+        operation: read_object_tree_operation(&object["operation"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ObjectTreeRowKind {
+    Plate,
+    Object,
+    Volume,
+    InstanceGroup,
+    Instance,
+    Settings,
+    LayerGroup,
+    LayerRange,
+}
+fn read_object_tree_row_kind(v: &Value) -> Result<ObjectTreeRowKind, InvalidIntent> {
+    match v.as_str() {
+        Some("plate") => Ok(ObjectTreeRowKind::Plate),
+        Some("object") => Ok(ObjectTreeRowKind::Object),
+        Some("volume") => Ok(ObjectTreeRowKind::Volume),
+        Some("instanceGroup") => Ok(ObjectTreeRowKind::InstanceGroup),
+        Some("instance") => Ok(ObjectTreeRowKind::Instance),
+        Some("settings") => Ok(ObjectTreeRowKind::Settings),
+        Some("layerGroup") => Ok(ObjectTreeRowKind::LayerGroup),
+        Some("layerRange") => Ok(ObjectTreeRowKind::LayerRange),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ObjectTreeRowExpansion {
+    Leaf,
+    Collapsed,
+    Expanded,
+}
+fn read_object_tree_row_expansion(v: &Value) -> Result<ObjectTreeRowExpansion, InvalidIntent> {
+    match v.as_str() {
+        Some("leaf") => Ok(ObjectTreeRowExpansion::Leaf),
+        Some("collapsed") => Ok(ObjectTreeRowExpansion::Collapsed),
+        Some("expanded") => Ok(ObjectTreeRowExpansion::Expanded),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ObjectTreePrintable {
+    Unknown,
+    Printable,
+    NotPrintable,
+}
+fn read_object_tree_printable(v: &Value) -> Result<ObjectTreePrintable, InvalidIntent> {
+    match v.as_str() {
+        Some("unknown") => Ok(ObjectTreePrintable::Unknown),
+        Some("printable") => Ok(ObjectTreePrintable::Printable),
+        Some("notPrintable") => Ok(ObjectTreePrintable::NotPrintable),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectTreeFilament {
+    pub id: Id,
+    pub name: EditText,
+    pub color: EditText,
+    pub mixed: Flag,
+    pub inherited: Flag,
+}
+fn read_object_tree_filament(v: &Value) -> Result<ObjectTreeFilament, InvalidIntent> {
+    let object = fields(v, &["id", "name", "color", "mixed", "inherited"], false)?;
+    Ok(ObjectTreeFilament {
+        id: read_id(&object["id"])?,
+        name: read_edit_text(&object["name"])?,
+        color: read_edit_text(&object["color"])?,
+        mixed: read_flag(&object["mixed"])?,
+        inherited: read_flag(&object["inherited"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalObjectTreeFilament {
+    Absent(Empty),
+    Value(ObjectTreeFilament),
+}
+fn read_optional_object_tree_filament(
+    v: &Value,
+) -> Result<OptionalObjectTreeFilament, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalObjectTreeFilament::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalObjectTreeFilament::Value(
+            read_object_tree_filament(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectTreePaint {
+    pub color_facet_count: Counter,
+    pub support_facet_count: Counter,
+}
+fn read_object_tree_paint(v: &Value) -> Result<ObjectTreePaint, InvalidIntent> {
+    let object = fields(v, &["colorFacetCount", "supportFacetCount"], false)?;
+    Ok(ObjectTreePaint {
+        color_facet_count: read_counter(&object["colorFacetCount"])?,
+        support_facet_count: read_counter(&object["supportFacetCount"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalObjectTreePaint {
+    Absent(Empty),
+    Value(ObjectTreePaint),
+}
+fn read_optional_object_tree_paint(v: &Value) -> Result<OptionalObjectTreePaint, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalObjectTreePaint::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalObjectTreePaint::Value(read_object_tree_paint(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalVolumeRoleName {
+    Absent(Empty),
+    Value(VolumeRoleName),
+}
+fn read_optional_volume_role_name(v: &Value) -> Result<OptionalVolumeRoleName, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalVolumeRoleName::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalVolumeRoleName::Value(read_volume_role_name(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectTreeIndicators {
+    pub printable: ObjectTreePrintable,
+    pub filament: OptionalObjectTreeFilament,
+    pub paint: OptionalObjectTreePaint,
+    pub editable: Flag,
+    pub settings_count: OptionalCounter,
+    pub volume_role: OptionalVolumeRoleName,
+}
+fn read_object_tree_indicators(v: &Value) -> Result<ObjectTreeIndicators, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "printable",
+            "filament",
+            "paint",
+            "editable",
+            "settingsCount",
+            "volumeRole",
+        ],
+        false,
+    )?;
+    Ok(ObjectTreeIndicators {
+        printable: read_object_tree_printable(&object["printable"])?,
+        filament: read_optional_object_tree_filament(&object["filament"])?,
+        paint: read_optional_object_tree_paint(&object["paint"])?,
+        editable: read_flag(&object["editable"])?,
+        settings_count: read_optional_counter(&object["settingsCount"])?,
+        volume_role: read_optional_volume_role_name(&object["volumeRole"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectTreeRow {
+    pub key: EditText,
+    pub kind: ObjectTreeRowKind,
+    pub parent_key: OptionalText,
+    pub label: EditText,
+    pub description: OptionalText,
+    pub entity: OptionalObjectTreeEntity,
+    pub owner: OptionalObjectTreeEntity,
+    pub indicators: ObjectTreeIndicators,
+    pub matched_filter: Flag,
+    pub focused: Flag,
+    pub selected: Flag,
+    pub level: Counter,
+    pub position_in_set: Counter,
+    pub set_size: Counter,
+    pub expansion: ObjectTreeRowExpansion,
+}
+fn read_object_tree_row(v: &Value) -> Result<ObjectTreeRow, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "key",
+            "kind",
+            "parentKey",
+            "label",
+            "description",
+            "entity",
+            "owner",
+            "indicators",
+            "matchedFilter",
+            "focused",
+            "selected",
+            "level",
+            "positionInSet",
+            "setSize",
+            "expansion",
+        ],
+        false,
+    )?;
+    Ok(ObjectTreeRow {
+        key: read_edit_text(&object["key"])?,
+        kind: read_object_tree_row_kind(&object["kind"])?,
+        parent_key: read_optional_text(&object["parentKey"])?,
+        label: read_edit_text(&object["label"])?,
+        description: read_optional_text(&object["description"])?,
+        entity: read_optional_object_tree_entity(&object["entity"])?,
+        owner: read_optional_object_tree_entity(&object["owner"])?,
+        indicators: read_object_tree_indicators(&object["indicators"])?,
+        matched_filter: read_flag(&object["matchedFilter"])?,
+        focused: read_flag(&object["focused"])?,
+        selected: read_flag(&object["selected"])?,
+        level: read_counter(&object["level"])?,
+        position_in_set: read_counter(&object["positionInSet"])?,
+        set_size: read_counter(&object["setSize"])?,
+        expansion: read_object_tree_row_expansion(&object["expansion"])?,
+    })
+}
+pub type ObjectTreeRows = Vec<ObjectTreeRow>;
+fn read_object_tree_rows(v: &Value) -> Result<ObjectTreeRows, InvalidIntent> {
+    list(v, 0, 64)?.iter().map(read_object_tree_row).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectTreePage {
+    pub total_rows: Counter,
+    pub focus_key: OptionalText,
+    pub filter_active: Flag,
+    pub rows: ObjectTreeRows,
+}
+fn read_object_tree_page(v: &Value) -> Result<ObjectTreePage, InvalidIntent> {
+    let object = fields(v, &["totalRows", "focusKey", "filterActive", "rows"], false)?;
+    Ok(ObjectTreePage {
+        total_rows: read_counter(&object["totalRows"])?,
+        focus_key: read_optional_text(&object["focusKey"])?,
+        filter_active: read_flag(&object["filterActive"])?,
+        rows: read_object_tree_rows(&object["rows"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectTreeSelection {
+    pub refs: ObjectTreeEntities,
+    pub primary: OptionalObjectTreeEntity,
+    pub anchor_key: OptionalText,
+}
+fn read_object_tree_selection(v: &Value) -> Result<ObjectTreeSelection, InvalidIntent> {
+    let object = fields(v, &["refs", "primary", "anchorKey"], false)?;
+    Ok(ObjectTreeSelection {
+        refs: read_object_tree_entities(&object["refs"])?,
+        primary: read_optional_object_tree_entity(&object["primary"])?,
+        anchor_key: read_optional_text(&object["anchorKey"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ObjectTreeReply {
+    Page(ObjectTreePage),
+    Selected(ObjectTreeSelection),
+    Ignored(Empty),
+}
+fn read_object_tree_reply(v: &Value) -> Result<ObjectTreeReply, InvalidIntent> {
+    let object = fields(v, &["page", "selected", "ignored"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "page" => Ok(ObjectTreeReply::Page(read_object_tree_page(value)?)),
+        "selected" => Ok(ObjectTreeReply::Selected(read_object_tree_selection(
+            value,
+        )?)),
+        "ignored" => Ok(ObjectTreeReply::Ignored(read_empty(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -10200,5 +10705,21 @@ pub fn decode_explosion_reply(text: &str) -> Result<ExplosionReply, InvalidInten
 pub fn encode_explosion_reply(value: &ExplosionReply) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_explosion_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_object_tree_request(text: &str) -> Result<ObjectTreeRequest, InvalidIntent> {
+    read_object_tree_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_object_tree_request(value: &ObjectTreeRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_object_tree_request(&text)?;
+    Ok(text)
+}
+pub fn decode_object_tree_reply(text: &str) -> Result<ObjectTreeReply, InvalidIntent> {
+    read_object_tree_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_object_tree_reply(value: &ObjectTreeReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_object_tree_reply(&text)?;
     Ok(text)
 }

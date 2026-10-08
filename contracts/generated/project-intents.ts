@@ -4452,6 +4452,237 @@ const shapes = {
       "exploded": "ExplosionOffsets",
       "refused": "AssemblyRefusal"
     }
+  },
+  "SelectionEntity": {
+    "kind": "union",
+    "variants": {
+      "project": "Empty",
+      "plate": "Id",
+      "object": "Id",
+      "volume": "Id",
+      "instance": "Id",
+      "layerRange": "Id",
+      "filament": "Id"
+    }
+  },
+  "SelectionEntities": {
+    "kind": "array",
+    "items": "SelectionEntity",
+    "min": 0,
+    "max": 131072
+  },
+  "OptionalSelectionEntity": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "SelectionEntity"
+    }
+  },
+  "ObjectTreeEntity": {
+    "kind": "union",
+    "variants": {
+      "plate": "Id",
+      "object": "Id",
+      "volume": "Id",
+      "instance": "Id",
+      "layerRange": "Id"
+    }
+  },
+  "ObjectTreeEntities": {
+    "kind": "array",
+    "items": "ObjectTreeEntity",
+    "min": 0,
+    "max": 131072
+  },
+  "OptionalObjectTreeEntity": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "ObjectTreeEntity"
+    }
+  },
+  "ObjectTreeKeys": {
+    "kind": "array",
+    "items": "EditText",
+    "min": 0,
+    "max": 131072
+  },
+  "ObjectTreeExpansion": {
+    "kind": "union",
+    "variants": {
+      "default": "Empty",
+      "keys": "ObjectTreeKeys"
+    }
+  },
+  "ObjectTreePageRequest": {
+    "kind": "object",
+    "fields": {
+      "start": "Counter",
+      "count": "Counter"
+    }
+  },
+  "ObjectTreeSelectionMode": {
+    "kind": "enum",
+    "values": [
+      "replace",
+      "toggle",
+      "range"
+    ]
+  },
+  "ObjectTreeSelect": {
+    "kind": "object",
+    "fields": {
+      "key": "EditText",
+      "mode": "ObjectTreeSelectionMode",
+      "anchorKey": "OptionalText"
+    }
+  },
+  "ObjectTreeOperation": {
+    "kind": "union",
+    "variants": {
+      "page": "ObjectTreePageRequest",
+      "select": "ObjectTreeSelect"
+    }
+  },
+  "ObjectTreeRequest": {
+    "kind": "object",
+    "fields": {
+      "expansion": "ObjectTreeExpansion",
+      "filterQuery": "EditText",
+      "selection": "SelectionEntities",
+      "primary": "OptionalSelectionEntity",
+      "focusedKey": "OptionalText",
+      "operation": "ObjectTreeOperation"
+    }
+  },
+  "ObjectTreeRowKind": {
+    "kind": "enum",
+    "values": [
+      "plate",
+      "object",
+      "volume",
+      "instanceGroup",
+      "instance",
+      "settings",
+      "layerGroup",
+      "layerRange"
+    ]
+  },
+  "ObjectTreeRowExpansion": {
+    "kind": "enum",
+    "values": [
+      "leaf",
+      "collapsed",
+      "expanded"
+    ]
+  },
+  "ObjectTreePrintable": {
+    "kind": "enum",
+    "values": [
+      "unknown",
+      "printable",
+      "notPrintable"
+    ]
+  },
+  "ObjectTreeFilament": {
+    "kind": "object",
+    "fields": {
+      "id": "Id",
+      "name": "EditText",
+      "color": "EditText",
+      "mixed": "Flag",
+      "inherited": "Flag"
+    }
+  },
+  "OptionalObjectTreeFilament": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "ObjectTreeFilament"
+    }
+  },
+  "ObjectTreePaint": {
+    "kind": "object",
+    "fields": {
+      "colorFacetCount": "Counter",
+      "supportFacetCount": "Counter"
+    }
+  },
+  "OptionalObjectTreePaint": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "ObjectTreePaint"
+    }
+  },
+  "OptionalVolumeRoleName": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "VolumeRoleName"
+    }
+  },
+  "ObjectTreeIndicators": {
+    "kind": "object",
+    "fields": {
+      "printable": "ObjectTreePrintable",
+      "filament": "OptionalObjectTreeFilament",
+      "paint": "OptionalObjectTreePaint",
+      "editable": "Flag",
+      "settingsCount": "OptionalCounter",
+      "volumeRole": "OptionalVolumeRoleName"
+    }
+  },
+  "ObjectTreeRow": {
+    "kind": "object",
+    "fields": {
+      "key": "EditText",
+      "kind": "ObjectTreeRowKind",
+      "parentKey": "OptionalText",
+      "label": "EditText",
+      "description": "OptionalText",
+      "entity": "OptionalObjectTreeEntity",
+      "owner": "OptionalObjectTreeEntity",
+      "indicators": "ObjectTreeIndicators",
+      "matchedFilter": "Flag",
+      "focused": "Flag",
+      "selected": "Flag",
+      "level": "Counter",
+      "positionInSet": "Counter",
+      "setSize": "Counter",
+      "expansion": "ObjectTreeRowExpansion"
+    }
+  },
+  "ObjectTreeRows": {
+    "kind": "array",
+    "items": "ObjectTreeRow",
+    "min": 0,
+    "max": 64
+  },
+  "ObjectTreePage": {
+    "kind": "object",
+    "fields": {
+      "totalRows": "Counter",
+      "focusKey": "OptionalText",
+      "filterActive": "Flag",
+      "rows": "ObjectTreeRows"
+    }
+  },
+  "ObjectTreeSelection": {
+    "kind": "object",
+    "fields": {
+      "refs": "ObjectTreeEntities",
+      "primary": "OptionalObjectTreeEntity",
+      "anchorKey": "OptionalText"
+    }
+  },
+  "ObjectTreeReply": {
+    "kind": "union",
+    "variants": {
+      "page": "ObjectTreePage",
+      "selected": "ObjectTreeSelection",
+      "ignored": "Empty"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -4992,6 +5223,33 @@ export interface ProjectExplosionRequestWire {readonly parts: ProjectExplosionPa
 export interface ProjectExplosionOffsetWire {readonly id: ProjectIdWire;readonly offsetMm: ProjectVectorWire;}
 export type ProjectExplosionOffsetsWire = readonly ProjectExplosionOffsetWire[];
 export type ProjectExplosionReplyWire = {readonly exploded:ProjectExplosionOffsetsWire} | {readonly refused:ProjectAssemblyRefusalWire};
+export type ProjectSelectionEntityWire = {readonly project:ProjectEmptyWire} | {readonly plate:ProjectIdWire} | {readonly object:ProjectIdWire} | {readonly volume:ProjectIdWire} | {readonly instance:ProjectIdWire} | {readonly layerRange:ProjectIdWire} | {readonly filament:ProjectIdWire};
+export type ProjectSelectionEntitiesWire = readonly ProjectSelectionEntityWire[];
+export type ProjectOptionalSelectionEntityWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectSelectionEntityWire};
+export type ProjectObjectTreeEntityWire = {readonly plate:ProjectIdWire} | {readonly object:ProjectIdWire} | {readonly volume:ProjectIdWire} | {readonly instance:ProjectIdWire} | {readonly layerRange:ProjectIdWire};
+export type ProjectObjectTreeEntitiesWire = readonly ProjectObjectTreeEntityWire[];
+export type ProjectOptionalObjectTreeEntityWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectObjectTreeEntityWire};
+export type ProjectObjectTreeKeysWire = readonly ProjectEditTextWire[];
+export type ProjectObjectTreeExpansionWire = {readonly default:ProjectEmptyWire} | {readonly keys:ProjectObjectTreeKeysWire};
+export interface ProjectObjectTreePageRequestWire {readonly start: ProjectCounterWire;readonly count: ProjectCounterWire;}
+export type ProjectObjectTreeSelectionModeWire = "replace" | "toggle" | "range";
+export interface ProjectObjectTreeSelectWire {readonly key: ProjectEditTextWire;readonly mode: ProjectObjectTreeSelectionModeWire;readonly anchorKey: ProjectOptionalTextWire;}
+export type ProjectObjectTreeOperationWire = {readonly page:ProjectObjectTreePageRequestWire} | {readonly select:ProjectObjectTreeSelectWire};
+export interface ProjectObjectTreeRequestWire {readonly expansion: ProjectObjectTreeExpansionWire;readonly filterQuery: ProjectEditTextWire;readonly selection: ProjectSelectionEntitiesWire;readonly primary: ProjectOptionalSelectionEntityWire;readonly focusedKey: ProjectOptionalTextWire;readonly operation: ProjectObjectTreeOperationWire;}
+export type ProjectObjectTreeRowKindWire = "plate" | "object" | "volume" | "instanceGroup" | "instance" | "settings" | "layerGroup" | "layerRange";
+export type ProjectObjectTreeRowExpansionWire = "leaf" | "collapsed" | "expanded";
+export type ProjectObjectTreePrintableWire = "unknown" | "printable" | "notPrintable";
+export interface ProjectObjectTreeFilamentWire {readonly id: ProjectIdWire;readonly name: ProjectEditTextWire;readonly color: ProjectEditTextWire;readonly mixed: ProjectFlagWire;readonly inherited: ProjectFlagWire;}
+export type ProjectOptionalObjectTreeFilamentWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectObjectTreeFilamentWire};
+export interface ProjectObjectTreePaintWire {readonly colorFacetCount: ProjectCounterWire;readonly supportFacetCount: ProjectCounterWire;}
+export type ProjectOptionalObjectTreePaintWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectObjectTreePaintWire};
+export type ProjectOptionalVolumeRoleNameWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectVolumeRoleNameWire};
+export interface ProjectObjectTreeIndicatorsWire {readonly printable: ProjectObjectTreePrintableWire;readonly filament: ProjectOptionalObjectTreeFilamentWire;readonly paint: ProjectOptionalObjectTreePaintWire;readonly editable: ProjectFlagWire;readonly settingsCount: ProjectOptionalCounterWire;readonly volumeRole: ProjectOptionalVolumeRoleNameWire;}
+export interface ProjectObjectTreeRowWire {readonly key: ProjectEditTextWire;readonly kind: ProjectObjectTreeRowKindWire;readonly parentKey: ProjectOptionalTextWire;readonly label: ProjectEditTextWire;readonly description: ProjectOptionalTextWire;readonly entity: ProjectOptionalObjectTreeEntityWire;readonly owner: ProjectOptionalObjectTreeEntityWire;readonly indicators: ProjectObjectTreeIndicatorsWire;readonly matchedFilter: ProjectFlagWire;readonly focused: ProjectFlagWire;readonly selected: ProjectFlagWire;readonly level: ProjectCounterWire;readonly positionInSet: ProjectCounterWire;readonly setSize: ProjectCounterWire;readonly expansion: ProjectObjectTreeRowExpansionWire;}
+export type ProjectObjectTreeRowsWire = readonly ProjectObjectTreeRowWire[];
+export interface ProjectObjectTreePageWire {readonly totalRows: ProjectCounterWire;readonly focusKey: ProjectOptionalTextWire;readonly filterActive: ProjectFlagWire;readonly rows: ProjectObjectTreeRowsWire;}
+export interface ProjectObjectTreeSelectionWire {readonly refs: ProjectObjectTreeEntitiesWire;readonly primary: ProjectOptionalObjectTreeEntityWire;readonly anchorKey: ProjectOptionalTextWire;}
+export type ProjectObjectTreeReplyWire = {readonly page:ProjectObjectTreePageWire} | {readonly selected:ProjectObjectTreeSelectionWire} | {readonly ignored:ProjectEmptyWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -5316,3 +5574,9 @@ export function encodeProjectExplosionRequest(value:ProjectExplosionRequestWire)
 export function captureProjectExplosionReply(value:unknown):ProjectExplosionReplyWire { return captureIntent("ExplosionReply",value,shapes,limits) as ProjectExplosionReplyWire; }
 export function decodeProjectExplosionReply(text:string):ProjectExplosionReplyWire { return captureProjectExplosionReply(parseIntentJson(text,limits)); }
 export function encodeProjectExplosionReply(value:ProjectExplosionReplyWire):string { return JSON.stringify(captureProjectExplosionReply(value)); }
+export function captureProjectObjectTreeRequest(value:unknown):ProjectObjectTreeRequestWire { return captureIntent("ObjectTreeRequest",value,shapes,limits) as ProjectObjectTreeRequestWire; }
+export function decodeProjectObjectTreeRequest(text:string):ProjectObjectTreeRequestWire { return captureProjectObjectTreeRequest(parseIntentJson(text,limits)); }
+export function encodeProjectObjectTreeRequest(value:ProjectObjectTreeRequestWire):string { return JSON.stringify(captureProjectObjectTreeRequest(value)); }
+export function captureProjectObjectTreeReply(value:unknown):ProjectObjectTreeReplyWire { return captureIntent("ObjectTreeReply",value,shapes,limits) as ProjectObjectTreeReplyWire; }
+export function decodeProjectObjectTreeReply(text:string):ProjectObjectTreeReplyWire { return captureProjectObjectTreeReply(parseIntentJson(text,limits)); }
+export function encodeProjectObjectTreeReply(value:ProjectObjectTreeReplyWire):string { return JSON.stringify(captureProjectObjectTreeReply(value)); }

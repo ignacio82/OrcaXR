@@ -4451,6 +4451,237 @@
         "exploded": "ExplosionOffsets",
         "refused": "AssemblyRefusal"
       }
+    },
+    "SelectionEntity": {
+      "kind": "union",
+      "variants": {
+        "project": "Empty",
+        "plate": "Id",
+        "object": "Id",
+        "volume": "Id",
+        "instance": "Id",
+        "layerRange": "Id",
+        "filament": "Id"
+      }
+    },
+    "SelectionEntities": {
+      "kind": "array",
+      "items": "SelectionEntity",
+      "min": 0,
+      "max": 131072
+    },
+    "OptionalSelectionEntity": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "SelectionEntity"
+      }
+    },
+    "ObjectTreeEntity": {
+      "kind": "union",
+      "variants": {
+        "plate": "Id",
+        "object": "Id",
+        "volume": "Id",
+        "instance": "Id",
+        "layerRange": "Id"
+      }
+    },
+    "ObjectTreeEntities": {
+      "kind": "array",
+      "items": "ObjectTreeEntity",
+      "min": 0,
+      "max": 131072
+    },
+    "OptionalObjectTreeEntity": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "ObjectTreeEntity"
+      }
+    },
+    "ObjectTreeKeys": {
+      "kind": "array",
+      "items": "EditText",
+      "min": 0,
+      "max": 131072
+    },
+    "ObjectTreeExpansion": {
+      "kind": "union",
+      "variants": {
+        "default": "Empty",
+        "keys": "ObjectTreeKeys"
+      }
+    },
+    "ObjectTreePageRequest": {
+      "kind": "object",
+      "fields": {
+        "start": "Counter",
+        "count": "Counter"
+      }
+    },
+    "ObjectTreeSelectionMode": {
+      "kind": "enum",
+      "values": [
+        "replace",
+        "toggle",
+        "range"
+      ]
+    },
+    "ObjectTreeSelect": {
+      "kind": "object",
+      "fields": {
+        "key": "EditText",
+        "mode": "ObjectTreeSelectionMode",
+        "anchorKey": "OptionalText"
+      }
+    },
+    "ObjectTreeOperation": {
+      "kind": "union",
+      "variants": {
+        "page": "ObjectTreePageRequest",
+        "select": "ObjectTreeSelect"
+      }
+    },
+    "ObjectTreeRequest": {
+      "kind": "object",
+      "fields": {
+        "expansion": "ObjectTreeExpansion",
+        "filterQuery": "EditText",
+        "selection": "SelectionEntities",
+        "primary": "OptionalSelectionEntity",
+        "focusedKey": "OptionalText",
+        "operation": "ObjectTreeOperation"
+      }
+    },
+    "ObjectTreeRowKind": {
+      "kind": "enum",
+      "values": [
+        "plate",
+        "object",
+        "volume",
+        "instanceGroup",
+        "instance",
+        "settings",
+        "layerGroup",
+        "layerRange"
+      ]
+    },
+    "ObjectTreeRowExpansion": {
+      "kind": "enum",
+      "values": [
+        "leaf",
+        "collapsed",
+        "expanded"
+      ]
+    },
+    "ObjectTreePrintable": {
+      "kind": "enum",
+      "values": [
+        "unknown",
+        "printable",
+        "notPrintable"
+      ]
+    },
+    "ObjectTreeFilament": {
+      "kind": "object",
+      "fields": {
+        "id": "Id",
+        "name": "EditText",
+        "color": "EditText",
+        "mixed": "Flag",
+        "inherited": "Flag"
+      }
+    },
+    "OptionalObjectTreeFilament": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "ObjectTreeFilament"
+      }
+    },
+    "ObjectTreePaint": {
+      "kind": "object",
+      "fields": {
+        "colorFacetCount": "Counter",
+        "supportFacetCount": "Counter"
+      }
+    },
+    "OptionalObjectTreePaint": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "ObjectTreePaint"
+      }
+    },
+    "OptionalVolumeRoleName": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "VolumeRoleName"
+      }
+    },
+    "ObjectTreeIndicators": {
+      "kind": "object",
+      "fields": {
+        "printable": "ObjectTreePrintable",
+        "filament": "OptionalObjectTreeFilament",
+        "paint": "OptionalObjectTreePaint",
+        "editable": "Flag",
+        "settingsCount": "OptionalCounter",
+        "volumeRole": "OptionalVolumeRoleName"
+      }
+    },
+    "ObjectTreeRow": {
+      "kind": "object",
+      "fields": {
+        "key": "EditText",
+        "kind": "ObjectTreeRowKind",
+        "parentKey": "OptionalText",
+        "label": "EditText",
+        "description": "OptionalText",
+        "entity": "OptionalObjectTreeEntity",
+        "owner": "OptionalObjectTreeEntity",
+        "indicators": "ObjectTreeIndicators",
+        "matchedFilter": "Flag",
+        "focused": "Flag",
+        "selected": "Flag",
+        "level": "Counter",
+        "positionInSet": "Counter",
+        "setSize": "Counter",
+        "expansion": "ObjectTreeRowExpansion"
+      }
+    },
+    "ObjectTreeRows": {
+      "kind": "array",
+      "items": "ObjectTreeRow",
+      "min": 0,
+      "max": 64
+    },
+    "ObjectTreePage": {
+      "kind": "object",
+      "fields": {
+        "totalRows": "Counter",
+        "focusKey": "OptionalText",
+        "filterActive": "Flag",
+        "rows": "ObjectTreeRows"
+      }
+    },
+    "ObjectTreeSelection": {
+      "kind": "object",
+      "fields": {
+        "refs": "ObjectTreeEntities",
+        "primary": "OptionalObjectTreeEntity",
+        "anchorKey": "OptionalText"
+      }
+    },
+    "ObjectTreeReply": {
+      "kind": "union",
+      "variants": {
+        "page": "ObjectTreePage",
+        "selected": "ObjectTreeSelection",
+        "ignored": "Empty"
+      }
     }
   },
   "roots": [
@@ -4561,7 +4792,9 @@
     "AssemblyAlignmentRequest",
     "AssemblyAlignmentReply",
     "ExplosionRequest",
-    "ExplosionReply"
+    "ExplosionReply",
+    "ObjectTreeRequest",
+    "ObjectTreeReply"
   ],
   "sessionVersion": 1
 }

@@ -3487,6 +3487,42 @@ palettes. Captured projects serve the palette to hosts
 (`CapturedProject.paint_palette`, `ProjectSnapshot.paintPalette`), checked
 through the settings projection replay.
 
+### Objects tree
+
+`objects_tree` ports the Objects panel's model: `projectObjectsTree` (plates
+by order, then each object's parts with their settings, its instances, its
+own settings and its height ranges by lower bound, with the browser's
+labels, descriptions, printable state, filament badges, paint counts —
+refined leaves where a channel is refined — and settings counts),
+`buildObjectTreeView` (expansion, filter tokens that must all occur in a
+row's search text, matched rows shown with their ancestors and descendants,
+selection, focus and tree accessibility) and the panel's selection rules,
+now shared code in `selectionRequest.ts`: replace, toggle (keeping the
+previous primary while it remains selected) and range across the visible
+rows from an anchor. Search text is folded by the host (`SearchFolding`:
+NFKD, then US-English lowercase; ASCII is folded in the core), then loses
+combining diacritics, is trimmed and has whitespace runs collapsed.
+
+Hosts keep their view state and send it with each `ObjectTreeRequest` on a
+captured project (`CapturedProject.object_tree`, `ProjectSnapshot.objectTree`):
+a page of at most 64 visible rows, or the selection activating a row
+commits. A request may carry the session's whole selection; the tree sees
+only plates, objects, parts, instances and height ranges, as the panel does.
+Porting found two browser defects, both fixed with regressions: a stable
+imported ID with a lone surrogate made every row ID throw `URIError`
+(`encodeURIComponent`), so such a project showed no Objects tree; and search
+folding followed the host's default locale, so in a Turkish browser
+"Instance" folded to "ınstance" and a lowercase query missed it.
+
+`object-tree-vectors.mjs` records 1,957 browser answers over five states
+derived from the browser fixture (non-ASCII, whitespace-laden and
+lone-surrogate names and IDs, refined and sparse paint, mixed and inherited
+filaments, fractional heights, out-of-order plates, a 40-object plate for
+paging) and five model-vector states, with every text the browser folded.
+Rust matches all of them; WASM in Node and Chrome and JNI answer the 943 on
+the fixture states with the host's own folding, refuse a non-ASCII filter
+without a folder, and 605 Kotlin checks cover the wrapper.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

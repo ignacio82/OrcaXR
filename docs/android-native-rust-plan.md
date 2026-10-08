@@ -1325,7 +1325,7 @@ and replay coverage for the complete current command inventory.
   - [x] Expose the settings editor to hosts (WASM, JNI, Kotlin) with host
     collation and search folding (14,938 replies and 78 refusals per
     binding; 24 Kotlin checks).
-- [ ] Provide bounded object-tree, inspector, capability, selection, and renderer
+- [x] Provide bounded object-tree, inspector, capability, selection, and renderer
   projections. Subscribe to revisioned deltas; do not send the complete project
   or all geometry to every panel after each edit.
   Immutable query captures now provide nine entity kinds and eight child relations
@@ -1335,8 +1335,8 @@ and replay coverage for the complete current command inventory.
   365 admitted captures. This covers canonical hierarchy, numeric inspector data,
   transforms, filament inheritance and source declarations. Settings pages, the
   paint palette, action capabilities and revisioned renderer deltas over live
-  sessions are served too, as are paint overlay packets; full tree
-  presentation/paint summaries are not.
+  sessions are served too, as are paint overlay packets and the Objects
+  tree's presentation, paint summaries included, in pages of visible rows.
   - [x] Expose bounded captured hierarchy/inspector/transform/filament queries
     through WASM/JNI with generated packet validation and independent replay.
   - [x] Port the settings projection (`settings::scoped`): scoped edit
@@ -1360,6 +1360,13 @@ and replay coverage for the complete current command inventory.
     answers (259 pages and 57 refusals per binding; 23,154 differential
     pages agree in CI and 144,585 locally; the browser surface shares the
     colour rule).
+  - [x] Port the Objects tree (`objects_tree`): the panel's rows, labels,
+    indicators and paint counts, its view under the host's expansion,
+    filter, selection and focus, and its replace, toggle and range
+    selection, served as pages of at most 64 visible rows on captured
+    projects with host search folding. 1,957 browser answers agree in Rust
+    and 943 in every binding; a lone-surrogate ID that blanked the browser's
+    tree and locale-dependent search folding were fixed first.
 - [x] Make worker/service generation changes invalidate pending replies. Implement
   explicit session disposal and recovery after the core worker fails; recover
   only from acknowledged snapshots/journal entries, never an optimistic UI view.

@@ -199,6 +199,23 @@ pub(crate) fn open(
         folder,
     })
 }
+/// An `ObjectTreeRequest` on a captured project, as contract JSON; the folder
+/// folds non-ASCII search text (without one, such text is refused).
+pub(crate) fn object_tree(
+    snapshot: &ProjectSnapshot,
+    request: &str,
+    folder: Option<&SearchFolder>,
+) -> Result<String, JsValue> {
+    use orcaxr_project::objects_tree::{self, Refusal};
+    let request = self::request(request, wire::decode_object_tree_request)?;
+    let reply = objects_tree::answer(snapshot.state(), &request, &mut Fold(folder)).map_err(
+        |e| match e {
+            Refusal::Host(code) => error(code),
+            other => error(other.code()),
+        },
+    )?;
+    encode(&reply, wire::encode_object_tree_reply)
+}
 /// The settings projection of a captured project, as contract JSON.
 pub(crate) fn projection(
     snapshot: &ProjectSnapshot,

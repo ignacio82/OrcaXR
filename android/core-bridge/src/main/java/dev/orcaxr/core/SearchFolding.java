@@ -1,6 +1,6 @@
 package dev.orcaxr.core;
 
-/** Folds settings search text as the browser does with
+/** Folds settings and Objects-tree search text as the browser does with
  * {@code text.normalize("NFKD").toLocaleLowerCase("en-US")}. Called on the
  * thread running the query; a thrown exception refuses the query. */
 public interface SearchFolding {

@@ -5,6 +5,7 @@ export * from './interaction';
 export * from './layerRangeCommands';
 export * from './meshBooleanCommands';
 export * from './projection';
+export * from './selectionRequest';
 export * from './semanticVolumeCommands';
 export * from './splitCommands';
 export * from './splitPreparation';

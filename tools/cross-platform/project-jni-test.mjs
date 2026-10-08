@@ -33,6 +33,7 @@ import { projectClipboardBoundaries } from "./project-clipboard-boundaries.mjs";
 import { stagedCommandJson } from "./project-staged-replay.mjs";
 import { replayArchives, archiveCases, replayHostileArchives } from "./archive-wasm-replay.mjs";
 import { replayModelImports } from "./model-import-replay.mjs";
+import { replayObjectTree } from "./object-tree-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -869,6 +870,43 @@ try {
       .join("\n"),
   );
   assert.equal(assemblyChecks, 1174);
+  // The Objects tree on captured projects (platform folding), then the Kotlin
+  // wrapper over the browser's richest state.
+  const treeFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/object-tree-vectors.json", root)),
+  );
+  const trees = replayObjectTree(
+    projectJniCore(jvm.call),
+    treeFixture,
+    layout,
+    fixture.generation,
+    "platform",
+  );
+  assert.deepEqual(
+    [
+      trees.objectTreeStates,
+      trees.objectTreePages,
+      trees.objectTreeSelections,
+      trees.objectTreeIgnored,
+      trees.objectTreeRefusals,
+    ],
+    [5, 367, 546, 21, 9],
+  );
+  const scene = treeFixture.states.findIndex((s) => s.name === "scene");
+  const treeChecks = jvm.call(
+    "objectTreeChecks",
+    treeFixture.states[scene].stateJson,
+    Uint8Array.from(treeFixture.assets[0].bytes),
+    treeFixture.cases
+      .filter((c) => c.state === scene)
+      .map((c) =>
+        c.replyJson !== undefined
+          ? `T\t${c.requestJson}\t${c.replyJson}`
+          : `R\t${c.requestJson}\t${c.refusal}`,
+      )
+      .join("\n"),
+  );
+  assert.equal(treeChecks, 605);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

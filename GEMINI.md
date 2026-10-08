@@ -288,9 +288,9 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   Copy scans frozen input off authority; paste owns its captured data. Save streams
   frozen bundles; only a successful, still-current handoff clears dirty state.
   App integration remains open. Captured queries expose bounded pages, transforms,
-  filament inheritance and asset declarations. Read names/IDs in bounded UTF-16 chunks.
-  Query addresses never become command IDs. Plate/range sorting has an explicit
-  entry budget and belongs on an owned projection executor. Authored
+  filament inheritance and asset declarations; `objects_tree` pages visible tree rows
+  (host-folded search). Read names/IDs in bounded UTF-16 chunks. Query addresses never
+  become command IDs. Plate/range sorting has an explicit entry budget and belongs on an owned projection executor. Authored
   mesh declarations are not validated GPU buffers. Production subscriptions,
   worker/JNI integration, other command families and Android editing UI remain open.
 - SHA-256 identifies artifacts/project/config outputs. Canonical FNV-1a64

@@ -9,7 +9,10 @@ import {
   buildObjectTreeView,
   computeFixedVirtualWindow,
   entityRowKey,
+  objectTreeRowId,
+  objectTreeSelectionRequest,
   projectObjectsTree,
+  resolveObjectTreeSelection,
   scrollOffsetToRevealRow,
 } from '../objects';
 import { SelectionStore, selectionKey } from '../selection';
@@ -181,6 +184,83 @@ await test('virtual window math stays bounded for 10,000 rows and reveals keyboa
   assert.equal(bottom.endIndex, 10_000);
   assert.equal(scrollOffsetToRevealRow(500, 0, 320, 32, 10_000), 15_712);
   assert.equal(scrollOffsetToRevealRow(4, 0, 320, 32, 10_000), 0);
+});
+
+// Stable imported IDs may carry lone surrogates; encodeURIComponent threw on
+// them, so such a project could not show its Objects tree at all.
+await test('lone surrogates in entity IDs keep distinct row IDs instead of throwing', () => {
+  const { state } = treeFixture();
+  const object = state.plates[0].objects[0];
+  object.id = 'import:test:\ud800' as typeof object.id;
+  const copy = cloneProjectState(state);
+  copy.plates[0].objects[0].id = 'import:test:\ud801' as typeof object.id;
+  const first = projectObjectsTree(state).rowsByKey.get('object:import:test:\ud800');
+  const second = projectObjectsTree(copy).rowsByKey.get('object:import:test:\ud801');
+  assert.equal(first?.id, 'orcaxr-object-row-object%3Aimport%3Atest%3A%uD800');
+  assert.equal(second?.id, 'orcaxr-object-row-object%3Aimport%3Atest%3A%uD801');
+  assert.equal(objectTreeRowId('plate:%uD800'), 'orcaxr-object-row-plate%3A%25uD800');
+  assert.equal(objectTreeRowId('a\ud83d\ude00b'), `orcaxr-object-row-${encodeURIComponent('a\ud83d\ude00b')}`);
+});
+
+// Folding followed the host's default locale, so in a Turkish browser
+// 'Instance' folded to 'ınstance' and the query 'instance' found nothing.
+await test('search folding does not follow the default locale', () => {
+  const { state, secondInstance } = treeFixture();
+  const instance = state.plates[0].objects[0].instances.find((candidate) => candidate.id === secondInstance)!;
+  instance.name = 'IDLE COPY';
+  const lower = String.prototype.toLocaleLowerCase;
+  // A Turkish default locale: only an explicit locale escapes it.
+  String.prototype.toLocaleLowerCase = function (this: string, ...locales: unknown[]) {
+    return lower.call(this, ...(locales.length > 0 && locales[0] !== undefined ? (locales as string[]) : ['tr']));
+  };
+  try {
+    const view = buildObjectTreeView(projectObjectsTree(state), { filterQuery: 'idle copy' });
+    assert.deepEqual(
+      view.rows.filter((row) => row.matchedFilter).map((row) => row.label),
+      ['IDLE COPY'],
+    );
+  } finally {
+    String.prototype.toLocaleLowerCase = lower;
+  }
+});
+
+await test('row activation follows the panel: anchors, visible ranges and toggled primaries', () => {
+  const { state, secondInstance } = treeFixture();
+  const view = buildObjectTreeView(projectObjectsTree(state));
+  const objectRow = view.rows.find((row) => row.kind === 'object')!;
+  const settingsRow = view.rows.find((row) => row.kind === 'settings')!;
+  assert.deepEqual(objectTreeSelectionRequest(view, settingsRow, 'replace', 'plate:x'), { anchorKey: 'plate:x' });
+
+  const replaced = objectTreeSelectionRequest(view, objectRow, 'replace', undefined);
+  assert.equal(replaced.anchorKey, objectRow.key);
+  assert.deepEqual(resolveObjectTreeSelection({ refs: [] }, replaced.request!), {
+    refs: [objectRow.entity],
+    primary: objectRow.entity,
+  });
+
+  // A range spans the visible rows between the anchor and the row, each entity once.
+  const plateRow = view.rows[0];
+  const ranged = objectTreeSelectionRequest(view, objectRow, 'range', plateRow.key);
+  assert.equal(ranged.anchorKey, plateRow.key);
+  assert.deepEqual(ranged.request!.range, [plateRow.entity, objectRow.entity]);
+  assert.deepEqual(objectTreeSelectionRequest(view, objectRow, 'range', 'plate:hidden').request!.range, [
+    objectRow.entity,
+  ]);
+
+  // Toggling off keeps the previous primary while it stays selected.
+  const instance = { kind: 'instance' as const, id: secondInstance };
+  const toggled = objectTreeSelectionRequest(view, objectRow, 'toggle', undefined).request!;
+  assert.deepEqual(resolveObjectTreeSelection({ refs: [instance, objectRow.entity!], primary: instance }, toggled), {
+    refs: [instance],
+    primary: instance,
+  });
+  assert.deepEqual(resolveObjectTreeSelection({ refs: [objectRow.entity!], primary: objectRow.entity }, toggled), {
+    refs: [],
+  });
+  assert.deepEqual(resolveObjectTreeSelection({ refs: [instance] }, toggled), {
+    refs: [instance, objectRow.entity],
+    primary: objectRow.entity,
+  });
 });
 
 console.log(`\nCanonical Objects tree: ${passed} tests passed.`);

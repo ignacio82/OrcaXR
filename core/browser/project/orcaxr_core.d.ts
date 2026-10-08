@@ -27,6 +27,12 @@ export class CapturedProject {
     id(start: number, count: number): Uint16Array;
     id_length(): number;
     /**
+     * An `ObjectTreeRequest`; returns an `ObjectTreeReply`: one page of the
+     * Objects tree's visible rows, or the selection activating a row commits.
+     * The folder folds non-ASCII search text as the settings search does.
+     */
+    object_tree(request: string, folder?: any | null): string;
+    /**
      * A `PaintPaletteRequest`; returns the project's `PaintPalette`.
      */
     paint_palette(request: string): string;
@@ -928,6 +934,7 @@ export interface InitOutput {
     readonly capturedproject_hash: (a: number) => [number, number];
     readonly capturedproject_id: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_id_length: (a: number) => number;
+    readonly capturedproject_object_tree: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly capturedproject_paint_palette: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_query: (a: number, b: number) => [number, number, number];
     readonly capturedproject_revision: (a: number) => number;

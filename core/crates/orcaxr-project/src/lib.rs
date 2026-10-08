@@ -37,6 +37,7 @@ pub mod measure;
 pub mod mesh;
 pub mod mesh_packet;
 pub mod model;
+pub mod objects_tree;
 pub mod picking;
 pub mod placement;
 pub mod query;

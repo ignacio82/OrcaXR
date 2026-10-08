@@ -514,6 +514,13 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_projectObjectTree, project_object_tree, jstring,
+    handle: jlong,
+    request: JString<'local>,
+    folder: JObject<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,
