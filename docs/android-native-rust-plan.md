@@ -1269,9 +1269,11 @@ and replay coverage for the complete current command inventory.
   UTF-16 through bounded chunk reads. Plate/range sorting checks an explicit entry
   budget before allocation. The independent corpus compares 5,987 nodes across
   365 admitted captures. This covers canonical hierarchy, numeric inspector data,
-  transforms, filament inheritance and source declarations; it does not yet supply
-  full tree presentation/paint summaries, resolved-setting pages, capabilities,
-  qualified renderer packets or revisioned projection subscriptions.
+  transforms, filament inheritance and source declarations. Settings pages, the
+  paint palette and the action capability catalog are ported too; full tree
+  presentation/paint summaries, host capability exchange with project-derived
+  workspace facts, qualified renderer packets and revisioned projection
+  subscriptions are not.
   - [x] Expose bounded captured hierarchy/inspector/transform/filament queries
     through WASM/JNI with generated packet validation and independent replay.
   - [x] Port the settings projection (`settings::scoped`): scoped edit
@@ -1283,7 +1285,11 @@ and replay coverage for the complete current command inventory.
     project intent (275 replies per binding; intents execute natively).
   - [x] Port the paint palette projection (`facets::palette`) and serve it on
     captured projects (147 corpus libraries and 8 variants, 310 palettes).
-  - [ ] Add capability and renderer projections and revisioned deltas.
+  - [x] Port the action catalog and its availability rules
+    (`orcaxr_contracts::capabilities`), generated from the production registry
+    (226 actions; 372,900 availabilities over 110 states).
+  - [ ] Serve capabilities to hosts with project-derived workspace facts; add
+    renderer projections and revisioned deltas.
 - [ ] Make worker/service generation changes invalidate pending replies. Implement
   explicit session disposal and recovery after the core worker fails; recover
   only from acknowledged snapshots/journal entries, never an optimistic UI view.

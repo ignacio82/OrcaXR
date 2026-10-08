@@ -1,4 +1,5 @@
 pub mod canonical;
+pub mod capabilities;
 pub mod generated;
 // Generated decode targets are short-lived; boxing large intent variants would
 // only add allocations to every decode.

@@ -118,6 +118,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-staging.mjs
           node tools/cross-platform/generate-setting-scopes.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/generate-engine-options.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/generate-action-catalog.mjs
           node tools/cross-platform/test-project-intent-generator.mjs
           node tools/cross-platform/project-intent-vectors.mjs
           node tools/cross-platform/package-browser-core.mjs
@@ -134,6 +135,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-editor-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-projection-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/paint-palette-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/action-capability-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-catalog-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-library-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs

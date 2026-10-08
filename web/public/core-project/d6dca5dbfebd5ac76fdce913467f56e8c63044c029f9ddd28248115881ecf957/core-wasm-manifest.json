@@ -148,10 +148,13 @@
     "core/crates/orcaxr-contracts/Cargo.toml": "1bb86d9047b047aae98f639e63af798f83700585002853e995b46e8f4ce1a2a8",
     "core/crates/orcaxr-contracts/src/bin/contract-runner.rs": "bdd4e0f6fb99a34a7e74acee307d34924fb4132292cdcae9e75946ae43f67343",
     "core/crates/orcaxr-contracts/src/canonical.rs": "8009f7c170a690d81b5a427afff71429732078aaf70b81816e25faac15a32d8c",
+    "core/crates/orcaxr-contracts/src/capabilities/generated.rs": "19a8ddb54b2cc69b6b8d75e58d19da0ba5d795f603864bdb31a73fc7ab2775ea",
+    "core/crates/orcaxr-contracts/src/capabilities/mod.rs": "e4a6090e30d674e66b289bac91ff8ce9c49d54dd9831d85f505bdb100ab97351",
     "core/crates/orcaxr-contracts/src/generated.rs": "1ac386ce3c8dcd75256a822fa716e041815f892d38148a5144353a15330ea10b",
-    "core/crates/orcaxr-contracts/src/lib.rs": "2996d7b676f89fb2632c45bea421521dbefc4259bd78517b80a4874ddcbe33c2",
+    "core/crates/orcaxr-contracts/src/lib.rs": "ccf51dfa1263b6f3b3a65932d5d7e9a8eb6c089e34e2d2af3b65e597e547126c",
     "core/crates/orcaxr-contracts/src/project_intent_types.rs": "ec912750a13c2ab42507d43df9eef0f519772ae7cddaf9c36dc327e1c7a5d7b6",
     "core/crates/orcaxr-contracts/src/project_intents.rs": "8234d81aa140d31453cc1a7399620f6c61e853417cfc90dcbb2425cfbee6b88e",
+    "core/crates/orcaxr-contracts/tests/action_capabilities.rs": "f74c1a4d6770e285b9beb37ca2034ae761477225f26ff2bcc4908086ce44a143",
     "core/crates/orcaxr-contracts/tests/canonical_vectors.rs": "3c06a2f854c159d959981ec76cedafb3c113280eb13719355b959755709a4a63",
     "core/crates/orcaxr-contracts/tests/project_intents.rs": "70ac761c84287fb28b4334a8b18d66bac579231e4ec7ac6866acdbee6c37310d",
     "core/crates/orcaxr-gcode/Cargo.toml": "d240563bfd243008bf79f8e95f065791c0ac317c09c68c4912fc247796f7b31f",
@@ -340,7 +343,7 @@
   "outputs": {
     "orcaxr_core.d.ts": "f7b3620634547f417564bddbc75b36f9d66a07dd4cee1aa7076ada3dcac2b659",
     "orcaxr_core.js": "526bd24f934a1f04c740516c6495f330003b33e973cc2231484abf575d864dd0",
-    "orcaxr_core_bg.wasm": "a9ce778f476be45f930905f5de918b0e59d4ca1212d74132e0b3433456b0de21",
+    "orcaxr_core_bg.wasm": "f4fe93bd16a891eb74b892e4b5d26ec04312254ede707217ef7c38a18a15caa8",
     "orcaxr_core_bg.wasm.d.ts": "2d692c2014aca48f8ea36b745dc6c40e7a68c92997666b37be6adddf94da5968"
   },
   "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",

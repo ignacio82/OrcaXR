@@ -189,8 +189,8 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   owner/identity check before commit.
 - `ActionRegistry` is the sole invocation/availability gateway for DOM, XR,
   menus, shortcuts, command palette and contextual Objects actions. A capability
-  marked implemented needs a real handler and evidence. A DOM-only dialog must
-  declare its XR exclusion until a complete headset flow exists.
+  marked implemented needs a real handler and evidence. DOM-only dialogs declare
+  XR exclusions. Rules stay in `generate-action-catalog.mjs`'s boolean grammar.
 - Slice preflight uses exact catalog/imported configuration, never display
   defaults; imported projects slice as authored, never rebound to a bundled preset.
   Native `slicing`/`settings` replay browser vectors; order is UTF-16, never

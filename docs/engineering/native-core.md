@@ -3185,6 +3185,42 @@ palettes. Captured projects serve the palette to hosts
 (`CapturedProject.paint_palette`, `ProjectSnapshot.paintPalette`), checked
 through the settings projection replay.
 
+### Action capabilities
+
+`orcaxr_contracts::capabilities` ports the browser's action catalog and its
+availability rules (`ActionRegistry`): which surfaces offer an action, the
+catalog order `forSurface` and `forContext` list, and whether a workspace
+state enables an action, with the browser's reason when it does not. An
+action is hidden on a surface that does not offer it (with its XR
+unsupported reason on XR surfaces) or whose visibility rule refuses the
+state; it is disabled by an unavailable or blocked status, by a startup
+feature it depends on (`initializationBlockReason`: the first core feature
+not ready, with profiles and the settings schema added for slicing,
+calibration, filament, settings and preset actions), by the first unmet
+prerequisite, or by its enablement rule. Reasons are structured, and render
+as the browser's text in UTF-16, including host-supplied startup labels.
+
+`generate-action-catalog.mjs` generates the catalog from the production
+registry: every action in catalog order with its resolved capability, the
+surface, group, context, status, mode, printer-job, startup-phase and
+prerequisite vocabularies from their TypeScript unions, the prerequisite
+rules from the registry source, and each enablement rule translated from its
+arrow function into Rust. The translation admits the small boolean grammar
+the registry uses — flags, `!`, `&&`, `||`, count comparisons and enum
+equality — and refuses anything else, including a rule that reads a
+workspace field the native state does not model. Optional browser flags read
+as false when absent, so only their positive test is admitted.
+
+`action-capability-vectors.mjs` records the registry's own answers: every
+action on every surface over the initial state, representative workflows,
+every startup phase of every application feature, and seeded combinations of
+every field a rule reads, plus the surface and context listings. The Rust
+replay matches each availability and reason, the listings, the catalog
+order and that the native default state is `INITIAL_UI_STATE`: 110
+states, 372,900 availabilities and 58 distinct reasons. The two paths no
+catalog action takes today, a hiding visibility rule and a disabling status
+without a reason, are pinned against the registry's own text.
+
 ### Preset graph and profile catalog
 
 `settings::presets` ports `PresetGraph`, the pinned v2.3.4 preset semantics:
@@ -3862,6 +3898,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-p
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-model-import.mjs
 node tools/cross-platform/generate-setting-scopes.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/generate-engine-options.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/generate-action-catalog.mjs
 node tools/cross-platform/test-project-intent-generator.mjs
 node tools/cross-platform/project-intent-vectors.mjs
 node tools/cross-platform/package-browser-core.mjs
@@ -3878,6 +3915,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settin
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-editor-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-projection-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/paint-palette-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/action-capability-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-catalog-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-library-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs
