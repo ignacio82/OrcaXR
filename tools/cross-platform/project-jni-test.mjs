@@ -14,6 +14,7 @@ import { replayRender } from "./render-replay.mjs";
 import { replayFacetRegions } from "./facet-region-replay.mjs";
 import { replayPaintStrokes } from "./paint-stroke-replay.mjs";
 import { replayPicks } from "./pick-replay.mjs";
+import { replayPlacements } from "./placement-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -548,6 +549,18 @@ try {
     ].join("\n"),
   );
   assert.equal(pickChecks, 976);
+  // Placement planning over a live session, then the Kotlin wrapper.
+  const placementFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/placement-vectors.json", root)),
+  );
+  assert.equal(replayPlacements(projectJniCore(jvm.call), placementFixture, layout).placements, 67);
+  const placementChecks = jvm.call(
+    "placementChecks",
+    placementFixture.stateJson,
+    ...placementFixture.assets.map((a) => Uint8Array.from(a.bytes)),
+    placementFixture.cases.map((c) => `${c.request}\t${c.reply}`).join("\n"),
+  );
+  assert.equal(placementChecks, 135);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

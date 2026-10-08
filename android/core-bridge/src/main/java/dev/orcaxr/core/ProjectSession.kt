@@ -191,6 +191,11 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun paintStroke(guard: ProjectGuard, request: ProjectIntents.PaintStrokeOpen): ProjectPaintStroke = read {
         own(NativeProject.paintStrokeOpen(it, guard.reference(), ProjectIntents.encodePaintStrokeOpen(request)), ::ProjectPaintStroke)
     }
+    /** The transforms one placement edit submits, as one `setInstanceTransforms`
+     * intent's changes, or the operation's refusal. */
+    fun planPlacement(request: ProjectIntents.PlacementRequest): ProjectIntents.PlacementReply = read {
+        ProjectIntents.decodePlacementReply(NativeProject.sessionPlacement(it, ProjectIntents.encodePlacementRequest(request)))
+    }
     /** One plate captured for picking; the scene owns its meshes, so picks run
      * off this session's call gate. Capture again when the project changes. */
     fun pickScene(request: ProjectIntents.PickSceneRequest): ProjectPickScene = read {

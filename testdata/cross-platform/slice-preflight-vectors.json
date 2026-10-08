@@ -19,7 +19,7 @@
     },
     {
       "path": "web/src/project/objects/bounds.ts",
-      "sha256": "f0870fec37ca8d482dcf602f3af52793fbd9fa3d9733fdb11d170fe17e83c70c"
+      "sha256": "688c6ea16a0b88e3a9ebbed9b661c0791e8992df584326e9888cedd8d7f3b4ce"
     },
     {
       "path": "web/src/project/meshCodec.ts",

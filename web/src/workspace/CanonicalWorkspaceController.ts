@@ -207,11 +207,13 @@ import { DEFAULT_ZIP_LIMITS, writeDeterministicZip } from '../project/serializat
 import { type InstanceTransformChange } from '../project/objects/transformCommands';
 import {
   centerInstancesOnPlate,
+  dropInstancesToBed,
   layInstanceOnFace,
   scaleInstancesToFitPrintVolume,
   mirrorInstances,
   resetInstanceRotations,
   resetInstanceScales,
+  resetInstanceTransforms as resetBothInstanceTransforms,
   type MirrorAxis,
   type PrintVolumeMm,
 } from '../project/objects/transformOperations';
@@ -3901,35 +3903,9 @@ export class CanonicalWorkspaceController {
   async dropInstancesToBed(instanceIds: readonly InstanceId[]): Promise<CanonicalDropToBedResult> {
     this.assertActive();
     if (instanceIds.length === 0) throw new Error('Drop to bed requires at least one instance');
-    const state = this.session.project.getSnapshot().state;
-    const seen = new Set<InstanceId>();
-    const results: Array<CanonicalDropToBedResult['instances'][number]> = [];
-    const changes: InstanceTransformChange[] = [];
-    for (const instanceId of instanceIds) {
-      if (seen.has(instanceId)) throw new Error(`Drop to bed contains duplicate instance ${instanceId}`);
-      seen.add(instanceId);
-      const found = findInstance(state, instanceId);
-      if (!found) throw new Error(`Unknown instance ${instanceId}`);
-      const bounds = computeCanonicalInstanceBounds(state, this.assets, [instanceId], {
-        volumeRoles: ['model'],
-      });
-      const minZBeforeMm = bounds.min[2];
-      const deltaZMm = minZBeforeMm === 0 ? 0 : -minZBeforeMm;
-      results.push(Object.freeze({ instanceId, minZBeforeMm, deltaZMm }));
-      changes.push({
-        instanceId,
-        transform: {
-          ...found.instance.transform,
-          translationMm: [
-            found.instance.transform.translationMm[0],
-            found.instance.transform.translationMm[1],
-            found.instance.transform.translationMm[2] + deltaZMm,
-          ],
-        },
-      });
-    }
+    const { changes, results } = dropInstancesToBed(this.session.project.getSnapshot().state, this.assets, instanceIds);
     await this.setInstanceTransforms(changes);
-    return Object.freeze({ instances: Object.freeze(results) });
+    return Object.freeze({ instances: Object.freeze(results.map((result) => Object.freeze({ ...result }))) });
   }
 
   /**
@@ -4482,7 +4458,7 @@ export class CanonicalWorkspaceController {
         ? resetInstanceRotations(state, instanceIds)
         : target === 'scale'
           ? resetInstanceScales(state, instanceIds)
-          : mergeChanges(resetInstanceRotations(state, instanceIds), resetInstanceScales(state, instanceIds));
+          : resetBothInstanceTransforms(state, instanceIds);
     await this.setInstanceTransforms(changes, `reset:${target}`);
   }
 
@@ -5284,20 +5260,6 @@ function readClock(clock: CanonicalWorkspaceClock): string {
 }
 
 /** Later changes win, so a combined reset applies both fields per instance. */
-function mergeChanges(
-  first: readonly InstanceTransformChange[],
-  second: readonly InstanceTransformChange[],
-): InstanceTransformChange[] {
-  const merged = new Map<string, InstanceTransformChange>();
-  for (const change of [...first, ...second]) {
-    const previous = merged.get(change.instanceId);
-    merged.set(change.instanceId, {
-      instanceId: change.instanceId,
-      transform: previous ? { ...previous.transform, ...change.transform } : change.transform,
-    });
-  }
-  return [...merged.values()];
-}
 
 function combinedCancellation(primary: CancellationToken, secondary?: CancellationToken): CancellationToken {
   return Object.freeze({

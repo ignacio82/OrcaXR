@@ -237,6 +237,21 @@ impl<P: TimestampPolicy> ProjectSession<P> {
         stroke.session_guard = Some(guard.clone());
         Ok(stroke)
     }
+    /// The transforms one placement edit submits, planned from the
+    /// acknowledged state (`PlacementRequest` → `PlacementReply`).
+    pub fn plan_placement(
+        &self,
+        request: &wire::PlacementRequest,
+    ) -> Result<wire::PlacementReply, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        Ok(crate::placement::reply(
+            self.bus.snapshot().state(),
+            self.bus.assets(),
+            request,
+        ))
+    }
     /// One plate's volumes captured for picking from the acknowledged state;
     /// the scene owns its meshes, so picks run off the session.
     pub fn pick_scene(

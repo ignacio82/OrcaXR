@@ -10,6 +10,27 @@ export interface CanonicalBounds3 {
   readonly max: Vec3;
 }
 
+export type CanonicalBoundsErrorCode =
+  | 'empty-selection'
+  | 'duplicate-instance'
+  | 'unknown-instance'
+  | 'missing-asset'
+  | 'asset-metadata'
+  | 'no-geometry'
+  | 'non-finite-vertex'
+  | 'invalid-rotation';
+
+/** Why canonical bounds cannot be measured; the message names the entity. */
+export class CanonicalBoundsError extends Error {
+  constructor(
+    message: string,
+    readonly code: CanonicalBoundsErrorCode,
+  ) {
+    super(message);
+    this.name = 'CanonicalBoundsError';
+  }
+}
+
 export interface CanonicalInstanceBoundsOptions {
   /** Omit to include every canonical volume role. */
   readonly volumeRoles?: readonly VolumeRole[];
@@ -27,7 +48,9 @@ export function computeCanonicalInstanceBounds(
   instanceIds: readonly InstanceId[],
   options: CanonicalInstanceBoundsOptions = {},
 ): CanonicalBounds3 {
-  if (instanceIds.length === 0) throw new Error('Canonical bounds require at least one instance');
+  if (instanceIds.length === 0) {
+    throw new CanonicalBoundsError('Canonical bounds require at least one instance', 'empty-selection');
+  }
   const seen = new Set<InstanceId>();
   const includedRoles = options.volumeRoles ? new Set(options.volumeRoles) : undefined;
   const descriptors = new Map(state.sourceAssets.map((descriptor) => [descriptor.id, descriptor]));
@@ -35,10 +58,12 @@ export function computeCanonicalInstanceBounds(
   const result = emptyBounds();
 
   for (const instanceId of instanceIds) {
-    if (seen.has(instanceId)) throw new Error(`Canonical bounds contain duplicate instance ${instanceId}`);
+    if (seen.has(instanceId)) {
+      throw new CanonicalBoundsError(`Canonical bounds contain duplicate instance ${instanceId}`, 'duplicate-instance');
+    }
     seen.add(instanceId);
     const found = findInstance(state, instanceId);
-    if (!found) throw new Error(`Unknown instance ${instanceId}`);
+    if (!found) throw new CanonicalBoundsError(`Unknown instance ${instanceId}`, 'unknown-instance');
 
     for (const volume of found.object.volumes) {
       if (includedRoles && !includedRoles.has(volume.role)) continue;
@@ -47,10 +72,16 @@ export function computeCanonicalInstanceBounds(
       // whole mesh, and this runs on every placement and preflight.
       const payload = assets.peek(volume.source.assetId);
       if (!descriptor || !payload) {
-        throw new Error(`Volume ${volume.id} references missing asset ${volume.source.assetId}`);
+        throw new CanonicalBoundsError(
+          `Volume ${volume.id} references missing asset ${volume.source.assetId}`,
+          'missing-asset',
+        );
       }
       if (canonicalStringify(descriptor) !== canonicalStringify(payload.descriptor)) {
-        throw new Error(`Asset repository metadata differs for ${volume.source.assetId}`);
+        throw new CanonicalBoundsError(
+          `Asset repository metadata differs for ${volume.source.assetId}`,
+          'asset-metadata',
+        );
       }
       let positions = positionsByAsset.get(volume.source.assetId);
       if (!positions) {
@@ -62,7 +93,7 @@ export function computeCanonicalInstanceBounds(
   }
 
   if (!result.min.every(Number.isFinite) || !result.max.every(Number.isFinite)) {
-    throw new Error('Selected instances contain no bounded mesh geometry');
+    throw new CanonicalBoundsError('Selected instances contain no bounded mesh geometry', 'no-geometry');
   }
   return Object.freeze({
     min: Object.freeze([...result.min]) as Vec3,
@@ -136,7 +167,7 @@ function accumulateTransformedBounds(
     z = z + 2 * (iqw * uvZ + uuvZ) + itz;
 
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
-      throw new Error('Canonical bounds contain a non-finite transformed vertex');
+      throw new CanonicalBoundsError('Canonical bounds contain a non-finite transformed vertex', 'non-finite-vertex');
     }
 
     if (x < minX) minX = x;
@@ -157,6 +188,8 @@ function accumulateTransformedBounds(
 
 function normalizedQuaternion(quaternion: readonly [number, number, number, number]): [number, number, number, number] {
   const length = Math.hypot(quaternion[0], quaternion[1], quaternion[2], quaternion[3]);
-  if (!Number.isFinite(length) || length === 0) throw new Error('A canonical transform quaternion must be non-zero');
+  if (!Number.isFinite(length) || length === 0) {
+    throw new CanonicalBoundsError('A canonical transform quaternion must be non-zero', 'invalid-rotation');
+  }
   return [quaternion[0] / length, quaternion[1] / length, quaternion[2] / length, quaternion[3] / length];
 }

@@ -14,6 +14,7 @@ import { replayRender } from "./render-replay.mjs";
 import { replayFacetRegions } from "./facet-region-replay.mjs";
 import { replayPaintStrokes } from "./paint-stroke-replay.mjs";
 import { replayPicks } from "./pick-replay.mjs";
+import { replayPlacements } from "./placement-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -91,6 +92,8 @@ if (isMainThread) {
     );
     // Ray picking over a live session, in both scenes.
     assert.deepEqual([result.picks, result.pickRefusals], [486, 1]);
+    // Placement planning over a live session.
+    assert.equal(result.placements, 67);
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -368,6 +371,15 @@ if (isMainThread) {
     ),
     layout,
   );
+  const placed = replayPlacements(
+    core,
+    JSON.parse(
+      await readFile(
+        new URL("testdata/cross-platform/placement-vectors.json", root),
+      ),
+    ),
+    layout,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -392,6 +404,7 @@ if (isMainThread) {
       ...regions,
       ...strokes,
       ...picks,
+      ...placed,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

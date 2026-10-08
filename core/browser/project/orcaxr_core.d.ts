@@ -534,6 +534,11 @@ export class ProjectSession {
      * scene owns its meshes, so picks run off the session.
      */
     pick_scene(request: string): ProjectPickScene;
+    /**
+     * The transforms one placement edit submits: a `PlacementRequest`;
+     * returns a `PlacementReply`.
+     */
+    plan_placement(request: string): string;
     release_staged(id: number): boolean;
     /**
      * A `RenderRequest`: a page of the renderer deltas from the snapshot the
@@ -853,6 +858,7 @@ export interface InitOutput {
     readonly projectsession_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_pending_count: (a: number) => number;
     readonly projectsession_pick_scene: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectsession_plan_placement: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_release_staged: (a: number, b: number) => [number, number, number];
     readonly projectsession_render: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_reset_document: (a: number, b: number, c: number) => [number, number, number];

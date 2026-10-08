@@ -1,7 +1,8 @@
 import type { AssetRepository } from '../assets';
-import type { InstanceId } from '../domain/ids';
+import type { InstanceId, VolumeId } from '../domain/ids';
 import type { ProjectState, Quaternion, Transform, Vec3 } from '../domain/model';
 import { findInstance } from '../domain/selectors';
+import { decodeIndexedMeshAsset } from '../meshCodec';
 import { computeCanonicalInstanceBounds } from './bounds';
 import type { InstanceTransformChange } from './transformCommands';
 
@@ -17,7 +18,11 @@ export class TransformOperationError extends Error {
       | 'invalid-normal'
       | 'invalid-bed'
       /** The selection has no measurable extent, so no factor would fit it. */
-      | 'degenerate-selection',
+      | 'degenerate-selection'
+      | 'duplicate-instance'
+      /** The facet's volume is not part of the instance's object. */
+      | 'unknown-volume'
+      | 'invalid-facet',
   ) {
     super(message);
     this.name = 'TransformOperationError';
@@ -62,6 +67,18 @@ export function resetInstanceScales(
 ): InstanceTransformChange[] {
   return eachInstance(state, instanceIds, (transform) => ({
     ...transform,
+    scale: [1, 1, 1] as unknown as Transform['scale'],
+  }));
+}
+
+/** Clear rotation and scale together, keeping each instance's position. */
+export function resetInstanceTransforms(
+  state: ProjectState,
+  instanceIds: readonly InstanceId[],
+): InstanceTransformChange[] {
+  return eachInstance(state, instanceIds, (transform) => ({
+    ...transform,
+    rotation: [0, 0, 0, 1] as unknown as Transform['rotation'],
     scale: [1, 1, 1] as unknown as Transform['scale'],
   }));
 }
@@ -175,6 +192,101 @@ export function scaleInstancesToFitPrintVolume(
       transform.scale[2] * factor,
     ] as unknown as Transform['scale'],
   }));
+}
+
+/** One instance dropped to the bed: where its lowest point was, and the move. */
+export interface DropToBedResult {
+  readonly instanceId: InstanceId;
+  readonly minZBeforeMm: number;
+  readonly deltaZMm: number;
+}
+
+/**
+ * Rest each instance's lowest model point on Z = 0 independently, measured
+ * from canonical bounds. An instance already on the bed moves by zero; the
+ * selection must not repeat an instance.
+ */
+export function dropInstancesToBed(
+  state: ProjectState,
+  assets: AssetRepository,
+  instanceIds: readonly InstanceId[],
+): { readonly changes: InstanceTransformChange[]; readonly results: DropToBedResult[] } {
+  if (instanceIds.length === 0) throw new TransformOperationError('Nothing is selected', 'empty-selection');
+  const seen = new Set<InstanceId>();
+  const changes: InstanceTransformChange[] = [];
+  const results: DropToBedResult[] = [];
+  for (const instanceId of instanceIds) {
+    if (seen.has(instanceId)) {
+      throw new TransformOperationError(`Drop to bed contains duplicate instance ${instanceId}`, 'duplicate-instance');
+    }
+    seen.add(instanceId);
+    const found = findInstance(state, instanceId);
+    if (!found) throw new TransformOperationError(`Unknown instance ${instanceId}`, 'unknown-instance');
+    const bounds = computeCanonicalInstanceBounds(state, assets, [instanceId], { volumeRoles: ['model'] });
+    const minZBeforeMm = bounds.min[2];
+    const deltaZMm = minZBeforeMm === 0 ? 0 : -minZBeforeMm;
+    results.push({ instanceId, minZBeforeMm, deltaZMm });
+    const transform = found.instance.transform;
+    changes.push({
+      instanceId,
+      transform: {
+        ...transform,
+        translationMm: [
+          transform.translationMm[0],
+          transform.translationMm[1],
+          transform.translationMm[2] + deltaZMm,
+        ] as unknown as Transform['translationMm'],
+      },
+    });
+  }
+  return { changes, results };
+}
+
+export interface LayOnFacetRequest {
+  readonly instanceId: InstanceId;
+  readonly volumeId: VolumeId;
+  /** A facet of that volume's mesh, as a pick reports it. */
+  readonly triangle: number;
+}
+
+/**
+ * Lay an instance on one facet of one of its volumes, as the workspace lays a
+ * picked facet: the facet's normal as three computes it (`Triangle.getNormal`
+ * over the mesh's own vertices), turned by the volume's rotation into the
+ * instance's space, then {@link layInstanceOnFace}.
+ */
+export function layInstanceOnFacet(
+  state: ProjectState,
+  assets: AssetRepository,
+  request: LayOnFacetRequest,
+): InstanceTransformChange[] {
+  const found = findInstance(state, request.instanceId);
+  if (!found) throw new TransformOperationError(`Unknown instance ${request.instanceId}`, 'unknown-instance');
+  const volume = found.object.volumes.find((candidate) => candidate.id === request.volumeId);
+  if (!volume) throw new TransformOperationError(`Unknown volume ${request.volumeId}`, 'unknown-volume');
+  const payload = assets.peek(volume.source.assetId);
+  if (!payload) throw new TransformOperationError(`Volume ${volume.id} has no readable mesh`, 'invalid-facet');
+  const { positions, indices } = decodeIndexedMeshAsset(payload);
+  const triangle = request.triangle;
+  if (!Number.isInteger(triangle) || triangle < 0 || triangle * 3 + 2 >= indices.length) {
+    throw new TransformOperationError(`Facet ${triangle} is not part of volume ${volume.id}`, 'invalid-facet');
+  }
+  const vertex = (corner: number): Vec3 => {
+    const index = indices[triangle * 3 + corner];
+    return [positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2]];
+  };
+  // `Triangle.getNormal(a, b, c)`: (c - b) × (a - b), scaled by 1 / length.
+  const [a, b, c] = [vertex(0), vertex(1), vertex(2)];
+  const cb: Vec3 = [c[0] - b[0], c[1] - b[1], c[2] - b[2]];
+  const ab: Vec3 = [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const cross: Vec3 = [cb[1] * ab[2] - cb[2] * ab[1], cb[2] * ab[0] - cb[0] * ab[2], cb[0] * ab[1] - cb[1] * ab[0]];
+  const lengthSq = cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2];
+  const inverse = lengthSq > 0 ? 1 / Math.sqrt(lengthSq) : 0;
+  const normal: Vec3 = [cross[0] * inverse, cross[1] * inverse, cross[2] * inverse];
+  return layInstanceOnFace(state, assets, {
+    instanceId: request.instanceId,
+    localNormal: rotateVector(normal, volume.transform.rotation),
+  });
 }
 
 export interface LayOnFaceRequest {

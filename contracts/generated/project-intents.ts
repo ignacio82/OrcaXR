@@ -3269,6 +3269,123 @@ const shapes = {
       "hit": "PickHit",
       "miss": "Empty"
     }
+  },
+  "PlacementAxis": {
+    "kind": "enum",
+    "values": [
+      "x",
+      "y",
+      "z"
+    ]
+  },
+  "PlacementSelection": {
+    "kind": "object",
+    "fields": {
+      "instanceIds": "Ids"
+    }
+  },
+  "PlacementMirror": {
+    "kind": "object",
+    "fields": {
+      "instanceIds": "Ids",
+      "axis": "PlacementAxis"
+    }
+  },
+  "PlacementCenter": {
+    "kind": "object",
+    "fields": {
+      "instanceIds": "Ids",
+      "bedSizeMm": "PlanarPosition"
+    }
+  },
+  "PlacementScaleToFit": {
+    "kind": "object",
+    "fields": {
+      "instanceIds": "Ids",
+      "volumeMm": "Vector"
+    }
+  },
+  "PlacementLayOnFace": {
+    "kind": "object",
+    "fields": {
+      "instanceId": "Id",
+      "localNormal": "Vector"
+    }
+  },
+  "PlacementLayOnFacet": {
+    "kind": "object",
+    "fields": {
+      "instanceId": "Id",
+      "volumeId": "Id",
+      "triangle": "Counter"
+    }
+  },
+  "PlacementRequest": {
+    "kind": "union",
+    "variants": {
+      "mirror": "PlacementMirror",
+      "resetRotation": "PlacementSelection",
+      "resetScale": "PlacementSelection",
+      "resetTransform": "PlacementSelection",
+      "centerOnPlate": "PlacementCenter",
+      "scaleToFit": "PlacementScaleToFit",
+      "layOnFace": "PlacementLayOnFace",
+      "layOnFacet": "PlacementLayOnFacet",
+      "dropToBed": "PlacementSelection"
+    }
+  },
+  "PlacementDrop": {
+    "kind": "object",
+    "fields": {
+      "instanceId": "Id",
+      "minZBeforeMm": "Finite",
+      "deltaZMm": "Finite"
+    }
+  },
+  "PlacementDrops": {
+    "kind": "array",
+    "items": "PlacementDrop",
+    "min": 0,
+    "max": 131072
+  },
+  "PlacementPlan": {
+    "kind": "object",
+    "fields": {
+      "changes": "InstanceTransforms",
+      "drops": "PlacementDrops"
+    }
+  },
+  "PlacementRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "emptySelection",
+      "duplicateInstance",
+      "unknownInstance",
+      "unknownVolume",
+      "invalidFacet",
+      "invalidNormal",
+      "invalidBed",
+      "degenerateSelection",
+      "missingAsset",
+      "assetMetadata",
+      "noGeometry",
+      "nonFiniteVertex",
+      "invalidRotation"
+    ]
+  },
+  "PlacementRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "PlacementRefusalCode",
+      "message": "EditText"
+    }
+  },
+  "PlacementReply": {
+    "kind": "union",
+    "variants": {
+      "plan": "PlacementPlan",
+      "refused": "PlacementRefusal"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -3661,6 +3778,20 @@ export interface ProjectPickSceneRequestWire {readonly plateId: ProjectIdWire;re
 export interface ProjectPickRayWire {readonly origin: ProjectVectorWire;readonly direction: ProjectVectorWire;}
 export interface ProjectPickHitWire {readonly objectId: ProjectIdWire;readonly instanceId: ProjectIdWire;readonly volumeId: ProjectIdWire;readonly triangle: ProjectCounterWire;readonly point: ProjectVectorWire;readonly localPoint: ProjectVectorWire;readonly localOrigin: ProjectVectorWire;readonly distance: ProjectFiniteWire;}
 export type ProjectPickReplyWire = {readonly hit:ProjectPickHitWire} | {readonly miss:ProjectEmptyWire};
+export type ProjectPlacementAxisWire = "x" | "y" | "z";
+export interface ProjectPlacementSelectionWire {readonly instanceIds: ProjectIdsWire;}
+export interface ProjectPlacementMirrorWire {readonly instanceIds: ProjectIdsWire;readonly axis: ProjectPlacementAxisWire;}
+export interface ProjectPlacementCenterWire {readonly instanceIds: ProjectIdsWire;readonly bedSizeMm: ProjectPlanarPositionWire;}
+export interface ProjectPlacementScaleToFitWire {readonly instanceIds: ProjectIdsWire;readonly volumeMm: ProjectVectorWire;}
+export interface ProjectPlacementLayOnFaceWire {readonly instanceId: ProjectIdWire;readonly localNormal: ProjectVectorWire;}
+export interface ProjectPlacementLayOnFacetWire {readonly instanceId: ProjectIdWire;readonly volumeId: ProjectIdWire;readonly triangle: ProjectCounterWire;}
+export type ProjectPlacementRequestWire = {readonly mirror:ProjectPlacementMirrorWire} | {readonly resetRotation:ProjectPlacementSelectionWire} | {readonly resetScale:ProjectPlacementSelectionWire} | {readonly resetTransform:ProjectPlacementSelectionWire} | {readonly centerOnPlate:ProjectPlacementCenterWire} | {readonly scaleToFit:ProjectPlacementScaleToFitWire} | {readonly layOnFace:ProjectPlacementLayOnFaceWire} | {readonly layOnFacet:ProjectPlacementLayOnFacetWire} | {readonly dropToBed:ProjectPlacementSelectionWire};
+export interface ProjectPlacementDropWire {readonly instanceId: ProjectIdWire;readonly minZBeforeMm: ProjectFiniteWire;readonly deltaZMm: ProjectFiniteWire;}
+export type ProjectPlacementDropsWire = readonly ProjectPlacementDropWire[];
+export interface ProjectPlacementPlanWire {readonly changes: ProjectInstanceTransformsWire;readonly drops: ProjectPlacementDropsWire;}
+export type ProjectPlacementRefusalCodeWire = "emptySelection" | "duplicateInstance" | "unknownInstance" | "unknownVolume" | "invalidFacet" | "invalidNormal" | "invalidBed" | "degenerateSelection" | "missingAsset" | "assetMetadata" | "noGeometry" | "nonFiniteVertex" | "invalidRotation";
+export interface ProjectPlacementRefusalWire {readonly code: ProjectPlacementRefusalCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectPlacementReplyWire = {readonly plan:ProjectPlacementPlanWire} | {readonly refused:ProjectPlacementRefusalWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -3871,3 +4002,9 @@ export function encodeProjectPickRay(value:ProjectPickRayWire):string { return J
 export function captureProjectPickReply(value:unknown):ProjectPickReplyWire { return captureIntent("PickReply",value,shapes,limits) as ProjectPickReplyWire; }
 export function decodeProjectPickReply(text:string):ProjectPickReplyWire { return captureProjectPickReply(parseIntentJson(text,limits)); }
 export function encodeProjectPickReply(value:ProjectPickReplyWire):string { return JSON.stringify(captureProjectPickReply(value)); }
+export function captureProjectPlacementRequest(value:unknown):ProjectPlacementRequestWire { return captureIntent("PlacementRequest",value,shapes,limits) as ProjectPlacementRequestWire; }
+export function decodeProjectPlacementRequest(text:string):ProjectPlacementRequestWire { return captureProjectPlacementRequest(parseIntentJson(text,limits)); }
+export function encodeProjectPlacementRequest(value:ProjectPlacementRequestWire):string { return JSON.stringify(captureProjectPlacementRequest(value)); }
+export function captureProjectPlacementReply(value:unknown):ProjectPlacementReplyWire { return captureIntent("PlacementReply",value,shapes,limits) as ProjectPlacementReplyWire; }
+export function decodeProjectPlacementReply(text:string):ProjectPlacementReplyWire { return captureProjectPlacementReply(parseIntentJson(text,limits)); }
+export function encodeProjectPlacementReply(value:ProjectPlacementReplyWire):string { return JSON.stringify(captureProjectPlacementReply(value)); }

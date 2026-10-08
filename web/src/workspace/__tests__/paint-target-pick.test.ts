@@ -91,4 +91,54 @@ await test('a paint stroke starts on the nearest part the ray meets, not the fir
   }
 });
 
+await test('lay flat turns the nearest part the ray meets, not the first in scene order', async () => {
+  const registry = buildRegistry();
+  const workspace = new OrcaWorkspace(registry);
+  workspace.actionContext = new ActionContext(workspace, new UiState(), registry);
+  const internals = workspace as unknown as PaintInternals & {
+    layPickedFacetOnBed(raycaster: THREE.Raycaster): Promise<boolean>;
+  };
+  // Lay flat is an instance action; the gesture supplies the instance.
+  workspace.actionContext.ui.update({ hasSelection: true, hasInstanceSelection: true, modelCount: 2 });
+  try {
+    const controller = internals.canonicalProject;
+    const geometry = new THREE.BoxGeometry(10, 10, 10);
+    controller.importBufferGeometry(geometry, { name: 'First' });
+    controller.importBufferGeometry(geometry, { name: 'Second' });
+    geometry.dispose();
+    const root = controller.surface.root;
+    const meshes = root.children.flatMap((group) => group.children.filter((c) => c instanceof THREE.Mesh));
+    const [first, second] = meshes;
+    // Set the second part 30 mm aside in the canonical project, so the
+    // display and the transform the lay-flat edit starts from agree.
+    const instances = meshes.map((mesh) => getThreeProjectEntity(mesh)!.instanceId);
+    const before = new Map(
+      instances.map((id) => [id, JSON.stringify(controller.getInstanceTransform(id)?.rotation)] as const),
+    );
+    const secondInstance = getThreeProjectEntity(second)!.instanceId;
+    const moved = controller.getInstanceTransform(secondInstance)!;
+    await controller.setInstanceTransforms([
+      {
+        instanceId: secondInstance,
+        transform: {
+          ...moved,
+          translationMm: [moved.translationMm[0] + 30, moved.translationMm[1], moved.translationMm[2]],
+        },
+      },
+    ]);
+    root.updateMatrixWorld(true);
+    const centre = (mesh: THREE.Object3D) => new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
+    const [a, b] = [centre(first), centre(second)];
+    const direction = a.clone().sub(b).normalize();
+    const origin = b.clone().addScaledVector(direction, -a.distanceTo(b) * 4);
+    assert.ok(await internals.layPickedFacetOnBed(new THREE.Raycaster(origin, direction)));
+    const changed = instances.filter(
+      (id) => JSON.stringify(controller.getInstanceTransform(id)?.rotation) !== before.get(id),
+    );
+    assert.deepEqual(changed, [secondInstance]);
+  } finally {
+    workspace.dispose();
+  }
+});
+
 console.log(`\nWorkspace paint target picking: ${passed} tests passed.`);

@@ -4908,6 +4908,184 @@ object ProjectIntents {
             is PickReply.Miss -> w.field("miss") { writeEmpty(w, v.value) }
         } }
     }
+    enum class PlacementAxis {X,Y,Z}
+    private fun readPlacementAxis(v: Any): PlacementAxis {
+        return when(v) {"x" -> PlacementAxis.X;"y" -> PlacementAxis.Y;"z" -> PlacementAxis.Z; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePlacementAxis(w: ProjectIntentWriter, v: PlacementAxis) {
+        w.literal(when(v) {PlacementAxis.X -> "x";PlacementAxis.Y -> "y";PlacementAxis.Z -> "z";})
+    }
+    data class PlacementSelection(val instanceIds: List<List<Int>>)
+    private fun readPlacementSelection(v: Any): PlacementSelection {
+        val obj = ProjectIntentJson.fields(v, setOf("instanceIds"), false)
+        return PlacementSelection(readIds(obj.get("instanceIds")))
+    }
+    private fun writePlacementSelection(w: ProjectIntentWriter, v: PlacementSelection) {
+        w.obj {
+            w.field("instanceIds") { writeIds(w, v.instanceIds) }
+        }
+    }
+    data class PlacementMirror(val instanceIds: List<List<Int>>, val axis: PlacementAxis)
+    private fun readPlacementMirror(v: Any): PlacementMirror {
+        val obj = ProjectIntentJson.fields(v, setOf("instanceIds", "axis"), false)
+        return PlacementMirror(readIds(obj.get("instanceIds")), readPlacementAxis(obj.get("axis")))
+    }
+    private fun writePlacementMirror(w: ProjectIntentWriter, v: PlacementMirror) {
+        w.obj {
+            w.field("instanceIds") { writeIds(w, v.instanceIds) }
+            w.field("axis") { writePlacementAxis(w, v.axis) }
+        }
+    }
+    data class PlacementCenter(val instanceIds: List<List<Int>>, val bedSizeMm: List<Double>)
+    private fun readPlacementCenter(v: Any): PlacementCenter {
+        val obj = ProjectIntentJson.fields(v, setOf("instanceIds", "bedSizeMm"), false)
+        return PlacementCenter(readIds(obj.get("instanceIds")), readPlanarPosition(obj.get("bedSizeMm")))
+    }
+    private fun writePlacementCenter(w: ProjectIntentWriter, v: PlacementCenter) {
+        w.obj {
+            w.field("instanceIds") { writeIds(w, v.instanceIds) }
+            w.field("bedSizeMm") { writePlanarPosition(w, v.bedSizeMm) }
+        }
+    }
+    data class PlacementScaleToFit(val instanceIds: List<List<Int>>, val volumeMm: List<Double>)
+    private fun readPlacementScaleToFit(v: Any): PlacementScaleToFit {
+        val obj = ProjectIntentJson.fields(v, setOf("instanceIds", "volumeMm"), false)
+        return PlacementScaleToFit(readIds(obj.get("instanceIds")), readVector(obj.get("volumeMm")))
+    }
+    private fun writePlacementScaleToFit(w: ProjectIntentWriter, v: PlacementScaleToFit) {
+        w.obj {
+            w.field("instanceIds") { writeIds(w, v.instanceIds) }
+            w.field("volumeMm") { writeVector(w, v.volumeMm) }
+        }
+    }
+    data class PlacementLayOnFace(val instanceId: List<Int>, val localNormal: List<Double>)
+    private fun readPlacementLayOnFace(v: Any): PlacementLayOnFace {
+        val obj = ProjectIntentJson.fields(v, setOf("instanceId", "localNormal"), false)
+        return PlacementLayOnFace(readId(obj.get("instanceId")), readVector(obj.get("localNormal")))
+    }
+    private fun writePlacementLayOnFace(w: ProjectIntentWriter, v: PlacementLayOnFace) {
+        w.obj {
+            w.field("instanceId") { writeId(w, v.instanceId) }
+            w.field("localNormal") { writeVector(w, v.localNormal) }
+        }
+    }
+    data class PlacementLayOnFacet(val instanceId: List<Int>, val volumeId: List<Int>, val triangle: Long)
+    private fun readPlacementLayOnFacet(v: Any): PlacementLayOnFacet {
+        val obj = ProjectIntentJson.fields(v, setOf("instanceId", "volumeId", "triangle"), false)
+        return PlacementLayOnFacet(readId(obj.get("instanceId")), readId(obj.get("volumeId")), readCounter(obj.get("triangle")))
+    }
+    private fun writePlacementLayOnFacet(w: ProjectIntentWriter, v: PlacementLayOnFacet) {
+        w.obj {
+            w.field("instanceId") { writeId(w, v.instanceId) }
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("triangle") { writeCounter(w, v.triangle) }
+        }
+    }
+    sealed interface PlacementRequest {
+        data class Mirror(val value: ProjectIntents.PlacementMirror) : PlacementRequest
+        data class ResetRotation(val value: ProjectIntents.PlacementSelection) : PlacementRequest
+        data class ResetScale(val value: ProjectIntents.PlacementSelection) : PlacementRequest
+        data class ResetTransform(val value: ProjectIntents.PlacementSelection) : PlacementRequest
+        data class CenterOnPlate(val value: ProjectIntents.PlacementCenter) : PlacementRequest
+        data class ScaleToFit(val value: ProjectIntents.PlacementScaleToFit) : PlacementRequest
+        data class LayOnFace(val value: ProjectIntents.PlacementLayOnFace) : PlacementRequest
+        data class LayOnFacet(val value: ProjectIntents.PlacementLayOnFacet) : PlacementRequest
+        data class DropToBed(val value: ProjectIntents.PlacementSelection) : PlacementRequest
+    }
+    private fun readPlacementRequest(v: Any): PlacementRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("mirror", "resetRotation", "resetScale", "resetTransform", "centerOnPlate", "scaleToFit", "layOnFace", "layOnFacet", "dropToBed"), true)
+        return when(val key = obj.keys().next()) {
+            "mirror" -> PlacementRequest.Mirror(readPlacementMirror(obj.get(key)))
+            "resetRotation" -> PlacementRequest.ResetRotation(readPlacementSelection(obj.get(key)))
+            "resetScale" -> PlacementRequest.ResetScale(readPlacementSelection(obj.get(key)))
+            "resetTransform" -> PlacementRequest.ResetTransform(readPlacementSelection(obj.get(key)))
+            "centerOnPlate" -> PlacementRequest.CenterOnPlate(readPlacementCenter(obj.get(key)))
+            "scaleToFit" -> PlacementRequest.ScaleToFit(readPlacementScaleToFit(obj.get(key)))
+            "layOnFace" -> PlacementRequest.LayOnFace(readPlacementLayOnFace(obj.get(key)))
+            "layOnFacet" -> PlacementRequest.LayOnFacet(readPlacementLayOnFacet(obj.get(key)))
+            "dropToBed" -> PlacementRequest.DropToBed(readPlacementSelection(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePlacementRequest(w: ProjectIntentWriter, v: PlacementRequest) {
+        w.obj { when(v) {
+            is PlacementRequest.Mirror -> w.field("mirror") { writePlacementMirror(w, v.value) }
+            is PlacementRequest.ResetRotation -> w.field("resetRotation") { writePlacementSelection(w, v.value) }
+            is PlacementRequest.ResetScale -> w.field("resetScale") { writePlacementSelection(w, v.value) }
+            is PlacementRequest.ResetTransform -> w.field("resetTransform") { writePlacementSelection(w, v.value) }
+            is PlacementRequest.CenterOnPlate -> w.field("centerOnPlate") { writePlacementCenter(w, v.value) }
+            is PlacementRequest.ScaleToFit -> w.field("scaleToFit") { writePlacementScaleToFit(w, v.value) }
+            is PlacementRequest.LayOnFace -> w.field("layOnFace") { writePlacementLayOnFace(w, v.value) }
+            is PlacementRequest.LayOnFacet -> w.field("layOnFacet") { writePlacementLayOnFacet(w, v.value) }
+            is PlacementRequest.DropToBed -> w.field("dropToBed") { writePlacementSelection(w, v.value) }
+        } }
+    }
+    data class PlacementDrop(val instanceId: List<Int>, val minZBeforeMm: Double, val deltaZMm: Double)
+    private fun readPlacementDrop(v: Any): PlacementDrop {
+        val obj = ProjectIntentJson.fields(v, setOf("instanceId", "minZBeforeMm", "deltaZMm"), false)
+        return PlacementDrop(readId(obj.get("instanceId")), readFinite(obj.get("minZBeforeMm")), readFinite(obj.get("deltaZMm")))
+    }
+    private fun writePlacementDrop(w: ProjectIntentWriter, v: PlacementDrop) {
+        w.obj {
+            w.field("instanceId") { writeId(w, v.instanceId) }
+            w.field("minZBeforeMm") { writeFinite(w, v.minZBeforeMm) }
+            w.field("deltaZMm") { writeFinite(w, v.deltaZMm) }
+        }
+    }
+    private fun readPlacementDrops(v: Any): List<PlacementDrop> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readPlacementDrop(array.get(it)) }
+    }
+    private fun writePlacementDrops(w: ProjectIntentWriter, v: List<PlacementDrop>) {
+        w.array(v, 0, 131072) { writePlacementDrop(w, it) }
+    }
+    data class PlacementPlan(val changes: List<InstanceTransform>, val drops: List<PlacementDrop>)
+    private fun readPlacementPlan(v: Any): PlacementPlan {
+        val obj = ProjectIntentJson.fields(v, setOf("changes", "drops"), false)
+        return PlacementPlan(readInstanceTransforms(obj.get("changes")), readPlacementDrops(obj.get("drops")))
+    }
+    private fun writePlacementPlan(w: ProjectIntentWriter, v: PlacementPlan) {
+        w.obj {
+            w.field("changes") { writeInstanceTransforms(w, v.changes) }
+            w.field("drops") { writePlacementDrops(w, v.drops) }
+        }
+    }
+    enum class PlacementRefusalCode {EmptySelection,DuplicateInstance,UnknownInstance,UnknownVolume,InvalidFacet,InvalidNormal,InvalidBed,DegenerateSelection,MissingAsset,AssetMetadata,NoGeometry,NonFiniteVertex,InvalidRotation}
+    private fun readPlacementRefusalCode(v: Any): PlacementRefusalCode {
+        return when(v) {"emptySelection" -> PlacementRefusalCode.EmptySelection;"duplicateInstance" -> PlacementRefusalCode.DuplicateInstance;"unknownInstance" -> PlacementRefusalCode.UnknownInstance;"unknownVolume" -> PlacementRefusalCode.UnknownVolume;"invalidFacet" -> PlacementRefusalCode.InvalidFacet;"invalidNormal" -> PlacementRefusalCode.InvalidNormal;"invalidBed" -> PlacementRefusalCode.InvalidBed;"degenerateSelection" -> PlacementRefusalCode.DegenerateSelection;"missingAsset" -> PlacementRefusalCode.MissingAsset;"assetMetadata" -> PlacementRefusalCode.AssetMetadata;"noGeometry" -> PlacementRefusalCode.NoGeometry;"nonFiniteVertex" -> PlacementRefusalCode.NonFiniteVertex;"invalidRotation" -> PlacementRefusalCode.InvalidRotation; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePlacementRefusalCode(w: ProjectIntentWriter, v: PlacementRefusalCode) {
+        w.literal(when(v) {PlacementRefusalCode.EmptySelection -> "emptySelection";PlacementRefusalCode.DuplicateInstance -> "duplicateInstance";PlacementRefusalCode.UnknownInstance -> "unknownInstance";PlacementRefusalCode.UnknownVolume -> "unknownVolume";PlacementRefusalCode.InvalidFacet -> "invalidFacet";PlacementRefusalCode.InvalidNormal -> "invalidNormal";PlacementRefusalCode.InvalidBed -> "invalidBed";PlacementRefusalCode.DegenerateSelection -> "degenerateSelection";PlacementRefusalCode.MissingAsset -> "missingAsset";PlacementRefusalCode.AssetMetadata -> "assetMetadata";PlacementRefusalCode.NoGeometry -> "noGeometry";PlacementRefusalCode.NonFiniteVertex -> "nonFiniteVertex";PlacementRefusalCode.InvalidRotation -> "invalidRotation";})
+    }
+    data class PlacementRefusal(val code: PlacementRefusalCode, val message: List<Int>)
+    private fun readPlacementRefusal(v: Any): PlacementRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return PlacementRefusal(readPlacementRefusalCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writePlacementRefusal(w: ProjectIntentWriter, v: PlacementRefusal) {
+        w.obj {
+            w.field("code") { writePlacementRefusalCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface PlacementReply {
+        data class Plan(val value: ProjectIntents.PlacementPlan) : PlacementReply
+        data class Refused(val value: ProjectIntents.PlacementRefusal) : PlacementReply
+    }
+    private fun readPlacementReply(v: Any): PlacementReply {
+        val obj = ProjectIntentJson.fields(v, setOf("plan", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "plan" -> PlacementReply.Plan(readPlacementPlan(obj.get(key)))
+            "refused" -> PlacementReply.Refused(readPlacementRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePlacementReply(w: ProjectIntentWriter, v: PlacementReply) {
+        w.obj { when(v) {
+            is PlacementReply.Plan -> w.field("plan") { writePlacementPlan(w, v.value) }
+            is PlacementReply.Refused -> w.field("refused") { writePlacementRefusal(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -5048,4 +5226,8 @@ object ProjectIntents {
     fun encodePickRay(value: PickRay): String = ProjectIntentWriter().also { writePickRay(it, value) }.finish()
     fun decodePickReply(text: String): PickReply = readPickReply(ProjectIntentJson.parse(text))
     fun encodePickReply(value: PickReply): String = ProjectIntentWriter().also { writePickReply(it, value) }.finish()
+    fun decodePlacementRequest(text: String): PlacementRequest = readPlacementRequest(ProjectIntentJson.parse(text))
+    fun encodePlacementRequest(value: PlacementRequest): String = ProjectIntentWriter().also { writePlacementRequest(it, value) }.finish()
+    fun decodePlacementReply(text: String): PlacementReply = readPlacementReply(ProjectIntentJson.parse(text))
+    fun encodePlacementReply(value: PlacementReply): String = ProjectIntentWriter().also { writePlacementReply(it, value) }.finish()
 }

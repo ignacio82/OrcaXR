@@ -3268,6 +3268,123 @@
         "hit": "PickHit",
         "miss": "Empty"
       }
+    },
+    "PlacementAxis": {
+      "kind": "enum",
+      "values": [
+        "x",
+        "y",
+        "z"
+      ]
+    },
+    "PlacementSelection": {
+      "kind": "object",
+      "fields": {
+        "instanceIds": "Ids"
+      }
+    },
+    "PlacementMirror": {
+      "kind": "object",
+      "fields": {
+        "instanceIds": "Ids",
+        "axis": "PlacementAxis"
+      }
+    },
+    "PlacementCenter": {
+      "kind": "object",
+      "fields": {
+        "instanceIds": "Ids",
+        "bedSizeMm": "PlanarPosition"
+      }
+    },
+    "PlacementScaleToFit": {
+      "kind": "object",
+      "fields": {
+        "instanceIds": "Ids",
+        "volumeMm": "Vector"
+      }
+    },
+    "PlacementLayOnFace": {
+      "kind": "object",
+      "fields": {
+        "instanceId": "Id",
+        "localNormal": "Vector"
+      }
+    },
+    "PlacementLayOnFacet": {
+      "kind": "object",
+      "fields": {
+        "instanceId": "Id",
+        "volumeId": "Id",
+        "triangle": "Counter"
+      }
+    },
+    "PlacementRequest": {
+      "kind": "union",
+      "variants": {
+        "mirror": "PlacementMirror",
+        "resetRotation": "PlacementSelection",
+        "resetScale": "PlacementSelection",
+        "resetTransform": "PlacementSelection",
+        "centerOnPlate": "PlacementCenter",
+        "scaleToFit": "PlacementScaleToFit",
+        "layOnFace": "PlacementLayOnFace",
+        "layOnFacet": "PlacementLayOnFacet",
+        "dropToBed": "PlacementSelection"
+      }
+    },
+    "PlacementDrop": {
+      "kind": "object",
+      "fields": {
+        "instanceId": "Id",
+        "minZBeforeMm": "Finite",
+        "deltaZMm": "Finite"
+      }
+    },
+    "PlacementDrops": {
+      "kind": "array",
+      "items": "PlacementDrop",
+      "min": 0,
+      "max": 131072
+    },
+    "PlacementPlan": {
+      "kind": "object",
+      "fields": {
+        "changes": "InstanceTransforms",
+        "drops": "PlacementDrops"
+      }
+    },
+    "PlacementRefusalCode": {
+      "kind": "enum",
+      "values": [
+        "emptySelection",
+        "duplicateInstance",
+        "unknownInstance",
+        "unknownVolume",
+        "invalidFacet",
+        "invalidNormal",
+        "invalidBed",
+        "degenerateSelection",
+        "missingAsset",
+        "assetMetadata",
+        "noGeometry",
+        "nonFiniteVertex",
+        "invalidRotation"
+      ]
+    },
+    "PlacementRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "PlacementRefusalCode",
+        "message": "EditText"
+      }
+    },
+    "PlacementReply": {
+      "kind": "union",
+      "variants": {
+        "plan": "PlacementPlan",
+        "refused": "PlacementRefusal"
+      }
     }
   },
   "roots": [
@@ -3340,7 +3457,9 @@
     "PaintOverlaySummary",
     "PickSceneRequest",
     "PickRay",
-    "PickReply"
+    "PickReply",
+    "PlacementRequest",
+    "PlacementReply"
   ],
   "sessionVersion": 1
 }

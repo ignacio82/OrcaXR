@@ -322,4 +322,23 @@ await test('a missing acknowledgement never retries or rolls back a committed ge
   }
 });
 
+await test('resetting rotation and scale together clears both, keeping position', async () => {
+  const { controller, first } = setup();
+  try {
+    await controller.setInstanceTransform(first.instanceId, {
+      translationMm: [20, 5, 20],
+      rotation: [0, 0, 0.6, 0.8],
+      scale: [2, 0.5, -1],
+    });
+    await controller.resetInstanceTransforms([first.instanceId], 'both');
+    assert.deepEqual(controller.getInstanceTransform(first.instanceId), {
+      translationMm: [20, 5, 20],
+      rotation: [0, 0, 0, 1],
+      scale: [1, 1, 1],
+    });
+  } finally {
+    controller.dispose();
+  }
+});
+
 console.log(`\nAsynchronous object and transform editing: ${passed} tests passed.`);

@@ -8478,9 +8478,14 @@ export class OrcaWorkspace extends xb.Script {
    * canonical command never reads back a rendered matrix.
    */
   private async layPickedFacetOnBed(raycaster: THREE.Raycaster): Promise<boolean> {
-    for (const target of this.paintTargets()) {
-      const [hit] = raycaster.intersectObject(target.display, false);
-      if (!hit?.face) continue;
+    // The nearest model part the ray meets: the facet the user sees.
+    const hits = this.paintTargets()
+      .map((target) => ({ target, hit: raycaster.intersectObject(target.display, false)[0] }))
+      .filter((entry) => entry.hit?.face)
+      .sort((left, right) => left.hit.distance - right.hit.distance)
+      .slice(0, 1);
+    for (const { target, hit } of hits) {
+      if (!hit.face) continue;
       const instance = this.projectedModels(this.activePlateId).find(
         (entry) => entry.volumeId === target.volumeId,
       )?.instanceId;

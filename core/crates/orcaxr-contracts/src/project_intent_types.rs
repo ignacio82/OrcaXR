@@ -6830,6 +6830,256 @@ fn read_pick_reply(v: &Value) -> Result<PickReply, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PlacementAxis {
+    X,
+    Y,
+    Z,
+}
+fn read_placement_axis(v: &Value) -> Result<PlacementAxis, InvalidIntent> {
+    match v.as_str() {
+        Some("x") => Ok(PlacementAxis::X),
+        Some("y") => Ok(PlacementAxis::Y),
+        Some("z") => Ok(PlacementAxis::Z),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlacementSelection {
+    pub instance_ids: Ids,
+}
+fn read_placement_selection(v: &Value) -> Result<PlacementSelection, InvalidIntent> {
+    let object = fields(v, &["instanceIds"], false)?;
+    Ok(PlacementSelection {
+        instance_ids: read_ids(&object["instanceIds"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlacementMirror {
+    pub instance_ids: Ids,
+    pub axis: PlacementAxis,
+}
+fn read_placement_mirror(v: &Value) -> Result<PlacementMirror, InvalidIntent> {
+    let object = fields(v, &["instanceIds", "axis"], false)?;
+    Ok(PlacementMirror {
+        instance_ids: read_ids(&object["instanceIds"])?,
+        axis: read_placement_axis(&object["axis"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlacementCenter {
+    pub instance_ids: Ids,
+    pub bed_size_mm: PlanarPosition,
+}
+fn read_placement_center(v: &Value) -> Result<PlacementCenter, InvalidIntent> {
+    let object = fields(v, &["instanceIds", "bedSizeMm"], false)?;
+    Ok(PlacementCenter {
+        instance_ids: read_ids(&object["instanceIds"])?,
+        bed_size_mm: read_planar_position(&object["bedSizeMm"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlacementScaleToFit {
+    pub instance_ids: Ids,
+    pub volume_mm: Vector,
+}
+fn read_placement_scale_to_fit(v: &Value) -> Result<PlacementScaleToFit, InvalidIntent> {
+    let object = fields(v, &["instanceIds", "volumeMm"], false)?;
+    Ok(PlacementScaleToFit {
+        instance_ids: read_ids(&object["instanceIds"])?,
+        volume_mm: read_vector(&object["volumeMm"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlacementLayOnFace {
+    pub instance_id: Id,
+    pub local_normal: Vector,
+}
+fn read_placement_lay_on_face(v: &Value) -> Result<PlacementLayOnFace, InvalidIntent> {
+    let object = fields(v, &["instanceId", "localNormal"], false)?;
+    Ok(PlacementLayOnFace {
+        instance_id: read_id(&object["instanceId"])?,
+        local_normal: read_vector(&object["localNormal"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlacementLayOnFacet {
+    pub instance_id: Id,
+    pub volume_id: Id,
+    pub triangle: Counter,
+}
+fn read_placement_lay_on_facet(v: &Value) -> Result<PlacementLayOnFacet, InvalidIntent> {
+    let object = fields(v, &["instanceId", "volumeId", "triangle"], false)?;
+    Ok(PlacementLayOnFacet {
+        instance_id: read_id(&object["instanceId"])?,
+        volume_id: read_id(&object["volumeId"])?,
+        triangle: read_counter(&object["triangle"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PlacementRequest {
+    Mirror(PlacementMirror),
+    ResetRotation(PlacementSelection),
+    ResetScale(PlacementSelection),
+    ResetTransform(PlacementSelection),
+    CenterOnPlate(PlacementCenter),
+    ScaleToFit(PlacementScaleToFit),
+    LayOnFace(PlacementLayOnFace),
+    LayOnFacet(PlacementLayOnFacet),
+    DropToBed(PlacementSelection),
+}
+fn read_placement_request(v: &Value) -> Result<PlacementRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "mirror",
+            "resetRotation",
+            "resetScale",
+            "resetTransform",
+            "centerOnPlate",
+            "scaleToFit",
+            "layOnFace",
+            "layOnFacet",
+            "dropToBed",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "mirror" => Ok(PlacementRequest::Mirror(read_placement_mirror(value)?)),
+        "resetRotation" => Ok(PlacementRequest::ResetRotation(read_placement_selection(
+            value,
+        )?)),
+        "resetScale" => Ok(PlacementRequest::ResetScale(read_placement_selection(
+            value,
+        )?)),
+        "resetTransform" => Ok(PlacementRequest::ResetTransform(read_placement_selection(
+            value,
+        )?)),
+        "centerOnPlate" => Ok(PlacementRequest::CenterOnPlate(read_placement_center(
+            value,
+        )?)),
+        "scaleToFit" => Ok(PlacementRequest::ScaleToFit(read_placement_scale_to_fit(
+            value,
+        )?)),
+        "layOnFace" => Ok(PlacementRequest::LayOnFace(read_placement_lay_on_face(
+            value,
+        )?)),
+        "layOnFacet" => Ok(PlacementRequest::LayOnFacet(read_placement_lay_on_facet(
+            value,
+        )?)),
+        "dropToBed" => Ok(PlacementRequest::DropToBed(read_placement_selection(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlacementDrop {
+    pub instance_id: Id,
+    pub min_z_before_mm: Finite,
+    pub delta_z_mm: Finite,
+}
+fn read_placement_drop(v: &Value) -> Result<PlacementDrop, InvalidIntent> {
+    let object = fields(v, &["instanceId", "minZBeforeMm", "deltaZMm"], false)?;
+    Ok(PlacementDrop {
+        instance_id: read_id(&object["instanceId"])?,
+        min_z_before_mm: read_finite(&object["minZBeforeMm"])?,
+        delta_z_mm: read_finite(&object["deltaZMm"])?,
+    })
+}
+pub type PlacementDrops = Vec<PlacementDrop>;
+fn read_placement_drops(v: &Value) -> Result<PlacementDrops, InvalidIntent> {
+    list(v, 0, 131072)?
+        .iter()
+        .map(read_placement_drop)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlacementPlan {
+    pub changes: InstanceTransforms,
+    pub drops: PlacementDrops,
+}
+fn read_placement_plan(v: &Value) -> Result<PlacementPlan, InvalidIntent> {
+    let object = fields(v, &["changes", "drops"], false)?;
+    Ok(PlacementPlan {
+        changes: read_instance_transforms(&object["changes"])?,
+        drops: read_placement_drops(&object["drops"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PlacementRefusalCode {
+    EmptySelection,
+    DuplicateInstance,
+    UnknownInstance,
+    UnknownVolume,
+    InvalidFacet,
+    InvalidNormal,
+    InvalidBed,
+    DegenerateSelection,
+    MissingAsset,
+    AssetMetadata,
+    NoGeometry,
+    NonFiniteVertex,
+    InvalidRotation,
+}
+fn read_placement_refusal_code(v: &Value) -> Result<PlacementRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("emptySelection") => Ok(PlacementRefusalCode::EmptySelection),
+        Some("duplicateInstance") => Ok(PlacementRefusalCode::DuplicateInstance),
+        Some("unknownInstance") => Ok(PlacementRefusalCode::UnknownInstance),
+        Some("unknownVolume") => Ok(PlacementRefusalCode::UnknownVolume),
+        Some("invalidFacet") => Ok(PlacementRefusalCode::InvalidFacet),
+        Some("invalidNormal") => Ok(PlacementRefusalCode::InvalidNormal),
+        Some("invalidBed") => Ok(PlacementRefusalCode::InvalidBed),
+        Some("degenerateSelection") => Ok(PlacementRefusalCode::DegenerateSelection),
+        Some("missingAsset") => Ok(PlacementRefusalCode::MissingAsset),
+        Some("assetMetadata") => Ok(PlacementRefusalCode::AssetMetadata),
+        Some("noGeometry") => Ok(PlacementRefusalCode::NoGeometry),
+        Some("nonFiniteVertex") => Ok(PlacementRefusalCode::NonFiniteVertex),
+        Some("invalidRotation") => Ok(PlacementRefusalCode::InvalidRotation),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlacementRefusal {
+    pub code: PlacementRefusalCode,
+    pub message: EditText,
+}
+fn read_placement_refusal(v: &Value) -> Result<PlacementRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(PlacementRefusal {
+        code: read_placement_refusal_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PlacementReply {
+    Plan(PlacementPlan),
+    Refused(PlacementRefusal),
+}
+fn read_placement_reply(v: &Value) -> Result<PlacementReply, InvalidIntent> {
+    let object = fields(v, &["plan", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "plan" => Ok(PlacementReply::Plan(read_placement_plan(value)?)),
+        "refused" => Ok(PlacementReply::Refused(read_placement_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -7432,5 +7682,21 @@ pub fn decode_pick_reply(text: &str) -> Result<PickReply, InvalidIntent> {
 pub fn encode_pick_reply(value: &PickReply) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_pick_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_placement_request(text: &str) -> Result<PlacementRequest, InvalidIntent> {
+    read_placement_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_placement_request(value: &PlacementRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_placement_request(&text)?;
+    Ok(text)
+}
+pub fn decode_placement_reply(text: &str) -> Result<PlacementReply, InvalidIntent> {
+    read_placement_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_placement_reply(value: &PlacementReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_placement_reply(&text)?;
     Ok(text)
 }

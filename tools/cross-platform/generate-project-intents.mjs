@@ -107,6 +107,8 @@ assert.deepEqual(schema.roots, [
   "PickSceneRequest",
   "PickRay",
   "PickReply",
+  "PlacementRequest",
+  "PlacementReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

@@ -483,6 +483,21 @@ impl ProjectSession {
             .map(|inner| ProjectPaintStroke { inner })
             .map_err(|refusal| error(refusal.code()))
     }
+    /// The transforms one placement edit submits: a `PlacementRequest`;
+    /// returns a `PlacementReply`.
+    pub fn plan_placement(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_placement_request(request).map_err(|_| error("invalid_request"))?;
+        let reply = self
+            .inner
+            .plan_placement(&request)
+            .map_err(|_| error("disposed"))?;
+        wire::encode_placement_reply(&reply).map_err(|_| error("output_limit"))
+    }
     /// One plate's volumes captured for picking: a `PickSceneRequest`. The
     /// scene owns its meshes, so picks run off the session.
     pub fn pick_scene(&self, request: &str) -> Result<ProjectPickScene, JsValue> {

@@ -3376,6 +3376,35 @@ mirrored instance; from below the bed; past everything; with a zero direction
 answer all 486 picks byte for byte and the refusal; 976 Kotlin checks cover
 the wrapper.
 
+### Placement planning
+
+`placement` plans the instance transforms the workspace's placement edits
+submit — mirror, rotation and scale resets (separately or together), centring
+on the printable area, scale-to-fit, lay flat by a local normal or by a picked
+facet, and drop to bed — from the browser's `transformOperations.ts` through
+`placementExchange.ts`. A `PlacementRequest` answers a `PlacementReply`: a plan
+whose changes are one `setInstanceTransforms` intent (drop to bed also reports
+each instance's lowest point and move), or the operation's own refusal code
+and message, in the browser's order. Bounds walk the browser's way — instances
+in order, then their model volumes — over the shared mesh arithmetic, with
+lay-flat's probe transform substituted for its instance; lay flat by facet
+takes the facet's normal as three's `Triangle.getNormal` computes it and turns
+it by the volume's rotation, as the workspace does for a picked facet. Two
+browser defects were fixed on the way: resetting rotation and scale together
+left the rotation untouched (the merged change carried the scale reset's
+original rotation), and lay flat and paint picks took the first part in scene
+order rather than the nearest; workspace regression tests cover both.
+Bindings: WASM `ProjectSession.plan_placement`, the JNI export
+`sessionPlacement` and Kotlin `ProjectSession.planPlacement`.
+
+`placement-vectors.mjs` plans 67 requests over the picking scene's plain,
+rotated and non-uniformly scaled, and mirrored instances — every operation,
+lay flat by five normals per instance and by facets of the sphere, the
+modifier and the terrain — and 17 refusals (empty and repeated selections,
+unknown instances and volumes, facets past a mesh, unusable normals, no
+printable area). Rust, WASM in Node and Chrome and JNI answer all 67 byte for
+byte; 135 Kotlin checks cover the wrapper.
+
 ### Paint palette
 
 `facets::palette` ports `projectPaintPalette`: the filament library as the
