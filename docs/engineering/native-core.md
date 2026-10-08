@@ -2993,8 +2993,9 @@ range-reduction branch, thresholds, huge and subnormal inputs), 2,512 exp and
 pinned schema with the browser's own `validateEngineOptionSchema`. The table
 records all 816 `ConfigOptionDef` storage contracts: option and value type,
 shape, nullability, percent semantics, delimiters, nil token, bounds and the
-enum domain with labels. The schema's SHA-256 is bound into the table. GUI
-layout, defaults and source provenance stay in the browser schema.
+enum domain with labels. The schema's SHA-256 is bound into the table. A
+second table, for the settings editor below, carries presentation, defaults
+and literal GUI placements; source provenance stays in the browser schema.
 
 The codec ports `codec.ts` in the browser's order and with its messages:
 
@@ -3021,8 +3022,47 @@ differed from the canonical UTF-16 order everywhere else. It now uses
 representative of each of the 161 distinct storage contracts: 13,191 drafts
 and typed values. It also pins every definition's contract, three
 configuration decodes (every key, mixed JSON, invalid values) and the commit
-refusals. Rust replays all of them as canonical JSON. Defaults, presets and
-the profile catalog are not yet native.
+refusals. Rust replays all of them as canonical JSON.
+
+### Settings editor
+
+`settings::editor` ports the browser's settings editor. The generator emits
+each definition's label, full label, category, tooltip, unit, mode,
+technology, read-only flag, GUI widget type, aliases, conditional enum
+domains and canonical default, plus the 21 tabs, 93 groups and 424 literal
+placements, the custom-widget keys and the exact project-config writes.
+
+- `assess_support` (`assessFieldSupport`) gives the generic editor's
+  refusals in the browser's order: ambiguous owners, custom widgets, unknown
+  technology, read-only, special widgets, conditional enums, missing or
+  wrong-surface placements (the reviewed project overrides excepted), codec
+  contracts and invalid defaults.
+- `project_field` and `query_fields` (`projectSettingsField(s)`) apply scope,
+  mode, technology, support and search filters, record search matches and
+  sort by GUI order, then category, label, key, owner and ID.
+- `DraftEditor` (`SettingsDraftEditor`) keeps drafts over inherited values,
+  defaults and overrides: field states, comparisons, resets and atomic
+  commits with the browser's errors and messages.
+- `step_value` and `step_for` (`stepper.ts`) toggle booleans, cycle enums
+  and step bounded scalars by a snapped hundredth of the span, rounding as
+  V8 does. `stepper_rows` builds the keyboard-free rows of
+  `ScopedSettingsStepper`.
+- `full_spectrum` holds the reviewed Local-Z, height-bound and recipe-editor
+  rules.
+
+Sorting uses the host `Collation`. Search folds text with
+`normalize('NFKD')` and `toLocaleLowerCase('en-US')`, which is a host
+`SearchFolding` policy; the built-in `AsciiFolding` is exact for ASCII and
+refuses other text. Labels, categories, keys and IDs are ASCII, so the
+built-in collation orders every field.
+
+`settings-editor-vectors.mjs` drives the production modules: 816 field
+projections under six surfaces and three technologies, 61 queries (40 with
+searches, including NFKD-only matches such as `mm3` for `mm³`), five draft
+editors (61 steps), 5,856 stepping origins in both directions and the rows of
+every scope in two modes through the production controller. Full Spectrum
+expansions, dependencies, cross-field issues and the structured editor are
+pinned too. Rust matches all of them.
 
 ### Preset graph and profile catalog
 
@@ -3714,6 +3754,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-model-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-resolution-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-codec-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-editor-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-catalog-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-library-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs

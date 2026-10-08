@@ -1210,7 +1210,9 @@ and replay coverage for the complete current command inventory.
   native too, as are the preset graph, the compiled profile catalog and its
   host exchange, and the user preset library and its host exchange.
   Condition expressions stay unresolved, as in the browser, which ships no
-  evaluator. The settings editor's draft commands are not native yet.
+  evaluator. The settings editor (field support, projection and search,
+  drafts, stepping and Full Spectrum rules) is native as well; its host
+  exchange is not yet.
   - [x] Port generated scope eligibility, layered resolution, import sanitization
     and configuration selectors with independent reference cases.
   - [x] Port canonical slice preflight (`slicing::preflight`) with FullSpectrum
@@ -1242,7 +1244,12 @@ and replay coverage for the complete current command inventory.
     stored-byte creation, contract operations stamped by the request, bundles
     and state as bounded bytes, piecewise issues and the composed profile
     catalog (425 replies and 184 refusals per binding).
-  - [ ] Port the settings editor's field projection and draft commands.
+  - [x] Port the settings editor (`settings::editor`): generated
+    presentation and GUI placements, field support, projection and search
+    under host collation and folding, the draft editor, stepping, stepper
+    rows and Full Spectrum rules (816 fields, 61 queries, 5,856 stepping
+    origins, 10 row views).
+  - [ ] Expose the settings editor to hosts.
 - [ ] Provide bounded object-tree, inspector, capability, selection, and renderer
   projections. Subscribe to revisioned deltas; do not send the complete project
   or all geometry to every panel after each edit.
