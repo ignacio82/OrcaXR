@@ -133,4 +133,27 @@ await test('an SVG part is cut, re-cut and undone through acknowledged staged wo
   }
 });
 
+await test('a mesh import commits its object and bytes as staged work, reusing identical bytes', async () => {
+  const { controller } = setup();
+  try {
+    const before = footprint(controller);
+    const geometry = new THREE.BoxGeometry(12, 12, 12);
+    const pending = controller.importGeometry(geometry, { name: 'Imported' });
+    assert.deepEqual(footprint(controller), before, 'nothing applies before acknowledgement');
+    const first = await pending;
+    assert.equal(first.reusedAsset, false);
+    assert.equal(controller.getSummary().objectCount, before.summary.objectCount + 1);
+    const second = await controller.importGeometry(geometry, { name: 'Imported again' });
+    geometry.dispose();
+    assert.equal(second.reusedAsset, true, 'identical mesh bytes are stored once');
+    assert.equal(second.assetId, first.assetId);
+    assert.equal(controller.getSummary().objectCount, before.summary.objectCount + 2);
+    assert.equal(await controller.undoAsync(), true);
+    assert.equal(await controller.undoAsync(), true);
+    assert.equal(controller.captureProjectExportGuard().semanticHash, before.identity.semanticHash);
+  } finally {
+    controller.dispose();
+  }
+});
+
 console.log(`canonical async geometry tests passed: ${passed}`);

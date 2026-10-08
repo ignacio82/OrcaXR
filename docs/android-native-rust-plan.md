@@ -929,7 +929,9 @@ and replay coverage for the complete current command inventory.
   nozzle and filament-slot changes commit as staged project replacement through
   one serialized queue: each commit reads the live profile and the acknowledged
   state when it runs, a stale refusal recomputes rather than rebases, and what
-  reads the committed configuration refreshes on acknowledgement. In
+  reads the committed configuration refreshes on acknowledgement. Primitives,
+  library and calibration models and single-gauge placement add their object and
+  mesh bytes as staged work, identical bytes stored once. In
   process, a command the session refuses reports the browser's own error; the
   wire still carries only `commandFailed`. Other workflows, remote projections
   and production worker/JNI execution are not migrated yet. Browser capture and
@@ -951,6 +953,7 @@ and replay coverage for the complete current command inventory.
     and staged refinements.
   - [x] Route profile, nozzle and filament-slot changes through serialized staged
     project replacement.
+  - [x] Route primitive, library and calibration model adds through staged work.
   - [ ] Migrate remaining editing/import/save/slice routes and isolate
     preparation work; preserve the registry boundary for every mutation.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,

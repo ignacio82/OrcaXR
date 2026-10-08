@@ -86,11 +86,11 @@ SlicerClient.attestCapturedProjectRoute = async () => {
 
 const WAVE_REFUSAL = /native Snapmaker Orca CLI, which has no wave-overhang support/;
 
-function harness() {
+async function harness() {
   const workspace = new OrcaWorkspace(buildRegistry());
   const statuses: string[] = [];
   workspace.onStatusChanged = (text) => statuses.push(text);
-  workspace.addPrimitive('cube');
+  await workspace.addPrimitive('cube');
   const setWaves = async (on: boolean) => {
     const snapshot = workspace.getProjectSettingsOverrideSnapshot();
     await workspace.applyProjectSettingsOverrides(
@@ -109,7 +109,7 @@ await test('only the WASM engine carries the wave-overhang port', () => {
 
 await test('slicing every plate on the CLI engine with waves on is refused, with the way out named', async () => {
   attestedEngine = 'cli';
-  const { workspace, statuses, setWaves } = harness();
+  const { workspace, statuses, setWaves } = await harness();
   await setWaves(true);
   const before = attestations;
   assert.equal(await workspace.sliceAllPlates(), 0);
@@ -125,7 +125,7 @@ await test('slicing every plate on the CLI engine with waves on is refused, with
 
 await test('the same project is not refused for waves when they are off, or when the engine has them', async () => {
   attestedEngine = 'cli';
-  const off = harness();
+  const off = await harness();
   await off.setWaves(false);
   await off.workspace.sliceAllPlates();
   assert.ok(
@@ -136,7 +136,7 @@ await test('the same project is not refused for waves when they are off, or when
   assert.ok(off.statuses.includes('Slicing: preflighting'), `the external job started: ${off.statuses.join(' | ')}`);
 
   attestedEngine = 'wasm';
-  const wasm = harness();
+  const wasm = await harness();
   await wasm.setWaves(true);
   await wasm.workspace.sliceAllPlates();
   assert.ok(

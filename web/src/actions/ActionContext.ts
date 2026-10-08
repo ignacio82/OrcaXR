@@ -80,8 +80,8 @@ export class ActionContext {
   importZip(): void {
     this.workspace.onRequestLoadZip?.();
   }
-  addFromLibrary(): void {
-    this.workspace.addFromLibrary();
+  async addFromLibrary(): Promise<void> {
+    await this.workspace.addFromLibrary();
   }
   async deleteSelected(): Promise<void> {
     await this.workspace.deleteSelectedModel();
@@ -205,8 +205,8 @@ export class ActionContext {
   async scaleToFitPrintVolume(): Promise<void> {
     await this.workspace.scaleSelectionToFitPrintVolume();
   }
-  addPrimitive(kind: PrimitiveKind): void {
-    this.workspace.addPrimitive(kind);
+  async addPrimitive(kind: PrimitiveKind): Promise<void> {
+    await this.workspace.addPrimitive(kind);
   }
   setExplosionFactor(factor: number): boolean {
     return this.workspace.setExplosionFactor(factor);
@@ -259,7 +259,7 @@ export class ActionContext {
   async simplifySelected(decimateRatio?: number): Promise<void> {
     await this.workspace.simplifySelected(decimateRatio);
   }
-  addCalibration(
+  async addCalibration(
     kind:
       | 'tower'
       | 'cube'
@@ -275,8 +275,8 @@ export class ActionContext {
       | 'input_shaping_frequency'
       | 'input_shaping_damping'
       | 'junction_deviation',
-  ): void {
-    this.workspace.addCalibration(kind);
+  ): Promise<void> {
+    await this.workspace.addCalibration(kind);
   }
   async addPlate(): Promise<void> {
     await this.workspace.addPlate();

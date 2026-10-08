@@ -5186,7 +5186,7 @@ export class OrcaWorkspace extends xb.Script {
   private async addStlModel(url: string, color: number) {
     const raw = await new STLLoader().loadAsync(url);
     this.library.push({ name: 'cube_20mm.stl', geometry: raw });
-    this.addModelFromGeometry(raw, color, {}, url.split('/').pop() ?? 'Imported model');
+    await this.addModelFromGeometry(raw, color, {}, url.split('/').pop() ?? 'Imported model');
     if (this.transformControls && this.models.length > 0) {
       this.selectModel(this.models[this.models.length - 1]);
     }
@@ -5743,10 +5743,10 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Replace the current model with [raw] (STL geometry: mm, Z-up). */
-  loadModelFromGeometry(raw: THREE.BufferGeometry, name: string, options: GeometryLoadOptions = {}) {
+  async loadModelFromGeometry(raw: THREE.BufferGeometry, name: string, options: GeometryLoadOptions = {}) {
     this.library.push({ name, geometry: raw });
     this.libraryIndex = this.library.length - 1;
-    this.addModelFromGeometry(raw, 0x4fc3f7, options, name);
+    await this.addModelFromGeometry(raw, 0x4fc3f7, options, name);
     if (!options.deferPostAdd) this.setStatus(`Loaded ${name}.`);
   }
 
@@ -5756,13 +5756,13 @@ export class OrcaWorkspace extends xb.Script {
    * The shapes live in `project/objects/primitives.ts` so their dimensions can
    * be measured without a browser; this only places what that module built.
    */
-  public addPrimitive(kind: PrimitiveKind) {
-    this.loadModelFromGeometry(primitiveGeometry(kind), primitiveFileName(kind));
+  public async addPrimitive(kind: PrimitiveKind): Promise<void> {
+    await this.loadModelFromGeometry(primitiveGeometry(kind), primitiveFileName(kind));
     this.setStatus(`Added ${kind}.`);
   }
 
   /** Drop a calibration test model (temperature/overhang tower or XYZ cube). */
-  public addCalibration(
+  public async addCalibration(
     kind:
       | 'tower'
       | 'cube'
@@ -5834,7 +5834,7 @@ export class OrcaWorkspace extends xb.Script {
     // leaves them to notice and undo it. Opening a session is idempotent, so
     // adding a second calibration replaces the first rather than nesting.
     const opened = this.canonicalProject.beginCalibrationSession();
-    this.loadModelFromGeometry(geo.toNonIndexed(), filename);
+    await this.loadModelFromGeometry(geo.toNonIndexed(), filename);
     this.setStatus(
       opened
         ? `Added calibration ${kind}. Your project is held aside — finish or discard the calibration to get it back.`
@@ -6021,7 +6021,7 @@ export class OrcaWorkspace extends xb.Script {
           `${size.map((value) => value.toFixed(3)).join(' × ')} mm, so this is not one copy of it.`,
       };
     }
-    this.canonicalProject.importBufferGeometry(geometry, { name: plan.label });
+    await this.canonicalProject.importGeometry(geometry, { name: plan.label });
     return { placed: 1 };
   }
 
@@ -6512,12 +6512,12 @@ export class OrcaWorkspace extends xb.Script {
     return true;
   }
 
-  public addFromLibrary() {
+  public async addFromLibrary(): Promise<void> {
     if (this.library.length === 0) return;
     this.libraryIndex = (this.libraryIndex + 1) % this.library.length;
     const entry = this.library[this.libraryIndex];
     if (entry) {
-      this.addModelFromGeometry(entry.geometry, 0x4fc3f7);
+      await this.addModelFromGeometry(entry.geometry, 0x4fc3f7);
       if (this.transformControls && this.models.length > 0) {
         this.selectModel(this.models[this.models.length - 1]);
       }
@@ -6605,7 +6605,7 @@ export class OrcaWorkspace extends xb.Script {
     return result;
   }
 
-  private addModelFromGeometry(
+  private async addModelFromGeometry(
     raw: THREE.BufferGeometry,
     _color: number,
     options: GeometryLoadOptions = {},
@@ -6625,7 +6625,7 @@ export class OrcaWorkspace extends xb.Script {
       rotation: [0, 0, 0, 1],
       scale: [1, 1, 1],
     };
-    const imported = this.canonicalProject.importBufferGeometry(raw, {
+    const imported = await this.canonicalProject.importGeometry(raw, {
       name,
       sourceFilename: name,
       transform,

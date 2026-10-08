@@ -100,7 +100,7 @@ export function selfTestLiveCanonicalBoundaries() {
       'scene-attached import',
       inspectImports,
       `class OrcaWorkspace {
-        addModelFromGeometry(raw) { this.canonicalProject.importBufferGeometry(raw); }
+        async addModelFromGeometry(raw) { await this.canonicalProject.importGeometry(raw); }
         loadModelFromGeometry(raw) { this.addModelFromGeometry(raw); }
         importModelFile(name, bytes) { this.canonicalProject.prepareModelImport(bytes); }
         loadModelFromBuffer(name, raw) { this.workspace.add(raw); this.importModelFile(name, raw); }
@@ -110,10 +110,36 @@ export function selfTestLiveCanonicalBoundaries() {
       'attach imported geometry',
     ],
     [
-      'untransacted model import',
+      'synchronous model placement',
       inspectImports,
       `class OrcaWorkspace {
         addModelFromGeometry(raw) { this.canonicalProject.importBufferGeometry(raw); }
+        loadModelFromGeometry(raw) { this.addModelFromGeometry(raw); }
+        importModelFile(name, bytes) { this.canonicalProject.prepareModelImport(bytes); }
+        loadModelFromBuffer(name, raw) { return this.importModelFile(name, raw); }
+        loadModelFromUrl(url) { return this.importModelFile(url, url); }
+        importZipArchive(raw, name) { return this.importModelFile(name, raw); }
+      }`,
+      'model placement must commit through the guarded session',
+    ],
+    [
+      'unawaited model placement',
+      inspectImports,
+      `class OrcaWorkspace {
+        async addModelFromGeometry(raw) { this.canonicalProject.importGeometry(raw); }
+        loadModelFromGeometry(raw) { this.addModelFromGeometry(raw); }
+        importModelFile(name, bytes) { this.canonicalProject.prepareModelImport(bytes); }
+        loadModelFromBuffer(name, raw) { return this.importModelFile(name, raw); }
+        loadModelFromUrl(url) { return this.importModelFile(url, url); }
+        importZipArchive(raw, name) { return this.importModelFile(name, raw); }
+      }`,
+      'model placement must await its acknowledgement',
+    ],
+    [
+      'untransacted model import',
+      inspectImports,
+      `class OrcaWorkspace {
+        async addModelFromGeometry(raw) { await this.canonicalProject.importGeometry(raw); }
         loadModelFromGeometry(raw) { this.addModelFromGeometry(raw); }
         importModelFile(name, bytes) { const decoded = decodeModelImport(bytes); this.loadModelFromGeometry(decoded); }
         loadModelFromBuffer(name, raw) { return this.importModelFile(name, raw); }
@@ -126,7 +152,7 @@ export function selfTestLiveCanonicalBoundaries() {
       'per-entry archive commit',
       inspectImports,
       `class OrcaWorkspace {
-        addModelFromGeometry(raw) { this.canonicalProject.importBufferGeometry(raw); }
+        async addModelFromGeometry(raw) { await this.canonicalProject.importGeometry(raw); }
         loadModelFromGeometry(raw) { this.addModelFromGeometry(raw); }
         importModelFile(name, bytes) { this.canonicalProject.prepareModelImport(bytes); }
         loadModelFromBuffer(name, raw) { return this.importModelFile(name, raw); }
@@ -623,8 +649,15 @@ function inspectImports(file, source) {
   const placement = check.method('OrcaWorkspace', 'addModelFromGeometry');
   if (placement) {
     const all = facts(placement);
-    check.requireCall(all, 'this.canonicalProject.importBufferGeometry', 'model placement must commit canonically');
-    check.forbidCalls(all, sceneImportCalls('model placement'));
+    // Placement commits the object and its mesh bytes as guarded staged work
+    // and waits for the acknowledgement; the synchronous bus is not a route.
+    const commit = all.calls.find((entry) => entry.path === 'this.canonicalProject.importGeometry');
+    if (!commit) check.fail(placement, 'model placement must commit through the guarded session');
+    else if (!awaitsCompletion(commit.node)) check.fail(commit.node, 'model placement must await its acknowledgement');
+    check.forbidCalls(all, {
+      ...sceneImportCalls('model placement'),
+      'this.canonicalProject.importBufferGeometry': 'model placement must commit through the guarded session',
+    });
   }
   const publicPlacement = check.method('OrcaWorkspace', 'loadModelFromGeometry');
   if (publicPlacement) {

@@ -12,6 +12,7 @@ import {
 import { createIntentTextEncoder } from '../project/PreparedProjectCommands';
 import {
   captureAddEmbossTextCommand,
+  captureAddObjectWithAssetCommand,
   captureAddSvgPartCommand,
   captureAddVolumeCommand,
   captureEditEmbossTextCommand,
@@ -2777,6 +2778,34 @@ export class CanonicalWorkspaceController {
     options: ImportBufferGeometryOptions = {},
   ): ImportedCanonicalModel {
     this.assertActive();
+    const prepared = this.prepareGeometryObject(geometry, options);
+    this.session.execute(new AddObjectWithAssetCommand(prepared.plateId, prepared.object, prepared.asset));
+    return prepared.result;
+  }
+
+  /**
+   * {@link importBufferGeometry} through the guarded asynchronous session
+   * route: the new object and its mesh bytes commit as measured staged work.
+   */
+  async importGeometry(
+    geometry: THREE.BufferGeometry,
+    options: ImportBufferGeometryOptions = {},
+  ): Promise<ImportedCanonicalModel> {
+    this.assertActive();
+    const guard = this.asyncSession.captureGuard();
+    const prepared = this.prepareGeometryObject(geometry, options);
+    await this.executeStagedEdit(
+      captureAddObjectWithAssetCommand(prepared.plateId, prepared.object, prepared.asset, MESH_INPUT_LIMITS),
+      guard,
+    );
+    return prepared.result;
+  }
+
+  /** One mesh as a new object on a plate, its asset deduplicated against the project's. */
+  private prepareGeometryObject(
+    geometry: THREE.BufferGeometry,
+    options: ImportBufferGeometryOptions,
+  ): { plateId: PlateId; object: ProjectObject; asset: AssetPayload; result: ImportedCanonicalModel } {
     const state = this.session.project.getSnapshot().state;
     const plateId = options.plateId ?? state.activePlateId;
     const plate = findPlate(state, plateId);
@@ -2840,15 +2869,19 @@ export class CanonicalWorkspaceController {
       ],
       layerRanges: [],
     };
-    this.session.execute(new AddObjectWithAssetCommand(plateId, object, asset));
-    return Object.freeze({
+    return {
       plateId,
-      objectId,
-      volumeId,
-      instanceId,
-      assetId: asset.descriptor.id,
-      reusedAsset: Boolean(duplicate),
-    });
+      object,
+      asset,
+      result: Object.freeze({
+        plateId,
+        objectId,
+        volumeId,
+        instanceId,
+        assetId: asset.descriptor.id,
+        reusedAsset: Boolean(duplicate),
+      }),
+    };
   }
 
   /** Replace canonical selection with any independently selectable Objects-tree entities. */
