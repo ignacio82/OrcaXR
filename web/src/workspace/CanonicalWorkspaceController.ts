@@ -63,7 +63,7 @@ const RANGE_INERT_KEYS = new Set(['nozzle_temperature']);
 import { facetAnnotationsHaveAssignments } from '../project/domain/facetRefinement';
 import type { EmbossTextConfiguration, EmbossedMesh, GlyphOutlineSource } from '../project/objects/emboss';
 import type { EmbossSvgPart } from '../project/domain/model';
-import { prepareSvgPart, svgVolumeIdentity, type PreparedSvgPart } from '../project/objects/svgCommands';
+import { prepareSvgPart, svgPartName, svgVolumeIdentity, type PreparedSvgPart } from '../project/objects/svgCommands';
 import { embossVolumeIdentity, prepareEmbossedVolume } from '../project/objects/embossCommands';
 import type {
   AssetId,
@@ -4280,7 +4280,7 @@ export class CanonicalWorkspaceController {
       assetId: identity.assetId,
       drawingAssetId: identity.drawingAssetId,
     });
-    const name = options.fileName.replace(/\.svg$/i, '') || 'SVG part';
+    const name = svgPartName(options.fileName);
     await this.executeStagedEdit(
       captureAddSvgPartCommand(
         { objectId, volumeId: identity.volumeId, assetId: identity.assetId, transform },

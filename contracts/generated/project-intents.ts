@@ -4155,6 +4155,107 @@ const shapes = {
       "add": "EmbossAdd",
       "edit": "EmbossEdit"
     }
+  },
+  "SvgPartRequest": {
+    "kind": "object",
+    "fields": {
+      "fileName": "EditText",
+      "depthMm": "Finite",
+      "widthMm": "OptionalFinite",
+      "useSurface": "Flag",
+      "sourcePath": "OptionalText"
+    }
+  },
+  "SvgUnsupportedReason": {
+    "kind": "enum",
+    "values": [
+      "needsFont",
+      "rasterImage",
+      "externalReference",
+      "paintEffect",
+      "strokeOnly",
+      "unsupportedUnit",
+      "unsupportedCommand",
+      "emptyShape",
+      "cssSelector"
+    ]
+  },
+  "SvgUnsupportedFeature": {
+    "kind": "object",
+    "fields": {
+      "element": "EditText",
+      "reason": "SvgUnsupportedReason",
+      "detail": "EditText"
+    }
+  },
+  "SvgUnsupportedFeatures": {
+    "kind": "array",
+    "items": "SvgUnsupportedFeature",
+    "min": 0,
+    "max": 64
+  },
+  "SvgPartPreview": {
+    "kind": "object",
+    "fields": {
+      "triangleCount": "Counter",
+      "vertexCount": "Counter",
+      "openEdgeCount": "Counter",
+      "coincidentEdgeCount": "Counter",
+      "sizeMm": "PlanarPosition",
+      "unsupported": "SvgUnsupportedFeatures",
+      "unsupportedCount": "Counter",
+      "digest": "EditText",
+      "byteLength": "Counter",
+      "drawingDigest": "EditText",
+      "drawingByteLength": "Counter"
+    }
+  },
+  "SvgPartRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "invalidSvg",
+      "noGeometry",
+      "invalidMesh"
+    ]
+  },
+  "SvgPartRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "SvgPartRefusalCode",
+      "message": "EditText"
+    }
+  },
+  "SvgPartReply": {
+    "kind": "union",
+    "variants": {
+      "prepared": "SvgPartPreview",
+      "refused": "SvgPartRefusal"
+    }
+  },
+  "SvgPartAdd": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "volumeId": "Id",
+      "assetId": "Id",
+      "drawingAssetId": "Id",
+      "transform": "Transform"
+    }
+  },
+  "SvgPartEdit": {
+    "kind": "object",
+    "fields": {
+      "volumeId": "Id",
+      "assetId": "Id",
+      "drawingAssetId": "Id"
+    }
+  },
+  "SvgPartStage": {
+    "kind": "union",
+    "variants": {
+      "add": "SvgPartAdd",
+      "edit": "SvgPartEdit"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -4659,6 +4760,17 @@ export type ProjectEmbossReplyWire = {readonly prepared:ProjectEmbossPreviewWire
 export interface ProjectEmbossAddWire {readonly objectId: ProjectIdWire;readonly volumeId: ProjectIdWire;readonly assetId: ProjectIdWire;readonly transform: ProjectTransformWire;}
 export interface ProjectEmbossEditWire {readonly volumeId: ProjectIdWire;readonly assetId: ProjectIdWire;}
 export type ProjectEmbossStageWire = {readonly add:ProjectEmbossAddWire} | {readonly edit:ProjectEmbossEditWire};
+export interface ProjectSvgPartRequestWire {readonly fileName: ProjectEditTextWire;readonly depthMm: ProjectFiniteWire;readonly widthMm: ProjectOptionalFiniteWire;readonly useSurface: ProjectFlagWire;readonly sourcePath: ProjectOptionalTextWire;}
+export type ProjectSvgUnsupportedReasonWire = "needsFont" | "rasterImage" | "externalReference" | "paintEffect" | "strokeOnly" | "unsupportedUnit" | "unsupportedCommand" | "emptyShape" | "cssSelector";
+export interface ProjectSvgUnsupportedFeatureWire {readonly element: ProjectEditTextWire;readonly reason: ProjectSvgUnsupportedReasonWire;readonly detail: ProjectEditTextWire;}
+export type ProjectSvgUnsupportedFeaturesWire = readonly ProjectSvgUnsupportedFeatureWire[];
+export interface ProjectSvgPartPreviewWire {readonly triangleCount: ProjectCounterWire;readonly vertexCount: ProjectCounterWire;readonly openEdgeCount: ProjectCounterWire;readonly coincidentEdgeCount: ProjectCounterWire;readonly sizeMm: ProjectPlanarPositionWire;readonly unsupported: ProjectSvgUnsupportedFeaturesWire;readonly unsupportedCount: ProjectCounterWire;readonly digest: ProjectEditTextWire;readonly byteLength: ProjectCounterWire;readonly drawingDigest: ProjectEditTextWire;readonly drawingByteLength: ProjectCounterWire;}
+export type ProjectSvgPartRefusalCodeWire = "invalidSvg" | "noGeometry" | "invalidMesh";
+export interface ProjectSvgPartRefusalWire {readonly code: ProjectSvgPartRefusalCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectSvgPartReplyWire = {readonly prepared:ProjectSvgPartPreviewWire} | {readonly refused:ProjectSvgPartRefusalWire};
+export interface ProjectSvgPartAddWire {readonly objectId: ProjectIdWire;readonly volumeId: ProjectIdWire;readonly assetId: ProjectIdWire;readonly drawingAssetId: ProjectIdWire;readonly transform: ProjectTransformWire;}
+export interface ProjectSvgPartEditWire {readonly volumeId: ProjectIdWire;readonly assetId: ProjectIdWire;readonly drawingAssetId: ProjectIdWire;}
+export type ProjectSvgPartStageWire = {readonly add:ProjectSvgPartAddWire} | {readonly edit:ProjectSvgPartEditWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -4950,3 +5062,12 @@ export function encodeProjectEmbossReply(value:ProjectEmbossReplyWire):string { 
 export function captureProjectEmbossStage(value:unknown):ProjectEmbossStageWire { return captureIntent("EmbossStage",value,shapes,limits) as ProjectEmbossStageWire; }
 export function decodeProjectEmbossStage(text:string):ProjectEmbossStageWire { return captureProjectEmbossStage(parseIntentJson(text,limits)); }
 export function encodeProjectEmbossStage(value:ProjectEmbossStageWire):string { return JSON.stringify(captureProjectEmbossStage(value)); }
+export function captureProjectSvgPartRequest(value:unknown):ProjectSvgPartRequestWire { return captureIntent("SvgPartRequest",value,shapes,limits) as ProjectSvgPartRequestWire; }
+export function decodeProjectSvgPartRequest(text:string):ProjectSvgPartRequestWire { return captureProjectSvgPartRequest(parseIntentJson(text,limits)); }
+export function encodeProjectSvgPartRequest(value:ProjectSvgPartRequestWire):string { return JSON.stringify(captureProjectSvgPartRequest(value)); }
+export function captureProjectSvgPartReply(value:unknown):ProjectSvgPartReplyWire { return captureIntent("SvgPartReply",value,shapes,limits) as ProjectSvgPartReplyWire; }
+export function decodeProjectSvgPartReply(text:string):ProjectSvgPartReplyWire { return captureProjectSvgPartReply(parseIntentJson(text,limits)); }
+export function encodeProjectSvgPartReply(value:ProjectSvgPartReplyWire):string { return JSON.stringify(captureProjectSvgPartReply(value)); }
+export function captureProjectSvgPartStage(value:unknown):ProjectSvgPartStageWire { return captureIntent("SvgPartStage",value,shapes,limits) as ProjectSvgPartStageWire; }
+export function decodeProjectSvgPartStage(text:string):ProjectSvgPartStageWire { return captureProjectSvgPartStage(parseIntentJson(text,limits)); }
+export function encodeProjectSvgPartStage(value:ProjectSvgPartStageWire):string { return JSON.stringify(captureProjectSvgPartStage(value)); }

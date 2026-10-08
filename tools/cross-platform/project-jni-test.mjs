@@ -22,6 +22,7 @@ import { replaySimplify } from "./simplify-replay.mjs";
 import { replayMeasure } from "./measure-replay.mjs";
 import { replayBrimEars } from "./brim-ear-replay.mjs";
 import { replayEmboss } from "./emboss-replay.mjs";
+import { replaySvgParts } from "./svg-part-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -757,6 +758,45 @@ try {
       .join("\n"),
   );
   assert.equal(embossChecks, 111);
+  // SVG parts: drawings cut from their file bytes and staged, then the Kotlin
+  // wrapper.
+  const svgFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/svg-part-vectors.json", root)),
+  );
+  const svgParts = await replaySvgParts(
+    projectJniCore(jvm.call),
+    svgFixture,
+    layout,
+    stagingLayout.version,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    (text) => Uint8Array.from(Buffer.from(text, "base64")),
+  );
+  assert.deepEqual(
+    [
+      svgParts.svgPrepared,
+      svgParts.svgRefused,
+      svgParts.svgMeshes,
+      svgParts.svgStages,
+      svgParts.svgApplied,
+      svgParts.svgHistory,
+    ],
+    [11, 11, 11, 15, 7, 4],
+  );
+  const svgPartChecks = jvm.call(
+    "svgPartChecks",
+    svgFixture.stateJson,
+    Uint8Array.from(svgFixture.assets[0].bytes),
+    svgFixture.steps
+      .map((s) =>
+        "prepare" in s
+          ? `P\t${s.svg}\t${s.prepare}\t${s.drawing}\t${s.reply}\t${s.mesh ?? ""}\t${s.window ?? ""}`
+          : "stage" in s
+            ? `S\t${s.svg}\t${s.stage}\t${s.outcome}\t${s.revision}\t${s.hash}\t${label(s)}`
+            : `H\t${s.history}\t${s.revision}\t${s.hash}\t${label(s)}`,
+      )
+      .join("\n"),
+  );
+  assert.equal(svgPartChecks, 111);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

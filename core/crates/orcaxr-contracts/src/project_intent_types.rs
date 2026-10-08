@@ -8631,6 +8631,227 @@ fn read_emboss_stage(v: &Value) -> Result<EmbossStage, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SvgPartRequest {
+    pub file_name: EditText,
+    pub depth_mm: Finite,
+    pub width_mm: OptionalFinite,
+    pub use_surface: Flag,
+    pub source_path: OptionalText,
+}
+fn read_svg_part_request(v: &Value) -> Result<SvgPartRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &["fileName", "depthMm", "widthMm", "useSurface", "sourcePath"],
+        false,
+    )?;
+    Ok(SvgPartRequest {
+        file_name: read_edit_text(&object["fileName"])?,
+        depth_mm: read_finite(&object["depthMm"])?,
+        width_mm: read_optional_finite(&object["widthMm"])?,
+        use_surface: read_flag(&object["useSurface"])?,
+        source_path: read_optional_text(&object["sourcePath"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SvgUnsupportedReason {
+    NeedsFont,
+    RasterImage,
+    ExternalReference,
+    PaintEffect,
+    StrokeOnly,
+    UnsupportedUnit,
+    UnsupportedCommand,
+    EmptyShape,
+    CssSelector,
+}
+fn read_svg_unsupported_reason(v: &Value) -> Result<SvgUnsupportedReason, InvalidIntent> {
+    match v.as_str() {
+        Some("needsFont") => Ok(SvgUnsupportedReason::NeedsFont),
+        Some("rasterImage") => Ok(SvgUnsupportedReason::RasterImage),
+        Some("externalReference") => Ok(SvgUnsupportedReason::ExternalReference),
+        Some("paintEffect") => Ok(SvgUnsupportedReason::PaintEffect),
+        Some("strokeOnly") => Ok(SvgUnsupportedReason::StrokeOnly),
+        Some("unsupportedUnit") => Ok(SvgUnsupportedReason::UnsupportedUnit),
+        Some("unsupportedCommand") => Ok(SvgUnsupportedReason::UnsupportedCommand),
+        Some("emptyShape") => Ok(SvgUnsupportedReason::EmptyShape),
+        Some("cssSelector") => Ok(SvgUnsupportedReason::CssSelector),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SvgUnsupportedFeature {
+    pub element: EditText,
+    pub reason: SvgUnsupportedReason,
+    pub detail: EditText,
+}
+fn read_svg_unsupported_feature(v: &Value) -> Result<SvgUnsupportedFeature, InvalidIntent> {
+    let object = fields(v, &["element", "reason", "detail"], false)?;
+    Ok(SvgUnsupportedFeature {
+        element: read_edit_text(&object["element"])?,
+        reason: read_svg_unsupported_reason(&object["reason"])?,
+        detail: read_edit_text(&object["detail"])?,
+    })
+}
+pub type SvgUnsupportedFeatures = Vec<SvgUnsupportedFeature>;
+fn read_svg_unsupported_features(v: &Value) -> Result<SvgUnsupportedFeatures, InvalidIntent> {
+    list(v, 0, 64)?
+        .iter()
+        .map(read_svg_unsupported_feature)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SvgPartPreview {
+    pub triangle_count: Counter,
+    pub vertex_count: Counter,
+    pub open_edge_count: Counter,
+    pub coincident_edge_count: Counter,
+    pub size_mm: PlanarPosition,
+    pub unsupported: SvgUnsupportedFeatures,
+    pub unsupported_count: Counter,
+    pub digest: EditText,
+    pub byte_length: Counter,
+    pub drawing_digest: EditText,
+    pub drawing_byte_length: Counter,
+}
+fn read_svg_part_preview(v: &Value) -> Result<SvgPartPreview, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "triangleCount",
+            "vertexCount",
+            "openEdgeCount",
+            "coincidentEdgeCount",
+            "sizeMm",
+            "unsupported",
+            "unsupportedCount",
+            "digest",
+            "byteLength",
+            "drawingDigest",
+            "drawingByteLength",
+        ],
+        false,
+    )?;
+    Ok(SvgPartPreview {
+        triangle_count: read_counter(&object["triangleCount"])?,
+        vertex_count: read_counter(&object["vertexCount"])?,
+        open_edge_count: read_counter(&object["openEdgeCount"])?,
+        coincident_edge_count: read_counter(&object["coincidentEdgeCount"])?,
+        size_mm: read_planar_position(&object["sizeMm"])?,
+        unsupported: read_svg_unsupported_features(&object["unsupported"])?,
+        unsupported_count: read_counter(&object["unsupportedCount"])?,
+        digest: read_edit_text(&object["digest"])?,
+        byte_length: read_counter(&object["byteLength"])?,
+        drawing_digest: read_edit_text(&object["drawingDigest"])?,
+        drawing_byte_length: read_counter(&object["drawingByteLength"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SvgPartRefusalCode {
+    InvalidSvg,
+    NoGeometry,
+    InvalidMesh,
+}
+fn read_svg_part_refusal_code(v: &Value) -> Result<SvgPartRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("invalidSvg") => Ok(SvgPartRefusalCode::InvalidSvg),
+        Some("noGeometry") => Ok(SvgPartRefusalCode::NoGeometry),
+        Some("invalidMesh") => Ok(SvgPartRefusalCode::InvalidMesh),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SvgPartRefusal {
+    pub code: SvgPartRefusalCode,
+    pub message: EditText,
+}
+fn read_svg_part_refusal(v: &Value) -> Result<SvgPartRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(SvgPartRefusal {
+        code: read_svg_part_refusal_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SvgPartReply {
+    Prepared(SvgPartPreview),
+    Refused(SvgPartRefusal),
+}
+fn read_svg_part_reply(v: &Value) -> Result<SvgPartReply, InvalidIntent> {
+    let object = fields(v, &["prepared", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "prepared" => Ok(SvgPartReply::Prepared(read_svg_part_preview(value)?)),
+        "refused" => Ok(SvgPartReply::Refused(read_svg_part_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SvgPartAdd {
+    pub object_id: Id,
+    pub volume_id: Id,
+    pub asset_id: Id,
+    pub drawing_asset_id: Id,
+    pub transform: Transform,
+}
+fn read_svg_part_add(v: &Value) -> Result<SvgPartAdd, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "objectId",
+            "volumeId",
+            "assetId",
+            "drawingAssetId",
+            "transform",
+        ],
+        false,
+    )?;
+    Ok(SvgPartAdd {
+        object_id: read_id(&object["objectId"])?,
+        volume_id: read_id(&object["volumeId"])?,
+        asset_id: read_id(&object["assetId"])?,
+        drawing_asset_id: read_id(&object["drawingAssetId"])?,
+        transform: read_transform(&object["transform"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SvgPartEdit {
+    pub volume_id: Id,
+    pub asset_id: Id,
+    pub drawing_asset_id: Id,
+}
+fn read_svg_part_edit(v: &Value) -> Result<SvgPartEdit, InvalidIntent> {
+    let object = fields(v, &["volumeId", "assetId", "drawingAssetId"], false)?;
+    Ok(SvgPartEdit {
+        volume_id: read_id(&object["volumeId"])?,
+        asset_id: read_id(&object["assetId"])?,
+        drawing_asset_id: read_id(&object["drawingAssetId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SvgPartStage {
+    Add(SvgPartAdd),
+    Edit(SvgPartEdit),
+}
+fn read_svg_part_stage(v: &Value) -> Result<SvgPartStage, InvalidIntent> {
+    let object = fields(v, &["add", "edit"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "add" => Ok(SvgPartStage::Add(read_svg_part_add(value)?)),
+        "edit" => Ok(SvgPartStage::Edit(read_svg_part_edit(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -9463,5 +9684,29 @@ pub fn decode_emboss_stage(text: &str) -> Result<EmbossStage, InvalidIntent> {
 pub fn encode_emboss_stage(value: &EmbossStage) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_emboss_stage(&text)?;
+    Ok(text)
+}
+pub fn decode_svg_part_request(text: &str) -> Result<SvgPartRequest, InvalidIntent> {
+    read_svg_part_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_svg_part_request(value: &SvgPartRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_svg_part_request(&text)?;
+    Ok(text)
+}
+pub fn decode_svg_part_reply(text: &str) -> Result<SvgPartReply, InvalidIntent> {
+    read_svg_part_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_svg_part_reply(value: &SvgPartReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_svg_part_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_svg_part_stage(text: &str) -> Result<SvgPartStage, InvalidIntent> {
+    read_svg_part_stage(&super::project_intents::parse(text)?)
+}
+pub fn encode_svg_part_stage(value: &SvgPartStage) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_svg_part_stage(&text)?;
     Ok(text)
 }

@@ -155,6 +155,12 @@ final class NativeProject {
     static native String embossReply(long handle);
     static native byte[] embossMesh(long handle, long start, long count);
     static native long stageEmboss(long handle, long emboss, String request);
+    // SVG parts: cut a drawing's file bytes with a recipe, read the summary or
+    // refusal and page the mesh, then stage it as a new part or a re-cut.
+    static native long prepareSvgPart(String request, byte[] drawing);
+    static native String svgPartReply(long handle);
+    static native byte[] svgPartMesh(long handle, long start, long count);
+    static native long stageSvgPart(long handle, long svg, String request);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

@@ -21,7 +21,7 @@ import { findVolume } from '../domain/selectors';
 import type { CommandContext, ProjectCommand } from '../history/command';
 import { encodeIndexedMeshAsset } from '../meshCodec';
 import { extrudeContours, type ExtrudedMesh } from './extrude';
-import { readSvgShapes, SvgError, type SvgUnsupportedFeature } from './svgShapes';
+import { readSvgShapes, SvgError, type SvgShapes, type SvgUnsupportedFeature } from './svgShapes';
 
 /** Everything needed to place a newly cut SVG part. */
 export interface SvgPlacement {
@@ -69,6 +69,98 @@ export function svgArchivePath(volumeId: VolumeId, fileName: string): string {
   return `Metadata/svg/${String(volumeId).replaceAll(/[^A-Za-z0-9._-]/g, '_')}/${safe}`;
 }
 
+/** A part's name from its file: the name without a final `.svg`. */
+export function svgPartName(fileName: string): string {
+  return fileName.replace(/\.svg$/i, '') || 'SVG part';
+}
+
+/** The asset ID a cut is encoded under until it is packaged. */
+const PREVIEW_ASSET_ID = 'import:svg:preview' as AssetId;
+
+/** A drawing cut into a mesh, before anything names it. */
+export interface SvgCut {
+  readonly shapes: SvgShapes;
+  readonly mesh: ExtrudedMesh;
+  /** The mesh encoded under a placeholder asset ID. */
+  readonly preview: AssetPayload;
+  /** The drawing's text as the part stores it. */
+  readonly svgBytes: Uint8Array;
+}
+
+/**
+ * Cut a drawing into a mesh: the half of preparation that needs no IDs, so a
+ * host can preview a cut before naming it. Throws `SvgError`.
+ */
+export function cutSvgDrawing(
+  source: string,
+  options: { readonly fileName: string; readonly depthMm: number; readonly widthMm?: number },
+): SvgCut {
+  if (!Number.isFinite(options.depthMm) || options.depthMm <= 0) {
+    throw new SvgError('An SVG part needs a depth greater than zero', 'invalid-svg');
+  }
+  const shapes = readSvgShapes(source, options.widthMm);
+  // A size past float64 range cannot be recorded as the part's width.
+  if (!shapes.sizeMm.every(Number.isFinite)) throw new SvgError('That drawing is too large to cut', 'invalid-svg');
+  const mesh = extrudeContours(shapes.contours, options.depthMm);
+  if (mesh.triangleCount === 0) {
+    throw new SvgError('That drawing produced no geometry to cut', 'no-geometry');
+  }
+  let preview: AssetPayload;
+  try {
+    preview = encodeIndexedMeshAsset({
+      id: PREVIEW_ASSET_ID,
+      positions: mesh.positions,
+      indices: mesh.indices,
+      sourceFilename: options.fileName,
+    });
+  } catch (error) {
+    // A shape scaled past float32 range.
+    throw new SvgError((error as Error).message, 'invalid-mesh');
+  }
+  return { shapes, mesh, preview, svgBytes: new TextEncoder().encode(source) };
+}
+
+/** Name a cut: the mesh and drawing under their asset IDs, and the recipe. */
+export function packageSvgPart(
+  cut: SvgCut,
+  options: {
+    readonly fileName: string;
+    readonly volumeId: VolumeId;
+    readonly assetId: AssetId;
+    readonly drawingAssetId: AssetId;
+    readonly depthMm: number;
+    readonly useSurface?: boolean;
+    readonly sourcePath?: string;
+  },
+): PreparedSvgPart {
+  return {
+    drawing: {
+      descriptor: {
+        id: options.drawingAssetId,
+        kind: 'extension',
+        digest: contentDigest(cut.svgBytes),
+        byteLength: cut.svgBytes.byteLength,
+        mediaType: 'image/svg+xml',
+        sourceFilename: options.fileName,
+      },
+      bytes: cut.svgBytes,
+    },
+    asset: { descriptor: { ...cut.preview.descriptor, id: options.assetId }, bytes: cut.preview.bytes },
+    mesh: cut.mesh,
+    part: Object.freeze({
+      pathIn3mf: svgArchivePath(options.volumeId, options.fileName),
+      drawingAssetId: options.drawingAssetId,
+      ...(options.sourcePath ? { sourcePath: options.sourcePath } : {}),
+      depthMm: options.depthMm,
+      useSurface: options.useSurface ?? false,
+      widthMm: cut.shapes.sizeMm[0],
+    }),
+    svgBytes: cut.svgBytes,
+    unsupported: cut.shapes.unsupported,
+    sizeMm: cut.shapes.sizeMm,
+  };
+}
+
 /**
  * Cut a drawing into a mesh and package it, without touching project state.
  *
@@ -89,47 +181,7 @@ export function prepareSvgPart(
   },
 ): PreparedSvgPart {
   if (!isStableEntityId(options.assetId)) throw new Error(`Asset ID ${options.assetId} is not stable`);
-  if (!Number.isFinite(options.depthMm) || options.depthMm <= 0) {
-    throw new SvgError('An SVG part needs a depth greater than zero', 'invalid-svg');
-  }
-  const shapes = readSvgShapes(source, options.widthMm);
-  const mesh = extrudeContours(shapes.contours, options.depthMm);
-  if (mesh.triangleCount === 0) {
-    throw new SvgError('That drawing produced no geometry to cut', 'no-geometry');
-  }
-  const pathIn3mf = svgArchivePath(options.volumeId, options.fileName);
-  const svgBytes = new TextEncoder().encode(source);
-  return {
-    drawing: {
-      descriptor: {
-        id: options.drawingAssetId,
-        kind: 'extension',
-        digest: contentDigest(svgBytes),
-        byteLength: svgBytes.byteLength,
-        mediaType: 'image/svg+xml',
-        sourceFilename: options.fileName,
-      },
-      bytes: svgBytes,
-    },
-    asset: encodeIndexedMeshAsset({
-      id: options.assetId,
-      positions: mesh.positions,
-      indices: mesh.indices,
-      sourceFilename: options.fileName,
-    }),
-    mesh,
-    part: Object.freeze({
-      pathIn3mf,
-      drawingAssetId: options.drawingAssetId,
-      ...(options.sourcePath ? { sourcePath: options.sourcePath } : {}),
-      depthMm: options.depthMm,
-      useSurface: options.useSurface ?? false,
-      widthMm: shapes.sizeMm[0],
-    }),
-    svgBytes,
-    unsupported: shapes.unsupported,
-    sizeMm: shapes.sizeMm,
-  };
+  return packageSvgPart(cutSvgDrawing(source, options), options);
 }
 
 /** Add an SVG part to an existing object. */

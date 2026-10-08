@@ -1614,8 +1614,26 @@ painting, and FullSpectrum operations that can support real native projects.
     optional), and both commands refuse a drawing stored under another ID
     than its recipe names, as they refuse a mismatched mesh (asset corpus 25
     / 362; staged 57 / 954, exact in Rust, WASM and JNI).
-  - [ ] Port the remaining preparation kernel (SVG), mesh renderer packets and
-    device qualification.
+  - [x] Port SVG parts (`svg::shapes`, `svg`): the browser's hand-written
+    reader line for line, its regular expressions as the scans they amount
+    to (leftmost matches and backtracking outcomes included) with
+    ECMAScript whitespace, `Number` and ASCII-only case folding, over a
+    drawing's file bytes read as `File.text()` reads them (a byte-order mark
+    dropped, malformed UTF-8 replaced), cut and staged as a new part or a
+    re-cut under host IDs. A reply lists the first 64 unsupported features
+    with their total and clips the drawing text they echo. 534 readings
+    (curated, plus 360 seeded random documents) match bit for bit in Rust;
+    22 cuts and 15 stages are exact in every binding. V8's `Math.tan` joins
+    `js_math`, pinned on 9,972 inputs. Browser fixes, each with a
+    regression: a `<title>` or `<style>` inside a line-art group was
+    reported as stroked, and named by the refusal; groups nest at most 256
+    deep and are refused past that (the reader rescans each level's subtree,
+    and a native host has no engine stack limit); and a drawing whose
+    extent overflows is refused instead of cut into a part whose width
+    cannot be stored. The Rust reader also avoids two browser scans that are
+    quadratic on hostile stylesheets (`@a;` repeated, and every rule tested
+    against every element), with identical results.
+  - [ ] Port mesh renderer packets and device qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.

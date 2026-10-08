@@ -5,19 +5,17 @@
 use crate::assets::AssetPayload;
 use crate::commands::staged::{CaptureError, CapturedCommand, StagedWork};
 use crate::commands::{PartPlacement, Recipe, StagedAsset};
-use crate::ids::{AssetId, EntityId};
+use crate::drawn::{self, stable, units};
+use crate::ids::AssetId;
 use crate::js_math::{self, convert};
 use crate::mesh::extrude::{Extruded, extrude};
-use crate::mesh::{Coordinates, EncodeOptions, Limits, encode};
-use crate::model::{Decode, EmbossTextConfiguration, Number, Text, Transform};
+use crate::model::{Decode, EmbossTextConfiguration};
 use orcaxr_contracts::canonical::Value;
 use orcaxr_contracts::project_intent_types as wire;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
-fn stable<K>(units: &[u16]) -> Result<EntityId<K>, Error> {
-    EntityId::try_from_utf16(units.to_vec()).map_err(|_| Error::Invalid)
-}
+pub use crate::drawn::{Error, MAX_PAGE};
 
 /// The asset ID a preview is encoded under until staging names it.
 const PREVIEW_ASSET_ID: &str = "import:emboss:preview";
@@ -43,18 +41,6 @@ struct Prepared {
     digest: Vec<u16>,
 }
 
-/// Why a prepared cut does not stage or page.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
-    Invalid,
-    Limit,
-}
-
-pub const MAX_PAGE: u64 = 16 * 1024 * 1024;
-
-fn units(text: &str) -> Vec<u16> {
-    text.encode_utf16().collect()
-}
 fn refused(code: wire::EmbossRefusalCode, message: impl AsRef<str>) -> wire::EmbossRefusal {
     wire::EmbossRefusal {
         code,
@@ -310,17 +296,6 @@ fn prepared(request: &wire::EmbossRequest) -> Result<Prepared, wire::EmbossRefus
         );
     }
     let (mesh, missing) = build(&configuration, request.font.units_per_em, &glyphs)?;
-    // `encodeIndexedMeshAsset`'s coordinate checks, in its order.
-    for &coordinate in &mesh.positions {
-        let message = if !coordinate.is_finite() {
-            "Mesh positions must be finite"
-        } else if !(coordinate as f32).is_finite() {
-            "Mesh positions must fit finite float32"
-        } else {
-            continue;
-        };
-        return Err(refused(wire::EmbossRefusalCode::InvalidMesh, message));
-    }
     let first_line = configuration
         .text
         .units()
@@ -336,35 +311,8 @@ fn prepared(request: &wire::EmbossRequest) -> Result<Prepared, wire::EmbossRefus
     .into_iter()
     .chain(units(".emboss"))
     .collect();
-    let preview = encode(
-        EncodeOptions {
-            id: AssetId::try_from_str(PREVIEW_ASSET_ID).expect("a stable preview ID"),
-            source_filename: Some(Text::new(filename)),
-            provenance: None,
-            metadata_bytes: usize::MAX,
-        },
-        Coordinates::Float64(&mesh.positions),
-        Some(&mesh.indices),
-        Limits {
-            asset_bytes: usize::MAX,
-            vertices: usize::MAX,
-            indices: usize::MAX,
-        },
-        || false,
-    )
-    .map_err(|_| {
-        refused(
-            wire::EmbossRefusalCode::InvalidMesh,
-            "Mesh payload is too large",
-        )
-    })?;
-    let digest = match &preview.descriptor {
-        Value::Object(fields) => match fields.get(&units("digest")) {
-            Some(Value::String(units)) => units.clone(),
-            _ => unreachable!("an encoded descriptor has a digest"),
-        },
-        _ => unreachable!("an encoded descriptor is an object"),
-    };
+    let encoded = drawn::encode_cut(PREVIEW_ASSET_ID, &mesh.positions, &mesh.indices, filename)
+        .map_err(|message| refused(wire::EmbossRefusalCode::InvalidMesh, message))?;
     Ok(Prepared {
         configuration: Arc::new(configuration),
         triangles: (mesh.indices.len() / 3) as u64,
@@ -372,8 +320,8 @@ fn prepared(request: &wire::EmbossRequest) -> Result<Prepared, wire::EmbossRefus
         missing,
         open_edges: mesh.open_edges,
         coincident_edges: mesh.coincident_edges,
-        preview,
-        digest,
+        preview: encoded.payload,
+        digest: encoded.digest,
     })
 }
 
@@ -396,17 +344,8 @@ impl PreparedEmboss {
 
     /// Bytes `start..start + count` of the cut's indexed-mesh payload.
     pub fn mesh(&self, start: u64, count: u64) -> Result<&[u8], Error> {
-        let bytes = &self
-            .outcome
-            .as_ref()
-            .map_err(|_| Error::Invalid)?
-            .preview
-            .bytes;
-        let end = start.checked_add(count).ok_or(Error::Invalid)?;
-        if count > MAX_PAGE || end > bytes.len() as u64 {
-            return Err(Error::Invalid);
-        }
-        Ok(&bytes[start as usize..end as usize])
+        let prepared = self.outcome.as_ref().map_err(|_| Error::Invalid)?;
+        drawn::page(&prepared.preview.bytes, start, count)
     }
 
     /// A new text part of an object, or a re-cut of an existing one.
@@ -416,55 +355,30 @@ impl PreparedEmboss {
             wire::EmbossStage::Add(add) => &add.asset_id,
             wire::EmbossStage::Edit(edit) => &edit.asset_id,
         };
-        let id = AssetId::try_from_utf16(asset_id.clone()).map_err(|_| Error::Invalid)?;
-        let mut descriptor = prepared.preview.descriptor.clone();
-        if let Value::Object(fields) = &mut descriptor {
-            fields.insert(units("id"), Value::String(id.as_utf16().to_vec()));
-        }
-        let asset = StagedAsset::new(AssetPayload {
-            descriptor,
-            bytes: prepared.preview.bytes.clone(),
-        })
-        .map_err(|_| Error::Invalid)?;
+        let id: AssetId = stable(asset_id)?;
+        let asset =
+            StagedAsset::new(drawn::named(&prepared.preview, &id)).map_err(|_| Error::Invalid)?;
         let recipe = Recipe::Text(prepared.configuration.clone());
         let triangles = prepared.triangles as f64;
         let captured = match stage {
             wire::EmbossStage::Add(add) => {
-                let number = |v: f64| Number::new(v).map_err(|_| Error::Invalid);
-                let t = &add.transform;
                 let placement = PartPlacement {
                     object: stable(&add.object_id)?,
                     volume: stable(&add.volume_id)?,
                     asset: id,
-                    transform: Transform {
-                        translation_mm: [
-                            number(t.translation_mm[0])?,
-                            number(t.translation_mm[1])?,
-                            number(t.translation_mm[2])?,
-                        ],
-                        rotation: [
-                            number(t.rotation[0])?,
-                            number(t.rotation[1])?,
-                            number(t.rotation[2])?,
-                            number(t.rotation[3])?,
-                        ],
-                        scale: [
-                            number(t.scale[0])?,
-                            number(t.scale[1])?,
-                            number(t.scale[2])?,
-                        ],
-                        extra: Default::default(),
-                    },
+                    transform: drawn::transform(&add.transform)?,
                 };
                 CapturedCommand::add_drawn_part(
                     placement, asset, triangles, recipe, None, max_units,
                 )
             }
-            wire::EmbossStage::Edit(edit) => {
-                let volume =
-                    EntityId::try_from_utf16(edit.volume_id.clone()).map_err(|_| Error::Invalid)?;
-                CapturedCommand::recut_part(volume, asset, triangles, recipe, max_units)
-            }
+            wire::EmbossStage::Edit(edit) => CapturedCommand::recut_part(
+                stable(&edit.volume_id)?,
+                asset,
+                triangles,
+                recipe,
+                max_units,
+            ),
         };
         captured
             .map(StagedWork::single)

@@ -720,6 +720,31 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_prepareSvgPart, prepare_svg_part, jlong,
+    request: JString<'local>,
+    drawing: JByteArray<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_svgPartReply, svg_part_reply, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_svgPartMesh, svg_part_mesh, jbyteArray,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_stageSvgPart, stage_svg_part, jlong,
+    handle: jlong,
+    svg: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

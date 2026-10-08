@@ -207,6 +207,19 @@ test('a volume that is not an SVG part refuses the re-cut', () => {
   assert.throws(() => commands.execute(new EditSvgPartCommand(plain.id, prepared)), /not an SVG part/);
 });
 
+test('a drawing whose extent overflows is refused before it becomes a part', () => {
+  // Every point is finite but the extent is not, so the part's width could
+  // never be stored; the cut went ahead and the edit failed later instead.
+  const { ids } = session();
+  const drawing =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100">' +
+    '<path d="M-1e308 0 L0 0 L1e308 0 Z"/><rect width="10" height="10"/></svg>';
+  assert.throws(
+    () => prepareSvgPart(drawing, { ...svgVolumeIdentity(ids), fileName: 'x.svg', depthMm: 1 }),
+    (error: unknown) => error instanceof SvgError && error.code === 'invalid-svg' && /too large/.test(error.message),
+  );
+});
+
 test('a drawing with nothing solid in it is refused before any state changes', () => {
   const { ids } = session();
   const identity = svgVolumeIdentity(ids);

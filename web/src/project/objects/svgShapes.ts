@@ -24,6 +24,13 @@ export const PINNED_SVG_SOURCE = Object.freeze({
 /** Segments per curve. Fine enough that a 50 mm arc has no visible facets. */
 const CURVE_SEGMENTS = 16;
 
+/**
+ * Group nesting a drawing may use. Deeper is refused rather than recursed:
+ * the reader walks a group's subtree once per level, and a native host has
+ * no engine stack limit to stop it.
+ */
+export const MAX_SVG_NESTING = 256;
+
 /** CSS absolute units, in millimetres per unit, plus the 96dpi pixel. */
 const UNIT_MM: Readonly<Record<string, number>> = Object.freeze({
   px: 25.4 / 96,
@@ -66,7 +73,7 @@ export interface SvgShapes {
 export class SvgError extends Error {
   constructor(
     message: string,
-    readonly code: 'invalid-svg' | 'no-geometry',
+    readonly code: 'invalid-svg' | 'no-geometry' | 'invalid-mesh',
   ) {
     super(message);
     this.name = 'SvgError';
@@ -131,7 +138,7 @@ export function readSvgShapes(source: string, targetWidthMm?: number): SvgShapes
 
   const contours: (readonly [number, number])[][] = [];
   const stylesheet = readStylesheet(source, unsupported);
-  collectElement(source, root, documentMatrix, contours, unsupported, {}, stylesheet);
+  collectElement(source, root, documentMatrix, contours, unsupported, {}, stylesheet, 0);
 
   if (contours.length === 0) {
     throw new SvgError(
@@ -180,6 +187,21 @@ interface Element {
   readonly end: number;
   readonly selfClosing: boolean;
 }
+
+/**
+ * Elements that draw a shape: the only ones a stroke can leave without area.
+ * A `<title>` or `<style>` inside a line-art group was reported as stroked,
+ * and when nothing else was cut the refusal named it instead of the path.
+ */
+const SHAPE_ELEMENTS: ReadonlySet<string> = new Set([
+  'path',
+  'rect',
+  'circle',
+  'ellipse',
+  'polygon',
+  'polyline',
+  'line',
+]);
 
 /** Elements that describe paint rather than a shape this can extrude. */
 const UNSUPPORTED_ELEMENTS: Readonly<Record<string, { reason: SvgUnsupportedReason; detail: string }>> = Object.freeze({
@@ -437,6 +459,7 @@ function collectElement(
   unsupported: SvgUnsupportedFeature[],
   inherited: InheritedPresentation = {},
   stylesheet: SvgStylesheet = EMPTY_STYLESHEET,
+  depth = 0,
 ): void {
   const matrix = multiply(parent, parseTransform(element.attributes.transform, unsupported, element.name));
   const here = resolvePresentation(inherited, element.attributes, stylesheet, element.name);
@@ -456,13 +479,19 @@ function collectElement(
       continue;
     }
     if (child.name === 'g' || child.name === 'svg' || child.name === 'a' || child.name === 'switch') {
-      collectElement(source, child, matrix, contours, unsupported, here, stylesheet);
+      if (depth + 1 > MAX_SVG_NESTING) {
+        throw new SvgError(`This SVG nests its groups more than ${MAX_SVG_NESTING} deep`, 'invalid-svg');
+      }
+      collectElement(source, child, matrix, contours, unsupported, here, stylesheet, depth + 1);
       continue;
     }
     const childMatrix = multiply(matrix, parseTransform(child.attributes.transform, unsupported, child.name));
     // Checked before emptiness: an open stroked path yields no contour at all,
     // and reporting it as "empty" would hide why it vanished.
-    if (isStrokeOnly(resolvePresentation(here, child.attributes, stylesheet, child.name))) {
+    if (
+      SHAPE_ELEMENTS.has(child.name) &&
+      isStrokeOnly(resolvePresentation(here, child.attributes, stylesheet, child.name))
+    ) {
       unsupported.push({
         element: child.name,
         reason: 'stroke-only',

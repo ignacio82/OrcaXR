@@ -3074,6 +3074,23 @@ export class ProjectSession {
         return ret[0];
     }
     /**
+     * Stage a prepared SVG cut (an `SvgPartStage`) for `executeStaged`: a
+     * new part under the host's IDs, or a re-cut of an SVG part.
+     * @param {ProjectSvgPart} svg
+     * @param {string} request
+     * @returns {number}
+     */
+    stage_svg_part(svg, request) {
+        _assertClass(svg, ProjectSvgPart);
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectsession_stage_svg_part(this.__wbg_ptr, svg.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0];
+    }
+    /**
      * Stage a prepared decimation under the host's asset ID (a
      * `VolumeSimplifyStage`) for `executeStaged`. A run whose state changed
      * refuses `stale`.
@@ -3206,6 +3223,66 @@ export class ProjectSession {
     }
 }
 if (Symbol.dispose) ProjectSession.prototype[Symbol.dispose] = ProjectSession.prototype.free;
+
+/**
+ * One SVG cut, prepared from a drawing's file bytes and a recipe.
+ */
+export class ProjectSvgPart {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectSvgPart.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectSvgPartFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectSvgPartFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectsvgpart_free(ptr, 0);
+    }
+    /**
+     * Bytes `start..start + count` of the cut's indexed-mesh payload.
+     * @param {number} start
+     * @param {number} count
+     * @returns {Uint8Array}
+     */
+    mesh(start, count) {
+        const ret = wasm.projectsvgpart_mesh(this.__wbg_ptr, start, count);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * The `SvgPartReply`: the cut's summary, or the refusal.
+     * @returns {string}
+     */
+    reply() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectsvgpart_reply(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ProjectSvgPart.prototype[Symbol.dispose] = ProjectSvgPart.prototype.free;
 
 export class ProjectUpload {
     __destroy_into_raw() {
@@ -3833,6 +3910,24 @@ export function prepare_emboss(request) {
 }
 
 /**
+ * Cut a drawing's file bytes with a recipe: an `SvgPartRequest`.
+ * @param {string} request
+ * @param {Uint8Array} drawing
+ * @returns {ProjectSvgPart}
+ */
+export function prepare_svg_part(request, drawing) {
+    const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(drawing, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.prepare_svg_part(ptr0, len0, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ProjectSvgPart.__wrap(ret[0]);
+}
+
+/**
  * The Full Spectrum rules: an `EditorRuleRequest` to `EditorRules`.
  * @param {string} rules
  * @returns {string}
@@ -4037,6 +4132,9 @@ const ProjectSelectionInputFinalization = (typeof FinalizationRegistry === 'unde
 const ProjectSessionFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectsession_free(ptr, 1));
+const ProjectSvgPartFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectsvgpart_free(ptr, 1));
 const ProjectUploadFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectupload_free(ptr, 1));

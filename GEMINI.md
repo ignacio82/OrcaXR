@@ -212,7 +212,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   Do not substitute strict ISO parsing or Rust rounding for the existing graph
   validator's `Date.parse` and layer-event `toFixed(4)` compatibility requirements.
   The Rust compatibility helpers now reproduce pinned V8 timestamp syntax and exact four-decimal
-  collision keys. Browser `Math.sin/cos/exp/hypot/min/max` in ported code must use
+  collision keys. Browser `Math.sin/cos/tan/acos/exp/round/hypot/min/max` in ported code must use
   `orcaxr_project::js_math` (V8 12.4's own fdlibm port): the `libm` crate's FreeBSD trig differs from V8
   in the last bit for ~1% of inputs; `Number`/`String`/`toFixed`/`trim` go through `js_math::convert`.
   One `Math.fround` per step ports as f32 math, but frounded terms summed before one `fround` (split
@@ -315,8 +315,8 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   survives. Dense expansion requires an explicit host root budget; the stateless canonicalizer's
   parser limits are not persisted project limits. Graph validation now checks annotation/source
   topology consistency; revision plate requests have native session guards; native paint strokes
-  stage one guarded commit each; splits/simplifications prepare on a guard and stage under host IDs;
-  emboss takes host glyph contours, never font files; an SVG part stores exactly the drawing it names.
+  stage one guarded commit each; splits/simplifications prepare on a guard and stage under host IDs.
+  Emboss takes glyph contours, SVG the file's bytes (as `File.text()`); a part stores the drawing it names.
 - Smart Paint is a validated, bounded proposal plus operator correction and one
   canonical transaction. Check per-provider/payload consent before sending data.
 - Wipe towers reserve their complete printed footprint against the printable rectangle's actual origin,

@@ -134,6 +134,9 @@ assert.deepEqual(schema.roots, [
   "EmbossRequest",
   "EmbossReply",
   "EmbossStage",
+  "SvgPartRequest",
+  "SvgPartReply",
+  "SvgPartStage",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

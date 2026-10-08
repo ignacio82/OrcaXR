@@ -1,4 +1,4 @@
-//! `Math.sin`, `Math.cos`, `Math.exp` and `Math.acos` exactly as V8 computes them: a
+//! `Math.sin`, `Math.cos`, `Math.tan`, `Math.exp` and `Math.acos` exactly as V8 computes them: a
 //! line-for-line port of V8 12.4's `src/base/ieee754.cc` (fdlibm 5.3, which
 //! Node 22's V8 uses for sin/cos rather than its optional glibc routines), not
 //! the later FreeBSD msun revisions the `libm` crate follows (different
@@ -562,4 +562,94 @@ pub fn acos(x: f64) -> f64 {
         let w = r * s + c;
         2.0 * (df + w)
     }
+}
+
+/// `__kernel_tan(x, y, k)`: tan on [-pi/4, pi/4] with tail `y`; `iy` is 1 for
+/// tan and -1 for -1/tan.
+fn kernel_tan(mut x: f64, mut y: f64, iy: i32) -> f64 {
+    const T: [f64; 13] = [
+        3.33333333333334091986e-01,
+        1.33333333333201242699e-01,
+        5.39682539762260521377e-02,
+        2.18694882948595424599e-02,
+        8.86323982359930005737e-03,
+        3.59207910759131235356e-03,
+        1.45620945432529025516e-03,
+        5.88041240820264096874e-04,
+        2.46463134818469906812e-04,
+        7.81794442939557092300e-05,
+        7.14072491382608190305e-05,
+        -1.85586374855275456654e-05,
+        2.59073051863633712884e-05,
+    ];
+    const ONE: f64 = 1.00000000000000000000e+00;
+    const PIO4: f64 = 7.85398163397448278999e-01;
+    const PIO4LO: f64 = 3.06161699786838301793e-17;
+    let hx = high(x);
+    let ix = hx & 0x7FFFFFFF;
+    if ix < 0x3E300000 && x as i32 == 0 {
+        // |x| < 2**-28.
+        if ix == 0 && low(x) == 0 && iy == -1 {
+            return ONE / x.abs();
+        }
+        if iy == 1 {
+            return x;
+        }
+        // Compute -1 / (x+y) carefully.
+        let w = x + y;
+        let z = words(high(w), 0);
+        let v = y - (z - x);
+        let a = -ONE / w;
+        let t = words(high(a), 0);
+        let s = ONE + t * z;
+        return t + a * (s + t * v);
+    }
+    if ix >= 0x3FE59428 {
+        // |x| >= 0.6744.
+        if hx < 0 {
+            x = -x;
+            y = -y;
+        }
+        let z = PIO4 - x;
+        let w = PIO4LO - y;
+        x = z + w;
+        y = 0.0;
+    }
+    let z = x * x;
+    let w = z * z;
+    // x^5 (T1 + x^2 T2 + ...) split into odd and even powers of x^4.
+    let r = T[1] + w * (T[3] + w * (T[5] + w * (T[7] + w * (T[9] + w * T[11]))));
+    let v = z * (T[2] + w * (T[4] + w * (T[6] + w * (T[8] + w * (T[10] + w * T[12])))));
+    let s = z * x;
+    let mut r = y + z * (s * (r + v) + y);
+    r += T[0] * s;
+    let w = x + r;
+    if ix >= 0x3FE59428 {
+        let v = iy as f64;
+        return (1 - ((hx >> 30) & 2)) as f64 * (v - 2.0 * (x - (w * w / (w + v) - r)));
+    }
+    if iy == 1 {
+        return w;
+    }
+    // Compute -1.0 / (x+r) accurately.
+    let z = words(high(w), 0);
+    let v = r - (z - x);
+    let a = -1.0 / w;
+    let t = words(high(a), 0);
+    let s = 1.0 + t * z;
+    t + a * (s + t * v)
+}
+
+pub fn tan(x: f64) -> f64 {
+    let ix = high(x) & 0x7FFFFFFF;
+    if ix <= 0x3FE921FB {
+        return kernel_tan(x, 0.0, 1);
+    }
+    if ix >= 0x7FF00000 {
+        // `x - x`: tan of Inf or NaN is NaN.
+        return f64::NAN;
+    }
+    let mut y = [0.0; 2];
+    let n = rem_pio2(x, &mut y);
+    kernel_tan(y[0], y[1], 1 - ((n & 1) << 1))
 }

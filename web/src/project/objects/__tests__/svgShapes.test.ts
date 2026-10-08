@@ -386,6 +386,36 @@ test('classes cascade in stylesheet order, not in the order an element lists the
   assert.throws(() => readSvgShapes(id), SvgError);
 });
 
+test('a title or stylesheet inside a line-art group is not reported as stroked', () => {
+  // Every element under `<g fill="none" stroke>` was checked for stroke-only
+  // paint, so a `<title>` was reported as a stroked shape and, with nothing
+  // else cut, the refusal named it instead of the path.
+  const drawing = svg(
+    '<g fill="none" stroke="#000"><title>Logo</title><desc>d</desc><path d="M0 0 L50 0 L50 50 Z"/></g>',
+  );
+  assert.throws(
+    () => readSvgShapes(drawing),
+    (error: unknown) =>
+      error instanceof SvgError && error.code === 'no-geometry' && /<path> is stroked/.test(error.message),
+  );
+  const solid = readSvgShapes(
+    svg('<g fill="none" stroke="#000"><title>Logo</title></g><path d="M0 0 L50 0 L50 50 Z"/>'),
+  );
+  assert.deepEqual(solid.unsupported, []);
+});
+
+test('groups nested past the limit are refused, not recursed', () => {
+  // The reader walks each group's subtree once per level, and a native host
+  // has no engine stack limit to stop a hostile nesting.
+  const nested = (depth: number) => svg(`${'<g>'.repeat(depth)}<path d="M0 0 L50 0 L50 50 Z"/>${'</g>'.repeat(depth)}`);
+  assert.equal(readSvgShapes(nested(256)).contours.length, 1);
+  assert.throws(
+    () => readSvgShapes(nested(257)),
+    (error: unknown) =>
+      error instanceof SvgError && error.code === 'invalid-svg' && /more than 256 deep/.test(error.message),
+  );
+});
+
 test('an ordinary grouped shape with no fill stated is still solid', () => {
   // SVG defaults `fill` to black, so a path that says nothing is filled. This
   // is the control: the fix must not make silence mean "none".

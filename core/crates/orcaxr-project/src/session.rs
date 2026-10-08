@@ -405,6 +405,25 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             })?;
         self.stage(&guard, work)
     }
+    /// Stage a prepared SVG cut ([`crate::svg::prepare`]) as one edit on the
+    /// current state: a new part of an object or a re-cut of an SVG part,
+    /// under the host's IDs (`SvgPartStage`). A refused cut or an unstable ID
+    /// refuses as an invalid request; the commit checks the object or volume
+    /// when it runs.
+    pub fn stage_svg_part(
+        &mut self,
+        svg: &crate::svg::PreparedSvgPart,
+        request: &wire::SvgPartStage,
+    ) -> Result<u64, wire::SessionError> {
+        let guard = self.capture_guard()?;
+        let work = svg
+            .work(request, self.staging.max_units())
+            .map_err(|error| match error {
+                crate::drawn::Error::Limit => wire::SessionError::ResourceLimit,
+                crate::drawn::Error::Invalid => wire::SessionError::InvalidRequest,
+            })?;
+        self.stage(&guard, work)
+    }
     /// The transforms one placement edit submits, planned from the
     /// acknowledged state (`PlacementRequest` → `PlacementReply`).
     pub fn plan_placement(

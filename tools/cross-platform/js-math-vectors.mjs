@@ -1,6 +1,6 @@
 // Bit-exact references for the ECMAScript `Math` functions the native core
 // reproduces (`orcaxr_project::js_math`): sin and cos (V8's vendored glibc),
-// exp and acos (fdlibm), hypot (V8's scaled, compensated sum) and round. Inputs cover every
+// tan, exp and acos (fdlibm), hypot (V8's scaled, compensated sum) and round. Inputs cover every
 // range-reduction branch of the trig routines, their thresholds, signed zeros,
 // non-finite values and seeded random doubles across magnitudes. Values are
 // IEEE-754 bit patterns in hex, so no decimal parsing sits between V8 and Rust.
@@ -108,6 +108,30 @@ for (let i = 0; i < 1500; i += 1) {
 }
 for (const args of hypotCases) hypotRows.push([args.map(bits), bits(Math.hypot(...args))]);
 
+// tan, drawn after the others so their seeded inputs stay as they were:
+// __kernel_tan's 2**-28 and 0.6744 thresholds, pi/4 and the reduction
+// threshold with neighbours, multiples of pi/4, the skew angles an SVG
+// transform produces (degrees * pi / 180) and seeded doubles.
+const tan = new Set();
+for (const value of [0, -0, Infinity, -Infinity, NaN, Number.MIN_VALUE, Number.MAX_VALUE, -Number.MAX_VALUE, Math.PI / 2, -Math.PI / 2])
+  tan.add(bits(value));
+for (const high of [0x3e300000, 0x3fe59428, 0x3fe921fb, 0x400921fb, 0x413921fb, 0x7fefffff]) {
+  for (const low of [0, 1, 0x54442d18, 0x7fffffff, 0xffffffff]) {
+    for (const sign of [0n, 1n << 63n]) {
+      const value = fromBits(((sign | (BigInt(high) << 32n) | BigInt(low)) & 0xffffffffffffffffn).toString(16));
+      tan.add(bits(value));
+      tan.add(((BigInt(`0x${bits(value)}`) - 1n) & 0xffffffffffffffffn).toString(16).padStart(16, "0"));
+    }
+  }
+}
+for (let k = -64; k <= 64; k += 1) tan.add(bits((k * Math.PI) / 4));
+for (let degrees = -720; degrees <= 720; degrees += 0.25) tan.add(bits((degrees * Math.PI) / 180));
+for (let i = 0; i < 2000; i += 1) tan.add(bits(uniform(-4, 4)));
+for (let i = 0; i < 1000; i += 1) tan.add(bits(uniform(-1000, 1000)));
+for (let i = 0; i < 500; i += 1) tan.add(bits(logUniform(1e-20, 1e-6)));
+for (let i = 0; i < 500; i += 1) tan.add(bits(logUniform(1e3, 1e308)));
+const tanRows = [...tan].sort().map((hex) => [hex, bits(Math.tan(fromBits(hex)))]);
+
 const source = "tools/cross-platform/js-math-vectors.mjs";
 const output =
   JSON.stringify(
@@ -118,6 +142,7 @@ const output =
       trig: trigRows,
       exp: expRows,
       acos: acosRows,
+      tan: tanRows,
       round: roundRows,
       hypot: hypotRows,
     },
@@ -127,4 +152,4 @@ const output =
 const path = new URL("testdata/cross-platform/js-math-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);
 else assert.equal(readFileSync(path, "utf8"), output, "JS Math reference drift");
-console.log(`JS Math references: ${trigRows.length} sin/cos, ${expRows.length} exp, ${acosRows.length} acos, ${roundRows.length} round, ${hypotRows.length} hypot (V8 ${process.versions.v8})`);
+console.log(`JS Math references: ${trigRows.length} sin/cos, ${expRows.length} exp, ${acosRows.length} acos, ${tanRows.length} tan, ${roundRows.length} round, ${hypotRows.length} hypot (V8 ${process.versions.v8})`);

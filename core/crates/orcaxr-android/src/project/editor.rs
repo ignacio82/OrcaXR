@@ -501,6 +501,68 @@ pub(super) fn stage_emboss(
         })
     })
 }
+/// Cut a drawing's file bytes with a recipe.
+pub(super) fn prepare_svg_part(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+    drawing: JByteArray<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_svg_part_request)?;
+    let length = env
+        .get_array_length(&drawing)
+        .map_err(|_| "invalid_input")?;
+    if length < 0 || length as usize > orcaxr_project::svg::MAX_DRAWING_BYTES {
+        return Err("input_limit");
+    }
+    let drawing = env
+        .convert_byte_array(&drawing)
+        .map_err(|_| "invalid_input")?;
+    capture(|| {
+        Ok(Record::SvgPart(Box::new(orcaxr_project::svg::prepare(
+            &request, &drawing,
+        ))))
+    })
+}
+/// The cut's summary, or its refusal.
+pub(super) fn svg_part_reply(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_svg_part(handle, |svg| {
+        encoded(&svg.reply(), wire::encode_svg_part_reply)
+    })?;
+    string(env, json)
+}
+/// A page of the cut's indexed-mesh bytes.
+pub(super) fn svg_part_mesh(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+) -> Result<jbyteArray> {
+    let (start, count) = (index(start)?, index(count)?);
+    let bytes = with_svg_part(handle, |svg| {
+        svg.mesh(start as u64, count as u64)
+            .map(<[u8]>::to_vec)
+            .map_err(|_| "invalid_request")
+    })?;
+    env.byte_array_from_slice(&bytes)
+        .map(|array| array.into_raw())
+        .map_err(|_| "output_limit")
+}
+/// The cut's staged commit ID.
+pub(super) fn stage_svg_part(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    svg: jlong,
+    request: JString<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_svg_part_stage)?;
+    with_svg_part(svg, |svg| {
+        with_session(handle, |s| {
+            s.stage_svg_part(svg, &request)
+                .map(|id| id as jlong)
+                .map_err(session_error)
+        })
+    })
+}
 fn session_error(error: wire::SessionError) -> &'static str {
     match error {
         wire::SessionError::Disposed => "disposed",

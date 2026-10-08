@@ -621,6 +621,11 @@ export class ProjectSession {
      */
     stage_paint_stroke(stroke: ProjectPaintStroke, label?: Uint16Array | null): number;
     /**
+     * Stage a prepared SVG cut (an `SvgPartStage`) for `executeStaged`: a
+     * new part under the host's IDs, or a re-cut of an SVG part.
+     */
+    stage_svg_part(svg: ProjectSvgPart, request: string): number;
+    /**
      * Stage a prepared decimation under the host's asset ID (a
      * `VolumeSimplifyStage`) for `executeStaged`. A run whose state changed
      * refuses `stale`.
@@ -654,6 +659,23 @@ export class ProjectSession {
      * is captured with the same snapshot; writing never changes dirty state.
      */
     write_archive(version: number, policy: Float64Array): ProjectArchiveOutput;
+}
+
+/**
+ * One SVG cut, prepared from a drawing's file bytes and a recipe.
+ */
+export class ProjectSvgPart {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Bytes `start..start + count` of the cut's indexed-mesh payload.
+     */
+    mesh(start: number, count: number): Uint8Array;
+    /**
+     * The `SvgPartReply`: the cut's summary, or the refusal.
+     */
+    reply(): string;
 }
 
 export class ProjectUpload {
@@ -795,6 +817,11 @@ export function measure_features(request: string): string;
 export function prepare_emboss(request: string): ProjectEmboss;
 
 /**
+ * Cut a drawing's file bytes with a recipe: an `SvgPartRequest`.
+ */
+export function prepare_svg_part(request: string, drawing: Uint8Array): ProjectSvgPart;
+
+/**
  * The Full Spectrum rules: an `EditorRuleRequest` to `EditorRules`.
  */
 export function settings_rules(rules: string): string;
@@ -840,6 +867,7 @@ export interface InitOutput {
     readonly __wbg_projectreply_free: (a: number, b: number) => void;
     readonly __wbg_projectselectioninput_free: (a: number, b: number) => void;
     readonly __wbg_projectsession_free: (a: number, b: number) => void;
+    readonly __wbg_projectsvgpart_free: (a: number, b: number) => void;
     readonly __wbg_projectupload_free: (a: number, b: number) => void;
     readonly __wbg_projectvolumesimplify_free: (a: number, b: number) => void;
     readonly __wbg_projectvolumesplit_free: (a: number, b: number) => void;
@@ -872,6 +900,7 @@ export interface InitOutput {
     readonly format_override_value: (a: number, b: number) => [number, number, number, number];
     readonly measure_features: (a: number, b: number) => [number, number, number, number];
     readonly prepare_emboss: (a: number, b: number) => [number, number, number];
+    readonly prepare_svg_part: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly presetlibrary_apply: (a: number, b: number, c: number) => [number, number, number, number];
     readonly presetlibrary_apply_update: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_bases: (a: number, b: number, c: number) => [number, number, number, number];
@@ -1016,6 +1045,7 @@ export interface InitOutput {
     readonly projectsession_stage_commands: (a: number, b: number) => [number, number, number];
     readonly projectsession_stage_emboss: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_stage_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly projectsession_stage_svg_part: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_stage_volume_simplify: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_stage_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_staging_usage: (a: number) => [number, number];
@@ -1024,6 +1054,8 @@ export interface InitOutput {
     readonly projectsession_volume_simplify: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_write_archive: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly projectsvgpart_mesh: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectsvgpart_reply: (a: number) => [number, number, number, number];
     readonly projectupload_append_asset: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectupload_append_document: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectupload_asset_count: (a: number) => [number, number, number];

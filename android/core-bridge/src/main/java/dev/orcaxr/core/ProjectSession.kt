@@ -239,6 +239,11 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun stageEmboss(emboss: ProjectEmboss, request: ProjectIntents.EmbossStage): ProjectStagedInput = read {
         ProjectStagedInput.own(this, NativeProject.stageEmboss(it, emboss.reference(), ProjectIntents.encodeEmbossStage(request)))
     }
+    /** A prepared SVG cut as one staged edit for `executeStaged`: a new
+     * part of an object under the host's IDs, or a re-cut of an SVG part. */
+    fun stageSvgPart(svg: ProjectSvgPart, request: ProjectIntents.SvgPartStage): ProjectStagedInput = read {
+        ProjectStagedInput.own(this, NativeProject.stageSvgPart(it, svg.reference(), ProjectIntents.encodeSvgPartStage(request)))
+    }
     /** The plate's wipe tower auto-placed: the winning candidate and the tower
      * one `setPlateWipeTower` intent sets. */
     fun planWipeTower(request: ProjectIntents.WipeTowerRequest): ProjectIntents.WipeTowerReply = read {
@@ -312,6 +317,24 @@ class ProjectEmboss private constructor(handle: Long) : ProjectHandle(handle) {
         const val MAX_PAGE = 16L * 1024 * 1024
         fun prepare(request: ProjectIntents.EmbossRequest): ProjectEmboss =
             ProjectEmboss(NativeProject.prepareEmboss(ProjectIntents.encodeEmbossRequest(request)))
+    }
+}
+/** One SVG cut from a drawing's file bytes and a recipe: its summary and
+ * mesh bytes, the very payload [ProjectSession.stageSvgPart] installs. The
+ * drawing is read as UTF-8 (a byte-order mark dropped, malformed sequences
+ * replaced), and that text is what the part stores. */
+class ProjectSvgPart private constructor(handle: Long) : ProjectHandle(handle) {
+    fun reply(): ProjectIntents.SvgPartReply = read {
+        ProjectIntents.decodeSvgPartReply(NativeProject.svgPartReply(it))
+    }
+    /** Bytes [start] until [start] + [count], at most [MAX_PAGE]. */
+    fun mesh(start: Long, count: Long): ByteArray = read { NativeProject.svgPartMesh(it, start, count) }
+    companion object {
+        const val MAX_PAGE = 16L * 1024 * 1024
+        /** The largest drawing [prepare] accepts, in bytes. */
+        const val MAX_DRAWING_BYTES = 16 * 1024 * 1024
+        fun prepare(request: ProjectIntents.SvgPartRequest, drawing: ByteArray): ProjectSvgPart =
+            ProjectSvgPart(NativeProject.prepareSvgPart(ProjectIntents.encodeSvgPartRequest(request), drawing))
     }
 }
 /** One volume's features, captured by [ProjectSession.measureVolume]. */

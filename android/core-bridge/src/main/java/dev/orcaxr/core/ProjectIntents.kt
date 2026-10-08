@@ -6291,6 +6291,146 @@ object ProjectIntents {
             is EmbossStage.Edit -> w.field("edit") { writeEmbossEdit(w, v.value) }
         } }
     }
+    data class SvgPartRequest(val fileName: List<Int>, val depthMm: Double, val widthMm: OptionalFinite, val useSurface: Boolean, val sourcePath: OptionalText)
+    private fun readSvgPartRequest(v: Any): SvgPartRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("fileName", "depthMm", "widthMm", "useSurface", "sourcePath"), false)
+        return SvgPartRequest(readEditText(obj.get("fileName")), readFinite(obj.get("depthMm")), readOptionalFinite(obj.get("widthMm")), readFlag(obj.get("useSurface")), readOptionalText(obj.get("sourcePath")))
+    }
+    private fun writeSvgPartRequest(w: ProjectIntentWriter, v: SvgPartRequest) {
+        w.obj {
+            w.field("fileName") { writeEditText(w, v.fileName) }
+            w.field("depthMm") { writeFinite(w, v.depthMm) }
+            w.field("widthMm") { writeOptionalFinite(w, v.widthMm) }
+            w.field("useSurface") { writeFlag(w, v.useSurface) }
+            w.field("sourcePath") { writeOptionalText(w, v.sourcePath) }
+        }
+    }
+    enum class SvgUnsupportedReason {NeedsFont,RasterImage,ExternalReference,PaintEffect,StrokeOnly,UnsupportedUnit,UnsupportedCommand,EmptyShape,CssSelector}
+    private fun readSvgUnsupportedReason(v: Any): SvgUnsupportedReason {
+        return when(v) {"needsFont" -> SvgUnsupportedReason.NeedsFont;"rasterImage" -> SvgUnsupportedReason.RasterImage;"externalReference" -> SvgUnsupportedReason.ExternalReference;"paintEffect" -> SvgUnsupportedReason.PaintEffect;"strokeOnly" -> SvgUnsupportedReason.StrokeOnly;"unsupportedUnit" -> SvgUnsupportedReason.UnsupportedUnit;"unsupportedCommand" -> SvgUnsupportedReason.UnsupportedCommand;"emptyShape" -> SvgUnsupportedReason.EmptyShape;"cssSelector" -> SvgUnsupportedReason.CssSelector; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeSvgUnsupportedReason(w: ProjectIntentWriter, v: SvgUnsupportedReason) {
+        w.literal(when(v) {SvgUnsupportedReason.NeedsFont -> "needsFont";SvgUnsupportedReason.RasterImage -> "rasterImage";SvgUnsupportedReason.ExternalReference -> "externalReference";SvgUnsupportedReason.PaintEffect -> "paintEffect";SvgUnsupportedReason.StrokeOnly -> "strokeOnly";SvgUnsupportedReason.UnsupportedUnit -> "unsupportedUnit";SvgUnsupportedReason.UnsupportedCommand -> "unsupportedCommand";SvgUnsupportedReason.EmptyShape -> "emptyShape";SvgUnsupportedReason.CssSelector -> "cssSelector";})
+    }
+    data class SvgUnsupportedFeature(val element: List<Int>, val reason: SvgUnsupportedReason, val detail: List<Int>)
+    private fun readSvgUnsupportedFeature(v: Any): SvgUnsupportedFeature {
+        val obj = ProjectIntentJson.fields(v, setOf("element", "reason", "detail"), false)
+        return SvgUnsupportedFeature(readEditText(obj.get("element")), readSvgUnsupportedReason(obj.get("reason")), readEditText(obj.get("detail")))
+    }
+    private fun writeSvgUnsupportedFeature(w: ProjectIntentWriter, v: SvgUnsupportedFeature) {
+        w.obj {
+            w.field("element") { writeEditText(w, v.element) }
+            w.field("reason") { writeSvgUnsupportedReason(w, v.reason) }
+            w.field("detail") { writeEditText(w, v.detail) }
+        }
+    }
+    private fun readSvgUnsupportedFeatures(v: Any): List<SvgUnsupportedFeature> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readSvgUnsupportedFeature(array.get(it)) }
+    }
+    private fun writeSvgUnsupportedFeatures(w: ProjectIntentWriter, v: List<SvgUnsupportedFeature>) {
+        w.array(v, 0, 64) { writeSvgUnsupportedFeature(w, it) }
+    }
+    data class SvgPartPreview(val triangleCount: Long, val vertexCount: Long, val openEdgeCount: Long, val coincidentEdgeCount: Long, val sizeMm: List<Double>, val unsupported: List<SvgUnsupportedFeature>, val unsupportedCount: Long, val digest: List<Int>, val byteLength: Long, val drawingDigest: List<Int>, val drawingByteLength: Long)
+    private fun readSvgPartPreview(v: Any): SvgPartPreview {
+        val obj = ProjectIntentJson.fields(v, setOf("triangleCount", "vertexCount", "openEdgeCount", "coincidentEdgeCount", "sizeMm", "unsupported", "unsupportedCount", "digest", "byteLength", "drawingDigest", "drawingByteLength"), false)
+        return SvgPartPreview(readCounter(obj.get("triangleCount")), readCounter(obj.get("vertexCount")), readCounter(obj.get("openEdgeCount")), readCounter(obj.get("coincidentEdgeCount")), readPlanarPosition(obj.get("sizeMm")), readSvgUnsupportedFeatures(obj.get("unsupported")), readCounter(obj.get("unsupportedCount")), readEditText(obj.get("digest")), readCounter(obj.get("byteLength")), readEditText(obj.get("drawingDigest")), readCounter(obj.get("drawingByteLength")))
+    }
+    private fun writeSvgPartPreview(w: ProjectIntentWriter, v: SvgPartPreview) {
+        w.obj {
+            w.field("triangleCount") { writeCounter(w, v.triangleCount) }
+            w.field("vertexCount") { writeCounter(w, v.vertexCount) }
+            w.field("openEdgeCount") { writeCounter(w, v.openEdgeCount) }
+            w.field("coincidentEdgeCount") { writeCounter(w, v.coincidentEdgeCount) }
+            w.field("sizeMm") { writePlanarPosition(w, v.sizeMm) }
+            w.field("unsupported") { writeSvgUnsupportedFeatures(w, v.unsupported) }
+            w.field("unsupportedCount") { writeCounter(w, v.unsupportedCount) }
+            w.field("digest") { writeEditText(w, v.digest) }
+            w.field("byteLength") { writeCounter(w, v.byteLength) }
+            w.field("drawingDigest") { writeEditText(w, v.drawingDigest) }
+            w.field("drawingByteLength") { writeCounter(w, v.drawingByteLength) }
+        }
+    }
+    enum class SvgPartRefusalCode {InvalidSvg,NoGeometry,InvalidMesh}
+    private fun readSvgPartRefusalCode(v: Any): SvgPartRefusalCode {
+        return when(v) {"invalidSvg" -> SvgPartRefusalCode.InvalidSvg;"noGeometry" -> SvgPartRefusalCode.NoGeometry;"invalidMesh" -> SvgPartRefusalCode.InvalidMesh; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeSvgPartRefusalCode(w: ProjectIntentWriter, v: SvgPartRefusalCode) {
+        w.literal(when(v) {SvgPartRefusalCode.InvalidSvg -> "invalidSvg";SvgPartRefusalCode.NoGeometry -> "noGeometry";SvgPartRefusalCode.InvalidMesh -> "invalidMesh";})
+    }
+    data class SvgPartRefusal(val code: SvgPartRefusalCode, val message: List<Int>)
+    private fun readSvgPartRefusal(v: Any): SvgPartRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return SvgPartRefusal(readSvgPartRefusalCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writeSvgPartRefusal(w: ProjectIntentWriter, v: SvgPartRefusal) {
+        w.obj {
+            w.field("code") { writeSvgPartRefusalCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface SvgPartReply {
+        data class Prepared(val value: ProjectIntents.SvgPartPreview) : SvgPartReply
+        data class Refused(val value: ProjectIntents.SvgPartRefusal) : SvgPartReply
+    }
+    private fun readSvgPartReply(v: Any): SvgPartReply {
+        val obj = ProjectIntentJson.fields(v, setOf("prepared", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "prepared" -> SvgPartReply.Prepared(readSvgPartPreview(obj.get(key)))
+            "refused" -> SvgPartReply.Refused(readSvgPartRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeSvgPartReply(w: ProjectIntentWriter, v: SvgPartReply) {
+        w.obj { when(v) {
+            is SvgPartReply.Prepared -> w.field("prepared") { writeSvgPartPreview(w, v.value) }
+            is SvgPartReply.Refused -> w.field("refused") { writeSvgPartRefusal(w, v.value) }
+        } }
+    }
+    data class SvgPartAdd(val objectId: List<Int>, val volumeId: List<Int>, val assetId: List<Int>, val drawingAssetId: List<Int>, val transform: Transform)
+    private fun readSvgPartAdd(v: Any): SvgPartAdd {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "volumeId", "assetId", "drawingAssetId", "transform"), false)
+        return SvgPartAdd(readId(obj.get("objectId")), readId(obj.get("volumeId")), readId(obj.get("assetId")), readId(obj.get("drawingAssetId")), readTransform(obj.get("transform")))
+    }
+    private fun writeSvgPartAdd(w: ProjectIntentWriter, v: SvgPartAdd) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("assetId") { writeId(w, v.assetId) }
+            w.field("drawingAssetId") { writeId(w, v.drawingAssetId) }
+            w.field("transform") { writeTransform(w, v.transform) }
+        }
+    }
+    data class SvgPartEdit(val volumeId: List<Int>, val assetId: List<Int>, val drawingAssetId: List<Int>)
+    private fun readSvgPartEdit(v: Any): SvgPartEdit {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeId", "assetId", "drawingAssetId"), false)
+        return SvgPartEdit(readId(obj.get("volumeId")), readId(obj.get("assetId")), readId(obj.get("drawingAssetId")))
+    }
+    private fun writeSvgPartEdit(w: ProjectIntentWriter, v: SvgPartEdit) {
+        w.obj {
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("assetId") { writeId(w, v.assetId) }
+            w.field("drawingAssetId") { writeId(w, v.drawingAssetId) }
+        }
+    }
+    sealed interface SvgPartStage {
+        data class Add(val value: ProjectIntents.SvgPartAdd) : SvgPartStage
+        data class Edit(val value: ProjectIntents.SvgPartEdit) : SvgPartStage
+    }
+    private fun readSvgPartStage(v: Any): SvgPartStage {
+        val obj = ProjectIntentJson.fields(v, setOf("add", "edit"), true)
+        return when(val key = obj.keys().next()) {
+            "add" -> SvgPartStage.Add(readSvgPartAdd(obj.get(key)))
+            "edit" -> SvgPartStage.Edit(readSvgPartEdit(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeSvgPartStage(w: ProjectIntentWriter, v: SvgPartStage) {
+        w.obj { when(v) {
+            is SvgPartStage.Add -> w.field("add") { writeSvgPartAdd(w, v.value) }
+            is SvgPartStage.Edit -> w.field("edit") { writeSvgPartEdit(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -6485,4 +6625,10 @@ object ProjectIntents {
     fun encodeEmbossReply(value: EmbossReply): String = ProjectIntentWriter().also { writeEmbossReply(it, value) }.finish()
     fun decodeEmbossStage(text: String): EmbossStage = readEmbossStage(ProjectIntentJson.parse(text))
     fun encodeEmbossStage(value: EmbossStage): String = ProjectIntentWriter().also { writeEmbossStage(it, value) }.finish()
+    fun decodeSvgPartRequest(text: String): SvgPartRequest = readSvgPartRequest(ProjectIntentJson.parse(text))
+    fun encodeSvgPartRequest(value: SvgPartRequest): String = ProjectIntentWriter().also { writeSvgPartRequest(it, value) }.finish()
+    fun decodeSvgPartReply(text: String): SvgPartReply = readSvgPartReply(ProjectIntentJson.parse(text))
+    fun encodeSvgPartReply(value: SvgPartReply): String = ProjectIntentWriter().also { writeSvgPartReply(it, value) }.finish()
+    fun decodeSvgPartStage(text: String): SvgPartStage = readSvgPartStage(ProjectIntentJson.parse(text))
+    fun encodeSvgPartStage(value: SvgPartStage): String = ProjectIntentWriter().also { writeSvgPartStage(it, value) }.finish()
 }

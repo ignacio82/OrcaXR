@@ -4154,6 +4154,107 @@
         "add": "EmbossAdd",
         "edit": "EmbossEdit"
       }
+    },
+    "SvgPartRequest": {
+      "kind": "object",
+      "fields": {
+        "fileName": "EditText",
+        "depthMm": "Finite",
+        "widthMm": "OptionalFinite",
+        "useSurface": "Flag",
+        "sourcePath": "OptionalText"
+      }
+    },
+    "SvgUnsupportedReason": {
+      "kind": "enum",
+      "values": [
+        "needsFont",
+        "rasterImage",
+        "externalReference",
+        "paintEffect",
+        "strokeOnly",
+        "unsupportedUnit",
+        "unsupportedCommand",
+        "emptyShape",
+        "cssSelector"
+      ]
+    },
+    "SvgUnsupportedFeature": {
+      "kind": "object",
+      "fields": {
+        "element": "EditText",
+        "reason": "SvgUnsupportedReason",
+        "detail": "EditText"
+      }
+    },
+    "SvgUnsupportedFeatures": {
+      "kind": "array",
+      "items": "SvgUnsupportedFeature",
+      "min": 0,
+      "max": 64
+    },
+    "SvgPartPreview": {
+      "kind": "object",
+      "fields": {
+        "triangleCount": "Counter",
+        "vertexCount": "Counter",
+        "openEdgeCount": "Counter",
+        "coincidentEdgeCount": "Counter",
+        "sizeMm": "PlanarPosition",
+        "unsupported": "SvgUnsupportedFeatures",
+        "unsupportedCount": "Counter",
+        "digest": "EditText",
+        "byteLength": "Counter",
+        "drawingDigest": "EditText",
+        "drawingByteLength": "Counter"
+      }
+    },
+    "SvgPartRefusalCode": {
+      "kind": "enum",
+      "values": [
+        "invalidSvg",
+        "noGeometry",
+        "invalidMesh"
+      ]
+    },
+    "SvgPartRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "SvgPartRefusalCode",
+        "message": "EditText"
+      }
+    },
+    "SvgPartReply": {
+      "kind": "union",
+      "variants": {
+        "prepared": "SvgPartPreview",
+        "refused": "SvgPartRefusal"
+      }
+    },
+    "SvgPartAdd": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "volumeId": "Id",
+        "assetId": "Id",
+        "drawingAssetId": "Id",
+        "transform": "Transform"
+      }
+    },
+    "SvgPartEdit": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id",
+        "assetId": "Id",
+        "drawingAssetId": "Id"
+      }
+    },
+    "SvgPartStage": {
+      "kind": "union",
+      "variants": {
+        "add": "SvgPartAdd",
+        "edit": "SvgPartEdit"
+      }
     }
   },
   "roots": [
@@ -4253,7 +4354,10 @@
     "BrimEarStrandedReply",
     "EmbossRequest",
     "EmbossReply",
-    "EmbossStage"
+    "EmbossStage",
+    "SvgPartRequest",
+    "SvgPartReply",
+    "SvgPartStage"
   ],
   "sessionVersion": 1
 }

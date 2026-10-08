@@ -64,6 +64,16 @@ fn acos_matches_v8_bit_for_bit() {
 }
 
 #[test]
+fn tan_matches_v8_bit_for_bit() {
+    let rows = corpus()["tan"].as_array().unwrap().clone();
+    assert!(rows.len() > 9_000);
+    for row in rows {
+        let x = f(&row[0]);
+        assert!(same(js_math::tan(x), f(&row[1])), "tan({x:e})");
+    }
+}
+
+#[test]
 fn round_matches_v8_bit_for_bit() {
     let rows = corpus()["round"].as_array().unwrap().clone();
     assert!(rows.len() > 1_500);

@@ -111,6 +111,7 @@ enum Record {
     VolumeSimplify(Box<orcaxr_project::simplify::VolumeSimplify>),
     MeasureVolume(Box<orcaxr_project::measure::MeasureVolume>),
     Emboss(Box<orcaxr_project::emboss::PreparedEmboss>),
+    SvgPart(Box<orcaxr_project::svg::PreparedSvgPart>),
     PaintOverlay(Box<orcaxr_project::facets::overlay::Overlay>),
     PickScene(Box<orcaxr_project::picking::PickScene>),
 }
@@ -213,6 +214,11 @@ access!(
     with_emboss,
     Emboss,
     Box<orcaxr_project::emboss::PreparedEmboss>
+);
+access!(
+    with_svg_part,
+    SvgPart,
+    Box<orcaxr_project::svg::PreparedSvgPart>
 );
 fn option_values<const N: usize>(
     env: &mut JNIEnv<'_>,

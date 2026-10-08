@@ -615,6 +615,19 @@ impl ProjectSession {
             .map(|id| id as f64)
             .map_err(|value| error(session_error(value)))
     }
+    /// Stage a prepared SVG cut (an `SvgPartStage`) for `executeStaged`: a
+    /// new part under the host's IDs, or a re-cut of an SVG part.
+    pub fn stage_svg_part(&mut self, svg: &ProjectSvgPart, request: &str) -> Result<f64, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request = wire::decode_svg_part_stage(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .stage_svg_part(&svg.inner, &request)
+            .map(|id| id as f64)
+            .map_err(|value| error(session_error(value)))
+    }
     /// The plate's wipe tower, auto-placed: a `WipeTowerRequest`; returns a
     /// `WipeTowerReply`.
     pub fn plan_wipe_tower(&self, request: &str) -> Result<String, JsValue> {
@@ -940,6 +953,38 @@ pub fn prepare_emboss(request: &str) -> Result<ProjectEmboss, JsValue> {
     let request = wire::decode_emboss_request(request).map_err(|_| error("invalid_request"))?;
     Ok(ProjectEmboss {
         inner: orcaxr_project::emboss::prepare(&request),
+    })
+}
+/// One SVG cut, prepared from a drawing's file bytes and a recipe.
+#[wasm_bindgen]
+pub struct ProjectSvgPart {
+    inner: orcaxr_project::svg::PreparedSvgPart,
+}
+#[wasm_bindgen]
+impl ProjectSvgPart {
+    /// The `SvgPartReply`: the cut's summary, or the refusal.
+    pub fn reply(&self) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        wire::encode_svg_part_reply(&self.inner.reply()).map_err(|_| error("output_limit"))
+    }
+    /// Bytes `start..start + count` of the cut's indexed-mesh payload.
+    pub fn mesh(&self, start: f64, count: f64) -> Result<Vec<u8>, JsValue> {
+        self.inner
+            .mesh(index(start)? as u64, index(count)? as u64)
+            .map(<[u8]>::to_vec)
+            .map_err(|_| error("invalid_request"))
+    }
+}
+/// Cut a drawing's file bytes with a recipe: an `SvgPartRequest`.
+#[wasm_bindgen]
+pub fn prepare_svg_part(request: &str, drawing: &[u8]) -> Result<ProjectSvgPart, JsValue> {
+    use orcaxr_contracts::project_intent_types as wire;
+    if request.len() > wire::MAX_BYTES || drawing.len() > orcaxr_project::svg::MAX_DRAWING_BYTES {
+        return Err(error("input_limit"));
+    }
+    let request = wire::decode_svg_part_request(request).map_err(|_| error("invalid_request"))?;
+    Ok(ProjectSvgPart {
+        inner: orcaxr_project::svg::prepare(&request, drawing),
     })
 }
 fn session_error(value: orcaxr_contracts::project_intent_types::SessionError) -> &'static str {

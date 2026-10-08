@@ -22,6 +22,7 @@ import { replaySimplify } from "./simplify-replay.mjs";
 import { replayMeasure } from "./measure-replay.mjs";
 import { replayBrimEars } from "./brim-ear-replay.mjs";
 import { replayEmboss } from "./emboss-replay.mjs";
+import { replaySvgParts } from "./svg-part-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -157,6 +158,19 @@ if (isMainThread) {
         result.embossHistory,
       ],
       [21, 8, 21, 8, 3, 3],
+    );
+    // SVG parts: drawings cut from their file bytes, their meshes, and
+    // stages over a live session.
+    assert.deepEqual(
+      [
+        result.svgPrepared,
+        result.svgRefused,
+        result.svgMeshes,
+        result.svgStages,
+        result.svgApplied,
+        result.svgHistory,
+      ],
+      [11, 11, 11, 15, 7, 4],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -505,6 +519,17 @@ if (isMainThread) {
       .version,
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
   );
+  const svgParts = await replaySvgParts(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/svg-part-vectors.json", root)),
+    ),
+    layout,
+    JSON.parse(await readFile(new URL("contracts/project-staging.json", root)))
+      .version,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    (text) => Uint8Array.from(Buffer.from(text, "base64")),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -537,6 +562,7 @@ if (isMainThread) {
       ...measured,
       ...brimEars,
       ...embossed,
+      ...svgParts,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],
