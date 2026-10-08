@@ -452,6 +452,19 @@ impl ProjectSession {
             .map_err(|refusal| error(refusal.code()))?;
         wire::encode_render_page(&page).map_err(|_| error("output_limit"))
     }
+    /// A `FacetRegionRequest` over the session's acknowledged state; returns a
+    /// `FacetRegionReply`.
+    pub fn facet_region(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_facet_region_request(request).map_err(|_| error("invalid_request"))?;
+        let reply = orcaxr_project::facets::region_exchange::session_reply(&self.inner, &request)
+            .map_err(|refusal| error(refusal.code()))?;
+        wire::encode_facet_region_reply(&reply).map_err(|_| error("output_limit"))
+    }
     pub fn asset_fingerprint(&self) -> String {
         self.inner.assets().bundle_fingerprint().into()
     }

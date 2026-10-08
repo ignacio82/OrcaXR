@@ -3,6 +3,7 @@
 //! temporary editing representation. This is computation, not a project codec.
 pub mod palette;
 pub mod region;
+pub mod region_exchange;
 pub mod stroke;
 mod validation;
 pub use validation::{Issue, ValidationOptions, validate_refinement};

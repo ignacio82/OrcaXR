@@ -248,6 +248,19 @@ pub(super) fn session_render(
     })?;
     string(env, json)
 }
+pub(super) fn session_facet_region(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_facet_region_request)?;
+    let json = with_session(handle, |s| {
+        let reply = orcaxr_project::facets::region_exchange::session_reply(s, &request)
+            .map_err(|refusal| refusal.code())?;
+        encoded(&reply, wire::encode_facet_region_reply)
+    })?;
+    string(env, json)
+}
 pub(super) fn project_settings_targets(
     env: &mut JNIEnv<'_>,
     handle: jlong,

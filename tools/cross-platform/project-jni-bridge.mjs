@@ -29,6 +29,7 @@ export function startProjectJni(profile = "debug") {
   signatures.editorChecks = ["String"];
   signatures.capabilityChecks = ["String", "byte[]", "String"];
   signatures.renderChecks = ["String", "byte[]", "String"];
+  signatures.facetRegionChecks = ["String", "byte[]", "byte[]", "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -330,6 +331,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     render(request) {
       return call("sessionRender", this.handle, request);
+    }
+    facet_region(request) {
+      return call("sessionFacetRegion", this.handle, request);
     }
     asset_fingerprint() {
       return call("assetFingerprint", this.handle);

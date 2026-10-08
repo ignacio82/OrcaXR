@@ -179,6 +179,12 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun render(request: ProjectIntents.RenderRequest): ProjectIntents.RenderPage = read {
         ProjectIntents.decodeRenderPage(NativeProject.sessionRender(it, ProjectIntents.encodeRenderRequest(request)))
     }
+    /** Select facets of one volume with a painter tool over the session's
+     * acknowledged state: a page of ranges and the [ProjectIntents.FacetGuard]
+     * a `facetStroke` commits them under, or the selector's issues. */
+    fun facetRegion(request: ProjectIntents.FacetRegionRequest): ProjectIntents.FacetRegionReply = read {
+        ProjectIntents.decodeFacetRegionReply(NativeProject.sessionFacetRegion(it, ProjectIntents.encodeFacetRegionRequest(request)))
+    }
     fun assetFingerprint(): String = read { NativeProject.assetFingerprint(it) }
     fun asset(position: Long): ProjectAsset = read { own(NativeProject.asset(it, position), ::ProjectAsset) }
     fun captureGuard(): ProjectGuard = read { own(NativeProject.captureGuard(it), ::ProjectGuard) }

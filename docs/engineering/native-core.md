@@ -3219,7 +3219,22 @@ and the overhang gate; Gap Fill thresholds under two state orders; and Circle
 and Sphere strokes, single and dragged, from frontal and oblique cameras at
 four radii under five transforms — plus 20 refusals and 2 stale topologies.
 Rust reproduces all 5,855 cases and every mesh's neighbour table exactly.
-Session bindings are the next stage.
+
+Hosts select over a live session (`facets::region_exchange`, the browser's
+`FacetRegionExchange.ts`). A `FacetRegionRequest` names a volume, a channel,
+the seed facet, the tool and the optional clipping plane, selection transform
+and overhang angle, and a page window; the session decodes that volume's mesh
+asset, reads its annotations and answers a `FacetRegionReply`: a page of the
+selected ranges and Gap Fill replacements (at most 4,096 of each) with the
+`FacetGuard` a `facetStroke` intent commits them under, the selector's own
+issues for invalid tool input, or a stale topology. An oversized page, an
+unknown volume, an unreadable mesh and a disposed session refuse. Bindings:
+WASM `ProjectSession.facet_region`, the JNI export `sessionFacetRegion` and
+Kotlin `ProjectSession.facetRegion`. `facet-region-exchange-vectors.mjs` opens
+a browser project with a painted icosphere and a support-painted terrain and
+runs every tool, transforms, clipping, the overhang gate and paging windows;
+Rust, WASM in Node and Chrome and JNI answer all 136 replies byte for byte and
+both refusals, and 411 Kotlin checks cover the wrapper.
 
 ### Paint palette
 

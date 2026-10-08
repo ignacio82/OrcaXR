@@ -11,6 +11,7 @@ import { replayEditor } from "./editor-replay.mjs";
 import { replayProjection } from "./projection-replay.mjs";
 import { replayCapabilities } from "./capability-replay.mjs";
 import { replayRender } from "./render-replay.mjs";
+import { replayFacetRegions } from "./facet-region-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -468,6 +469,27 @@ try {
       .join("\n"),
   );
   assert.equal(renderChecks, 41);
+  // Facet region selection over a live session, then the Kotlin wrapper.
+  const regionFixture = JSON.parse(
+    await readFile(
+      new URL("testdata/cross-platform/facet-region-exchange-vectors.json", root),
+    ),
+  );
+  const regions = replayFacetRegions(projectJniCore(jvm.call), regionFixture, layout);
+  assert.deepEqual(
+    [regions.facetRegionReplies, regions.facetRegionRefusals],
+    [136, 2],
+  );
+  const facetRegionChecks = jvm.call(
+    "facetRegionChecks",
+    regionFixture.stateJson,
+    Uint8Array.from(regionFixture.assets[0].bytes),
+    Uint8Array.from(regionFixture.assets[1].bytes),
+    regionFixture.script
+      .map((e) => ("refusal" in e ? `X\t${e.request}\t${e.refusal}` : `P\t${e.request}\t${e.reply}`))
+      .join("\n"),
+  );
+  assert.equal(facetRegionChecks, 411);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);
@@ -498,6 +520,8 @@ try {
     capabilityChecks,
     ...renders,
     renderChecks,
+    ...regions,
+    facetRegionChecks,
     ownedQueryTextUnits: ownedQueryText.length,
     ownedBytes: owned.byteLength,
     hostJniSha256: createHash("sha256")

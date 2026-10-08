@@ -162,6 +162,7 @@ export const projectsession_command_upload: (a: number, b: number, c: number, d:
 export const projectsession_commit_import: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const projectsession_configure_staging: (a: number, b: number, c: number, d: number) => [number, number];
 export const projectsession_dispose: (a: number) => void;
+export const projectsession_facet_region: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_finish_open: (a: number, b: number, c: number) => [number, number, number];
 export const projectsession_history: (a: number) => number;
 export const projectsession_history_revision: (a: number) => number;

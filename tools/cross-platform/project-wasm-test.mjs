@@ -11,6 +11,7 @@ import { replayEditor } from "./editor-replay.mjs";
 import { replayProjection } from "./projection-replay.mjs";
 import { replayCapabilities } from "./capability-replay.mjs";
 import { replayRender } from "./render-replay.mjs";
+import { replayFacetRegions } from "./facet-region-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -68,6 +69,11 @@ if (isMainThread) {
     assert.deepEqual(
       [result.renderPages, result.renderRefusals, result.renderRequests],
       [259, 57, 209],
+    );
+    // Facet region selection over a live session.
+    assert.deepEqual(
+      [result.facetRegionReplies, result.facetRegionRefusals],
+      [136, 2],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -318,6 +324,15 @@ if (isMainThread) {
     ),
     layout,
   );
+  const regions = replayFacetRegions(
+    core,
+    JSON.parse(
+      await readFile(
+        new URL("testdata/cross-platform/facet-region-exchange-vectors.json", root),
+      ),
+    ),
+    layout,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -339,6 +354,7 @@ if (isMainThread) {
       ...projections,
       ...capabilities,
       ...renders,
+      ...regions,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

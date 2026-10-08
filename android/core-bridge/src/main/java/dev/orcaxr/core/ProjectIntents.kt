@@ -4445,6 +4445,295 @@ object ProjectIntents {
             w.field("changes") { writeRenderChanges(w, v.changes) }
         }
     }
+    sealed interface OptionalVector {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalVector
+        data class Value(val value: List<Double>) : OptionalVector
+    }
+    private fun readOptionalVector(v: Any): OptionalVector {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalVector.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalVector.Value(readVector(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalVector(w: ProjectIntentWriter, v: OptionalVector) {
+        w.obj { when(v) {
+            is OptionalVector.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalVector.Value -> w.field("value") { writeVector(w, v.value) }
+        } }
+    }
+    private fun readLinearRows(v: Any): List<List<Double>> {
+        val array = ProjectIntentJson.list(v, 3, 3)
+        return List(array.length()) { readVector(array.get(it)) }
+    }
+    private fun writeLinearRows(w: ProjectIntentWriter, v: List<List<Double>>) {
+        w.array(v, 3, 3) { writeVector(w, it) }
+    }
+    data class FacetRegionBrush(val center: List<Double>, val previousCenter: OptionalVector, val cameraPosition: List<Double>, val radiusMm: Double)
+    private fun readFacetRegionBrush(v: Any): FacetRegionBrush {
+        val obj = ProjectIntentJson.fields(v, setOf("center", "previousCenter", "cameraPosition", "radiusMm"), false)
+        return FacetRegionBrush(readVector(obj.get("center")), readOptionalVector(obj.get("previousCenter")), readVector(obj.get("cameraPosition")), readFinite(obj.get("radiusMm")))
+    }
+    private fun writeFacetRegionBrush(w: ProjectIntentWriter, v: FacetRegionBrush) {
+        w.obj {
+            w.field("center") { writeVector(w, v.center) }
+            w.field("previousCenter") { writeOptionalVector(w, v.previousCenter) }
+            w.field("cameraPosition") { writeVector(w, v.cameraPosition) }
+            w.field("radiusMm") { writeFinite(w, v.radiusMm) }
+        }
+    }
+    data class FacetRegionTriangle(val hit: OptionalVector)
+    private fun readFacetRegionTriangle(v: Any): FacetRegionTriangle {
+        val obj = ProjectIntentJson.fields(v, setOf("hit"), false)
+        return FacetRegionTriangle(readOptionalVector(obj.get("hit")))
+    }
+    private fun writeFacetRegionTriangle(w: ProjectIntentWriter, v: FacetRegionTriangle) {
+        w.obj {
+            w.field("hit") { writeOptionalVector(w, v.hit) }
+        }
+    }
+    data class FacetRegionFill(val hit: OptionalVector, val maxAdjacentAngleDegrees: OptionalFinite)
+    private fun readFacetRegionFill(v: Any): FacetRegionFill {
+        val obj = ProjectIntentJson.fields(v, setOf("hit", "maxAdjacentAngleDegrees"), false)
+        return FacetRegionFill(readOptionalVector(obj.get("hit")), readOptionalFinite(obj.get("maxAdjacentAngleDegrees")))
+    }
+    private fun writeFacetRegionFill(w: ProjectIntentWriter, v: FacetRegionFill) {
+        w.obj {
+            w.field("hit") { writeOptionalVector(w, v.hit) }
+            w.field("maxAdjacentAngleDegrees") { writeOptionalFinite(w, v.maxAdjacentAngleDegrees) }
+        }
+    }
+    data class FacetRegionHeightRange(val startZMm: Double, val heightMm: Double)
+    private fun readFacetRegionHeightRange(v: Any): FacetRegionHeightRange {
+        val obj = ProjectIntentJson.fields(v, setOf("startZMm", "heightMm"), false)
+        return FacetRegionHeightRange(readFinite(obj.get("startZMm")), readFinite(obj.get("heightMm")))
+    }
+    private fun writeFacetRegionHeightRange(w: ProjectIntentWriter, v: FacetRegionHeightRange) {
+        w.obj {
+            w.field("startZMm") { writeFinite(w, v.startZMm) }
+            w.field("heightMm") { writeFinite(w, v.heightMm) }
+        }
+    }
+    private fun readPaintValueInputs(v: Any): List<PaintValueInput> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readPaintValueInput(array.get(it)) }
+    }
+    private fun writePaintValueInputs(w: ProjectIntentWriter, v: List<PaintValueInput>) {
+        w.array(v, 0, 4096) { writePaintValueInput(w, it) }
+    }
+    data class FacetRegionGapFill(val maxAreaMm2: Double, val stateOrder: List<PaintValueInput>)
+    private fun readFacetRegionGapFill(v: Any): FacetRegionGapFill {
+        val obj = ProjectIntentJson.fields(v, setOf("maxAreaMm2", "stateOrder"), false)
+        return FacetRegionGapFill(readFinite(obj.get("maxAreaMm2")), readPaintValueInputs(obj.get("stateOrder")))
+    }
+    private fun writeFacetRegionGapFill(w: ProjectIntentWriter, v: FacetRegionGapFill) {
+        w.obj {
+            w.field("maxAreaMm2") { writeFinite(w, v.maxAreaMm2) }
+            w.field("stateOrder") { writePaintValueInputs(w, v.stateOrder) }
+        }
+    }
+    sealed interface FacetRegionTool {
+        data class Triangle(val value: ProjectIntents.FacetRegionTriangle) : FacetRegionTool
+        data class Fill(val value: ProjectIntents.FacetRegionFill) : FacetRegionTool
+        data class HeightRange(val value: ProjectIntents.FacetRegionHeightRange) : FacetRegionTool
+        data class GapFill(val value: ProjectIntents.FacetRegionGapFill) : FacetRegionTool
+        data class Circle(val value: ProjectIntents.FacetRegionBrush) : FacetRegionTool
+        data class Sphere(val value: ProjectIntents.FacetRegionBrush) : FacetRegionTool
+    }
+    private fun readFacetRegionTool(v: Any): FacetRegionTool {
+        val obj = ProjectIntentJson.fields(v, setOf("triangle", "fill", "heightRange", "gapFill", "circle", "sphere"), true)
+        return when(val key = obj.keys().next()) {
+            "triangle" -> FacetRegionTool.Triangle(readFacetRegionTriangle(obj.get(key)))
+            "fill" -> FacetRegionTool.Fill(readFacetRegionFill(obj.get(key)))
+            "heightRange" -> FacetRegionTool.HeightRange(readFacetRegionHeightRange(obj.get(key)))
+            "gapFill" -> FacetRegionTool.GapFill(readFacetRegionGapFill(obj.get(key)))
+            "circle" -> FacetRegionTool.Circle(readFacetRegionBrush(obj.get(key)))
+            "sphere" -> FacetRegionTool.Sphere(readFacetRegionBrush(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeFacetRegionTool(w: ProjectIntentWriter, v: FacetRegionTool) {
+        w.obj { when(v) {
+            is FacetRegionTool.Triangle -> w.field("triangle") { writeFacetRegionTriangle(w, v.value) }
+            is FacetRegionTool.Fill -> w.field("fill") { writeFacetRegionFill(w, v.value) }
+            is FacetRegionTool.HeightRange -> w.field("heightRange") { writeFacetRegionHeightRange(w, v.value) }
+            is FacetRegionTool.GapFill -> w.field("gapFill") { writeFacetRegionGapFill(w, v.value) }
+            is FacetRegionTool.Circle -> w.field("circle") { writeFacetRegionBrush(w, v.value) }
+            is FacetRegionTool.Sphere -> w.field("sphere") { writeFacetRegionBrush(w, v.value) }
+        } }
+    }
+    data class FacetClippingPlane(val normal: List<Double>, val offset: Double)
+    private fun readFacetClippingPlane(v: Any): FacetClippingPlane {
+        val obj = ProjectIntentJson.fields(v, setOf("normal", "offset"), false)
+        return FacetClippingPlane(readVector(obj.get("normal")), readFinite(obj.get("offset")))
+    }
+    private fun writeFacetClippingPlane(w: ProjectIntentWriter, v: FacetClippingPlane) {
+        w.obj {
+            w.field("normal") { writeVector(w, v.normal) }
+            w.field("offset") { writeFinite(w, v.offset) }
+        }
+    }
+    sealed interface OptionalFacetClippingPlane {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalFacetClippingPlane
+        data class Value(val value: ProjectIntents.FacetClippingPlane) : OptionalFacetClippingPlane
+    }
+    private fun readOptionalFacetClippingPlane(v: Any): OptionalFacetClippingPlane {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalFacetClippingPlane.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalFacetClippingPlane.Value(readFacetClippingPlane(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalFacetClippingPlane(w: ProjectIntentWriter, v: OptionalFacetClippingPlane) {
+        w.obj { when(v) {
+            is OptionalFacetClippingPlane.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalFacetClippingPlane.Value -> w.field("value") { writeFacetClippingPlane(w, v.value) }
+        } }
+    }
+    data class FacetSelectionTransform(val linear: List<List<Double>>, val translation: List<Double>, val scalingFactors: List<Double>)
+    private fun readFacetSelectionTransform(v: Any): FacetSelectionTransform {
+        val obj = ProjectIntentJson.fields(v, setOf("linear", "translation", "scalingFactors"), false)
+        return FacetSelectionTransform(readLinearRows(obj.get("linear")), readVector(obj.get("translation")), readVector(obj.get("scalingFactors")))
+    }
+    private fun writeFacetSelectionTransform(w: ProjectIntentWriter, v: FacetSelectionTransform) {
+        w.obj {
+            w.field("linear") { writeLinearRows(w, v.linear) }
+            w.field("translation") { writeVector(w, v.translation) }
+            w.field("scalingFactors") { writeVector(w, v.scalingFactors) }
+        }
+    }
+    sealed interface OptionalFacetSelectionTransform {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalFacetSelectionTransform
+        data class Value(val value: ProjectIntents.FacetSelectionTransform) : OptionalFacetSelectionTransform
+    }
+    private fun readOptionalFacetSelectionTransform(v: Any): OptionalFacetSelectionTransform {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalFacetSelectionTransform.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalFacetSelectionTransform.Value(readFacetSelectionTransform(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalFacetSelectionTransform(w: ProjectIntentWriter, v: OptionalFacetSelectionTransform) {
+        w.obj { when(v) {
+            is OptionalFacetSelectionTransform.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalFacetSelectionTransform.Value -> w.field("value") { writeFacetSelectionTransform(w, v.value) }
+        } }
+    }
+    data class FacetRegionRequest(val volumeId: List<Int>, val channel: FacetChannelName, val seedTriangle: Long, val tool: FacetRegionTool, val clippingPlane: OptionalFacetClippingPlane, val transform: OptionalFacetSelectionTransform, val highlightByAngleDegrees: OptionalFinite, val start: Long, val count: Long)
+    private fun readFacetRegionRequest(v: Any): FacetRegionRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeId", "channel", "seedTriangle", "tool", "clippingPlane", "transform", "highlightByAngleDegrees", "start", "count"), false)
+        return FacetRegionRequest(readId(obj.get("volumeId")), readFacetChannelName(obj.get("channel")), readCounter(obj.get("seedTriangle")), readFacetRegionTool(obj.get("tool")), readOptionalFacetClippingPlane(obj.get("clippingPlane")), readOptionalFacetSelectionTransform(obj.get("transform")), readOptionalFinite(obj.get("highlightByAngleDegrees")), readCounter(obj.get("start")), readCounter(obj.get("count")))
+    }
+    private fun writeFacetRegionRequest(w: ProjectIntentWriter, v: FacetRegionRequest) {
+        w.obj {
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("channel") { writeFacetChannelName(w, v.channel) }
+            w.field("seedTriangle") { writeCounter(w, v.seedTriangle) }
+            w.field("tool") { writeFacetRegionTool(w, v.tool) }
+            w.field("clippingPlane") { writeOptionalFacetClippingPlane(w, v.clippingPlane) }
+            w.field("transform") { writeOptionalFacetSelectionTransform(w, v.transform) }
+            w.field("highlightByAngleDegrees") { writeOptionalFinite(w, v.highlightByAngleDegrees) }
+            w.field("start") { writeCounter(w, v.start) }
+            w.field("count") { writeCounter(w, v.count) }
+        }
+    }
+    sealed interface FacetRegionState {
+        data class Unpainted(val value: ProjectIntents.Empty) : FacetRegionState
+        data class Assigned(val value: ProjectIntents.PaintValueInput) : FacetRegionState
+    }
+    private fun readFacetRegionState(v: Any): FacetRegionState {
+        val obj = ProjectIntentJson.fields(v, setOf("unpainted", "assigned"), true)
+        return when(val key = obj.keys().next()) {
+            "unpainted" -> FacetRegionState.Unpainted(readEmpty(obj.get(key)))
+            "assigned" -> FacetRegionState.Assigned(readPaintValueInput(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeFacetRegionState(w: ProjectIntentWriter, v: FacetRegionState) {
+        w.obj { when(v) {
+            is FacetRegionState.Unpainted -> w.field("unpainted") { writeEmpty(w, v.value) }
+            is FacetRegionState.Assigned -> w.field("assigned") { writePaintValueInput(w, v.value) }
+        } }
+    }
+    data class FacetGapFillReplacement(val areaMm2: Double, val source: FacetRegionState, val target: FacetRegionState, val triangleCount: Long, val ranges: List<TriangleRangeInput>)
+    private fun readFacetGapFillReplacement(v: Any): FacetGapFillReplacement {
+        val obj = ProjectIntentJson.fields(v, setOf("areaMm2", "source", "target", "triangleCount", "ranges"), false)
+        return FacetGapFillReplacement(readFinite(obj.get("areaMm2")), readFacetRegionState(obj.get("source")), readFacetRegionState(obj.get("target")), readCounter(obj.get("triangleCount")), readTriangleRanges(obj.get("ranges")))
+    }
+    private fun writeFacetGapFillReplacement(w: ProjectIntentWriter, v: FacetGapFillReplacement) {
+        w.obj {
+            w.field("areaMm2") { writeFinite(w, v.areaMm2) }
+            w.field("source") { writeFacetRegionState(w, v.source) }
+            w.field("target") { writeFacetRegionState(w, v.target) }
+            w.field("triangleCount") { writeCounter(w, v.triangleCount) }
+            w.field("ranges") { writeTriangleRanges(w, v.ranges) }
+        }
+    }
+    private fun readFacetGapFillReplacements(v: Any): List<FacetGapFillReplacement> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readFacetGapFillReplacement(array.get(it)) }
+    }
+    private fun writeFacetGapFillReplacements(w: ProjectIntentWriter, v: List<FacetGapFillReplacement>) {
+        w.array(v, 0, 4096) { writeFacetGapFillReplacement(w, it) }
+    }
+    data class FacetRegionPage(val guard: FacetGuard, val selectedTriangles: Long, val totalRanges: Long, val ranges: List<TriangleRangeInput>, val totalReplacements: Long, val replacements: List<FacetGapFillReplacement>)
+    private fun readFacetRegionPage(v: Any): FacetRegionPage {
+        val obj = ProjectIntentJson.fields(v, setOf("guard", "selectedTriangles", "totalRanges", "ranges", "totalReplacements", "replacements"), false)
+        return FacetRegionPage(readFacetGuard(obj.get("guard")), readCounter(obj.get("selectedTriangles")), readCounter(obj.get("totalRanges")), readTriangleRanges(obj.get("ranges")), readCounter(obj.get("totalReplacements")), readFacetGapFillReplacements(obj.get("replacements")))
+    }
+    private fun writeFacetRegionPage(w: ProjectIntentWriter, v: FacetRegionPage) {
+        w.obj {
+            w.field("guard") { writeFacetGuard(w, v.guard) }
+            w.field("selectedTriangles") { writeCounter(w, v.selectedTriangles) }
+            w.field("totalRanges") { writeCounter(w, v.totalRanges) }
+            w.field("ranges") { writeTriangleRanges(w, v.ranges) }
+            w.field("totalReplacements") { writeCounter(w, v.totalReplacements) }
+            w.field("replacements") { writeFacetGapFillReplacements(w, v.replacements) }
+        }
+    }
+    data class FacetRegionIssue(val code: List<Int>, val path: List<Int>, val message: List<Int>)
+    private fun readFacetRegionIssue(v: Any): FacetRegionIssue {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "path", "message"), false)
+        return FacetRegionIssue(readEditText(obj.get("code")), readEditText(obj.get("path")), readEditText(obj.get("message")))
+    }
+    private fun writeFacetRegionIssue(w: ProjectIntentWriter, v: FacetRegionIssue) {
+        w.obj {
+            w.field("code") { writeEditText(w, v.code) }
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    private fun readFacetRegionIssues(v: Any): List<FacetRegionIssue> {
+        val array = ProjectIntentJson.list(v, 1, 4096)
+        return List(array.length()) { readFacetRegionIssue(array.get(it)) }
+    }
+    private fun writeFacetRegionIssues(w: ProjectIntentWriter, v: List<FacetRegionIssue>) {
+        w.array(v, 1, 4096) { writeFacetRegionIssue(w, it) }
+    }
+    sealed interface FacetRegionReply {
+        data class Page(val value: ProjectIntents.FacetRegionPage) : FacetRegionReply
+        data class Invalid(val value: List<ProjectIntents.FacetRegionIssue>) : FacetRegionReply
+        data class Stale(val value: ProjectIntents.Empty) : FacetRegionReply
+    }
+    private fun readFacetRegionReply(v: Any): FacetRegionReply {
+        val obj = ProjectIntentJson.fields(v, setOf("page", "invalid", "stale"), true)
+        return when(val key = obj.keys().next()) {
+            "page" -> FacetRegionReply.Page(readFacetRegionPage(obj.get(key)))
+            "invalid" -> FacetRegionReply.Invalid(readFacetRegionIssues(obj.get(key)))
+            "stale" -> FacetRegionReply.Stale(readEmpty(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeFacetRegionReply(w: ProjectIntentWriter, v: FacetRegionReply) {
+        w.obj { when(v) {
+            is FacetRegionReply.Page -> w.field("page") { writeFacetRegionPage(w, v.value) }
+            is FacetRegionReply.Invalid -> w.field("invalid") { writeFacetRegionIssues(w, v.value) }
+            is FacetRegionReply.Stale -> w.field("stale") { writeEmpty(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -4561,4 +4850,8 @@ object ProjectIntents {
     fun encodeRenderRequest(value: RenderRequest): String = ProjectIntentWriter().also { writeRenderRequest(it, value) }.finish()
     fun decodeRenderPage(text: String): RenderPage = readRenderPage(ProjectIntentJson.parse(text))
     fun encodeRenderPage(value: RenderPage): String = ProjectIntentWriter().also { writeRenderPage(it, value) }.finish()
+    fun decodeFacetRegionRequest(text: String): FacetRegionRequest = readFacetRegionRequest(ProjectIntentJson.parse(text))
+    fun encodeFacetRegionRequest(value: FacetRegionRequest): String = ProjectIntentWriter().also { writeFacetRegionRequest(it, value) }.finish()
+    fun decodeFacetRegionReply(text: String): FacetRegionReply = readFacetRegionReply(ProjectIntentJson.parse(text))
+    fun encodeFacetRegionReply(value: FacetRegionReply): String = ProjectIntentWriter().also { writeFacetRegionReply(it, value) }.finish()
 }

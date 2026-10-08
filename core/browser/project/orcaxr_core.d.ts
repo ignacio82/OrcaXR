@@ -459,6 +459,11 @@ export class ProjectSession {
     commit_import(preview: ProjectImportPreview, acknowledged: string[]): ProjectEffects;
     configure_staging(version: number, options: Float64Array): void;
     dispose(): void;
+    /**
+     * A `FacetRegionRequest` over the session's acknowledged state; returns a
+     * `FacetRegionReply`.
+     */
+    facet_region(request: string): string;
     finish_open(ticket: ProjectOpen, document: ProjectDocument): ProjectEffects;
     history(): CapturedHistory;
     history_revision(): number;
@@ -760,6 +765,7 @@ export interface InitOutput {
     readonly projectsession_commit_import: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_configure_staging: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectsession_dispose: (a: number) => void;
+    readonly projectsession_facet_region: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_finish_open: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_history: (a: number) => number;
     readonly projectsession_history_revision: (a: number) => number;

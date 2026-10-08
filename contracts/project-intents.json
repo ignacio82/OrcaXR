@@ -2994,6 +2994,171 @@
         "total": "Counter",
         "changes": "RenderChanges"
       }
+    },
+    "OptionalVector": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "Vector"
+      }
+    },
+    "LinearRows": {
+      "kind": "array",
+      "items": "Vector",
+      "min": 3,
+      "max": 3
+    },
+    "FacetRegionBrush": {
+      "kind": "object",
+      "fields": {
+        "center": "Vector",
+        "previousCenter": "OptionalVector",
+        "cameraPosition": "Vector",
+        "radiusMm": "Finite"
+      }
+    },
+    "FacetRegionTriangle": {
+      "kind": "object",
+      "fields": {
+        "hit": "OptionalVector"
+      }
+    },
+    "FacetRegionFill": {
+      "kind": "object",
+      "fields": {
+        "hit": "OptionalVector",
+        "maxAdjacentAngleDegrees": "OptionalFinite"
+      }
+    },
+    "FacetRegionHeightRange": {
+      "kind": "object",
+      "fields": {
+        "startZMm": "Finite",
+        "heightMm": "Finite"
+      }
+    },
+    "PaintValueInputs": {
+      "kind": "array",
+      "items": "PaintValueInput",
+      "min": 0,
+      "max": 4096
+    },
+    "FacetRegionGapFill": {
+      "kind": "object",
+      "fields": {
+        "maxAreaMm2": "Finite",
+        "stateOrder": "PaintValueInputs"
+      }
+    },
+    "FacetRegionTool": {
+      "kind": "union",
+      "variants": {
+        "triangle": "FacetRegionTriangle",
+        "fill": "FacetRegionFill",
+        "heightRange": "FacetRegionHeightRange",
+        "gapFill": "FacetRegionGapFill",
+        "circle": "FacetRegionBrush",
+        "sphere": "FacetRegionBrush"
+      }
+    },
+    "FacetClippingPlane": {
+      "kind": "object",
+      "fields": {
+        "normal": "Vector",
+        "offset": "Finite"
+      }
+    },
+    "OptionalFacetClippingPlane": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "FacetClippingPlane"
+      }
+    },
+    "FacetSelectionTransform": {
+      "kind": "object",
+      "fields": {
+        "linear": "LinearRows",
+        "translation": "Vector",
+        "scalingFactors": "Vector"
+      }
+    },
+    "OptionalFacetSelectionTransform": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "FacetSelectionTransform"
+      }
+    },
+    "FacetRegionRequest": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id",
+        "channel": "FacetChannelName",
+        "seedTriangle": "Counter",
+        "tool": "FacetRegionTool",
+        "clippingPlane": "OptionalFacetClippingPlane",
+        "transform": "OptionalFacetSelectionTransform",
+        "highlightByAngleDegrees": "OptionalFinite",
+        "start": "Counter",
+        "count": "Counter"
+      }
+    },
+    "FacetRegionState": {
+      "kind": "union",
+      "variants": {
+        "unpainted": "Empty",
+        "assigned": "PaintValueInput"
+      }
+    },
+    "FacetGapFillReplacement": {
+      "kind": "object",
+      "fields": {
+        "areaMm2": "Finite",
+        "source": "FacetRegionState",
+        "target": "FacetRegionState",
+        "triangleCount": "Counter",
+        "ranges": "TriangleRanges"
+      }
+    },
+    "FacetGapFillReplacements": {
+      "kind": "array",
+      "items": "FacetGapFillReplacement",
+      "min": 0,
+      "max": 4096
+    },
+    "FacetRegionPage": {
+      "kind": "object",
+      "fields": {
+        "guard": "FacetGuard",
+        "selectedTriangles": "Counter",
+        "totalRanges": "Counter",
+        "ranges": "TriangleRanges",
+        "totalReplacements": "Counter",
+        "replacements": "FacetGapFillReplacements"
+      }
+    },
+    "FacetRegionIssue": {
+      "kind": "object",
+      "fields": {
+        "code": "EditText",
+        "path": "EditText",
+        "message": "EditText"
+      }
+    },
+    "FacetRegionIssues": {
+      "kind": "array",
+      "items": "FacetRegionIssue",
+      "min": 1,
+      "max": 4096
+    },
+    "FacetRegionReply": {
+      "kind": "union",
+      "variants": {
+        "page": "FacetRegionPage",
+        "invalid": "FacetRegionIssues",
+        "stale": "Empty"
+      }
     }
   },
   "roots": [
@@ -3054,7 +3219,9 @@
     "CapabilityRequest",
     "CapabilityPage",
     "RenderRequest",
-    "RenderPage"
+    "RenderPage",
+    "FacetRegionRequest",
+    "FacetRegionReply"
   ],
   "sessionVersion": 1
 }

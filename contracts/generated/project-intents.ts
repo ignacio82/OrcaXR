@@ -2995,6 +2995,171 @@ const shapes = {
       "total": "Counter",
       "changes": "RenderChanges"
     }
+  },
+  "OptionalVector": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "Vector"
+    }
+  },
+  "LinearRows": {
+    "kind": "array",
+    "items": "Vector",
+    "min": 3,
+    "max": 3
+  },
+  "FacetRegionBrush": {
+    "kind": "object",
+    "fields": {
+      "center": "Vector",
+      "previousCenter": "OptionalVector",
+      "cameraPosition": "Vector",
+      "radiusMm": "Finite"
+    }
+  },
+  "FacetRegionTriangle": {
+    "kind": "object",
+    "fields": {
+      "hit": "OptionalVector"
+    }
+  },
+  "FacetRegionFill": {
+    "kind": "object",
+    "fields": {
+      "hit": "OptionalVector",
+      "maxAdjacentAngleDegrees": "OptionalFinite"
+    }
+  },
+  "FacetRegionHeightRange": {
+    "kind": "object",
+    "fields": {
+      "startZMm": "Finite",
+      "heightMm": "Finite"
+    }
+  },
+  "PaintValueInputs": {
+    "kind": "array",
+    "items": "PaintValueInput",
+    "min": 0,
+    "max": 4096
+  },
+  "FacetRegionGapFill": {
+    "kind": "object",
+    "fields": {
+      "maxAreaMm2": "Finite",
+      "stateOrder": "PaintValueInputs"
+    }
+  },
+  "FacetRegionTool": {
+    "kind": "union",
+    "variants": {
+      "triangle": "FacetRegionTriangle",
+      "fill": "FacetRegionFill",
+      "heightRange": "FacetRegionHeightRange",
+      "gapFill": "FacetRegionGapFill",
+      "circle": "FacetRegionBrush",
+      "sphere": "FacetRegionBrush"
+    }
+  },
+  "FacetClippingPlane": {
+    "kind": "object",
+    "fields": {
+      "normal": "Vector",
+      "offset": "Finite"
+    }
+  },
+  "OptionalFacetClippingPlane": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "FacetClippingPlane"
+    }
+  },
+  "FacetSelectionTransform": {
+    "kind": "object",
+    "fields": {
+      "linear": "LinearRows",
+      "translation": "Vector",
+      "scalingFactors": "Vector"
+    }
+  },
+  "OptionalFacetSelectionTransform": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "FacetSelectionTransform"
+    }
+  },
+  "FacetRegionRequest": {
+    "kind": "object",
+    "fields": {
+      "volumeId": "Id",
+      "channel": "FacetChannelName",
+      "seedTriangle": "Counter",
+      "tool": "FacetRegionTool",
+      "clippingPlane": "OptionalFacetClippingPlane",
+      "transform": "OptionalFacetSelectionTransform",
+      "highlightByAngleDegrees": "OptionalFinite",
+      "start": "Counter",
+      "count": "Counter"
+    }
+  },
+  "FacetRegionState": {
+    "kind": "union",
+    "variants": {
+      "unpainted": "Empty",
+      "assigned": "PaintValueInput"
+    }
+  },
+  "FacetGapFillReplacement": {
+    "kind": "object",
+    "fields": {
+      "areaMm2": "Finite",
+      "source": "FacetRegionState",
+      "target": "FacetRegionState",
+      "triangleCount": "Counter",
+      "ranges": "TriangleRanges"
+    }
+  },
+  "FacetGapFillReplacements": {
+    "kind": "array",
+    "items": "FacetGapFillReplacement",
+    "min": 0,
+    "max": 4096
+  },
+  "FacetRegionPage": {
+    "kind": "object",
+    "fields": {
+      "guard": "FacetGuard",
+      "selectedTriangles": "Counter",
+      "totalRanges": "Counter",
+      "ranges": "TriangleRanges",
+      "totalReplacements": "Counter",
+      "replacements": "FacetGapFillReplacements"
+    }
+  },
+  "FacetRegionIssue": {
+    "kind": "object",
+    "fields": {
+      "code": "EditText",
+      "path": "EditText",
+      "message": "EditText"
+    }
+  },
+  "FacetRegionIssues": {
+    "kind": "array",
+    "items": "FacetRegionIssue",
+    "min": 1,
+    "max": 4096
+  },
+  "FacetRegionReply": {
+    "kind": "union",
+    "variants": {
+      "page": "FacetRegionPage",
+      "invalid": "FacetRegionIssues",
+      "stale": "Empty"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -3353,6 +3518,27 @@ export interface ProjectRenderVolumeWire {readonly volumeId: ProjectIdWire;reado
 export type ProjectRenderChangeWire = {readonly plate:ProjectRenderPlateWire} | {readonly instance:ProjectRenderInstanceWire} | {readonly volume:ProjectRenderVolumeWire} | {readonly removePlate:ProjectIdWire} | {readonly removeInstance:ProjectIdWire} | {readonly removeVolume:ProjectIdWire};
 export type ProjectRenderChangesWire = readonly ProjectRenderChangeWire[];
 export interface ProjectRenderPageWire {readonly base: ProjectOptionalRenderCursorWire;readonly target: ProjectRenderCursorWire;readonly total: ProjectCounterWire;readonly changes: ProjectRenderChangesWire;}
+export type ProjectOptionalVectorWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectVectorWire};
+export type ProjectLinearRowsWire = readonly ProjectVectorWire[];
+export interface ProjectFacetRegionBrushWire {readonly center: ProjectVectorWire;readonly previousCenter: ProjectOptionalVectorWire;readonly cameraPosition: ProjectVectorWire;readonly radiusMm: ProjectFiniteWire;}
+export interface ProjectFacetRegionTriangleWire {readonly hit: ProjectOptionalVectorWire;}
+export interface ProjectFacetRegionFillWire {readonly hit: ProjectOptionalVectorWire;readonly maxAdjacentAngleDegrees: ProjectOptionalFiniteWire;}
+export interface ProjectFacetRegionHeightRangeWire {readonly startZMm: ProjectFiniteWire;readonly heightMm: ProjectFiniteWire;}
+export type ProjectPaintValueInputsWire = readonly ProjectPaintValueInputWire[];
+export interface ProjectFacetRegionGapFillWire {readonly maxAreaMm2: ProjectFiniteWire;readonly stateOrder: ProjectPaintValueInputsWire;}
+export type ProjectFacetRegionToolWire = {readonly triangle:ProjectFacetRegionTriangleWire} | {readonly fill:ProjectFacetRegionFillWire} | {readonly heightRange:ProjectFacetRegionHeightRangeWire} | {readonly gapFill:ProjectFacetRegionGapFillWire} | {readonly circle:ProjectFacetRegionBrushWire} | {readonly sphere:ProjectFacetRegionBrushWire};
+export interface ProjectFacetClippingPlaneWire {readonly normal: ProjectVectorWire;readonly offset: ProjectFiniteWire;}
+export type ProjectOptionalFacetClippingPlaneWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectFacetClippingPlaneWire};
+export interface ProjectFacetSelectionTransformWire {readonly linear: ProjectLinearRowsWire;readonly translation: ProjectVectorWire;readonly scalingFactors: ProjectVectorWire;}
+export type ProjectOptionalFacetSelectionTransformWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectFacetSelectionTransformWire};
+export interface ProjectFacetRegionRequestWire {readonly volumeId: ProjectIdWire;readonly channel: ProjectFacetChannelNameWire;readonly seedTriangle: ProjectCounterWire;readonly tool: ProjectFacetRegionToolWire;readonly clippingPlane: ProjectOptionalFacetClippingPlaneWire;readonly transform: ProjectOptionalFacetSelectionTransformWire;readonly highlightByAngleDegrees: ProjectOptionalFiniteWire;readonly start: ProjectCounterWire;readonly count: ProjectCounterWire;}
+export type ProjectFacetRegionStateWire = {readonly unpainted:ProjectEmptyWire} | {readonly assigned:ProjectPaintValueInputWire};
+export interface ProjectFacetGapFillReplacementWire {readonly areaMm2: ProjectFiniteWire;readonly source: ProjectFacetRegionStateWire;readonly target: ProjectFacetRegionStateWire;readonly triangleCount: ProjectCounterWire;readonly ranges: ProjectTriangleRangesWire;}
+export type ProjectFacetGapFillReplacementsWire = readonly ProjectFacetGapFillReplacementWire[];
+export interface ProjectFacetRegionPageWire {readonly guard: ProjectFacetGuardWire;readonly selectedTriangles: ProjectCounterWire;readonly totalRanges: ProjectCounterWire;readonly ranges: ProjectTriangleRangesWire;readonly totalReplacements: ProjectCounterWire;readonly replacements: ProjectFacetGapFillReplacementsWire;}
+export interface ProjectFacetRegionIssueWire {readonly code: ProjectEditTextWire;readonly path: ProjectEditTextWire;readonly message: ProjectEditTextWire;}
+export type ProjectFacetRegionIssuesWire = readonly ProjectFacetRegionIssueWire[];
+export type ProjectFacetRegionReplyWire = {readonly page:ProjectFacetRegionPageWire} | {readonly invalid:ProjectFacetRegionIssuesWire} | {readonly stale:ProjectEmptyWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -3527,3 +3713,9 @@ export function encodeProjectRenderRequest(value:ProjectRenderRequestWire):strin
 export function captureProjectRenderPage(value:unknown):ProjectRenderPageWire { return captureIntent("RenderPage",value,shapes,limits) as ProjectRenderPageWire; }
 export function decodeProjectRenderPage(text:string):ProjectRenderPageWire { return captureProjectRenderPage(parseIntentJson(text,limits)); }
 export function encodeProjectRenderPage(value:ProjectRenderPageWire):string { return JSON.stringify(captureProjectRenderPage(value)); }
+export function captureProjectFacetRegionRequest(value:unknown):ProjectFacetRegionRequestWire { return captureIntent("FacetRegionRequest",value,shapes,limits) as ProjectFacetRegionRequestWire; }
+export function decodeProjectFacetRegionRequest(text:string):ProjectFacetRegionRequestWire { return captureProjectFacetRegionRequest(parseIntentJson(text,limits)); }
+export function encodeProjectFacetRegionRequest(value:ProjectFacetRegionRequestWire):string { return JSON.stringify(captureProjectFacetRegionRequest(value)); }
+export function captureProjectFacetRegionReply(value:unknown):ProjectFacetRegionReplyWire { return captureIntent("FacetRegionReply",value,shapes,limits) as ProjectFacetRegionReplyWire; }
+export function decodeProjectFacetRegionReply(text:string):ProjectFacetRegionReplyWire { return captureProjectFacetRegionReply(parseIntentJson(text,limits)); }
+export function encodeProjectFacetRegionReply(value:ProjectFacetRegionReplyWire):string { return JSON.stringify(captureProjectFacetRegionReply(value)); }

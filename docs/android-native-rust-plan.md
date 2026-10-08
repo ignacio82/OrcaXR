@@ -1521,8 +1521,11 @@ painting, and FullSpectrum operations that can support real native projects.
     Range under transforms and the overhang gate, Gap Fill, and Circle/Sphere
     brushes with dragged capsules, float32-exact against the browser (5,855
     cases, 20 refusals).
-  - [ ] Bind the geometry operations and finish picking and refined selection,
-    preparation kernels, renderer packets and device qualification.
+  - [x] Serve region selection over live sessions through WASM, JNI and
+    Kotlin: the session decodes the volume's mesh and pages ranges under the
+    guard a `facetStroke` commits (136 replies and 2 refusals per binding).
+  - [ ] Finish picking and refined selection, preparation kernels, renderer
+    packets and device qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.

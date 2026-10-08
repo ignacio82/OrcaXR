@@ -95,6 +95,8 @@ assert.deepEqual(schema.roots, [
   "CapabilityPage",
   "RenderRequest",
   "RenderPage",
+  "FacetRegionRequest",
+  "FacetRegionReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

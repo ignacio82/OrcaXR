@@ -6217,6 +6217,364 @@ fn read_render_page(v: &Value) -> Result<RenderPage, InvalidIntent> {
         changes: read_render_changes(&object["changes"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalVector {
+    Absent(Empty),
+    Value(Vector),
+}
+fn read_optional_vector(v: &Value) -> Result<OptionalVector, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalVector::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalVector::Value(read_vector(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type LinearRows = Vec<Vector>;
+fn read_linear_rows(v: &Value) -> Result<LinearRows, InvalidIntent> {
+    list(v, 3, 3)?.iter().map(read_vector).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetRegionBrush {
+    pub center: Vector,
+    pub previous_center: OptionalVector,
+    pub camera_position: Vector,
+    pub radius_mm: Finite,
+}
+fn read_facet_region_brush(v: &Value) -> Result<FacetRegionBrush, InvalidIntent> {
+    let object = fields(
+        v,
+        &["center", "previousCenter", "cameraPosition", "radiusMm"],
+        false,
+    )?;
+    Ok(FacetRegionBrush {
+        center: read_vector(&object["center"])?,
+        previous_center: read_optional_vector(&object["previousCenter"])?,
+        camera_position: read_vector(&object["cameraPosition"])?,
+        radius_mm: read_finite(&object["radiusMm"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetRegionTriangle {
+    pub hit: OptionalVector,
+}
+fn read_facet_region_triangle(v: &Value) -> Result<FacetRegionTriangle, InvalidIntent> {
+    let object = fields(v, &["hit"], false)?;
+    Ok(FacetRegionTriangle {
+        hit: read_optional_vector(&object["hit"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetRegionFill {
+    pub hit: OptionalVector,
+    pub max_adjacent_angle_degrees: OptionalFinite,
+}
+fn read_facet_region_fill(v: &Value) -> Result<FacetRegionFill, InvalidIntent> {
+    let object = fields(v, &["hit", "maxAdjacentAngleDegrees"], false)?;
+    Ok(FacetRegionFill {
+        hit: read_optional_vector(&object["hit"])?,
+        max_adjacent_angle_degrees: read_optional_finite(&object["maxAdjacentAngleDegrees"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetRegionHeightRange {
+    pub start_z_mm: Finite,
+    pub height_mm: Finite,
+}
+fn read_facet_region_height_range(v: &Value) -> Result<FacetRegionHeightRange, InvalidIntent> {
+    let object = fields(v, &["startZMm", "heightMm"], false)?;
+    Ok(FacetRegionHeightRange {
+        start_z_mm: read_finite(&object["startZMm"])?,
+        height_mm: read_finite(&object["heightMm"])?,
+    })
+}
+pub type PaintValueInputs = Vec<PaintValueInput>;
+fn read_paint_value_inputs(v: &Value) -> Result<PaintValueInputs, InvalidIntent> {
+    list(v, 0, 4096)?
+        .iter()
+        .map(read_paint_value_input)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetRegionGapFill {
+    pub max_area_mm2: Finite,
+    pub state_order: PaintValueInputs,
+}
+fn read_facet_region_gap_fill(v: &Value) -> Result<FacetRegionGapFill, InvalidIntent> {
+    let object = fields(v, &["maxAreaMm2", "stateOrder"], false)?;
+    Ok(FacetRegionGapFill {
+        max_area_mm2: read_finite(&object["maxAreaMm2"])?,
+        state_order: read_paint_value_inputs(&object["stateOrder"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FacetRegionTool {
+    Triangle(FacetRegionTriangle),
+    Fill(FacetRegionFill),
+    HeightRange(FacetRegionHeightRange),
+    GapFill(FacetRegionGapFill),
+    Circle(FacetRegionBrush),
+    Sphere(FacetRegionBrush),
+}
+fn read_facet_region_tool(v: &Value) -> Result<FacetRegionTool, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "triangle",
+            "fill",
+            "heightRange",
+            "gapFill",
+            "circle",
+            "sphere",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "triangle" => Ok(FacetRegionTool::Triangle(read_facet_region_triangle(
+            value,
+        )?)),
+        "fill" => Ok(FacetRegionTool::Fill(read_facet_region_fill(value)?)),
+        "heightRange" => Ok(FacetRegionTool::HeightRange(
+            read_facet_region_height_range(value)?,
+        )),
+        "gapFill" => Ok(FacetRegionTool::GapFill(read_facet_region_gap_fill(value)?)),
+        "circle" => Ok(FacetRegionTool::Circle(read_facet_region_brush(value)?)),
+        "sphere" => Ok(FacetRegionTool::Sphere(read_facet_region_brush(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetClippingPlane {
+    pub normal: Vector,
+    pub offset: Finite,
+}
+fn read_facet_clipping_plane(v: &Value) -> Result<FacetClippingPlane, InvalidIntent> {
+    let object = fields(v, &["normal", "offset"], false)?;
+    Ok(FacetClippingPlane {
+        normal: read_vector(&object["normal"])?,
+        offset: read_finite(&object["offset"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalFacetClippingPlane {
+    Absent(Empty),
+    Value(FacetClippingPlane),
+}
+fn read_optional_facet_clipping_plane(
+    v: &Value,
+) -> Result<OptionalFacetClippingPlane, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalFacetClippingPlane::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalFacetClippingPlane::Value(
+            read_facet_clipping_plane(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetSelectionTransform {
+    pub linear: LinearRows,
+    pub translation: Vector,
+    pub scaling_factors: Vector,
+}
+fn read_facet_selection_transform(v: &Value) -> Result<FacetSelectionTransform, InvalidIntent> {
+    let object = fields(v, &["linear", "translation", "scalingFactors"], false)?;
+    Ok(FacetSelectionTransform {
+        linear: read_linear_rows(&object["linear"])?,
+        translation: read_vector(&object["translation"])?,
+        scaling_factors: read_vector(&object["scalingFactors"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalFacetSelectionTransform {
+    Absent(Empty),
+    Value(FacetSelectionTransform),
+}
+fn read_optional_facet_selection_transform(
+    v: &Value,
+) -> Result<OptionalFacetSelectionTransform, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalFacetSelectionTransform::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalFacetSelectionTransform::Value(
+            read_facet_selection_transform(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetRegionRequest {
+    pub volume_id: Id,
+    pub channel: FacetChannelName,
+    pub seed_triangle: Counter,
+    pub tool: FacetRegionTool,
+    pub clipping_plane: OptionalFacetClippingPlane,
+    pub transform: OptionalFacetSelectionTransform,
+    pub highlight_by_angle_degrees: OptionalFinite,
+    pub start: Counter,
+    pub count: Counter,
+}
+fn read_facet_region_request(v: &Value) -> Result<FacetRegionRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "volumeId",
+            "channel",
+            "seedTriangle",
+            "tool",
+            "clippingPlane",
+            "transform",
+            "highlightByAngleDegrees",
+            "start",
+            "count",
+        ],
+        false,
+    )?;
+    Ok(FacetRegionRequest {
+        volume_id: read_id(&object["volumeId"])?,
+        channel: read_facet_channel_name(&object["channel"])?,
+        seed_triangle: read_counter(&object["seedTriangle"])?,
+        tool: read_facet_region_tool(&object["tool"])?,
+        clipping_plane: read_optional_facet_clipping_plane(&object["clippingPlane"])?,
+        transform: read_optional_facet_selection_transform(&object["transform"])?,
+        highlight_by_angle_degrees: read_optional_finite(&object["highlightByAngleDegrees"])?,
+        start: read_counter(&object["start"])?,
+        count: read_counter(&object["count"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FacetRegionState {
+    Unpainted(Empty),
+    Assigned(PaintValueInput),
+}
+fn read_facet_region_state(v: &Value) -> Result<FacetRegionState, InvalidIntent> {
+    let object = fields(v, &["unpainted", "assigned"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "unpainted" => Ok(FacetRegionState::Unpainted(read_empty(value)?)),
+        "assigned" => Ok(FacetRegionState::Assigned(read_paint_value_input(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetGapFillReplacement {
+    pub area_mm2: Finite,
+    pub source: FacetRegionState,
+    pub target: FacetRegionState,
+    pub triangle_count: Counter,
+    pub ranges: TriangleRanges,
+}
+fn read_facet_gap_fill_replacement(v: &Value) -> Result<FacetGapFillReplacement, InvalidIntent> {
+    let object = fields(
+        v,
+        &["areaMm2", "source", "target", "triangleCount", "ranges"],
+        false,
+    )?;
+    Ok(FacetGapFillReplacement {
+        area_mm2: read_finite(&object["areaMm2"])?,
+        source: read_facet_region_state(&object["source"])?,
+        target: read_facet_region_state(&object["target"])?,
+        triangle_count: read_counter(&object["triangleCount"])?,
+        ranges: read_triangle_ranges(&object["ranges"])?,
+    })
+}
+pub type FacetGapFillReplacements = Vec<FacetGapFillReplacement>;
+fn read_facet_gap_fill_replacements(v: &Value) -> Result<FacetGapFillReplacements, InvalidIntent> {
+    list(v, 0, 4096)?
+        .iter()
+        .map(read_facet_gap_fill_replacement)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetRegionPage {
+    pub guard: FacetGuard,
+    pub selected_triangles: Counter,
+    pub total_ranges: Counter,
+    pub ranges: TriangleRanges,
+    pub total_replacements: Counter,
+    pub replacements: FacetGapFillReplacements,
+}
+fn read_facet_region_page(v: &Value) -> Result<FacetRegionPage, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "guard",
+            "selectedTriangles",
+            "totalRanges",
+            "ranges",
+            "totalReplacements",
+            "replacements",
+        ],
+        false,
+    )?;
+    Ok(FacetRegionPage {
+        guard: read_facet_guard(&object["guard"])?,
+        selected_triangles: read_counter(&object["selectedTriangles"])?,
+        total_ranges: read_counter(&object["totalRanges"])?,
+        ranges: read_triangle_ranges(&object["ranges"])?,
+        total_replacements: read_counter(&object["totalReplacements"])?,
+        replacements: read_facet_gap_fill_replacements(&object["replacements"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacetRegionIssue {
+    pub code: EditText,
+    pub path: EditText,
+    pub message: EditText,
+}
+fn read_facet_region_issue(v: &Value) -> Result<FacetRegionIssue, InvalidIntent> {
+    let object = fields(v, &["code", "path", "message"], false)?;
+    Ok(FacetRegionIssue {
+        code: read_edit_text(&object["code"])?,
+        path: read_edit_text(&object["path"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+pub type FacetRegionIssues = Vec<FacetRegionIssue>;
+fn read_facet_region_issues(v: &Value) -> Result<FacetRegionIssues, InvalidIntent> {
+    list(v, 1, 4096)?
+        .iter()
+        .map(read_facet_region_issue)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FacetRegionReply {
+    Page(FacetRegionPage),
+    Invalid(FacetRegionIssues),
+    Stale(Empty),
+}
+fn read_facet_region_reply(v: &Value) -> Result<FacetRegionReply, InvalidIntent> {
+    let object = fields(v, &["page", "invalid", "stale"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "page" => Ok(FacetRegionReply::Page(read_facet_region_page(value)?)),
+        "invalid" => Ok(FacetRegionReply::Invalid(read_facet_region_issues(value)?)),
+        "stale" => Ok(FacetRegionReply::Stale(read_empty(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -6715,5 +7073,21 @@ pub fn decode_render_page(text: &str) -> Result<RenderPage, InvalidIntent> {
 pub fn encode_render_page(value: &RenderPage) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_render_page(&text)?;
+    Ok(text)
+}
+pub fn decode_facet_region_request(text: &str) -> Result<FacetRegionRequest, InvalidIntent> {
+    read_facet_region_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_facet_region_request(value: &FacetRegionRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_facet_region_request(&text)?;
+    Ok(text)
+}
+pub fn decode_facet_region_reply(text: &str) -> Result<FacetRegionReply, InvalidIntent> {
+    read_facet_region_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_facet_region_reply(value: &FacetRegionReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_facet_region_reply(&text)?;
     Ok(text)
 }
