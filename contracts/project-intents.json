@@ -3611,6 +3611,88 @@
         "plan": "WipeTowerPlan",
         "refused": "WipeTowerRefusal"
       }
+    },
+    "VolumeSplitRequest": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id"
+      }
+    },
+    "VolumeSplitPart": {
+      "kind": "object",
+      "fields": {
+        "triangleCount": "Counter",
+        "vertexCount": "Counter",
+        "geometry": "Counter",
+        "transform": "Transform"
+      }
+    },
+    "VolumeSplitParts": {
+      "kind": "array",
+      "items": "VolumeSplitPart",
+      "min": 2,
+      "max": 131072
+    },
+    "VolumeSplitGeometry": {
+      "kind": "object",
+      "fields": {
+        "digest": "EditText",
+        "byteLength": "Counter"
+      }
+    },
+    "VolumeSplitGeometries": {
+      "kind": "array",
+      "items": "VolumeSplitGeometry",
+      "min": 1,
+      "max": 131072
+    },
+    "VolumeSplitPreview": {
+      "kind": "object",
+      "fields": {
+        "parts": "VolumeSplitParts",
+        "geometries": "VolumeSplitGeometries"
+      }
+    },
+    "VolumeSplitRefusalCode": {
+      "kind": "enum",
+      "values": [
+        "unknownVolume",
+        "assetMetadata",
+        "missingAsset",
+        "invalidSource",
+        "invalidMesh",
+        "invalidTransform",
+        "notSplittable"
+      ]
+    },
+    "VolumeSplitRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "VolumeSplitRefusalCode",
+        "message": "EditText"
+      }
+    },
+    "VolumeSplitReply": {
+      "kind": "union",
+      "variants": {
+        "prepared": "VolumeSplitPreview",
+        "refused": "VolumeSplitRefusal"
+      }
+    },
+    "OptionalSeparatedObjects": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "SeparatedObjects"
+      }
+    },
+    "VolumeSplitStage": {
+      "kind": "object",
+      "fields": {
+        "volumeIds": "Ids",
+        "assetIds": "Ids",
+        "objects": "OptionalSeparatedObjects"
+      }
     }
   },
   "roots": [
@@ -3691,7 +3773,10 @@
     "BedFillRequest",
     "BedFillReply",
     "WipeTowerRequest",
-    "WipeTowerReply"
+    "WipeTowerReply",
+    "VolumeSplitRequest",
+    "VolumeSplitReply",
+    "VolumeSplitStage"
   ],
   "sessionVersion": 1
 }

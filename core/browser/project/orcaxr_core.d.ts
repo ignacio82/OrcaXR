@@ -570,8 +570,18 @@ export class ProjectSession {
      * when it touched no facet. A stroke whose state changed refuses `stale`.
      */
     stage_paint_stroke(stroke: ProjectPaintStroke, label?: Uint16Array | null): number;
+    /**
+     * Stage a prepared split under the host's names (a `VolumeSplitStage`)
+     * for `executeStaged`. A split whose state changed refuses `stale`.
+     */
+    stage_volume_split(split: ProjectVolumeSplit, request: string): number;
     staging_usage(): Float64Array;
     submit(request: string): ProjectReply | undefined;
+    /**
+     * Prepare one volume's split on the state `guard` captured: a
+     * `VolumeSplitRequest`. Its `reply` gives the parts or the refusal.
+     */
+    volume_split(guard: ProjectGuard, request: string): ProjectVolumeSplit;
     /**
      * Write the current immutable capture as a complete 3MF package. The guard
      * is captured with the same snapshot; writing never changes dirty state.
@@ -604,6 +614,19 @@ export class ProjectUpload {
      * synchronous finalization belongs to the host's owned opening task.
      */
     seal_document(): void;
+}
+
+/**
+ * One volume's split, prepared on a session guard.
+ */
+export class ProjectVolumeSplit {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * The `VolumeSplitReply`: the parts and geometries, or the refusal.
+     */
+    reply(): string;
 }
 
 /**
@@ -721,6 +744,7 @@ export interface InitOutput {
     readonly __wbg_projectselectioninput_free: (a: number, b: number) => void;
     readonly __wbg_projectsession_free: (a: number, b: number) => void;
     readonly __wbg_projectupload_free: (a: number, b: number) => void;
+    readonly __wbg_projectvolumesplit_free: (a: number, b: number) => void;
     readonly __wbg_settingseditor_free: (a: number, b: number) => void;
     readonly capturedhistory_dirty_categories: (a: number) => [number, number];
     readonly capturedhistory_has_label: (a: number, b: number) => number;
@@ -885,8 +909,10 @@ export interface InitOutput {
     readonly projectsession_snapshot: (a: number) => number;
     readonly projectsession_stage_commands: (a: number, b: number) => [number, number, number];
     readonly projectsession_stage_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly projectsession_stage_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_staging_usage: (a: number) => [number, number];
     readonly projectsession_submit: (a: number, b: number, c: number) => number;
+    readonly projectsession_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_write_archive: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectupload_append_asset: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectupload_append_document: (a: number, b: number, c: number, d: number) => [number, number];
@@ -898,6 +924,7 @@ export interface InitOutput {
     readonly projectupload_open: (a: number, b: number, c: number) => [number, number, number];
     readonly projectupload_prepare: (a: number) => [number, number, number];
     readonly projectupload_seal_document: (a: number) => [number, number];
+    readonly projectvolumesplit_reply: (a: number) => [number, number, number, number];
     readonly settings_rules: (a: number, b: number) => [number, number, number, number];
     readonly settings_step: (a: number, b: number) => [number, number, number, number];
     readonly settingseditor_commit: (a: number) => [number, number, number, number];

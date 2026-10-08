@@ -3612,6 +3612,88 @@ const shapes = {
       "plan": "WipeTowerPlan",
       "refused": "WipeTowerRefusal"
     }
+  },
+  "VolumeSplitRequest": {
+    "kind": "object",
+    "fields": {
+      "volumeId": "Id"
+    }
+  },
+  "VolumeSplitPart": {
+    "kind": "object",
+    "fields": {
+      "triangleCount": "Counter",
+      "vertexCount": "Counter",
+      "geometry": "Counter",
+      "transform": "Transform"
+    }
+  },
+  "VolumeSplitParts": {
+    "kind": "array",
+    "items": "VolumeSplitPart",
+    "min": 2,
+    "max": 131072
+  },
+  "VolumeSplitGeometry": {
+    "kind": "object",
+    "fields": {
+      "digest": "EditText",
+      "byteLength": "Counter"
+    }
+  },
+  "VolumeSplitGeometries": {
+    "kind": "array",
+    "items": "VolumeSplitGeometry",
+    "min": 1,
+    "max": 131072
+  },
+  "VolumeSplitPreview": {
+    "kind": "object",
+    "fields": {
+      "parts": "VolumeSplitParts",
+      "geometries": "VolumeSplitGeometries"
+    }
+  },
+  "VolumeSplitRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "unknownVolume",
+      "assetMetadata",
+      "missingAsset",
+      "invalidSource",
+      "invalidMesh",
+      "invalidTransform",
+      "notSplittable"
+    ]
+  },
+  "VolumeSplitRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "VolumeSplitRefusalCode",
+      "message": "EditText"
+    }
+  },
+  "VolumeSplitReply": {
+    "kind": "union",
+    "variants": {
+      "prepared": "VolumeSplitPreview",
+      "refused": "VolumeSplitRefusal"
+    }
+  },
+  "OptionalSeparatedObjects": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "SeparatedObjects"
+    }
+  },
+  "VolumeSplitStage": {
+    "kind": "object",
+    "fields": {
+      "volumeIds": "Ids",
+      "assetIds": "Ids",
+      "objects": "OptionalSeparatedObjects"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -4046,6 +4128,17 @@ export interface ProjectWipeTowerPlanWire {readonly pick: ProjectWipeTowerPickWi
 export type ProjectWipeTowerRefusalCodeWire = "unknownPlate" | "invalidBed";
 export interface ProjectWipeTowerRefusalWire {readonly code: ProjectWipeTowerRefusalCodeWire;readonly message: ProjectEditTextWire;}
 export type ProjectWipeTowerReplyWire = {readonly plan:ProjectWipeTowerPlanWire} | {readonly refused:ProjectWipeTowerRefusalWire};
+export interface ProjectVolumeSplitRequestWire {readonly volumeId: ProjectIdWire;}
+export interface ProjectVolumeSplitPartWire {readonly triangleCount: ProjectCounterWire;readonly vertexCount: ProjectCounterWire;readonly geometry: ProjectCounterWire;readonly transform: ProjectTransformWire;}
+export type ProjectVolumeSplitPartsWire = readonly ProjectVolumeSplitPartWire[];
+export interface ProjectVolumeSplitGeometryWire {readonly digest: ProjectEditTextWire;readonly byteLength: ProjectCounterWire;}
+export type ProjectVolumeSplitGeometriesWire = readonly ProjectVolumeSplitGeometryWire[];
+export interface ProjectVolumeSplitPreviewWire {readonly parts: ProjectVolumeSplitPartsWire;readonly geometries: ProjectVolumeSplitGeometriesWire;}
+export type ProjectVolumeSplitRefusalCodeWire = "unknownVolume" | "assetMetadata" | "missingAsset" | "invalidSource" | "invalidMesh" | "invalidTransform" | "notSplittable";
+export interface ProjectVolumeSplitRefusalWire {readonly code: ProjectVolumeSplitRefusalCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectVolumeSplitReplyWire = {readonly prepared:ProjectVolumeSplitPreviewWire} | {readonly refused:ProjectVolumeSplitRefusalWire};
+export type ProjectOptionalSeparatedObjectsWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectSeparatedObjectsWire};
+export interface ProjectVolumeSplitStageWire {readonly volumeIds: ProjectIdsWire;readonly assetIds: ProjectIdsWire;readonly objects: ProjectOptionalSeparatedObjectsWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -4280,3 +4373,12 @@ export function encodeProjectWipeTowerRequest(value:ProjectWipeTowerRequestWire)
 export function captureProjectWipeTowerReply(value:unknown):ProjectWipeTowerReplyWire { return captureIntent("WipeTowerReply",value,shapes,limits) as ProjectWipeTowerReplyWire; }
 export function decodeProjectWipeTowerReply(text:string):ProjectWipeTowerReplyWire { return captureProjectWipeTowerReply(parseIntentJson(text,limits)); }
 export function encodeProjectWipeTowerReply(value:ProjectWipeTowerReplyWire):string { return JSON.stringify(captureProjectWipeTowerReply(value)); }
+export function captureProjectVolumeSplitRequest(value:unknown):ProjectVolumeSplitRequestWire { return captureIntent("VolumeSplitRequest",value,shapes,limits) as ProjectVolumeSplitRequestWire; }
+export function decodeProjectVolumeSplitRequest(text:string):ProjectVolumeSplitRequestWire { return captureProjectVolumeSplitRequest(parseIntentJson(text,limits)); }
+export function encodeProjectVolumeSplitRequest(value:ProjectVolumeSplitRequestWire):string { return JSON.stringify(captureProjectVolumeSplitRequest(value)); }
+export function captureProjectVolumeSplitReply(value:unknown):ProjectVolumeSplitReplyWire { return captureIntent("VolumeSplitReply",value,shapes,limits) as ProjectVolumeSplitReplyWire; }
+export function decodeProjectVolumeSplitReply(text:string):ProjectVolumeSplitReplyWire { return captureProjectVolumeSplitReply(parseIntentJson(text,limits)); }
+export function encodeProjectVolumeSplitReply(value:ProjectVolumeSplitReplyWire):string { return JSON.stringify(captureProjectVolumeSplitReply(value)); }
+export function captureProjectVolumeSplitStage(value:unknown):ProjectVolumeSplitStageWire { return captureIntent("VolumeSplitStage",value,shapes,limits) as ProjectVolumeSplitStageWire; }
+export function decodeProjectVolumeSplitStage(text:string):ProjectVolumeSplitStageWire { return captureProjectVolumeSplitStage(parseIntentJson(text,limits)); }
+export function encodeProjectVolumeSplitStage(value:ProjectVolumeSplitStageWire):string { return JSON.stringify(captureProjectVolumeSplitStage(value)); }

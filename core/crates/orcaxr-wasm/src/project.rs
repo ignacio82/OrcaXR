@@ -483,6 +483,42 @@ impl ProjectSession {
             .map(|inner| ProjectPaintStroke { inner })
             .map_err(|refusal| error(refusal.code()))
     }
+    /// Prepare one volume's split on the state `guard` captured: a
+    /// `VolumeSplitRequest`. Its `reply` gives the parts or the refusal.
+    pub fn volume_split(
+        &self,
+        guard: &ProjectGuard,
+        request: &str,
+    ) -> Result<ProjectVolumeSplit, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_volume_split_request(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .volume_split(&guard.inner, &request)
+            .map(|inner| ProjectVolumeSplit { inner })
+            .map_err(|value| error(session_error(value)))
+    }
+    /// Stage a prepared split under the host's names (a `VolumeSplitStage`)
+    /// for `executeStaged`. A split whose state changed refuses `stale`.
+    pub fn stage_volume_split(
+        &mut self,
+        split: &ProjectVolumeSplit,
+        request: &str,
+    ) -> Result<f64, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_volume_split_stage(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .stage_volume_split(&split.inner, &request)
+            .map(|id| id as f64)
+            .map_err(|value| error(session_error(value)))
+    }
     /// The plate's wipe tower, auto-placed: a `WipeTowerRequest`; returns a
     /// `WipeTowerReply`.
     pub fn plan_wipe_tower(&self, request: &str) -> Result<String, JsValue> {
@@ -706,6 +742,29 @@ impl ProjectPaintStroke {
             .overlay(&request)
             .map_err(|refusal| error(refusal.code()))?;
         wire::encode_paint_stroke_overlay(&page).map_err(|_| error("output_limit"))
+    }
+}
+
+/// One volume's split, prepared on a session guard.
+#[wasm_bindgen]
+pub struct ProjectVolumeSplit {
+    inner: orcaxr_project::split::VolumeSplit,
+}
+#[wasm_bindgen]
+impl ProjectVolumeSplit {
+    /// The `VolumeSplitReply`: the parts and geometries, or the refusal.
+    pub fn reply(&self) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        wire::encode_volume_split_reply(&self.inner.reply()).map_err(|_| error("output_limit"))
+    }
+}
+fn session_error(value: orcaxr_contracts::project_intent_types::SessionError) -> &'static str {
+    use orcaxr_contracts::project_intent_types::SessionError;
+    match value {
+        SessionError::Disposed => "disposed",
+        SessionError::Stale => "stale",
+        SessionError::ResourceLimit => "resource_limit",
+        _ => "invalid_request",
     }
 }
 

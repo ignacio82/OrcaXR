@@ -307,6 +307,54 @@ pub(super) fn paint_stroke_overlay(
     })?;
     string(env, json)
 }
+/// Prepare one volume's split on the state `guard` captured.
+pub(super) fn volume_split(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    guard: jlong,
+    request: JString<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_volume_split_request)?;
+    let guard = with_guard(guard, |g| Ok(g.clone()))?;
+    capture(|| {
+        with_session(handle, |s| {
+            s.volume_split(&guard, &request)
+                .map(|split| Record::VolumeSplit(Box::new(split)))
+                .map_err(session_error)
+        })
+    })
+}
+/// The split's parts and geometries, or its refusal.
+pub(super) fn volume_split_reply(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_volume_split(handle, |split| {
+        encoded(&split.reply(), wire::encode_volume_split_reply)
+    })?;
+    string(env, json)
+}
+/// The split's staged commit ID under the host's names.
+pub(super) fn stage_volume_split(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    split: jlong,
+    request: JString<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_volume_split_stage)?;
+    with_volume_split(split, |split| {
+        with_session(handle, |s| {
+            s.stage_volume_split(split, &request)
+                .map(|id| id as jlong)
+                .map_err(session_error)
+        })
+    })
+}
+fn session_error(error: wire::SessionError) -> &'static str {
+    match error {
+        wire::SessionError::Disposed => "disposed",
+        wire::SessionError::Stale => "stale",
+        wire::SessionError::ResourceLimit => "resource_limit",
+        _ => "invalid_request",
+    }
+}
 /// The plate's wipe tower, auto-placed.
 pub(super) fn session_wipe_tower(
     env: &mut JNIEnv<'_>,

@@ -39,6 +39,7 @@ pub mod selection;
 pub mod session;
 pub mod settings;
 pub mod slicing;
+pub mod split;
 pub mod staging_layout;
 pub mod store;
 pub mod validation;

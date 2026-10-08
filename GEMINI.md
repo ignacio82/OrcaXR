@@ -213,15 +213,15 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   it owns no store revision, asset-byte attestation, command bus or history.
   Do not substitute strict ISO parsing or Rust rounding for the existing graph
   validator's `Date.parse` and layer-event `toFixed(4)` compatibility requirements.
-  The Rust compatibility helpers now reproduce pinned V8 timestamp syntax and
-  exact four-decimal collision keys. Browser `Math.sin/cos/exp/hypot/min/max` in
-  ported code must use `orcaxr_project::js_math` (V8 12.4's own fdlibm port): the
-  `libm` crate's FreeBSD trig differs from V8 in the last bit for ~1% of inputs;
-  `Number`/`String`/`toFixed`/`trim` go through `js_math::convert`. Legacy timezone overflow needs an explicit
-  V8 integer profile; timezone-less dates need a host resolver with matching DST
-  and historical rules. Resolver failure must propagate, never default to UTC
-  or become an invalid-data diagnostic. Graph admission uses that explicit policy.
-  Unknown paint-channel diagnostics use canonical UTF-16 ordering; layer-range
+  The Rust compatibility helpers now reproduce pinned V8 timestamp syntax and exact four-decimal
+  collision keys. Browser `Math.sin/cos/exp/hypot/min/max` in ported code must use
+  `orcaxr_project::js_math` (V8 12.4's own fdlibm port): the `libm` crate's FreeBSD trig differs from V8
+  in the last bit for ~1% of inputs; `Number`/`String`/`toFixed`/`trim` go through `js_math::convert`.
+  One `Math.fround` per step ports as f32 math, but frounded terms summed before one `fround` (split
+  signed volume) sum in f64. Legacy timezone overflow needs an explicit V8 integer profile;
+  timezone-less dates need a host resolver with matching DST and historical rules. Resolver failure must
+  propagate, never default to UTC or become an invalid-data diagnostic. Graph admission uses that
+  explicit policy. Unknown paint-channel diagnostics use canonical UTF-16 ordering; layer-range
   diagnostics retain original array positions, including repeated shared records.
   Both must survive save/reopen. The native project store now publishes admitted
   state with monotonic revisions, including equal replacements and rollback.
@@ -309,16 +309,16 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   exact source plate origins. Canonical transforms remain plate-local. Component
   IDs are model-part-local; resolve normalized paths, cycles/depth/expansion
   limits and transforms before flattening. Never guess membership from geometry.
-- Paint stores stable physical/mixed filament IDs and sparse refined-facet
-  version-2 state, not palette colors or one canonical object per triangle.
-  Topology-changing operations must explicitly remap or reject dependent data.
-  Rust validates all five sparse channels; BBS hex decoding budgets explicit roots
-  across channels, and writing borrows existing trees. Sparse import assembly never
-  expands unpainted roots. Normalize/remap assignments and splits together so
-  collapsed paint survives. Dense expansion requires an explicit host root budget; the
-  stateless canonicalizer's parser limits are not persisted project limits.
-  Graph validation now checks annotation/source topology consistency; revision
-  plate requests have native session guards; native paint strokes stage one guarded commit each.
+- Paint stores stable physical/mixed filament IDs and sparse refined-facet version-2 state, not
+  palette colors or one canonical object per triangle. Topology-changing operations must
+  explicitly remap or reject dependent data. Rust validates all five sparse channels; BBS hex
+  decoding budgets explicit roots across channels, and writing borrows existing trees. Sparse
+  import assembly never expands unpainted roots. Normalize/remap assignments and splits together
+  so collapsed paint survives. Dense expansion requires an explicit host root budget; the
+  stateless canonicalizer's parser limits are not persisted project limits. Graph validation now
+  checks annotation/source topology consistency; revision plate requests have native session
+  guards; native paint strokes stage one guarded commit each; native volume splits prepare on a
+  guard and stage under host IDs.
 - Smart Paint is a validated, bounded proposal plus operator correction and one
   canonical transaction. Check per-provider/payload consent before sending data.
 - Wipe towers reserve their complete printed footprint against the printable

@@ -1551,9 +1551,15 @@ painting, and FullSpectrum operations that can support real native projects.
     limits (28 requests exact in every binding); two fill error codes fixed.
   - [x] Port wipe-tower auto-placement (`placement::wipe_tower`) with the
     browser's configuration coercions (27 requests exact in every binding).
-  - [ ] Port the remaining preparation kernels (split preparation,
-    simplification, brim ears, measurement, emboss/SVG), mesh renderer packets
-    and device qualification. Brim ears first need a browser fix: the workspace
+  - [x] Port split preparation (`mesh::split`, `split`): the pinned
+    shared-edge components with the browser's float32 signed volume and
+    recentring, prepared on a session guard (parts, distinct geometries or a
+    coded refusal), then staged under host IDs as parts or objects with
+    project-asset reuse (16 preparations, 19 stages and 9 direct refusals
+    exact in every binding); the workspace controller now prepares through
+    the same exchange.
+  - [ ] Port the remaining preparation kernels (simplification, brim ears,
+    measurement, emboss/SVG), mesh renderer packets and device qualification. Brim ears first need a browser fix: the workspace
     detects, places and draws ears in the first volume's own space, while the
     model and the engine read them as object-local, so an object whose first
     volume is transformed (split parts are recentred) gets misplaced ears; the

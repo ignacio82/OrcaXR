@@ -107,6 +107,7 @@ enum Record {
     Library(Box<library::Library>),
     Editor(Box<editor::Editor>),
     PaintStroke(Box<orcaxr_project::facets::paint_stroke::PaintStroke>),
+    VolumeSplit(Box<orcaxr_project::split::VolumeSplit>),
     PaintOverlay(Box<orcaxr_project::facets::overlay::Overlay>),
     PickScene(Box<orcaxr_project::picking::PickScene>),
 }
@@ -189,6 +190,11 @@ access!(
     with_paint_stroke,
     PaintStroke,
     Box<orcaxr_project::facets::paint_stroke::PaintStroke>
+);
+access!(
+    with_volume_split,
+    VolumeSplit,
+    Box<orcaxr_project::split::VolumeSplit>
 );
 fn option_values<const N: usize>(
     env: &mut JNIEnv<'_>,

@@ -237,6 +237,58 @@ impl<P: TimestampPolicy> ProjectSession<P> {
         stroke.session_guard = Some(guard.clone());
         Ok(stroke)
     }
+    /// Prepare one volume's split on the state `guard` captured, which must
+    /// still be current: its parts and geometries, or the workspace's refusal
+    /// ([`crate::split::VolumeSplit::reply`]). The split stages under the
+    /// same guard ([`Self::stage_volume_split`]).
+    pub fn volume_split(
+        &self,
+        guard: &LocalGuard,
+        request: &wire::VolumeSplitRequest,
+    ) -> Result<crate::split::VolumeSplit, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        if !self.is_current(guard) {
+            return Err(wire::SessionError::Stale);
+        }
+        let mut split = crate::split::prepare(guard.project.state(), self.bus.assets(), request);
+        split.session_guard = Some(guard.clone());
+        Ok(split)
+    }
+    /// Stage a session-prepared split under the host's IDs (`VolumeSplitStage`)
+    /// as one edit: parts of the source's object or, with object identities,
+    /// one object per part. Staging refuses as stale once anything changed
+    /// since the split was prepared, before its names are read; a refused
+    /// split or bad names refuse as an invalid request.
+    pub fn stage_volume_split(
+        &mut self,
+        split: &crate::split::VolumeSplit,
+        request: &wire::VolumeSplitStage,
+    ) -> Result<u64, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        let guard = split
+            .session_guard
+            .as_ref()
+            .ok_or(wire::SessionError::InvalidRequest)?;
+        if !self.is_current(guard) {
+            return Err(wire::SessionError::Stale);
+        }
+        let work = split
+            .work(
+                self.bus.snapshot().state(),
+                self.bus.assets(),
+                request,
+                self.staging.max_units(),
+            )
+            .map_err(|error| match error {
+                crate::split::StageError::Limit => wire::SessionError::ResourceLimit,
+                crate::split::StageError::Invalid => wire::SessionError::InvalidRequest,
+            })?;
+        self.stage(guard, work)
+    }
     /// The transforms one placement edit submits, planned from the
     /// acknowledged state (`PlacementRequest` → `PlacementReply`).
     pub fn plan_placement(

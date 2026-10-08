@@ -115,6 +115,9 @@ assert.deepEqual(schema.roots, [
   "BedFillReply",
   "WipeTowerRequest",
   "WipeTowerReply",
+  "VolumeSplitRequest",
+  "VolumeSplitReply",
+  "VolumeSplitStage",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

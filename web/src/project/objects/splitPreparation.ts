@@ -5,6 +5,20 @@ import type { Transform, Vec3 } from '../domain/model';
 import { decodeIndexedMeshAsset, encodeIndexedMeshAsset, type DecodedIndexedMesh } from '../meshCodec';
 import type { PreparedVolumeSplitPart } from './splitCommands';
 
+export type VolumeSplitPreparationErrorCode =
+  'invalid-source' | 'invalid-mesh' | 'invalid-transform' | 'not-splittable' | 'invalid-identity';
+
+/** Why a split cannot be prepared or named; the message names the entity. */
+export class VolumeSplitPreparationError extends Error {
+  constructor(
+    message: string,
+    readonly code: VolumeSplitPreparationErrorCode,
+  ) {
+    super(message);
+    this.name = 'VolumeSplitPreparationError';
+  }
+}
+
 export type VolumeSplitPreparationStage = 'decode' | 'connectivity' | 'components' | 'encode';
 
 export interface VolumeSplitPreparationProgress {
@@ -58,6 +72,29 @@ interface ComponentGeometry {
  * deliberately serializes that scan in ascending source-face order.
  */
 export function prepareVolumeSplitParts(request: PrepareVolumeSplitPartsRequest): PreparedVolumeSplitPart[] {
+  const components = prepareVolumeSplitComponents(request);
+  return assignVolumeSplitIdentities(components, request.sourceAsset.descriptor.id, request.idsForPart);
+}
+
+/**
+ * One connected component, encoded and recentred but not yet named: its mesh
+ * payload still carries the source asset's ID, and its digest is the
+ * identity that names it.
+ */
+export interface PreparedVolumeSplitComponent {
+  readonly sourceTriangleIndices: readonly number[];
+  readonly preview: AssetPayload;
+  readonly transform: Transform;
+}
+
+/**
+ * The topology and bytes of a split, before any ID is drawn: components in the
+ * pinned source-face order, each encoded with generated provenance and
+ * recentred on its own bounding box.
+ */
+export function prepareVolumeSplitComponents(
+  request: Omit<PrepareVolumeSplitPartsRequest, 'idsForPart'>,
+): PreparedVolumeSplitComponent[] {
   const progress = new PreparationProgress(request.signal, request.onProgress);
   progress.check();
   const sourceAsset: AssetPayload = {
@@ -69,47 +106,86 @@ export function prepareVolumeSplitParts(request: PrepareVolumeSplitPartsRequest)
     rotation: [...request.sourceTransform.rotation],
     scale: [...request.sourceTransform.scale],
   };
-  const idsForPart = request.idsForPart;
   assertSourceTransform(sourceTransform);
   if (!isStableEntityId(sourceAsset.descriptor.id)) {
-    throw new Error(`Source split asset ID ${sourceAsset.descriptor.id} is not stable`);
+    throw new VolumeSplitPreparationError(
+      `Source split asset ID ${sourceAsset.descriptor.id} is not stable`,
+      'invalid-source',
+    );
   }
 
   progress.report('decode', 0, 1);
-  const mesh = decodeIndexedMeshAsset(sourceAsset);
+  let mesh: DecodedIndexedMesh;
+  try {
+    mesh = decodeIndexedMeshAsset(sourceAsset);
+  } catch (error) {
+    throw new VolumeSplitPreparationError((error as Error).message, 'invalid-mesh');
+  }
   if (mesh.triangles.length === 0 || mesh.vertices.length === 0) {
-    throw new Error('Split preparation requires a non-empty indexed mesh');
+    throw new VolumeSplitPreparationError('Split preparation requires a non-empty indexed mesh', 'invalid-mesh');
   }
   progress.report('decode', 1, 1);
 
   const neighbors = buildPinnedFaceNeighbors(mesh, progress);
   const components = discoverPinnedComponents(neighbors, progress);
   if (components.length < 2) {
-    throw new Error('Source mesh has one shared-edge component and is not splittable');
+    throw new VolumeSplitPreparationError(
+      'Source mesh has one shared-edge component and is not splittable',
+      'not-splittable',
+    );
   }
 
-  const results: PreparedVolumeSplitPart[] = [];
-  const volumeIds = new Set<VolumeId>();
-  const assetIdByDigest = new Map<string, AssetId>();
-  const assetById = new Map<AssetId, AssetPayload>();
+  const prepared: PreparedVolumeSplitComponent[] = [];
   const encodeTotal = mesh.triangles.length + components.length;
   let encodedTriangles = 0;
   progress.report('encode', 0, encodeTotal);
-
   for (const [partIndex, sourceTriangles] of components.entries()) {
     const component = buildComponentGeometry(mesh, sourceTriangles, () => {
       encodedTriangles += 1;
       progress.report('encode', encodedTriangles + partIndex, encodeTotal);
     });
-    const preview = encodeIndexedMeshAsset({
-      id: sourceAsset.descriptor.id,
-      positions: component.positions,
-      indices: component.indices,
-      provenance: {
-        source: 'generated',
-        uri: `orcaxr:split-to-parts:${sourceAsset.descriptor.digest}`,
-      },
+    let preview: AssetPayload;
+    try {
+      preview = encodeIndexedMeshAsset({
+        id: sourceAsset.descriptor.id,
+        positions: component.positions,
+        indices: component.indices,
+        provenance: {
+          source: 'generated',
+          uri: `orcaxr:split-to-parts:${sourceAsset.descriptor.digest}`,
+        },
+      });
+    } catch (error) {
+      // The encoder's own refusals; recentring keeps every coordinate within
+      // half its component's float32 extent, so none is expected.
+      throw new VolumeSplitPreparationError((error as Error).message, 'invalid-mesh');
+    }
+    prepared.push({
+      sourceTriangleIndices: [...component.sourceTriangleIndices],
+      preview,
+      transform: recenteredTransform(sourceTransform, component.center),
     });
+    progress.report('encode', encodedTriangles + partIndex + 1, encodeTotal);
+  }
+  return prepared;
+}
+
+/**
+ * Name prepared components: each part takes the IDs `idsForPart` draws for it,
+ * identical geometry must resolve to one immutable asset, and no injected ID
+ * may name both a volume and an asset.
+ */
+export function assignVolumeSplitIdentities(
+  components: readonly PreparedVolumeSplitComponent[],
+  sourceAssetId: AssetId,
+  idsForPart: (request: VolumeSplitPartIdentityRequest) => VolumeSplitPartIdentity,
+): PreparedVolumeSplitPart[] {
+  const results: PreparedVolumeSplitPart[] = [];
+  const volumeIds = new Set<VolumeId>();
+  const assetIdByDigest = new Map<string, AssetId>();
+  const assetById = new Map<AssetId, AssetPayload>();
+  for (const [partIndex, component] of components.entries()) {
+    const preview = component.preview;
     const sourceTriangleIndices = [...component.sourceTriangleIndices];
     const identity = idsForPart({
       partIndex,
@@ -117,17 +193,20 @@ export function prepareVolumeSplitParts(request: PrepareVolumeSplitPartsRequest)
       sourceTriangleIndices: [...sourceTriangleIndices],
       geometryDigest: preview.descriptor.digest,
     });
-    progress.check();
-    assertPreparedIdentity(identity, sourceAsset.descriptor.id, partIndex);
+    assertPreparedIdentity(identity, sourceAssetId, partIndex);
     if (volumeIds.has(identity.volumeId)) {
-      throw new Error(`Prepared split volume ID ${identity.volumeId} is duplicated`);
+      throw new VolumeSplitPreparationError(
+        `Prepared split volume ID ${identity.volumeId} is duplicated`,
+        'invalid-identity',
+      );
     }
     volumeIds.add(identity.volumeId);
 
     const digestAssetId = assetIdByDigest.get(preview.descriptor.digest);
     if (digestAssetId && digestAssetId !== identity.assetId) {
-      throw new Error(
+      throw new VolumeSplitPreparationError(
         `Identical split geometry ${preview.descriptor.digest} resolved to both ${digestAssetId} and ${identity.assetId}`,
+        'invalid-identity',
       );
     }
     const asset: AssetPayload = {
@@ -136,7 +215,10 @@ export function prepareVolumeSplitParts(request: PrepareVolumeSplitPartsRequest)
     };
     const existingAsset = assetById.get(identity.assetId);
     if (existingAsset && !sameAssetPayload(existingAsset, asset)) {
-      throw new Error(`Prepared split asset ID ${identity.assetId} resolved to different immutable geometry`);
+      throw new VolumeSplitPreparationError(
+        `Prepared split asset ID ${identity.assetId} resolved to different immutable geometry`,
+        'invalid-identity',
+      );
     }
     assetIdByDigest.set(preview.descriptor.digest, identity.assetId);
     const canonicalAsset = existingAsset ?? asset;
@@ -145,15 +227,21 @@ export function prepareVolumeSplitParts(request: PrepareVolumeSplitPartsRequest)
     results.push({
       volumeId: identity.volumeId,
       asset: cloneAssetPayload(canonicalAsset),
-      transform: recenteredTransform(sourceTransform, component.center),
+      transform: {
+        translationMm: [...component.transform.translationMm],
+        rotation: [...component.transform.rotation],
+        scale: [...component.transform.scale],
+      },
       sourceTriangleIndices,
     });
-    progress.report('encode', encodedTriangles + partIndex + 1, encodeTotal);
   }
 
   for (const assetId of assetById.keys()) {
     if (volumeIds.has(assetId as unknown as VolumeId)) {
-      throw new Error(`Injected stable ID ${assetId} is reused by a prepared split volume and asset`);
+      throw new VolumeSplitPreparationError(
+        `Injected stable ID ${assetId} is reused by a prepared split volume and asset`,
+        'invalid-identity',
+      );
     }
   }
   return results;
@@ -187,7 +275,7 @@ function buildPinnedFaceNeighbors(mesh: DecodedIndexedMesh, progress: Preparatio
 
   for (const [faceIndex, triangle] of mesh.triangles.entries()) {
     if (triangle[0] === triangle[1] || triangle[1] === triangle[2] || triangle[2] === triangle[0]) {
-      throw new Error(`Source triangle ${faceIndex} repeats a vertex index`);
+      throw new VolumeSplitPreparationError(`Source triangle ${faceIndex} repeats a vertex index`, 'invalid-mesh');
     }
     vertexFaces[triangle[0]].push(faceIndex);
     vertexFaces[triangle[1]].push(faceIndex);
@@ -347,7 +435,7 @@ function recenteredTransform(source: Transform, center: Vec3): Transform {
     source.translationMm[2] + center[2],
   ];
   if (translationMm.some((value) => !Number.isFinite(value))) {
-    throw new Error('Recentered split transform is not finite');
+    throw new VolumeSplitPreparationError('Recentered split transform is not finite', 'invalid-transform');
   }
   return {
     translationMm,
@@ -358,31 +446,40 @@ function recenteredTransform(source: Transform, center: Vec3): Transform {
 
 function assertSourceTransform(transform: Transform): void {
   if (transform.translationMm.length !== 3 || transform.rotation.length !== 4 || transform.scale.length !== 3) {
-    throw new Error('Source split transform has invalid dimensions');
+    throw new VolumeSplitPreparationError('Source split transform has invalid dimensions', 'invalid-transform');
   }
   if (
     [...transform.translationMm, ...transform.rotation, ...transform.scale].some((value) => !Number.isFinite(value))
   ) {
-    throw new Error('Source split transform must be finite');
+    throw new VolumeSplitPreparationError('Source split transform must be finite', 'invalid-transform');
   }
   if (transform.scale.some((value) => Math.abs(value) < 1e-12)) {
-    throw new Error('Source split transform scale cannot contain zero');
+    throw new VolumeSplitPreparationError('Source split transform scale cannot contain zero', 'invalid-transform');
   }
   const rotationNorm = Math.hypot(...transform.rotation);
   if (!Number.isFinite(rotationNorm) || rotationNorm < 1e-12) {
-    throw new Error('Source split transform rotation cannot be zero');
+    throw new VolumeSplitPreparationError('Source split transform rotation cannot be zero', 'invalid-transform');
   }
 }
 
 function assertPreparedIdentity(identity: VolumeSplitPartIdentity, sourceAssetId: AssetId, partIndex: number): void {
   if (!isStableEntityId(identity.volumeId)) {
-    throw new Error(`Prepared split part ${partIndex + 1} volume ID ${identity.volumeId} is not stable`);
+    throw new VolumeSplitPreparationError(
+      `Prepared split part ${partIndex + 1} volume ID ${identity.volumeId} is not stable`,
+      'invalid-identity',
+    );
   }
   if (!isStableEntityId(identity.assetId)) {
-    throw new Error(`Prepared split part ${partIndex + 1} asset ID ${identity.assetId} is not stable`);
+    throw new VolumeSplitPreparationError(
+      `Prepared split part ${partIndex + 1} asset ID ${identity.assetId} is not stable`,
+      'invalid-identity',
+    );
   }
   if (identity.assetId === sourceAssetId) {
-    throw new Error(`Prepared split part ${partIndex + 1} reuses the immutable source asset ID`);
+    throw new VolumeSplitPreparationError(
+      `Prepared split part ${partIndex + 1} reuses the immutable source asset ID`,
+      'invalid-identity',
+    );
   }
 }
 

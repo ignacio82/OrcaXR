@@ -17,6 +17,7 @@ import { replayPicks } from "./pick-replay.mjs";
 import { replayPlacements } from "./placement-replay.mjs";
 import { replayArrangements } from "./arrange-replay.mjs";
 import { replayWipeTowers } from "./wipe-tower-replay.mjs";
+import { replayVolumeSplits } from "./volume-split-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -589,6 +590,45 @@ try {
     towerFixture.cases.map((c) => `${c.request}\t${c.reply}`).join("\n"),
   );
   assert.equal(wipeTowerChecks, 55);
+  // Volume splits over a live session, staged and executed, then the Kotlin
+  // wrapper.
+  const splitFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/volume-split-vectors.json", root)),
+  );
+  const splits = await replayVolumeSplits(
+    projectJniCore(jvm.call),
+    splitFixture,
+    layout,
+    stagingLayout.version,
+  );
+  assert.deepEqual(
+    [
+      splits.volumeSplitPreparations,
+      splits.volumeSplitRefusals,
+      splits.volumeSplitStages,
+      splits.volumeSplitsApplied,
+      splits.volumeSplitHistory,
+    ],
+    [16, 6, 19, 5, 6],
+  );
+  const label = (s) => (s.undoLabel ? String.fromCharCode(...s.undoLabel) : "");
+  const volumeSplitChecks = jvm.call(
+    "volumeSplitChecks",
+    splitFixture.stateJson,
+    ...splitFixture.assets.map((a) => Uint8Array.from(a.bytes)),
+    splitFixture.steps
+      .map((s) =>
+        "prepare" in s
+          ? `P\t${s.split}\t${s.prepare}\t${s.reply}`
+          : "stage" in s
+            ? `S\t${s.split}\t${s.stage}\t${s.outcome}\t${s.revision}\t${s.hash}\t${label(s)}`
+            : "edit" in s
+              ? `E\t${s.edit}\t${s.revision}\t${s.hash}\t${label(s)}`
+              : `H\t${s.history}\t${s.revision}\t${s.hash}\t${label(s)}`,
+      )
+      .join("\n"),
+  );
+  assert.equal(volumeSplitChecks, 105);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

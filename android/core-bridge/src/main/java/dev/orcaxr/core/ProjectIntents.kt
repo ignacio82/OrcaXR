@@ -5437,6 +5437,131 @@ object ProjectIntents {
             is WipeTowerReply.Refused -> w.field("refused") { writeWipeTowerRefusal(w, v.value) }
         } }
     }
+    data class VolumeSplitRequest(val volumeId: List<Int>)
+    private fun readVolumeSplitRequest(v: Any): VolumeSplitRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeId"), false)
+        return VolumeSplitRequest(readId(obj.get("volumeId")))
+    }
+    private fun writeVolumeSplitRequest(w: ProjectIntentWriter, v: VolumeSplitRequest) {
+        w.obj {
+            w.field("volumeId") { writeId(w, v.volumeId) }
+        }
+    }
+    data class VolumeSplitPart(val triangleCount: Long, val vertexCount: Long, val geometry: Long, val transform: Transform)
+    private fun readVolumeSplitPart(v: Any): VolumeSplitPart {
+        val obj = ProjectIntentJson.fields(v, setOf("triangleCount", "vertexCount", "geometry", "transform"), false)
+        return VolumeSplitPart(readCounter(obj.get("triangleCount")), readCounter(obj.get("vertexCount")), readCounter(obj.get("geometry")), readTransform(obj.get("transform")))
+    }
+    private fun writeVolumeSplitPart(w: ProjectIntentWriter, v: VolumeSplitPart) {
+        w.obj {
+            w.field("triangleCount") { writeCounter(w, v.triangleCount) }
+            w.field("vertexCount") { writeCounter(w, v.vertexCount) }
+            w.field("geometry") { writeCounter(w, v.geometry) }
+            w.field("transform") { writeTransform(w, v.transform) }
+        }
+    }
+    private fun readVolumeSplitParts(v: Any): List<VolumeSplitPart> {
+        val array = ProjectIntentJson.list(v, 2, 131072)
+        return List(array.length()) { readVolumeSplitPart(array.get(it)) }
+    }
+    private fun writeVolumeSplitParts(w: ProjectIntentWriter, v: List<VolumeSplitPart>) {
+        w.array(v, 2, 131072) { writeVolumeSplitPart(w, it) }
+    }
+    data class VolumeSplitGeometry(val digest: List<Int>, val byteLength: Long)
+    private fun readVolumeSplitGeometry(v: Any): VolumeSplitGeometry {
+        val obj = ProjectIntentJson.fields(v, setOf("digest", "byteLength"), false)
+        return VolumeSplitGeometry(readEditText(obj.get("digest")), readCounter(obj.get("byteLength")))
+    }
+    private fun writeVolumeSplitGeometry(w: ProjectIntentWriter, v: VolumeSplitGeometry) {
+        w.obj {
+            w.field("digest") { writeEditText(w, v.digest) }
+            w.field("byteLength") { writeCounter(w, v.byteLength) }
+        }
+    }
+    private fun readVolumeSplitGeometries(v: Any): List<VolumeSplitGeometry> {
+        val array = ProjectIntentJson.list(v, 1, 131072)
+        return List(array.length()) { readVolumeSplitGeometry(array.get(it)) }
+    }
+    private fun writeVolumeSplitGeometries(w: ProjectIntentWriter, v: List<VolumeSplitGeometry>) {
+        w.array(v, 1, 131072) { writeVolumeSplitGeometry(w, it) }
+    }
+    data class VolumeSplitPreview(val parts: List<VolumeSplitPart>, val geometries: List<VolumeSplitGeometry>)
+    private fun readVolumeSplitPreview(v: Any): VolumeSplitPreview {
+        val obj = ProjectIntentJson.fields(v, setOf("parts", "geometries"), false)
+        return VolumeSplitPreview(readVolumeSplitParts(obj.get("parts")), readVolumeSplitGeometries(obj.get("geometries")))
+    }
+    private fun writeVolumeSplitPreview(w: ProjectIntentWriter, v: VolumeSplitPreview) {
+        w.obj {
+            w.field("parts") { writeVolumeSplitParts(w, v.parts) }
+            w.field("geometries") { writeVolumeSplitGeometries(w, v.geometries) }
+        }
+    }
+    enum class VolumeSplitRefusalCode {UnknownVolume,AssetMetadata,MissingAsset,InvalidSource,InvalidMesh,InvalidTransform,NotSplittable}
+    private fun readVolumeSplitRefusalCode(v: Any): VolumeSplitRefusalCode {
+        return when(v) {"unknownVolume" -> VolumeSplitRefusalCode.UnknownVolume;"assetMetadata" -> VolumeSplitRefusalCode.AssetMetadata;"missingAsset" -> VolumeSplitRefusalCode.MissingAsset;"invalidSource" -> VolumeSplitRefusalCode.InvalidSource;"invalidMesh" -> VolumeSplitRefusalCode.InvalidMesh;"invalidTransform" -> VolumeSplitRefusalCode.InvalidTransform;"notSplittable" -> VolumeSplitRefusalCode.NotSplittable; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeVolumeSplitRefusalCode(w: ProjectIntentWriter, v: VolumeSplitRefusalCode) {
+        w.literal(when(v) {VolumeSplitRefusalCode.UnknownVolume -> "unknownVolume";VolumeSplitRefusalCode.AssetMetadata -> "assetMetadata";VolumeSplitRefusalCode.MissingAsset -> "missingAsset";VolumeSplitRefusalCode.InvalidSource -> "invalidSource";VolumeSplitRefusalCode.InvalidMesh -> "invalidMesh";VolumeSplitRefusalCode.InvalidTransform -> "invalidTransform";VolumeSplitRefusalCode.NotSplittable -> "notSplittable";})
+    }
+    data class VolumeSplitRefusal(val code: VolumeSplitRefusalCode, val message: List<Int>)
+    private fun readVolumeSplitRefusal(v: Any): VolumeSplitRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return VolumeSplitRefusal(readVolumeSplitRefusalCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writeVolumeSplitRefusal(w: ProjectIntentWriter, v: VolumeSplitRefusal) {
+        w.obj {
+            w.field("code") { writeVolumeSplitRefusalCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface VolumeSplitReply {
+        data class Prepared(val value: ProjectIntents.VolumeSplitPreview) : VolumeSplitReply
+        data class Refused(val value: ProjectIntents.VolumeSplitRefusal) : VolumeSplitReply
+    }
+    private fun readVolumeSplitReply(v: Any): VolumeSplitReply {
+        val obj = ProjectIntentJson.fields(v, setOf("prepared", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "prepared" -> VolumeSplitReply.Prepared(readVolumeSplitPreview(obj.get(key)))
+            "refused" -> VolumeSplitReply.Refused(readVolumeSplitRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeVolumeSplitReply(w: ProjectIntentWriter, v: VolumeSplitReply) {
+        w.obj { when(v) {
+            is VolumeSplitReply.Prepared -> w.field("prepared") { writeVolumeSplitPreview(w, v.value) }
+            is VolumeSplitReply.Refused -> w.field("refused") { writeVolumeSplitRefusal(w, v.value) }
+        } }
+    }
+    sealed interface OptionalSeparatedObjects {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalSeparatedObjects
+        data class Value(val value: List<ProjectIntents.SeparatedObject>) : OptionalSeparatedObjects
+    }
+    private fun readOptionalSeparatedObjects(v: Any): OptionalSeparatedObjects {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalSeparatedObjects.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalSeparatedObjects.Value(readSeparatedObjects(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalSeparatedObjects(w: ProjectIntentWriter, v: OptionalSeparatedObjects) {
+        w.obj { when(v) {
+            is OptionalSeparatedObjects.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalSeparatedObjects.Value -> w.field("value") { writeSeparatedObjects(w, v.value) }
+        } }
+    }
+    data class VolumeSplitStage(val volumeIds: List<List<Int>>, val assetIds: List<List<Int>>, val objects: OptionalSeparatedObjects)
+    private fun readVolumeSplitStage(v: Any): VolumeSplitStage {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeIds", "assetIds", "objects"), false)
+        return VolumeSplitStage(readIds(obj.get("volumeIds")), readIds(obj.get("assetIds")), readOptionalSeparatedObjects(obj.get("objects")))
+    }
+    private fun writeVolumeSplitStage(w: ProjectIntentWriter, v: VolumeSplitStage) {
+        w.obj {
+            w.field("volumeIds") { writeIds(w, v.volumeIds) }
+            w.field("assetIds") { writeIds(w, v.assetIds) }
+            w.field("objects") { writeOptionalSeparatedObjects(w, v.objects) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -5593,4 +5718,10 @@ object ProjectIntents {
     fun encodeWipeTowerRequest(value: WipeTowerRequest): String = ProjectIntentWriter().also { writeWipeTowerRequest(it, value) }.finish()
     fun decodeWipeTowerReply(text: String): WipeTowerReply = readWipeTowerReply(ProjectIntentJson.parse(text))
     fun encodeWipeTowerReply(value: WipeTowerReply): String = ProjectIntentWriter().also { writeWipeTowerReply(it, value) }.finish()
+    fun decodeVolumeSplitRequest(text: String): VolumeSplitRequest = readVolumeSplitRequest(ProjectIntentJson.parse(text))
+    fun encodeVolumeSplitRequest(value: VolumeSplitRequest): String = ProjectIntentWriter().also { writeVolumeSplitRequest(it, value) }.finish()
+    fun decodeVolumeSplitReply(text: String): VolumeSplitReply = readVolumeSplitReply(ProjectIntentJson.parse(text))
+    fun encodeVolumeSplitReply(value: VolumeSplitReply): String = ProjectIntentWriter().also { writeVolumeSplitReply(it, value) }.finish()
+    fun decodeVolumeSplitStage(text: String): VolumeSplitStage = readVolumeSplitStage(ProjectIntentJson.parse(text))
+    fun encodeVolumeSplitStage(value: VolumeSplitStage): String = ProjectIntentWriter().also { writeVolumeSplitStage(it, value) }.finish()
 }

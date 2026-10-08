@@ -24,6 +24,15 @@ impl StagedAsset {
             descriptor: Arc::new(descriptor),
         })
     }
+    /// A record a repository already validated, shared rather than copied.
+    pub fn from_lease(lease: AssetLease) -> Result<Self, AssetError> {
+        let descriptor = SourceAssetDescriptor::from_value(lease.descriptor().clone())
+            .map_err(|_| AssetError::InvalidDescriptor)?;
+        Ok(Self {
+            lease,
+            descriptor: Arc::new(descriptor),
+        })
+    }
     pub fn id(&self) -> &AssetId {
         self.lease.id()
     }

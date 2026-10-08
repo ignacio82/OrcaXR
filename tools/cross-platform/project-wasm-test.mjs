@@ -17,6 +17,7 @@ import { replayPicks } from "./pick-replay.mjs";
 import { replayPlacements } from "./placement-replay.mjs";
 import { replayArrangements } from "./arrange-replay.mjs";
 import { replayWipeTowers } from "./wipe-tower-replay.mjs";
+import { replayVolumeSplits } from "./volume-split-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -100,6 +101,17 @@ if (isMainThread) {
     assert.equal(result.arrangements, 28);
     // Wipe-tower auto-placement over a live session.
     assert.equal(result.wipeTowers, 27);
+    // Volume splits over a live session, staged and executed.
+    assert.deepEqual(
+      [
+        result.volumeSplitPreparations,
+        result.volumeSplitRefusals,
+        result.volumeSplitStages,
+        result.volumeSplitsApplied,
+        result.volumeSplitHistory,
+      ],
+      [16, 6, 19, 5, 6],
+    );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -402,6 +414,17 @@ if (isMainThread) {
     ),
     layout,
   );
+  const splits = await replayVolumeSplits(
+    core,
+    JSON.parse(
+      await readFile(
+        new URL("testdata/cross-platform/volume-split-vectors.json", root),
+      ),
+    ),
+    layout,
+    JSON.parse(await readFile(new URL("contracts/project-staging.json", root)))
+      .version,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -429,6 +452,7 @@ if (isMainThread) {
       ...placed,
       ...arranged,
       ...towers,
+      ...splits,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

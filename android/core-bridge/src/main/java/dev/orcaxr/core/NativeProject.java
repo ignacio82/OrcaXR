@@ -128,6 +128,11 @@ final class NativeProject {
     static native String sessionBedFill(long handle, String request);
     // Wipe tower: the plate's tower auto-placed against its printable parts.
     static native String sessionWipeTower(long handle, String request);
+    // Volume splits: prepare one volume's components on a current guard, read
+    // the parts or refusal, then stage them under host IDs as parts or objects.
+    static native long volumeSplit(long handle, long guard, String request);
+    static native String volumeSplitReply(long handle);
+    static native long stageVolumeSplit(long handle, long split, String request);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

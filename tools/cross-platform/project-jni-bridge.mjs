@@ -35,6 +35,7 @@ export function startProjectJni(profile = "debug") {
   signatures.placementChecks = ["String", "byte[]", "byte[]", "byte[]", "String"];
   signatures.arrangeChecks = ["String", "byte[]", "byte[]", "byte[]", "String"];
   signatures.wipeTowerChecks = ["String", "byte[]", "byte[]", "byte[]", "String"];
+  signatures.volumeSplitChecks = ["String", ...Array(6).fill("byte[]"), "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -366,6 +367,15 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
         ProjectPaintStroke,
         call("paintStrokeOpen", this.handle, guard.handle, request),
       );
+    }
+    volume_split(guard, request) {
+      return wrap(
+        ProjectVolumeSplit,
+        call("volumeSplit", this.handle, guard.handle, request),
+      );
+    }
+    stage_volume_split(split, request) {
+      return call("stageVolumeSplit", this.handle, split.handle, request);
     }
     stage_paint_stroke(stroke, label) {
       return call(
@@ -758,6 +768,11 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     preview() {
       return wrap(ProjectPaintOverlay, call("paintStrokePreview", this.handle));
+    }
+  }
+  class ProjectVolumeSplit extends Handle {
+    reply() {
+      return call("volumeSplitReply", this.handle);
     }
   }
   class ProjectPickScene extends Handle {

@@ -23,10 +23,8 @@ import {
   captureImportProjectCommand,
   captureReplaceVolumeMeshCommand,
   captureClipboardPasteCommand,
-  captureSplitVolumeToPartsCommand,
   facetRefinementStagedWork,
   singleStagedWork,
-  splitToObjectsStagedWork,
   transactionStagedWork,
   type CapturedProjectCommand,
 } from '../project/StagedProjectCommands';
@@ -246,8 +244,8 @@ import {
   type VolumeRoleConversionDecision,
 } from '../project/objects/semanticVolumeCommands';
 import { MagnetOp, MagnetShape, type MagnetSpec } from '../features/MagnetOp';
-import { captureVolumeSplitGuard, type PreparedVolumeSplitPart } from '../project/objects/splitCommands';
-import { prepareVolumeSplitParts } from '../project/objects/splitPreparation';
+import type { PreparedVolumeSplitPart } from '../project/objects/splitCommands';
+import { prepareVolumeSplit, type PreparedVolumeSplit } from '../project/objects/volumeSplitExchange';
 import {
   captureObjectVolumeSeparationGuard,
   SeparateObjectVolumesCommand,
@@ -3359,52 +3357,9 @@ export class CanonicalWorkspaceController {
       return splitToObjectsResult(sourceObject.id, 'existing-volumes', identities, []);
     }
 
-    const sourceVolume = sourceObject.volumes[0];
-    const sourceDescriptors = project.state.sourceAssets.filter(
-      (descriptor) => descriptor.id === sourceVolume.source.assetId,
-    );
-    if (sourceDescriptors.length !== 1) {
-      throw new Error(`Split source asset ${sourceVolume.source.assetId} is not declared exactly once`);
-    }
-    const sourceAsset = this.assets.get(sourceVolume.source.assetId);
-    if (!sourceAsset) throw new Error(`Split source asset ${sourceVolume.source.assetId} is missing`);
-    if (canonicalStringify(sourceAsset.descriptor) !== canonicalStringify(sourceDescriptors[0])) {
-      throw new Error(`Split source asset ${sourceVolume.source.assetId} differs from its canonical descriptor`);
-    }
-
-    const volumeGuard = captureVolumeSplitGuard(project.state, sourceVolume.id);
-    const generatedAssetIds = new Map<string, AssetId>();
-    const stagedParts = prepareVolumeSplitParts({
-      sourceAsset,
-      sourceTransform: sourceVolume.transform,
-      idsForPart: ({ geometryDigest }) => {
-        let assetId = generatedAssetIds.get(geometryDigest);
-        if (!assetId) {
-          assetId = this.options.idSource.next('asset');
-          generatedAssetIds.set(geometryDigest, assetId);
-        }
-        return {
-          volumeId: this.options.idSource.next('volume'),
-          assetId,
-        };
-      },
-    });
-
-    // A project may already own the exact immutable component bytes. Reuse
-    // that canonical payload rather than letting the commit reject a duplicate
-    // digest; ordinary outputs still retain their freshly injected asset IDs.
-    const reusableAssets = new Map<string, AssetPayload>();
-    for (const descriptor of project.state.sourceAssets) {
-      if (descriptor.id === sourceVolume.source.assetId || reusableAssets.has(descriptor.digest)) continue;
-      const payload = this.assets.get(descriptor.id);
-      if (payload && canonicalStringify(payload.descriptor) === canonicalStringify(descriptor)) {
-        reusableAssets.set(descriptor.digest, payload);
-      }
-    }
-    const parts = stagedParts.map((part) => {
-      const reusable = reusableAssets.get(part.asset.descriptor.digest);
-      return reusable ? { ...part, asset: reusable } : part;
-    });
+    const split = prepareVolumeSplit(project.state, this.assets, sourceObject.volumes[0].id);
+    const { volumeIds, assetIds } = this.drawVolumeSplitIds(split);
+    const parts = split.parts(project.state, this.assets, volumeIds, assetIds);
     const refreshed = this.session.project.getSnapshot();
     if (
       refreshed.revision !== guard.expectedRevision ||
@@ -3417,10 +3372,9 @@ export class CanonicalWorkspaceController {
       parts.map((part) => part.volumeId),
       sourceObject.instances.length,
     );
-    await this.sessionTransport.executeStaged(
-      splitToObjectsStagedWork(volumeGuard, parts, identities, MESH_INPUT_LIMITS),
-      { guard: sessionGuard },
-    );
+    await this.sessionTransport.executeStaged(split.work(parts, identities, MESH_INPUT_LIMITS), {
+      guard: sessionGuard,
+    });
     return splitToObjectsResult(sourceObject.id, 'connected-components', identities, parts);
   }
 
@@ -3448,58 +3402,12 @@ export class CanonicalWorkspaceController {
       throw new Error(`Object "${sourceObject.name}" already has ${sourceObject.volumes.length} parts`);
     }
 
-    const sourceVolume = sourceObject.volumes[0];
-    const sourceDescriptors = project.state.sourceAssets.filter(
-      (descriptor) => descriptor.id === sourceVolume.source.assetId,
-    );
-    if (sourceDescriptors.length !== 1) {
-      throw new Error(`Split source asset ${sourceVolume.source.assetId} is not declared exactly once`);
-    }
-    const sourceAsset = this.assets.get(sourceVolume.source.assetId);
-    if (!sourceAsset) throw new Error(`Split source asset ${sourceVolume.source.assetId} is missing`);
-    if (canonicalStringify(sourceAsset.descriptor) !== canonicalStringify(sourceDescriptors[0])) {
-      throw new Error(`Split source asset ${sourceVolume.source.assetId} differs from its canonical descriptor`);
-    }
-
-    const volumeGuard = captureVolumeSplitGuard(project.state, sourceVolume.id);
-    const generatedAssetIds = new Map<string, AssetId>();
-    const stagedParts = prepareVolumeSplitParts({
-      sourceAsset,
-      sourceTransform: sourceVolume.transform,
-      idsForPart: ({ geometryDigest }) => {
-        let assetId = generatedAssetIds.get(geometryDigest);
-        if (!assetId) {
-          assetId = this.options.idSource.next('asset');
-          generatedAssetIds.set(geometryDigest, assetId);
-        }
-        return {
-          volumeId: this.options.idSource.next('volume'),
-          assetId,
-        };
-      },
+    const split = prepareVolumeSplit(project.state, this.assets, sourceObject.volumes[0].id);
+    const { volumeIds, assetIds } = this.drawVolumeSplitIds(split);
+    const parts = split.parts(project.state, this.assets, volumeIds, assetIds);
+    await this.sessionTransport.executeStaged(split.work(parts, undefined, MESH_INPUT_LIMITS), {
+      guard: sessionGuard,
     });
-
-    if (stagedParts.length < 2) {
-      throw new Error(`Mesh "${sourceObject.name}" contains only 1 connected component and cannot be split into parts`);
-    }
-
-    const reusableAssets = new Map<string, AssetPayload>();
-    for (const descriptor of project.state.sourceAssets) {
-      if (descriptor.id === sourceVolume.source.assetId || reusableAssets.has(descriptor.digest)) continue;
-      const payload = this.assets.get(descriptor.id);
-      if (payload && canonicalStringify(payload.descriptor) === canonicalStringify(descriptor)) {
-        reusableAssets.set(descriptor.digest, payload);
-      }
-    }
-    const parts = stagedParts.map((part) => {
-      const reusable = reusableAssets.get(part.asset.descriptor.digest);
-      return reusable ? { ...part, asset: reusable } : part;
-    });
-
-    await this.sessionTransport.executeStaged(
-      singleStagedWork(captureSplitVolumeToPartsCommand(volumeGuard, parts, MESH_INPUT_LIMITS)),
-      { guard: sessionGuard },
-    );
     return {
       partCount: parts.length,
       objectName: sourceObject.name,
@@ -3770,6 +3678,18 @@ export class CanonicalWorkspaceController {
     await this.executeEditIntent((text) => ({
       adaptiveLayerHeightProfile: { objectId: text(objectId), limits, qualityFactor },
     }));
+  }
+
+  /** One volume ID per part and one asset ID per distinct geometry, drawn
+   * in part order as each geometry first appears. */
+  private drawVolumeSplitIds(split: PreparedVolumeSplit): { volumeIds: VolumeId[]; assetIds: AssetId[] } {
+    const volumeIds: VolumeId[] = [];
+    const assetIds: AssetId[] = [];
+    for (const geometry of split.partGeometries) {
+      if (geometry === assetIds.length) assetIds.push(this.options.idSource.next('asset'));
+      volumeIds.push(this.options.idSource.next('volume'));
+    }
+    return { volumeIds, assetIds };
   }
 
   private allocateSeparatedObjectIdentities(

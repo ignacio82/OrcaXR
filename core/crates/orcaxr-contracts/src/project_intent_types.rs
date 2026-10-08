@@ -7537,6 +7537,163 @@ fn read_wipe_tower_reply(v: &Value) -> Result<WipeTowerReply, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeSplitRequest {
+    pub volume_id: Id,
+}
+fn read_volume_split_request(v: &Value) -> Result<VolumeSplitRequest, InvalidIntent> {
+    let object = fields(v, &["volumeId"], false)?;
+    Ok(VolumeSplitRequest {
+        volume_id: read_id(&object["volumeId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeSplitPart {
+    pub triangle_count: Counter,
+    pub vertex_count: Counter,
+    pub geometry: Counter,
+    pub transform: Transform,
+}
+fn read_volume_split_part(v: &Value) -> Result<VolumeSplitPart, InvalidIntent> {
+    let object = fields(
+        v,
+        &["triangleCount", "vertexCount", "geometry", "transform"],
+        false,
+    )?;
+    Ok(VolumeSplitPart {
+        triangle_count: read_counter(&object["triangleCount"])?,
+        vertex_count: read_counter(&object["vertexCount"])?,
+        geometry: read_counter(&object["geometry"])?,
+        transform: read_transform(&object["transform"])?,
+    })
+}
+pub type VolumeSplitParts = Vec<VolumeSplitPart>;
+fn read_volume_split_parts(v: &Value) -> Result<VolumeSplitParts, InvalidIntent> {
+    list(v, 2, 131072)?
+        .iter()
+        .map(read_volume_split_part)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeSplitGeometry {
+    pub digest: EditText,
+    pub byte_length: Counter,
+}
+fn read_volume_split_geometry(v: &Value) -> Result<VolumeSplitGeometry, InvalidIntent> {
+    let object = fields(v, &["digest", "byteLength"], false)?;
+    Ok(VolumeSplitGeometry {
+        digest: read_edit_text(&object["digest"])?,
+        byte_length: read_counter(&object["byteLength"])?,
+    })
+}
+pub type VolumeSplitGeometries = Vec<VolumeSplitGeometry>;
+fn read_volume_split_geometries(v: &Value) -> Result<VolumeSplitGeometries, InvalidIntent> {
+    list(v, 1, 131072)?
+        .iter()
+        .map(read_volume_split_geometry)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeSplitPreview {
+    pub parts: VolumeSplitParts,
+    pub geometries: VolumeSplitGeometries,
+}
+fn read_volume_split_preview(v: &Value) -> Result<VolumeSplitPreview, InvalidIntent> {
+    let object = fields(v, &["parts", "geometries"], false)?;
+    Ok(VolumeSplitPreview {
+        parts: read_volume_split_parts(&object["parts"])?,
+        geometries: read_volume_split_geometries(&object["geometries"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VolumeSplitRefusalCode {
+    UnknownVolume,
+    AssetMetadata,
+    MissingAsset,
+    InvalidSource,
+    InvalidMesh,
+    InvalidTransform,
+    NotSplittable,
+}
+fn read_volume_split_refusal_code(v: &Value) -> Result<VolumeSplitRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("unknownVolume") => Ok(VolumeSplitRefusalCode::UnknownVolume),
+        Some("assetMetadata") => Ok(VolumeSplitRefusalCode::AssetMetadata),
+        Some("missingAsset") => Ok(VolumeSplitRefusalCode::MissingAsset),
+        Some("invalidSource") => Ok(VolumeSplitRefusalCode::InvalidSource),
+        Some("invalidMesh") => Ok(VolumeSplitRefusalCode::InvalidMesh),
+        Some("invalidTransform") => Ok(VolumeSplitRefusalCode::InvalidTransform),
+        Some("notSplittable") => Ok(VolumeSplitRefusalCode::NotSplittable),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeSplitRefusal {
+    pub code: VolumeSplitRefusalCode,
+    pub message: EditText,
+}
+fn read_volume_split_refusal(v: &Value) -> Result<VolumeSplitRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(VolumeSplitRefusal {
+        code: read_volume_split_refusal_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VolumeSplitReply {
+    Prepared(VolumeSplitPreview),
+    Refused(VolumeSplitRefusal),
+}
+fn read_volume_split_reply(v: &Value) -> Result<VolumeSplitReply, InvalidIntent> {
+    let object = fields(v, &["prepared", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "prepared" => Ok(VolumeSplitReply::Prepared(read_volume_split_preview(
+            value,
+        )?)),
+        "refused" => Ok(VolumeSplitReply::Refused(read_volume_split_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalSeparatedObjects {
+    Absent(Empty),
+    Value(SeparatedObjects),
+}
+fn read_optional_separated_objects(v: &Value) -> Result<OptionalSeparatedObjects, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalSeparatedObjects::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalSeparatedObjects::Value(read_separated_objects(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeSplitStage {
+    pub volume_ids: Ids,
+    pub asset_ids: Ids,
+    pub objects: OptionalSeparatedObjects,
+}
+fn read_volume_split_stage(v: &Value) -> Result<VolumeSplitStage, InvalidIntent> {
+    let object = fields(v, &["volumeIds", "assetIds", "objects"], false)?;
+    Ok(VolumeSplitStage {
+        volume_ids: read_ids(&object["volumeIds"])?,
+        asset_ids: read_ids(&object["assetIds"])?,
+        objects: read_optional_separated_objects(&object["objects"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -8203,5 +8360,29 @@ pub fn decode_wipe_tower_reply(text: &str) -> Result<WipeTowerReply, InvalidInte
 pub fn encode_wipe_tower_reply(value: &WipeTowerReply) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_wipe_tower_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_volume_split_request(text: &str) -> Result<VolumeSplitRequest, InvalidIntent> {
+    read_volume_split_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_volume_split_request(value: &VolumeSplitRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_volume_split_request(&text)?;
+    Ok(text)
+}
+pub fn decode_volume_split_reply(text: &str) -> Result<VolumeSplitReply, InvalidIntent> {
+    read_volume_split_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_volume_split_reply(value: &VolumeSplitReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_volume_split_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_volume_split_stage(text: &str) -> Result<VolumeSplitStage, InvalidIntent> {
+    read_volume_split_stage(&super::project_intents::parse(text)?)
+}
+pub fn encode_volume_split_stage(value: &VolumeSplitStage) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_volume_split_stage(&text)?;
     Ok(text)
 }

@@ -617,6 +617,25 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_volumeSplit, volume_split, jlong,
+    handle: jlong,
+    guard: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_volumeSplitReply, volume_split_reply, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_stageVolumeSplit, stage_volume_split, jlong,
+    handle: jlong,
+    split: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,
