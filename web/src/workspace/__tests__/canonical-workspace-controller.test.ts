@@ -1190,7 +1190,7 @@ await test('exports volume to binary STL and applies repaired mesh with undo/red
 
   const repairedPositions = [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10];
   const repairedIndices = [0, 1, 2, 0, 2, 3];
-  const res = controller.applyRepairedVolumeMesh(fixture.ids.volume, repairedPositions, repairedIndices);
+  const res = await controller.applyRepairedVolumeMesh(fixture.ids.volume, repairedPositions, repairedIndices);
   assert.equal(res.beforeTriangles, 1);
   assert.equal(res.afterTriangles, 2);
 
@@ -1211,7 +1211,7 @@ await test('exports volume to binary STL and applies repaired mesh with undo/red
   controller.dispose();
 });
 
-await test('applies boolean mesh result, deletes second object, and supports undo/redo', () => {
+await test('applies boolean mesh result, deletes second object, and supports undo/redo', async () => {
   const controller = createController();
   const geometry1 = new THREE.BoxGeometry(10, 10, 10);
   const geometry2 = new THREE.BoxGeometry(5, 5, 5);
@@ -1225,7 +1225,7 @@ await test('applies boolean mesh result, deletes second object, and supports und
 
   const booleanPositions = [0, 0, 0, 10, 0, 0, 0, 10, 0];
   const booleanIndices = [0, 1, 2];
-  const res = controller.applyBooleanMesh(
+  const res = await controller.applyBooleanMesh(
     first.instanceId,
     second.instanceId,
     booleanPositions,
@@ -1244,7 +1244,7 @@ await test('applies boolean mesh result, deletes second object, and supports und
   controller.dispose();
 });
 
-await test('applies subtract boolean mesh result and supports undo/redo', () => {
+await test('applies subtract boolean mesh result and supports undo/redo', async () => {
   const controller = createController();
   const geometry1 = new THREE.BoxGeometry(10, 10, 10);
   const geometry2 = new THREE.BoxGeometry(5, 5, 5);
@@ -1253,7 +1253,7 @@ await test('applies subtract boolean mesh result and supports undo/redo', () => 
 
   const booleanPositions = [0, 0, 0, 10, 0, 0, 0, 10, 0];
   const booleanIndices = [0, 1, 2];
-  const res = controller.applyBooleanMesh(
+  const res = await controller.applyBooleanMesh(
     first.instanceId,
     second.instanceId,
     booleanPositions,
@@ -1272,7 +1272,7 @@ await test('applies subtract boolean mesh result and supports undo/redo', () => 
   controller.dispose();
 });
 
-await test('applies intersect boolean mesh result and supports undo/redo', () => {
+await test('applies intersect boolean mesh result and supports undo/redo', async () => {
   const controller = createController();
   const geometry1 = new THREE.BoxGeometry(10, 10, 10);
   const geometry2 = new THREE.BoxGeometry(5, 5, 5);
@@ -1281,7 +1281,7 @@ await test('applies intersect boolean mesh result and supports undo/redo', () =>
 
   const booleanPositions = [0, 0, 0, 10, 0, 0, 0, 10, 0];
   const booleanIndices = [0, 1, 2];
-  const res = controller.applyBooleanMesh(
+  const res = await controller.applyBooleanMesh(
     first.instanceId,
     second.instanceId,
     booleanPositions,

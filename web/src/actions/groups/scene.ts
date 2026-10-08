@@ -402,8 +402,8 @@ export const sceneActions: Action[] = [
     menuSection: 'tools',
     hint: 'Install exactly the decimated mesh the preview is showing, as one undoable entry',
     isEnabled: (s) => s.simplifyPreviewing === true,
-    run: (ctx) => {
-      ctx.applySimplifyPreview();
+    run: async (ctx) => {
+      await ctx.applySimplifyPreview();
     },
   },
   {

@@ -920,7 +920,9 @@ and replay coverage for the complete current command inventory.
   magnet holes and split-to-parts/objects carry their new mesh bytes as measured
   staged work (within the clipboard's asset budget); adaptive layer heights and
   volume separation submit intents, as do brim ears and adopting a printer's
-  loaded filaments (with its new filament IDs drawn before submission). In
+  loaded filaments (with its new filament IDs drawn before submission). Mesh
+  simplification, repair, Boolean results and embossed-text and SVG parts
+  (added or re-cut) carry their new meshes as staged work too. In
   process, a command the session refuses reports the browser's own error; the
   wire still carries only `commandFailed`. Other workflows, remote projections
   and production worker/JNI execution are not migrated yet. Browser capture and
@@ -936,6 +938,8 @@ and replay coverage for the complete current command inventory.
   - [x] Route helper volumes, magnet holes, splits and adaptive layer heights
     through guarded intents and measured staged work.
   - [x] Route brim ears and printer filament adoption through guarded intents.
+  - [x] Route mesh simplification, repair, Booleans and emboss/SVG parts through
+    measured staged work.
   - [ ] Migrate remaining editing/import/save/slice routes and isolate
     preparation work; preserve the registry boundary for every mutation.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,

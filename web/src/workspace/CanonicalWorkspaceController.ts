@@ -11,13 +11,20 @@ import {
 } from '../../../contracts/generated/project-intents';
 import { createIntentTextEncoder } from '../project/PreparedProjectCommands';
 import {
+  captureAddEmbossTextCommand,
+  captureAddSvgPartCommand,
   captureAddVolumeCommand,
+  captureEditEmbossTextCommand,
+  captureEditSvgPartCommand,
   captureInstanceCommand,
+  captureMeshBooleanCommand,
+  captureReplaceVolumeMeshCommand,
   captureClipboardPasteCommand,
   captureSplitVolumeToPartsCommand,
   singleStagedWork,
   splitToObjectsStagedWork,
   transactionStagedWork,
+  type CapturedProjectCommand,
 } from '../project/StagedProjectCommands';
 import * as THREE from 'three';
 
@@ -54,19 +61,8 @@ const RANGE_INERT_KEYS = new Set(['nozzle_temperature']);
 import { facetAnnotationsHaveAssignments } from '../project/domain/facetRefinement';
 import type { EmbossTextConfiguration, EmbossedMesh, GlyphOutlineSource } from '../project/objects/emboss';
 import type { EmbossSvgPart } from '../project/domain/model';
-import {
-  AddSvgPartCommand,
-  EditSvgPartCommand,
-  prepareSvgPart,
-  svgVolumeIdentity,
-  type PreparedSvgPart,
-} from '../project/objects/svgCommands';
-import {
-  AddEmbossTextCommand,
-  EditEmbossTextCommand,
-  embossVolumeIdentity,
-  prepareEmbossedVolume,
-} from '../project/objects/embossCommands';
+import { prepareSvgPart, svgVolumeIdentity, type PreparedSvgPart } from '../project/objects/svgCommands';
+import { embossVolumeIdentity, prepareEmbossedVolume } from '../project/objects/embossCommands';
 import type {
   AssetId,
   CustomGcodeId,
@@ -167,8 +163,8 @@ import {
   type ProjectImportSource,
 } from '../project/import/types';
 import { decodeIndexedMeshAsset, encodeIndexedMeshAsset } from '../project/meshCodec';
-import { ReplaceVolumeMeshCommand, type MeshTopologyReplacementGuard } from '../project/objects/topologyCommands';
-import { MeshBooleanCommand, type MeshBooleanGuard, type MeshBooleanOp } from '../project/objects/meshBooleanCommands';
+import type { MeshTopologyReplacementGuard } from '../project/objects/topologyCommands';
+import type { MeshBooleanGuard, MeshBooleanOp } from '../project/objects/meshBooleanCommands';
 import {
   AddBrimEarCommand,
   AddBrimEarsCommand,
@@ -2461,6 +2457,11 @@ export class CanonicalWorkspaceController {
     return scopedOverrideSnapshot(this.session.project.getSnapshot(), target);
   }
 
+  /** One captured command as measured staged work, guarded by the session it was read from. */
+  private async executeStagedEdit(command: CapturedProjectCommand, guard: AsyncSessionGuard): Promise<void> {
+    await this.sessionTransport.executeStaged(singleStagedWork(command), { guard });
+  }
+
   /** One edit command, guarded by the session revision it was read at. */
   private executeEditIntent(
     command: (text: (value: string) => number[]) => ProjectCommandWire,
@@ -3920,19 +3921,23 @@ export class CanonicalWorkspaceController {
    * computed, so a volume that changed underneath a long preview is refused by
    * the existing command rather than silently overwritten.
    */
-  applyPreparedSimplify(prepared: PreparedSimplify): {
+  async applyPreparedSimplify(prepared: PreparedSimplify): Promise<{
     readonly beforeTriangles: number;
     readonly afterTriangles: number;
     readonly maxError: number;
-  } {
+  }> {
     this.assertActive();
+    const sessionGuard = this.asyncSession.captureGuard();
     const encoded = encodeIndexedMeshAsset({
       id: this.options.idSource.next('asset'),
       positions: [...prepared.positions],
       indices: [...prepared.indices],
       ...(prepared.sourceFilename ? { sourceFilename: prepared.sourceFilename } : {}),
     });
-    this.session.commands.execute(new ReplaceVolumeMeshCommand(prepared.guard, encoded));
+    await this.executeStagedEdit(
+      captureReplaceVolumeMeshCommand(prepared.guard, encoded, MESH_INPUT_LIMITS),
+      sessionGuard,
+    );
     return {
       beforeTriangles: prepared.beforeTriangles,
       afterTriangles: prepared.afterTriangles,
@@ -3940,11 +3945,11 @@ export class CanonicalWorkspaceController {
     };
   }
 
-  simplifyVolume(
+  async simplifyVolume(
     volumeId: VolumeId,
     configuration: SimplifyConfiguration = DEFAULT_SIMPLIFY_CONFIGURATION,
     options: SimplifyOptions = {},
-  ): { readonly beforeTriangles: number; readonly afterTriangles: number; readonly maxError: number } {
+  ): Promise<{ readonly beforeTriangles: number; readonly afterTriangles: number; readonly maxError: number }> {
     const prepared = this.prepareSimplifyVolume(volumeId, configuration, options);
     if (!prepared) {
       const state = this.session.project.getSnapshot().state;
@@ -3967,15 +3972,16 @@ export class CanonicalWorkspaceController {
   /**
    * Install a repaired mesh into a volume as one undoable topology replacement.
    */
-  applyRepairedVolumeMesh(
+  async applyRepairedVolumeMesh(
     volumeId: VolumeId,
     positions: readonly number[] | Float32Array,
     indices: readonly number[] | Uint32Array,
-  ): {
+  ): Promise<{
     readonly beforeTriangles: number;
     readonly afterTriangles: number;
-  } {
+  }> {
     this.assertActive();
+    const sessionGuard = this.asyncSession.captureGuard();
     const state = this.session.project.getSnapshot().state;
     const found = findVolume(state, volumeId);
     if (!found) throw new Error(`Unknown volume ${volumeId}`);
@@ -3996,7 +4002,7 @@ export class CanonicalWorkspaceController {
       indices: Array.from(indices),
       ...(payload.descriptor.sourceFilename ? { sourceFilename: payload.descriptor.sourceFilename } : {}),
     });
-    this.session.commands.execute(new ReplaceVolumeMeshCommand(guard, encoded));
+    await this.executeStagedEdit(captureReplaceVolumeMeshCommand(guard, encoded, MESH_INPUT_LIMITS), sessionGuard);
     const afterTriangles = Math.floor(indices.length / 3);
     return { beforeTriangles, afterTriangles };
   }
@@ -4013,17 +4019,18 @@ export class CanonicalWorkspaceController {
   /**
    * Commit a Boolean CSG mesh result into target instance while removing other instance/object.
    */
-  applyBooleanMesh(
+  async applyBooleanMesh(
     targetInstanceId: InstanceId,
     otherInstanceId: InstanceId,
     positions: readonly number[] | Float32Array,
     indices: readonly number[] | Uint32Array,
     op: MeshBooleanOp,
-  ): {
+  ): Promise<{
     readonly beforeTriangles: number;
     readonly afterTriangles: number;
-  } {
+  }> {
     this.assertActive();
+    const sessionGuard = this.asyncSession.captureGuard();
     const state = this.session.project.getSnapshot().state;
     const target = findInstance(state, targetInstanceId);
     if (!target) throw new Error(`Unknown target instance ${targetInstanceId}`);
@@ -4051,7 +4058,7 @@ export class CanonicalWorkspaceController {
       indices: Array.from(indices),
       ...(payload.descriptor.sourceFilename ? { sourceFilename: payload.descriptor.sourceFilename } : {}),
     });
-    this.session.commands.execute(new MeshBooleanCommand(guard, encoded, op));
+    await this.executeStagedEdit(captureMeshBooleanCommand(guard, encoded, op, MESH_INPUT_LIMITS), sessionGuard);
     const afterTriangles = Math.floor(indices.length / 3);
     return { beforeTriangles, afterTriangles };
   }
@@ -4132,30 +4139,41 @@ export class CanonicalWorkspaceController {
    * The font is a `GlyphOutlineSource` the caller supplies, because a browser
    * cannot enumerate installed fonts and the app CSP forbids fetching one.
    */
-  addEmbossText(
+  async addEmbossText(
     objectId: ObjectId,
     configuration: EmbossTextConfiguration,
     font: GlyphOutlineSource,
     transform: Transform = identityTransform(),
-  ): { volumeId: VolumeId; mesh: EmbossedMesh } {
+  ): Promise<{ volumeId: VolumeId; mesh: EmbossedMesh }> {
     this.assertActive();
+    const sessionGuard = this.asyncSession.captureGuard();
     const identity = embossVolumeIdentity(this.options.idSource);
     const prepared = prepareEmbossedVolume(configuration, font, identity.assetId);
-    this.session.commands.execute(
-      new AddEmbossTextCommand(
+    await this.executeStagedEdit(
+      captureAddEmbossTextCommand(
         { objectId, volumeId: identity.volumeId, assetId: identity.assetId, transform },
         configuration,
         prepared,
+        MESH_INPUT_LIMITS,
       ),
+      sessionGuard,
     );
     return { volumeId: identity.volumeId, mesh: prepared.mesh };
   }
 
   /** Re-cut an existing embossed volume from an edited recipe. */
-  editEmbossText(volumeId: VolumeId, configuration: EmbossTextConfiguration, font: GlyphOutlineSource): EmbossedMesh {
+  async editEmbossText(
+    volumeId: VolumeId,
+    configuration: EmbossTextConfiguration,
+    font: GlyphOutlineSource,
+  ): Promise<EmbossedMesh> {
     this.assertActive();
+    const sessionGuard = this.asyncSession.captureGuard();
     const prepared = prepareEmbossedVolume(configuration, font, embossVolumeIdentity(this.options.idSource).assetId);
-    this.session.commands.execute(new EditEmbossTextCommand(volumeId, configuration, prepared));
+    await this.executeStagedEdit(
+      captureEditEmbossTextCommand(volumeId, configuration, prepared, MESH_INPUT_LIMITS),
+      sessionGuard,
+    );
     return prepared.mesh;
   }
 
@@ -4165,7 +4183,7 @@ export class CanonicalWorkspaceController {
    * The SVG's own bytes are returned so the caller can keep them beside the
    * project; without them a reopened part could be re-placed but never re-cut.
    */
-  addSvgPart(
+  async addSvgPart(
     objectId: ObjectId,
     source: string,
     options: {
@@ -4175,8 +4193,9 @@ export class CanonicalWorkspaceController {
       readonly sourcePath?: string;
     },
     transform: Transform = identityTransform(),
-  ): { volumeId: VolumeId; prepared: PreparedSvgPart } {
+  ): Promise<{ volumeId: VolumeId; prepared: PreparedSvgPart }> {
     this.assertActive();
+    const sessionGuard = this.asyncSession.captureGuard();
     const identity = svgVolumeIdentity(this.options.idSource);
     const prepared = prepareSvgPart(source, {
       ...options,
@@ -4185,18 +4204,20 @@ export class CanonicalWorkspaceController {
       drawingAssetId: identity.drawingAssetId,
     });
     const name = options.fileName.replace(/\.svg$/i, '') || 'SVG part';
-    this.session.commands.execute(
-      new AddSvgPartCommand(
+    await this.executeStagedEdit(
+      captureAddSvgPartCommand(
         { objectId, volumeId: identity.volumeId, assetId: identity.assetId, transform },
         prepared,
         name,
+        MESH_INPUT_LIMITS,
       ),
+      sessionGuard,
     );
     return { volumeId: identity.volumeId, prepared };
   }
 
   /** Re-cut an existing SVG part from changed width or depth. */
-  editSvgPart(
+  async editSvgPart(
     volumeId: VolumeId,
     source: string,
     options: {
@@ -4205,8 +4226,9 @@ export class CanonicalWorkspaceController {
       readonly widthMm?: number;
       readonly sourcePath?: string;
     },
-  ): PreparedSvgPart {
+  ): Promise<PreparedSvgPart> {
     this.assertActive();
+    const sessionGuard = this.asyncSession.captureGuard();
     const next = svgVolumeIdentity(this.options.idSource);
     const prepared = prepareSvgPart(source, {
       ...options,
@@ -4214,7 +4236,7 @@ export class CanonicalWorkspaceController {
       assetId: next.assetId,
       drawingAssetId: next.drawingAssetId,
     });
-    this.session.commands.execute(new EditSvgPartCommand(volumeId, prepared));
+    await this.executeStagedEdit(captureEditSvgPartCommand(volumeId, prepared, MESH_INPUT_LIMITS), sessionGuard);
     return prepared;
   }
 

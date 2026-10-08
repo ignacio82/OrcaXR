@@ -248,7 +248,7 @@ export class ActionContext {
     return this.workspace.previewSimplify(configuration);
   }
 
-  applySimplifyPreview(): boolean {
+  applySimplifyPreview(): Promise<boolean> {
     return this.workspace.applySimplifyPreview();
   }
 
@@ -256,8 +256,8 @@ export class ActionContext {
     return this.workspace.cancelSimplifyPreview();
   }
 
-  simplifySelected(decimateRatio?: number): void {
-    this.workspace.simplifySelected(decimateRatio);
+  async simplifySelected(decimateRatio?: number): Promise<void> {
+    await this.workspace.simplifySelected(decimateRatio);
   }
   addCalibration(
     kind:
@@ -659,8 +659,8 @@ export class ActionContext {
     this.workspace.setSvgPartSize(patch);
   }
 
-  applySvgPart(): void {
-    this.workspace.applySvgPart();
+  async applySvgPart(): Promise<void> {
+    await this.workspace.applySvgPart();
   }
 
   loadEmbossFont(name: string, bytes: Uint8Array): void {
@@ -671,8 +671,8 @@ export class ActionContext {
     this.workspace.setEmbossRecipe(patch);
   }
 
-  applyEmboss(): void {
-    this.workspace.applyEmboss();
+  async applyEmboss(): Promise<void> {
+    await this.workspace.applyEmboss();
   }
 
   setBrimEarRadius(radiusMm: number): void {

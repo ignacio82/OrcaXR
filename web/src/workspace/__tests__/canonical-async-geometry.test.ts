@@ -110,4 +110,27 @@ await test('brim ears add, add as a set, remove and clear through acknowledged i
   }
 });
 
+await test('an SVG part is cut, re-cut and undone through acknowledged staged work', async () => {
+  const { controller, imported } = setup();
+  try {
+    const drawing =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="6"/></svg>';
+    const before = footprint(controller);
+    const pending = controller.addSvgPart(imported.objectId, drawing, { fileName: 'badge.svg', depthMm: 1 });
+    assert.deepEqual(footprint(controller), before, 'nothing applies before acknowledgement');
+    const { volumeId } = await pending;
+    assert.ok(volumes(controller).length === 2);
+    const afterAdd = footprint(controller);
+    const recut = await controller.editSvgPart(volumeId, drawing, { fileName: 'badge.svg', depthMm: 2 });
+    assert.ok(recut.mesh.triangleCount > 0);
+    assert.notEqual(controller.captureProjectExportGuard().semanticHash, afterAdd.identity.semanticHash);
+    assert.equal(await controller.undoAsync(), true);
+    assert.equal(controller.captureProjectExportGuard().semanticHash, afterAdd.identity.semanticHash);
+    assert.equal(await controller.undoAsync(), true);
+    assert.equal(controller.captureProjectExportGuard().semanticHash, before.identity.semanticHash);
+  } finally {
+    controller.dispose();
+  }
+});
+
 console.log(`canonical async geometry tests passed: ${passed}`);

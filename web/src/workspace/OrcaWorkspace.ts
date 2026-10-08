@@ -3009,7 +3009,7 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Add the current recipe to the selected object, or re-cut a selected text part. */
-  public applyEmboss(): boolean {
+  public async applyEmboss(): Promise<boolean> {
     const font = this.embossFont;
     if (!font) {
       this.setStatus(t('workspace.orcaWorkspace.chooseATtfFontFile', 'Choose a .ttf font file before embossing.'));
@@ -3018,8 +3018,8 @@ export class OrcaWorkspace extends xb.Script {
     const volumeId = this.embossTargetVolume();
     try {
       const mesh = volumeId
-        ? this.canonicalProject.editEmbossText(volumeId, this.embossRecipe, font.source)
-        : this.addEmbossToSelectedObject(font.source);
+        ? await this.canonicalProject.editEmbossText(volumeId, this.embossRecipe, font.source)
+        : await this.addEmbossToSelectedObject(font.source);
       if (!mesh) return false;
       const notes: string[] = [];
       if (mesh.missingCodePoints.length > 0) {
@@ -3045,7 +3045,7 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  private addEmbossToSelectedObject(source: GlyphOutlineSource): EmbossedMesh | undefined {
+  private async addEmbossToSelectedObject(source: GlyphOutlineSource): Promise<EmbossedMesh | undefined> {
     const objectId = this.brimEarTargetObject();
     if (!objectId) {
       this.setStatus(
@@ -3053,7 +3053,7 @@ export class OrcaWorkspace extends xb.Script {
       );
       return undefined;
     }
-    return this.canonicalProject.addEmbossText(objectId, this.embossRecipe, source).mesh;
+    return (await this.canonicalProject.addEmbossText(objectId, this.embossRecipe, source)).mesh;
   }
 
   /** The selected volume, when it is itself embossed text an edit would re-cut. */
@@ -3163,7 +3163,7 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Cut the loaded drawing into the selection, or re-cut a selected SVG part. */
-  public applySvgPart(): boolean {
+  public async applySvgPart(): Promise<boolean> {
     const drawing = this.svgDrawing;
     if (!drawing) {
       this.setStatus(t('workspace.orcaWorkspace.chooseAnSvgFileBefore', 'Choose an .svg file before adding a part.'));
@@ -3178,7 +3178,7 @@ export class OrcaWorkspace extends xb.Script {
       const volumeId = this.svgTargetVolume();
       let prepared;
       if (volumeId) {
-        prepared = this.canonicalProject.editSvgPart(volumeId, drawing.source, options);
+        prepared = await this.canonicalProject.editSvgPart(volumeId, drawing.source, options);
       } else {
         const objectId = this.brimEarTargetObject();
         if (!objectId) {
@@ -3187,7 +3187,7 @@ export class OrcaWorkspace extends xb.Script {
           );
           return false;
         }
-        prepared = this.canonicalProject.addSvgPart(objectId, drawing.source, options).prepared;
+        prepared = (await this.canonicalProject.addSvgPart(objectId, drawing.source, options)).prepared;
       }
       // Anything the drawing asked for that a solid cannot express is named
       // rather than quietly missing from the result.
@@ -6340,7 +6340,7 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Install exactly what the preview drew, as one undoable run. */
-  public applySimplifyPreview(): boolean {
+  public async applySimplifyPreview(): Promise<boolean> {
     const session = this.simplifyPreview;
     if (!session) {
       this.setStatus(t('workspace.orcaWorkspace.thereIsNoSimplifyPreview', 'There is no simplify preview to apply.'));
@@ -6350,7 +6350,7 @@ export class OrcaWorkspace extends xb.Script {
     let after = 0;
     try {
       for (const entry of session.prepared) {
-        const result = this.canonicalProject.applyPreparedSimplify(entry);
+        const result = await this.canonicalProject.applyPreparedSimplify(entry);
         before += result.beforeTriangles;
         after += result.afterTriangles;
       }
@@ -6413,7 +6413,7 @@ export class OrcaWorkspace extends xb.Script {
    * topology command, so the whole run is undoable and a failure on one part
    * leaves the rest — and the project — exactly as they were.
    */
-  public simplifySelected(decimateRatio = 50): boolean {
+  public async simplifySelected(decimateRatio = 50): Promise<boolean> {
     const volumes = this.paintableSelectedVolumes();
     if (volumes.length === 0) {
       this.setStatus(t('workspace.orcaWorkspace.selectAModelToSimplify2', 'Select a model to simplify.'));
@@ -6424,7 +6424,7 @@ export class OrcaWorkspace extends xb.Script {
     let changed = 0;
     for (const volumeId of volumes) {
       try {
-        const result = this.canonicalProject.simplifyVolume(volumeId, {
+        const result = await this.canonicalProject.simplifyVolume(volumeId, {
           useCount: true,
           decimateRatio,
           maxError: SIMPLIFY_DEFAULT_MAX_ERROR,
@@ -10211,7 +10211,7 @@ export class OrcaWorkspace extends xb.Script {
         if (!repMesh) {
           throw new Error(t('workspace.orcaWorkspace.repairReturnedEmpty', 'Repair returned empty mesh'));
         }
-        this.canonicalProject.applyRepairedVolumeMesh(volumeId, repMesh.positions, repMesh.indices);
+        await this.canonicalProject.applyRepairedVolumeMesh(volumeId, repMesh.positions, repMesh.indices);
       } catch (e: any) {
         const errorMsg = `${t('workspace.orcaWorkspace.repairFailed', 'Repair failed:')} ${e.message}`;
         this.setStatus(errorMsg);
@@ -10271,7 +10271,7 @@ export class OrcaWorkspace extends xb.Script {
       if (!mesh) {
         throw new Error(t('workspace.orcaWorkspace.booleanReturnedEmpty', 'Boolean operation returned empty mesh'));
       }
-      this.canonicalProject.applyBooleanMesh(targetId, otherId, mesh.positions, mesh.indices, op);
+      await this.canonicalProject.applyBooleanMesh(targetId, otherId, mesh.positions, mesh.indices, op);
       this.refreshPaintOverlays();
       this.recomputePreflight();
       this.setStatus(

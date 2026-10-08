@@ -103,7 +103,7 @@ await test('preparing a decimation changes nothing at all', () => {
   assert.equal(workspace.getSummary().history.undoCount, historyBefore, 'and no command was recorded');
 });
 
-await test('apply installs exactly the mesh the preview computed', () => {
+await test('apply installs exactly the mesh the preview computed', async () => {
   const workspace = controller();
   workspace.importBufferGeometry(sphere(), { name: 'Ball' });
   const volumeId = firstVolume(workspace);
@@ -114,7 +114,7 @@ await test('apply installs exactly the mesh the preview computed', () => {
     maxError: 1,
   });
   assert.ok(prepared);
-  const result = workspace.applyPreparedSimplify(prepared);
+  const result = await workspace.applyPreparedSimplify(prepared);
 
   const installed = meshOf(workspace, volumeId);
   // Not "close enough" — the same triangles. This is the whole reason prepare
@@ -178,7 +178,7 @@ await test('the ratio mode is driven by count, so the same ratio lands on the sa
   assert.deepEqual([...again.indices], [...half.indices]);
 });
 
-await test('a prepared decimation is refused once the volume has moved on', () => {
+await test('a prepared decimation is refused once the volume has moved on', async () => {
   const workspace = controller();
   workspace.importBufferGeometry(sphere(), { name: 'Ball' });
   const volumeId = firstVolume(workspace);
@@ -187,11 +187,11 @@ await test('a prepared decimation is refused once the volume has moved on', () =
   assert.ok(stale);
   // Someone else decimates first. The prepared result now describes a topology
   // that is no longer there, and installing it would silently undo their edit.
-  workspace.simplifyVolume(volumeId, { useCount: true, decimateRatio: 30, maxError: 1 });
-  assert.throws(() => workspace.applyPreparedSimplify(stale), /topolog|guard|stale|revision/i);
+  await workspace.simplifyVolume(volumeId, { useCount: true, decimateRatio: 30, maxError: 1 });
+  await assert.rejects(workspace.applyPreparedSimplify(stale), /topolog|guard|stale|revision/i);
 });
 
-await test('undo after an applied preview restores the original mesh exactly', () => {
+await test('undo after an applied preview restores the original mesh exactly', async () => {
   const workspace = controller();
   workspace.importBufferGeometry(sphere(), { name: 'Ball' });
   const volumeId = firstVolume(workspace);
@@ -199,7 +199,7 @@ await test('undo after an applied preview restores the original mesh exactly', (
 
   const prepared = workspace.prepareSimplifyVolume(volumeId, { useCount: true, decimateRatio: 50, maxError: 1 });
   assert.ok(prepared);
-  workspace.applyPreparedSimplify(prepared);
+  await workspace.applyPreparedSimplify(prepared);
   assert.notDeepEqual(meshOf(workspace, volumeId).indices, before.indices);
 
   workspace.undo();
