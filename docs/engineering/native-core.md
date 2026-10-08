@@ -3269,6 +3269,48 @@ runs every tool, transforms, clipping, the overhang gate and paging windows;
 Rust, WASM in Node and Chrome and JNI answer all 136 replies byte for byte and
 both refusals, and 411 Kotlin checks cover the wrapper.
 
+### Paint strokes over live sessions
+
+A whole paint gesture runs over a session as the browser's painter drives
+`PaintStrokeService` (`facets::paint_stroke`, the browser's
+`PaintStrokeExchange.ts`). The host opens a stroke with a `PaintStrokeOpen` —
+volume, channel and paint target, unpainted for erasing — under a current
+session guard. The browser's checks run in its order: a channel no surface
+paints (brim), an unknown volume, a non-model role, a target the channel
+cannot hold and an unknown or unavailable palette filament refuse, then an
+unreadable mesh. The stroke owns the opened snapshot's decoded mesh, the
+channel's assignments and persisted refinement, so each `PaintStrokeSample`
+(seed facet, tool, triangle splitting, clipping plane, transform and overhang
+angle) runs on the stroke, off the session. A sample selects over that
+snapshot and the tree the samples before it left: the persisted refinement
+until a sample refines, then the stroke's own post-sample tree, passed to the
+selector as typed roots (`region::Roots::Nodes`) rather than re-encoded JSON.
+It accumulates the touched facets and the tree `region::refinement_after`
+returns, and answers counts of selected facets and leaves, or the selector's
+issues without changing the stroke. A `PaintStrokeOverlay` pages the touched
+facets as ranges with the facet guard. `ProjectSession::stage_paint_stroke`
+stages the gesture as one edit for `executeStaged`: the refined tree as
+`facetRefinement` work, otherwise one `facetStroke` built natively
+(`CapturedCommand::facet_stroke`, measured as its intent but never bounded by
+the wire's page limits), with the browser's labels; a stroke that touched
+nothing stages nothing, and staging refuses as stale once anything changed
+since the stroke opened. Bindings: WASM `ProjectSession.paint_stroke` /
+`stage_paint_stroke` and `ProjectPaintStroke.sample` / `overlay`, the JNI
+exports `paintStrokeOpen`, `paintStrokeSample`, `paintStrokeOverlay` and
+`stagePaintStroke`, and Kotlin `ProjectSession.paintStroke` /
+`stagePaintStroke` with `ProjectPaintStroke`.
+
+`paint-stroke-vectors.mjs` opens a browser project with a painted icosphere,
+a support-painted terrain and a modifier, runs every open refusal, then
+strokes — dragged Circles, splitting Spheres, Fill and Triangle over the
+persisted refinement under clipping and a transform, a splitting erase and
+its repeat, dense Gap Fill, Height Ranges on the seam and fuzzy-skin channels,
+an empty stroke and two strokes racing — and commits each through the
+browser's own facet commands. Rust, WASM in Node and Chrome and JNI reproduce
+every sample reply and overlay page byte for byte and every refusal, and each
+commit's outcome (8 applied, 1 unchanged, 1 nothing to stage, 1 stale),
+revision, hash and undo label; 105 Kotlin checks cover the wrapper.
+
 ### Paint palette
 
 `facets::palette` ports `projectPaintPalette`: the filament library as the

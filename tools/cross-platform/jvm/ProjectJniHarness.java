@@ -29,6 +29,9 @@ public final class ProjectJniHarness {
     public static long facetRegionChecks(String source, byte[] sphere, byte[] terrain, String script) {
         return ProjectFacetRegionChecks.run(source, sphere, terrain, script);
     }
+    public static long paintStrokeChecks(String source, byte[] sphere, byte[] terrain, String script) {
+        return ProjectPaintStrokeChecks.run(source, sphere, terrain, script);
+    }
     public static long actorPreflightChecks(String source, byte[] mesh, String request, String expected) {
         return ProjectPreflightChecks.run(source, mesh, request, expected);
     }
@@ -146,8 +149,14 @@ public final class ProjectJniHarness {
             if (length > 16 * 1024 * 1024) throw new IOException("test input limit");
             byte[] v = new byte[length]; in.readFully(v); return v;
         }
+        if (type == char[].class) {
+            // A negative length is a null reference (optional labels).
+            int length = in.readInt();
+            if (length < 0) return null;
+            if (length > 16 * 1024 * 1024) throw new IOException("test input limit");
+            char[] v = new char[length]; for (int i = 0; i < length; i++) v[i] = in.readChar(); return v;
+        }
         int n = length();
-        if (type == char[].class) { char[] v = new char[n]; for (int i = 0; i < n; i++) v[i] = in.readChar(); return v; }
         if (type == long[].class) { long[] v = new long[n]; for (int i = 0; i < n; i++) v[i] = in.readLong(); return v; }
         if (type == double[].class) { double[] v = new double[n]; for (int i = 0; i < n; i++) v[i] = in.readDouble(); return v; }
         throw new IOException("unsupported test argument");
@@ -177,6 +186,7 @@ public final class ProjectJniHarness {
             if (name.equals("capabilityChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class);
             if (name.equals("renderChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class);
             if (name.equals("facetRegionChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, String.class);
+            if (name.equals("paintStrokeChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, String.class);
             if (name.equals("actorPreflightChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorClipboardChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class);
             if (name.equals("actorClipboardReplay")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class, long.class, String.class, long[].class);

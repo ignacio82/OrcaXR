@@ -30,6 +30,7 @@ export function startProjectJni(profile = "debug") {
   signatures.capabilityChecks = ["String", "byte[]", "String"];
   signatures.renderChecks = ["String", "byte[]", "String"];
   signatures.facetRegionChecks = ["String", "byte[]", "byte[]", "String"];
+  signatures.paintStrokeChecks = ["String", "byte[]", "byte[]", "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -106,7 +107,7 @@ export function startProjectJni(profile = "debug") {
     // A collator mode the harness maps to a Java object, or none.
     if (type === "PresetCollator" || type === "SearchFolding")
       return sized(Buffer.from(v ?? "none", "utf8"));
-    if (type === "byte[]" && v == null) return i32(-1);
+    if ((type === "byte[]" || type === "char[]") && v == null) return i32(-1);
     if (type === "byte[]") return sized(Buffer.from(v));
     const width = type === "char[]" ? 2 : 8,
       b = Buffer.alloc(v.length * width);
@@ -334,6 +335,20 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     facet_region(request) {
       return call("sessionFacetRegion", this.handle, request);
+    }
+    paint_stroke(guard, request) {
+      return wrap(
+        ProjectPaintStroke,
+        call("paintStrokeOpen", this.handle, guard.handle, request),
+      );
+    }
+    stage_paint_stroke(stroke, label) {
+      return call(
+        "stagePaintStroke",
+        this.handle,
+        stroke.handle,
+        label === undefined ? null : Array.from(label),
+      );
     }
     asset_fingerprint() {
       return call("assetFingerprint", this.handle);
@@ -707,6 +722,14 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     id(p, start, count) {
       return call("selectionId", this.handle, p, start, count);
+    }
+  }
+  class ProjectPaintStroke extends Handle {
+    sample(request) {
+      return call("paintStrokeSample", this.handle, request);
+    }
+    overlay(request) {
+      return call("paintStrokeOverlay", this.handle, request);
     }
   }
   class CapturedHistory extends Handle {

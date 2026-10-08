@@ -185,6 +185,19 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun facetRegion(request: ProjectIntents.FacetRegionRequest): ProjectIntents.FacetRegionReply = read {
         ProjectIntents.decodeFacetRegionReply(NativeProject.sessionFacetRegion(it, ProjectIntents.encodeFacetRegionRequest(request)))
     }
+    /** Open a paint stroke on the state [guard] captured, which must still be
+     * current. The stroke owns its mesh: samples and overlay pages run on it,
+     * off this session's call gate. */
+    fun paintStroke(guard: ProjectGuard, request: ProjectIntents.PaintStrokeOpen): ProjectPaintStroke = read {
+        own(NativeProject.paintStrokeOpen(it, guard.reference(), ProjectIntents.encodePaintStrokeOpen(request)), ::ProjectPaintStroke)
+    }
+    /** The stroke's whole gesture as one staged edit for `executeStaged`, or
+     * null when it touched no facet. A stroke whose state changed refuses
+     * `stale`; do not sample the stroke while it stages. */
+    fun stagePaintStroke(stroke: ProjectPaintStroke, label: String? = null): ProjectStagedInput? = read {
+        val id = NativeProject.stagePaintStroke(it, stroke.reference(), label?.toCharArray())
+        if (id == 0L) null else ProjectStagedInput.own(this, id)
+    }
     fun assetFingerprint(): String = read { NativeProject.assetFingerprint(it) }
     fun asset(position: Long): ProjectAsset = read { own(NativeProject.asset(it, position), ::ProjectAsset) }
     fun captureGuard(): ProjectGuard = read { own(NativeProject.captureGuard(it), ::ProjectGuard) }
@@ -208,6 +221,18 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     }
 }
 class ProjectGuard internal constructor(handle: Long) : ProjectHandle(handle)
+
+/** One paint gesture, opened by [ProjectSession.paintStroke]. Samples
+ * accumulate the facets and refined tree the commit stages; nothing reaches
+ * the project before [ProjectSession.stagePaintStroke]. */
+class ProjectPaintStroke internal constructor(handle: Long) : ProjectHandle(handle) {
+    fun sample(request: ProjectIntents.PaintStrokeSample): ProjectIntents.PaintStrokeSampleReply = read {
+        ProjectIntents.decodePaintStrokeSampleReply(NativeProject.paintStrokeSample(it, ProjectIntents.encodePaintStrokeSample(request)))
+    }
+    fun overlay(request: ProjectIntents.PaintStrokeOverlayRequest): ProjectIntents.PaintStrokeOverlay = read {
+        ProjectIntents.decodePaintStrokeOverlay(NativeProject.paintStrokeOverlay(it, ProjectIntents.encodePaintStrokeOverlayRequest(request)))
+    }
+}
 /** Immutable complete bundle; declaration positions match its project snapshot. */
 class ProjectExportCapture internal constructor(handle: Long) : ProjectHandle(handle) {
     fun project(): ProjectSnapshot = read { own(NativeProject.exportProject(it), ::ProjectSnapshot) }

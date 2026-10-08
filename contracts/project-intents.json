@@ -3159,6 +3159,60 @@
         "invalid": "FacetRegionIssues",
         "stale": "Empty"
       }
+    },
+    "PaintStrokeOpen": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id",
+        "channel": "FacetChannelName",
+        "target": "FacetRegionState"
+      }
+    },
+    "PaintStrokeSample": {
+      "kind": "object",
+      "fields": {
+        "seedTriangle": "Counter",
+        "tool": "FacetRegionTool",
+        "triangleSplitting": "Flag",
+        "clippingPlane": "OptionalFacetClippingPlane",
+        "transform": "OptionalFacetSelectionTransform",
+        "highlightByAngleDegrees": "OptionalFinite"
+      }
+    },
+    "PaintStrokeSampled": {
+      "kind": "object",
+      "fields": {
+        "selectedTriangles": "Counter",
+        "leaves": "Counter",
+        "selectedLeaves": "Counter",
+        "strokeTriangles": "Counter",
+        "refined": "Flag"
+      }
+    },
+    "PaintStrokeSampleReply": {
+      "kind": "union",
+      "variants": {
+        "sampled": "PaintStrokeSampled",
+        "invalid": "FacetRegionIssues",
+        "stale": "Empty"
+      }
+    },
+    "PaintStrokeOverlayRequest": {
+      "kind": "object",
+      "fields": {
+        "start": "Counter",
+        "count": "Counter"
+      }
+    },
+    "PaintStrokeOverlay": {
+      "kind": "object",
+      "fields": {
+        "guard": "FacetGuard",
+        "strokeTriangles": "Counter",
+        "refined": "Flag",
+        "totalRanges": "Counter",
+        "ranges": "TriangleRanges"
+      }
     }
   },
   "roots": [
@@ -3221,7 +3275,12 @@
     "RenderRequest",
     "RenderPage",
     "FacetRegionRequest",
-    "FacetRegionReply"
+    "FacetRegionReply",
+    "PaintStrokeOpen",
+    "PaintStrokeSample",
+    "PaintStrokeSampleReply",
+    "PaintStrokeOverlayRequest",
+    "PaintStrokeOverlay"
   ],
   "sessionVersion": 1
 }

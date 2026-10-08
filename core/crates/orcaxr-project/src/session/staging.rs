@@ -56,6 +56,10 @@ pub(super) struct StagingPool {
     ready: BTreeMap<u64, StagedResource>,
 }
 impl StagingPool {
+    /// The configured per-work unit budget.
+    pub fn max_units(&self) -> u64 {
+        self.limits.max_units
+    }
     pub fn usage(&self) -> StagingUsage {
         *self.budget.lock().expect("private staging counter lock")
     }

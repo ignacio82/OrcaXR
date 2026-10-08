@@ -318,7 +318,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   collapsed paint survives. Dense expansion requires an explicit host root budget; the
   stateless canonicalizer's parser limits are not persisted project limits.
   Graph validation now checks annotation/source topology consistency; revision
-  plate requests have native session guards; paint gesture/topology guards and commands remain open.
+  plate requests have native session guards; native paint strokes stage one guarded commit each.
 - Smart Paint is a validated, bounded proposal plus operator correction and one
   canonical transaction. Check per-provider/payload consent before sending data.
 - Wipe towers reserve their complete printed footprint against the printable

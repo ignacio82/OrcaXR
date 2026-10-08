@@ -465,6 +465,44 @@ impl ProjectSession {
             .map_err(|refusal| error(refusal.code()))?;
         wire::encode_facet_region_reply(&reply).map_err(|_| error("output_limit"))
     }
+    /// Open a paint stroke on the state `guard` captured: a `PaintStrokeOpen`.
+    /// The stroke owns its mesh, so its samples never touch this session.
+    pub fn paint_stroke(
+        &self,
+        guard: &ProjectGuard,
+        request: &str,
+    ) -> Result<ProjectPaintStroke, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_paint_stroke_open(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .paint_stroke(&guard.inner, &request)
+            .map(|inner| ProjectPaintStroke { inner })
+            .map_err(|refusal| error(refusal.code()))
+    }
+    /// Stage the stroke's whole gesture as one edit for `executeStaged`; 0
+    /// when it touched no facet. A stroke whose state changed refuses `stale`.
+    pub fn stage_paint_stroke(
+        &mut self,
+        stroke: &ProjectPaintStroke,
+        label: Option<Vec<u16>>,
+    ) -> Result<f64, JsValue> {
+        use orcaxr_contracts::project_intent_types::SessionError;
+        self.inner
+            .stage_paint_stroke(&stroke.inner, label)
+            .map(|id| id.map_or(0.0, |id| id as f64))
+            .map_err(|value| {
+                error(match value {
+                    SessionError::Disposed => "disposed",
+                    SessionError::Stale => "stale",
+                    SessionError::ResourceLimit => "resource_limit",
+                    _ => "invalid_request",
+                })
+            })
+    }
     pub fn asset_fingerprint(&self) -> String {
         self.inner.assets().bundle_fingerprint().into()
     }
@@ -540,6 +578,41 @@ impl ProjectSession {
 #[wasm_bindgen]
 pub struct ProjectGuard {
     pub(crate) inner: LocalGuard,
+}
+
+/// One paint gesture, opened on a session guard. Samples and overlay pages
+/// run here, off the session; the session stages its commit.
+#[wasm_bindgen]
+pub struct ProjectPaintStroke {
+    inner: orcaxr_project::facets::paint_stroke::PaintStroke,
+}
+#[wasm_bindgen]
+impl ProjectPaintStroke {
+    /// A `PaintStrokeSample`; returns a `PaintStrokeSampleReply`.
+    pub fn sample(&mut self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_paint_stroke_sample(request).map_err(|_| error("invalid_request"))?;
+        wire::encode_paint_stroke_sample_reply(&self.inner.sample(&request))
+            .map_err(|_| error("output_limit"))
+    }
+    /// A `PaintStrokeOverlayRequest`; returns a `PaintStrokeOverlay`.
+    pub fn overlay(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request = wire::decode_paint_stroke_overlay_request(request)
+            .map_err(|_| error("invalid_request"))?;
+        let page = self
+            .inner
+            .overlay(&request)
+            .map_err(|refusal| error(refusal.code()))?;
+        wire::encode_paint_stroke_overlay(&page).map_err(|_| error("output_limit"))
+    }
 }
 
 #[wasm_bindgen]

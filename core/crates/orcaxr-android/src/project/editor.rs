@@ -261,6 +261,77 @@ pub(super) fn session_facet_region(
     })?;
     string(env, json)
 }
+/// Open a paint stroke on the state `guard` captured; the stroke owns its
+/// mesh and samples off the session.
+pub(super) fn paint_stroke_open(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    guard: jlong,
+    request: JString<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_paint_stroke_open)?;
+    let guard = with_guard(guard, |g| Ok(g.clone()))?;
+    capture(|| {
+        with_session(handle, |s| {
+            s.paint_stroke(&guard, &request)
+                .map(|stroke| Record::PaintStroke(Box::new(stroke)))
+                .map_err(|refusal| refusal.code())
+        })
+    })
+}
+pub(super) fn paint_stroke_sample(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_paint_stroke_sample)?;
+    let json = with_paint_stroke(handle, |stroke| {
+        encoded(
+            &stroke.sample(&request),
+            wire::encode_paint_stroke_sample_reply,
+        )
+    })?;
+    string(env, json)
+}
+pub(super) fn paint_stroke_overlay(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_paint_stroke_overlay_request)?;
+    let json = with_paint_stroke(handle, |stroke| {
+        encoded(
+            &stroke.overlay(&request).map_err(|refusal| refusal.code())?,
+            wire::encode_paint_stroke_overlay,
+        )
+    })?;
+    string(env, json)
+}
+/// The stroke's staged commit ID, or 0 when it touched no facet.
+pub(super) fn stage_paint_stroke(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    stroke: jlong,
+    label: JCharArray<'_>,
+) -> Result<jlong> {
+    let label = if label.is_null() {
+        None
+    } else {
+        Some(super::model::chars(env, &label)?)
+    };
+    with_paint_stroke(stroke, |stroke| {
+        with_session(handle, |s| {
+            s.stage_paint_stroke(stroke, label)
+                .map(|id| id.map_or(0, |id| id as jlong))
+                .map_err(|error| match error {
+                    wire::SessionError::Disposed => "disposed",
+                    wire::SessionError::Stale => "stale",
+                    wire::SessionError::ResourceLimit => "resource_limit",
+                    _ => "invalid_request",
+                })
+        })
+    })
+}
 pub(super) fn project_settings_targets(
     env: &mut JNIEnv<'_>,
     handle: jlong,

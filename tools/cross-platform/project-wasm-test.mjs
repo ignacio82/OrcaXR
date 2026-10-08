@@ -12,6 +12,7 @@ import { replayProjection } from "./projection-replay.mjs";
 import { replayCapabilities } from "./capability-replay.mjs";
 import { replayRender } from "./render-replay.mjs";
 import { replayFacetRegions } from "./facet-region-replay.mjs";
+import { replayPaintStrokes } from "./paint-stroke-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -74,6 +75,17 @@ if (isMainThread) {
     assert.deepEqual(
       [result.facetRegionReplies, result.facetRegionRefusals],
       [136, 2],
+    );
+    // Paint strokes over a live session, staged and executed.
+    assert.deepEqual(
+      [
+        result.paintStrokeOpens,
+        result.paintStrokeSamples,
+        result.paintStrokeOverlays,
+        result.paintStrokeCommits,
+        result.paintStrokeRefusals,
+      ],
+      [11, 18, 5, 11, 9],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -333,6 +345,17 @@ if (isMainThread) {
     ),
     layout,
   );
+  const strokes = replayPaintStrokes(
+    core,
+    JSON.parse(
+      await readFile(
+        new URL("testdata/cross-platform/paint-stroke-vectors.json", root),
+      ),
+    ),
+    layout,
+    JSON.parse(await readFile(new URL("contracts/project-staging.json", root)))
+      .version,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -355,6 +378,7 @@ if (isMainThread) {
       ...capabilities,
       ...renders,
       ...regions,
+      ...strokes,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

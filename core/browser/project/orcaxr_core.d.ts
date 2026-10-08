@@ -371,6 +371,24 @@ export class ProjectOpen {
 }
 
 /**
+ * One paint gesture, opened on a session guard. Samples and overlay pages
+ * run here, off the session; the session stages its commit.
+ */
+export class ProjectPaintStroke {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * A `PaintStrokeOverlayRequest`; returns a `PaintStrokeOverlay`.
+     */
+    overlay(request: string): string;
+    /**
+     * A `PaintStrokeSample`; returns a `PaintStrokeSampleReply`.
+     */
+    sample(request: string): string;
+}
+
+/**
  * One live preflight result, read item by item as contract JSON.
  */
 export class ProjectPreflight {
@@ -471,6 +489,11 @@ export class ProjectSession {
     is_disposed(): boolean;
     is_export_current(guard: ProjectGuard): boolean;
     is_open_current(ticket: ProjectOpen): boolean;
+    /**
+     * Open a paint stroke on the state `guard` captured: a `PaintStrokeOpen`.
+     * The stroke owns its mesh, so its samples never touch this session.
+     */
+    paint_stroke(guard: ProjectGuard, request: string): ProjectPaintStroke;
     pending_count(): number;
     release_staged(id: number): boolean;
     /**
@@ -484,6 +507,11 @@ export class ProjectSession {
     selection(): CapturedSelection;
     snapshot(): CapturedProject;
     stage_commands(input: ProjectCommandUpload): number;
+    /**
+     * Stage the stroke's whole gesture as one edit for `executeStaged`; 0
+     * when it touched no facet. A stroke whose state changed refuses `stale`.
+     */
+    stage_paint_stroke(stroke: ProjectPaintStroke, label?: Uint16Array | null): number;
     staging_usage(): Float64Array;
     submit(request: string): ProjectReply | undefined;
     /**
@@ -625,6 +653,7 @@ export interface InitOutput {
     readonly __wbg_projectimportpreview_free: (a: number, b: number) => void;
     readonly __wbg_projectmodelupload_free: (a: number, b: number) => void;
     readonly __wbg_projectopen_free: (a: number, b: number) => void;
+    readonly __wbg_projectpaintstroke_free: (a: number, b: number) => void;
     readonly __wbg_projectpreflight_free: (a: number, b: number) => void;
     readonly __wbg_projectquerylist_free: (a: number, b: number) => void;
     readonly __wbg_projectquerynode_free: (a: number, b: number) => void;
@@ -732,6 +761,8 @@ export interface InitOutput {
     readonly projectimportpreview_read: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectmodelupload_append: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectmodelupload_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly projectpaintstroke_overlay: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectpaintstroke_sample: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectpreflight_issue: (a: number, b: number) => [number, number, number, number];
     readonly projectpreflight_omission: (a: number, b: number) => [number, number, number, number];
     readonly projectpreflight_printable_instance: (a: number, b: number) => [number, number, number, number];
@@ -773,6 +804,7 @@ export interface InitOutput {
     readonly projectsession_is_disposed: (a: number) => number;
     readonly projectsession_is_export_current: (a: number, b: number) => number;
     readonly projectsession_is_open_current: (a: number, b: number) => number;
+    readonly projectsession_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_pending_count: (a: number) => number;
     readonly projectsession_release_staged: (a: number, b: number) => [number, number, number];
     readonly projectsession_render: (a: number, b: number, c: number) => [number, number, number, number];
@@ -782,6 +814,7 @@ export interface InitOutput {
     readonly projectsession_selection: (a: number) => number;
     readonly projectsession_snapshot: (a: number) => number;
     readonly projectsession_stage_commands: (a: number, b: number) => [number, number, number];
+    readonly projectsession_stage_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_staging_usage: (a: number) => [number, number];
     readonly projectsession_submit: (a: number, b: number, c: number) => number;
     readonly projectsession_write_archive: (a: number, b: number, c: number, d: number) => [number, number, number];

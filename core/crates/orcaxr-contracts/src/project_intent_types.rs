@@ -6575,6 +6575,147 @@ fn read_facet_region_reply(v: &Value) -> Result<FacetRegionReply, InvalidIntent>
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaintStrokeOpen {
+    pub volume_id: Id,
+    pub channel: FacetChannelName,
+    pub target: FacetRegionState,
+}
+fn read_paint_stroke_open(v: &Value) -> Result<PaintStrokeOpen, InvalidIntent> {
+    let object = fields(v, &["volumeId", "channel", "target"], false)?;
+    Ok(PaintStrokeOpen {
+        volume_id: read_id(&object["volumeId"])?,
+        channel: read_facet_channel_name(&object["channel"])?,
+        target: read_facet_region_state(&object["target"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaintStrokeSample {
+    pub seed_triangle: Counter,
+    pub tool: FacetRegionTool,
+    pub triangle_splitting: Flag,
+    pub clipping_plane: OptionalFacetClippingPlane,
+    pub transform: OptionalFacetSelectionTransform,
+    pub highlight_by_angle_degrees: OptionalFinite,
+}
+fn read_paint_stroke_sample(v: &Value) -> Result<PaintStrokeSample, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "seedTriangle",
+            "tool",
+            "triangleSplitting",
+            "clippingPlane",
+            "transform",
+            "highlightByAngleDegrees",
+        ],
+        false,
+    )?;
+    Ok(PaintStrokeSample {
+        seed_triangle: read_counter(&object["seedTriangle"])?,
+        tool: read_facet_region_tool(&object["tool"])?,
+        triangle_splitting: read_flag(&object["triangleSplitting"])?,
+        clipping_plane: read_optional_facet_clipping_plane(&object["clippingPlane"])?,
+        transform: read_optional_facet_selection_transform(&object["transform"])?,
+        highlight_by_angle_degrees: read_optional_finite(&object["highlightByAngleDegrees"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaintStrokeSampled {
+    pub selected_triangles: Counter,
+    pub leaves: Counter,
+    pub selected_leaves: Counter,
+    pub stroke_triangles: Counter,
+    pub refined: Flag,
+}
+fn read_paint_stroke_sampled(v: &Value) -> Result<PaintStrokeSampled, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "selectedTriangles",
+            "leaves",
+            "selectedLeaves",
+            "strokeTriangles",
+            "refined",
+        ],
+        false,
+    )?;
+    Ok(PaintStrokeSampled {
+        selected_triangles: read_counter(&object["selectedTriangles"])?,
+        leaves: read_counter(&object["leaves"])?,
+        selected_leaves: read_counter(&object["selectedLeaves"])?,
+        stroke_triangles: read_counter(&object["strokeTriangles"])?,
+        refined: read_flag(&object["refined"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PaintStrokeSampleReply {
+    Sampled(PaintStrokeSampled),
+    Invalid(FacetRegionIssues),
+    Stale(Empty),
+}
+fn read_paint_stroke_sample_reply(v: &Value) -> Result<PaintStrokeSampleReply, InvalidIntent> {
+    let object = fields(v, &["sampled", "invalid", "stale"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "sampled" => Ok(PaintStrokeSampleReply::Sampled(read_paint_stroke_sampled(
+            value,
+        )?)),
+        "invalid" => Ok(PaintStrokeSampleReply::Invalid(read_facet_region_issues(
+            value,
+        )?)),
+        "stale" => Ok(PaintStrokeSampleReply::Stale(read_empty(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaintStrokeOverlayRequest {
+    pub start: Counter,
+    pub count: Counter,
+}
+fn read_paint_stroke_overlay_request(
+    v: &Value,
+) -> Result<PaintStrokeOverlayRequest, InvalidIntent> {
+    let object = fields(v, &["start", "count"], false)?;
+    Ok(PaintStrokeOverlayRequest {
+        start: read_counter(&object["start"])?,
+        count: read_counter(&object["count"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaintStrokeOverlay {
+    pub guard: FacetGuard,
+    pub stroke_triangles: Counter,
+    pub refined: Flag,
+    pub total_ranges: Counter,
+    pub ranges: TriangleRanges,
+}
+fn read_paint_stroke_overlay(v: &Value) -> Result<PaintStrokeOverlay, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "guard",
+            "strokeTriangles",
+            "refined",
+            "totalRanges",
+            "ranges",
+        ],
+        false,
+    )?;
+    Ok(PaintStrokeOverlay {
+        guard: read_facet_guard(&object["guard"])?,
+        stroke_triangles: read_counter(&object["strokeTriangles"])?,
+        refined: read_flag(&object["refined"])?,
+        total_ranges: read_counter(&object["totalRanges"])?,
+        ranges: read_triangle_ranges(&object["ranges"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -7089,5 +7230,53 @@ pub fn decode_facet_region_reply(text: &str) -> Result<FacetRegionReply, Invalid
 pub fn encode_facet_region_reply(value: &FacetRegionReply) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_facet_region_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_paint_stroke_open(text: &str) -> Result<PaintStrokeOpen, InvalidIntent> {
+    read_paint_stroke_open(&super::project_intents::parse(text)?)
+}
+pub fn encode_paint_stroke_open(value: &PaintStrokeOpen) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_paint_stroke_open(&text)?;
+    Ok(text)
+}
+pub fn decode_paint_stroke_sample(text: &str) -> Result<PaintStrokeSample, InvalidIntent> {
+    read_paint_stroke_sample(&super::project_intents::parse(text)?)
+}
+pub fn encode_paint_stroke_sample(value: &PaintStrokeSample) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_paint_stroke_sample(&text)?;
+    Ok(text)
+}
+pub fn decode_paint_stroke_sample_reply(
+    text: &str,
+) -> Result<PaintStrokeSampleReply, InvalidIntent> {
+    read_paint_stroke_sample_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_paint_stroke_sample_reply(
+    value: &PaintStrokeSampleReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_paint_stroke_sample_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_paint_stroke_overlay_request(
+    text: &str,
+) -> Result<PaintStrokeOverlayRequest, InvalidIntent> {
+    read_paint_stroke_overlay_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_paint_stroke_overlay_request(
+    value: &PaintStrokeOverlayRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_paint_stroke_overlay_request(&text)?;
+    Ok(text)
+}
+pub fn decode_paint_stroke_overlay(text: &str) -> Result<PaintStrokeOverlay, InvalidIntent> {
+    read_paint_stroke_overlay(&super::project_intents::parse(text)?)
+}
+pub fn encode_paint_stroke_overlay(value: &PaintStrokeOverlay) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_paint_stroke_overlay(&text)?;
     Ok(text)
 }

@@ -165,6 +165,15 @@ impl serde_json::ser::Formatter for JsNumbers {
         }
     }
 }
+/// A value as its wire text, written without the wire's byte budget: the
+/// measure of a command a native host built and never sends.
+pub fn write_unbounded(
+    value: &impl serde::Serialize,
+    out: &mut dyn Write,
+) -> Result<(), InvalidIntent> {
+    let mut serializer = serde_json::Serializer::with_formatter(out, JsNumbers);
+    value.serialize(&mut serializer).map_err(|_| InvalidIntent)
+}
 pub(crate) fn encode(value: &impl serde::Serialize) -> Result<String, InvalidIntent> {
     let mut output = Output(Vec::new());
     let mut serializer = serde_json::Serializer::with_formatter(&mut output, JsNumbers);

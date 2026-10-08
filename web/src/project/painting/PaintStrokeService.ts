@@ -502,28 +502,7 @@ export class PaintStrokeService {
       readonly value?: FacetAnnotationValue<Channel>;
     },
   ): void {
-    if (request.mode === 'erase' || request.value === undefined) return;
-    const channel = (request.channel ?? 'color') as PaintChannel;
-    if (channel !== 'color') {
-      const allowed = CHANNEL_STATE_ORDER[channel];
-      if (!allowed.includes(request.value as JsonValue)) {
-        throw new PaintTargetError(
-          `${String(request.value)} is not a valid ${channelLabel(channel)} state`,
-          'invalid-settings',
-        );
-      }
-      return;
-    }
-    const filamentId = request.value as FilamentId;
-    const palette = projectPaintPalette(state, { includeUnavailable: true });
-    const entry = palette.entries.find((candidate) => candidate.filamentId === filamentId);
-    if (!entry) throw new PaintTargetError(`Unknown filament ${filamentId}`, 'unknown-filament');
-    if (!entry.selectable) {
-      throw new PaintTargetError(
-        entry.unavailableReason ?? `Filament ${filamentId} cannot be painted`,
-        'unavailable-filament',
-      );
-    }
+    assertPaintTarget(state, request);
   }
 
   private meshFor(assetId: string, volumeId: VolumeId): FacetSelectionMesh {
@@ -648,6 +627,43 @@ export class PaintStrokeService {
 
 function assertGuardTargetsVolume(guard: FacetAnnotationGuard | undefined, volumeId: VolumeId): void {
   if (guard && guard.volumeId !== volumeId) throw new StaleFacetAnnotationResultError('project');
+}
+
+/**
+ * Refuse a paint target the channel cannot hold: an assigned state outside the
+ * channel's pinned order, or a colour that is not a selectable palette entry.
+ * Erasing always passes.
+ */
+export function assertPaintTarget<Channel extends PaintChannel>(
+  state: ProjectState,
+  request: {
+    readonly mode: 'paint' | 'erase';
+    readonly channel?: Channel;
+    readonly value?: FacetAnnotationValue<Channel>;
+  },
+): void {
+  if (request.mode === 'erase' || request.value === undefined) return;
+  const channel = (request.channel ?? 'color') as PaintChannel;
+  if (channel !== 'color') {
+    const allowed = CHANNEL_STATE_ORDER[channel];
+    if (!allowed.includes(request.value as JsonValue)) {
+      throw new PaintTargetError(
+        `${String(request.value)} is not a valid ${channelLabel(channel)} state`,
+        'invalid-settings',
+      );
+    }
+    return;
+  }
+  const filamentId = request.value as FilamentId;
+  const palette = projectPaintPalette(state, { includeUnavailable: true });
+  const entry = palette.entries.find((candidate) => candidate.filamentId === filamentId);
+  if (!entry) throw new PaintTargetError(`Unknown filament ${filamentId}`, 'unknown-filament');
+  if (!entry.selectable) {
+    throw new PaintTargetError(
+      entry.unavailableReason ?? `Filament ${filamentId} cannot be painted`,
+      'unavailable-filament',
+    );
+  }
 }
 
 /** Displayed filament-ID order used by Gap Fill's neighbour precedence. */

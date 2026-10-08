@@ -46,7 +46,7 @@ export function answerFacetRegion(
   request: ProjectFacetRegionRequestWire,
 ): ProjectFacetRegionReplyWire {
   if (request.count > FACET_REGION_PAGE_LIMIT) throw new FacetRegionRefusal('invalid-request');
-  const volumeId = text(request.volumeId);
+  const volumeId = wireText(request.volumeId);
   const volume = snapshot.state.plates
     .flatMap((plate) => plate.objects)
     .flatMap((object) => object.volumes)
@@ -70,8 +70,8 @@ export function answerFacetRegion(
     (_, i) => [indices[i * 3], indices[i * 3 + 1], indices[i * 3 + 2]] as const,
   );
   const guard = { topologyRevision: volume.source.topologyRevision, triangleCount: volume.source.triangleCount };
-  const clippingPlane = 'value' in request.clippingPlane ? clipping(request.clippingPlane.value) : undefined;
-  const transform = 'value' in request.transform ? selectionTransform(request.transform.value) : undefined;
+  const clippingPlane = 'value' in request.clippingPlane ? regionClippingPlane(request.clippingPlane.value) : undefined;
+  const transform = 'value' in request.transform ? regionSelectionTransform(request.transform.value) : undefined;
   let selection;
   try {
     selection = selectFacetRegion({
@@ -80,7 +80,7 @@ export function answerFacetRegion(
       channel: request.channel as FacetAnnotationChannel,
       guard,
       seedTriangle: request.seedTriangle,
-      tool: tool(request.tool),
+      tool: regionTool(request.tool),
       ...(clippingPlane ? { clippingPlane } : {}),
       ...(transform ? { transform } : {}),
       ...('value' in request.highlightByAngleDegrees
@@ -91,9 +91,9 @@ export function answerFacetRegion(
     if (error instanceof FacetAnnotationValidationError) {
       return {
         invalid: error.issues.map((issue) => ({
-          code: units(issue.code),
-          path: units(issue.path),
-          message: units(issue.message),
+          code: wireUnits(issue.code),
+          path: wireUnits(issue.path),
+          message: wireUnits(issue.message),
         })),
       };
     }
@@ -106,8 +106,8 @@ export function answerFacetRegion(
     page: {
       guard: {
         revision: snapshot.revision,
-        hash: units(snapshot.hash),
-        volumeId: units(volume.id),
+        hash: wireUnits(snapshot.hash),
+        volumeId: wireUnits(volume.id),
         topologyRevision: guard.topologyRevision,
         triangleCount: guard.triangleCount,
       },
@@ -126,7 +126,8 @@ export function answerFacetRegion(
   };
 }
 
-function tool(wire: ProjectFacetRegionRequestWire['tool']): FacetRegionTool {
+/** A wire tool as the selector takes it. */
+export function regionTool(wire: ProjectFacetRegionRequestWire['tool']): FacetRegionTool {
   const vector = (value: readonly number[]): Vec3 => [value[0], value[1], value[2]];
   const hit = (value: { readonly absent: unknown } | { readonly value: readonly number[] }) =>
     'value' in value ? { hit: vector(value.value) } : {};
@@ -153,11 +154,14 @@ function tool(wire: ProjectFacetRegionRequestWire['tool']): FacetRegionTool {
   };
 }
 
-function clipping(wire: { readonly normal: readonly number[]; readonly offset: number }): FacetClippingPlane {
+export function regionClippingPlane(wire: {
+  readonly normal: readonly number[];
+  readonly offset: number;
+}): FacetClippingPlane {
   return { normal: [wire.normal[0], wire.normal[1], wire.normal[2]], offset: wire.offset };
 }
 
-function selectionTransform(wire: {
+export function regionSelectionTransform(wire: {
   readonly linear: readonly (readonly number[])[];
   readonly translation: readonly number[];
   readonly scalingFactors: readonly number[];
@@ -171,22 +175,27 @@ function selectionTransform(wire: {
 }
 
 function paint(value: ProjectPaintValueInputWire): JsonValue {
-  return 'text' in value ? text(value.text) : value.flag;
+  return 'text' in value ? wireText(value.text) : value.flag;
+}
+
+/** A wire paint state as the selector takes it. */
+export function regionState(wire: ProjectFacetRegionStateWire): FacetRegionState {
+  return 'unpainted' in wire ? { kind: 'unpainted' } : { kind: 'assigned', value: paint(wire.assigned) };
 }
 
 function stateWire(state: FacetRegionState): ProjectFacetRegionStateWire {
   if (state.kind === 'unpainted') return { unpainted: {} };
   const value = state.value;
-  return { assigned: typeof value === 'boolean' ? { flag: value } : { text: units(String(value)) } };
+  return { assigned: typeof value === 'boolean' ? { flag: value } : { text: wireUnits(String(value)) } };
 }
 
-function text(value: readonly number[]): string {
+export function wireText(value: readonly number[]): string {
   let out = '';
   for (let offset = 0; offset < value.length; offset += 4096)
     out += String.fromCharCode(...value.slice(offset, offset + 4096));
   return out;
 }
 
-function units(value: string): number[] {
+export function wireUnits(value: string): number[] {
   return Array.from({ length: value.length }, (_, i) => value.charCodeAt(i));
 }

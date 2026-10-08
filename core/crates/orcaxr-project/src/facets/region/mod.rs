@@ -91,6 +91,33 @@ pub enum Tool {
     Sphere(Brush),
 }
 
+impl Tool {
+    /// The painter's triangle-splitting setting: brushes and height bands
+    /// subdivide adaptively; other tools ignore it.
+    pub fn with_triangle_splitting(self) -> Self {
+        match self {
+            Self::HeightRange {
+                start_z_mm,
+                height_mm,
+                ..
+            } => Self::HeightRange {
+                start_z_mm,
+                height_mm,
+                triangle_splitting: Some(true),
+            },
+            Self::Circle(brush) => Self::Circle(Brush {
+                triangle_splitting: Some(true),
+                ..brush
+            }),
+            Self::Sphere(brush) => Self::Sphere(Brush {
+                triangle_splitting: Some(true),
+                ..brush
+            }),
+            other => other,
+        }
+    }
+}
+
 /// One channel's assignments as canonical state stores them.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
@@ -116,7 +143,15 @@ pub struct Request<'a> {
     /// as canonical JSON, validated like the browser's raw input.
     pub refinement: Option<&'a Value>,
     /// Dense working roots supplied mid-gesture, one per source facet.
-    pub refined_roots: Option<&'a Value>,
+    pub refined_roots: Option<Roots<'a>>,
+}
+
+/// Dense working roots: host JSON, validated as the browser's raw input, or a
+/// tree this core produced (a stroke's post-sample tree).
+#[derive(Debug, Clone, Copy)]
+pub enum Roots<'a> {
+    Json(&'a Value),
+    Nodes(&'a [EncodedNode]),
 }
 
 /// `{ kind: 'unpainted' }` or `{ kind: 'assigned', value }`.

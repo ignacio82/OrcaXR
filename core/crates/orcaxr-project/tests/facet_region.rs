@@ -8,8 +8,8 @@ use orcaxr_project::facets::{
     Channel, PaintValue,
     region::{
         self, Assignment, Brush, ClippingPlane, EncodedNode, GapFillReplacement, LeafRef, Mesh,
-        RefinedLeaf, RefinedSelection, RegionError, RegionState, Request, Selection, StateUpdate,
-        Tool, Transform,
+        RefinedLeaf, RefinedSelection, RegionError, RegionState, Request, Roots, Selection,
+        StateUpdate, Tool, Transform,
     },
 };
 use serde_json::Value;
@@ -239,7 +239,7 @@ fn region_selection_matches_the_browser() {
             }),
             highlight_by_angle_degrees: r.get("highlightByAngleDegrees").map(number),
             refinement: refinement.as_ref(),
-            refined_roots: refined_roots.as_ref(),
+            refined_roots: refined_roots.as_ref().map(Roots::Json),
         };
         let result = &case["result"];
         if let Some(expected) = result.get("materialized") {

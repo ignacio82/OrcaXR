@@ -8,7 +8,7 @@ use super::region::{
     self, Assignment, Brush, ClippingPlane, Mesh, RegionError, RegionState, Request, Tool,
     Transform,
 };
-use super::{Channel, PaintValue};
+use super::{Channel, PaintValue, validation::Issue};
 use crate::{assets::AssetRepository, mesh::decode_indexed, store::ProjectSnapshot};
 use orcaxr_contracts::{canonical::Value, project_intent_types as wire};
 
@@ -72,7 +72,7 @@ pub fn reply(
         .chunks_exact(3)
         .map(|t| [t[0] as f64, t[1] as f64, t[2] as f64])
         .collect();
-    let channel = channel(&request.channel);
+    let channel = channel_of(&request.channel);
     let annotations = &volume.annotations;
     let assignments = assignments(match channel {
         Channel::Color => annotations.color.value(),
@@ -94,26 +94,9 @@ pub fn reply(
         guard_topology_revision: topology,
         guard_triangle_count: triangle_count,
         seed_triangle: request.seed_triangle as f64,
-        tool: tool(&request.tool),
-        clipping_plane: match &request.clipping_plane {
-            wire::OptionalFacetClippingPlane::Value(p) => Some(ClippingPlane {
-                normal: vector(&p.normal),
-                offset: p.offset,
-            }),
-            wire::OptionalFacetClippingPlane::Absent(_) => None,
-        },
-        transform: match &request.transform {
-            wire::OptionalFacetSelectionTransform::Value(t) => Some(Transform {
-                linear: [
-                    vector(&t.linear[0]),
-                    vector(&t.linear[1]),
-                    vector(&t.linear[2]),
-                ],
-                translation: vector(&t.translation),
-                scaling_factors: vector(&t.scaling_factors),
-            }),
-            wire::OptionalFacetSelectionTransform::Absent(_) => None,
-        },
+        tool: region_tool(&request.tool),
+        clipping_plane: clipping_plane(&request.clipping_plane),
+        transform: transform_of(&request.transform),
         highlight_by_angle_degrees: optional(&request.highlight_by_angle_degrees),
         // Refined replies (prior refinement, triangle splitting) are a later
         // step; the exchange selects source facets as the browser's does.
@@ -123,16 +106,7 @@ pub fn reply(
     let selection = match selection {
         Ok(selection) => selection,
         Err(RegionError::Invalid(issues)) => {
-            return Ok(wire::FacetRegionReply::Invalid(
-                issues
-                    .iter()
-                    .map(|issue| wire::FacetRegionIssue {
-                        code: units(issue.code),
-                        path: units(&issue.path),
-                        message: units(&issue.message),
-                    })
-                    .collect(),
-            ));
+            return Ok(wire::FacetRegionReply::Invalid(issues_wire(&issues)));
         }
         Err(RegionError::StaleTopology) => {
             return Ok(wire::FacetRegionReply::Stale(wire::Empty {}));
@@ -170,7 +144,7 @@ pub fn reply(
     }))
 }
 
-fn channel(name: &wire::FacetChannelName) -> Channel {
+pub(super) fn channel_of(name: &wire::FacetChannelName) -> Channel {
     match name {
         wire::FacetChannelName::Color => Channel::Color,
         wire::FacetChannelName::Support => Channel::Support,
@@ -181,7 +155,7 @@ fn channel(name: &wire::FacetChannelName) -> Channel {
 }
 
 /// Canonical `[{ value, triangles }]` as the selector reads it.
-fn assignments(value: &Value) -> Vec<Assignment> {
+pub(super) fn assignments(value: &Value) -> Vec<Assignment> {
     let Value::Array(entries) = value else {
         return Vec::new();
     };
@@ -209,7 +183,8 @@ fn assignments(value: &Value) -> Vec<Assignment> {
         .collect()
 }
 
-fn tool(wire: &wire::FacetRegionTool) -> Tool {
+/// A wire tool as the selector takes it.
+pub(super) fn region_tool(wire: &wire::FacetRegionTool) -> Tool {
     let hit = |value: &wire::OptionalVector| match value {
         wire::OptionalVector::Value(v) => Some(vector(v)),
         wire::OptionalVector::Absent(_) => None,
@@ -248,6 +223,50 @@ fn paint(value: &wire::PaintValueInput) -> PaintValue {
     }
 }
 
+/// A wire paint state as the selector takes it.
+pub(super) fn state_of(wire: &wire::FacetRegionState) -> RegionState {
+    match wire {
+        wire::FacetRegionState::Unpainted(_) => RegionState::Unpainted,
+        wire::FacetRegionState::Assigned(value) => RegionState::Assigned(paint(value)),
+    }
+}
+
+pub(super) fn clipping_plane(wire: &wire::OptionalFacetClippingPlane) -> Option<ClippingPlane> {
+    match wire {
+        wire::OptionalFacetClippingPlane::Value(p) => Some(ClippingPlane {
+            normal: vector(&p.normal),
+            offset: p.offset,
+        }),
+        wire::OptionalFacetClippingPlane::Absent(_) => None,
+    }
+}
+
+pub(super) fn transform_of(wire: &wire::OptionalFacetSelectionTransform) -> Option<Transform> {
+    match wire {
+        wire::OptionalFacetSelectionTransform::Value(t) => Some(Transform {
+            linear: [
+                vector(&t.linear[0]),
+                vector(&t.linear[1]),
+                vector(&t.linear[2]),
+            ],
+            translation: vector(&t.translation),
+            scaling_factors: vector(&t.scaling_factors),
+        }),
+        wire::OptionalFacetSelectionTransform::Absent(_) => None,
+    }
+}
+
+pub(super) fn issues_wire(issues: &[Issue]) -> Vec<wire::FacetRegionIssue> {
+    issues
+        .iter()
+        .map(|issue| wire::FacetRegionIssue {
+            code: units(issue.code),
+            path: units(&issue.path),
+            message: units(&issue.message),
+        })
+        .collect()
+}
+
 fn state_wire(state: &RegionState) -> wire::FacetRegionState {
     match state {
         RegionState::Unpainted => wire::FacetRegionState::Unpainted(wire::Empty {}),
@@ -260,7 +279,7 @@ fn state_wire(state: &RegionState) -> wire::FacetRegionState {
     }
 }
 
-fn ranges_wire(ranges: &[(u32, u32)]) -> Vec<wire::TriangleRangeInput> {
+pub(super) fn ranges_wire(ranges: &[(u32, u32)]) -> Vec<wire::TriangleRangeInput> {
     ranges
         .iter()
         .map(|&(start, end)| wire::TriangleRangeInput {
@@ -270,7 +289,7 @@ fn ranges_wire(ranges: &[(u32, u32)]) -> Vec<wire::TriangleRangeInput> {
         .collect()
 }
 
-fn optional(value: &wire::OptionalFinite) -> Option<f64> {
+pub(super) fn optional(value: &wire::OptionalFinite) -> Option<f64> {
     match value {
         wire::OptionalFinite::Value(v) => Some(*v),
         wire::OptionalFinite::Absent(_) => None,

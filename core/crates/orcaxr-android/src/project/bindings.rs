@@ -532,6 +532,32 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_paintStrokeOpen, paint_stroke_open, jlong,
+    handle: jlong,
+    guard: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_paintStrokeSample, paint_stroke_sample, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_paintStrokeOverlay, paint_stroke_overlay, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_stagePaintStroke, stage_paint_stroke, jlong,
+    handle: jlong,
+    stroke: jlong,
+    label: JCharArray<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

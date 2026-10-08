@@ -106,6 +106,12 @@ final class NativeProject {
     static native String sessionRender(long handle, String request);
     // Facet regions: a FacetRegionRequest against a session's acknowledged state.
     static native String sessionFacetRegion(long handle, String request);
+    // Paint strokes: open on a current guard, sample and page the overlay off
+    // the session, then stage the one commit (0 when nothing was touched).
+    static native long paintStrokeOpen(long handle, long guard, String request);
+    static native String paintStrokeSample(long handle, String request);
+    static native String paintStrokeOverlay(long handle, String request);
+    static native long stagePaintStroke(long handle, long stroke, char[] label);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

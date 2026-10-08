@@ -1531,7 +1531,11 @@ painting, and FullSpectrum operations that can support real native projects.
   - [x] Port the refined commit helpers: the tree a stroke commits, with
     homogeneous branches collapsed, for refined strokes and refined or dense
     Gap Fill, and the helpers' refusals (190 trees and 11 refusals exact).
-  - [ ] Finish picking, refined session replies, preparation kernels,
+  - [x] Run whole paint strokes over live sessions through WASM, JNI and
+    Kotlin: strokes open under a session guard, sample off the authority over
+    typed refined trees, page their overlay and stage one guarded commit
+    (refined tree or ranges); 11 browser strokes agree in every binding.
+  - [ ] Finish picking, refined leaf overlay packets, preparation kernels,
     renderer packets and device qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,

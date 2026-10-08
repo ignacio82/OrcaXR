@@ -97,6 +97,11 @@ assert.deepEqual(schema.roots, [
   "RenderPage",
   "FacetRegionRequest",
   "FacetRegionReply",
+  "PaintStrokeOpen",
+  "PaintStrokeSample",
+  "PaintStrokeSampleReply",
+  "PaintStrokeOverlayRequest",
+  "PaintStrokeOverlay",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

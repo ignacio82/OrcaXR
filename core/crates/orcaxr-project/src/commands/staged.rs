@@ -116,6 +116,26 @@ impl CapturedCommand {
         let command = prepare_intent(json).map_err(CaptureError::Preparation)?;
         Ok(Self::plain(command, units))
     }
+    /// A `facetStroke` a native host built rather than received, such as a
+    /// paint stroke's ranges: measured as the intent it stands for, but never
+    /// round-tripped through the wire's page limits.
+    pub fn facet_stroke(stroke: wire::FacetStroke, max_units: u64) -> Result<Self, CaptureError> {
+        let command = wire::Command::FacetStroke(stroke);
+        let units = measure(max_units, |out| {
+            out.write_all(b"[\"intent\",")?;
+            orcaxr_contracts::project_intents::write_unbounded(
+                &wire::Intent {
+                    version: 1,
+                    command: command.clone(),
+                },
+                &mut *out,
+            )
+            .map_err(io::Error::other)?;
+            out.write_all(b"]")
+        })?;
+        let command = super::prepare_decoded(command).map_err(CaptureError::Preparation)?;
+        Ok(Self::plain(command, units))
+    }
     pub fn clipboard_paste(
         clipboard: Arc<crate::clipboard::ClipboardData>,
         ids: IndependentObjectIds,

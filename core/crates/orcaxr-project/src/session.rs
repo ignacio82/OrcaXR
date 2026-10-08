@@ -217,6 +217,56 @@ impl<P: TimestampPolicy> ProjectSession<P> {
         }
         self.staging.stage(guard.clone(), work)
     }
+    /// Open a paint stroke on the state `guard` captured, which must still be
+    /// current. The stroke samples off the authority and stages its commit
+    /// under the same guard ([`Self::stage_paint_stroke`]).
+    pub fn paint_stroke(
+        &self,
+        guard: &LocalGuard,
+        request: &wire::PaintStrokeOpen,
+    ) -> Result<crate::facets::paint_stroke::PaintStroke, crate::facets::paint_stroke::Refusal>
+    {
+        use crate::facets::paint_stroke::{PaintStroke, Refusal};
+        if self.disposed {
+            return Err(Refusal::Disposed);
+        }
+        if !self.is_current(guard) {
+            return Err(Refusal::Stale);
+        }
+        let mut stroke = PaintStroke::open(&guard.project, self.bus.assets(), request)?;
+        stroke.session_guard = Some(guard.clone());
+        Ok(stroke)
+    }
+    /// Stage a session-opened stroke's whole gesture as one edit; `None` when
+    /// it touched no facet. Staging refuses as stale once anything changed
+    /// since the stroke opened, and the work's facet guard refuses it again
+    /// when it runs.
+    pub fn stage_paint_stroke(
+        &mut self,
+        stroke: &crate::facets::paint_stroke::PaintStroke,
+        label: Option<Vec<u16>>,
+    ) -> Result<Option<u64>, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        let guard = stroke
+            .session_guard
+            .as_ref()
+            .ok_or(wire::SessionError::InvalidRequest)?;
+        if !self.is_current(guard) {
+            return Err(wire::SessionError::Stale);
+        }
+        let work = stroke
+            .work(label, self.staging.max_units())
+            .map_err(|error| match error {
+                crate::commands::staged::CaptureError::Limit => wire::SessionError::ResourceLimit,
+                _ => wire::SessionError::InvalidRequest,
+            })?;
+        match work {
+            Some(work) => self.stage(guard, work).map(Some),
+            None => Ok(None),
+        }
+    }
     pub fn capture_guard(&self) -> Result<LocalGuard, wire::SessionError> {
         if self.disposed {
             return Err(wire::SessionError::Disposed);

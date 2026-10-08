@@ -1,6 +1,7 @@
 //! Sparse facet paint and bounded subdivision trees. Canonical storage keeps
 //! only subdivided source facets; dense roots are an explicitly budgeted,
 //! temporary editing representation. This is computation, not a project codec.
+pub mod paint_stroke;
 pub mod palette;
 pub mod region;
 pub mod region_exchange;

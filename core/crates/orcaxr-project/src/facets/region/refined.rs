@@ -74,35 +74,24 @@ fn issue(code: &'static str, path: &str, message: impl Into<String>) -> RegionEr
 
 pub(super) fn encoding_issues(request: &Request<'_>, issues: &mut Vec<Issue>) {
     let count = request.guard_triangle_count;
-    if let Some(roots) = request.refined_roots {
-        let Value::Array(roots) = roots else {
-            issues.push(Issue::new(
-                "invalid-facet-refinement-roots",
-                "refinedRoots",
-                "Dense facet refinement roots must be an array",
-            ));
+    match request.refined_roots {
+        Some(Roots::Json(roots)) => {
+            let Value::Array(roots) = roots else {
+                issues.push(Issue::new(
+                    "invalid-facet-refinement-roots",
+                    "refinedRoots",
+                    "Dense facet refinement roots must be an array",
+                ));
+                return;
+            };
+            dense_issues(roots, count, request.channel, issues);
             return;
-        };
-        if roots.len() as f64 != count {
-            issues.push(Issue::new(
-                "invalid-facet-refinement-root-count",
-                "refinedRoots",
-                "Facet refinement must contain exactly one root per source triangle",
-            ));
         }
-        let stack = roots
-            .iter()
-            .enumerate()
-            .map(|(i, node)| (node, format!("refinedRoots[{i}]"), 0))
-            .collect();
-        walk_nodes(
-            stack,
-            node_budget(count),
-            request.channel,
-            "refinedRoots",
-            issues,
-        );
-        return;
+        Some(Roots::Nodes(roots)) => {
+            dense_issues(roots, count, request.channel, issues);
+            return;
+        }
+        None => {}
     }
     let Some(candidate) = request.refinement else {
         return;
@@ -138,17 +127,13 @@ pub(super) fn encoding_issues(request: &Request<'_>, issues: &mut Vec<Issue>) {
         ));
     }
     let budget = node_budget(count);
-    let stack: Vec<(&Value, String, usize)> = splits
-        .iter()
-        .enumerate()
-        .map(|(i, split)| {
-            let node = match split {
-                Value::Object(fields) => field(fields, "node").unwrap_or(&UNDEFINED),
-                other => other,
-            };
-            (node, format!("refinement.splits[{i}].node"), 0)
-        })
-        .collect();
+    let roots = splits.iter().enumerate().rev().map(|(i, split)| {
+        let node = match split {
+            Value::Object(fields) => field(fields, "node").unwrap_or(&UNDEFINED),
+            other => other,
+        };
+        (node, NodePath::root(RootPath::Split(i)))
+    });
     for (i, split) in splits.iter().enumerate() {
         let triangle = match split {
             Value::Object(fields) => field(fields, "triangle"),
@@ -163,7 +148,24 @@ pub(super) fn encoding_issues(request: &Request<'_>, issues: &mut Vec<Issue>) {
             ));
         }
     }
-    walk_nodes(stack, budget, request.channel, "refinement", issues);
+    walk_nodes(roots, budget, request.channel, "refinement", issues);
+}
+
+/// Dense roots: one per source facet, then every node walked.
+fn dense_issues<N: TreeNode>(roots: &[N], count: f64, channel: Channel, issues: &mut Vec<Issue>) {
+    if roots.len() as f64 != count {
+        issues.push(Issue::new(
+            "invalid-facet-refinement-root-count",
+            "refinedRoots",
+            "Facet refinement must contain exactly one root per source triangle",
+        ));
+    }
+    let roots = roots
+        .iter()
+        .enumerate()
+        .rev()
+        .map(|(i, node)| (node, NodePath::root(RootPath::Dense(i))));
+    walk_nodes(roots, node_budget(count), channel, "refinedRoots", issues);
 }
 
 /// Stands in for a missing JavaScript property.
@@ -175,103 +177,251 @@ fn field<'a>(fields: &'a Fields, name: &str) -> Option<&'a Value> {
     fields.get(&name.encode_utf16().collect::<Vec<_>>())
 }
 
-/// `walkRefinementNodes`: a stack walk, last root first, as the browser's.
-fn walk_nodes(
-    mut stack: Vec<(&Value, String, usize)>,
+/// `walkRefinementNodes`: the browser stacks every root and pops the last
+/// first, so each root's subtree is walked depth first in reverse root order;
+/// `roots` arrives in that order and a node's path is formatted only for an
+/// issue.
+fn walk_nodes<'n, N: TreeNode + 'n>(
+    roots: impl Iterator<Item = (&'n N, NodePath)>,
     budget: f64,
     channel: Channel,
     root_path: &str,
     issues: &mut Vec<Issue>,
 ) {
     let mut count = 0.0;
-    while let Some((node, path, depth)) = stack.pop() {
-        count += 1.0;
-        if count > budget {
-            issues.push(Issue::new(
-                "facet-refinement-limit-exceeded",
-                root_path,
-                format!(
-                    "Facet refinement may contain at most {} nodes",
-                    js_number(budget)
-                ),
-            ));
-            return;
+    let mut stack: Vec<(&N, NodePath, usize)> = Vec::new();
+    for (root, path) in roots {
+        stack.push((root, path, 0));
+        while let Some((node, path, depth)) = stack.pop() {
+            count += 1.0;
+            if count > budget {
+                issues.push(Issue::new(
+                    "facet-refinement-limit-exceeded",
+                    root_path,
+                    format!(
+                        "Facet refinement may contain at most {} nodes",
+                        js_number(budget)
+                    ),
+                ));
+                return;
+            }
+            let (sides, special, children) = match node.shape() {
+                Shape::Malformed => {
+                    issues.push(Issue::new(
+                        "invalid-facet-refinement-node",
+                        path.to_string(),
+                        "Facet refinement nodes must be objects",
+                    ));
+                    continue;
+                }
+                Shape::Leaf(state) => {
+                    if !state.valid(channel) {
+                        issues.push(Issue::new(
+                            "invalid-facet-refinement-state",
+                            format!("{path}.state"),
+                            format!(
+                                "Refined leaf state is invalid for the {} channel",
+                                channel.name()
+                            ),
+                        ));
+                    }
+                    continue;
+                }
+                Shape::Unknown => {
+                    issues.push(Issue::new(
+                        "invalid-facet-refinement-node",
+                        format!("{path}.kind"),
+                        "Facet refinement node kind must be leaf or split",
+                    ));
+                    continue;
+                }
+                Shape::Split {
+                    sides,
+                    special,
+                    children,
+                } => (sides, special, children),
+            };
+            if sides.is_none() {
+                issues.push(Issue::new(
+                    "invalid-facet-refinement-split",
+                    format!("{path}.splitSides"),
+                    "Refined split side count must be 1, 2, or 3",
+                ));
+            }
+            if special.is_none() || (sides == Some(3) && special != Some(0)) {
+                issues.push(Issue::new(
+                    "invalid-facet-refinement-special-side",
+                    format!("{path}.specialSide"),
+                    "Refined special side must be 0, 1, or 2; a three-side split must use side 0",
+                ));
+            }
+            let Some(children) = children else {
+                issues.push(Issue::new(
+                    "invalid-facet-refinement-children",
+                    format!("{path}.children"),
+                    "Refined split children must be an array",
+                ));
+                continue;
+            };
+            let Some(sides) = sides else {
+                continue;
+            };
+            if children.len() != usize::from(sides) + 1 {
+                issues.push(Issue::new(
+                    "invalid-facet-refinement-child-count",
+                    format!("{path}.children"),
+                    "Refined child count must equal splitSides + 1",
+                ));
+                continue;
+            }
+            if depth >= MAX_DEPTH {
+                issues.push(Issue::new(
+                    "facet-refinement-limit-exceeded",
+                    path.to_string(),
+                    format!("Facet refinement may contain at most {MAX_DEPTH} split levels"),
+                ));
+                continue;
+            }
+            for (i, child) in children.iter().enumerate() {
+                stack.push((child, path.child(i as u8), depth + 1));
+            }
         }
-        let Value::Object(record) = node else {
-            issues.push(Issue::new(
-                "invalid-facet-refinement-node",
-                path,
-                "Facet refinement nodes must be objects",
-            ));
-            continue;
+    }
+}
+
+/// Which input a root came from.
+#[derive(Debug, Clone, Copy)]
+enum RootPath {
+    Dense(usize),
+    Split(usize),
+}
+/// A node's place in the request, formatted only for an issue.
+#[derive(Debug, Clone)]
+struct NodePath {
+    root: RootPath,
+    children: Vec<u8>,
+}
+impl NodePath {
+    fn root(root: RootPath) -> Self {
+        Self {
+            root,
+            children: Vec::new(),
+        }
+    }
+    fn child(&self, index: u8) -> Self {
+        let mut children = self.children.clone();
+        children.push(index);
+        Self {
+            root: self.root,
+            children,
+        }
+    }
+}
+impl std::fmt::Display for NodePath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.root {
+            RootPath::Dense(i) => write!(f, "refinedRoots[{i}]")?,
+            RootPath::Split(i) => write!(f, "refinement.splits[{i}].node")?,
+        }
+        for child in &self.children {
+            write!(f, ".children[{child}]")?;
+        }
+        Ok(())
+    }
+}
+
+/// A refinement node as the selector reads it: host JSON, validated as the
+/// browser's raw input, or a tree this core produced.
+pub(super) trait TreeNode: Sized {
+    fn shape(&self) -> Shape<'_, Self>;
+}
+pub(super) enum Shape<'n, N> {
+    /// Not an object.
+    Malformed,
+    /// An object whose kind is neither leaf nor split.
+    Unknown,
+    Leaf(LeafState),
+    /// Side counts outside their ranges and non-array children read as `None`.
+    Split {
+        sides: Option<u8>,
+        special: Option<u8>,
+        children: Option<&'n [N]>,
+    },
+}
+pub(super) enum LeafState {
+    Unpainted,
+    /// `None` is a value no channel can hold.
+    Assigned(Option<PaintValue>),
+    /// Not a state object, or another kind.
+    Malformed,
+}
+impl LeafState {
+    /// `isValidRefinementState`.
+    fn valid(&self, channel: Channel) -> bool {
+        match self {
+            Self::Unpainted => true,
+            Self::Assigned(Some(value)) => channel_value(channel, value),
+            _ => false,
+        }
+    }
+    fn decoded(self) -> Option<PaintValue> {
+        match self {
+            Self::Assigned(value) => value,
+            _ => None,
+        }
+    }
+}
+impl TreeNode for Value {
+    fn shape(&self) -> Shape<'_, Self> {
+        let Value::Object(record) = self else {
+            return Shape::Malformed;
         };
         let kind = field(record, "kind");
         if text_is(kind, "leaf") {
-            if !valid_state(channel, field(record, "state")) {
-                issues.push(Issue::new(
-                    "invalid-facet-refinement-state",
-                    format!("{path}.state"),
-                    format!(
-                        "Refined leaf state is invalid for the {} channel",
-                        channel.name()
-                    ),
-                ));
-            }
-            continue;
+            let state = match field(record, "state") {
+                Some(Value::Object(state)) => {
+                    let kind = field(state, "kind");
+                    if text_is(kind, "unpainted") {
+                        LeafState::Unpainted
+                    } else if text_is(kind, "assigned") {
+                        LeafState::Assigned(field(state, "value").and_then(PaintValue::from_value))
+                    } else {
+                        LeafState::Malformed
+                    }
+                }
+                _ => LeafState::Malformed,
+            };
+            return Shape::Leaf(state);
         }
         if !text_is(kind, "split") {
-            issues.push(Issue::new(
-                "invalid-facet-refinement-node",
-                format!("{path}.kind"),
-                "Facet refinement node kind must be leaf or split",
-            ));
-            continue;
+            return Shape::Unknown;
         }
-        let sides = small(field(record, "splitSides"), 1..=3);
-        if sides.is_none() {
-            issues.push(Issue::new(
-                "invalid-facet-refinement-split",
-                format!("{path}.splitSides"),
-                "Refined split side count must be 1, 2, or 3",
-            ));
+        Shape::Split {
+            sides: small(field(record, "splitSides"), 1..=3),
+            special: small(field(record, "specialSide"), 0..=2),
+            children: match field(record, "children") {
+                Some(Value::Array(children)) => Some(children),
+                _ => None,
+            },
         }
-        let special = small(field(record, "specialSide"), 0..=2);
-        if special.is_none() || (sides == Some(3) && special != Some(0)) {
-            issues.push(Issue::new(
-                "invalid-facet-refinement-special-side",
-                format!("{path}.specialSide"),
-                "Refined special side must be 0, 1, or 2; a three-side split must use side 0",
-            ));
-        }
-        let Some(Value::Array(children)) = field(record, "children") else {
-            issues.push(Issue::new(
-                "invalid-facet-refinement-children",
-                format!("{path}.children"),
-                "Refined split children must be an array",
-            ));
-            continue;
-        };
-        let Some(sides) = sides else {
-            continue;
-        };
-        if children.len() != usize::from(sides) + 1 {
-            issues.push(Issue::new(
-                "invalid-facet-refinement-child-count",
-                format!("{path}.children"),
-                "Refined child count must equal splitSides + 1",
-            ));
-            continue;
-        }
-        if depth >= MAX_DEPTH {
-            issues.push(Issue::new(
-                "facet-refinement-limit-exceeded",
-                path,
-                format!("Facet refinement may contain at most {MAX_DEPTH} split levels"),
-            ));
-            continue;
-        }
-        for (i, child) in children.iter().enumerate() {
-            stack.push((child, format!("{path}.children[{i}]"), depth + 1));
+    }
+}
+impl TreeNode for EncodedNode {
+    fn shape(&self) -> Shape<'_, Self> {
+        match self {
+            EncodedNode::Leaf(RegionState::Unpainted) => Shape::Leaf(LeafState::Unpainted),
+            EncodedNode::Leaf(RegionState::Assigned(value)) => {
+                Shape::Leaf(LeafState::Assigned(Some(value.clone())))
+            }
+            EncodedNode::Split {
+                split_sides,
+                special_side,
+                children,
+            } => Shape::Split {
+                sides: (1..=3).contains(split_sides).then_some(*split_sides),
+                special: (*special_side <= 2).then_some(*special_side),
+                children: Some(children),
+            },
         }
     }
 }
@@ -288,59 +438,46 @@ fn small(value: Option<&Value>, range: std::ops::RangeInclusive<u8>) -> Option<u
         _ => None,
     }
 }
-/// `isValidRefinementState`.
-fn valid_state(channel: Channel, state: Option<&Value>) -> bool {
-    let Some(Value::Object(record)) = state else {
-        return false;
-    };
-    let kind = field(record, "kind");
-    text_is(kind, "unpainted")
-        || (text_is(kind, "assigned")
-            && field(record, "value")
-                .and_then(PaintValue::from_value)
-                .is_some_and(|v| channel_value(channel, &v)))
-}
-
 /// `priorRefinedStates`: assigned states the prior refinement carries; `None`
 /// stands for an assigned value no channel can hold.
 pub(super) fn prior_assigned_states(request: &Request<'_>) -> Vec<Option<PaintValue>> {
-    let roots: Vec<&Value> = if let Some(Value::Array(roots)) = request.refined_roots {
-        roots.iter().collect()
-    } else if let Some(Value::Object(encoding)) = request.refinement {
-        match field(encoding, "splits") {
-            Some(Value::Array(splits)) => splits
-                .iter()
-                .map(|split| match split {
+    let mut states = Vec::new();
+    match request.refined_roots {
+        Some(Roots::Json(Value::Array(roots))) => collect_assigned(roots.iter(), &mut states),
+        Some(Roots::Nodes(roots)) => collect_assigned(roots.iter(), &mut states),
+        Some(Roots::Json(_)) => {}
+        None => {
+            if let Some(Value::Object(encoding)) = request.refinement
+                && let Some(Value::Array(splits)) = field(encoding, "splits")
+            {
+                let nodes = splits.iter().map(|split| match split {
                     Value::Object(fields) => field(fields, "node").unwrap_or(&UNDEFINED),
                     _ => &UNDEFINED,
-                })
-                .collect(),
-            _ => Vec::new(),
-        }
-    } else {
-        Vec::new()
-    };
-    let mut states = Vec::new();
-    let mut stack = roots;
-    while let Some(node) = stack.pop() {
-        let Value::Object(record) = node else {
-            continue;
-        };
-        let kind = field(record, "kind");
-        if text_is(kind, "leaf") {
-            if let Some(Value::Object(state)) = field(record, "state")
-                && text_is(field(state, "kind"), "assigned")
-            {
-                states.push(field(state, "value").and_then(PaintValue::from_value));
+                });
+                collect_assigned(nodes, &mut states);
             }
-        } else if text_is(kind, "split")
-            && let Some(Value::Array(children)) = field(record, "children")
-            && children.len() <= 4
-        {
-            stack.extend(children.iter());
         }
     }
     states
+}
+fn collect_assigned<'n, N: TreeNode + 'n>(
+    roots: impl DoubleEndedIterator<Item = &'n N>,
+    states: &mut Vec<Option<PaintValue>>,
+) {
+    let mut stack = Vec::new();
+    for root in roots.rev() {
+        stack.push(root);
+        while let Some(node) = stack.pop() {
+            match node.shape() {
+                Shape::Leaf(LeafState::Assigned(value)) => states.push(value),
+                Shape::Split {
+                    children: Some(children),
+                    ..
+                } if children.len() <= 4 => stack.extend(children.iter()),
+                _ => {}
+            }
+        }
+    }
 }
 
 // --- The working tree -------------------------------------------------------
@@ -368,15 +505,16 @@ fn build(request: &Request<'_>) -> Result<Workspace, RegionError> {
         root_neighbors: validated_neighbors(mesh),
         budget: node_budget(mesh.triangles.len() as f64),
     };
-    if let Some(Value::Array(roots)) = request.refined_roots {
-        for (source, node) in roots.iter().enumerate() {
-            if source >= workspace.roots.len() {
-                continue;
-            }
-            let neighbors = workspace.root_neighbors[source];
-            apply_node(&mut workspace, source, neighbors, node, 0)?;
+    match request.refined_roots {
+        Some(Roots::Json(Value::Array(roots))) => {
+            apply_roots(&mut workspace, roots)?;
+            return Ok(workspace);
         }
-        return Ok(workspace);
+        Some(Roots::Nodes(roots)) => {
+            apply_roots(&mut workspace, roots)?;
+            return Ok(workspace);
+        }
+        _ => {}
     }
     if let Some(Value::Object(encoding)) = request.refinement
         && let Some(Value::Array(splits)) = field(encoding, "splits")
@@ -405,38 +543,46 @@ fn build(request: &Request<'_>) -> Result<Workspace, RegionError> {
     Ok(workspace)
 }
 
-fn decode_state(value: Option<&Value>) -> Option<PaintValue> {
-    let Some(Value::Object(state)) = value else {
-        return None;
-    };
-    if text_is(field(state, "kind"), "assigned") {
-        field(state, "value").and_then(PaintValue::from_value)
-    } else {
-        None
+fn apply_roots<N: TreeNode>(workspace: &mut Workspace, roots: &[N]) -> Result<(), RegionError> {
+    for (source, node) in roots.iter().enumerate() {
+        if source >= workspace.roots.len() {
+            continue;
+        }
+        let neighbors = workspace.root_neighbors[source];
+        apply_node(workspace, source, neighbors, node, 0)?;
     }
+    Ok(())
 }
 
-fn apply_node(
+fn apply_node<N: TreeNode>(
     workspace: &mut Workspace,
     triangle: usize,
     neighbors: Neighbors,
-    node: &Value,
+    node: &N,
     depth: usize,
 ) -> Result<(), RegionError> {
-    let Value::Object(record) = node else {
-        return Ok(());
+    // Validation refused malformed and unknown nodes before the tree is built.
+    let (sides, special, children) = match node.shape() {
+        Shape::Leaf(state) => {
+            workspace.triangles[triangle].state = state.decoded();
+            return Ok(());
+        }
+        Shape::Split {
+            sides,
+            special,
+            children,
+        } => (sides, special, children),
+        Shape::Malformed | Shape::Unknown => return Ok(()),
     };
-    if text_is(field(record, "kind"), "leaf") {
-        workspace.triangles[triangle].state = decode_state(field(record, "state"));
-        return Ok(());
-    }
-    let sides = small(field(record, "splitSides"), 1..=3).unwrap_or(1);
-    let special = small(field(record, "specialSide"), 0..=2).unwrap_or(0);
-    perform_split(workspace, triangle, neighbors, sides, special, depth)?;
-    let Some(Value::Array(children)) = field(record, "children") else {
-        return Ok(());
-    };
-    for (i, child) in children.iter().enumerate() {
+    perform_split(
+        workspace,
+        triangle,
+        neighbors,
+        sides.unwrap_or(1),
+        special.unwrap_or(0),
+        depth,
+    )?;
+    for (i, child) in children.unwrap_or_default().iter().enumerate() {
         let child_triangle = workspace.triangles[triangle].children[i];
         let child_neighbors = child_neighbors(workspace, triangle, neighbors, i)?;
         apply_node(workspace, child_triangle, child_neighbors, child, depth + 1)?;

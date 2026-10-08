@@ -4734,6 +4734,93 @@ object ProjectIntents {
             is FacetRegionReply.Stale -> w.field("stale") { writeEmpty(w, v.value) }
         } }
     }
+    data class PaintStrokeOpen(val volumeId: List<Int>, val channel: FacetChannelName, val target: FacetRegionState)
+    private fun readPaintStrokeOpen(v: Any): PaintStrokeOpen {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeId", "channel", "target"), false)
+        return PaintStrokeOpen(readId(obj.get("volumeId")), readFacetChannelName(obj.get("channel")), readFacetRegionState(obj.get("target")))
+    }
+    private fun writePaintStrokeOpen(w: ProjectIntentWriter, v: PaintStrokeOpen) {
+        w.obj {
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("channel") { writeFacetChannelName(w, v.channel) }
+            w.field("target") { writeFacetRegionState(w, v.target) }
+        }
+    }
+    data class PaintStrokeSample(val seedTriangle: Long, val tool: FacetRegionTool, val triangleSplitting: Boolean, val clippingPlane: OptionalFacetClippingPlane, val transform: OptionalFacetSelectionTransform, val highlightByAngleDegrees: OptionalFinite)
+    private fun readPaintStrokeSample(v: Any): PaintStrokeSample {
+        val obj = ProjectIntentJson.fields(v, setOf("seedTriangle", "tool", "triangleSplitting", "clippingPlane", "transform", "highlightByAngleDegrees"), false)
+        return PaintStrokeSample(readCounter(obj.get("seedTriangle")), readFacetRegionTool(obj.get("tool")), readFlag(obj.get("triangleSplitting")), readOptionalFacetClippingPlane(obj.get("clippingPlane")), readOptionalFacetSelectionTransform(obj.get("transform")), readOptionalFinite(obj.get("highlightByAngleDegrees")))
+    }
+    private fun writePaintStrokeSample(w: ProjectIntentWriter, v: PaintStrokeSample) {
+        w.obj {
+            w.field("seedTriangle") { writeCounter(w, v.seedTriangle) }
+            w.field("tool") { writeFacetRegionTool(w, v.tool) }
+            w.field("triangleSplitting") { writeFlag(w, v.triangleSplitting) }
+            w.field("clippingPlane") { writeOptionalFacetClippingPlane(w, v.clippingPlane) }
+            w.field("transform") { writeOptionalFacetSelectionTransform(w, v.transform) }
+            w.field("highlightByAngleDegrees") { writeOptionalFinite(w, v.highlightByAngleDegrees) }
+        }
+    }
+    data class PaintStrokeSampled(val selectedTriangles: Long, val leaves: Long, val selectedLeaves: Long, val strokeTriangles: Long, val refined: Boolean)
+    private fun readPaintStrokeSampled(v: Any): PaintStrokeSampled {
+        val obj = ProjectIntentJson.fields(v, setOf("selectedTriangles", "leaves", "selectedLeaves", "strokeTriangles", "refined"), false)
+        return PaintStrokeSampled(readCounter(obj.get("selectedTriangles")), readCounter(obj.get("leaves")), readCounter(obj.get("selectedLeaves")), readCounter(obj.get("strokeTriangles")), readFlag(obj.get("refined")))
+    }
+    private fun writePaintStrokeSampled(w: ProjectIntentWriter, v: PaintStrokeSampled) {
+        w.obj {
+            w.field("selectedTriangles") { writeCounter(w, v.selectedTriangles) }
+            w.field("leaves") { writeCounter(w, v.leaves) }
+            w.field("selectedLeaves") { writeCounter(w, v.selectedLeaves) }
+            w.field("strokeTriangles") { writeCounter(w, v.strokeTriangles) }
+            w.field("refined") { writeFlag(w, v.refined) }
+        }
+    }
+    sealed interface PaintStrokeSampleReply {
+        data class Sampled(val value: ProjectIntents.PaintStrokeSampled) : PaintStrokeSampleReply
+        data class Invalid(val value: List<ProjectIntents.FacetRegionIssue>) : PaintStrokeSampleReply
+        data class Stale(val value: ProjectIntents.Empty) : PaintStrokeSampleReply
+    }
+    private fun readPaintStrokeSampleReply(v: Any): PaintStrokeSampleReply {
+        val obj = ProjectIntentJson.fields(v, setOf("sampled", "invalid", "stale"), true)
+        return when(val key = obj.keys().next()) {
+            "sampled" -> PaintStrokeSampleReply.Sampled(readPaintStrokeSampled(obj.get(key)))
+            "invalid" -> PaintStrokeSampleReply.Invalid(readFacetRegionIssues(obj.get(key)))
+            "stale" -> PaintStrokeSampleReply.Stale(readEmpty(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePaintStrokeSampleReply(w: ProjectIntentWriter, v: PaintStrokeSampleReply) {
+        w.obj { when(v) {
+            is PaintStrokeSampleReply.Sampled -> w.field("sampled") { writePaintStrokeSampled(w, v.value) }
+            is PaintStrokeSampleReply.Invalid -> w.field("invalid") { writeFacetRegionIssues(w, v.value) }
+            is PaintStrokeSampleReply.Stale -> w.field("stale") { writeEmpty(w, v.value) }
+        } }
+    }
+    data class PaintStrokeOverlayRequest(val start: Long, val count: Long)
+    private fun readPaintStrokeOverlayRequest(v: Any): PaintStrokeOverlayRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("start", "count"), false)
+        return PaintStrokeOverlayRequest(readCounter(obj.get("start")), readCounter(obj.get("count")))
+    }
+    private fun writePaintStrokeOverlayRequest(w: ProjectIntentWriter, v: PaintStrokeOverlayRequest) {
+        w.obj {
+            w.field("start") { writeCounter(w, v.start) }
+            w.field("count") { writeCounter(w, v.count) }
+        }
+    }
+    data class PaintStrokeOverlay(val guard: FacetGuard, val strokeTriangles: Long, val refined: Boolean, val totalRanges: Long, val ranges: List<TriangleRangeInput>)
+    private fun readPaintStrokeOverlay(v: Any): PaintStrokeOverlay {
+        val obj = ProjectIntentJson.fields(v, setOf("guard", "strokeTriangles", "refined", "totalRanges", "ranges"), false)
+        return PaintStrokeOverlay(readFacetGuard(obj.get("guard")), readCounter(obj.get("strokeTriangles")), readFlag(obj.get("refined")), readCounter(obj.get("totalRanges")), readTriangleRanges(obj.get("ranges")))
+    }
+    private fun writePaintStrokeOverlay(w: ProjectIntentWriter, v: PaintStrokeOverlay) {
+        w.obj {
+            w.field("guard") { writeFacetGuard(w, v.guard) }
+            w.field("strokeTriangles") { writeCounter(w, v.strokeTriangles) }
+            w.field("refined") { writeFlag(w, v.refined) }
+            w.field("totalRanges") { writeCounter(w, v.totalRanges) }
+            w.field("ranges") { writeTriangleRanges(w, v.ranges) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -4854,4 +4941,14 @@ object ProjectIntents {
     fun encodeFacetRegionRequest(value: FacetRegionRequest): String = ProjectIntentWriter().also { writeFacetRegionRequest(it, value) }.finish()
     fun decodeFacetRegionReply(text: String): FacetRegionReply = readFacetRegionReply(ProjectIntentJson.parse(text))
     fun encodeFacetRegionReply(value: FacetRegionReply): String = ProjectIntentWriter().also { writeFacetRegionReply(it, value) }.finish()
+    fun decodePaintStrokeOpen(text: String): PaintStrokeOpen = readPaintStrokeOpen(ProjectIntentJson.parse(text))
+    fun encodePaintStrokeOpen(value: PaintStrokeOpen): String = ProjectIntentWriter().also { writePaintStrokeOpen(it, value) }.finish()
+    fun decodePaintStrokeSample(text: String): PaintStrokeSample = readPaintStrokeSample(ProjectIntentJson.parse(text))
+    fun encodePaintStrokeSample(value: PaintStrokeSample): String = ProjectIntentWriter().also { writePaintStrokeSample(it, value) }.finish()
+    fun decodePaintStrokeSampleReply(text: String): PaintStrokeSampleReply = readPaintStrokeSampleReply(ProjectIntentJson.parse(text))
+    fun encodePaintStrokeSampleReply(value: PaintStrokeSampleReply): String = ProjectIntentWriter().also { writePaintStrokeSampleReply(it, value) }.finish()
+    fun decodePaintStrokeOverlayRequest(text: String): PaintStrokeOverlayRequest = readPaintStrokeOverlayRequest(ProjectIntentJson.parse(text))
+    fun encodePaintStrokeOverlayRequest(value: PaintStrokeOverlayRequest): String = ProjectIntentWriter().also { writePaintStrokeOverlayRequest(it, value) }.finish()
+    fun decodePaintStrokeOverlay(text: String): PaintStrokeOverlay = readPaintStrokeOverlay(ProjectIntentJson.parse(text))
+    fun encodePaintStrokeOverlay(value: PaintStrokeOverlay): String = ProjectIntentWriter().also { writePaintStrokeOverlay(it, value) }.finish()
 }

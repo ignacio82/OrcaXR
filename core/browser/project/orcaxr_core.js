@@ -1763,6 +1763,80 @@ export class ProjectOpen {
 if (Symbol.dispose) ProjectOpen.prototype[Symbol.dispose] = ProjectOpen.prototype.free;
 
 /**
+ * One paint gesture, opened on a session guard. Samples and overlay pages
+ * run here, off the session; the session stages its commit.
+ */
+export class ProjectPaintStroke {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectPaintStroke.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectPaintStrokeFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectPaintStrokeFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectpaintstroke_free(ptr, 0);
+    }
+    /**
+     * A `PaintStrokeOverlayRequest`; returns a `PaintStrokeOverlay`.
+     * @param {string} request
+     * @returns {string}
+     */
+    overlay(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.projectpaintstroke_overlay(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * A `PaintStrokeSample`; returns a `PaintStrokeSampleReply`.
+     * @param {string} request
+     * @returns {string}
+     */
+    sample(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.projectpaintstroke_sample(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ProjectPaintStroke.prototype[Symbol.dispose] = ProjectPaintStroke.prototype.free;
+
+/**
  * One live preflight result, read item by item as contract JSON.
  */
 export class ProjectPreflight {
@@ -2418,6 +2492,23 @@ export class ProjectSession {
         return ret !== 0;
     }
     /**
+     * Open a paint stroke on the state `guard` captured: a `PaintStrokeOpen`.
+     * The stroke owns its mesh, so its samples never touch this session.
+     * @param {ProjectGuard} guard
+     * @param {string} request
+     * @returns {ProjectPaintStroke}
+     */
+    paint_stroke(guard, request) {
+        _assertClass(guard, ProjectGuard);
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectsession_paint_stroke(this.__wbg_ptr, guard.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectPaintStroke.__wrap(ret[0]);
+    }
+    /**
      * @returns {number}
      */
     pending_count() {
@@ -2520,6 +2611,23 @@ export class ProjectSession {
         _assertClass(input, ProjectCommandUpload);
         var ptr0 = input.__destroy_into_raw();
         const ret = wasm.projectsession_stage_commands(this.__wbg_ptr, ptr0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0];
+    }
+    /**
+     * Stage the stroke's whole gesture as one edit for `executeStaged`; 0
+     * when it touched no facet. A stroke whose state changed refuses `stale`.
+     * @param {ProjectPaintStroke} stroke
+     * @param {Uint16Array | null} [label]
+     * @returns {number}
+     */
+    stage_paint_stroke(stroke, label) {
+        _assertClass(stroke, ProjectPaintStroke);
+        var ptr0 = isLikeNone(label) ? 0 : passArray16ToWasm0(label, wasm.__wbindgen_malloc);
+        var len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectsession_stage_paint_stroke(this.__wbg_ptr, stroke.__wbg_ptr, ptr0, len0);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -3213,6 +3321,9 @@ const ProjectModelUploadFinalization = (typeof FinalizationRegistry === 'undefin
 const ProjectOpenFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectopen_free(ptr, 1));
+const ProjectPaintStrokeFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectpaintstroke_free(ptr, 1));
 const ProjectPreflightFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectpreflight_free(ptr, 1));

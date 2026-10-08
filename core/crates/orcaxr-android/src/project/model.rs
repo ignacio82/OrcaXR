@@ -86,7 +86,7 @@ pub(super) fn import_base(_: &mut JNIEnv<'_>, handle: jlong) -> Result<jlong> {
         })
     })
 }
-fn chars(env: &mut JNIEnv<'_>, array: &JCharArray<'_>) -> Result<Vec<u16>> {
+pub(super) fn chars(env: &mut JNIEnv<'_>, array: &JCharArray<'_>) -> Result<Vec<u16>> {
     let length = env.get_array_length(array).map_err(|_| "invalid_input")?;
     if length < 0 || length as usize > MAX_TEXT_UNITS {
         return Err("input_limit");
