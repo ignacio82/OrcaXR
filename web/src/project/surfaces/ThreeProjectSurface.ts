@@ -5,8 +5,8 @@ import { canonicalStringify } from '../domain/canonical';
 import type { AssetId, InstanceId, ObjectId, PlateId, VolumeId } from '../domain/ids';
 import type { ProjectState, ProjectVolume, Transform, Vec3 } from '../domain/model';
 import { assertValidProjectState } from '../domain/validation';
-import { decodeIndexedMeshAsset } from '../meshCodec';
 import type { EditorSurfacePort } from '../ports';
+import { displayGeometry } from './meshPacket';
 import { volumeDisplayColor } from '../renderProjection';
 import { selectionKey, type SelectionRef, type SelectionSnapshot } from '../selection';
 import type { ProjectSnapshot } from '../store';
@@ -432,13 +432,8 @@ export class ThreeProjectSurface implements EditorSurfacePort {
 
     let geometry: THREE.BufferGeometry;
     try {
-      const decoded = decodeIndexedMeshAsset(payload);
-      geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(decoded.positions, 3));
-      geometry.setIndex(new THREE.BufferAttribute(decoded.indices, 1));
-      geometry.computeVertexNormals();
-      geometry.computeBoundingBox();
-      geometry.computeBoundingSphere();
+      // The same geometry a native renderer receives as a mesh packet.
+      geometry = displayGeometry(payload);
       geometry.userData = Object.freeze({
         assetId,
         digest: descriptor.digest,

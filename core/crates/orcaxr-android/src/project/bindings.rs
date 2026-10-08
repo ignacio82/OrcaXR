@@ -662,6 +662,24 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sessionMeshPacket, session_mesh_packet, jlong,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_meshPacketReply, mesh_packet_reply, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_meshPacketBytes, mesh_packet_bytes, jbyteArray,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionMeasureVolume, session_measure_volume, jlong,
     handle: jlong,
     request: JString<'local>,

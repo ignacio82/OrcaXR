@@ -34,6 +34,7 @@ pub mod js_math;
 pub mod layer_heights;
 pub mod measure;
 pub mod mesh;
+pub mod mesh_packet;
 pub mod model;
 pub mod picking;
 pub mod placement;

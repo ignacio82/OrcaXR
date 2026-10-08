@@ -41,6 +41,7 @@ export function startProjectJni(profile = "debug") {
   signatures.brimEarChecks = ["String", ...Array(8).fill("byte[]"), "String"];
   signatures.embossChecks = ["String", "byte[]", "String"];
   signatures.svgPartChecks = ["String", "byte[]", "String"];
+  signatures.meshPacketChecks = ["String", "byte[]", "String", "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -399,6 +400,12 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     stage_svg_part(svg, request) {
       return call("stageSvgPart", this.handle, svg.handle, request);
+    }
+    mesh_packet(request) {
+      return wrap(
+        ProjectMeshPacket,
+        call("sessionMeshPacket", this.handle, request),
+      );
     }
     measure_volume(request) {
       return wrap(
@@ -808,6 +815,14 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     mesh(start, count) {
       return call("embossMesh", this.handle, start, count);
+    }
+  }
+  class ProjectMeshPacket extends Handle {
+    reply() {
+      return call("meshPacketReply", this.handle);
+    }
+    bytes(start, count) {
+      return call("meshPacketBytes", this.handle, start, count);
     }
   }
   class ProjectSvgPart extends Handle {

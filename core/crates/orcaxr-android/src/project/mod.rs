@@ -110,6 +110,7 @@ enum Record {
     VolumeSplit(Box<orcaxr_project::split::VolumeSplit>),
     VolumeSimplify(Box<orcaxr_project::simplify::VolumeSimplify>),
     MeasureVolume(Box<orcaxr_project::measure::MeasureVolume>),
+    MeshPacket(Box<orcaxr_project::mesh_packet::MeshPacket>),
     Emboss(Box<orcaxr_project::emboss::PreparedEmboss>),
     SvgPart(Box<orcaxr_project::svg::PreparedSvgPart>),
     PaintOverlay(Box<orcaxr_project::facets::overlay::Overlay>),
@@ -209,6 +210,11 @@ access!(
     with_measure_volume,
     MeasureVolume,
     Box<orcaxr_project::measure::MeasureVolume>
+);
+access!(
+    with_mesh_packet,
+    MeshPacket,
+    Box<orcaxr_project::mesh_packet::MeshPacket>
 );
 access!(
     with_emboss,

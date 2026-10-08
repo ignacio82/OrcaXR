@@ -137,6 +137,8 @@ assert.deepEqual(schema.roots, [
   "SvgPartRequest",
   "SvgPartReply",
   "SvgPartStage",
+  "MeshPacketRequest",
+  "MeshPacketReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

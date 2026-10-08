@@ -142,6 +142,11 @@ final class NativeProject {
     static native long stageVolumeSimplify(long handle, long simplify, String request);
     // Measurement: capture one volume's features, resolve picks off the
     // session, and measure any two features.
+    // Mesh renderer packets: one asset's display geometry, chunked to the
+    // host's vertex limit; read the reply, then page the table and chunks.
+    static native long sessionMeshPacket(long handle, String request);
+    static native String meshPacketReply(long handle);
+    static native byte[] meshPacketBytes(long handle, long start, long count);
     static native long sessionMeasureVolume(long handle, String request);
     static native String measureVolumeReply(long handle);
     static native String measureVolumeFeature(long handle, String request);

@@ -424,6 +424,18 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             })?;
         self.stage(&guard, work)
     }
+    /// The renderer packet for one asset of the session's repository
+    /// (`MeshPacketRequest`): the geometry the workspace draws, chunked to
+    /// the host's vertex limit ([`crate::mesh_packet`]).
+    pub fn mesh_packet(
+        &self,
+        request: &wire::MeshPacketRequest,
+    ) -> Result<crate::mesh_packet::MeshPacket, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        Ok(crate::mesh_packet::packet(self.bus.assets(), request))
+    }
     /// The transforms one placement edit submits, planned from the
     /// acknowledged state (`PlacementRequest` → `PlacementReply`).
     pub fn plan_placement(

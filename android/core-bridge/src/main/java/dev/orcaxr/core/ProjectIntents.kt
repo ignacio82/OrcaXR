@@ -6431,6 +6431,107 @@ object ProjectIntents {
             is SvgPartStage.Edit -> w.field("edit") { writeSvgPartEdit(w, v.value) }
         } }
     }
+    private fun readMeshChunkVertices(v: Any): Long {
+        return ProjectIntentJson.integer(v, 3L, 4294967295L)
+    }
+    private fun writeMeshChunkVertices(w: ProjectIntentWriter, v: Long) {
+        w.integer(v.toLong(), 3L, 4294967295L)
+    }
+    data class MeshPacketRequest(val assetId: List<Int>, val maxChunkVertices: Long)
+    private fun readMeshPacketRequest(v: Any): MeshPacketRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("assetId", "maxChunkVertices"), false)
+        return MeshPacketRequest(readId(obj.get("assetId")), readMeshChunkVertices(obj.get("maxChunkVertices")))
+    }
+    private fun writeMeshPacketRequest(w: ProjectIntentWriter, v: MeshPacketRequest) {
+        w.obj {
+            w.field("assetId") { writeId(w, v.assetId) }
+            w.field("maxChunkVertices") { writeMeshChunkVertices(w, v.maxChunkVertices) }
+        }
+    }
+    data class MeshPacketBounds(val boxMin: List<Double>, val boxMax: List<Double>, val sphereCenter: List<Double>, val sphereRadius: Double)
+    private fun readMeshPacketBounds(v: Any): MeshPacketBounds {
+        val obj = ProjectIntentJson.fields(v, setOf("boxMin", "boxMax", "sphereCenter", "sphereRadius"), false)
+        return MeshPacketBounds(readVector(obj.get("boxMin")), readVector(obj.get("boxMax")), readVector(obj.get("sphereCenter")), readFinite(obj.get("sphereRadius")))
+    }
+    private fun writeMeshPacketBounds(w: ProjectIntentWriter, v: MeshPacketBounds) {
+        w.obj {
+            w.field("boxMin") { writeVector(w, v.boxMin) }
+            w.field("boxMax") { writeVector(w, v.boxMax) }
+            w.field("sphereCenter") { writeVector(w, v.sphereCenter) }
+            w.field("sphereRadius") { writeFinite(w, v.sphereRadius) }
+        }
+    }
+    sealed interface OptionalMeshPacketBounds {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalMeshPacketBounds
+        data class Value(val value: ProjectIntents.MeshPacketBounds) : OptionalMeshPacketBounds
+    }
+    private fun readOptionalMeshPacketBounds(v: Any): OptionalMeshPacketBounds {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalMeshPacketBounds.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalMeshPacketBounds.Value(readMeshPacketBounds(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalMeshPacketBounds(w: ProjectIntentWriter, v: OptionalMeshPacketBounds) {
+        w.obj { when(v) {
+            is OptionalMeshPacketBounds.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalMeshPacketBounds.Value -> w.field("value") { writeMeshPacketBounds(w, v.value) }
+        } }
+    }
+    data class MeshPacket(val assetId: List<Int>, val digest: List<Int>, val vertexCount: Long, val triangleCount: Long, val bounds: OptionalMeshPacketBounds, val indexBytes: Long, val chunkCount: Long, val byteLength: Long)
+    private fun readMeshPacket(v: Any): MeshPacket {
+        val obj = ProjectIntentJson.fields(v, setOf("assetId", "digest", "vertexCount", "triangleCount", "bounds", "indexBytes", "chunkCount", "byteLength"), false)
+        return MeshPacket(readId(obj.get("assetId")), readEditText(obj.get("digest")), readCounter(obj.get("vertexCount")), readCounter(obj.get("triangleCount")), readOptionalMeshPacketBounds(obj.get("bounds")), readCounter(obj.get("indexBytes")), readCounter(obj.get("chunkCount")), readCounter(obj.get("byteLength")))
+    }
+    private fun writeMeshPacket(w: ProjectIntentWriter, v: MeshPacket) {
+        w.obj {
+            w.field("assetId") { writeId(w, v.assetId) }
+            w.field("digest") { writeEditText(w, v.digest) }
+            w.field("vertexCount") { writeCounter(w, v.vertexCount) }
+            w.field("triangleCount") { writeCounter(w, v.triangleCount) }
+            w.field("bounds") { writeOptionalMeshPacketBounds(w, v.bounds) }
+            w.field("indexBytes") { writeCounter(w, v.indexBytes) }
+            w.field("chunkCount") { writeCounter(w, v.chunkCount) }
+            w.field("byteLength") { writeCounter(w, v.byteLength) }
+        }
+    }
+    enum class MeshPacketRefusalCode {UnknownAsset,InvalidMesh,TooLarge}
+    private fun readMeshPacketRefusalCode(v: Any): MeshPacketRefusalCode {
+        return when(v) {"unknownAsset" -> MeshPacketRefusalCode.UnknownAsset;"invalidMesh" -> MeshPacketRefusalCode.InvalidMesh;"tooLarge" -> MeshPacketRefusalCode.TooLarge; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeMeshPacketRefusalCode(w: ProjectIntentWriter, v: MeshPacketRefusalCode) {
+        w.literal(when(v) {MeshPacketRefusalCode.UnknownAsset -> "unknownAsset";MeshPacketRefusalCode.InvalidMesh -> "invalidMesh";MeshPacketRefusalCode.TooLarge -> "tooLarge";})
+    }
+    data class MeshPacketRefusal(val code: MeshPacketRefusalCode, val message: List<Int>)
+    private fun readMeshPacketRefusal(v: Any): MeshPacketRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return MeshPacketRefusal(readMeshPacketRefusalCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writeMeshPacketRefusal(w: ProjectIntentWriter, v: MeshPacketRefusal) {
+        w.obj {
+            w.field("code") { writeMeshPacketRefusalCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface MeshPacketReply {
+        data class Prepared(val value: ProjectIntents.MeshPacket) : MeshPacketReply
+        data class Refused(val value: ProjectIntents.MeshPacketRefusal) : MeshPacketReply
+    }
+    private fun readMeshPacketReply(v: Any): MeshPacketReply {
+        val obj = ProjectIntentJson.fields(v, setOf("prepared", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "prepared" -> MeshPacketReply.Prepared(readMeshPacket(obj.get(key)))
+            "refused" -> MeshPacketReply.Refused(readMeshPacketRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMeshPacketReply(w: ProjectIntentWriter, v: MeshPacketReply) {
+        w.obj { when(v) {
+            is MeshPacketReply.Prepared -> w.field("prepared") { writeMeshPacket(w, v.value) }
+            is MeshPacketReply.Refused -> w.field("refused") { writeMeshPacketRefusal(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -6631,4 +6732,8 @@ object ProjectIntents {
     fun encodeSvgPartReply(value: SvgPartReply): String = ProjectIntentWriter().also { writeSvgPartReply(it, value) }.finish()
     fun decodeSvgPartStage(text: String): SvgPartStage = readSvgPartStage(ProjectIntentJson.parse(text))
     fun encodeSvgPartStage(value: SvgPartStage): String = ProjectIntentWriter().also { writeSvgPartStage(it, value) }.finish()
+    fun decodeMeshPacketRequest(text: String): MeshPacketRequest = readMeshPacketRequest(ProjectIntentJson.parse(text))
+    fun encodeMeshPacketRequest(value: MeshPacketRequest): String = ProjectIntentWriter().also { writeMeshPacketRequest(it, value) }.finish()
+    fun decodeMeshPacketReply(text: String): MeshPacketReply = readMeshPacketReply(ProjectIntentJson.parse(text))
+    fun encodeMeshPacketReply(value: MeshPacketReply): String = ProjectIntentWriter().also { writeMeshPacketReply(it, value) }.finish()
 }

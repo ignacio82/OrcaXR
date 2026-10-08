@@ -1512,8 +1512,9 @@ painting, and FullSpectrum operations that can support real native projects.
   expansion. Canonical instance bounds use exact vertices and volume/instance
   transforms, with captured metadata agreement and role filtering. Independent
   browser fixtures compare bytes, float bits and refusals; a two-million-vertex /
-  two-million-triangle host probe checks allocation ownership. Bindings, production
-  renderer packets, picking/region selection and device qualification remain open.
+  two-million-triangle host probe checks allocation ownership. Renderer packets,
+  picking and region selection are bound in every host; wiring packets into the
+  native renderers and device qualification remain open.
   - [x] Port immutable packed mesh validation, deterministic authoring and exact
     transformed bounds; verify the two-million-vertex/triangle ownership probe.
   - [x] Port facet region selection for source facets (`facets::region`):
@@ -1633,7 +1634,21 @@ painting, and FullSpectrum operations that can support real native projects.
     cannot be stored. The Rust reader also avoids two browser scans that are
     quadratic on hostile stylesheets (`@a;` repeated, and every rule tested
     against every element), with identical results.
-  - [ ] Port mesh renderer packets and device qualification.
+  - [x] Port mesh renderer packets (`mesh_packet`): the geometry the
+    workspace draws (`displayGeometry`, now shared with `ThreeProjectSurface`)
+    — decoded float32 positions, three.js's smooth vertex normals (each
+    triangle's `cb × ab` summed through float32 storage, then normalized by a
+    reciprocal) and its box and sphere — chunked in triangle order to a
+    host's vertex limit. Each chunk carries its own vertices in first-use
+    order with 16-bit indices when it can never exceed 65,536 vertices,
+    behind a binary chunk table; normals stay the whole mesh's, so chunk
+    seams shade identically. Packets stay in asset millimetres for each
+    adapter to convert once. 56 requests (53 packets in 8,307 chunks, 3
+    refusals) are exact in every binding, normals bit for bit against
+    three.js's own attribute, and a browser property test checks the packer
+    against the geometry directly. Kotlin reads the chunk table.
+  - [ ] Wire mesh packets into the flat and spatial renderers and qualify
+    them on devices.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.

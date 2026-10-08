@@ -4256,6 +4256,69 @@ const shapes = {
       "add": "SvgPartAdd",
       "edit": "SvgPartEdit"
     }
+  },
+  "MeshChunkVertices": {
+    "kind": "integer",
+    "min": 3,
+    "max": 4294967295
+  },
+  "MeshPacketRequest": {
+    "kind": "object",
+    "fields": {
+      "assetId": "Id",
+      "maxChunkVertices": "MeshChunkVertices"
+    }
+  },
+  "MeshPacketBounds": {
+    "kind": "object",
+    "fields": {
+      "boxMin": "Vector",
+      "boxMax": "Vector",
+      "sphereCenter": "Vector",
+      "sphereRadius": "Finite"
+    }
+  },
+  "OptionalMeshPacketBounds": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "MeshPacketBounds"
+    }
+  },
+  "MeshPacket": {
+    "kind": "object",
+    "fields": {
+      "assetId": "Id",
+      "digest": "EditText",
+      "vertexCount": "Counter",
+      "triangleCount": "Counter",
+      "bounds": "OptionalMeshPacketBounds",
+      "indexBytes": "Counter",
+      "chunkCount": "Counter",
+      "byteLength": "Counter"
+    }
+  },
+  "MeshPacketRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "unknownAsset",
+      "invalidMesh",
+      "tooLarge"
+    ]
+  },
+  "MeshPacketRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "MeshPacketRefusalCode",
+      "message": "EditText"
+    }
+  },
+  "MeshPacketReply": {
+    "kind": "union",
+    "variants": {
+      "prepared": "MeshPacket",
+      "refused": "MeshPacketRefusal"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -4771,6 +4834,14 @@ export type ProjectSvgPartReplyWire = {readonly prepared:ProjectSvgPartPreviewWi
 export interface ProjectSvgPartAddWire {readonly objectId: ProjectIdWire;readonly volumeId: ProjectIdWire;readonly assetId: ProjectIdWire;readonly drawingAssetId: ProjectIdWire;readonly transform: ProjectTransformWire;}
 export interface ProjectSvgPartEditWire {readonly volumeId: ProjectIdWire;readonly assetId: ProjectIdWire;readonly drawingAssetId: ProjectIdWire;}
 export type ProjectSvgPartStageWire = {readonly add:ProjectSvgPartAddWire} | {readonly edit:ProjectSvgPartEditWire};
+export type ProjectMeshChunkVerticesWire = number;
+export interface ProjectMeshPacketRequestWire {readonly assetId: ProjectIdWire;readonly maxChunkVertices: ProjectMeshChunkVerticesWire;}
+export interface ProjectMeshPacketBoundsWire {readonly boxMin: ProjectVectorWire;readonly boxMax: ProjectVectorWire;readonly sphereCenter: ProjectVectorWire;readonly sphereRadius: ProjectFiniteWire;}
+export type ProjectOptionalMeshPacketBoundsWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectMeshPacketBoundsWire};
+export interface ProjectMeshPacketWire {readonly assetId: ProjectIdWire;readonly digest: ProjectEditTextWire;readonly vertexCount: ProjectCounterWire;readonly triangleCount: ProjectCounterWire;readonly bounds: ProjectOptionalMeshPacketBoundsWire;readonly indexBytes: ProjectCounterWire;readonly chunkCount: ProjectCounterWire;readonly byteLength: ProjectCounterWire;}
+export type ProjectMeshPacketRefusalCodeWire = "unknownAsset" | "invalidMesh" | "tooLarge";
+export interface ProjectMeshPacketRefusalWire {readonly code: ProjectMeshPacketRefusalCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectMeshPacketReplyWire = {readonly prepared:ProjectMeshPacketWire} | {readonly refused:ProjectMeshPacketRefusalWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -5071,3 +5142,9 @@ export function encodeProjectSvgPartReply(value:ProjectSvgPartReplyWire):string 
 export function captureProjectSvgPartStage(value:unknown):ProjectSvgPartStageWire { return captureIntent("SvgPartStage",value,shapes,limits) as ProjectSvgPartStageWire; }
 export function decodeProjectSvgPartStage(text:string):ProjectSvgPartStageWire { return captureProjectSvgPartStage(parseIntentJson(text,limits)); }
 export function encodeProjectSvgPartStage(value:ProjectSvgPartStageWire):string { return JSON.stringify(captureProjectSvgPartStage(value)); }
+export function captureProjectMeshPacketRequest(value:unknown):ProjectMeshPacketRequestWire { return captureIntent("MeshPacketRequest",value,shapes,limits) as ProjectMeshPacketRequestWire; }
+export function decodeProjectMeshPacketRequest(text:string):ProjectMeshPacketRequestWire { return captureProjectMeshPacketRequest(parseIntentJson(text,limits)); }
+export function encodeProjectMeshPacketRequest(value:ProjectMeshPacketRequestWire):string { return JSON.stringify(captureProjectMeshPacketRequest(value)); }
+export function captureProjectMeshPacketReply(value:unknown):ProjectMeshPacketReplyWire { return captureIntent("MeshPacketReply",value,shapes,limits) as ProjectMeshPacketReplyWire; }
+export function decodeProjectMeshPacketReply(text:string):ProjectMeshPacketReplyWire { return captureProjectMeshPacketReply(parseIntentJson(text,limits)); }
+export function encodeProjectMeshPacketReply(value:ProjectMeshPacketReplyWire):string { return JSON.stringify(captureProjectMeshPacketReply(value)); }

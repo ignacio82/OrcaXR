@@ -572,6 +572,21 @@ impl ProjectSession {
             .map(|inner| ProjectMeasureVolume { inner })
             .map_err(|value| error(session_error(value)))
     }
+    /// The renderer packet for one of the session's mesh assets: a
+    /// `MeshPacketRequest`. Its `reply` gives the packet's shape or the
+    /// refusal, and `bytes` pages the chunk table and chunks.
+    pub fn mesh_packet(&self, request: &str) -> Result<ProjectMeshPacket, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_mesh_packet_request(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .mesh_packet(&request)
+            .map(|inner| ProjectMeshPacket { inner })
+            .map_err(|value| error(session_error(value)))
+    }
     /// The corners of one object's first layer an ear would hold down: a
     /// `BrimEarDetectRequest`; returns a `BrimEarDetectReply`.
     pub fn detect_brim_ears(&self, request: &str) -> Result<String, JsValue> {
@@ -885,6 +900,27 @@ impl ProjectVolumeSimplify {
             .mesh(index(start)? as u64, index(count)? as u64)
             .map(<[u8]>::to_vec)
             .map_err(|_| error("invalid_request"))
+    }
+}
+/// One mesh asset's renderer packet.
+#[wasm_bindgen]
+pub struct ProjectMeshPacket {
+    inner: orcaxr_project::mesh_packet::MeshPacket,
+}
+#[wasm_bindgen]
+impl ProjectMeshPacket {
+    /// The `MeshPacketReply`: the packet's shape, or the refusal.
+    pub fn reply(&self) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        wire::encode_mesh_packet_reply(self.inner.reply()).map_err(|_| error("output_limit"))
+    }
+    /// Bytes `start..start + count` of the packet: the chunk table, then the
+    /// chunks.
+    pub fn bytes(&self, start: f64, count: f64) -> Result<Vec<u8>, JsValue> {
+        self.inner
+            .bytes(index(start)? as u64, index(count)? as u64)
+            .map(<[u8]>::to_vec)
+            .ok_or_else(|| error("invalid_request"))
     }
 }
 /// One volume's features, captured for measuring.

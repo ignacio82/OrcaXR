@@ -23,6 +23,7 @@ import { replayMeasure } from "./measure-replay.mjs";
 import { replayBrimEars } from "./brim-ear-replay.mjs";
 import { replayEmboss } from "./emboss-replay.mjs";
 import { replaySvgParts } from "./svg-part-replay.mjs";
+import { replayMeshPackets } from "./mesh-packet-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -797,6 +798,34 @@ try {
       .join("\n"),
   );
   assert.equal(svgPartChecks, 111);
+  // Mesh renderer packets: replies and paged bytes, then the Kotlin wrapper.
+  const packetFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/mesh-packet-vectors.json", root)),
+  );
+  const packets = await replayMeshPackets(
+    projectJniCore(jvm.call),
+    packetFixture,
+    layout,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
+  assert.deepEqual(
+    [
+      packets.meshPacketsPrepared,
+      packets.meshPacketsRefused,
+      packets.meshPacketChunks,
+    ],
+    [53, 3, 8307],
+  );
+  const packetChecks = jvm.call(
+    "meshPacketChecks",
+    packetFixture.stateJson,
+    Uint8Array.from(packetFixture.assets.flatMap((a) => a.bytes)),
+    packetFixture.assets.map((a) => a.bytes.length).join(","),
+    packetFixture.steps
+      .map((s) => `P\t${s.request}\t${s.reply}\t${s.bytes ?? ""}\t${s.window ?? ""}`)
+      .join("\n"),
+  );
+  assert.equal(packetChecks, 219);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

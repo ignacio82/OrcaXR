@@ -217,6 +217,12 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun stageVolumeSimplify(simplify: ProjectVolumeSimplify, request: ProjectIntents.VolumeSimplifyStage): ProjectStagedInput = read {
         ProjectStagedInput.own(this, NativeProject.stageVolumeSimplify(it, simplify.reference(), ProjectIntents.encodeVolumeSimplifyStage(request)))
     }
+    /** The renderer packet for one of the session's mesh assets: the
+     * geometry the workspace draws (three.js's smooth normals included),
+     * chunked to the request's vertex limit, in the asset's millimetres. */
+    fun meshPacket(request: ProjectIntents.MeshPacketRequest): ProjectMeshPacket = read {
+        own(NativeProject.sessionMeshPacket(it, ProjectIntents.encodeMeshPacketRequest(request)), ::ProjectMeshPacket)
+    }
     /** One volume's features captured for the Measure tool: the capture owns
      * its mesh, so [ProjectMeasureVolume.feature] picks run off this
      * session's call gate. Capture again when the volume's mesh changes. */
@@ -338,6 +344,35 @@ class ProjectSvgPart private constructor(handle: Long) : ProjectHandle(handle) {
     }
 }
 /** One volume's features, captured by [ProjectSession.measureVolume]. */
+/** One mesh asset's renderer packet: a table of [Chunk]s, then each chunk's
+ * float32 xyz positions, float32 xyz normals and indices (16-bit when the
+ * reply's `indexBytes` is 2), little-endian, at 4-byte-aligned offsets. */
+class ProjectMeshPacket internal constructor(handle: Long) : ProjectHandle(handle) {
+    /** One chunk: triangles `firstTriangle` until `firstTriangle +
+     * triangleCount` of the mesh, drawn from its own `vertexCount` vertices
+     * starting at `byteOffset`. */
+    data class Chunk(val firstTriangle: Long, val triangleCount: Long, val vertexCount: Long, val byteOffset: Long)
+
+    fun reply(): ProjectIntents.MeshPacketReply = read {
+        ProjectIntents.decodeMeshPacketReply(NativeProject.meshPacketReply(it))
+    }
+    /** Bytes [start] until [start] + [count], at most [MAX_PAGE]. */
+    fun bytes(start: Long, count: Long): ByteArray = read { NativeProject.meshPacketBytes(it, start, count) }
+    /** The chunk table of a prepared packet with [chunkCount] chunks. */
+    fun chunks(chunkCount: Long): List<Chunk> {
+        if (chunkCount == 0L) return emptyList()
+        val table = java.nio.ByteBuffer.wrap(bytes(0, chunkCount * TABLE_ENTRY_BYTES)).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        return List(chunkCount.toInt()) { index ->
+            val at = index * TABLE_ENTRY_BYTES.toInt()
+            fun word(offset: Int) = table.getInt(at + offset).toLong() and 0xffff_ffffL
+            Chunk(word(0), word(4), word(8), word(12))
+        }
+    }
+    companion object {
+        const val MAX_PAGE = 16L * 1024 * 1024
+        const val TABLE_ENTRY_BYTES = 16L
+    }
+}
 class ProjectMeasureVolume internal constructor(handle: Long) : ProjectHandle(handle) {
     fun reply(): ProjectIntents.MeasureVolumeReply = read {
         ProjectIntents.decodeMeasureVolumeReply(NativeProject.measureVolumeReply(it))

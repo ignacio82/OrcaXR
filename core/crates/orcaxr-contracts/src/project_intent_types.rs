@@ -8852,6 +8852,142 @@ fn read_svg_part_stage(v: &Value) -> Result<SvgPartStage, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
+pub type MeshChunkVertices = u64;
+fn read_mesh_chunk_vertices(v: &Value) -> Result<MeshChunkVertices, InvalidIntent> {
+    Ok(integer(v, 3, 4294967295)? as MeshChunkVertices)
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeshPacketRequest {
+    pub asset_id: Id,
+    pub max_chunk_vertices: MeshChunkVertices,
+}
+fn read_mesh_packet_request(v: &Value) -> Result<MeshPacketRequest, InvalidIntent> {
+    let object = fields(v, &["assetId", "maxChunkVertices"], false)?;
+    Ok(MeshPacketRequest {
+        asset_id: read_id(&object["assetId"])?,
+        max_chunk_vertices: read_mesh_chunk_vertices(&object["maxChunkVertices"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeshPacketBounds {
+    pub box_min: Vector,
+    pub box_max: Vector,
+    pub sphere_center: Vector,
+    pub sphere_radius: Finite,
+}
+fn read_mesh_packet_bounds(v: &Value) -> Result<MeshPacketBounds, InvalidIntent> {
+    let object = fields(
+        v,
+        &["boxMin", "boxMax", "sphereCenter", "sphereRadius"],
+        false,
+    )?;
+    Ok(MeshPacketBounds {
+        box_min: read_vector(&object["boxMin"])?,
+        box_max: read_vector(&object["boxMax"])?,
+        sphere_center: read_vector(&object["sphereCenter"])?,
+        sphere_radius: read_finite(&object["sphereRadius"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalMeshPacketBounds {
+    Absent(Empty),
+    Value(MeshPacketBounds),
+}
+fn read_optional_mesh_packet_bounds(v: &Value) -> Result<OptionalMeshPacketBounds, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalMeshPacketBounds::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalMeshPacketBounds::Value(read_mesh_packet_bounds(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeshPacket {
+    pub asset_id: Id,
+    pub digest: EditText,
+    pub vertex_count: Counter,
+    pub triangle_count: Counter,
+    pub bounds: OptionalMeshPacketBounds,
+    pub index_bytes: Counter,
+    pub chunk_count: Counter,
+    pub byte_length: Counter,
+}
+fn read_mesh_packet(v: &Value) -> Result<MeshPacket, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "assetId",
+            "digest",
+            "vertexCount",
+            "triangleCount",
+            "bounds",
+            "indexBytes",
+            "chunkCount",
+            "byteLength",
+        ],
+        false,
+    )?;
+    Ok(MeshPacket {
+        asset_id: read_id(&object["assetId"])?,
+        digest: read_edit_text(&object["digest"])?,
+        vertex_count: read_counter(&object["vertexCount"])?,
+        triangle_count: read_counter(&object["triangleCount"])?,
+        bounds: read_optional_mesh_packet_bounds(&object["bounds"])?,
+        index_bytes: read_counter(&object["indexBytes"])?,
+        chunk_count: read_counter(&object["chunkCount"])?,
+        byte_length: read_counter(&object["byteLength"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MeshPacketRefusalCode {
+    UnknownAsset,
+    InvalidMesh,
+    TooLarge,
+}
+fn read_mesh_packet_refusal_code(v: &Value) -> Result<MeshPacketRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("unknownAsset") => Ok(MeshPacketRefusalCode::UnknownAsset),
+        Some("invalidMesh") => Ok(MeshPacketRefusalCode::InvalidMesh),
+        Some("tooLarge") => Ok(MeshPacketRefusalCode::TooLarge),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeshPacketRefusal {
+    pub code: MeshPacketRefusalCode,
+    pub message: EditText,
+}
+fn read_mesh_packet_refusal(v: &Value) -> Result<MeshPacketRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(MeshPacketRefusal {
+        code: read_mesh_packet_refusal_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MeshPacketReply {
+    Prepared(MeshPacket),
+    Refused(MeshPacketRefusal),
+}
+fn read_mesh_packet_reply(v: &Value) -> Result<MeshPacketReply, InvalidIntent> {
+    let object = fields(v, &["prepared", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "prepared" => Ok(MeshPacketReply::Prepared(read_mesh_packet(value)?)),
+        "refused" => Ok(MeshPacketReply::Refused(read_mesh_packet_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -9708,5 +9844,21 @@ pub fn decode_svg_part_stage(text: &str) -> Result<SvgPartStage, InvalidIntent> 
 pub fn encode_svg_part_stage(value: &SvgPartStage) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_svg_part_stage(&text)?;
+    Ok(text)
+}
+pub fn decode_mesh_packet_request(text: &str) -> Result<MeshPacketRequest, InvalidIntent> {
+    read_mesh_packet_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_mesh_packet_request(value: &MeshPacketRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_mesh_packet_request(&text)?;
+    Ok(text)
+}
+pub fn decode_mesh_packet_reply(text: &str) -> Result<MeshPacketReply, InvalidIntent> {
+    read_mesh_packet_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_mesh_packet_reply(value: &MeshPacketReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_mesh_packet_reply(&text)?;
     Ok(text)
 }

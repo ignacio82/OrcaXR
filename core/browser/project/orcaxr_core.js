@@ -1828,6 +1828,67 @@ export class ProjectMeasureVolume {
 }
 if (Symbol.dispose) ProjectMeasureVolume.prototype[Symbol.dispose] = ProjectMeasureVolume.prototype.free;
 
+/**
+ * One mesh asset's renderer packet.
+ */
+export class ProjectMeshPacket {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectMeshPacket.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectMeshPacketFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectMeshPacketFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectmeshpacket_free(ptr, 0);
+    }
+    /**
+     * Bytes `start..start + count` of the packet: the chunk table, then the
+     * chunks.
+     * @param {number} start
+     * @param {number} count
+     * @returns {Uint8Array}
+     */
+    bytes(start, count) {
+        const ret = wasm.projectmeshpacket_bytes(this.__wbg_ptr, start, count);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * The `MeshPacketReply`: the packet's shape, or the refusal.
+     * @returns {string}
+     */
+    reply() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectmeshpacket_reply(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ProjectMeshPacket.prototype[Symbol.dispose] = ProjectMeshPacket.prototype.free;
+
 export class ProjectModelUpload {
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
@@ -2780,6 +2841,22 @@ export class ProjectSession {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ProjectMeasureVolume.__wrap(ret[0]);
+    }
+    /**
+     * The renderer packet for one of the session's mesh assets: a
+     * `MeshPacketRequest`. Its `reply` gives the packet's shape or the
+     * refusal, and `bytes` pages the chunk table and chunks.
+     * @param {string} request
+     * @returns {ProjectMeshPacket}
+     */
+    mesh_packet(request) {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectsession_mesh_packet(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectMeshPacket.__wrap(ret[0]);
     }
     /**
      * The canonical paint overlay of one volume's channel: a
@@ -4099,6 +4176,9 @@ const ProjectImportPreviewFinalization = (typeof FinalizationRegistry === 'undef
 const ProjectMeasureVolumeFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectmeasurevolume_free(ptr, 1));
+const ProjectMeshPacketFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectmeshpacket_free(ptr, 1));
 const ProjectModelUploadFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectmodelupload_free(ptr, 1));

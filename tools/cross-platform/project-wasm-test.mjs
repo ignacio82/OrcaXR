@@ -23,6 +23,7 @@ import { replayMeasure } from "./measure-replay.mjs";
 import { replayBrimEars } from "./brim-ear-replay.mjs";
 import { replayEmboss } from "./emboss-replay.mjs";
 import { replaySvgParts } from "./svg-part-replay.mjs";
+import { replayMeshPackets } from "./mesh-packet-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -171,6 +172,15 @@ if (isMainThread) {
         result.svgHistory,
       ],
       [11, 11, 11, 15, 7, 4],
+    );
+    // Mesh renderer packets: replies and paged bytes off a live session.
+    assert.deepEqual(
+      [
+        result.meshPacketsPrepared,
+        result.meshPacketsRefused,
+        result.meshPacketChunks,
+      ],
+      [53, 3, 8307],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -530,6 +540,14 @@ if (isMainThread) {
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
     (text) => Uint8Array.from(Buffer.from(text, "base64")),
   );
+  const packets = await replayMeshPackets(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/mesh-packet-vectors.json", root)),
+    ),
+    layout,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -563,6 +581,7 @@ if (isMainThread) {
       ...brimEars,
       ...embossed,
       ...svgParts,
+      ...packets,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

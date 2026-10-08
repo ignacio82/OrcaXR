@@ -4255,6 +4255,69 @@
         "add": "SvgPartAdd",
         "edit": "SvgPartEdit"
       }
+    },
+    "MeshChunkVertices": {
+      "kind": "integer",
+      "min": 3,
+      "max": 4294967295
+    },
+    "MeshPacketRequest": {
+      "kind": "object",
+      "fields": {
+        "assetId": "Id",
+        "maxChunkVertices": "MeshChunkVertices"
+      }
+    },
+    "MeshPacketBounds": {
+      "kind": "object",
+      "fields": {
+        "boxMin": "Vector",
+        "boxMax": "Vector",
+        "sphereCenter": "Vector",
+        "sphereRadius": "Finite"
+      }
+    },
+    "OptionalMeshPacketBounds": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "MeshPacketBounds"
+      }
+    },
+    "MeshPacket": {
+      "kind": "object",
+      "fields": {
+        "assetId": "Id",
+        "digest": "EditText",
+        "vertexCount": "Counter",
+        "triangleCount": "Counter",
+        "bounds": "OptionalMeshPacketBounds",
+        "indexBytes": "Counter",
+        "chunkCount": "Counter",
+        "byteLength": "Counter"
+      }
+    },
+    "MeshPacketRefusalCode": {
+      "kind": "enum",
+      "values": [
+        "unknownAsset",
+        "invalidMesh",
+        "tooLarge"
+      ]
+    },
+    "MeshPacketRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "MeshPacketRefusalCode",
+        "message": "EditText"
+      }
+    },
+    "MeshPacketReply": {
+      "kind": "union",
+      "variants": {
+        "prepared": "MeshPacket",
+        "refused": "MeshPacketRefusal"
+      }
     }
   },
   "roots": [
@@ -4357,7 +4420,9 @@
     "EmbossStage",
     "SvgPartRequest",
     "SvgPartReply",
-    "SvgPartStage"
+    "SvgPartStage",
+    "MeshPacketRequest",
+    "MeshPacketReply"
   ],
   "sessionVersion": 1
 }

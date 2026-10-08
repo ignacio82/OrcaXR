@@ -387,6 +387,24 @@ export class ProjectMeasureVolume {
     reply(): string;
 }
 
+/**
+ * One mesh asset's renderer packet.
+ */
+export class ProjectMeshPacket {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Bytes `start..start + count` of the packet: the chunk table, then the
+     * chunks.
+     */
+    bytes(start: number, count: number): Uint8Array;
+    /**
+     * The `MeshPacketReply`: the packet's shape, or the refusal.
+     */
+    reply(): string;
+}
+
 export class ProjectModelUpload {
     free(): void;
     [Symbol.dispose](): void;
@@ -563,6 +581,12 @@ export class ProjectSession {
      * and `feature` resolves picks off this session.
      */
     measure_volume(request: string): ProjectMeasureVolume;
+    /**
+     * The renderer packet for one of the session's mesh assets: a
+     * `MeshPacketRequest`. Its `reply` gives the packet's shape or the
+     * refusal, and `bytes` pages the chunk table and chunks.
+     */
+    mesh_packet(request: string): ProjectMeshPacket;
     /**
      * The canonical paint overlay of one volume's channel: a
      * `PaintOverlayRequest`. The capture owns its facets and packets.
@@ -856,6 +880,7 @@ export interface InitOutput {
     readonly __wbg_projectimportbase_free: (a: number, b: number) => void;
     readonly __wbg_projectimportpreview_free: (a: number, b: number) => void;
     readonly __wbg_projectmeasurevolume_free: (a: number, b: number) => void;
+    readonly __wbg_projectmeshpacket_free: (a: number, b: number) => void;
     readonly __wbg_projectmodelupload_free: (a: number, b: number) => void;
     readonly __wbg_projectopen_free: (a: number, b: number) => void;
     readonly __wbg_projectpaintoverlay_free: (a: number, b: number) => void;
@@ -976,6 +1001,8 @@ export interface InitOutput {
     readonly projectimportpreview_read: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectmeasurevolume_feature: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectmeasurevolume_reply: (a: number) => [number, number, number, number];
+    readonly projectmeshpacket_bytes: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectmeshpacket_reply: (a: number) => [number, number, number, number];
     readonly projectmodelupload_append: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectmodelupload_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly projectpaintoverlay_packet: (a: number, b: number, c: number) => [number, number, number, number];
@@ -1027,6 +1054,7 @@ export interface InitOutput {
     readonly projectsession_is_export_current: (a: number, b: number) => number;
     readonly projectsession_is_open_current: (a: number, b: number) => number;
     readonly projectsession_measure_volume: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectsession_mesh_packet: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_paint_overlay: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_pending_count: (a: number) => number;

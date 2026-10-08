@@ -420,6 +420,46 @@ pub(super) fn session_measure_volume(
         })
     })
 }
+/// One asset's renderer packet.
+pub(super) fn session_mesh_packet(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_mesh_packet_request)?;
+    capture(|| {
+        with_session(handle, |s| {
+            s.mesh_packet(&request)
+                .map(|packet| Record::MeshPacket(Box::new(packet)))
+                .map_err(session_error)
+        })
+    })
+}
+/// The packet's shape, or its refusal.
+pub(super) fn mesh_packet_reply(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_mesh_packet(handle, |packet| {
+        encoded(packet.reply(), wire::encode_mesh_packet_reply)
+    })?;
+    string(env, json)
+}
+/// A page of the packet's bytes.
+pub(super) fn mesh_packet_bytes(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+) -> Result<jbyteArray> {
+    let (start, count) = (index(start)?, index(count)?);
+    let bytes = with_mesh_packet(handle, |packet| {
+        packet
+            .bytes(start as u64, count as u64)
+            .map(<[u8]>::to_vec)
+            .ok_or("invalid_request")
+    })?;
+    env.byte_array_from_slice(&bytes)
+        .map(|array| array.into_raw())
+        .map_err(|_| "output_limit")
+}
 /// The capture's plane and facet counts, or its refusal.
 pub(super) fn measure_volume_reply(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
     let json = with_measure_volume(handle, |volume| {
