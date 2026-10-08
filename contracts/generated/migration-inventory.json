@@ -1,15 +1,16 @@
 {
   "schemaVersion": 1,
-  "sourceCommit": "abce5fbb7e284b3e1084df573179abc870c7296e",
+  "sourceCommit": "75a1dfa572b14004fe657cee9623456547e1c24d",
   "sources": {
     "docs/parity/release-report.json": "6da865e5720fb9cbb2ccf36fc310c97dffed94b2c279aedd7df8f58b1fafc49a",
     "web/public/profiles/catalog.json": "19cfbf414f4b2c770b047da152b9b9e2e2101909d92f8fae3166685e7bf58fda",
     "web/public/profiles/manifest.json": "980db93551c0541928061f0edc35d61b434f82161a6db55a352b8e67dee0b958",
     "web/src/actions/ActionContext.ts": "cc3d03e76a2e5e3bb1d755fd28be3b325fab6d660b13dcb6a3cffede08ae8ac6",
-    "web/src/actions/ActionRegistry.ts": "9338ff70df280c2b349e3c6c94513b9a92fa4b123925035d1fad214de296be15",
+    "web/src/actions/ActionRegistry.ts": "1d830d6c70947d0e3e8ab9213e28e367279c1fe1117d814cee9b3ce39f0a966f",
     "web/src/actions/CapabilityEvidence.ts": "e9af7e3210718942e64640ed105c717134450d51aad8e87828ab6ed9900d940e",
     "web/src/actions/ShortcutCatalog.ts": "c241c559bbcee7a3cd2c791e163b105d7010c4ce5c439708840d392159f162fa",
     "web/src/actions/UiState.ts": "3c84536ac8b62015968068916422ae0c0027351c74badf6392c523616f58d271",
+    "web/src/actions/canonicalUiFacts.ts": "750a56b4cbd2f3037b532047f214781b98e25d00f8b86b8cd643bae09ce80b28",
     "web/src/actions/catalog.ts": "555ce21dcafb1c2d863ba4d6bfe2ee91ea165320b8d50700415768c46704c893",
     "web/src/actions/groups/advanced.ts": "6adac93000238ae7522580bd5c84e9266d4e971e0e686b842307c56d45958d29",
     "web/src/actions/groups/calibration.ts": "b58e3d4859341a8bd6356e41cc25a7276cda73c650fdf767c9b24044aa142047",
