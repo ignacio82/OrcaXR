@@ -919,7 +919,8 @@ and replay coverage for the complete current command inventory.
   state and guarded by the revision and fingerprint it will meet. Helper volumes,
   magnet holes and split-to-parts/objects carry their new mesh bytes as measured
   staged work (within the clipboard's asset budget); adaptive layer heights and
-  volume separation submit intents. In
+  volume separation submit intents, as do brim ears and adopting a printer's
+  loaded filaments (with its new filament IDs drawn before submission). In
   process, a command the session refuses reports the browser's own error; the
   wire still carries only `commandFailed`. Other workflows, remote projections
   and production worker/JNI execution are not migrated yet. Browser capture and
@@ -934,6 +935,7 @@ and replay coverage for the complete current command inventory.
     the virtual filament library through guarded intents.
   - [x] Route helper volumes, magnet holes, splits and adaptive layer heights
     through guarded intents and measured staged work.
+  - [x] Route brim ears and printer filament adoption through guarded intents.
   - [ ] Migrate remaining editing/import/save/slice routes and isolate
     preparation work; preserve the registry boundary for every mutation.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,

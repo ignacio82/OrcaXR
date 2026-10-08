@@ -214,7 +214,7 @@ export const gizmoActions: Action[] = [
         ctx.reportCapabilityUnavailable('Remove a brim ear', 'Choose an ear in the Brim ears panel.');
         return;
       }
-      ctx.removeBrimEar(index);
+      return ctx.removeBrimEar(index);
     },
   },
   {

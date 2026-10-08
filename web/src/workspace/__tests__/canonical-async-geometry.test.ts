@@ -84,4 +84,30 @@ await test('adaptive layer heights wait for acknowledgement; a competing edit is
   }
 });
 
+await test('brim ears add, add as a set, remove and clear through acknowledged intents', async () => {
+  const { controller, imported } = setup();
+  try {
+    const ears = () => controller.getBrimEars(imported.objectId);
+    const before = footprint(controller);
+    const ear = (x: number) => ({ positionMm: [x, 0, -10] as [number, number, number], headFrontRadiusMm: 4 });
+    const pending = controller.addBrimEar(imported.objectId, ear(10));
+    assert.equal(ears().length, 0, 'nothing applies before acknowledgement');
+    await pending;
+    await controller.addBrimEars(imported.objectId, [ear(-10), ear(5)]);
+    assert.equal(ears().length, 3);
+    await controller.removeBrimEar(imported.objectId, 0);
+    assert.deepEqual(
+      ears().map((placed) => placed.positionMm[0]),
+      [-10, 5],
+    );
+    await controller.clearBrimEars(imported.objectId);
+    assert.deepEqual(ears(), []);
+    for (let i = 0; i < 4; i++) assert.equal(await controller.undoAsync(), true);
+    assert.equal(controller.captureProjectExportGuard().semanticHash, before.identity.semanticHash);
+    await assert.rejects(controller.removeBrimEar(imported.objectId, 7), /ear/i);
+  } finally {
+    controller.dispose();
+  }
+});
+
 console.log(`canonical async geometry tests passed: ${passed}`);

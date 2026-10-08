@@ -151,8 +151,8 @@ export class ActionContext {
   ): Promise<void> {
     await this.workspace.applyScopedOverrides(target, overrides, guard);
   }
-  autoPlaceBrimEars(): void {
-    this.workspace.autoPlaceBrimEars();
+  async autoPlaceBrimEars(): Promise<void> {
+    await this.workspace.autoPlaceBrimEars();
   }
   toggleSelectionOutline(): void {
     this.workspace.toggleSelectionOutline();
@@ -679,12 +679,12 @@ export class ActionContext {
     this.workspace.setBrimEarRadius(radiusMm);
   }
 
-  removeBrimEar(index: number): void {
-    this.workspace.removeBrimEar(index);
+  async removeBrimEar(index: number): Promise<void> {
+    await this.workspace.removeBrimEar(index);
   }
 
-  clearBrimEars(): void {
-    this.workspace.clearBrimEars();
+  async clearBrimEars(): Promise<void> {
+    await this.workspace.clearBrimEars();
   }
 
   assemblyView(): void {

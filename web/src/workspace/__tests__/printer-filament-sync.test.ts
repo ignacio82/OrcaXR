@@ -48,8 +48,8 @@ const catalogRaw: unknown = JSON.parse(
 );
 
 let passed = 0;
-function test(name: string, run: () => void): void {
-  run();
+async function test(name: string, run: () => void | Promise<void>): Promise<void> {
+  await run();
   passed += 1;
   console.log(`  ✓ ${name}`);
 }
@@ -155,7 +155,7 @@ function build(filamentType: string): Harness {
   };
 }
 
-test('adopting the printer’s filament rebinds the tool to a preset that declares that material', () => {
+await test('adopting the printer’s filament rebinds the tool to a preset that declares that material', async () => {
   // The pre-sync state is the bug's precondition: the tool is bound to ABS
   // while the machine has PLA loaded. The bound preset is what supplies the
   // material preflight checks a slice against, so leaving it on ABS is exactly
@@ -163,7 +163,7 @@ test('adopting the printer’s filament rebinds the tool to a preset that declar
   const { workspace, unsupported, boundMaterial } = build('ABS');
   assert.equal(boundMaterial(0), 'ABS', 'precondition: the tool starts bound to a different material');
 
-  const applied = workspace.syncFilamentsFromPrinter([
+  const applied = await workspace.syncFilamentsFromPrinter([
     { slotIndex: 0, colorHex: '#112233', material: 'PLA', vendor: 'Snapmaker' },
   ]);
   assert.equal(applied, true, 'a reported slot is adopted');
@@ -172,9 +172,11 @@ test('adopting the printer’s filament rebinds the tool to a preset that declar
   workspace.dispose();
 });
 
-test('the adopted material and colour survive the next profile touch', () => {
+await test('the adopted material and colour survive the next profile touch', async () => {
   const { workspace } = build('ABS');
-  workspace.syncFilamentsFromPrinter([{ slotIndex: 0, colorHex: '#abcdef', material: 'PLA', vendor: 'Snapmaker' }]);
+  await workspace.syncFilamentsFromPrinter([
+    { slotIndex: 0, colorHex: '#abcdef', material: 'PLA', vendor: 'Snapmaker' },
+  ]);
   // `applyLiveSlicingConfiguration` rebuilds canonical filaments from the live
   // palette and head presets, so a sync that only wrote canonical state is
   // silently reverted the moment anything else re-applies the profile.
@@ -187,9 +189,9 @@ test('the adopted material and colour survive the next profile touch', () => {
   workspace.dispose();
 });
 
-test('a reported material with no compatible preset is named instead of silently mismatched', () => {
+await test('a reported material with no compatible preset is named instead of silently mismatched', async () => {
   const { workspace, status } = build('ABS');
-  const applied = workspace.syncFilamentsFromPrinter([
+  const applied = await workspace.syncFilamentsFromPrinter([
     { slotIndex: 0, colorHex: '#445566', material: 'Unobtainium', vendor: 'Nobody' },
   ]);
   assert.equal(applied, true);
@@ -198,13 +200,15 @@ test('a reported material with no compatible preset is named instead of silently
   workspace.dispose();
 });
 
-test('a preset the report does not contradict is the operator’s to keep', () => {
+await test('a preset the report does not contradict is the operator’s to keep', async () => {
   // The machine names a vendor and a type and no grade. A deliberate Silk
   // choice satisfies every fact it reported, so nothing about it is wrong and
   // the sync must not drag it back to the plain preset.
   const { workspace, bindPreset, boundPreset } = build('PLA');
   bindPreset(0, 'Snapmaker PLA Silk @U1');
-  workspace.syncFilamentsFromPrinter([{ slotIndex: 0, colorHex: '#0f0f0f', material: 'PLA', vendor: 'Snapmaker' }]);
+  await workspace.syncFilamentsFromPrinter([
+    { slotIndex: 0, colorHex: '#0f0f0f', material: 'PLA', vendor: 'Snapmaker' },
+  ]);
   assert.equal(
     boundPreset(0),
     'Snapmaker PLA Silk @U1',
@@ -213,7 +217,7 @@ test('a preset the report does not contradict is the operator’s to keep', () =
   workspace.dispose();
 });
 
-test('the vendor and grade the machine reports pick the preset, not the first of that type', () => {
+await test('the vendor and grade the machine reports pick the preset, not the first of that type', async () => {
   // The reported bug, exactly: four heads of Snapmaker PLA Matte and SnapSpeed
   // all came back as Generic PLA, because matching looked at `filament_type`
   // alone and took whichever PLA preset the catalog listed first.
@@ -221,7 +225,7 @@ test('the vendor and grade the machine reports pick the preset, not the first of
   for (let toolId = 0; toolId < 4; toolId += 1) bindPreset(toolId, 'Generic PLA');
   assert.equal(boundPreset(0), 'Generic PLA', 'precondition: every head starts on the generic preset');
 
-  workspace.syncFilamentsFromPrinter([
+  await workspace.syncFilamentsFromPrinter([
     { slotIndex: 0, colorHex: '#1E88E5', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
     { slotIndex: 1, colorHex: '#000000', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
     { slotIndex: 2, colorHex: '#E2DEDB', material: 'PLA', subType: 'SnapSpeed', vendor: 'Snapmaker' },
@@ -241,10 +245,10 @@ test('the vendor and grade the machine reports pick the preset, not the first of
   workspace.dispose();
 });
 
-test('a reported grade with no preset of its own falls back to the vendor’s plain preset', () => {
+await test('a reported grade with no preset of its own falls back to the vendor’s plain preset', async () => {
   const { workspace, bindPreset, boundPreset } = build('PLA');
   bindPreset(0, 'Generic PLA');
-  workspace.syncFilamentsFromPrinter([
+  await workspace.syncFilamentsFromPrinter([
     { slotIndex: 0, colorHex: '#0f0f0f', material: 'PLA', subType: 'Nebula', vendor: 'Snapmaker' },
   ]);
   assert.equal(

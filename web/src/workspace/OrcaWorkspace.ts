@@ -2777,7 +2777,7 @@ export class OrcaWorkspace extends xb.Script {
    * supplies the slots it read, so this stays testable and the transport stays
    * out of the workspace.
    */
-  public syncFilamentsFromPrinter(
+  public async syncFilamentsFromPrinter(
     slots: readonly {
       slotIndex: number;
       colorHex: string;
@@ -2785,7 +2785,7 @@ export class OrcaWorkspace extends xb.Script {
       subType?: string;
       vendor: string;
     }[],
-  ): boolean {
+  ): Promise<boolean> {
     if (slots.length === 0) {
       this.setStatus(
         t(
@@ -2796,7 +2796,7 @@ export class OrcaWorkspace extends xb.Script {
       return false;
     }
     try {
-      const summary = this.canonicalProject.syncPhysicalFilamentsFromPrinter(
+      const summary = await this.canonicalProject.syncPhysicalFilamentsFromPrinter(
         slots.map((slot) => ({
           toolId: slot.slotIndex,
           color: slot.colorHex,
@@ -3363,7 +3363,7 @@ export class OrcaWorkspace extends xb.Script {
    * ears are stored in — the same space `placeBrimEar` converts a click into —
    * so a detected point and a clicked one mean the same thing.
    */
-  public autoPlaceBrimEars(): boolean {
+  public async autoPlaceBrimEars(): Promise<boolean> {
     const objectId = this.brimEarTargetObject();
     if (!objectId) {
       this.setStatus(
@@ -3390,7 +3390,7 @@ export class OrcaWorkspace extends xb.Script {
       return false;
     }
     try {
-      this.canonicalProject.addBrimEars(
+      await this.canonicalProject.addBrimEars(
         objectId,
         detected.ears.map((ear) => ear.point),
       );
@@ -3410,7 +3410,7 @@ export class OrcaWorkspace extends xb.Script {
     return true;
   }
 
-  public clearBrimEars(): boolean {
+  public async clearBrimEars(): Promise<boolean> {
     const objectId = this.brimEarTargetObject();
     if (!objectId) {
       this.setStatus(
@@ -3422,17 +3422,22 @@ export class OrcaWorkspace extends xb.Script {
       this.setStatus(t('workspace.orcaWorkspace.thatPartHasNoBrim', 'That part has no brim ears.'));
       return false;
     }
-    this.canonicalProject.clearBrimEars(objectId);
+    try {
+      await this.canonicalProject.clearBrimEars(objectId);
+    } catch (error) {
+      this.setStatus(`Brim ears: ${(error as Error).message}`);
+      return false;
+    }
     this.setStatus(t('workspace.orcaWorkspace.clearedTheBrimEarsUndo', 'Cleared the brim ears; undo restores them.'));
     this.notifyBrimEarChange();
     return true;
   }
 
-  public removeBrimEar(index: number): boolean {
+  public async removeBrimEar(index: number): Promise<boolean> {
     const objectId = this.brimEarTargetObject();
     if (!objectId) return false;
     try {
-      this.canonicalProject.removeBrimEar(objectId, index);
+      await this.canonicalProject.removeBrimEar(objectId, index);
       this.setStatus(t('workspace.orcaWorkspace.removedABrimEar', 'Removed a brim ear.'));
       this.notifyBrimEarChange();
       return true;
@@ -3472,18 +3477,19 @@ export class OrcaWorkspace extends xb.Script {
       // discards any ear whose transformed world Z is above the bed
       // (`Brim.cpp:867`), which silently dropped every ear placed up a wall.
       const baseZ = partBaseZ(target.display) ?? local.z;
-      try {
-        this.canonicalProject.addBrimEar(objectId, {
-          positionMm: [local.x, local.y, baseZ],
-          headFrontRadiusMm: this.brimEarRadiusMm,
-        });
-        this.setStatus(`Placed a ${this.brimEarRadiusMm} mm brim ear.`);
-        this.notifyBrimEarChange();
-        return true;
-      } catch (error) {
-        this.setStatus(`Brim ear: ${(error as Error).message}`);
-        return false;
-      }
+      const radiusMm = this.brimEarRadiusMm;
+      // The click is handled once it lands on the part; the session commits
+      // the ear and reports success or its refusal when it acknowledges.
+      void this.canonicalProject
+        .addBrimEar(objectId, { positionMm: [local.x, local.y, baseZ], headFrontRadiusMm: radiusMm })
+        .then(
+          () => {
+            this.setStatus(`Placed a ${radiusMm} mm brim ear.`);
+            this.notifyBrimEarChange();
+          },
+          (error: unknown) => this.setStatus(`Brim ear: ${error instanceof Error ? error.message : String(error)}`),
+        );
+      return true;
     }
     this.setStatus(
       t('workspace.orcaWorkspace.clickTheSelectedModelTo', 'Click the selected model to place a brim ear.'),

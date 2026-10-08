@@ -640,7 +640,7 @@ function setupDomUI(
       const summary = slots.map((slot) => `H${slot.slotIndex + 1}: ${slot.material} ${slot.colorHex}`).join('; ');
       // Adopting the machine's own loaded filaments is a project edit, so it
       // goes through one undoable canonical command and reports what changed.
-      if (!workspace.syncFilamentsFromPrinter(slots)) {
+      if (!(await workspace.syncFilamentsFromPrinter(slots))) {
         workspace.setStatus(`Printer filaments: ${summary}.`);
       }
     } catch (error) {

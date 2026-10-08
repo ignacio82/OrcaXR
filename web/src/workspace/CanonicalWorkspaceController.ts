@@ -4061,38 +4061,59 @@ export class CanonicalWorkspaceController {
    * command. Returns which tools changed and which reported slots had no
    * canonical tool, so the caller can report both honestly.
    */
-  syncPhysicalFilamentsFromPrinter(slots: readonly PrinterFilamentSlotFacts[]): PrinterFilamentSyncSummary {
+  async syncPhysicalFilamentsFromPrinter(
+    slots: readonly PrinterFilamentSlotFacts[],
+  ): Promise<PrinterFilamentSyncSummary> {
     this.assertActive();
     const state = this.session.project.getSnapshot().state;
-    // The id source is what lets a reported slot with no canonical tool be
-    // adopted rather than merely counted.
+    // New IDs are what let a reported slot with no canonical tool be adopted
+    // rather than merely counted; the command draws them in slot order.
     const summary = SyncPhysicalFilamentsFromPrinterCommand.describe(state, slots, true);
     if (summary.applied.length > 0 || summary.added.length > 0) {
-      this.session.commands.execute(new SyncPhysicalFilamentsFromPrinterCommand(slots, this.options.idSource));
+      new SyncPhysicalFilamentsFromPrinterCommand(slots);
+      const newIds = summary.added.map(() => this.options.idSource.next('physical-filament'));
+      await this.executeEditIntent((text) => ({
+        syncPhysicalFilaments: {
+          slots: slots.map((slot) => ({
+            toolId: slot.toolId,
+            color: text(slot.color),
+            material: text(slot.material),
+            subType: slot.subType === undefined ? { absent: {} } : { value: text(slot.subType) },
+            vendor: slot.vendor === undefined ? { absent: {} } : { value: text(slot.vendor) },
+          })),
+          newFilamentIds: newIds.length > 0 ? { value: newIds.map(text) } : { absent: {} },
+        },
+      }));
     }
     return summary;
   }
 
   /** Place one brim ear in object-local millimetres, as one undoable command. */
-  addBrimEar(objectId: ObjectId, point: BrimEarPoint): void {
+  async addBrimEar(objectId: ObjectId, point: BrimEarPoint): Promise<void> {
     this.assertActive();
-    this.session.commands.execute(new AddBrimEarCommand(objectId, point));
+    new AddBrimEarCommand(objectId, point);
+    await this.executeEditIntent((text) => ({ addBrimEar: { objectId: text(objectId), ear: brimEarWire(point) } }));
   }
 
   /** Place a detected set of ears as one undoable entry. */
-  addBrimEars(objectId: ObjectId, points: readonly BrimEarPoint[]): void {
+  async addBrimEars(objectId: ObjectId, points: readonly BrimEarPoint[]): Promise<void> {
     this.assertActive();
-    this.session.commands.execute(new AddBrimEarsCommand(objectId, points));
+    new AddBrimEarsCommand(objectId, points);
+    await this.executeEditIntent((text) => ({
+      addBrimEars: { objectId: text(objectId), ears: points.map(brimEarWire) },
+    }));
   }
 
-  removeBrimEar(objectId: ObjectId, index: number): void {
+  async removeBrimEar(objectId: ObjectId, index: number): Promise<void> {
     this.assertActive();
-    this.session.commands.execute(new RemoveBrimEarCommand(objectId, index));
+    new RemoveBrimEarCommand(objectId, index);
+    await this.executeEditIntent((text) => ({ removeBrimEar: { objectId: text(objectId), index } }));
   }
 
-  clearBrimEars(objectId: ObjectId): void {
+  async clearBrimEars(objectId: ObjectId): Promise<void> {
     this.assertActive();
-    this.session.commands.execute(new ClearBrimEarsCommand(objectId));
+    new ClearBrimEarsCommand(objectId);
+    await this.executeEditIntent((text) => ({ clearBrimEars: { objectId: text(objectId) } }));
   }
 
   /** Ears currently placed on one object, for a readout or an overlay. */
@@ -5458,4 +5479,11 @@ function createPrimitiveCylinderGeometry(
 /** A browser kebab-case name as its contract's camelCase enum value. */
 function camelWire<T extends string>(value: string): T {
   return value.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase()) as T;
+}
+
+function brimEarWire(point: BrimEarPoint) {
+  return {
+    positionMm: [point.positionMm[0], point.positionMm[1], point.positionMm[2]],
+    headFrontRadiusMm: point.headFrontRadiusMm,
+  };
 }
