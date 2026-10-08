@@ -18,6 +18,7 @@ import { replayPlacements } from "./placement-replay.mjs";
 import { replayArrangements } from "./arrange-replay.mjs";
 import { replayWipeTowers } from "./wipe-tower-replay.mjs";
 import { replayVolumeSplits } from "./volume-split-replay.mjs";
+import { replaySimplify } from "./simplify-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -629,6 +630,45 @@ try {
       .join("\n"),
   );
   assert.equal(volumeSplitChecks, 105);
+  // Mesh simplification over a live session, staged and executed, then the
+  // Kotlin wrapper.
+  const simplifyFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/simplify-vectors.json", root)),
+  );
+  const simplified = await replaySimplify(
+    projectJniCore(jvm.call),
+    simplifyFixture,
+    layout,
+    stagingLayout.version,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
+  assert.deepEqual(
+    [
+      simplified.simplifyPrepared,
+      simplified.simplifyUnchanged,
+      simplified.simplifyRefused,
+      simplified.simplifyMeshes,
+      simplified.simplifyStages,
+      simplified.simplifyApplied,
+      simplified.simplifyHistory,
+    ],
+    [34, 12, 8, 34, 9, 3, 3],
+  );
+  const simplifyChecks = jvm.call(
+    "simplifyChecks",
+    simplifyFixture.stateJson,
+    ...simplifyFixture.assets.map((a) => Uint8Array.from(a.bytes)),
+    simplifyFixture.steps
+      .map((s) =>
+        "prepare" in s
+          ? `P\t${s.simplify}\t${s.prepare}\t${s.reply}\t${s.mesh ?? ""}\t${s.window ?? ""}`
+          : "stage" in s
+            ? `S\t${s.simplify}\t${s.stage}\t${s.outcome}\t${s.revision}\t${s.hash}\t${label(s)}`
+            : `H\t${s.history}\t${s.revision}\t${s.hash}\t${label(s)}`,
+      )
+      .join("\n"),
+  );
+  assert.equal(simplifyChecks, 177);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

@@ -3,6 +3,7 @@
 mod bounds;
 mod encode;
 mod indexed;
+pub mod simplify;
 pub mod split;
 use crate::assets::AssetLease;
 pub use bounds::{Bounds, BoundsLimits, instance_bounds};

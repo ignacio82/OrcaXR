@@ -3694,6 +3694,64 @@ const shapes = {
       "assetIds": "Ids",
       "objects": "OptionalSeparatedObjects"
     }
+  },
+  "VolumeSimplifyRequest": {
+    "kind": "object",
+    "fields": {
+      "volumeId": "Id",
+      "useCount": "Flag",
+      "decimateRatio": "Finite",
+      "maxError": "Finite"
+    }
+  },
+  "VolumeSimplifyPreview": {
+    "kind": "object",
+    "fields": {
+      "beforeTriangles": "Counter",
+      "afterTriangles": "Counter",
+      "vertexCount": "Counter",
+      "maxError": "OptionalFinite",
+      "stoppedOnError": "Flag",
+      "digest": "EditText",
+      "byteLength": "Counter"
+    }
+  },
+  "VolumeSimplifyUnchanged": {
+    "kind": "object",
+    "fields": {
+      "triangleCount": "Counter"
+    }
+  },
+  "VolumeSimplifyRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "unknownVolume",
+      "missingAsset",
+      "invalidMesh",
+      "degenerateMesh",
+      "invalidConfiguration"
+    ]
+  },
+  "VolumeSimplifyRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "VolumeSimplifyRefusalCode",
+      "message": "EditText"
+    }
+  },
+  "VolumeSimplifyReply": {
+    "kind": "union",
+    "variants": {
+      "prepared": "VolumeSimplifyPreview",
+      "unchanged": "VolumeSimplifyUnchanged",
+      "refused": "VolumeSimplifyRefusal"
+    }
+  },
+  "VolumeSimplifyStage": {
+    "kind": "object",
+    "fields": {
+      "assetId": "Id"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -4139,6 +4197,13 @@ export interface ProjectVolumeSplitRefusalWire {readonly code: ProjectVolumeSpli
 export type ProjectVolumeSplitReplyWire = {readonly prepared:ProjectVolumeSplitPreviewWire} | {readonly refused:ProjectVolumeSplitRefusalWire};
 export type ProjectOptionalSeparatedObjectsWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectSeparatedObjectsWire};
 export interface ProjectVolumeSplitStageWire {readonly volumeIds: ProjectIdsWire;readonly assetIds: ProjectIdsWire;readonly objects: ProjectOptionalSeparatedObjectsWire;}
+export interface ProjectVolumeSimplifyRequestWire {readonly volumeId: ProjectIdWire;readonly useCount: ProjectFlagWire;readonly decimateRatio: ProjectFiniteWire;readonly maxError: ProjectFiniteWire;}
+export interface ProjectVolumeSimplifyPreviewWire {readonly beforeTriangles: ProjectCounterWire;readonly afterTriangles: ProjectCounterWire;readonly vertexCount: ProjectCounterWire;readonly maxError: ProjectOptionalFiniteWire;readonly stoppedOnError: ProjectFlagWire;readonly digest: ProjectEditTextWire;readonly byteLength: ProjectCounterWire;}
+export interface ProjectVolumeSimplifyUnchangedWire {readonly triangleCount: ProjectCounterWire;}
+export type ProjectVolumeSimplifyRefusalCodeWire = "unknownVolume" | "missingAsset" | "invalidMesh" | "degenerateMesh" | "invalidConfiguration";
+export interface ProjectVolumeSimplifyRefusalWire {readonly code: ProjectVolumeSimplifyRefusalCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectVolumeSimplifyReplyWire = {readonly prepared:ProjectVolumeSimplifyPreviewWire} | {readonly unchanged:ProjectVolumeSimplifyUnchangedWire} | {readonly refused:ProjectVolumeSimplifyRefusalWire};
+export interface ProjectVolumeSimplifyStageWire {readonly assetId: ProjectIdWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -4382,3 +4447,12 @@ export function encodeProjectVolumeSplitReply(value:ProjectVolumeSplitReplyWire)
 export function captureProjectVolumeSplitStage(value:unknown):ProjectVolumeSplitStageWire { return captureIntent("VolumeSplitStage",value,shapes,limits) as ProjectVolumeSplitStageWire; }
 export function decodeProjectVolumeSplitStage(text:string):ProjectVolumeSplitStageWire { return captureProjectVolumeSplitStage(parseIntentJson(text,limits)); }
 export function encodeProjectVolumeSplitStage(value:ProjectVolumeSplitStageWire):string { return JSON.stringify(captureProjectVolumeSplitStage(value)); }
+export function captureProjectVolumeSimplifyRequest(value:unknown):ProjectVolumeSimplifyRequestWire { return captureIntent("VolumeSimplifyRequest",value,shapes,limits) as ProjectVolumeSimplifyRequestWire; }
+export function decodeProjectVolumeSimplifyRequest(text:string):ProjectVolumeSimplifyRequestWire { return captureProjectVolumeSimplifyRequest(parseIntentJson(text,limits)); }
+export function encodeProjectVolumeSimplifyRequest(value:ProjectVolumeSimplifyRequestWire):string { return JSON.stringify(captureProjectVolumeSimplifyRequest(value)); }
+export function captureProjectVolumeSimplifyReply(value:unknown):ProjectVolumeSimplifyReplyWire { return captureIntent("VolumeSimplifyReply",value,shapes,limits) as ProjectVolumeSimplifyReplyWire; }
+export function decodeProjectVolumeSimplifyReply(text:string):ProjectVolumeSimplifyReplyWire { return captureProjectVolumeSimplifyReply(parseIntentJson(text,limits)); }
+export function encodeProjectVolumeSimplifyReply(value:ProjectVolumeSimplifyReplyWire):string { return JSON.stringify(captureProjectVolumeSimplifyReply(value)); }
+export function captureProjectVolumeSimplifyStage(value:unknown):ProjectVolumeSimplifyStageWire { return captureIntent("VolumeSimplifyStage",value,shapes,limits) as ProjectVolumeSimplifyStageWire; }
+export function decodeProjectVolumeSimplifyStage(text:string):ProjectVolumeSimplifyStageWire { return captureProjectVolumeSimplifyStage(parseIntentJson(text,limits)); }
+export function encodeProjectVolumeSimplifyStage(value:ProjectVolumeSimplifyStageWire):string { return JSON.stringify(captureProjectVolumeSimplifyStage(value)); }

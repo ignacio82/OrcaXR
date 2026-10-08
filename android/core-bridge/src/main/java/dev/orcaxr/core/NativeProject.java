@@ -133,6 +133,13 @@ final class NativeProject {
     static native long volumeSplit(long handle, long guard, String request);
     static native String volumeSplitReply(long handle);
     static native long stageVolumeSplit(long handle, long split, String request);
+    // Simplification: decimate one volume's mesh on a current guard, read the
+    // summary or refusal and page the result's bytes, then stage it under a
+    // host asset ID.
+    static native long volumeSimplify(long handle, long guard, String request);
+    static native String volumeSimplifyReply(long handle);
+    static native byte[] volumeSimplifyMesh(long handle, long start, long count);
+    static native long stageVolumeSimplify(long handle, long simplify, String request);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

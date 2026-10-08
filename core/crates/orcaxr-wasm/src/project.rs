@@ -519,6 +519,44 @@ impl ProjectSession {
             .map(|id| id as f64)
             .map_err(|value| error(session_error(value)))
     }
+    /// Decimate one volume's mesh on the state `guard` captured: a
+    /// `VolumeSimplifyRequest`. Its `reply` gives the summary, unchanged or
+    /// the refusal, and `mesh` pages the result's bytes.
+    pub fn volume_simplify(
+        &self,
+        guard: &ProjectGuard,
+        request: &str,
+    ) -> Result<ProjectVolumeSimplify, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_volume_simplify_request(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .volume_simplify(&guard.inner, &request)
+            .map(|inner| ProjectVolumeSimplify { inner })
+            .map_err(|value| error(session_error(value)))
+    }
+    /// Stage a prepared decimation under the host's asset ID (a
+    /// `VolumeSimplifyStage`) for `executeStaged`. A run whose state changed
+    /// refuses `stale`.
+    pub fn stage_volume_simplify(
+        &mut self,
+        simplify: &ProjectVolumeSimplify,
+        request: &str,
+    ) -> Result<f64, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_volume_simplify_stage(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .stage_volume_simplify(&simplify.inner, &request)
+            .map(|id| id as f64)
+            .map_err(|value| error(session_error(value)))
+    }
     /// The plate's wipe tower, auto-placed: a `WipeTowerRequest`; returns a
     /// `WipeTowerReply`.
     pub fn plan_wipe_tower(&self, request: &str) -> Result<String, JsValue> {
@@ -756,6 +794,26 @@ impl ProjectVolumeSplit {
     pub fn reply(&self) -> Result<String, JsValue> {
         use orcaxr_contracts::project_intent_types as wire;
         wire::encode_volume_split_reply(&self.inner.reply()).map_err(|_| error("output_limit"))
+    }
+}
+/// One volume's decimation, prepared on a session guard.
+#[wasm_bindgen]
+pub struct ProjectVolumeSimplify {
+    inner: orcaxr_project::simplify::VolumeSimplify,
+}
+#[wasm_bindgen]
+impl ProjectVolumeSimplify {
+    /// The `VolumeSimplifyReply`: the summary, unchanged, or the refusal.
+    pub fn reply(&self) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        wire::encode_volume_simplify_reply(&self.inner.reply()).map_err(|_| error("output_limit"))
+    }
+    /// Bytes `start..start + count` of the result's indexed-mesh payload.
+    pub fn mesh(&self, start: f64, count: f64) -> Result<Vec<u8>, JsValue> {
+        self.inner
+            .mesh(index(start)? as u64, index(count)? as u64)
+            .map(<[u8]>::to_vec)
+            .map_err(|_| error("invalid_request"))
     }
 }
 fn session_error(value: orcaxr_contracts::project_intent_types::SessionError) -> &'static str {

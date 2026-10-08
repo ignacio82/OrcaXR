@@ -7694,6 +7694,141 @@ fn read_volume_split_stage(v: &Value) -> Result<VolumeSplitStage, InvalidIntent>
         objects: read_optional_separated_objects(&object["objects"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeSimplifyRequest {
+    pub volume_id: Id,
+    pub use_count: Flag,
+    pub decimate_ratio: Finite,
+    pub max_error: Finite,
+}
+fn read_volume_simplify_request(v: &Value) -> Result<VolumeSimplifyRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &["volumeId", "useCount", "decimateRatio", "maxError"],
+        false,
+    )?;
+    Ok(VolumeSimplifyRequest {
+        volume_id: read_id(&object["volumeId"])?,
+        use_count: read_flag(&object["useCount"])?,
+        decimate_ratio: read_finite(&object["decimateRatio"])?,
+        max_error: read_finite(&object["maxError"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeSimplifyPreview {
+    pub before_triangles: Counter,
+    pub after_triangles: Counter,
+    pub vertex_count: Counter,
+    pub max_error: OptionalFinite,
+    pub stopped_on_error: Flag,
+    pub digest: EditText,
+    pub byte_length: Counter,
+}
+fn read_volume_simplify_preview(v: &Value) -> Result<VolumeSimplifyPreview, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "beforeTriangles",
+            "afterTriangles",
+            "vertexCount",
+            "maxError",
+            "stoppedOnError",
+            "digest",
+            "byteLength",
+        ],
+        false,
+    )?;
+    Ok(VolumeSimplifyPreview {
+        before_triangles: read_counter(&object["beforeTriangles"])?,
+        after_triangles: read_counter(&object["afterTriangles"])?,
+        vertex_count: read_counter(&object["vertexCount"])?,
+        max_error: read_optional_finite(&object["maxError"])?,
+        stopped_on_error: read_flag(&object["stoppedOnError"])?,
+        digest: read_edit_text(&object["digest"])?,
+        byte_length: read_counter(&object["byteLength"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeSimplifyUnchanged {
+    pub triangle_count: Counter,
+}
+fn read_volume_simplify_unchanged(v: &Value) -> Result<VolumeSimplifyUnchanged, InvalidIntent> {
+    let object = fields(v, &["triangleCount"], false)?;
+    Ok(VolumeSimplifyUnchanged {
+        triangle_count: read_counter(&object["triangleCount"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VolumeSimplifyRefusalCode {
+    UnknownVolume,
+    MissingAsset,
+    InvalidMesh,
+    DegenerateMesh,
+    InvalidConfiguration,
+}
+fn read_volume_simplify_refusal_code(
+    v: &Value,
+) -> Result<VolumeSimplifyRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("unknownVolume") => Ok(VolumeSimplifyRefusalCode::UnknownVolume),
+        Some("missingAsset") => Ok(VolumeSimplifyRefusalCode::MissingAsset),
+        Some("invalidMesh") => Ok(VolumeSimplifyRefusalCode::InvalidMesh),
+        Some("degenerateMesh") => Ok(VolumeSimplifyRefusalCode::DegenerateMesh),
+        Some("invalidConfiguration") => Ok(VolumeSimplifyRefusalCode::InvalidConfiguration),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeSimplifyRefusal {
+    pub code: VolumeSimplifyRefusalCode,
+    pub message: EditText,
+}
+fn read_volume_simplify_refusal(v: &Value) -> Result<VolumeSimplifyRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(VolumeSimplifyRefusal {
+        code: read_volume_simplify_refusal_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VolumeSimplifyReply {
+    Prepared(VolumeSimplifyPreview),
+    Unchanged(VolumeSimplifyUnchanged),
+    Refused(VolumeSimplifyRefusal),
+}
+fn read_volume_simplify_reply(v: &Value) -> Result<VolumeSimplifyReply, InvalidIntent> {
+    let object = fields(v, &["prepared", "unchanged", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "prepared" => Ok(VolumeSimplifyReply::Prepared(read_volume_simplify_preview(
+            value,
+        )?)),
+        "unchanged" => Ok(VolumeSimplifyReply::Unchanged(
+            read_volume_simplify_unchanged(value)?,
+        )),
+        "refused" => Ok(VolumeSimplifyReply::Refused(read_volume_simplify_refusal(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeSimplifyStage {
+    pub asset_id: Id,
+}
+fn read_volume_simplify_stage(v: &Value) -> Result<VolumeSimplifyStage, InvalidIntent> {
+    let object = fields(v, &["assetId"], false)?;
+    Ok(VolumeSimplifyStage {
+        asset_id: read_id(&object["assetId"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -8384,5 +8519,31 @@ pub fn decode_volume_split_stage(text: &str) -> Result<VolumeSplitStage, Invalid
 pub fn encode_volume_split_stage(value: &VolumeSplitStage) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_volume_split_stage(&text)?;
+    Ok(text)
+}
+pub fn decode_volume_simplify_request(text: &str) -> Result<VolumeSimplifyRequest, InvalidIntent> {
+    read_volume_simplify_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_volume_simplify_request(
+    value: &VolumeSimplifyRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_volume_simplify_request(&text)?;
+    Ok(text)
+}
+pub fn decode_volume_simplify_reply(text: &str) -> Result<VolumeSimplifyReply, InvalidIntent> {
+    read_volume_simplify_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_volume_simplify_reply(value: &VolumeSimplifyReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_volume_simplify_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_volume_simplify_stage(text: &str) -> Result<VolumeSimplifyStage, InvalidIntent> {
+    read_volume_simplify_stage(&super::project_intents::parse(text)?)
+}
+pub fn encode_volume_simplify_stage(value: &VolumeSimplifyStage) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_volume_simplify_stage(&text)?;
     Ok(text)
 }

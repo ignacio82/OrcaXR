@@ -202,10 +202,14 @@ export function simplifyMesh(
   const removedVertex = new Uint8Array(vertices.length);
   const version = new Int32Array(vertices.length);
 
-  // Per-vertex quadric from every incident face plane.
+  // Per-vertex quadric from every incident face plane. Every face joins its
+  // corners' sets, as upstream references every face: one without a normal
+  // (a sliver, or a repeated corner) adds no plane but is still rewritten
+  // and removed by the collapses that reach it, never left dangling.
   const quadrics: Quadric[] = vertices.map(() => new Float64Array(10));
   const incident: Set<number>[] = vertices.map(() => new Set<number>());
   for (const [index, triangle] of triangles.entries()) {
+    for (const vertex of triangle) incident[vertex].add(index);
     const normal = faceNormal(vertices, triangle);
     if (!normal) continue;
     const offset = -(
@@ -214,10 +218,7 @@ export function simplifyMesh(
       normal[2] * vertices[triangle[0]][2]
     );
     const q = planeQuadric(normal, offset);
-    for (const vertex of triangle) {
-      addQuadric(quadrics[vertex], q);
-      incident[vertex].add(index);
-    }
+    for (const vertex of triangle) addQuadric(quadrics[vertex], q);
   }
 
   const heap: Candidate[] = [];

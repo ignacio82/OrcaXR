@@ -212,6 +212,71 @@ test('degenerate meshes and impossible settings fail closed', () => {
   );
 });
 
+/** A closed box of gridded faces at integer coordinates, welded. */
+function griddedBox(cells: number): { vertices: Vec3[]; triangles: [number, number, number][] } {
+  const index = new Map<string, number>();
+  const vertices: Vec3[] = [];
+  const triangles: [number, number, number][] = [];
+  const id = (p: Vec3): number => {
+    const key = p.join(',');
+    if (!index.has(key)) index.set(key, vertices.push(p) - 1);
+    return index.get(key)!;
+  };
+  const n = cells;
+  const faces: [(u: number, v: number) => Vec3, boolean][] = [
+    [(u, v) => [u, v, 0], true],
+    [(u, v) => [u, v, n], false],
+    [(u, v) => [u, 0, v], false],
+    [(u, v) => [u, n, v], true],
+    [(u, v) => [0, u, v], true],
+    [(u, v) => [n, u, v], false],
+  ];
+  for (const [face, flip] of faces) {
+    for (let i = 0; i < n; i += 1) {
+      for (let j = 0; j < n; j += 1) {
+        const a = id(face(i, j));
+        const b = id(face(i + 1, j));
+        const c = id(face(i + 1, j + 1));
+        const d = id(face(i, j + 1));
+        for (const [x, y, z] of [
+          [a, b, c],
+          [a, c, d],
+        ])
+          triangles.push(flip ? [x, z, y] : [x, y, z]);
+      }
+    }
+  }
+  return { vertices, triangles };
+}
+
+test('faces without a normal are collapsed away rather than left dangling', () => {
+  // Upstream references every face from its corners; a face with no normal
+  // only adds no plane. Skipping such faces left exact slivers and repeated
+  // corners outside every collapse: they survived, pointing at removed
+  // vertices, and spent the triangle budget.
+  const clean = griddedBox(4);
+  const box = griddedBox(4);
+  const at = (p: Vec3): number => box.vertices.findIndex((v) => v.every((c, k) => c === p[k]));
+  for (const [p, q] of [
+    [at([1, 1, 0]), at([2, 1, 0])],
+    [at([2, 2, 4]), at([2, 3, 4])],
+  ]) {
+    const [a, b] = [box.vertices[p], box.vertices[q]];
+    const midpoint = box.vertices.push([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]) - 1;
+    box.triangles.push([p, midpoint, q]);
+  }
+  box.triangles.push([at([3, 3, 0]), at([3, 3, 0]), at([2, 3, 0])]);
+  const configuration = { useCount: true, decimateRatio: 90, maxError: 1 };
+  const result = simplifyMesh(box, configuration);
+  assert.equal(result.triangles.length, simplifyMesh(clean, configuration).triangles.length);
+  const uses = new Map<number, number>();
+  for (const triangle of result.triangles) for (const vertex of triangle) uses.set(vertex, (uses.get(vertex) ?? 0) + 1);
+  assert.ok(
+    [...uses.values()].every((count) => count >= 3),
+    'every surviving vertex of the closed box still bounds a fan of faces',
+  );
+});
+
 test('a decimated result installs through the guarded topology command as one entry', () => {
   const fixtureMesh = sphere(16, 8, 6);
   const asset = encodeIndexedMeshAsset({

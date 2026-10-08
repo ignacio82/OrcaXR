@@ -194,7 +194,6 @@ import {
 } from '../project/objects/brimEarCommands';
 import {
   DEFAULT_SIMPLIFY_CONFIGURATION,
-  simplifyMesh,
   type SimplifyConfiguration,
   type SimplifyOptions,
 } from '../project/objects/simplify';
@@ -246,6 +245,7 @@ import {
 import { MagnetOp, MagnetShape, type MagnetSpec } from '../features/MagnetOp';
 import type { PreparedVolumeSplitPart } from '../project/objects/splitCommands';
 import { prepareVolumeSplit, type PreparedVolumeSplit } from '../project/objects/volumeSplitExchange';
+import { prepareVolumeSimplify } from '../project/objects/simplifyExchange';
 import {
   captureObjectVolumeSeparationGuard,
   SeparateObjectVolumesCommand,
@@ -3943,41 +3943,29 @@ export class CanonicalWorkspaceController {
     options: SimplifyOptions = {},
   ): PreparedSimplify | null {
     this.assertActive();
-    const state = this.session.project.getSnapshot().state;
-    const found = findVolume(state, volumeId);
-    if (!found) throw new Error(`Unknown volume ${volumeId}`);
-    const payload = this.assets.get(found.volume.source.assetId);
-    if (!payload) throw new Error(`Volume ${volumeId} has no stored mesh asset`);
-
-    const guard: MeshTopologyReplacementGuard = {
+    const prepared = prepareVolumeSimplify(
+      this.session.project.getSnapshot().state,
+      this.assets,
       volumeId,
-      assetId: found.volume.source.assetId,
-      assetDigest: payload.descriptor.digest,
-      topologyRevision: found.volume.source.topologyRevision,
-      triangleCount: found.volume.source.triangleCount,
-    };
-    const decoded = decodeIndexedMeshAsset(payload);
-    const simplified = simplifyMesh(
-      { vertices: decoded.vertices, triangles: decoded.triangles },
       configuration,
       options,
     );
-    if (simplified.triangles.length >= simplified.sourceTriangleCount) return null;
-
+    if (prepared.kind === 'unchanged') return null;
+    const { guard, result, preview } = prepared.simplify;
     const positions: number[] = [];
-    for (const vertex of simplified.vertices) positions.push(vertex[0], vertex[1], vertex[2]);
+    for (const vertex of result.vertices) positions.push(vertex[0], vertex[1], vertex[2]);
     const indices: number[] = [];
-    for (const triangle of simplified.triangles) indices.push(triangle[0], triangle[1], triangle[2]);
+    for (const triangle of result.triangles) indices.push(triangle[0], triangle[1], triangle[2]);
     return Object.freeze({
       volumeId,
       guard,
       positions: Object.freeze(positions) as readonly number[],
       indices: Object.freeze(indices) as readonly number[],
-      beforeTriangles: simplified.sourceTriangleCount,
-      afterTriangles: simplified.triangles.length,
-      maxError: simplified.maxAppliedError,
-      stoppedOnError: simplified.stoppedOnError,
-      ...(payload.descriptor.sourceFilename ? { sourceFilename: payload.descriptor.sourceFilename } : {}),
+      beforeTriangles: result.sourceTriangleCount,
+      afterTriangles: result.triangles.length,
+      maxError: result.maxAppliedError,
+      stoppedOnError: result.stoppedOnError,
+      ...(preview.descriptor.sourceFilename ? { sourceFilename: preview.descriptor.sourceFilename } : {}),
     });
   }
 

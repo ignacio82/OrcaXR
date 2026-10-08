@@ -204,6 +204,19 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun stageVolumeSplit(split: ProjectVolumeSplit, request: ProjectIntents.VolumeSplitStage): ProjectStagedInput = read {
         ProjectStagedInput.own(this, NativeProject.stageVolumeSplit(it, split.reference(), ProjectIntents.encodeVolumeSplitStage(request)))
     }
+    /** Decimate one volume's mesh on the state [guard] captured, which must
+     * still be current: [ProjectVolumeSimplify.reply] gives its summary,
+     * unchanged, or why the workspace would not simplify it, and
+     * [ProjectVolumeSimplify.mesh] pages the result for a preview. */
+    fun volumeSimplify(guard: ProjectGuard, request: ProjectIntents.VolumeSimplifyRequest): ProjectVolumeSimplify = read {
+        own(NativeProject.volumeSimplify(it, guard.reference(), ProjectIntents.encodeVolumeSimplifyRequest(request)), ::ProjectVolumeSimplify)
+    }
+    /** A prepared decimation as one staged mesh replacement under the host's
+     * asset ID. A run whose state changed refuses `stale`; a refused or
+     * unchanged run, or an unstable ID, `invalid_request`. */
+    fun stageVolumeSimplify(simplify: ProjectVolumeSimplify, request: ProjectIntents.VolumeSimplifyStage): ProjectStagedInput = read {
+        ProjectStagedInput.own(this, NativeProject.stageVolumeSimplify(it, simplify.reference(), ProjectIntents.encodeVolumeSimplifyStage(request)))
+    }
     /** The plate's wipe tower auto-placed: the winning candidate and the tower
      * one `setPlateWipeTower` intent sets. */
     fun planWipeTower(request: ProjectIntents.WipeTowerRequest): ProjectIntents.WipeTowerReply = read {
@@ -264,6 +277,19 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
 }
 class ProjectGuard internal constructor(handle: Long) : ProjectHandle(handle)
 
+/** One volume's decimation, prepared by [ProjectSession.volumeSimplify]:
+ * its summary and the result's indexed-mesh bytes (float32 positions, then
+ * uint32 indices), the very payload staging installs. */
+class ProjectVolumeSimplify internal constructor(handle: Long) : ProjectHandle(handle) {
+    fun reply(): ProjectIntents.VolumeSimplifyReply = read {
+        ProjectIntents.decodeVolumeSimplifyReply(NativeProject.volumeSimplifyReply(it))
+    }
+    /** Bytes [start] until [start] + [count], at most [MAX_PAGE]. */
+    fun mesh(start: Long, count: Long): ByteArray = read { NativeProject.volumeSimplifyMesh(it, start, count) }
+    companion object {
+        const val MAX_PAGE = 16L * 1024 * 1024
+    }
+}
 /** One volume's split, prepared by [ProjectSession.volumeSplit]: its parts
  * in the pinned order and its distinct geometries, or the refusal. */
 class ProjectVolumeSplit internal constructor(handle: Long) : ProjectHandle(handle) {

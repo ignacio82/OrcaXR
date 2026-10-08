@@ -5562,6 +5562,94 @@ object ProjectIntents {
             w.field("objects") { writeOptionalSeparatedObjects(w, v.objects) }
         }
     }
+    data class VolumeSimplifyRequest(val volumeId: List<Int>, val useCount: Boolean, val decimateRatio: Double, val maxError: Double)
+    private fun readVolumeSimplifyRequest(v: Any): VolumeSimplifyRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeId", "useCount", "decimateRatio", "maxError"), false)
+        return VolumeSimplifyRequest(readId(obj.get("volumeId")), readFlag(obj.get("useCount")), readFinite(obj.get("decimateRatio")), readFinite(obj.get("maxError")))
+    }
+    private fun writeVolumeSimplifyRequest(w: ProjectIntentWriter, v: VolumeSimplifyRequest) {
+        w.obj {
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("useCount") { writeFlag(w, v.useCount) }
+            w.field("decimateRatio") { writeFinite(w, v.decimateRatio) }
+            w.field("maxError") { writeFinite(w, v.maxError) }
+        }
+    }
+    data class VolumeSimplifyPreview(val beforeTriangles: Long, val afterTriangles: Long, val vertexCount: Long, val maxError: OptionalFinite, val stoppedOnError: Boolean, val digest: List<Int>, val byteLength: Long)
+    private fun readVolumeSimplifyPreview(v: Any): VolumeSimplifyPreview {
+        val obj = ProjectIntentJson.fields(v, setOf("beforeTriangles", "afterTriangles", "vertexCount", "maxError", "stoppedOnError", "digest", "byteLength"), false)
+        return VolumeSimplifyPreview(readCounter(obj.get("beforeTriangles")), readCounter(obj.get("afterTriangles")), readCounter(obj.get("vertexCount")), readOptionalFinite(obj.get("maxError")), readFlag(obj.get("stoppedOnError")), readEditText(obj.get("digest")), readCounter(obj.get("byteLength")))
+    }
+    private fun writeVolumeSimplifyPreview(w: ProjectIntentWriter, v: VolumeSimplifyPreview) {
+        w.obj {
+            w.field("beforeTriangles") { writeCounter(w, v.beforeTriangles) }
+            w.field("afterTriangles") { writeCounter(w, v.afterTriangles) }
+            w.field("vertexCount") { writeCounter(w, v.vertexCount) }
+            w.field("maxError") { writeOptionalFinite(w, v.maxError) }
+            w.field("stoppedOnError") { writeFlag(w, v.stoppedOnError) }
+            w.field("digest") { writeEditText(w, v.digest) }
+            w.field("byteLength") { writeCounter(w, v.byteLength) }
+        }
+    }
+    data class VolumeSimplifyUnchanged(val triangleCount: Long)
+    private fun readVolumeSimplifyUnchanged(v: Any): VolumeSimplifyUnchanged {
+        val obj = ProjectIntentJson.fields(v, setOf("triangleCount"), false)
+        return VolumeSimplifyUnchanged(readCounter(obj.get("triangleCount")))
+    }
+    private fun writeVolumeSimplifyUnchanged(w: ProjectIntentWriter, v: VolumeSimplifyUnchanged) {
+        w.obj {
+            w.field("triangleCount") { writeCounter(w, v.triangleCount) }
+        }
+    }
+    enum class VolumeSimplifyRefusalCode {UnknownVolume,MissingAsset,InvalidMesh,DegenerateMesh,InvalidConfiguration}
+    private fun readVolumeSimplifyRefusalCode(v: Any): VolumeSimplifyRefusalCode {
+        return when(v) {"unknownVolume" -> VolumeSimplifyRefusalCode.UnknownVolume;"missingAsset" -> VolumeSimplifyRefusalCode.MissingAsset;"invalidMesh" -> VolumeSimplifyRefusalCode.InvalidMesh;"degenerateMesh" -> VolumeSimplifyRefusalCode.DegenerateMesh;"invalidConfiguration" -> VolumeSimplifyRefusalCode.InvalidConfiguration; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeVolumeSimplifyRefusalCode(w: ProjectIntentWriter, v: VolumeSimplifyRefusalCode) {
+        w.literal(when(v) {VolumeSimplifyRefusalCode.UnknownVolume -> "unknownVolume";VolumeSimplifyRefusalCode.MissingAsset -> "missingAsset";VolumeSimplifyRefusalCode.InvalidMesh -> "invalidMesh";VolumeSimplifyRefusalCode.DegenerateMesh -> "degenerateMesh";VolumeSimplifyRefusalCode.InvalidConfiguration -> "invalidConfiguration";})
+    }
+    data class VolumeSimplifyRefusal(val code: VolumeSimplifyRefusalCode, val message: List<Int>)
+    private fun readVolumeSimplifyRefusal(v: Any): VolumeSimplifyRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return VolumeSimplifyRefusal(readVolumeSimplifyRefusalCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writeVolumeSimplifyRefusal(w: ProjectIntentWriter, v: VolumeSimplifyRefusal) {
+        w.obj {
+            w.field("code") { writeVolumeSimplifyRefusalCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface VolumeSimplifyReply {
+        data class Prepared(val value: ProjectIntents.VolumeSimplifyPreview) : VolumeSimplifyReply
+        data class Unchanged(val value: ProjectIntents.VolumeSimplifyUnchanged) : VolumeSimplifyReply
+        data class Refused(val value: ProjectIntents.VolumeSimplifyRefusal) : VolumeSimplifyReply
+    }
+    private fun readVolumeSimplifyReply(v: Any): VolumeSimplifyReply {
+        val obj = ProjectIntentJson.fields(v, setOf("prepared", "unchanged", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "prepared" -> VolumeSimplifyReply.Prepared(readVolumeSimplifyPreview(obj.get(key)))
+            "unchanged" -> VolumeSimplifyReply.Unchanged(readVolumeSimplifyUnchanged(obj.get(key)))
+            "refused" -> VolumeSimplifyReply.Refused(readVolumeSimplifyRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeVolumeSimplifyReply(w: ProjectIntentWriter, v: VolumeSimplifyReply) {
+        w.obj { when(v) {
+            is VolumeSimplifyReply.Prepared -> w.field("prepared") { writeVolumeSimplifyPreview(w, v.value) }
+            is VolumeSimplifyReply.Unchanged -> w.field("unchanged") { writeVolumeSimplifyUnchanged(w, v.value) }
+            is VolumeSimplifyReply.Refused -> w.field("refused") { writeVolumeSimplifyRefusal(w, v.value) }
+        } }
+    }
+    data class VolumeSimplifyStage(val assetId: List<Int>)
+    private fun readVolumeSimplifyStage(v: Any): VolumeSimplifyStage {
+        val obj = ProjectIntentJson.fields(v, setOf("assetId"), false)
+        return VolumeSimplifyStage(readId(obj.get("assetId")))
+    }
+    private fun writeVolumeSimplifyStage(w: ProjectIntentWriter, v: VolumeSimplifyStage) {
+        w.obj {
+            w.field("assetId") { writeId(w, v.assetId) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -5724,4 +5812,10 @@ object ProjectIntents {
     fun encodeVolumeSplitReply(value: VolumeSplitReply): String = ProjectIntentWriter().also { writeVolumeSplitReply(it, value) }.finish()
     fun decodeVolumeSplitStage(text: String): VolumeSplitStage = readVolumeSplitStage(ProjectIntentJson.parse(text))
     fun encodeVolumeSplitStage(value: VolumeSplitStage): String = ProjectIntentWriter().also { writeVolumeSplitStage(it, value) }.finish()
+    fun decodeVolumeSimplifyRequest(text: String): VolumeSimplifyRequest = readVolumeSimplifyRequest(ProjectIntentJson.parse(text))
+    fun encodeVolumeSimplifyRequest(value: VolumeSimplifyRequest): String = ProjectIntentWriter().also { writeVolumeSimplifyRequest(it, value) }.finish()
+    fun decodeVolumeSimplifyReply(text: String): VolumeSimplifyReply = readVolumeSimplifyReply(ProjectIntentJson.parse(text))
+    fun encodeVolumeSimplifyReply(value: VolumeSimplifyReply): String = ProjectIntentWriter().also { writeVolumeSimplifyReply(it, value) }.finish()
+    fun decodeVolumeSimplifyStage(text: String): VolumeSimplifyStage = readVolumeSimplifyStage(ProjectIntentJson.parse(text))
+    fun encodeVolumeSimplifyStage(value: VolumeSimplifyStage): String = ProjectIntentWriter().also { writeVolumeSimplifyStage(it, value) }.finish()
 }

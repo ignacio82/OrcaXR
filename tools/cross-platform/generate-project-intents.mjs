@@ -118,6 +118,9 @@ assert.deepEqual(schema.roots, [
   "VolumeSplitRequest",
   "VolumeSplitReply",
   "VolumeSplitStage",
+  "VolumeSimplifyRequest",
+  "VolumeSimplifyReply",
+  "VolumeSimplifyStage",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

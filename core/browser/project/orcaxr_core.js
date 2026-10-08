@@ -2885,6 +2885,24 @@ export class ProjectSession {
         return ret[0];
     }
     /**
+     * Stage a prepared decimation under the host's asset ID (a
+     * `VolumeSimplifyStage`) for `executeStaged`. A run whose state changed
+     * refuses `stale`.
+     * @param {ProjectVolumeSimplify} simplify
+     * @param {string} request
+     * @returns {number}
+     */
+    stage_volume_simplify(simplify, request) {
+        _assertClass(simplify, ProjectVolumeSimplify);
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectsession_stage_volume_simplify(this.__wbg_ptr, simplify.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0];
+    }
+    /**
      * Stage a prepared split under the host's names (a `VolumeSplitStage`)
      * for `executeStaged`. A split whose state changed refuses `stale`.
      * @param {ProjectVolumeSplit} split
@@ -2919,6 +2937,24 @@ export class ProjectSession {
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.projectsession_submit(this.__wbg_ptr, ptr0, len0);
         return ret === 0 ? undefined : ProjectReply.__wrap(ret);
+    }
+    /**
+     * Decimate one volume's mesh on the state `guard` captured: a
+     * `VolumeSimplifyRequest`. Its `reply` gives the summary, unchanged or
+     * the refusal, and `mesh` pages the result's bytes.
+     * @param {ProjectGuard} guard
+     * @param {string} request
+     * @returns {ProjectVolumeSimplify}
+     */
+    volume_simplify(guard, request) {
+        _assertClass(guard, ProjectGuard);
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectsession_volume_simplify(this.__wbg_ptr, guard.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectVolumeSimplify.__wrap(ret[0]);
     }
     /**
      * Prepare one volume's split on the state `guard` captured: a
@@ -3081,6 +3117,66 @@ export class ProjectUpload {
     }
 }
 if (Symbol.dispose) ProjectUpload.prototype[Symbol.dispose] = ProjectUpload.prototype.free;
+
+/**
+ * One volume's decimation, prepared on a session guard.
+ */
+export class ProjectVolumeSimplify {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectVolumeSimplify.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectVolumeSimplifyFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectVolumeSimplifyFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectvolumesimplify_free(ptr, 0);
+    }
+    /**
+     * Bytes `start..start + count` of the result's indexed-mesh payload.
+     * @param {number} start
+     * @param {number} count
+     * @returns {Uint8Array}
+     */
+    mesh(start, count) {
+        const ret = wasm.projectvolumesimplify_mesh(this.__wbg_ptr, start, count);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * The `VolumeSimplifyReply`: the summary, unchanged, or the refusal.
+     * @returns {string}
+     */
+    reply() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectvolumesimplify_reply(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ProjectVolumeSimplify.prototype[Symbol.dispose] = ProjectVolumeSimplify.prototype.free;
 
 /**
  * One volume's split, prepared on a session guard.
@@ -3681,6 +3777,9 @@ const ProjectSessionFinalization = (typeof FinalizationRegistry === 'undefined')
 const ProjectUploadFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectupload_free(ptr, 1));
+const ProjectVolumeSimplifyFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectvolumesimplify_free(ptr, 1));
 const ProjectVolumeSplitFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectvolumesplit_free(ptr, 1));

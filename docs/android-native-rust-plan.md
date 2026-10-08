@@ -1558,8 +1558,17 @@ painting, and FullSpectrum operations that can support real native projects.
     project-asset reuse (16 preparations, 19 stages and 9 direct refusals
     exact in every binding); the workspace controller now prepares through
     the same exchange.
-  - [ ] Port the remaining preparation kernels (simplification, brim ears,
-    measurement, emboss/SVG), mesh renderer packets and device qualification. Brim ears first need a browser fix: the workspace
+  - [x] Port mesh simplification (`mesh::simplify`, `simplify`): the
+    quadric edge collapse with the browser's binary heap, tie-break and
+    JavaScript set order, prepared on a session guard (summary, unchanged or
+    a coded refusal, with the result's mesh bytes paged for a preview) and
+    staged as one mesh replacement under a host asset ID (54 runs and 9
+    stages exact in every binding). A browser defect is fixed with a
+    regression: faces without a normal (exact slivers, repeated corners)
+    never joined their corners' sets, so no collapse removed them and they
+    survived dangling; they now join them as upstream references every face.
+  - [ ] Port the remaining preparation kernels (brim ears, measurement,
+    emboss/SVG), mesh renderer packets and device qualification. Brim ears first need a browser fix: the workspace
     detects, places and draws ears in the first volume's own space, while the
     model and the engine read them as object-local, so an object whose first
     volume is transformed (split parts are recentred) gets misplaced ears; the

@@ -38,6 +38,7 @@ pub mod render;
 pub mod selection;
 pub mod session;
 pub mod settings;
+pub mod simplify;
 pub mod slicing;
 pub mod split;
 pub mod staging_layout;

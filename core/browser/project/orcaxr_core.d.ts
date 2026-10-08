@@ -571,12 +571,24 @@ export class ProjectSession {
      */
     stage_paint_stroke(stroke: ProjectPaintStroke, label?: Uint16Array | null): number;
     /**
+     * Stage a prepared decimation under the host's asset ID (a
+     * `VolumeSimplifyStage`) for `executeStaged`. A run whose state changed
+     * refuses `stale`.
+     */
+    stage_volume_simplify(simplify: ProjectVolumeSimplify, request: string): number;
+    /**
      * Stage a prepared split under the host's names (a `VolumeSplitStage`)
      * for `executeStaged`. A split whose state changed refuses `stale`.
      */
     stage_volume_split(split: ProjectVolumeSplit, request: string): number;
     staging_usage(): Float64Array;
     submit(request: string): ProjectReply | undefined;
+    /**
+     * Decimate one volume's mesh on the state `guard` captured: a
+     * `VolumeSimplifyRequest`. Its `reply` gives the summary, unchanged or
+     * the refusal, and `mesh` pages the result's bytes.
+     */
+    volume_simplify(guard: ProjectGuard, request: string): ProjectVolumeSimplify;
     /**
      * Prepare one volume's split on the state `guard` captured: a
      * `VolumeSplitRequest`. Its `reply` gives the parts or the refusal.
@@ -614,6 +626,23 @@ export class ProjectUpload {
      * synchronous finalization belongs to the host's owned opening task.
      */
     seal_document(): void;
+}
+
+/**
+ * One volume's decimation, prepared on a session guard.
+ */
+export class ProjectVolumeSimplify {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Bytes `start..start + count` of the result's indexed-mesh payload.
+     */
+    mesh(start: number, count: number): Uint8Array;
+    /**
+     * The `VolumeSimplifyReply`: the summary, unchanged, or the refusal.
+     */
+    reply(): string;
 }
 
 /**
@@ -744,6 +773,7 @@ export interface InitOutput {
     readonly __wbg_projectselectioninput_free: (a: number, b: number) => void;
     readonly __wbg_projectsession_free: (a: number, b: number) => void;
     readonly __wbg_projectupload_free: (a: number, b: number) => void;
+    readonly __wbg_projectvolumesimplify_free: (a: number, b: number) => void;
     readonly __wbg_projectvolumesplit_free: (a: number, b: number) => void;
     readonly __wbg_settingseditor_free: (a: number, b: number) => void;
     readonly capturedhistory_dirty_categories: (a: number) => [number, number];
@@ -909,9 +939,11 @@ export interface InitOutput {
     readonly projectsession_snapshot: (a: number) => number;
     readonly projectsession_stage_commands: (a: number, b: number) => [number, number, number];
     readonly projectsession_stage_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly projectsession_stage_volume_simplify: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_stage_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_staging_usage: (a: number) => [number, number];
     readonly projectsession_submit: (a: number, b: number, c: number) => number;
+    readonly projectsession_volume_simplify: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_write_archive: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectupload_append_asset: (a: number, b: number, c: number, d: number) => [number, number];
@@ -924,6 +956,8 @@ export interface InitOutput {
     readonly projectupload_open: (a: number, b: number, c: number) => [number, number, number];
     readonly projectupload_prepare: (a: number) => [number, number, number];
     readonly projectupload_seal_document: (a: number) => [number, number];
+    readonly projectvolumesimplify_mesh: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectvolumesimplify_reply: (a: number) => [number, number, number, number];
     readonly projectvolumesplit_reply: (a: number) => [number, number, number, number];
     readonly settings_rules: (a: number, b: number) => [number, number, number, number];
     readonly settings_step: (a: number, b: number) => [number, number, number, number];

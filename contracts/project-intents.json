@@ -3693,6 +3693,64 @@
         "assetIds": "Ids",
         "objects": "OptionalSeparatedObjects"
       }
+    },
+    "VolumeSimplifyRequest": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id",
+        "useCount": "Flag",
+        "decimateRatio": "Finite",
+        "maxError": "Finite"
+      }
+    },
+    "VolumeSimplifyPreview": {
+      "kind": "object",
+      "fields": {
+        "beforeTriangles": "Counter",
+        "afterTriangles": "Counter",
+        "vertexCount": "Counter",
+        "maxError": "OptionalFinite",
+        "stoppedOnError": "Flag",
+        "digest": "EditText",
+        "byteLength": "Counter"
+      }
+    },
+    "VolumeSimplifyUnchanged": {
+      "kind": "object",
+      "fields": {
+        "triangleCount": "Counter"
+      }
+    },
+    "VolumeSimplifyRefusalCode": {
+      "kind": "enum",
+      "values": [
+        "unknownVolume",
+        "missingAsset",
+        "invalidMesh",
+        "degenerateMesh",
+        "invalidConfiguration"
+      ]
+    },
+    "VolumeSimplifyRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "VolumeSimplifyRefusalCode",
+        "message": "EditText"
+      }
+    },
+    "VolumeSimplifyReply": {
+      "kind": "union",
+      "variants": {
+        "prepared": "VolumeSimplifyPreview",
+        "unchanged": "VolumeSimplifyUnchanged",
+        "refused": "VolumeSimplifyRefusal"
+      }
+    },
+    "VolumeSimplifyStage": {
+      "kind": "object",
+      "fields": {
+        "assetId": "Id"
+      }
     }
   },
   "roots": [
@@ -3776,7 +3834,10 @@
     "WipeTowerReply",
     "VolumeSplitRequest",
     "VolumeSplitReply",
-    "VolumeSplitStage"
+    "VolumeSplitStage",
+    "VolumeSimplifyRequest",
+    "VolumeSimplifyReply",
+    "VolumeSimplifyStage"
   ],
   "sessionVersion": 1
 }

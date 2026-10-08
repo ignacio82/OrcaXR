@@ -347,6 +347,64 @@ pub(super) fn stage_volume_split(
         })
     })
 }
+/// Decimate one volume's mesh on the state `guard` captured.
+pub(super) fn volume_simplify(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    guard: jlong,
+    request: JString<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_volume_simplify_request)?;
+    let guard = with_guard(guard, |g| Ok(g.clone()))?;
+    capture(|| {
+        with_session(handle, |s| {
+            s.volume_simplify(&guard, &request)
+                .map(|simplify| Record::VolumeSimplify(Box::new(simplify)))
+                .map_err(session_error)
+        })
+    })
+}
+/// The decimation's summary, unchanged, or its refusal.
+pub(super) fn volume_simplify_reply(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_volume_simplify(handle, |simplify| {
+        encoded(&simplify.reply(), wire::encode_volume_simplify_reply)
+    })?;
+    string(env, json)
+}
+/// A page of the result's indexed-mesh bytes.
+pub(super) fn volume_simplify_mesh(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+) -> Result<jbyteArray> {
+    let (start, count) = (index(start)?, index(count)?);
+    let bytes = with_volume_simplify(handle, |simplify| {
+        simplify
+            .mesh(start as u64, count as u64)
+            .map(<[u8]>::to_vec)
+            .map_err(|_| "invalid_request")
+    })?;
+    env.byte_array_from_slice(&bytes)
+        .map(|array| array.into_raw())
+        .map_err(|_| "output_limit")
+}
+/// The decimation's staged commit ID under the host's asset ID.
+pub(super) fn stage_volume_simplify(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    simplify: jlong,
+    request: JString<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_volume_simplify_stage)?;
+    with_volume_simplify(simplify, |simplify| {
+        with_session(handle, |s| {
+            s.stage_volume_simplify(simplify, &request)
+                .map(|id| id as jlong)
+                .map_err(session_error)
+        })
+    })
+}
 fn session_error(error: wire::SessionError) -> &'static str {
     match error {
         wire::SessionError::Disposed => "disposed",

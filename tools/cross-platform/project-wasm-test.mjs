@@ -18,6 +18,7 @@ import { replayPlacements } from "./placement-replay.mjs";
 import { replayArrangements } from "./arrange-replay.mjs";
 import { replayWipeTowers } from "./wipe-tower-replay.mjs";
 import { replayVolumeSplits } from "./volume-split-replay.mjs";
+import { replaySimplify } from "./simplify-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -111,6 +112,19 @@ if (isMainThread) {
         result.volumeSplitHistory,
       ],
       [16, 6, 19, 5, 6],
+    );
+    // Mesh simplification over a live session, staged and executed.
+    assert.deepEqual(
+      [
+        result.simplifyPrepared,
+        result.simplifyUnchanged,
+        result.simplifyRefused,
+        result.simplifyMeshes,
+        result.simplifyStages,
+        result.simplifyApplied,
+        result.simplifyHistory,
+      ],
+      [34, 12, 8, 34, 9, 3, 3],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -425,6 +439,16 @@ if (isMainThread) {
     JSON.parse(await readFile(new URL("contracts/project-staging.json", root)))
       .version,
   );
+  const simplified = await replaySimplify(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/simplify-vectors.json", root)),
+    ),
+    layout,
+    JSON.parse(await readFile(new URL("contracts/project-staging.json", root)))
+      .version,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -453,6 +477,7 @@ if (isMainThread) {
       ...arranged,
       ...towers,
       ...splits,
+      ...simplified,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

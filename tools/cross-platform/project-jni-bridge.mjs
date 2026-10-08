@@ -36,6 +36,7 @@ export function startProjectJni(profile = "debug") {
   signatures.arrangeChecks = ["String", "byte[]", "byte[]", "byte[]", "String"];
   signatures.wipeTowerChecks = ["String", "byte[]", "byte[]", "byte[]", "String"];
   signatures.volumeSplitChecks = ["String", ...Array(6).fill("byte[]"), "String"];
+  signatures.simplifyChecks = ["String", ...Array(7).fill("byte[]"), "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -376,6 +377,15 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     stage_volume_split(split, request) {
       return call("stageVolumeSplit", this.handle, split.handle, request);
+    }
+    volume_simplify(guard, request) {
+      return wrap(
+        ProjectVolumeSimplify,
+        call("volumeSimplify", this.handle, guard.handle, request),
+      );
+    }
+    stage_volume_simplify(simplify, request) {
+      return call("stageVolumeSimplify", this.handle, simplify.handle, request);
     }
     stage_paint_stroke(stroke, label) {
       return call(
@@ -768,6 +778,14 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     preview() {
       return wrap(ProjectPaintOverlay, call("paintStrokePreview", this.handle));
+    }
+  }
+  class ProjectVolumeSimplify extends Handle {
+    reply() {
+      return call("volumeSimplifyReply", this.handle);
+    }
+    mesh(start, count) {
+      return call("volumeSimplifyMesh", this.handle, start, count);
     }
   }
   class ProjectVolumeSplit extends Handle {

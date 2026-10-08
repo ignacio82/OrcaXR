@@ -289,6 +289,56 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             })?;
         self.stage(guard, work)
     }
+    /// Decimate one volume's mesh on the state `guard` captured, which must
+    /// still be current: its summary, unchanged, or the workspace's refusal
+    /// ([`crate::simplify::VolumeSimplify::reply`]), with the result's bytes
+    /// for a preview. It stages under the same guard
+    /// ([`Self::stage_volume_simplify`]).
+    pub fn volume_simplify(
+        &self,
+        guard: &LocalGuard,
+        request: &wire::VolumeSimplifyRequest,
+    ) -> Result<crate::simplify::VolumeSimplify, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        if !self.is_current(guard) {
+            return Err(wire::SessionError::Stale);
+        }
+        let mut simplify =
+            crate::simplify::prepare(guard.project.state(), self.bus.assets(), request, || false)
+                .expect("an uncancelled run finishes");
+        simplify.session_guard = Some(guard.clone());
+        Ok(simplify)
+    }
+    /// Stage a session-prepared decimation under the host's asset ID
+    /// (`VolumeSimplifyStage`) as one mesh replacement. Staging refuses as
+    /// stale once anything changed since the run was prepared; a refused or
+    /// unchanged run, or an unstable ID, refuses as an invalid request.
+    pub fn stage_volume_simplify(
+        &mut self,
+        simplify: &crate::simplify::VolumeSimplify,
+        request: &wire::VolumeSimplifyStage,
+    ) -> Result<u64, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        let guard = simplify
+            .session_guard
+            .as_ref()
+            .ok_or(wire::SessionError::InvalidRequest)?;
+        if !self.is_current(guard) {
+            return Err(wire::SessionError::Stale);
+        }
+        let work =
+            simplify
+                .work(request, self.staging.max_units())
+                .map_err(|error| match error {
+                    crate::simplify::Error::Limit => wire::SessionError::ResourceLimit,
+                    crate::simplify::Error::Invalid => wire::SessionError::InvalidRequest,
+                })?;
+        self.stage(guard, work)
+    }
     /// The transforms one placement edit submits, planned from the
     /// acknowledged state (`PlacementRequest` → `PlacementReply`).
     pub fn plan_placement(
