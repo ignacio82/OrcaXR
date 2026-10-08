@@ -11,12 +11,16 @@
 //!
 //! Circle and Sphere brushes reproduce the upstream single-point and dragged
 //! Capsule2D/3D containment, cursor-ray and edge tests with connected
-//! propagation; only Circle culls back-facing neighbours. Refined (subdivided)
-//! selection is not ported yet; a request that needs it is refused with
-//! [`RegionError::Unsupported`].
+//! propagation; only Circle culls back-facing neighbours. A request with prior
+//! refinement, dense refined roots or triangle splitting selects over the
+//! subdivided working tree ([`refined`]).
 use super::validation::Issue;
 use super::{Channel, PaintValue};
 use crate::js_math;
+use orcaxr_contracts::canonical::Value;
+
+mod refined;
+pub use refined::{EncodedNode, LeafRef, RefinedLeaf, RefinedSelection};
 
 pub const TRIANGLE_SELECTOR_EPSILON: f64 = 1e-4;
 pub const SMART_FILL_ANGLE_MIN_DEGREES: f64 = 0.0;
@@ -105,10 +109,11 @@ pub struct Request<'a> {
     pub clipping_plane: Option<ClippingPlane>,
     pub transform: Option<Transform>,
     pub highlight_by_angle_degrees: Option<f64>,
-    /// The request carries prior refinement or dense refined roots: refined
-    /// selection, not ported yet. Canonical annotations are admitted state, so
-    /// only the selected channel is re-checked here.
-    pub refined: bool,
+    /// The channel's persisted refinement (`{ version, triangleCount, splits }`),
+    /// as canonical JSON, validated like the browser's raw input.
+    pub refinement: Option<&'a Value>,
+    /// Dense working roots supplied mid-gesture, one per source facet.
+    pub refined_roots: Option<&'a Value>,
 }
 
 /// `{ kind: 'unpainted' }` or `{ kind: 'assigned', value }`.
@@ -126,6 +131,8 @@ pub struct GapFillReplacement {
     /// In connected-component (breadth-first) order, as the browser reports.
     pub triangle_indices: Vec<u32>,
     pub ranges: Vec<(u32, u32)>,
+    /// The fragment's leaves, when the selection was refined.
+    pub refined_leaves: Option<Vec<LeafRef>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -134,6 +141,9 @@ pub struct Selection {
     /// `[start, endExclusive)` runs.
     pub ranges: Vec<(u32, u32)>,
     pub gap_fill_replacements: Option<Vec<GapFillReplacement>>,
+    /// Present when the selection ran over the refined working tree; the
+    /// ranges are then the source-root union and callers commit leaves.
+    pub refinement: Option<RefinedSelection>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -142,8 +152,6 @@ pub enum RegionError {
     Invalid(Vec<Issue>),
     /// `StaleFacetAnnotationResultError('topology')`.
     StaleTopology,
-    /// Refined selection is not ported yet.
-    Unsupported,
 }
 
 /// `buildOrcaFaceNeighbors`: `its_face_neighbors` from the pinned revision.
@@ -160,6 +168,7 @@ pub fn face_neighbors(mesh: Mesh<'_>) -> Result<Vec<[i64; 3]>, RegionError> {
 
 /// `selectFacetRegion` for source facets.
 pub fn select(request: &Request<'_>) -> Result<Selection, RegionError> {
+    checked(request)?;
     let splitting = match &request.tool {
         Tool::HeightRange {
             triangle_splitting, ..
@@ -167,25 +176,8 @@ pub fn select(request: &Request<'_>) -> Result<Selection, RegionError> {
         Tool::Circle(brush) | Tool::Sphere(brush) => brush.triangle_splitting,
         _ => None,
     };
-    if request.refined || splitting == Some(true) {
-        return Err(RegionError::Unsupported);
-    }
-    let issues = request_issues(request);
-    if !issues.is_empty() {
-        return Err(RegionError::Invalid(issues));
-    }
-    let issues = mesh_issues(request.mesh);
-    if !issues.is_empty() {
-        return Err(RegionError::Invalid(issues));
-    }
-    if request.annotations_topology_revision != request.guard_topology_revision
-        || request.mesh.triangles.len() as f64 != request.guard_triangle_count
-    {
-        return Err(RegionError::StaleTopology);
-    }
-    let issues = annotation_issues(request);
-    if !issues.is_empty() {
-        return Err(RegionError::Invalid(issues));
+    if request.refinement.is_some() || request.refined_roots.is_some() || splitting == Some(true) {
+        return refined::select(request);
     }
     let count = request.mesh.triangles.len();
     let seed = request.seed_triangle as usize;
@@ -204,6 +196,41 @@ pub fn select(request: &Request<'_>) -> Result<Selection, RegionError> {
         Tool::Circle(brush) => Ok(brush_region(request, BrushKind::Circle, brush)),
         Tool::Sphere(brush) => Ok(brush_region(request, BrushKind::Sphere, brush)),
     }
+}
+
+/// `materializeFacetRefinement`: every persisted leaf of the request's
+/// refinement, none selected, for a derived render overlay. The request's
+/// tool and seed are ignored; it is validated as a Triangle at facet zero.
+pub fn materialize(request: &Request<'_>) -> Result<RefinedSelection, RegionError> {
+    let internal = Request {
+        seed_triangle: 0.0,
+        tool: Tool::Triangle { hit: None },
+        ..request.clone()
+    };
+    checked(&internal)?;
+    refined::materialize(&internal)
+}
+
+/// Request, mesh, staleness and annotation checks, in the browser's order.
+fn checked(request: &Request<'_>) -> Result<(), RegionError> {
+    let issues = request_issues(request);
+    if !issues.is_empty() {
+        return Err(RegionError::Invalid(issues));
+    }
+    let issues = mesh_issues(request.mesh);
+    if !issues.is_empty() {
+        return Err(RegionError::Invalid(issues));
+    }
+    if request.annotations_topology_revision != request.guard_topology_revision
+        || request.mesh.triangles.len() as f64 != request.guard_triangle_count
+    {
+        return Err(RegionError::StaleTopology);
+    }
+    let issues = annotation_issues(request);
+    if !issues.is_empty() {
+        return Err(RegionError::Invalid(issues));
+    }
+    Ok(())
 }
 
 fn fill(request: &Request<'_>, seed: usize, edge_detection: Option<f64>) -> Selection {
@@ -346,6 +373,7 @@ fn gap_fill(request: &Request<'_>, max_area_mm2: f64, order: &[PaintValue]) -> S
             target: state(target),
             triangle_indices: indices,
             ranges,
+            refined_leaves: None,
         });
     }
     let mut result = selection(flagged(&changed), count);
@@ -419,6 +447,7 @@ fn selection(indices: Vec<u32>, _count: usize) -> Selection {
         triangle_indices: indices,
         ranges,
         gap_fill_replacements: None,
+        refinement: None,
     }
 }
 
@@ -963,6 +992,7 @@ fn request_issues(request: &Request<'_>) -> Vec<Issue> {
             "Overhang highlight angle must be finite and in [0, 90] degrees",
         ));
     }
+    refined::encoding_issues(request, &mut issues);
     let hit_issue = |hit: &Option<Vec3>, issues: &mut Vec<Issue>| {
         if let Some(hit) = hit
             && !finite_float_vector(hit)
@@ -1068,6 +1098,16 @@ fn request_issues(request: &Request<'_>) -> Vec<Issue> {
                         "Every assigned facet state must have a pinned numeric position in tool.stateOrder",
                     ));
                 }
+            }
+            if refined::prior_assigned_states(request)
+                .iter()
+                .any(|state| state.as_ref().is_none_or(|value| !seen.contains(&value)))
+            {
+                issues.push(Issue::new(
+                    "missing-gap-fill-state",
+                    "refinement",
+                    "Every assigned refined state must have a pinned numeric position in tool.stateOrder",
+                ));
             }
         }
         Tool::Triangle { hit } => hit_issue(hit, &mut issues),

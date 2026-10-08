@@ -2,11 +2,13 @@
 //! mesh, then Triangle, Fill, Height Range, Gap Fill, Circle and Sphere
 //! selections, refusals and stale topologies, each equal to
 //! `selectFacetRegion`'s result.
+use orcaxr_contracts::canonical::{self, Value as Canonical};
 use orcaxr_project::facets::{
     Channel, PaintValue,
     region::{
-        self, Assignment, Brush, ClippingPlane, GapFillReplacement, Mesh, RegionError, RegionState,
-        Request, Selection, Tool, Transform,
+        self, Assignment, Brush, ClippingPlane, EncodedNode, GapFillReplacement, LeafRef, Mesh,
+        RefinedLeaf, RefinedSelection, RegionError, RegionState, Request, Selection, Tool,
+        Transform,
     },
 };
 use serde_json::Value;
@@ -100,6 +102,51 @@ fn tool(v: &Value) -> Tool {
     }
 }
 
+fn path(v: &Value) -> Vec<u8> {
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p.as_u64().unwrap() as u8)
+        .collect()
+}
+fn node(v: &Value) -> EncodedNode {
+    if v["kind"] == "leaf" {
+        EncodedNode::Leaf(state(&v["state"]))
+    } else {
+        EncodedNode::Split {
+            split_sides: v["splitSides"].as_u64().unwrap() as u8,
+            special_side: v["specialSide"].as_u64().unwrap() as u8,
+            children: v["children"].as_array().unwrap().iter().map(node).collect(),
+        }
+    }
+}
+fn refined(v: &Value) -> RefinedSelection {
+    RefinedSelection {
+        edge_limit_mm: v.get("edgeLimitMm").map(number),
+        vertices: v["vertices"].as_array().unwrap().iter().map(vec3).collect(),
+        roots: v["roots"].as_array().unwrap().iter().map(node).collect(),
+        leaves: v["leaves"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|l| RefinedLeaf {
+                source_triangle: l["sourceTriangle"].as_u64().unwrap() as u32,
+                path: path(&l["path"]),
+                vertex_indices: {
+                    let v = indices(&l["vertexIndices"]);
+                    [v[0], v[1], v[2]]
+                },
+                state: state(&l["state"]),
+                selected: l["selected"].as_bool().unwrap(),
+            })
+            .collect(),
+    }
+}
+/// Host input as canonical JSON, exactly as the browser received it.
+fn canonical_value(v: &Value) -> Canonical {
+    canonical::parse(&serde_json::to_string(v).unwrap()).unwrap()
+}
+
 #[test]
 fn region_selection_matches_the_browser() {
     let f = fixture();
@@ -138,7 +185,7 @@ fn region_selection_matches_the_browser() {
         assert_eq!(actual, expected, "neighbours of mesh {i}");
     }
 
-    let (mut selections, mut refusals, mut stale) = (0, 0, 0);
+    let (mut selections, mut refusals, mut stale, mut materialized) = (0, 0, 0, 0);
     for case in f["cases"].as_array().unwrap() {
         let name = case["name"].as_str().unwrap();
         let assignments: Vec<Assignment> = case["assignments"]
@@ -156,6 +203,8 @@ fn region_selection_matches_the_browser() {
             })
             .collect();
         let r = &case["request"];
+        let refinement = r.get("refinement").map(canonical_value);
+        let refined_roots = r.get("refinedRoots").map(canonical_value);
         let request = Request {
             mesh: mesh(case["mesh"].as_u64().unwrap() as usize),
             channel: channel(case["channel"].as_str().unwrap()),
@@ -178,10 +227,20 @@ fn region_selection_matches_the_browser() {
                 }
             }),
             highlight_by_angle_degrees: r.get("highlightByAngleDegrees").map(number),
-            refined: false,
+            refinement: refinement.as_ref(),
+            refined_roots: refined_roots.as_ref(),
         };
-        let actual = region::select(&request);
         let result = &case["result"];
+        if let Some(expected) = result.get("materialized") {
+            assert_eq!(
+                region::materialize(&request),
+                Ok(refined(expected)),
+                "{name}"
+            );
+            materialized += 1;
+            continue;
+        }
+        let actual = region::select(&request);
         if let Some(issues) = result.get("issues") {
             let Err(RegionError::Invalid(actual)) = actual else {
                 panic!("{name}: expected refusal, got {actual:?}");
@@ -221,63 +280,29 @@ fn region_selection_matches_the_browser() {
                             target: state(&r["target"]),
                             triangle_indices: indices(&r["triangleIndices"]),
                             ranges: ranges(&r["ranges"]),
+                            refined_leaves: r.get("refinedLeaves").map(|leaves| {
+                                leaves
+                                    .as_array()
+                                    .unwrap()
+                                    .iter()
+                                    .map(|l| LeafRef {
+                                        source_triangle: l["sourceTriangle"].as_u64().unwrap()
+                                            as u32,
+                                        path: path(&l["path"]),
+                                    })
+                                    .collect()
+                            }),
                         })
                         .collect()
                 }),
+                refinement: result.get("refinement").map(refined),
             };
             assert_eq!(actual, Ok(expected), "{name}");
             selections += 1;
         }
     }
-    assert_eq!((selections, refusals, stale), (5833, 20, 2));
-}
-
-/// Refined selection is a later stage; it refuses rather than guesses.
-#[test]
-fn refined_selection_is_not_ported_yet() {
-    let vertices = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
-    let triangles = [[0.0, 1.0, 2.0]];
-    let brush = Brush {
-        center: [0.2, 0.2, 0.0],
-        previous_center: None,
-        camera_position: [0.2, 0.2, 10.0],
-        radius_mm: 1.0,
-        triangle_splitting: Some(true),
-    };
-    let base = Request {
-        mesh: Mesh {
-            vertices: &vertices,
-            triangles: &triangles,
-        },
-        channel: Channel::Color,
-        annotations_topology_revision: 0.0,
-        assignments: &[],
-        guard_topology_revision: 0.0,
-        guard_triangle_count: 1.0,
-        seed_triangle: 0.0,
-        tool: Tool::Circle(brush.clone()),
-        clipping_plane: None,
-        transform: None,
-        highlight_by_angle_degrees: None,
-        refined: false,
-    };
-    assert_eq!(region::select(&base), Err(RegionError::Unsupported));
-    let refined = Request {
-        tool: Tool::Sphere(Brush {
-            triangle_splitting: None,
-            ..brush
-        }),
-        refined: true,
-        ..base.clone()
-    };
-    assert_eq!(region::select(&refined), Err(RegionError::Unsupported));
-    let split = Request {
-        tool: Tool::HeightRange {
-            start_z_mm: 0.0,
-            height_mm: 1.0,
-            triangle_splitting: Some(true),
-        },
-        ..base
-    };
-    assert_eq!(region::select(&split), Err(RegionError::Unsupported));
+    assert_eq!(
+        (selections, refusals, stale, materialized),
+        (5889, 44, 2, 3)
+    );
 }

@@ -115,7 +115,10 @@ pub fn reply(
             wire::OptionalFacetSelectionTransform::Absent(_) => None,
         },
         highlight_by_angle_degrees: optional(&request.highlight_by_angle_degrees),
-        refined: false,
+        // Refined replies (prior refinement, triangle splitting) are a later
+        // step; the exchange selects source facets as the browser's does.
+        refinement: None,
+        refined_roots: None,
     });
     let selection = match selection {
         Ok(selection) => selection,
@@ -134,8 +137,6 @@ pub fn reply(
         Err(RegionError::StaleTopology) => {
             return Ok(wire::FacetRegionReply::Stale(wire::Empty {}));
         }
-        // The contract carries no refined request, so this cannot occur.
-        Err(RegionError::Unsupported) => return Err(Refusal::InvalidRequest),
     };
     let window = |len: usize| {
         let start = usize::try_from(request.start)

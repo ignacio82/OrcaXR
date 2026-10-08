@@ -9,7 +9,9 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import {
+  applyFacetRefinedSelection,
   buildOrcaFaceNeighbors,
+  materializeFacetRefinement,
   selectFacetRegion,
 } from "../../web/src/project/annotations/FacetRegionSelection.ts";
 import {
@@ -243,7 +245,21 @@ const TRANSFORMS = [
 
 // --- Cases -------------------------------------------------------------------
 const cases = [];
-function run(name, meshIndex, channel, annotations, request) {
+const refinedJson = (refined) => ({
+  ...(refined.edgeLimitMm === undefined
+    ? {}
+    : { edgeLimitMm: refined.edgeLimitMm }),
+  vertices: refined.vertices.map((v) => [...v]),
+  roots: JSON.parse(JSON.stringify(refined.encoding.roots)),
+  leaves: refined.leaves.map((leaf) => ({
+    sourceTriangle: leaf.sourceTriangle,
+    path: [...leaf.path],
+    vertexIndices: [...leaf.vertexIndices],
+    state: leaf.state,
+    selected: leaf.selected,
+  })),
+});
+function run(name, meshIndex, channel, annotations, request, options = {}) {
   const mesh = meshes[meshIndex];
   const full = {
     mesh: { vertices: mesh.vertices, triangles: mesh.triangles },
@@ -252,23 +268,39 @@ function run(name, meshIndex, channel, annotations, request) {
     ...request,
   };
   let result;
+  let selection;
   try {
-    const selection = selectFacetRegion(full);
-    result = {
-      triangleIndices: [...selection.triangleIndices],
-      ranges: selection.ranges.map((r) => [r.start, r.endExclusive]),
-      ...(selection.gapFillReplacements
-        ? {
-            gapFillReplacements: selection.gapFillReplacements.map((r) => ({
-              areaMm2: r.areaMm2,
-              source: r.source,
-              target: r.target,
-              triangleIndices: [...r.triangleIndices],
-              ranges: r.ranges.map((x) => [x.start, x.endExclusive]),
-            })),
-          }
-        : {}),
-    };
+    if (options.materialize) {
+      result = { materialized: refinedJson(materializeFacetRefinement(full)) };
+    } else {
+      selection = selectFacetRegion(full);
+      result = {
+        triangleIndices: [...selection.triangleIndices],
+        ranges: selection.ranges.map((r) => [r.start, r.endExclusive]),
+        ...(selection.gapFillReplacements
+          ? {
+              gapFillReplacements: selection.gapFillReplacements.map((r) => ({
+                areaMm2: r.areaMm2,
+                source: r.source,
+                target: r.target,
+                triangleIndices: [...r.triangleIndices],
+                ranges: r.ranges.map((x) => [x.start, x.endExclusive]),
+                ...(r.refinedLeaves
+                  ? {
+                      refinedLeaves: r.refinedLeaves.map((l) => ({
+                        sourceTriangle: l.sourceTriangle,
+                        path: [...l.path],
+                      })),
+                    }
+                  : {}),
+              })),
+            }
+          : {}),
+        ...(selection.refinement
+          ? { refinement: refinedJson(selection.refinement) }
+          : {}),
+      };
+    }
   } catch (error) {
     if (error instanceof FacetAnnotationValidationError)
       result = { issues: error.issues.map((i) => ({ ...i })) };
@@ -285,6 +317,7 @@ function run(name, meshIndex, channel, annotations, request) {
     request,
     result,
   });
+  return selection;
 }
 
 const rng = random(0xfacade);
@@ -491,6 +524,246 @@ meshes.forEach((mesh, m) => {
     }
   }
 });
+
+// Refined selection: adaptive splitting under brushes and height bands, then
+// requests over the refinement those strokes leave, in dense and persisted
+// form, materialized overlays, and the refinement refusals.
+const leafCentroid = (refined, leaf) =>
+  [0, 1, 2].map(
+    (k) =>
+      leaf.vertexIndices.reduce((sum, v) => sum + refined.vertices[v][k], 0) /
+      3,
+  );
+const persisted = (roots, triangleCount) => ({
+  version: 2,
+  triangleCount,
+  splits: roots.flatMap((node, triangle) =>
+    node.kind === "split" ? [{ triangle, node }] : [],
+  ),
+});
+for (const m of [0, 1, 2]) {
+  const mesh = meshes[m];
+  const count = mesh.triangles.length;
+  const annotations = {
+    ...emptyAnnotations(3),
+    color: paint(rng, "color", count, 0.3),
+  };
+  const guard = { topologyRevision: 3, triangleCount: count };
+  const seed = m === 1 ? 37 : count >> 1;
+  const center = centroid(mesh, seed);
+  const camera = [center[0] + 15, center[1] - 10, center[2] + 40];
+  const strokes = [];
+  for (const kind of ["circle", "sphere"]) {
+    for (const radiusMm of m === 2 && kind === "circle" ? [0.4, 1.5] : [0.4]) {
+      const selection = run(
+        `${mesh.name} refined ${kind} r${radiusMm}`,
+        m,
+        "color",
+        annotations,
+        {
+          guard,
+          seedTriangle: seed,
+          tool: {
+            kind,
+            center,
+            cameraPosition: camera,
+            radiusMm,
+            triangleSplitting: true,
+          },
+        },
+      );
+      if (selection?.refinement) strokes.push(selection.refinement);
+    }
+  }
+  const zs = mesh.vertices.map((v) => v[2]);
+  const middle = (Math.min(...zs) + Math.max(...zs)) / 2;
+  // One split height band: its two boundaries subdivide every facet they cross.
+  if (m === 0)
+    run(`${mesh.name} refined height`, m, "color", annotations, {
+      guard,
+      seedTriangle: 0,
+      tool: {
+        kind: "heightRange",
+        startZMm: middle,
+        heightMm: 0.3,
+        triangleSplitting: true,
+      },
+      transform: TRANSFORMS[2],
+    });
+  // Paint the first stroke's selected leaves, then work over that refinement.
+  const stroke = strokes[0];
+  if (!stroke) continue;
+  const roots = applyFacetRefinedSelection("color", stroke, {
+    kind: "assigned",
+    value: "filament:blue",
+  }).roots;
+  const encoding = persisted(roots, count);
+  const splitSeed = encoding.splits[0]?.triangle ?? seed;
+  const splitLeaves = stroke.leaves.filter(
+    (leaf) => leaf.sourceTriangle === splitSeed,
+  );
+  const hit =
+    splitLeaves.length > 0 ? leafCentroid(stroke, splitLeaves[0]) : center;
+  for (const [form, prior] of [
+    ["dense", { refinedRoots: roots }],
+    ["persisted", { refinement: encoding }],
+  ]) {
+    run(`${mesh.name} ${form} triangle`, m, "color", annotations, {
+      guard,
+      seedTriangle: splitSeed,
+      tool: { kind: "triangle", hit },
+      ...prior,
+    });
+    for (const angle of [false, { maxAdjacentAngleDegrees: 30 }]) {
+      run(`${mesh.name} ${form} fill`, m, "color", annotations, {
+        guard,
+        seedTriangle: splitSeed,
+        tool: { kind: "fill", hit, edgeDetection: angle },
+        ...prior,
+      });
+    }
+    run(`${mesh.name} ${form} clipped fill`, m, "color", annotations, {
+      guard,
+      seedTriangle: splitSeed,
+      tool: { kind: "fill", hit, edgeDetection: false },
+      clippingPlane: { normal: [0, 0, 1], offset: middle },
+      ...prior,
+    });
+    for (const maxAreaMm2 of [0.2, 2]) {
+      run(`${mesh.name} ${form} gap ${maxAreaMm2}`, m, "color", annotations, {
+        guard,
+        seedTriangle: 0,
+        tool: {
+          kind: "gapFill",
+          maxAreaMm2,
+          stateOrder: ["filament:red", "filament:green", "filament:blue"],
+        },
+        ...prior,
+      });
+    }
+    run(`${mesh.name} ${form} brush`, m, "color", annotations, {
+      guard,
+      seedTriangle: seed,
+      tool: { kind: "sphere", center, cameraPosition: camera, radiusMm: 1 },
+      ...prior,
+    });
+    run(`${mesh.name} ${form} split brush`, m, "color", annotations, {
+      guard,
+      seedTriangle: seed,
+      tool: {
+        kind: "circle",
+        center,
+        cameraPosition: camera,
+        radiusMm: 0.4,
+        triangleSplitting: true,
+      },
+      ...prior,
+    });
+    run(`${mesh.name} ${form} missing hit`, m, "color", annotations, {
+      guard,
+      seedTriangle: splitSeed,
+      tool: { kind: "triangle" },
+      ...prior,
+    });
+    run(`${mesh.name} ${form} stray hit`, m, "color", annotations, {
+      guard,
+      seedTriangle: splitSeed,
+      tool: { kind: "triangle", hit: [1e6, 1e6, 1e6] },
+      ...prior,
+    });
+    run(
+      `${mesh.name} ${form} gap without refined state`,
+      m,
+      "color",
+      annotations,
+      {
+        guard,
+        seedTriangle: 0,
+        tool: {
+          kind: "gapFill",
+          maxAreaMm2: 1,
+          stateOrder: ["filament:red", "filament:green"],
+        },
+        ...prior,
+      },
+    );
+  }
+  run(
+    `${mesh.name} materialized`,
+    m,
+    "color",
+    annotations,
+    {
+      guard,
+      seedTriangle: 0,
+      tool: { kind: "triangle" },
+      refinement: encoding,
+    },
+    { materialize: true },
+  );
+}
+// Malformed refinement, as the browser's raw validation reports it.
+{
+  const annotations = { ...emptyAnnotations(1) };
+  const guard = { topologyRevision: 1, triangleCount: 12 };
+  // Fresh objects everywhere: the browser also refuses shared JavaScript nodes,
+  // which owned canonical JSON cannot express.
+  const leaf = () => ({ kind: "leaf", state: { kind: "unpainted" } });
+  const bad = (name, prior) =>
+    run(`refusal: refinement ${name}`, 0, "color", annotations, {
+      guard,
+      seedTriangle: 0,
+      tool: { kind: "triangle" },
+      ...prior,
+    });
+  bad("version and count", {
+    refinement: { version: 1, triangleCount: 11, splits: [] },
+  });
+  bad("splits", {
+    refinement: { version: 2, triangleCount: 12, splits: "none" },
+  });
+  bad("not an object", { refinement: [] });
+  bad("nodes", {
+    refinement: {
+      version: 2,
+      triangleCount: 12,
+      splits: [
+        { triangle: 12, node: leaf() },
+        { triangle: 1.5, node: "leaf" },
+        { triangle: 2, node: { kind: "twig" } },
+        {
+          triangle: 3,
+          node: { kind: "leaf", state: { kind: "assigned", value: 7 } },
+        },
+        {
+          triangle: 4,
+          node: { kind: "split", splitSides: 4, specialSide: 1, children: "x" },
+        },
+        {
+          triangle: 5,
+          node: {
+            kind: "split",
+            splitSides: 3,
+            specialSide: 1,
+            children: [leaf(), leaf(), leaf(), leaf()],
+          },
+        },
+        {
+          triangle: 6,
+          node: {
+            kind: "split",
+            splitSides: 2,
+            specialSide: 0,
+            children: [leaf()],
+          },
+        },
+        "no object",
+      ],
+    },
+  });
+  bad("dense count", { refinedRoots: [leaf(), leaf()] });
+  bad("dense type", { refinedRoots: { 0: leaf() } });
+}
 
 // Refusals, each with the browser's issues; then a stale topology.
 const base = {
@@ -756,6 +1029,9 @@ else
     "Facet region reference drift",
   );
 const count = (key) => cases.filter((c) => key in c.result).length;
+const refinedCount = cases.filter(
+  (c) => c.result.refinement || c.result.materialized,
+).length;
 console.log(
-  `facet regions: ${meshes.length} meshes, ${cases.length} cases (${count("triangleIndices")} selections, ${count("issues")} refusals, ${count("stale")} stale)`,
+  `facet regions: ${meshes.length} meshes, ${cases.length} cases (${count("triangleIndices")} selections, ${refinedCount} refined, ${count("issues")} refusals, ${count("stale")} stale)`,
 );

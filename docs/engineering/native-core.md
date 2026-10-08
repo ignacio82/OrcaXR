@@ -3207,9 +3207,21 @@ with explicit `Math.fround`; the port mirrors it operation by operation, so an
 browser's double rounding is innocuous for these operations). `Math.cos` is the
 fdlibm port. Requests are validated with the browser's issue codes, paths,
 messages and order, then the mesh, then topology staleness, then the selected
-channel's assignments. Refined subdivision (`triangleSplitting`, prior
-refinement) is a later stage and refuses as unsupported rather than
-approximate.
+channel's assignments.
+
+A request with prior refinement (the persisted `{ version, triangleCount,
+splits }` record or dense mid-gesture roots, validated as the browser's raw
+input) or with triangle splitting selects over the TriangleSelector working
+tree (`region::refined`): Orca's one-, two- and three-side splits with shared
+midpoints, propagated neighbour tables and touching-leaf walks; Triangle and
+Fill resolve a split seed from the local hit; Gap Fill measures leaf patches;
+brushes and height bands split adaptively at the pinned edge limits
+(`min(√r²/5, 0.05)` and 0.1 mm). The result carries every working vertex, the
+encoded roots and every leaf with its paint target flag, and Gap Fill
+replacements name their leaves. `materialize` rebuilds the persisted leaves
+for a render overlay. Tree-building failures — a split past the depth or node
+budget, a hit outside the seed, a neighbour that does not share an oriented
+edge — are the browser's single-issue refusals.
 
 `facet-region-vectors.mjs` drives `selectFacetRegion` over a closed cube, an
 icosphere, an open terrain, a patchwork grid and a non-manifold fan with a
@@ -3217,8 +3229,12 @@ degenerate facet, for all five channels: Triangle and Fill seeds at several
 smart-fill angles, with clipping planes; Height Ranges under four transforms
 and the overhang gate; Gap Fill thresholds under two state orders; and Circle
 and Sphere strokes, single and dragged, from frontal and oblique cameras at
-four radii under five transforms — plus 20 refusals and 2 stale topologies.
-Rust reproduces all 5,855 cases and every mesh's neighbour table exactly.
+four radii under five transforms; then splitting strokes and a split height
+band, and Triangle, Fill, clipped Fill, Gap Fill and brushes over the
+refinement a stroke leaves, in dense and persisted form, with materialized
+overlays — plus 44 refusals (including every malformed-refinement issue) and
+2 stale topologies. Rust reproduces all 5,938 cases, 59 of them refined, and
+every mesh's neighbour table exactly.
 
 Hosts select over a live session (`facets::region_exchange`, the browser's
 `FacetRegionExchange.ts`). A `FacetRegionRequest` names a volume, a channel,

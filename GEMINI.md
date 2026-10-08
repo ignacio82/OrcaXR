@@ -180,7 +180,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   captures data properties without getters or mutable caller-owned descendants.
   Kotlin protocol JSON uses a portable bounded parser and shared lexical checks (Android
   JsonReader needs them for G-code metadata). Renderers page `render` deltas from the shown
-  snapshot (unknown base = rebuild); colours use `volumeDisplayColor`. Region selection is float32-exact.
+  snapshot (unknown base = rebuild); colours use `volumeDisplayColor`. Region selection, refined too, is float32-exact.
 - A pending `EditorSession.open` owns its source revision/asset guard and operation identity.
   Newer opens, reset and disposal invalidate it; a failed newer open cannot revive an older
   read. Cooperative cancellation never replaces the final owner/identity check before commit.

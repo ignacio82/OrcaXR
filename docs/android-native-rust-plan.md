@@ -1524,8 +1524,12 @@ painting, and FullSpectrum operations that can support real native projects.
   - [x] Serve region selection over live sessions through WASM, JNI and
     Kotlin: the session decodes the volume's mesh and pages ranges under the
     guard a `facetStroke` commits (136 replies and 2 refusals per binding).
-  - [ ] Finish picking and refined selection, preparation kernels, renderer
-    packets and device qualification.
+  - [x] Port refined selection: the TriangleSelector working tree from
+    persisted or dense refinement, adaptive splitting under brushes and height
+    bands, leaf-level Fill and Gap Fill, and materialized overlays (59 refined
+    cases exact).
+  - [ ] Finish picking, refined session replies and commit helpers,
+    preparation kernels, renderer packets and device qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.
