@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "sourceCommit": "18700a744aa9477a6dcdfb54795a009824e76245",
+  "sourceCommit": "d06463de987c13c2461d9d0249ae94e7f87ec837",
   "sources": {
     "docs/parity/release-report.json": "6da865e5720fb9cbb2ccf36fc310c97dffed94b2c279aedd7df8f58b1fafc49a",
     "web/public/profiles/catalog.json": "19cfbf414f4b2c770b047da152b9b9e2e2101909d92f8fae3166685e7bf58fda",
     "web/public/profiles/manifest.json": "980db93551c0541928061f0edc35d61b434f82161a6db55a352b8e67dee0b958",
-    "web/src/actions/ActionContext.ts": "2a9e0ba27c38ae0947a48ddcb3873ac6cc8a0b0eff33fba5e7a7e6c516211436",
+    "web/src/actions/ActionContext.ts": "bd005421d75eb1c556dd97d4ef6cf32ac636f08fe3b575ff7d43ae278cd3b717",
     "web/src/actions/ActionRegistry.ts": "1d830d6c70947d0e3e8ab9213e28e367279c1fe1117d814cee9b3ce39f0a966f",
     "web/src/actions/CapabilityEvidence.ts": "e9af7e3210718942e64640ed105c717134450d51aad8e87828ab6ed9900d940e",
     "web/src/actions/ShortcutCatalog.ts": "c241c559bbcee7a3cd2c791e163b105d7010c4ce5c439708840d392159f162fa",
