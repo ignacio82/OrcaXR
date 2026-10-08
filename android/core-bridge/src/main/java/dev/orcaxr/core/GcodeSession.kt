@@ -142,8 +142,18 @@ class GcodeSession(private val sourceUnits: Int, options: String = "{}") : AutoC
         index.set(null)
         if (current != 0L) NativeGcode.close(current)
     }
-    private companion object {
-        fun open(units: Int, options: String): Long {
+    companion object {
+        /** The largest file [decodeUtf8] reads, the parser's whole input budget. */
+        const val MAX_DECODE_BYTES = 256 * 1024 * 1024
+        /** G-code file bytes as the UTF-16 a session reads, decoded exactly as
+         * the browser decodes a G-code file (`TextDecoder('utf-8')`): each
+         * malformed sequence becomes U+FFFD and one leading byte-order mark
+         * is dropped. */
+        fun decodeUtf8(bytes: ByteArray): CharArray {
+            check(bytes.size <= MAX_DECODE_BYTES) { "source_length" }
+            return NativeGcode.decodeUtf8(bytes)
+        }
+        private fun open(units: Int, options: String): Long {
             check(options.length <= GcodeRequests.MAX_OPTIONS_BYTES) { "resource_limit" }
             try { GcodeRequests.validateOptions(GcodeJson.objectValue(options)) }
             catch (_: IllegalArgumentException) { error("invalid_options") }

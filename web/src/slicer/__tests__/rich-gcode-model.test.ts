@@ -273,6 +273,26 @@ test('I-only and J-only centers are valid while extra R and malformed unused cen
   approximately(columns.endX[3], 11);
 });
 
+test('only ASCII letters are command or parameter letters, as upstream reads bytes', () => {
+  // `toUpperCase` turned ı into I, ſ into S and ß into a two-letter
+  // "parameter", so these words were silently accepted (an ſ1 line even ran
+  // as an S command) where upstream and the native parser report them.
+  const model = parseRichGcodeModel('G1 \u0131' + '5 X1\n\u017f1 X2\nG1 X3 \u00df4\n');
+  assert.deepEqual(
+    model.warnings.map((warning) => [warning.code, warning.line]),
+    [
+      ['malformed-token', 1],
+      ['malformed-token', 1],
+      ['invalid-command', 2],
+      ['malformed-token', 3],
+      ['malformed-token', 3],
+    ],
+  );
+  assert.deepEqual(Array.from(model.columns.endX), [1, 3]);
+  // Lower-case ASCII still reads as upper case.
+  assert.deepEqual(Array.from(parseRichGcodeModel('g1 x4 y5\n').columns.endX), [4]);
+});
+
 test('only pinned delimited two-character G2/G3 spellings dispatch arcs', () => {
   const source = ['G1 X1 Y0', 'G02 X0 Y1 I-1', 'G2.0 X0 Y1 I-1', 'G2X0Y1I-1', 'g3 X0 Y1 I-1', 'G1 X2'].join('\n');
   const model = parseRichGcodeModel(source);

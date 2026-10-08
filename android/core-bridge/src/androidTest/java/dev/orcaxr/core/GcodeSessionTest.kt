@@ -75,6 +75,20 @@ class GcodeSessionTest {
             }
         }
     }
+    @Test fun fileBytesDecodeAsTheBrowserDecodesThem() {
+        // Node's WHATWG decoder recorded these; malformed sequences, split
+        // characters and byte-order marks included.
+        val context = InstrumentationRegistry.getInstrumentation().context
+        val decodes = JSONObject(context.assets.open("gcode-oracle-vectors.json").bufferedReader().use { it.readText() }).getJSONArray("utf8")
+        for (i in 0 until decodes.length()) {
+            val case = decodes.getJSONObject(i)
+            val bytes = case.getJSONArray("bytes").let { a -> ByteArray(a.length()) { a.getInt(it).toByte() } }
+            val expected = case.getJSONArray("units").let { a -> CharArray(a.length()) { a.getInt(it).toChar() } }
+            assertArrayEquals("case $i", expected, GcodeSession.decodeUtf8(bytes))
+        }
+        assertEquals(319, decodes.length())
+    }
+
     @Test fun uploadLifecycleAndStaleHandlesFailClosed() {
         assertThrows(IllegalStateException::class.java) { NativeGcode.open(99, 0, "{}") }
         val handle = NativeGcode.open(1, 3, "{}")

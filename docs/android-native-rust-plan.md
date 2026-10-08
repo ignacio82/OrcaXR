@@ -859,9 +859,22 @@ that native code automatically reduces total memory.
   - [ ] Complete repeated performance measurements on the reference devices.
 - [ ] Bind the same library to Android and render the resulting columns through
   the native viewport. Verify identical semantic IDs and projections across hosts.
-- [ ] Add fuzz/property tests for malformed numbers, huge lines, truncated arcs,
+- [x] Add fuzz/property tests for malformed numbers, huge lines, truncated arcs,
   unsupported commands, invalid UTF-8, and allocation caps; retain independent
   expected results so both adapters cannot agree on the same new bug unnoticed.
+  `gcode-oracle-vectors` holds thirteen cases written by hand from the pinned
+  semantics (35 warnings and 36 records across every cap, BOM/CRLF and modal
+  kinematics). The browser parser must meet them before they are written, and
+  the Rust parser meets them in `tests/oracle.rs`. 400 seeded documents mixing
+  malformed numbers, stray and non-ASCII characters, checksums, tags, arcs and
+  small caps then parse identically in both. The hand cases found a browser
+  defect: its lexer used Unicode `toUpperCase`, so `ı`, `ſ` and `ß` read as
+  letters (an `ſ1` line ran as an S command) where upstream and the native
+  parser report malformed words; letters are now ASCII only, with a
+  regression. Invalid UTF-8 stops at the decode boundary: `decode_utf8`
+  reproduces `TextDecoder` on 319 byte strings whole, streamed and byte by
+  byte, and Android decodes G-code file bytes through it (device check
+  pending).
 
 **Exit gate:** differential fixtures and existing preview tests pass; memory and
 latency budgets pass on browser and native targets; cancellation and repeated-open

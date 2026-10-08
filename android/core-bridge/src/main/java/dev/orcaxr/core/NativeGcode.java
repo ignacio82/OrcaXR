@@ -15,4 +15,5 @@ final class NativeGcode {
     static native int prepareView(long handle, String request);
     static native void copy(long handle, ByteBuffer target);
     static native void close(long handle);
+    static native char[] decodeUtf8(byte[] bytes);
 }

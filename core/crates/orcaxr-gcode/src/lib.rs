@@ -14,6 +14,7 @@ pub mod preview;
 pub mod request_types;
 mod session;
 mod text;
+pub mod utf8;
 pub mod view_layout;
 mod view_packet;
 mod view_request;
@@ -27,6 +28,7 @@ pub use parser::{
 };
 pub use session::{Session, SessionError};
 pub use text::Text;
+pub use utf8::{Utf8Decoder, decode_utf8};
 
 /// Explicit float assignments preserve the pinned processor's operation order.
 #[inline]

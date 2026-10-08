@@ -82,5 +82,5 @@ fn document_windows_and_search_match_production_browser() {
             searches += 1;
         }
     }
-    assert_eq!((windows, searches), (1536, 18710));
+    assert_eq!((windows, searches), (1562, 19035));
 }

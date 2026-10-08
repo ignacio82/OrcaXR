@@ -1,7 +1,7 @@
 use jni::{
     JNIEnv,
-    objects::{JByteBuffer, JCharArray, JClass, JString},
-    sys::{jdouble, jint, jlong, jstring},
+    objects::{JByteArray, JByteBuffer, JCharArray, JClass, JString},
+    sys::{jcharArray, jdouble, jint, jlong, jstring},
 };
 use orcaxr_gcode::{Cancellation, Session, SessionError, layout};
 use std::{
@@ -150,6 +150,32 @@ pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_append(
             .append(integer(offset)?, &copy)
             .map_err(code)
     });
+}
+/// The parser's whole input budget, in bytes of source.
+const MAX_DECODE_BYTES: usize = 256 * 1024 * 1024;
+/// G-code file bytes decoded as the browser decodes a G-code file.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_decodeUtf8(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    bytes: JByteArray<'_>,
+) -> jcharArray {
+    boundary(&mut env, |env| {
+        let length = env.get_array_length(&bytes).map_err(|_| "invalid_source")?;
+        if length < 0 || length as usize > MAX_DECODE_BYTES {
+            return Err("source_length");
+        }
+        let input = env
+            .convert_byte_array(&bytes)
+            .map_err(|_| "invalid_source")?;
+        let units = orcaxr_gcode::decode_utf8(&input);
+        let array = env
+            .new_char_array(units.len() as i32)
+            .map_err(|_| "allocation_failed")?;
+        env.set_char_array_region(&array, 0, &units)
+            .map_err(|_| "allocation_failed")?;
+        Ok(array.into_raw())
+    })
 }
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_seal(

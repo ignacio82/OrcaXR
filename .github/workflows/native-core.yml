@@ -189,6 +189,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-session-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-input-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-oracle-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-document-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preview-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/inspection-vectors.mjs
@@ -200,7 +201,7 @@ jobs:
           cargo fmt --all --check
           cargo clippy --workspace --all-targets --all-features --locked --jobs 2 -- -D warnings
           cargo test --workspace --all-features --locked --jobs 2
-          cargo test -p orcaxr-gcode --lib --test preview --test inspection --test views --test session --test requests --test document_vectors --test document_session --release --locked --jobs 2
+          cargo test -p orcaxr-gcode --lib --test preview --test inspection --test views --test session --test requests --test document_vectors --test document_session --test oracle --release --locked --jobs 2
           cargo test -p orcaxr-contracts --test project_intents --release --locked --jobs 2
           cargo test -p orcaxr-project --release --locked --jobs 2
           cargo test -p orcaxr-archive --release --locked --jobs 2

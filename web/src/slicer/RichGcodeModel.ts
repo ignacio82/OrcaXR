@@ -1783,7 +1783,7 @@ function parseCommand(
   if (source.line === 1 && line.charCodeAt(cursor) === 0xfeff) cursor = skipWhitespace(line, cursor + 1, end);
 
   let commandLineNumber = -1;
-  if (line[cursor]?.toUpperCase() === 'N') {
+  if (asciiUpper(line[cursor]) === 'N') {
     const numbered = scanNumber(line, cursor + 1, end);
     if (
       !numbered.valid ||
@@ -1798,7 +1798,7 @@ function parseCommand(
     cursor = skipWhitespace(line, numbered.end, end);
   }
 
-  const letter = line[cursor]?.toUpperCase();
+  const letter = asciiUpper(line[cursor]);
   if (!letter || letter < 'A' || letter > 'Z') {
     warn('invalid-command', 'Source line does not begin with a valid G-code command');
     return undefined;
@@ -1808,7 +1808,7 @@ function parseCommand(
     warn('invalid-command', `Command ${letter} has an invalid numeric code`);
     return undefined;
   }
-  const commandToken = line.slice(cursor, commandNumber.end).toUpperCase();
+  const commandToken = asciiUpper(line.slice(cursor, commandNumber.end));
   const commandDelimiter = line.charCodeAt(commandNumber.end);
   const exactArcSpelling =
     letter === 'G' &&
@@ -1821,7 +1821,7 @@ function parseCommand(
   while (cursor < end) {
     cursor = skipWhitespace(line, cursor, end);
     if (cursor >= end || line[cursor] === '*') break;
-    const parameter = line[cursor].toUpperCase();
+    const parameter = asciiUpper(line[cursor]);
     if (parameter < 'A' || parameter > 'Z') {
       warn('malformed-token', `Unexpected token "${line[cursor]}" in ${letter}${commandNumber.value}`);
       cursor += 1;
@@ -1896,6 +1896,18 @@ function scanNumber(line: string, start: number, end: number): NumberScan {
   const value = Number(line.slice(start, cursor));
   const valid = Number.isFinite(value);
   return { valid, outOfRange: !valid, value, end: cursor };
+}
+
+/**
+ * Upper case for ASCII letters only. Upstream reads bytes, so nothing outside
+ * ASCII is a command or parameter letter; `toUpperCase` turned `ı` into `I`,
+ * `ſ` into `S` and `ß` into a two-letter "parameter", silently accepting words
+ * upstream and the native parser report as malformed.
+ */
+function asciiUpper(text: string): string;
+function asciiUpper(text: string | undefined): string | undefined;
+function asciiUpper(text: string | undefined): string | undefined {
+  return text?.replace(/[a-z]/g, (letter) => String.fromCharCode(letter.charCodeAt(0) - 32));
 }
 
 function skipWhitespace(line: string, start: number, end: number): number {

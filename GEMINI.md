@@ -429,11 +429,11 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Browser G-code preview indexes in an owned worker before allocating rich columns.
   Each window holds at most 240,000 records; checkpoints inside large layers and
   Previous/Next moves preserve access. Source replacement terminates the worker.
-- Rich G-code preview preserves semantic record IDs, tool/modal state, source spans,
-  arc interpolation and explicit incomplete-prefix diagnostics. Rendering consumes
-  projected colors/filtering and reports unsupported metadata honestly.
-- Android G-code views require an explicit captured model from the same session
-  and exact requested window. Validate output relations before rendering and keep
+- Rich G-code preview preserves semantic record IDs, tool/modal state, source spans, arc
+  interpolation and incomplete-prefix diagnostics; letters are ASCII only (upstream reads bytes).
+  Rendering consumes projected colors/filtering and reports unsupported metadata honestly.
+- Android decodes G-code bytes with `decode_utf8` (TextDecoder's rules); views require an explicit
+  captured model and exact requested window. Validate output relations before rendering and keep
   the capture identity; matching dimensions alone cannot associate two packets.
 - Canonicalization and G-code transport types come from shared request schemas.
   Rust decoding must require objects: ordinary Serde struct decoding also accepts

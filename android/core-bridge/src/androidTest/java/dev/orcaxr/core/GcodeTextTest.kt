@@ -72,8 +72,8 @@ class GcodeTextTest {
                 }
             }
         }
-        assertEquals(1536, windows)
-        assertEquals(18710, searches)
+        assertEquals(1562, windows)
+        assertEquals(19035, searches)
     }
 
     @Test fun refusalsLeaveTheSessionUsableAndCloseIsFinal() {
