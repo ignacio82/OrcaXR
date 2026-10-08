@@ -191,11 +191,10 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   menus, shortcuts, command palette and contextual Objects actions. A capability
   marked implemented needs a real handler and evidence. A DOM-only dialog must
   declare its XR exclusion until a complete headset flow exists.
-- Canonical slice preflight uses exact catalog/imported configuration. Three
-  display defaults are never safety inputs. Imported projects slice as authored,
-  without silently rebinding to a convenient bundled preset or dropping settings.
-  Rust `slicing::preflight`/`profile` replay `slice-preflight`/`slice-profile`
-  vectors; issue order is UTF-16, never `localeCompare`.
+- Slice preflight uses exact catalog/imported configuration, never display
+  defaults; imported projects slice as authored, never rebound to a bundled preset.
+  Rust `slicing::{preflight,profile}` and `settings::options` (generated from the
+  pinned schema) replay browser vectors; ordering is UTF-16, never `localeCompare`.
 - Published G-code binds exact project/revision/config/asset/engine identities.
   Preview, download and send reject drift. Keep output hashing and authoritative
   sidecar provenance intact; missing information remains unavailable.

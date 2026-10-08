@@ -18,6 +18,12 @@ function test(name: string, run: () => void): void {
   console.log(`  ✓ ${name}`);
 }
 
+test('reports foreign keys in UTF-16 code-unit order, independent of locale collation', () => {
+  // A collation puts '_' before digits and folds case; code units do neither.
+  const decoded = decodeSettingsConfig(catalog, { a_1: 'x', a1: 'x', B: 'x', a: 'x' });
+  assert.deepEqual(decoded.unknownKeys, ['B', 'a', 'a1', 'a_1']);
+});
+
 test('decodes generated engine wire values into typed editor values', () => {
   const source: ConfigMap = {
     layer_height: '0.24',

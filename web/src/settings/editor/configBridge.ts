@@ -1,3 +1,4 @@
+import { compareCanonicalText } from '../../project/domain/canonical';
 import type { ConfigMap, JsonValue } from '../../project/domain/model';
 import { EngineOptionCatalog } from '../generated/loader';
 import type { EngineOptionDefinition, EngineOptionValue } from '../generated/types';
@@ -26,7 +27,8 @@ export function decodeSettingsConfig(catalog: EngineOptionCatalog, config: Reado
   const diagnostics: SettingsConfigDecodeDiagnostic[] = [];
   const unknownKeys: string[] = [];
 
-  for (const key of Object.keys(config).sort((left, right) => left.localeCompare(right, 'en'))) {
+  // UTF-16 code-unit order: a locale collation would make the result depend on the host.
+  for (const key of Object.keys(config).sort(compareCanonicalText)) {
     const definitions = catalog.all(key);
     if (definitions.length === 0) {
       unknownKeys.push(key);

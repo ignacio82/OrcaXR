@@ -1206,8 +1206,9 @@ and replay coverage for the complete current command inventory.
   explicit import sanitization and project config selectors now exist. The table
   comes from the browser's pinned extractor; 3,439 layer cases and 100 graph
   queries compare reference results/errors. Canonical slice preflight, live
-  profile targets and their host exchange are now native too. Option-value and
-  profile validation, settings commands and the profile catalog are not yet.
+  profile targets, their host exchange and the option-value codec are now
+  native too. Preset-graph validation, settings commands and the profile
+  catalog are not yet.
   - [x] Port generated scope eligibility, layered resolution, import sanitization
     and configuration selectors with independent reference cases.
   - [x] Port canonical slice preflight (`slicing::preflight`) with FullSpectrum
@@ -1220,8 +1221,12 @@ and replay coverage for the complete current command inventory.
   - [x] Expose live preflight on export captures through WASM, JNI and Kotlin
     with generated contract codecs, piecewise replies, budgets and
     cancellation (7 live cases, 59 replies, 42 refusals per binding).
-  - [ ] Complete option/profile validation, settings commands and a native
-    profile catalog.
+  - [x] Port the engine-option value codec (`settings::options`): a generated
+    816-definition storage table, draft parsing, validation, serialization,
+    configuration decoding and commits (161 contracts, 13,191 cases). The
+    browser's locale-dependent key order is fixed.
+  - [ ] Complete profile validation (preset graph), settings commands and a
+    native profile catalog.
 - [ ] Provide bounded object-tree, inspector, capability, selection, and renderer
   projections. Subscribe to revisioned deltas; do not send the complete project
   or all geometry to every panel after each edit.

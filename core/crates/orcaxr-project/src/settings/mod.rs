@@ -2,6 +2,7 @@
 //! These read-only views borrow immutable input values; explicit public exports
 //! copy. They neither validate option values nor execute project commands.
 mod generated;
+pub mod options;
 mod project;
 use crate::model::{ConfigMap, Encode, Text};
 pub use generated::{SCOPE_ORDER, SOURCE_COMMIT, SOURCE_DIGEST, SOURCE_FILES};

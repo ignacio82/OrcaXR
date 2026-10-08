@@ -117,6 +117,7 @@ jobs:
           node tools/cross-platform/generate-project-staging.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-staging.mjs
           node tools/cross-platform/generate-setting-scopes.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/generate-engine-options.mjs
           node tools/cross-platform/test-project-intent-generator.mjs
           node tools/cross-platform/project-intent-vectors.mjs
           node tools/cross-platform/package-browser-core.mjs
@@ -129,6 +130,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-refinement-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-model-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-resolution-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-codec-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-validation-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slice-preflight-vectors.mjs
