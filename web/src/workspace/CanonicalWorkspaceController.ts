@@ -4523,6 +4523,17 @@ export class CanonicalWorkspaceController {
     return (await this.sessionTransport.redo()).value;
   }
 
+  /**
+   * Resolves once every edit submitted before it is acknowledged or refused: an
+   * ordered query behind them. A capture that must hold what the user just did
+   * — slice, save, export — awaits this first, so it never takes the state a
+   * queued edit is about to replace.
+   */
+  async settled(): Promise<void> {
+    this.assertActive();
+    await this.sessionTransport.query();
+  }
+
   /** Merge exact canonical instances into a caller-owned binary STL artifact. */
   exportCanonicalStl(instanceIds: readonly InstanceId[]): CanonicalStlExport {
     this.assertActive();

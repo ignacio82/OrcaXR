@@ -954,6 +954,9 @@ and replay coverage for the complete current command inventory.
   - [x] Route profile, nozzle and filament-slot changes through serialized staged
     project replacement.
   - [x] Route primitive, library and calibration model adds through staged work.
+  - [x] Capture slices, saves and exports only after every queued edit is
+    acknowledged or refused (`settled()`, an ordered query), with one slice
+    reserving the slicer while it waits.
   - [ ] Migrate remaining editing/import/save/slice routes and isolate
     preparation work; preserve the registry boundary for every mutation.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,

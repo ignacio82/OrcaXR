@@ -81,6 +81,7 @@ export function selfTestLiveCanonicalBoundaries() {
       'scene-baked slice',
       inspectSlice,
       `class OrcaWorkspace { async sliceNow() {
+        await this.prepareSlice(() => true);
         const slicer = new CanonicalWorkspaceSlicer({ workspace: this.canonicalProject });
         await slicer.startCurrentPlate().completion;
         const legacy = this.slicer; await legacy.slice(this.bakeToPrinterStl());
@@ -88,9 +89,40 @@ export function selfTestLiveCanonicalBoundaries() {
       'scene-baked STL',
     ],
     [
+      'slice racing queued edits',
+      inspectSlice,
+      `class OrcaWorkspace {
+        async sliceNow() {
+          const route = await this.resolveCanonicalSliceRoute();
+          const slicer = new CanonicalWorkspaceSlicer({ workspace: this.canonicalProject });
+          await slicer.startCurrentPlate().completion;
+        }
+      }`,
+      'must reserve slicing and settle queued edits before capture',
+    ],
+    [
+      'slice preparation settling late',
+      inspectSlice,
+      `class OrcaWorkspace {
+        async prepareSlice() { const route = await this.resolveCanonicalSliceRoute(); await this.editsSettled(); return route; }
+      }`,
+      'slice preparation captures before queued edits settle',
+    ],
+    [
+      'save racing queued edits',
+      inspectSave,
+      `class OrcaWorkspace { async saveProject() {
+        await this.persistence.save();
+        const snapshot = await this.canonicalProject.serializeProjectSnapshot();
+        this.canonicalProject.acknowledgeProjectExport(snapshot.guard);
+      } }`,
+      'save must await queued edits before it captures',
+    ],
+    [
       'wrong slice source',
       inspectSlice,
       `class OrcaWorkspace { async sliceNow() {
+        await this.prepareSlice(() => true);
         const slicer = new CanonicalWorkspaceSlicer({ workspace: this.sceneStore });
         await slicer.startCurrentPlate().completion;
       } }`,
@@ -515,6 +547,12 @@ function inspectSave(file, source) {
   const body = check.method('OrcaWorkspace', 'saveProject');
   if (!body) return check.failures;
   const all = facts(body);
+  requireSettledBefore(
+    check,
+    body,
+    ['this.persistence.save', 'this.canonicalProject.serializeProjectSnapshot'],
+    'save',
+  );
   check.requireCall(all, 'this.persistence.save', 'route browser saves through the shared persistence queue');
   check.requireCall(
     all,
@@ -598,6 +636,20 @@ function inspectOpen(file, source) {
 
 function inspectSlice(file, source) {
   const check = context(file, source);
+  for (const name of ['sliceNow', 'sliceAllPlates']) {
+    const entry = check.method('OrcaWorkspace', name);
+    if (!entry) continue;
+    const entryFacts = facts(entry);
+    // A slice reserves the slicer and lets queued edits land before capture.
+    const prepared = entryFacts.calls.find((call) => call.path === 'this.prepareSlice');
+    if (!prepared) check.fail(entry, `${name} must reserve slicing and settle queued edits before capture`);
+    else if (!awaitsCompletion(prepared.node)) check.fail(prepared.node, `${name} must await its slice preparation`);
+    check.forbidCalls(entryFacts, {
+      'this.resolveCanonicalSliceRoute': `${name} cannot resolve its route before queued edits settle`,
+    });
+  }
+  const preparation = check.method('OrcaWorkspace', 'prepareSlice');
+  if (preparation) requireSettledBefore(check, preparation, ['this.resolveCanonicalSliceRoute'], 'slice preparation');
   const body = check.method('OrcaWorkspace', 'sliceNow');
   if (!body) return check.failures;
   const all = facts(body);
@@ -950,6 +1002,22 @@ function hasRegistryInvocation(all, actionId) {
       ts.isStringLiteralLike(entry.node.arguments[0]) &&
       entry.node.arguments[0].text === actionId,
   );
+}
+
+/** `this.editsSettled()` is awaited, and before every capture in `later`. */
+function requireSettledBefore(check, method, later, label) {
+  const all = facts(method);
+  const settled = all.calls.find((call) => call.path === 'this.editsSettled');
+  if (!settled) {
+    check.fail(method, `${label} must await queued edits before it captures`);
+    return;
+  }
+  if (!awaitsCompletion(settled.node)) check.fail(settled.node, `${label} must await queued edits before it captures`);
+  for (const call of all.calls) {
+    if (later.includes(call.path) && call.node.getStart() < settled.node.getStart()) {
+      check.fail(call.node, `${label} captures before queued edits settle`);
+    }
+  }
 }
 
 function awaitsCompletion(call) {

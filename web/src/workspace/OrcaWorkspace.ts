@@ -906,6 +906,8 @@ export class OrcaWorkspace extends xb.Script {
   /** Sole mutable owner of project/model/plate/selection/history state. */
   private readonly canonicalProject: CanonicalWorkspaceController;
   private activeCanonicalSlicer: CanonicalWorkspaceSlicer | null = null;
+  /** A slice is waiting for queued edits or its route before it owns the slicer. */
+  private sliceStarting = false;
 
   /** Read-only compatibility projection while the surrounding shell migrates. */
   private get plates(): ReadonlyArray<{
@@ -4728,6 +4730,16 @@ export class OrcaWorkspace extends xb.Script {
   /** Resolves once every requested profile commit has been acknowledged or refused. */
   public slicingConfigurationSettled(): Promise<void> {
     return this.slicingCommits;
+  }
+
+  /**
+   * Resolves once every edit requested so far — profile commits first, since
+   * they submit from their own queue — is acknowledged or refused. Slice, save
+   * and export capture after this, never before a queued edit lands.
+   */
+  public async editsSettled(): Promise<void> {
+    await this.slicingConfigurationSettled();
+    await this.canonicalProject.settled();
   }
 
   private async commitLiveSlicingConfiguration(): Promise<void> {
@@ -9658,6 +9670,7 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public async exportPlate3mf(): Promise<void> {
+    await this.editsSettled();
     if (this.persistence) {
       await this.persistence.save();
       return;
@@ -9682,6 +9695,8 @@ export class OrcaWorkspace extends xb.Script {
   // --- Save / Open Project (Orca File → Save / Open Project) -----------
   /** Save the project as a downloadable OrcaXR .3mf (File → Save Project). */
   public async saveProject(): Promise<void> {
+    // A save holds every edit already made, not the state a queued one replaces.
+    await this.editsSettled();
     if (this.persistence) {
       await this.persistence.save();
       return;
@@ -9865,6 +9880,25 @@ export class OrcaWorkspace extends xb.Script {
    * Otherwise the operator is told precisely what failed instead of getting a
    * blanket refusal, and nothing leaves the browser.
    */
+  /**
+   * Reserve slicing, wait until every edit already made is acknowledged, then
+   * check there is something to slice and attest the engine route. Null when
+   * another slice owns the slicer, the workspace closed, `ready` refused or no
+   * route attests. A slice therefore never captures a state a queued edit is
+   * about to replace.
+   */
+  private async prepareSlice(ready: () => boolean): Promise<Extract<AttestedProjectRoute, { attested: true }> | null> {
+    if (this.activeCanonicalSlicer || this.sliceStarting) return null;
+    this.sliceStarting = true;
+    try {
+      await this.editsSettled();
+      if (this.disposed || !ready()) return null;
+      return await this.resolveCanonicalSliceRoute();
+    } finally {
+      this.sliceStarting = false;
+    }
+  }
+
   private async resolveCanonicalSliceRoute(): Promise<Extract<AttestedProjectRoute, { attested: true }> | null> {
     const attestation = await SlicerClient.attestCapturedProjectRoute();
     if (!attestation.attested) {
@@ -9898,13 +9932,12 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public async sliceNow() {
-    if (this.activeCanonicalSlicer) return;
-    const activePlate = this.canonicalProject.getSummary().plates.find((plate) => plate.id === this.activePlateId);
-    if (!activePlate || activePlate.instanceCount === 0) {
+    const route = await this.prepareSlice(() => {
+      const activePlate = this.canonicalProject.getSummary().plates.find((plate) => plate.id === this.activePlateId);
+      if (activePlate && activePlate.instanceCount > 0) return true;
       this.setStatus(t('workspace.orcaWorkspace.noModelsToSlice', 'No models to slice.'));
-      return;
-    }
-    const route = await this.resolveCanonicalSliceRoute();
+      return false;
+    });
     if (!route) return;
     const startedAt = performance.now();
     const preflight = this.createLiveProfilePreflight();
@@ -9973,14 +10006,12 @@ export class OrcaWorkspace extends xb.Script {
    * any project drift discards the whole set rather than publishing a mix.
    */
   public async sliceAllPlates(): Promise<number> {
-    if (this.activeCanonicalSlicer) return 0;
-    const summary = this.canonicalProject.getSummary();
-    const printable = summary.plates.filter((plate) => plate.printable && plate.instanceCount > 0);
-    if (printable.length === 0) {
+    const route = await this.prepareSlice(() => {
+      const summary = this.canonicalProject.getSummary();
+      if (summary.plates.some((plate) => plate.printable && plate.instanceCount > 0)) return true;
       this.setStatus(t('workspace.orcaWorkspace.noPrintablePlateHasModels', 'No printable plate has models to slice.'));
-      return 0;
-    }
-    const route = await this.resolveCanonicalSliceRoute();
+      return false;
+    });
     if (!route) return 0;
     const startedAt = performance.now();
     const slicer = new CanonicalWorkspaceSlicer({

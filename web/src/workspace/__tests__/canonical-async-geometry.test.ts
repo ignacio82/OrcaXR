@@ -156,4 +156,28 @@ await test('a mesh import commits its object and bytes as staged work, reusing i
   }
 });
 
+await test('settled resolves after every queued edit, applied or refused, so captures hold them', async () => {
+  const { controller } = setup();
+  try {
+    const order: string[] = [];
+    const record = (label: string) => (outcome: unknown) =>
+      order.push(outcome instanceof Error ? `${label} ${stale(outcome) ? 'refused' : 'failed'}` : label);
+    // Refused: a newer edit replaces the state it was guarded on.
+    const refused = controller.addHelperVolume('support-blocker').then(record('helper'), record('helper'));
+    controller.setProjectConfig({ edit_probe: 'newer' });
+    const applied = controller
+      .addMagnetHole({ diameterMm: 6, discHeightMm: 3 })
+      .then(record('magnet'), record('magnet'));
+    await controller.settled();
+    // The commits are acknowledged in order; a caller's own continuation may
+    // run later, but a capture taken now holds the applied edit.
+    assert.deepEqual(volumes(controller), ['model', 'negative-volume'], 'a capture now holds the applied edit');
+    order.push('settled');
+    await Promise.all([refused, applied]);
+    assert.deepEqual(order.sort(), ['helper refused', 'magnet', 'settled']);
+  } finally {
+    controller.dispose();
+  }
+});
+
 console.log(`canonical async geometry tests passed: ${passed}`);
