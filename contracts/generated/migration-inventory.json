@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "sourceCommit": "75a1dfa572b14004fe657cee9623456547e1c24d",
+  "sourceCommit": "6cb88d4f8a6a4c622139d6b72e48eac75a3602ca",
   "sources": {
     "docs/parity/release-report.json": "6da865e5720fb9cbb2ccf36fc310c97dffed94b2c279aedd7df8f58b1fafc49a",
     "web/public/profiles/catalog.json": "19cfbf414f4b2c770b047da152b9b9e2e2101909d92f8fae3166685e7bf58fda",
     "web/public/profiles/manifest.json": "980db93551c0541928061f0edc35d61b434f82161a6db55a352b8e67dee0b958",
-    "web/src/actions/ActionContext.ts": "cc3d03e76a2e5e3bb1d755fd28be3b325fab6d660b13dcb6a3cffede08ae8ac6",
+    "web/src/actions/ActionContext.ts": "ac35772f03193e11ea2734b34077540780f43059a98e99919058a32c223d10b5",
     "web/src/actions/ActionRegistry.ts": "1d830d6c70947d0e3e8ab9213e28e367279c1fe1117d814cee9b3ce39f0a966f",
     "web/src/actions/CapabilityEvidence.ts": "e9af7e3210718942e64640ed105c717134450d51aad8e87828ab6ed9900d940e",
     "web/src/actions/ShortcutCatalog.ts": "c241c559bbcee7a3cd2c791e163b105d7010c4ce5c439708840d392159f162fa",
@@ -18,7 +18,7 @@
     "web/src/actions/groups/file.ts": "d7b0de47d725047434d335056f34fff981654cf056a0a8dc015d8e1982a35f76",
     "web/src/actions/groups/gizmos.ts": "0b9d2a138097595100b98d9b907f2814cbbb547bde25a401f801fa8e778fd38c",
     "web/src/actions/groups/help.ts": "3c8c1cdc2c97da06a886a1f17b286b94f144b810bd09e7c500ff2d4d5187b724",
-    "web/src/actions/groups/objects.ts": "8ae8feaceb552e92b3b9dfd708dd117065909edc6ccde91d0c91c204575e0c25",
+    "web/src/actions/groups/objects.ts": "fd8f7180f4ca5af83b7c1c128d062471822ab6512ed82dbc646fbb838346b993",
     "web/src/actions/groups/output.ts": "f614e70c6785e536652d01b34b73fb57b80ed757a04dd132d4ee25819d5a5c4e",
     "web/src/actions/groups/painting.ts": "6469c4b93643cd34300d64a745d9b02df1ad800caba5cb3c9f5a9d21f881cccd",
     "web/src/actions/groups/presets.ts": "a312478fe985703bb7c6266597d11dc7c11eb13e5a382130259ebcb1803bb469",
