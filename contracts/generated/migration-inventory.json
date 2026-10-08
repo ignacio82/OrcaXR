@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "sourceCommit": "d06463de987c13c2461d9d0249ae94e7f87ec837",
+  "sourceCommit": "4738c18b52ed62c9664c6cb2b755d2c23f62e255",
   "sources": {
     "docs/parity/release-report.json": "6da865e5720fb9cbb2ccf36fc310c97dffed94b2c279aedd7df8f58b1fafc49a",
     "web/public/profiles/catalog.json": "19cfbf414f4b2c770b047da152b9b9e2e2101909d92f8fae3166685e7bf58fda",
     "web/public/profiles/manifest.json": "980db93551c0541928061f0edc35d61b434f82161a6db55a352b8e67dee0b958",
-    "web/src/actions/ActionContext.ts": "bd005421d75eb1c556dd97d4ef6cf32ac636f08fe3b575ff7d43ae278cd3b717",
+    "web/src/actions/ActionContext.ts": "539978a977e637af10e088aeda2a5b3e140eefcfe87324d34835004cf0b372e7",
     "web/src/actions/ActionRegistry.ts": "1d830d6c70947d0e3e8ab9213e28e367279c1fe1117d814cee9b3ce39f0a966f",
     "web/src/actions/CapabilityEvidence.ts": "e9af7e3210718942e64640ed105c717134450d51aad8e87828ab6ed9900d940e",
     "web/src/actions/ShortcutCatalog.ts": "c241c559bbcee7a3cd2c791e163b105d7010c4ce5c439708840d392159f162fa",
@@ -16,7 +16,7 @@
     "web/src/actions/groups/calibration.ts": "b58e3d4859341a8bd6356e41cc25a7276cda73c650fdf767c9b24044aa142047",
     "web/src/actions/groups/edit.ts": "d22a9ae736d6a2d617a19b725c462cc975d21be4d964e9c82188375f845cb3d0",
     "web/src/actions/groups/file.ts": "d7b0de47d725047434d335056f34fff981654cf056a0a8dc015d8e1982a35f76",
-    "web/src/actions/groups/gizmos.ts": "0b9d2a138097595100b98d9b907f2814cbbb547bde25a401f801fa8e778fd38c",
+    "web/src/actions/groups/gizmos.ts": "25035b18b6232e8102bb22e48af7cb3a9946333c22623dacf4259656032c9f82",
     "web/src/actions/groups/help.ts": "3c8c1cdc2c97da06a886a1f17b286b94f144b810bd09e7c500ff2d4d5187b724",
     "web/src/actions/groups/objects.ts": "85e56e679b33efa7edc80f3e94cfd8a3e159568bab668ea426ead4e4a45d2277",
     "web/src/actions/groups/output.ts": "f614e70c6785e536652d01b34b73fb57b80ed757a04dd132d4ee25819d5a5c4e",
