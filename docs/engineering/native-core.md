@@ -3224,6 +3224,24 @@ reasons. The two paths no
 catalog action takes today, a hiding visibility rule and a disabling status
 without a reason, are pinned against the registry's own text.
 
+### Differential replay
+
+`differential-replay.mjs` drives the TypeScript session, the authority, and
+the Rust session over WASM side by side through seeded command traces. Every
+distinct session-trace state opens in both; each step is generated from the
+authority's current state — renames, transforms, plates, object duplication
+and conversion, height ranges, layer events, filament assignment and
+remapping, part roles, brim ears, settings overrides with live or stale
+guards, two-command transactions, undo, redo, host selections and requests
+with a stale guard — mostly valid and sometimes not. Requests are raw JSON,
+so a shape the contract refuses is refused by both sessions' own decoders.
+After every step the reply, canonical state, semantic hash, asset
+fingerprint, selection, history, history revision and the registry facts
+the session decides must agree. CI runs twelve seeds of a hundred steps over
+each of the 19 states (22,800 steps, about a third of them refusals);
+`ORCAXR_DIFFERENTIAL_SEEDS` and `ORCAXR_DIFFERENTIAL_STEPS` widen the search
+locally, and 142,500 steps over fifty seeds agreed throughout.
+
 ### Capability exchange
 
 `capabilities` in the project crate serves the catalog to hosts over a live
@@ -4044,6 +4062,7 @@ python3 tools/cross-platform/build-wasm.py
 python3 tools/cross-platform/build-wasm.py --project
 python3 tools/cross-platform/verify-artifacts.py --wasm --project-wasm
 node tools/cross-platform/project-wasm-test.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/differential-replay.mjs
 node tools/cross-platform/project-wasm-browser.mjs
 node tools/cross-platform/wasm-smoke.mjs
 node tools/cross-platform/generate-project-jni.mjs

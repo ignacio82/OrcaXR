@@ -1324,9 +1324,16 @@ and replay coverage for the complete current command inventory.
 - [ ] Make worker/service generation changes invalidate pending replies. Implement
   explicit session disposal and recovery after the core worker fails; recover
   only from acknowledged snapshots/journal entries, never an optimistic UI view.
-- [ ] Replay imports and command traces against TypeScript and Rust in isolated
+- [x] Replay imports and command traces against TypeScript and Rust in isolated
   sessions. Compare state, semantic hashes, assets, dirty/history state,
   capabilities, errors, and exports after every step.
+  Seeded differential replay drives both sessions through generated command
+  traces from every distinct trace state and compares the reply, canonical
+  state (the export), semantic hash, assets, selection, history and the
+  capability facts after every step (22,800 steps in CI; 142,500 agreed
+  locally), beside the fixed session, staged, clipboard and query corpora.
+  Imports replay through both as archive opens and save round trips (1,341
+  cases) and model-import transactions with undo/redo.
 
 **Exit gate:** complete current command coverage with no unexplained semantic
 differences. The browser still passes its full quality gate through the facade.
