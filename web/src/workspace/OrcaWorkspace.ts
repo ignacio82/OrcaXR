@@ -6484,13 +6484,17 @@ export class OrcaWorkspace extends xb.Script {
     return this.canonicalProject.getProjectSettingsOverrideSnapshot();
   }
 
-  /** One revision/hash-guarded settings history boundary; no shadow UI state exists. */
-  public setProjectSettingsOverrides(
+  /**
+   * One revision/hash-guarded settings history boundary through the guarded
+   * asynchronous session route; resolves once the session acknowledged the
+   * command. No shadow UI state exists.
+   */
+  public async applyProjectSettingsOverrides(
     inheritedConfig: Readonly<ConfigMap>,
     overrides: Readonly<ConfigMap>,
     guard: ProjectSettingsOverrideGuard,
-  ): ProjectSettingsOverrideSnapshot {
-    const result = this.canonicalProject.setProjectSettingsOverrides({ inheritedConfig, overrides }, guard);
+  ): Promise<ProjectSettingsOverrideSnapshot> {
+    const result = await this.canonicalProject.applyProjectSettingsOverrides({ inheritedConfig, overrides }, guard);
     this.revalidatePublishedGcode();
     return result;
   }
@@ -6511,16 +6515,17 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /**
-   * Replace one node's in-scope overrides. Any scope changes what the engine
-   * will produce, so a published G-code artifact stops being current here just
-   * as it does for a project-wide change.
+   * Replace one node's in-scope overrides through the guarded asynchronous
+   * session route. Any scope changes what the engine will produce, so a
+   * published G-code artifact stops being current here just as it does for a
+   * project-wide change.
    */
-  public setScopedOverrides(
+  public async applyScopedOverrides(
     target: ScopedOverrideTarget,
     overrides: Readonly<ConfigMap>,
     guard: ScopedOverrideGuard,
-  ): ScopedOverrideSnapshot {
-    const result = this.canonicalProject.setScopedOverrides(target, overrides, guard);
+  ): Promise<ScopedOverrideSnapshot> {
+    const result = await this.canonicalProject.applyScopedOverrides(target, overrides, guard);
     this.revalidatePublishedGcode();
     return result;
   }

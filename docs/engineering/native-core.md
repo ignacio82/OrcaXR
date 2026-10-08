@@ -3156,6 +3156,15 @@ A Rust test closes the loop: each node's intent executes in a native
 session, and the node then stores exactly the committed overrides with its
 foreign keys intact.
 
+The browser commits the same way. Its settings panels submit these intents
+through the guarded asynchronous session route
+(`CanonicalWorkspaceController.applyProjectSettingsOverrides` and
+`applyScopedOverrides`), refusing stale guards, unknown nodes and
+out-of-scope keys with its own errors before submission.
+`canonical-async-settings.test.ts` pins that each scope lands exactly where
+the synchronous command does, waits for acknowledgement, keeps undo/redo,
+and rejects a competing queued edit instead of rebasing.
+
 ### Paint palette
 
 `facets::palette` ports `projectPaintPalette`: the filament library as the

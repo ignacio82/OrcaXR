@@ -59,7 +59,7 @@ export const advancedActions: Action[] = [
         ctx.reportCapabilityUnavailable('Apply project settings', 'Review and apply a settings draft first.');
         return;
       }
-      ctx.applyProjectSettings(request.inheritedConfig, request.overrides, {
+      return ctx.applyProjectSettings(request.inheritedConfig, request.overrides, {
         sourceRevision: request.sourceRevision,
         sourceHash: request.sourceHash,
       });
@@ -81,7 +81,7 @@ export const advancedActions: Action[] = [
         );
         return;
       }
-      ctx.applyScopedSettings(request.target, request.overrides, {
+      return ctx.applyScopedSettings(request.target, request.overrides, {
         sourceRevision: request.sourceRevision,
         sourceHash: request.sourceHash,
       });

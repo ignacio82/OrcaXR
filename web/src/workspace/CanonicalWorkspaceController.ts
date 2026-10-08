@@ -1,6 +1,6 @@
 import { AsyncTransformGesture, type TransformGestureHost } from './AsyncTransformGesture';
 import { LocalProjectSessionTransport, ProjectReceiptUnavailableError } from '../project/LocalProjectSessionTransport';
-import { PROJECT_INTENT_VERSION } from '../../../contracts/generated/project-intents';
+import { PROJECT_INTENT_VERSION, type ProjectCommandWire } from '../../../contracts/generated/project-intents';
 import { createIntentTextEncoder } from '../project/PreparedProjectCommands';
 import {
   captureInstanceCommand,
@@ -2215,6 +2215,87 @@ export class CanonicalWorkspaceController {
       this.session.execute(new SetScopedOverridesCommand(guard, target, overrides));
     }
     return scopedOverrideSnapshot(this.session.project.getSnapshot(), target);
+  }
+
+  /**
+   * The project's base/override pair as one guarded asynchronous intent: the
+   * command the synchronous route runs, prepared and acknowledged through the
+   * session transport like every migrated edit, so a native session receives
+   * exactly what the browser applies.
+   */
+  async applyProjectSettingsOverrides(
+    update: ProjectSettingsOverrideUpdate,
+    guard: ProjectSettingsOverrideGuard,
+  ): Promise<ProjectSettingsOverrideSnapshot> {
+    this.assertActive();
+    const before = this.session.project.getSnapshot();
+    if (before.revision !== guard.sourceRevision || before.hash !== guard.sourceHash) {
+      throw new StaleProjectSettingsOverrideError();
+    }
+    // The command validates on construction; refuse here with its own error
+    // rather than a prepared-intent wrapper.
+    new SetProjectSettingsOverridesCommand(guard, update);
+    await this.executeSettingsIntent((text) => ({
+      setProjectSettingsOverrides: {
+        guard: { sourceRevision: guard.sourceRevision, sourceHash: text(guard.sourceHash) },
+        inheritedConfigJson: text(canonicalStringify(update.inheritedConfig)),
+        overridesJson: text(canonicalStringify(update.overrides)),
+      },
+    }));
+    return projectSettingsOverrideSnapshot(this.session.project.getSnapshot());
+  }
+
+  /** {@link setScopedOverrides} as one guarded asynchronous intent. */
+  async applyScopedOverrides(
+    target: ScopedOverrideTarget,
+    overrides: Readonly<ConfigMap>,
+    guard: ScopedOverrideGuard,
+  ): Promise<ScopedOverrideSnapshot> {
+    this.assertActive();
+    const before = this.session.project.getSnapshot();
+    if (before.revision !== guard.sourceRevision || before.hash !== guard.sourceHash) {
+      throw new StaleScopedOverrideError();
+    }
+    if (target.scope === 'project') {
+      const update = projectScopeUpdate(before, overrides);
+      await this.executeSettingsIntent((text) => ({
+        setProjectSettingsOverrides: {
+          guard: { sourceRevision: guard.sourceRevision, sourceHash: text(guard.sourceHash) },
+          inheritedConfigJson: text(canonicalStringify(update.inheritedConfig)),
+          overridesJson: text(canonicalStringify(update.overrides)),
+        },
+      }));
+    } else {
+      // Refuse here with the browser's own errors rather than a session
+      // `commandFailed`: an unknown node with `UnknownScopedOverrideTargetError`,
+      // an out-of-scope key with the command's `SettingScopeError`.
+      scopedOverrideSnapshot(before, target);
+      new SetScopedOverridesCommand(guard, target, overrides);
+      await this.executeSettingsIntent((text) => ({
+        setScopedOverrides: {
+          guard: { sourceRevision: guard.sourceRevision, sourceHash: text(guard.sourceHash) },
+          target:
+            target.scope === 'plate'
+              ? { plate: { plateId: text(target.plateId) } }
+              : target.scope === 'object'
+                ? { object: { objectId: text(target.objectId) } }
+                : target.scope === 'part'
+                  ? { part: { volumeId: text(target.volumeId) } }
+                  : { layerRange: { layerRangeId: text(target.layerRangeId) } },
+          overridesJson: text(canonicalStringify(overrides)),
+        },
+      }));
+    }
+    return scopedOverrideSnapshot(this.session.project.getSnapshot(), target);
+  }
+
+  /** One settings command, guarded by the session revision it was read at. */
+  private async executeSettingsIntent(
+    command: (text: (value: string) => number[]) => ProjectCommandWire,
+  ): Promise<void> {
+    const guard = this.asyncSession.captureGuard();
+    const text = createIntentTextEncoder();
+    await this.sessionTransport.executeIntent({ version: PROJECT_INTENT_VERSION, command: command(text) }, { guard });
   }
 
   /**

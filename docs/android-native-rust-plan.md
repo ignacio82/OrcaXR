@@ -271,6 +271,7 @@ derived placement tools await their edits. DOM/XR gestures coalesce pending
 poses under an explicit owner and cancel on selection/tool/lifetime changes.
 Numeric transforms, DOM/XR gestures and DOM lay-on-face now use declared registry
 routes; result-bearing invocation preserves the actual command acknowledgement.
+Project and scoped settings commits await guarded settings intents.
 Plate controls retain their
 busy state until acknowledgement; stale requests reject without edits. The seven
 plate payloads now use a versioned shared schema generating TypeScript,
@@ -902,11 +903,19 @@ and replay coverage for the complete current command inventory.
   stale/closed refusal, failed-member rollback, pool exhaustion and uncertain
   acknowledgements have controller and presentation coverage. Clipboard paste now
   follows that local route with immutable selected asset captures and atomic
-  restoration, including SVG drawings. Other workflows, remote projections and production worker/JNI execution are not
+  restoration, including SVG drawings. Project and scoped settings commits from
+  the DOM settings panels and the wave-overhang card now submit
+  `setProjectSettingsOverrides` and `setScopedOverrides` intents through the same
+  adapter, the intents a native settings session returns. Stale guards, unknown
+  nodes and out-of-scope keys refuse with the browser's own errors before
+  submission; the synchronous workspace settings wrappers are gone. Other
+  workflows, remote projections and production worker/JNI execution are not
   migrated yet. Browser capture and placement planning still run synchronously.
   - [x] Route the plate/history, rename, transform and specified lifecycle/staged
     browser actions through guarded asynchronous acknowledgements.
-  - [ ] Migrate remaining editing/settings/import/save/slice routes and isolate
+  - [x] Route project and scoped settings commits through guarded settings
+    intents.
+  - [ ] Migrate remaining editing/import/save/slice routes and isolate
     preparation work; preserve the registry boundary for every mutation.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,
   immutable asset repository, selectors, and session lifecycle into Rust.

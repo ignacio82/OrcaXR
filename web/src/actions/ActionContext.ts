@@ -137,19 +137,19 @@ export class ActionContext {
   editSemanticLayerRange(request: CanonicalSemanticLayerRangeRequest): void {
     this.workspace.editSemanticLayerRange(request);
   }
-  applyProjectSettings(
+  async applyProjectSettings(
     inheritedConfig: Readonly<ConfigMap>,
     overrides: Readonly<ConfigMap>,
     guard: Readonly<{ sourceRevision: number; sourceHash: string }>,
-  ): void {
-    this.workspace.setProjectSettingsOverrides(inheritedConfig, overrides, guard);
+  ): Promise<void> {
+    await this.workspace.applyProjectSettingsOverrides(inheritedConfig, overrides, guard);
   }
-  applyScopedSettings(
+  async applyScopedSettings(
     target: ScopedOverrideTarget,
     overrides: Readonly<ConfigMap>,
     guard: Readonly<{ sourceRevision: number; sourceHash: string }>,
-  ): void {
-    this.workspace.setScopedOverrides(target, overrides, guard);
+  ): Promise<void> {
+    await this.workspace.applyScopedOverrides(target, overrides, guard);
   }
   autoPlaceBrimEars(): void {
     this.workspace.autoPlaceBrimEars();

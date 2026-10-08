@@ -91,9 +91,9 @@ function harness() {
   const statuses: string[] = [];
   workspace.onStatusChanged = (text) => statuses.push(text);
   workspace.addPrimitive('cube');
-  const setWaves = (on: boolean) => {
+  const setWaves = async (on: boolean) => {
     const snapshot = workspace.getProjectSettingsOverrideSnapshot();
-    workspace.setProjectSettingsOverrides(
+    await workspace.applyProjectSettingsOverrides(
       snapshot.inheritedConfig as unknown as Readonly<ConfigMap>,
       { ...(snapshot.overrides as unknown as Readonly<ConfigMap>), wave_overhangs: on ? '1' : '0' },
       { sourceRevision: snapshot.sourceRevision, sourceHash: snapshot.sourceHash },
@@ -110,7 +110,7 @@ await test('only the WASM engine carries the wave-overhang port', () => {
 await test('slicing every plate on the CLI engine with waves on is refused, with the way out named', async () => {
   attestedEngine = 'cli';
   const { workspace, statuses, setWaves } = harness();
-  setWaves(true);
+  await setWaves(true);
   const before = attestations;
   assert.equal(await workspace.sliceAllPlates(), 0);
   assert.equal(attestations, before + 1, 'the engine was asked to prove itself first');
@@ -126,7 +126,7 @@ await test('slicing every plate on the CLI engine with waves on is refused, with
 await test('the same project is not refused for waves when they are off, or when the engine has them', async () => {
   attestedEngine = 'cli';
   const off = harness();
-  off.setWaves(false);
+  await off.setWaves(false);
   await off.workspace.sliceAllPlates();
   assert.ok(
     off.statuses.every((status) => !WAVE_REFUSAL.test(status)),
@@ -137,7 +137,7 @@ await test('the same project is not refused for waves when they are off, or when
 
   attestedEngine = 'wasm';
   const wasm = harness();
-  wasm.setWaves(true);
+  await wasm.setWaves(true);
   await wasm.workspace.sliceAllPlates();
   assert.ok(
     wasm.statuses.every((status) => !WAVE_REFUSAL.test(status)),
