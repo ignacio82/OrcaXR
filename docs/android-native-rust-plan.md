@@ -1322,8 +1322,8 @@ and replay coverage for the complete current command inventory.
   365 admitted captures. This covers canonical hierarchy, numeric inspector data,
   transforms, filament inheritance and source declarations. Settings pages, the
   paint palette, action capabilities and revisioned renderer deltas over live
-  sessions are served too; full tree presentation/paint summaries and paint
-  overlay packets are not.
+  sessions are served too, as are paint overlay packets; full tree
+  presentation/paint summaries are not.
   - [x] Expose bounded captured hierarchy/inspector/transform/filament queries
     through WASM/JNI with generated packet validation and independent replay.
   - [x] Port the settings projection (`settings::scoped`): scoped edit
@@ -1535,8 +1535,11 @@ painting, and FullSpectrum operations that can support real native projects.
     Kotlin: strokes open under a session guard, sample off the authority over
     typed refined trees, page their overlay and stage one guarded commit
     (refined tree or ranges); 11 browser strokes agree in every binding.
-  - [ ] Finish picking, refined leaf overlay packets, preparation kernels,
-    renderer packets and device qualification.
+  - [x] Serve paint overlay packets: canonical overlays and live stroke
+    previews as 40-byte float32 facet packets with a state summary, drawn as
+    the workspace draws them (44 captures exact in every binding).
+  - [ ] Finish picking, preparation kernels, mesh renderer packets and device
+    qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.

@@ -307,6 +307,54 @@ pub(super) fn paint_stroke_overlay(
     })?;
     string(env, json)
 }
+/// The canonical paint overlay of one volume's channel.
+pub(super) fn session_paint_overlay(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_paint_overlay_request)?;
+    capture(|| {
+        with_session(handle, |s| {
+            s.paint_overlay(&request)
+                .map(|overlay| Record::PaintOverlay(Box::new(overlay)))
+                .map_err(|refusal| refusal.code())
+        })
+    })
+}
+/// A stroke's live preview as an overlay capture.
+pub(super) fn paint_stroke_preview(_: &mut JNIEnv<'_>, handle: jlong) -> Result<jlong> {
+    capture(|| {
+        with_paint_stroke(handle, |stroke| {
+            stroke
+                .preview()
+                .map(|overlay| Record::PaintOverlay(Box::new(overlay)))
+                .map_err(|refusal| refusal.code())
+        })
+    })
+}
+pub(super) fn paint_overlay_summary(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_paint_overlay(handle, |overlay| {
+        encoded(&overlay.summary(), wire::encode_paint_overlay_summary)
+    })?;
+    string(env, json)
+}
+pub(super) fn paint_overlay_packet(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+) -> Result<jbyteArray> {
+    let (start, count) = (index(start)?, index(count)?);
+    let packet = with_paint_overlay(handle, |overlay| {
+        overlay
+            .packet(start as u64, count as u64)
+            .map_err(|refusal| refusal.code())
+    })?;
+    env.byte_array_from_slice(&packet)
+        .map(|array| array.into_raw())
+        .map_err(|_| "output_limit")
+}
 /// The stroke's staged commit ID, or 0 when it touched no facet.
 pub(super) fn stage_paint_stroke(
     env: &mut JNIEnv<'_>,

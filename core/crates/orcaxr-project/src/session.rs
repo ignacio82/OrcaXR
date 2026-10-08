@@ -237,6 +237,17 @@ impl<P: TimestampPolicy> ProjectSession<P> {
         stroke.session_guard = Some(guard.clone());
         Ok(stroke)
     }
+    /// The canonical paint overlay of one volume's channel, drawn from the
+    /// acknowledged state; the capture owns its facets and packets.
+    pub fn paint_overlay(
+        &self,
+        request: &wire::PaintOverlayRequest,
+    ) -> Result<crate::facets::overlay::Overlay, crate::facets::overlay::Refusal> {
+        if self.disposed {
+            return Err(crate::facets::overlay::Refusal::Disposed);
+        }
+        crate::facets::overlay::capture(&self.bus.snapshot(), self.bus.assets(), request)
+    }
     /// Stage a session-opened stroke's whole gesture as one edit; `None` when
     /// it touched no facet. Staging refuses as stale once anything changed
     /// since the stroke opened, and the work's facet guard refuses it again

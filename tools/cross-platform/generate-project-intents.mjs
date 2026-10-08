@@ -102,6 +102,8 @@ assert.deepEqual(schema.roots, [
   "PaintStrokeSampleReply",
   "PaintStrokeOverlayRequest",
   "PaintStrokeOverlay",
+  "PaintOverlayRequest",
+  "PaintOverlaySummary",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

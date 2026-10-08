@@ -336,6 +336,12 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     facet_region(request) {
       return call("sessionFacetRegion", this.handle, request);
     }
+    paint_overlay(request) {
+      return wrap(
+        ProjectPaintOverlay,
+        call("sessionPaintOverlay", this.handle, request),
+      );
+    }
     paint_stroke(guard, request) {
       return wrap(
         ProjectPaintStroke,
@@ -730,6 +736,17 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     overlay(request) {
       return call("paintStrokeOverlay", this.handle, request);
+    }
+    preview() {
+      return wrap(ProjectPaintOverlay, call("paintStrokePreview", this.handle));
+    }
+  }
+  class ProjectPaintOverlay extends Handle {
+    summary() {
+      return call("paintOverlaySummary", this.handle);
+    }
+    packet(start, count) {
+      return call("paintOverlayPacket", this.handle, start, count);
     }
   }
   class CapturedHistory extends Handle {

@@ -112,6 +112,12 @@ final class NativeProject {
     static native String paintStrokeSample(long handle, String request);
     static native String paintStrokeOverlay(long handle, String request);
     static native long stagePaintStroke(long handle, long stroke, char[] label);
+    // Paint overlays: a volume channel's canonical overlay or a stroke's live
+    // preview, then its summary and 40-byte facet packets.
+    static native long sessionPaintOverlay(long handle, String request);
+    static native long paintStrokePreview(long handle);
+    static native String paintOverlaySummary(long handle);
+    static native byte[] paintOverlayPacket(long handle, long start, long count);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

@@ -9,6 +9,7 @@
 //! tree the samples before it left; nothing reaches canonical state until the
 //! staged commit, which carries the opened snapshot's guards, so a project
 //! that changed meanwhile refuses it as stale.
+use super::overlay::{self, Overlay, Region};
 use super::palette::project_palette;
 use super::region::{
     self, Assignment, EncodedNode, Mesh, RegionError, RegionState, Request, Roots,
@@ -17,7 +18,7 @@ use super::region_exchange::{
     assignments, channel_of, clipping_plane, issues_wire, optional, ranges_wire, region_tool,
     state_of, transform_of,
 };
-use super::{Channel, FacetError, Node, PaintValue, State};
+use super::{Channel, FacetChannel, FacetError, Node, PaintValue, State};
 use crate::commands::{
     FacetRefinement,
     staged::{CaptureError, CapturedCommand, StagedWork},
@@ -75,7 +76,8 @@ pub struct PaintStroke {
     /// The channel's persisted refinement, until a sample leaves a tree.
     persisted: Option<Value>,
     touched: Vec<bool>,
-    touched_count: usize,
+    /// Touched facets in the order a sample first touched them.
+    touched_order: Vec<u32>,
     refinement: Option<Vec<EncodedNode>>,
     /// The session guard a session-opened stroke stages its commit under.
     pub(crate) session_guard: Option<crate::session::LocalGuard>,
@@ -147,7 +149,7 @@ impl PaintStroke {
                     .cloned()
             }),
             touched: vec![false; triangle_count as usize],
-            touched_count: 0,
+            touched_order: Vec::new(),
             refinement: None,
             session_guard: None,
         })
@@ -208,7 +210,7 @@ impl PaintStroke {
                 && !*slot
             {
                 *slot = true;
-                self.touched_count += 1;
+                self.touched_order.push(triangle);
             }
         }
         if after.is_some() {
@@ -222,7 +224,7 @@ impl PaintStroke {
             selected_triangles: selection.triangle_indices.len() as u64,
             leaves: leaves.len() as u64,
             selected_leaves: leaves.iter().filter(|leaf| leaf.selected).count() as u64,
-            stroke_triangles: self.touched_count as u64,
+            stroke_triangles: self.touched_order.len() as u64,
             refined: self.refinement.is_some(),
         })
     }
@@ -244,7 +246,7 @@ impl PaintStroke {
             .min(ranges.len());
         Ok(wire::PaintStrokeOverlay {
             guard: self.guard.clone(),
-            stroke_triangles: self.touched_count as u64,
+            stroke_triangles: self.touched_order.len() as u64,
             refined: self.refinement.is_some(),
             total_ranges: ranges.len() as u64,
             ranges: ranges_wire(&ranges[start..end]),
@@ -259,7 +261,7 @@ impl PaintStroke {
         label: Option<Vec<u16>>,
         max_units: u64,
     ) -> Result<Option<StagedWork>, CaptureError> {
-        if self.touched_count == 0 {
+        if self.touched_order.is_empty() {
             return Ok(None);
         }
         let verb = if self.target == RegionState::Unpainted {
@@ -318,6 +320,42 @@ impl PaintStroke {
         Ok(Some(StagedWork::single(CapturedCommand::facet_stroke(
             stroke, max_units,
         )?)))
+    }
+
+    /// The stroke's live preview as the workspace draws it: the refined tree a
+    /// sample left, collapsed and materialized, or the touched facets in the
+    /// target state, in the order they were first touched.
+    pub fn preview(&self) -> Result<Overlay, overlay::Refusal> {
+        let mesh = Mesh {
+            vertices: &self.vertices,
+            triangles: &self.triangles,
+        };
+        let Some(roots) = &self.refinement else {
+            let regions = if self.touched_order.is_empty() {
+                Vec::new()
+            } else {
+                vec![Region {
+                    triangles: self.touched_order.iter().map(|&t| f64::from(t)).collect(),
+                    state: self.target.clone(),
+                }]
+            };
+            return Overlay::draw(self.guard.clone(), mesh, self.channel, &regions, None);
+        };
+        let invalid = |_| overlay::Refusal::InvalidAnnotations;
+        let nodes = roots
+            .iter()
+            .map(node_of)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(invalid)?;
+        let collapsed = FacetChannel::from_roots(self.channel, nodes, None).map_err(invalid)?;
+        let encoding = collapsed.encoding().map(|encoding| encoding.to_value());
+        Overlay::draw(
+            self.guard.clone(),
+            mesh,
+            self.channel,
+            &overlay::assigned_regions(collapsed.assignments()),
+            encoding.as_ref(),
+        )
     }
 
     fn ranges(&self) -> Vec<(u32, u32)> {

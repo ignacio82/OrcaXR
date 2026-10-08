@@ -3213,6 +3213,27 @@
         "totalRanges": "Counter",
         "ranges": "TriangleRanges"
       }
+    },
+    "PaintOverlayRequest": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id",
+        "channel": "FacetChannelName"
+      }
+    },
+    "FacetRegionStates": {
+      "kind": "array",
+      "items": "FacetRegionState",
+      "min": 0,
+      "max": 4096
+    },
+    "PaintOverlaySummary": {
+      "kind": "object",
+      "fields": {
+        "guard": "FacetGuard",
+        "facets": "Counter",
+        "states": "FacetRegionStates"
+      }
     }
   },
   "roots": [
@@ -3280,7 +3301,9 @@
     "PaintStrokeSample",
     "PaintStrokeSampleReply",
     "PaintStrokeOverlayRequest",
-    "PaintStrokeOverlay"
+    "PaintStrokeOverlay",
+    "PaintOverlayRequest",
+    "PaintOverlaySummary"
   ],
   "sessionVersion": 1
 }

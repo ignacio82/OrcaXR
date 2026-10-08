@@ -558,6 +558,29 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sessionPaintOverlay, session_paint_overlay, jlong,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_paintStrokePreview, paint_stroke_preview, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_paintOverlaySummary, paint_overlay_summary, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_paintOverlayPacket, paint_overlay_packet, jbyteArray,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

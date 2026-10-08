@@ -3214,6 +3214,27 @@ const shapes = {
       "totalRanges": "Counter",
       "ranges": "TriangleRanges"
     }
+  },
+  "PaintOverlayRequest": {
+    "kind": "object",
+    "fields": {
+      "volumeId": "Id",
+      "channel": "FacetChannelName"
+    }
+  },
+  "FacetRegionStates": {
+    "kind": "array",
+    "items": "FacetRegionState",
+    "min": 0,
+    "max": 4096
+  },
+  "PaintOverlaySummary": {
+    "kind": "object",
+    "fields": {
+      "guard": "FacetGuard",
+      "facets": "Counter",
+      "states": "FacetRegionStates"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -3599,6 +3620,9 @@ export interface ProjectPaintStrokeSampledWire {readonly selectedTriangles: Proj
 export type ProjectPaintStrokeSampleReplyWire = {readonly sampled:ProjectPaintStrokeSampledWire} | {readonly invalid:ProjectFacetRegionIssuesWire} | {readonly stale:ProjectEmptyWire};
 export interface ProjectPaintStrokeOverlayRequestWire {readonly start: ProjectCounterWire;readonly count: ProjectCounterWire;}
 export interface ProjectPaintStrokeOverlayWire {readonly guard: ProjectFacetGuardWire;readonly strokeTriangles: ProjectCounterWire;readonly refined: ProjectFlagWire;readonly totalRanges: ProjectCounterWire;readonly ranges: ProjectTriangleRangesWire;}
+export interface ProjectPaintOverlayRequestWire {readonly volumeId: ProjectIdWire;readonly channel: ProjectFacetChannelNameWire;}
+export type ProjectFacetRegionStatesWire = readonly ProjectFacetRegionStateWire[];
+export interface ProjectPaintOverlaySummaryWire {readonly guard: ProjectFacetGuardWire;readonly facets: ProjectCounterWire;readonly states: ProjectFacetRegionStatesWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -3794,3 +3818,9 @@ export function encodeProjectPaintStrokeOverlayRequest(value:ProjectPaintStrokeO
 export function captureProjectPaintStrokeOverlay(value:unknown):ProjectPaintStrokeOverlayWire { return captureIntent("PaintStrokeOverlay",value,shapes,limits) as ProjectPaintStrokeOverlayWire; }
 export function decodeProjectPaintStrokeOverlay(text:string):ProjectPaintStrokeOverlayWire { return captureProjectPaintStrokeOverlay(parseIntentJson(text,limits)); }
 export function encodeProjectPaintStrokeOverlay(value:ProjectPaintStrokeOverlayWire):string { return JSON.stringify(captureProjectPaintStrokeOverlay(value)); }
+export function captureProjectPaintOverlayRequest(value:unknown):ProjectPaintOverlayRequestWire { return captureIntent("PaintOverlayRequest",value,shapes,limits) as ProjectPaintOverlayRequestWire; }
+export function decodeProjectPaintOverlayRequest(text:string):ProjectPaintOverlayRequestWire { return captureProjectPaintOverlayRequest(parseIntentJson(text,limits)); }
+export function encodeProjectPaintOverlayRequest(value:ProjectPaintOverlayRequestWire):string { return JSON.stringify(captureProjectPaintOverlayRequest(value)); }
+export function captureProjectPaintOverlaySummary(value:unknown):ProjectPaintOverlaySummaryWire { return captureIntent("PaintOverlaySummary",value,shapes,limits) as ProjectPaintOverlaySummaryWire; }
+export function decodeProjectPaintOverlaySummary(text:string):ProjectPaintOverlaySummaryWire { return captureProjectPaintOverlaySummary(parseIntentJson(text,limits)); }
+export function encodeProjectPaintOverlaySummary(value:ProjectPaintOverlaySummaryWire):string { return JSON.stringify(captureProjectPaintOverlaySummary(value)); }

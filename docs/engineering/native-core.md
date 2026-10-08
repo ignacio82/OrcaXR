@@ -3311,6 +3311,35 @@ every sample reply and overlay page byte for byte and every refusal, and each
 commit's outcome (8 applied, 1 unchanged, 1 nothing to stage, 1 stale),
 revision, hash and undo label; 105 Kotlin checks cover the wrapper.
 
+### Paint overlay packets
+
+Renderers draw paint from packets, not from the canonical record
+(`facets::overlay`, the browser's `PaintOverlay.ts`, which the workspace's
+overlay meshes are now built from). An overlay holds the facets one volume's
+channel paints: every assigned leaf of the materialized refinement when the
+channel is subdivided, otherwise each assignment's whole facets in order.
+`ProjectSession::paint_overlay` captures the canonical overlay of a
+`PaintOverlayRequest` (volume and channel), and `PaintStroke::preview` the
+live preview the workspace draws mid-gesture: the stroke's tree collapsed and
+materialized, or the touched facets in the target state, in first-touch
+order. A capture owns its facets under the facet guard of the state it drew,
+so it is read off the session: a `PaintOverlaySummary` (guard, facet count,
+distinct states in first-drawn order), then packets of at most 16,384 facets,
+each 40 bytes — nine little-endian float32 corners in volume space and a
+little-endian uint32 index into the summary's states. Unknown volumes,
+unreadable meshes, refused annotations and oversized packets refuse.
+Bindings: WASM `ProjectSession.paint_overlay`, `ProjectPaintStroke.preview` and
+`ProjectPaintOverlay.summary` / `packet`, the JNI exports
+`sessionPaintOverlay`, `paintStrokePreview`, `paintOverlaySummary` and
+`paintOverlayPacket`, and Kotlin `ProjectSession.paintOverlay`,
+`ProjectPaintStroke.preview` and `ProjectPaintOverlay`.
+
+The paint-stroke corpus records the preview after every sample and the
+canonical overlay after every commit, then every channel of every volume, an
+unknown volume and an oversized packet: 44 summaries, whole packets and paging
+windows, packets compared by SHA-256 (refined previews reach 547 facets). Rust,
+WASM in Node and Chrome, JNI and 151 Kotlin checks reproduce all of them.
+
 ### Paint palette
 
 `facets::palette` ports `projectPaintPalette`: the filament library as the

@@ -483,6 +483,20 @@ impl ProjectSession {
             .map(|inner| ProjectPaintStroke { inner })
             .map_err(|refusal| error(refusal.code()))
     }
+    /// The canonical paint overlay of one volume's channel: a
+    /// `PaintOverlayRequest`. The capture owns its facets and packets.
+    pub fn paint_overlay(&self, request: &str) -> Result<ProjectPaintOverlay, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_paint_overlay_request(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .paint_overlay(&request)
+            .map(|inner| ProjectPaintOverlay { inner })
+            .map_err(|refusal| error(refusal.code()))
+    }
     /// Stage the stroke's whole gesture as one edit for `executeStaged`; 0
     /// when it touched no facet. A stroke whose state changed refuses `stale`.
     pub fn stage_paint_stroke(
@@ -599,6 +613,13 @@ impl ProjectPaintStroke {
         wire::encode_paint_stroke_sample_reply(&self.inner.sample(&request))
             .map_err(|_| error("output_limit"))
     }
+    /// The stroke's live preview as an overlay capture.
+    pub fn preview(&self) -> Result<ProjectPaintOverlay, JsValue> {
+        self.inner
+            .preview()
+            .map(|inner| ProjectPaintOverlay { inner })
+            .map_err(|refusal| error(refusal.code()))
+    }
     /// A `PaintStrokeOverlayRequest`; returns a `PaintStrokeOverlay`.
     pub fn overlay(&self, request: &str) -> Result<String, JsValue> {
         use orcaxr_contracts::project_intent_types as wire;
@@ -612,6 +633,25 @@ impl ProjectPaintStroke {
             .overlay(&request)
             .map_err(|refusal| error(refusal.code()))?;
         wire::encode_paint_stroke_overlay(&page).map_err(|_| error("output_limit"))
+    }
+}
+
+/// One paint overlay's facets: a `PaintOverlaySummary`, then packets of
+/// 40-byte facets (nine little-endian float32 corners and a uint32 state).
+#[wasm_bindgen]
+pub struct ProjectPaintOverlay {
+    inner: orcaxr_project::facets::overlay::Overlay,
+}
+#[wasm_bindgen]
+impl ProjectPaintOverlay {
+    pub fn summary(&self) -> Result<String, JsValue> {
+        orcaxr_contracts::project_intent_types::encode_paint_overlay_summary(&self.inner.summary())
+            .map_err(|_| error("output_limit"))
+    }
+    pub fn packet(&self, start: f64, count: f64) -> Result<Vec<u8>, JsValue> {
+        self.inner
+            .packet(index(start)? as u64, index(count)? as u64)
+            .map_err(|refusal| error(refusal.code()))
     }
 }
 

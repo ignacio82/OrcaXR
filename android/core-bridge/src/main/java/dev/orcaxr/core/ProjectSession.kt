@@ -191,6 +191,11 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun paintStroke(guard: ProjectGuard, request: ProjectIntents.PaintStrokeOpen): ProjectPaintStroke = read {
         own(NativeProject.paintStrokeOpen(it, guard.reference(), ProjectIntents.encodePaintStrokeOpen(request)), ::ProjectPaintStroke)
     }
+    /** The canonical paint overlay of one volume's channel; the capture owns
+     * its facets, so packets can be read off this session's call gate. */
+    fun paintOverlay(request: ProjectIntents.PaintOverlayRequest): ProjectPaintOverlay = read {
+        own(NativeProject.sessionPaintOverlay(it, ProjectIntents.encodePaintOverlayRequest(request)), ::ProjectPaintOverlay)
+    }
     /** The stroke's whole gesture as one staged edit for `executeStaged`, or
      * null when it touched no facet. A stroke whose state changed refuses
      * `stale`; do not sample the stroke while it stages. */
@@ -231,6 +236,22 @@ class ProjectPaintStroke internal constructor(handle: Long) : ProjectHandle(hand
     }
     fun overlay(request: ProjectIntents.PaintStrokeOverlayRequest): ProjectIntents.PaintStrokeOverlay = read {
         ProjectIntents.decodePaintStrokeOverlay(NativeProject.paintStrokeOverlay(it, ProjectIntents.encodePaintStrokeOverlayRequest(request)))
+    }
+    /** The live preview as the canonical overlay would draw it. */
+    fun preview(): ProjectPaintOverlay = read { own(NativeProject.paintStrokePreview(it), ::ProjectPaintOverlay) }
+}
+
+/** One paint overlay's facets: a summary of their states, then packets of
+ * [FACET_BYTES]-byte facets (nine little-endian float32 corners and a uint32
+ * state index), at most [MAX_PAGE] per packet. */
+class ProjectPaintOverlay internal constructor(handle: Long) : ProjectHandle(handle) {
+    fun summary(): ProjectIntents.PaintOverlaySummary = read {
+        ProjectIntents.decodePaintOverlaySummary(NativeProject.paintOverlaySummary(it))
+    }
+    fun packet(start: Long, count: Long): ByteArray = read { NativeProject.paintOverlayPacket(it, start, count) }
+    companion object {
+        const val FACET_BYTES = 40
+        const val MAX_PAGE = 16384L
     }
 }
 /** Immutable complete bundle; declaration positions match its project snapshot. */

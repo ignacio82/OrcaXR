@@ -7,7 +7,9 @@
 // Height Range, Gap Fill, invalid tool input — page their overlays, and
 // commit through the browser's own facet commands: ranges, refined trees
 // over a persisted refinement, a stroke that touched nothing, one that
-// changes nothing, and one that went stale. Replayed by Rust.
+// changes nothing, and one that went stale. Every sample's live preview and
+// every commit's canonical overlay are recorded as paint overlay packets
+// (`PaintOverlay.ts`), compared by SHA-256. Replayed by Rust.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -27,6 +29,13 @@ import {
   PaintStrokeRefusal,
 } from "../../web/src/project/painting/PaintStrokeExchange.ts";
 import {
+  PaintOverlayRefusal,
+  capturePaintOverlay,
+} from "../../web/src/project/painting/PaintOverlay.ts";
+import {
+  decodeProjectPaintOverlayRequest,
+  encodeProjectPaintOverlayRequest,
+  encodeProjectPaintOverlaySummary,
   decodeProjectPaintStrokeOpen,
   decodeProjectPaintStrokeOverlayRequest,
   decodeProjectPaintStrokeSample,
@@ -257,12 +266,49 @@ function open(name, volumeId, channel, target) {
       ),
     );
     steps.push({ stroke: name, open: text });
+    opened.set(name, { volumeId, channel });
   } catch (error) {
     if (!(error instanceof PaintStrokeRefusal)) throw error;
     steps.push({ stroke: name, open: text, refusal: code(error) });
   }
 }
 const code = (error) => error.code.replaceAll("-", "_");
+const opened = new Map();
+const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+// One overlay capture: its summary and its whole packet, or the refusal.
+function packets(capture, step) {
+  const facets = capture.facets.stateIndices.length;
+  steps.push({
+    ...step,
+    summary: encodeProjectPaintOverlaySummary(capture.summary()),
+    packet: sha256(capture.packet(0, 16384)),
+    ...(facets > 2 ? { window: sha256(capture.packet(1, 2)) } : {}),
+  });
+}
+// The stroke's live preview, as the workspace draws it after a sample.
+function preview(name) {
+  packets(strokes.get(name).preview(), { stroke: name, preview: true });
+}
+// The canonical overlay of one volume's channel, as the workspace draws it.
+function canonical(volumeId, channel) {
+  const text = encodeProjectPaintOverlayRequest({
+    volumeId: units(volumeId),
+    channel,
+  });
+  try {
+    packets(
+      capturePaintOverlay(
+        session.project.getSnapshot(),
+        session.assets,
+        decodeProjectPaintOverlayRequest(text),
+      ),
+      { canonical: text },
+    );
+  } catch (error) {
+    if (!(error instanceof PaintOverlayRefusal)) throw error;
+    steps.push({ canonical: text, refusal: code(error) });
+  }
+}
 function sample(name, request) {
   const text = encodeProjectPaintStrokeSample({
     triangleSplitting: false,
@@ -277,6 +323,7 @@ function sample(name, request) {
     sample: text,
     reply: encodeProjectPaintStrokeSampleReply(reply),
   });
+  preview(name);
 }
 function overlay(name, start = 0, count = 4096) {
   const text = encodeProjectPaintStrokeOverlayRequest({ start, count });
@@ -323,6 +370,8 @@ function commit(name, label) {
     undoLabel:
       history.undoLabel === undefined ? null : units(history.undoLabel),
   });
+  const { volumeId, channel } = opened.get(name);
+  canonical(volumeId, channel);
 }
 
 const centroid = (mesh, t) =>
@@ -498,12 +547,32 @@ sample("first", { seedTriangle: 3, tool: { triangle: { hit: absent } } });
 sample("second", { seedTriangle: 3, tool: { triangle: { hit: absent } } });
 commit("first");
 commit("second");
+// Every channel of every volume as the strokes left them, an unknown volume
+// and an oversized packet.
+for (const volumeId of [sphereId, terrainId, modifierId])
+  for (const channel of ["color", "support", "seam", "fuzzySkin", "brim"])
+    canonical(volumeId, channel);
+canonical("import:volume:missing", "color");
+{
+  const text = encodeProjectPaintOverlayRequest({
+    volumeId: units(sphereId),
+    channel: "color",
+  });
+  const capture = capturePaintOverlay(
+    session.project.getSnapshot(),
+    session.assets,
+    decodeProjectPaintOverlayRequest(text),
+  );
+  assert.throws(() => capture.packet(0, 16385), PaintOverlayRefusal);
+  steps.push({ canonical: text, count: 16385, refusal: "invalid_request" });
+}
 session.dispose();
 
 const sources = [
   "tools/cross-platform/paint-stroke-vectors.mjs",
   "web/src/project/painting/PaintStrokeExchange.ts",
   "web/src/project/painting/PaintStrokeService.ts",
+  "web/src/project/painting/PaintOverlay.ts",
   "web/src/project/annotations/FacetRegionExchange.ts",
   "web/src/project/annotations/FacetRegionSelection.ts",
   "web/src/project/annotations/FacetAnnotationStrokeCommand.ts",

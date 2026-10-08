@@ -2,9 +2,16 @@
 // session and run the host's script of strokes — opens and their refusals,
 // samples, overlay pages and staged commits — comparing every reply with the
 // TypeScript authority's own encoding and each commit's outcome, revision,
-// hash and undo label. Runs unchanged over WASM in Node and a browser worker,
-// and over the JNI bridge.
-export function replayPaintStrokes(core, fixture, layout, stagingVersion) {
+// hash and undo label; every live preview and canonical overlay packet is
+// compared by SHA-256 (`sha256` resolves a hex digest). Runs unchanged over
+// WASM in Node and a browser worker, and over the JNI bridge.
+export async function replayPaintStrokes(
+  core,
+  fixture,
+  layout,
+  stagingVersion,
+  sha256,
+) {
   const encode = new TextEncoder();
   const fail = (label) => {
     throw Error(label);
@@ -72,7 +79,30 @@ export function replayPaintStrokes(core, fixture, layout, stagingVersion) {
     return JSON.parse(reply.wire()).result;
   };
   const strokes = new Map();
-  const counts = { opens: 0, refusals: 0, samples: 0, overlays: 0, commits: 0 };
+  const counts = {
+    opens: 0,
+    refusals: 0,
+    samples: 0,
+    overlays: 0,
+    commits: 0,
+    packets: 0,
+  };
+  // One overlay capture against its recorded summary, packet and window.
+  const packets = async (overlay, step, label) => {
+    try {
+      eq(overlay.summary(), step.summary, `${label} summary`);
+      eq(
+        await sha256(overlay.packet(0, 16384)),
+        step.packet,
+        `${label} packet`,
+      );
+      if ("window" in step)
+        eq(await sha256(overlay.packet(1, 2)), step.window, `${label} window`);
+    } finally {
+      overlay.free();
+    }
+    counts.packets++;
+  };
   try {
     if (
       !submit({
@@ -99,7 +129,28 @@ export function replayPaintStrokes(core, fixture, layout, stagingVersion) {
     };
     for (const [i, step] of fixture.steps.entries()) {
       const label = `step ${i}`;
-      if ("open" in step) {
+      if ("preview" in step) {
+        await packets(strokes.get(step.stroke).preview(), step, label);
+      } else if ("canonical" in step) {
+        if (!("refusal" in step))
+          await packets(session.paint_overlay(step.canonical), step, label);
+        else if ("count" in step) {
+          const overlay = session.paint_overlay(step.canonical);
+          try {
+            refuses(() => overlay.packet(0, step.count), step.refusal, label);
+          } finally {
+            overlay.free();
+          }
+          counts.refusals++;
+        } else {
+          refuses(
+            () => session.paint_overlay(step.canonical),
+            step.refusal,
+            label,
+          );
+          counts.refusals++;
+        }
+      } else if ("open" in step) {
         if ("refusal" in step) {
           refuses(() => open(step.open).free(), step.refusal, label);
           counts.refusals++;
@@ -176,5 +227,6 @@ export function replayPaintStrokes(core, fixture, layout, stagingVersion) {
     paintStrokeOverlays: counts.overlays,
     paintStrokeCommits: counts.commits,
     paintStrokeRefusals: counts.refusals,
+    paintOverlayPackets: counts.packets,
   };
 }

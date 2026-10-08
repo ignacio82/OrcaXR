@@ -2,14 +2,26 @@ package dev.orcaxr.core
 
 /** Paint strokes through the Kotlin wrapper: every open, sample and overlay
  * of the browser's script round-trips and answers the browser's reply, each
- * refusal carries its code, and each staged commit executes to the browser's
+ * refusal carries its code, each live preview and canonical overlay packet
+ * hashes to the browser's, and each staged commit executes to the browser's
  * outcome, revision, hash and undo label; a disposed session opens nothing. */
 object ProjectPaintStrokeChecks {
     private fun failure(block: () -> Unit) = runCatching(block).exceptionOrNull()?.message
+    private fun sha256(bytes: ByteArray) =
+        java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+    /** One overlay against its recorded summary, whole packet and window. */
+    private fun packets(overlay: ProjectPaintOverlay, summary: String, packet: String, window: String): Boolean = overlay.use {
+        it.summary() == ProjectIntents.decodePaintOverlaySummary(summary) &&
+            sha256(it.packet(0, ProjectPaintOverlay.MAX_PAGE)) == packet &&
+            (window.isEmpty() || sha256(it.packet(1, 2)) == window)
+    }
 
     /** [script] holds one step per line: `O\t<stroke>\t<open>\t<refusal>`,
-     * `S\t<stroke>\t<sample>\t<reply>`, `V\t<stroke>\t<overlay>\t<reply>\t<refusal>`
-     * or `C\t<stroke>\t<label>\t<outcome>\t<revision>\t<hash>\t<undo label>`;
+     * `S\t<stroke>\t<sample>\t<reply>`, `V\t<stroke>\t<overlay>\t<reply>\t<refusal>`,
+     * `P\t<stroke>\t<summary>\t<packet>\t<window>` (a live preview),
+     * `K\t<request>\t<summary>\t<packet>\t<window>\t<refusal>\t<count>` (a
+     * canonical overlay) or
+     * `C\t<stroke>\t<label>\t<outcome>\t<revision>\t<hash>\t<undo label>`;
      * an empty field is absent. */
     @JvmStatic fun run(source: String, sphere: ByteArray, terrain: ByteArray, script: String): Long {
         var checks = 0L
@@ -40,6 +52,20 @@ object ProjectPaintStrokeChecks {
                 for (line in script.split("\n")) {
                     val entry = line.split("\t")
                     when (entry[0]) {
+                        "P" -> {
+                            check(packets(strokes.getValue(entry[1]).preview(), entry[2], entry[3], entry[4])) { "paint_preview_$checks" }; checks++
+                        }
+                        "K" -> {
+                            val request = ProjectIntents.decodePaintOverlayRequest(entry[1])
+                            when {
+                                entry[5].isEmpty() -> check(packets(session.paintOverlay(request), entry[2], entry[3], entry[4])) { "paint_overlay_packet_$checks" }
+                                entry[6].isEmpty() -> check(failure { session.paintOverlay(request).close() } == entry[5]) { "paint_overlay_refusal_$checks" }
+                                else -> session.paintOverlay(request).use { overlay ->
+                                    check(failure { overlay.packet(0, entry[6].toLong()) } == entry[5]) { "paint_packet_refusal_$checks" }
+                                }
+                            }
+                            checks++
+                        }
                         "O" -> {
                             val request = ProjectIntents.decodePaintStrokeOpen(entry[2])
                             check(ProjectIntents.encodePaintStrokeOpen(request) == entry[2]) { "paint_open_$checks" }; checks++

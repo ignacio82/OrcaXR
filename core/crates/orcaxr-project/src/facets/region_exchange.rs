@@ -267,7 +267,7 @@ pub(super) fn issues_wire(issues: &[Issue]) -> Vec<wire::FacetRegionIssue> {
         .collect()
 }
 
-fn state_wire(state: &RegionState) -> wire::FacetRegionState {
+pub(super) fn state_wire(state: &RegionState) -> wire::FacetRegionState {
     match state {
         RegionState::Unpainted => wire::FacetRegionState::Unpainted(wire::Empty {}),
         RegionState::Assigned(PaintValue::Text(text)) => {

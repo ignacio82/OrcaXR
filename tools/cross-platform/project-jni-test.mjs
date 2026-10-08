@@ -497,10 +497,16 @@ try {
       new URL("testdata/cross-platform/paint-stroke-vectors.json", root),
     ),
   );
-  const strokes = replayPaintStrokes(projectJniCore(jvm.call), strokeFixture, layout, stagingLayout.version);
+  const strokes = await replayPaintStrokes(
+    projectJniCore(jvm.call),
+    strokeFixture,
+    layout,
+    stagingLayout.version,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
   assert.deepEqual(
-    [strokes.paintStrokeOpens, strokes.paintStrokeSamples, strokes.paintStrokeOverlays, strokes.paintStrokeCommits, strokes.paintStrokeRefusals],
-    [11, 18, 5, 11, 9],
+    [strokes.paintStrokeOpens, strokes.paintStrokeSamples, strokes.paintStrokeOverlays, strokes.paintStrokeCommits, strokes.paintStrokeRefusals, strokes.paintOverlayPackets],
+    [11, 18, 5, 11, 11, 44],
   );
   const unitsText = (u) => String.fromCharCode(...u);
   const paintStrokeChecks = jvm.call(
@@ -510,7 +516,11 @@ try {
     Uint8Array.from(strokeFixture.assets[1].bytes),
     strokeFixture.steps
       .map((s) =>
-        "open" in s
+        "preview" in s
+          ? `P\t${s.stroke}\t${s.summary}\t${s.packet}\t${s.window ?? ""}`
+          : "canonical" in s
+            ? `K\t${s.canonical}\t${s.summary ?? ""}\t${s.packet ?? ""}\t${s.window ?? ""}\t${s.refusal ?? ""}\t${s.count ?? ""}`
+            : "open" in s
           ? `O\t${s.stroke}\t${s.open}\t${s.refusal ?? ""}`
           : "sample" in s
             ? `S\t${s.stroke}\t${s.sample}\t${s.reply}`
@@ -520,7 +530,7 @@ try {
       )
       .join("\n"),
   );
-  assert.equal(paintStrokeChecks, 105);
+  assert.equal(paintStrokeChecks, 151);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

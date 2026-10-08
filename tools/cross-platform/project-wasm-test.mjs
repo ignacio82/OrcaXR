@@ -84,8 +84,9 @@ if (isMainThread) {
         result.paintStrokeOverlays,
         result.paintStrokeCommits,
         result.paintStrokeRefusals,
+        result.paintOverlayPackets,
       ],
-      [11, 18, 5, 11, 9],
+      [11, 18, 5, 11, 11, 44],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -345,7 +346,7 @@ if (isMainThread) {
     ),
     layout,
   );
-  const strokes = replayPaintStrokes(
+  const strokes = await replayPaintStrokes(
     core,
     JSON.parse(
       await readFile(
@@ -355,6 +356,7 @@ if (isMainThread) {
     layout,
     JSON.parse(await readFile(new URL("contracts/project-staging.json", root)))
       .version,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
   );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {

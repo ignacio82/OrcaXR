@@ -1763,6 +1763,65 @@ export class ProjectOpen {
 if (Symbol.dispose) ProjectOpen.prototype[Symbol.dispose] = ProjectOpen.prototype.free;
 
 /**
+ * One paint overlay's facets: a `PaintOverlaySummary`, then packets of
+ * 40-byte facets (nine little-endian float32 corners and a uint32 state).
+ */
+export class ProjectPaintOverlay {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectPaintOverlay.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectPaintOverlayFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectPaintOverlayFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectpaintoverlay_free(ptr, 0);
+    }
+    /**
+     * @param {number} start
+     * @param {number} count
+     * @returns {Uint8Array}
+     */
+    packet(start, count) {
+        const ret = wasm.projectpaintoverlay_packet(this.__wbg_ptr, start, count);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * @returns {string}
+     */
+    summary() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectpaintoverlay_summary(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ProjectPaintOverlay.prototype[Symbol.dispose] = ProjectPaintOverlay.prototype.free;
+
+/**
  * One paint gesture, opened on a session guard. Samples and overlay pages
  * run here, off the session; the session stages its commit.
  */
@@ -1807,6 +1866,17 @@ export class ProjectPaintStroke {
         } finally {
             wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
         }
+    }
+    /**
+     * The stroke's live preview as an overlay capture.
+     * @returns {ProjectPaintOverlay}
+     */
+    preview() {
+        const ret = wasm.projectpaintstroke_preview(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectPaintOverlay.__wrap(ret[0]);
     }
     /**
      * A `PaintStrokeSample`; returns a `PaintStrokeSampleReply`.
@@ -2490,6 +2560,21 @@ export class ProjectSession {
         _assertClass(ticket, ProjectOpen);
         const ret = wasm.projectsession_is_open_current(this.__wbg_ptr, ticket.__wbg_ptr);
         return ret !== 0;
+    }
+    /**
+     * The canonical paint overlay of one volume's channel: a
+     * `PaintOverlayRequest`. The capture owns its facets and packets.
+     * @param {string} request
+     * @returns {ProjectPaintOverlay}
+     */
+    paint_overlay(request) {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectsession_paint_overlay(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectPaintOverlay.__wrap(ret[0]);
     }
     /**
      * Open a paint stroke on the state `guard` captured: a `PaintStrokeOpen`.
@@ -3321,6 +3406,9 @@ const ProjectModelUploadFinalization = (typeof FinalizationRegistry === 'undefin
 const ProjectOpenFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectopen_free(ptr, 1));
+const ProjectPaintOverlayFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectpaintoverlay_free(ptr, 1));
 const ProjectPaintStrokeFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectpaintstroke_free(ptr, 1));

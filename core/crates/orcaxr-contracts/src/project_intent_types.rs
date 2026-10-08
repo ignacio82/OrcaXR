@@ -6716,6 +6716,41 @@ fn read_paint_stroke_overlay(v: &Value) -> Result<PaintStrokeOverlay, InvalidInt
         ranges: read_triangle_ranges(&object["ranges"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaintOverlayRequest {
+    pub volume_id: Id,
+    pub channel: FacetChannelName,
+}
+fn read_paint_overlay_request(v: &Value) -> Result<PaintOverlayRequest, InvalidIntent> {
+    let object = fields(v, &["volumeId", "channel"], false)?;
+    Ok(PaintOverlayRequest {
+        volume_id: read_id(&object["volumeId"])?,
+        channel: read_facet_channel_name(&object["channel"])?,
+    })
+}
+pub type FacetRegionStates = Vec<FacetRegionState>;
+fn read_facet_region_states(v: &Value) -> Result<FacetRegionStates, InvalidIntent> {
+    list(v, 0, 4096)?
+        .iter()
+        .map(read_facet_region_state)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaintOverlaySummary {
+    pub guard: FacetGuard,
+    pub facets: Counter,
+    pub states: FacetRegionStates,
+}
+fn read_paint_overlay_summary(v: &Value) -> Result<PaintOverlaySummary, InvalidIntent> {
+    let object = fields(v, &["guard", "facets", "states"], false)?;
+    Ok(PaintOverlaySummary {
+        guard: read_facet_guard(&object["guard"])?,
+        facets: read_counter(&object["facets"])?,
+        states: read_facet_region_states(&object["states"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -7278,5 +7313,21 @@ pub fn decode_paint_stroke_overlay(text: &str) -> Result<PaintStrokeOverlay, Inv
 pub fn encode_paint_stroke_overlay(value: &PaintStrokeOverlay) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_paint_stroke_overlay(&text)?;
+    Ok(text)
+}
+pub fn decode_paint_overlay_request(text: &str) -> Result<PaintOverlayRequest, InvalidIntent> {
+    read_paint_overlay_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_paint_overlay_request(value: &PaintOverlayRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_paint_overlay_request(&text)?;
+    Ok(text)
+}
+pub fn decode_paint_overlay_summary(text: &str) -> Result<PaintOverlaySummary, InvalidIntent> {
+    read_paint_overlay_summary(&super::project_intents::parse(text)?)
+}
+pub fn encode_paint_overlay_summary(value: &PaintOverlaySummary) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_paint_overlay_summary(&text)?;
     Ok(text)
 }

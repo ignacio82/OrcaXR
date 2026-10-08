@@ -117,8 +117,8 @@ export function answerFacetRegion(
       totalReplacements: replacements.length,
       replacements: replacements.slice(request.start, end).map((r) => ({
         areaMm2: r.areaMm2,
-        source: stateWire(r.source),
-        target: stateWire(r.target),
+        source: regionStateWire(r.source),
+        target: regionStateWire(r.target),
         triangleCount: r.triangleIndices.length,
         ranges: r.ranges.map((x) => ({ start: x.start, endExclusive: x.endExclusive })),
       })),
@@ -183,7 +183,8 @@ export function regionState(wire: ProjectFacetRegionStateWire): FacetRegionState
   return 'unpainted' in wire ? { kind: 'unpainted' } : { kind: 'assigned', value: paint(wire.assigned) };
 }
 
-function stateWire(state: FacetRegionState): ProjectFacetRegionStateWire {
+/** A selector paint state in the wire's encoding. */
+export function regionStateWire(state: FacetRegionState): ProjectFacetRegionStateWire {
   if (state.kind === 'unpainted') return { unpainted: {} };
   const value = state.value;
   return { assigned: typeof value === 'boolean' ? { flag: value } : { text: wireUnits(String(value)) } };

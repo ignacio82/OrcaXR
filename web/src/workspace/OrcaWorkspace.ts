@@ -35,15 +35,9 @@ import { describeDiscovery, type DiscoveryOutcome } from '../printer/PrinterDire
 import type { ProjectSummaryInput } from '../diagnostics/DiagnosticsBundle';
 import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
 import { entityId, UuidIdSource } from '../project/domain/ids';
-import type {
-  ConfigMap,
-  FacetAnnotations,
-  FacetRefinementEncoding,
-  JsonValue,
-  Transform,
-  Vec3,
-} from '../project/domain/model';
-import { materializeFacetRefinement, type FacetAnnotationGuard } from '../project/annotations';
+import type { ConfigMap, FacetRefinementEncoding, JsonValue, Transform, Vec3 } from '../project/domain/model';
+import type { FacetAnnotationGuard } from '../project/annotations';
+import { paintOverlayFacets } from '../project/painting/PaintOverlay';
 import {
   collapseFacetRefinementRoots,
   type FacetRefinedRootSet,
@@ -3795,70 +3789,37 @@ export class OrcaWorkspace extends xb.Script {
     const position = source.getAttribute('position');
     const index = source.getIndex();
     if (!position || !index) return null;
-    const painted: Array<{ vertices: readonly [number, number, number]; color: THREE.Color }> = [];
-    let renderVertices: readonly Vec3[] | undefined;
-    if (refinement) {
-      const sourceMesh = {
-        vertices: Array.from(
-          { length: position.count },
-          (_, vertex) => [position.getX(vertex), position.getY(vertex), position.getZ(vertex)] as const,
-        ),
-        triangles: Array.from(
-          { length: index.count / 3 },
-          (_, triangle) =>
-            [index.getX(triangle * 3), index.getX(triangle * 3 + 1), index.getX(triangle * 3 + 2)] as const,
-        ),
-      };
-      const channelAssignments: FacetAnnotations = {
-        topologyRevision,
-        color: [],
-        support: [],
-        seam: [],
-        fuzzySkin: [],
-        brim: [],
-        refinement: { [channel]: refinement },
-      } as FacetAnnotations;
-      channelAssignments[channel] = assignments as never;
-      const materialized = materializeFacetRefinement({
-        mesh: sourceMesh,
-        annotations: channelAssignments,
-        channel,
-        guard: { topologyRevision, triangleCount: triangleCount ?? sourceMesh.triangles.length },
-        refinement,
-      });
-      renderVertices = materialized.vertices;
-      for (const leaf of materialized.leaves) {
-        if (leaf.state.kind !== 'assigned') continue;
-        painted.push({
-          vertices: leaf.vertexIndices,
-          color: new THREE.Color(colors.get(String(leaf.state.value)) ?? '#ffffff'),
-        });
-      }
-    } else {
-      renderVertices = Array.from(
+    const mesh = {
+      vertices: Array.from(
         { length: position.count },
         (_, vertex) => [position.getX(vertex), position.getY(vertex), position.getZ(vertex)] as const,
-      );
-      for (const assignment of assignments) {
-        const color = new THREE.Color(colors.get(String(assignment.value)) ?? '#ffffff');
-        for (const triangle of assignment.triangles) {
-          painted.push({
-            vertices: [index.getX(triangle * 3), index.getX(triangle * 3 + 1), index.getX(triangle * 3 + 2)],
-            color,
-          });
-        }
-      }
-    }
-    if (painted.length === 0) return null;
-    const positions = new Float32Array(painted.length * 9);
-    const vertexColors = new Float32Array(painted.length * 9);
-    painted.forEach(({ vertices, color }, slot) => {
+      ),
+      triangles: Array.from(
+        { length: index.count / 3 },
+        (_, triangle) =>
+          [index.getX(triangle * 3), index.getX(triangle * 3 + 1), index.getX(triangle * 3 + 2)] as const,
+      ),
+    };
+    const facets = paintOverlayFacets(
+      mesh,
+      channel,
+      assignments.map((assignment) => ({
+        triangles: assignment.triangles,
+        state: { kind: 'assigned', value: assignment.value },
+      })),
+      refinement ? { refinement, topologyRevision, triangleCount: triangleCount ?? mesh.triangles.length } : {},
+    );
+    if (facets.stateIndices.length === 0) return null;
+    const stateColors = facets.states.map(
+      (state) =>
+        new THREE.Color(state.kind === 'assigned' ? (colors.get(String(state.value)) ?? '#ffffff') : '#ffffff'),
+    );
+    const positions = facets.positions;
+    const vertexColors = new Float32Array(positions.length);
+    facets.stateIndices.forEach((state, slot) => {
+      const color = stateColors[state];
       for (let corner = 0; corner < 3; corner += 1) {
-        const vertex = renderVertices![vertices[corner]];
         const offset = slot * 9 + corner * 3;
-        positions[offset] = vertex[0];
-        positions[offset + 1] = vertex[1];
-        positions[offset + 2] = vertex[2];
         vertexColors[offset] = color.r;
         vertexColors[offset + 1] = color.g;
         vertexColors[offset + 2] = color.b;

@@ -5,8 +5,8 @@
 //! and undo label.
 use orcaxr_contracts::{canonical::parse, project_intent_types as wire};
 use orcaxr_project::{
-    assets::*, facets::paint_stroke::PaintStroke, history::*, model::*, selection::*, session::*,
-    validation::*,
+    assets::*, facets::overlay::Overlay, facets::paint_stroke::PaintStroke, history::*, model::*,
+    selection::*, session::*, validation::*,
 };
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -44,6 +44,39 @@ fn run<P: TimestampPolicy>(
         Submission::Queued { .. } => session.run_next().unwrap(),
     };
     serde_json::from_str::<Value>(response.wire()).unwrap()["result"].clone()
+}
+
+fn sha256(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+/// An overlay's summary, whole packet and, past two facets, the window of
+/// facets 1 and 2, as the browser recorded them.
+fn packets(overlay: &Overlay, step: &Value, i: usize) {
+    assert_eq!(
+        wire::encode_paint_overlay_summary(&overlay.summary()).unwrap(),
+        step["summary"].as_str().unwrap(),
+        "step {i} summary"
+    );
+    assert_eq!(
+        sha256(&overlay.packet(0, 16384).unwrap()),
+        step["packet"].as_str().unwrap(),
+        "step {i} packet"
+    );
+    assert_eq!(
+        step.get("window")
+            .map(|_| sha256(&overlay.packet(1, 2).unwrap())),
+        step.get("window").map(|w| w.as_str().unwrap().to_owned()),
+        "step {i} window"
+    );
+    assert_eq!(
+        overlay.facet_count() > 2,
+        step.get("window").is_some(),
+        "step {i}"
+    );
 }
 
 #[test]
@@ -100,9 +133,41 @@ fn paint_strokes_match_the_browser_over_a_live_session() {
     let mut strokes: BTreeMap<String, PaintStroke> = BTreeMap::new();
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for (i, step) in f["steps"].as_array().unwrap().iter().enumerate() {
-        let name = step["stroke"].as_str().unwrap().to_owned();
+        let name = step["stroke"].as_str().unwrap_or_default().to_owned();
         let refusal = step.get("refusal").map(|code| code.as_str().unwrap());
-        let kind = if let Some(open) = step.get("open") {
+        let kind = if step.get("preview").is_some() {
+            let preview = strokes[&name].preview().unwrap();
+            packets(&preview, step, i);
+            "preview"
+        } else if let Some(canonical) = step.get("canonical") {
+            let request = wire::decode_paint_overlay_request(canonical.as_str().unwrap()).unwrap();
+            let overlay = session.paint_overlay(&request);
+            match (refusal, step.get("count")) {
+                (Some(code), Some(count)) => {
+                    assert_eq!(
+                        overlay
+                            .unwrap()
+                            .packet(0, count.as_u64().unwrap())
+                            .map_err(|r| r.code()),
+                        Err(code),
+                        "step {i}"
+                    );
+                    "refused packet"
+                }
+                (Some(code), None) => {
+                    assert_eq!(
+                        overlay.map(|_| ()).map_err(|r| r.code()),
+                        Err(code),
+                        "step {i}"
+                    );
+                    "refused overlay"
+                }
+                (None, _) => {
+                    packets(&overlay.unwrap(), step, i);
+                    "canonical"
+                }
+            }
+        } else if let Some(open) = step.get("open") {
             let request = wire::decode_paint_stroke_open(open.as_str().unwrap()).unwrap();
             let opened = session.paint_stroke(&session.capture_guard().unwrap(), &request);
             match refusal {
@@ -201,7 +266,10 @@ fn paint_strokes_match_the_browser_over_a_live_session() {
                 ("open", 11),
                 ("sample", 18),
                 ("overlay", 5),
-                ("refused overlay", 1),
+                ("refused overlay", 2),
+                ("refused packet", 1),
+                ("preview", 18),
+                ("canonical", 26),
                 ("applied", 8),
                 ("unchanged", 1),
                 ("noop", 1),

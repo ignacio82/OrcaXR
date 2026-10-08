@@ -40,10 +40,11 @@ import {
   type FacetStrokeRequest,
 } from '../annotations/types';
 import type { AssetRepository } from '../assets';
-import type { FacetRefinedRootSet } from '../domain/facetRefinement';
+import { collapseFacetRefinementRoots, type FacetRefinedRootSet } from '../domain/facetRefinement';
 import type { JsonValue, ProjectVolume, Vec3 } from '../domain/model';
 import { decodeIndexedMeshAsset } from '../meshCodec';
 import type { ProjectSnapshot } from '../store';
+import { guardedFacets, PaintOverlayCapture, paintOverlayFacets } from './PaintOverlay';
 import { assertPaintTarget, channelLabel, PaintTargetError, type PaintChannel } from './PaintStrokeService';
 
 /** The most overlay ranges one page holds. */
@@ -228,6 +229,45 @@ export class PaintStrokeExchange {
         .slice(request.start, request.start + request.count)
         .map((range) => ({ start: range.start, endExclusive: range.endExclusive })),
     };
+  }
+
+  /**
+   * The stroke's live preview as the workspace draws it: the refined tree a
+   * sample left, collapsed and materialized, or the touched facets in the
+   * target state, in the order they were first touched.
+   */
+  preview(): PaintOverlayCapture {
+    if (this.refinement) {
+      const collapsed = collapseFacetRefinementRoots(this.refinement.roots);
+      return new PaintOverlayCapture(
+        this.guard,
+        guardedFacets(() =>
+          paintOverlayFacets(
+            this.mesh,
+            this.channel,
+            collapsed.assignments.map((assignment) => ({
+              triangles: assignment.triangles,
+              state: { kind: 'assigned', value: assignment.value },
+            })),
+            collapsed.encoding
+              ? {
+                  refinement: collapsed.encoding,
+                  topologyRevision: this.guard.topologyRevision,
+                  triangleCount: this.guard.triangleCount,
+                }
+              : {},
+          ),
+        ),
+      );
+    }
+    return new PaintOverlayCapture(
+      this.guard,
+      paintOverlayFacets(
+        this.mesh,
+        this.channel,
+        this.triangles.size === 0 ? [] : [{ triangles: [...this.triangles], state: this.target }],
+      ),
+    );
   }
 
   /**

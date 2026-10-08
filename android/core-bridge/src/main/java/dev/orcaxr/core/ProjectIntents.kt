@@ -4821,6 +4821,36 @@ object ProjectIntents {
             w.field("ranges") { writeTriangleRanges(w, v.ranges) }
         }
     }
+    data class PaintOverlayRequest(val volumeId: List<Int>, val channel: FacetChannelName)
+    private fun readPaintOverlayRequest(v: Any): PaintOverlayRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeId", "channel"), false)
+        return PaintOverlayRequest(readId(obj.get("volumeId")), readFacetChannelName(obj.get("channel")))
+    }
+    private fun writePaintOverlayRequest(w: ProjectIntentWriter, v: PaintOverlayRequest) {
+        w.obj {
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("channel") { writeFacetChannelName(w, v.channel) }
+        }
+    }
+    private fun readFacetRegionStates(v: Any): List<FacetRegionState> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readFacetRegionState(array.get(it)) }
+    }
+    private fun writeFacetRegionStates(w: ProjectIntentWriter, v: List<FacetRegionState>) {
+        w.array(v, 0, 4096) { writeFacetRegionState(w, it) }
+    }
+    data class PaintOverlaySummary(val guard: FacetGuard, val facets: Long, val states: List<FacetRegionState>)
+    private fun readPaintOverlaySummary(v: Any): PaintOverlaySummary {
+        val obj = ProjectIntentJson.fields(v, setOf("guard", "facets", "states"), false)
+        return PaintOverlaySummary(readFacetGuard(obj.get("guard")), readCounter(obj.get("facets")), readFacetRegionStates(obj.get("states")))
+    }
+    private fun writePaintOverlaySummary(w: ProjectIntentWriter, v: PaintOverlaySummary) {
+        w.obj {
+            w.field("guard") { writeFacetGuard(w, v.guard) }
+            w.field("facets") { writeCounter(w, v.facets) }
+            w.field("states") { writeFacetRegionStates(w, v.states) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -4951,4 +4981,8 @@ object ProjectIntents {
     fun encodePaintStrokeOverlayRequest(value: PaintStrokeOverlayRequest): String = ProjectIntentWriter().also { writePaintStrokeOverlayRequest(it, value) }.finish()
     fun decodePaintStrokeOverlay(text: String): PaintStrokeOverlay = readPaintStrokeOverlay(ProjectIntentJson.parse(text))
     fun encodePaintStrokeOverlay(value: PaintStrokeOverlay): String = ProjectIntentWriter().also { writePaintStrokeOverlay(it, value) }.finish()
+    fun decodePaintOverlayRequest(text: String): PaintOverlayRequest = readPaintOverlayRequest(ProjectIntentJson.parse(text))
+    fun encodePaintOverlayRequest(value: PaintOverlayRequest): String = ProjectIntentWriter().also { writePaintOverlayRequest(it, value) }.finish()
+    fun decodePaintOverlaySummary(text: String): PaintOverlaySummary = readPaintOverlaySummary(ProjectIntentJson.parse(text))
+    fun encodePaintOverlaySummary(value: PaintOverlaySummary): String = ProjectIntentWriter().also { writePaintOverlaySummary(it, value) }.finish()
 }

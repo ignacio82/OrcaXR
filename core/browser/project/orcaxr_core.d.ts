@@ -371,6 +371,18 @@ export class ProjectOpen {
 }
 
 /**
+ * One paint overlay's facets: a `PaintOverlaySummary`, then packets of
+ * 40-byte facets (nine little-endian float32 corners and a uint32 state).
+ */
+export class ProjectPaintOverlay {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    packet(start: number, count: number): Uint8Array;
+    summary(): string;
+}
+
+/**
  * One paint gesture, opened on a session guard. Samples and overlay pages
  * run here, off the session; the session stages its commit.
  */
@@ -382,6 +394,10 @@ export class ProjectPaintStroke {
      * A `PaintStrokeOverlayRequest`; returns a `PaintStrokeOverlay`.
      */
     overlay(request: string): string;
+    /**
+     * The stroke's live preview as an overlay capture.
+     */
+    preview(): ProjectPaintOverlay;
     /**
      * A `PaintStrokeSample`; returns a `PaintStrokeSampleReply`.
      */
@@ -489,6 +505,11 @@ export class ProjectSession {
     is_disposed(): boolean;
     is_export_current(guard: ProjectGuard): boolean;
     is_open_current(ticket: ProjectOpen): boolean;
+    /**
+     * The canonical paint overlay of one volume's channel: a
+     * `PaintOverlayRequest`. The capture owns its facets and packets.
+     */
+    paint_overlay(request: string): ProjectPaintOverlay;
     /**
      * Open a paint stroke on the state `guard` captured: a `PaintStrokeOpen`.
      * The stroke owns its mesh, so its samples never touch this session.
@@ -653,6 +674,7 @@ export interface InitOutput {
     readonly __wbg_projectimportpreview_free: (a: number, b: number) => void;
     readonly __wbg_projectmodelupload_free: (a: number, b: number) => void;
     readonly __wbg_projectopen_free: (a: number, b: number) => void;
+    readonly __wbg_projectpaintoverlay_free: (a: number, b: number) => void;
     readonly __wbg_projectpaintstroke_free: (a: number, b: number) => void;
     readonly __wbg_projectpreflight_free: (a: number, b: number) => void;
     readonly __wbg_projectquerylist_free: (a: number, b: number) => void;
@@ -761,7 +783,10 @@ export interface InitOutput {
     readonly projectimportpreview_read: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectmodelupload_append: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectmodelupload_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly projectpaintoverlay_packet: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectpaintoverlay_summary: (a: number) => [number, number, number, number];
     readonly projectpaintstroke_overlay: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectpaintstroke_preview: (a: number) => [number, number, number];
     readonly projectpaintstroke_sample: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectpreflight_issue: (a: number, b: number) => [number, number, number, number];
     readonly projectpreflight_omission: (a: number, b: number) => [number, number, number, number];
@@ -804,6 +829,7 @@ export interface InitOutput {
     readonly projectsession_is_disposed: (a: number) => number;
     readonly projectsession_is_export_current: (a: number, b: number) => number;
     readonly projectsession_is_open_current: (a: number, b: number) => number;
+    readonly projectsession_paint_overlay: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_pending_count: (a: number) => number;
     readonly projectsession_release_staged: (a: number, b: number) => [number, number, number];
