@@ -1516,8 +1516,12 @@ painting, and FullSpectrum operations that can support real native projects.
   renderer packets, picking/region selection and device qualification remain open.
   - [x] Port immutable packed mesh validation, deterministic authoring and exact
     transformed bounds; verify the two-million-vertex/triangle ownership probe.
-  - [ ] Bind the geometry operations and finish picking/selection, preparation
-    kernels, renderer packets and device qualification.
+  - [x] Port facet region selection for source facets (`facets::region`):
+    face neighbours, Triangle, Fill with smart-fill angles and clipping, Height
+    Range under transforms and the overhang gate, and Gap Fill, float32-exact
+    against the browser (3,719 cases, 17 refusals).
+  - [ ] Bind the geometry operations and finish picking, brushes and refined
+    selection, preparation kernels, renderer packets and device qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.

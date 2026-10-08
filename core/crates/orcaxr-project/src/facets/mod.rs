@@ -2,6 +2,7 @@
 //! only subdivided source facets; dense roots are an explicitly budgeted,
 //! temporary editing representation. This is computation, not a project codec.
 pub mod palette;
+pub mod region;
 pub mod stroke;
 mod validation;
 pub use validation::{Issue, ValidationOptions, validate_refinement};

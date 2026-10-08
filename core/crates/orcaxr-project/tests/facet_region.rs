@@ -1,0 +1,258 @@
+//! Facet region selection against the browser: face neighbours of every corpus
+//! mesh, then Triangle, Fill, Height Range and Gap Fill selections, refusals
+//! and stale topologies, each equal to `selectFacetRegion`'s result.
+use orcaxr_project::facets::{
+    Channel, PaintValue,
+    region::{
+        self, Assignment, ClippingPlane, GapFillReplacement, Mesh, RegionError, RegionState,
+        Request, Selection, Tool, Transform,
+    },
+};
+use serde_json::Value;
+
+/// Vertices and triangles, as the fixture lists them.
+type CorpusMesh = (Vec<[f64; 3]>, Vec<[f64; 3]>);
+
+fn fixture() -> Value {
+    serde_json::from_str(include_str!(
+        "../../../../testdata/cross-platform/facet-region-vectors.json"
+    ))
+    .unwrap()
+}
+fn number(v: &Value) -> f64 {
+    v.as_f64().unwrap()
+}
+fn vec3(v: &Value) -> [f64; 3] {
+    let a = v.as_array().unwrap();
+    [number(&a[0]), number(&a[1]), number(&a[2])]
+}
+fn paint(v: &Value) -> PaintValue {
+    match v {
+        Value::String(s) => PaintValue::text(s.encode_utf16().collect::<Vec<_>>()),
+        Value::Bool(b) => PaintValue::Bool(*b),
+        other => panic!("unrepresentable paint value {other}"),
+    }
+}
+fn channel(name: &str) -> Channel {
+    Channel::ALL.into_iter().find(|c| c.name() == name).unwrap()
+}
+fn state(v: &Value) -> RegionState {
+    match v["kind"].as_str().unwrap() {
+        "unpainted" => RegionState::Unpainted,
+        _ => RegionState::Assigned(paint(&v["value"])),
+    }
+}
+fn ranges(v: &Value) -> Vec<(u32, u32)> {
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|r| (r[0].as_u64().unwrap() as u32, r[1].as_u64().unwrap() as u32))
+        .collect()
+}
+fn indices(v: &Value) -> Vec<u32> {
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i.as_u64().unwrap() as u32)
+        .collect()
+}
+fn tool(v: &Value) -> Tool {
+    let hit = v.get("hit").map(vec3);
+    match v["kind"].as_str().unwrap() {
+        "triangle" => Tool::Triangle { hit },
+        "fill" => Tool::Fill {
+            hit,
+            edge_detection: match &v["edgeDetection"] {
+                Value::Bool(false) => None,
+                e => Some(number(&e["maxAdjacentAngleDegrees"])),
+            },
+        },
+        "heightRange" => Tool::HeightRange {
+            start_z_mm: number(&v["startZMm"]),
+            height_mm: number(&v["heightMm"]),
+            triangle_splitting: v.get("triangleSplitting").and_then(Value::as_bool),
+        },
+        "gapFill" => Tool::GapFill {
+            max_area_mm2: number(&v["maxAreaMm2"]),
+            state_order: v["stateOrder"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(paint)
+                .collect(),
+        },
+        kind => panic!("unexpected tool {kind}"),
+    }
+}
+
+#[test]
+fn region_selection_matches_the_browser() {
+    let f = fixture();
+    let meshes: Vec<CorpusMesh> = f["meshes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| {
+            (
+                m["vertices"].as_array().unwrap().iter().map(vec3).collect(),
+                m["triangles"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(vec3)
+                    .collect(),
+            )
+        })
+        .collect();
+    let mesh = |i: usize| Mesh {
+        vertices: &meshes[i].0,
+        triangles: &meshes[i].1,
+    };
+
+    for (i, expected) in f["neighbors"].as_array().unwrap().iter().enumerate() {
+        let actual = region::face_neighbors(mesh(i)).unwrap();
+        let expected: Vec<[i64; 3]> = expected
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| {
+                let n = n.as_array().unwrap();
+                [0, 1, 2].map(|k| n[k].as_i64().unwrap())
+            })
+            .collect();
+        assert_eq!(actual, expected, "neighbours of mesh {i}");
+    }
+
+    let (mut selections, mut refusals, mut stale) = (0, 0, 0);
+    for case in f["cases"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let assignments: Vec<Assignment> = case["assignments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| Assignment {
+                value: paint(&a["value"]),
+                triangles: a["triangles"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(number)
+                    .collect(),
+            })
+            .collect();
+        let r = &case["request"];
+        let request = Request {
+            mesh: mesh(case["mesh"].as_u64().unwrap() as usize),
+            channel: channel(case["channel"].as_str().unwrap()),
+            annotations_topology_revision: number(&case["topologyRevision"]),
+            assignments: &assignments,
+            guard_topology_revision: number(&r["guard"]["topologyRevision"]),
+            guard_triangle_count: number(&r["guard"]["triangleCount"]),
+            seed_triangle: number(&r["seedTriangle"]),
+            tool: tool(&r["tool"]),
+            clipping_plane: r.get("clippingPlane").map(|p| ClippingPlane {
+                normal: vec3(&p["normal"]),
+                offset: number(&p["offset"]),
+            }),
+            transform: r.get("transform").map(|t| {
+                let rows = t["linear"].as_array().unwrap();
+                Transform {
+                    linear: [vec3(&rows[0]), vec3(&rows[1]), vec3(&rows[2])],
+                    translation: vec3(&t["translation"]),
+                    scaling_factors: vec3(&t["scalingFactors"]),
+                }
+            }),
+            highlight_by_angle_degrees: r.get("highlightByAngleDegrees").map(number),
+            refined: false,
+        };
+        let actual = region::select(&request);
+        let result = &case["result"];
+        if let Some(issues) = result.get("issues") {
+            let Err(RegionError::Invalid(actual)) = actual else {
+                panic!("{name}: expected refusal, got {actual:?}");
+            };
+            let actual: Vec<(&str, &str, &str)> = actual
+                .iter()
+                .map(|i| (i.code, i.path.as_str(), i.message.as_str()))
+                .collect();
+            let expected: Vec<(&str, &str, &str)> = issues
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|i| {
+                    (
+                        i["code"].as_str().unwrap(),
+                        i["path"].as_str().unwrap(),
+                        i["message"].as_str().unwrap(),
+                    )
+                })
+                .collect();
+            assert_eq!(actual, expected, "{name}");
+            refusals += 1;
+        } else if result.get("stale").is_some() {
+            assert_eq!(actual, Err(RegionError::StaleTopology), "{name}");
+            stale += 1;
+        } else {
+            let expected = Selection {
+                triangle_indices: indices(&result["triangleIndices"]),
+                ranges: ranges(&result["ranges"]),
+                gap_fill_replacements: result.get("gapFillReplacements").map(|list| {
+                    list.as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|r| GapFillReplacement {
+                            area_mm2: number(&r["areaMm2"]),
+                            source: state(&r["source"]),
+                            target: state(&r["target"]),
+                            triangle_indices: indices(&r["triangleIndices"]),
+                            ranges: ranges(&r["ranges"]),
+                        })
+                        .collect()
+                }),
+            };
+            assert_eq!(actual, Ok(expected), "{name}");
+            selections += 1;
+        }
+    }
+    assert_eq!((selections, refusals, stale), (3700, 17, 2));
+}
+
+/// Brushes and refined selection are a later stage; they refuse, not guess.
+#[test]
+fn brushes_and_refinement_are_not_ported_yet() {
+    let vertices = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+    let triangles = [[0.0, 1.0, 2.0]];
+    let base = Request {
+        mesh: Mesh {
+            vertices: &vertices,
+            triangles: &triangles,
+        },
+        channel: Channel::Color,
+        annotations_topology_revision: 0.0,
+        assignments: &[],
+        guard_topology_revision: 0.0,
+        guard_triangle_count: 1.0,
+        seed_triangle: 0.0,
+        tool: Tool::Brush,
+        clipping_plane: None,
+        transform: None,
+        highlight_by_angle_degrees: None,
+        refined: false,
+    };
+    assert_eq!(region::select(&base), Err(RegionError::Unsupported));
+    let refined = Request {
+        tool: Tool::Triangle { hit: None },
+        refined: true,
+        ..base.clone()
+    };
+    assert_eq!(region::select(&refined), Err(RegionError::Unsupported));
+    let split = Request {
+        tool: Tool::HeightRange {
+            start_z_mm: 0.0,
+            height_mm: 1.0,
+            triangle_splitting: Some(true),
+        },
+        ..base
+    };
+    assert_eq!(region::select(&split), Err(RegionError::Unsupported));
+}

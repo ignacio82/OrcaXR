@@ -3182,6 +3182,36 @@ out-of-scope keys with its own errors before submission.
 the synchronous command does, waits for acknowledgement, keeps undo/redo,
 and rejects a competing queued edit instead of rebasing.
 
+### Facet region selection
+
+`facets::region` ports the browser's region selection (`FacetRegionSelection.ts`,
+the pinned Orca `TriangleSelector`) for source facets. Face neighbours follow
+`its_face_neighbors`: topological, opposite-winding pairs, and a non-manifold
+edge pairs the first still-unpaired later face. Triangle selects the seed;
+Fill is the state-aware bucket fill, crossing shared edges only to neighbours
+with the seed's current state, refusing clipped neighbours but never the
+seed, and stopping at the smart-fill angle; Height Range scans every facet in
+transformed Z, optionally gated to overhangs through the double-then-float
+inverse-transpose normal matrix; Gap Fill reports every same-state fragment
+under the area threshold with its remap to the lowest ordered adjacent state.
+
+Upstream computes in Eigen `Vec3f`, and the browser reproduces that in doubles
+with explicit `Math.fround`; the port mirrors it operation by operation, so an
+`f64` always holds a float32 and thresholds land on the same side (the
+browser's double rounding is innocuous for these operations). `Math.cos` is the
+fdlibm port. Requests are validated with the browser's issue codes, paths,
+messages and order, then the mesh, then topology staleness, then the selected
+channel's assignments. Brushes (Circle, Sphere) and refined subdivision are a
+later stage and refuse as unsupported rather than approximate.
+
+`facet-region-vectors.mjs` drives `selectFacetRegion` over a closed cube, an
+icosphere, an open terrain, a patchwork grid and a non-manifold fan with a
+degenerate facet, for all five channels: Triangle and Fill seeds at several
+smart-fill angles, with clipping planes; Height Ranges under four transforms
+and the overhang gate; and Gap Fill thresholds under two state orders — plus
+17 refusals and 2 stale topologies. Rust reproduces all 3,719 cases and every
+mesh's neighbour table exactly. Session bindings are the next stage.
+
 ### Paint palette
 
 `facets::palette` ports `projectPaintPalette`: the filament library as the
