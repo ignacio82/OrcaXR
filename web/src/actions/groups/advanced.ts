@@ -33,8 +33,7 @@ export const advancedActions: Action[] = [
     run: (ctx, invocation) => {
       if (invocation.fullSpectrumAutoPairPreference) {
         const request = invocation.fullSpectrumAutoPairPreference;
-        ctx.configureFullSpectrumAutoPairs(request.enabled, request.confirmedPhysicalCount);
-        return;
+        return ctx.configureFullSpectrumAutoPairs(request.enabled, request.confirmedPhysicalCount);
       }
       if (!invocation.virtualFilamentMutation) {
         ctx.reportCapabilityUnavailable(
@@ -43,7 +42,7 @@ export const advancedActions: Action[] = [
         );
         return;
       }
-      ctx.mutateVirtualFilament(invocation.virtualFilamentMutation);
+      return ctx.mutateVirtualFilament(invocation.virtualFilamentMutation);
     },
   },
   {

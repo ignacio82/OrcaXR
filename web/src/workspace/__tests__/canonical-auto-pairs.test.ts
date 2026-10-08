@@ -129,7 +129,7 @@ await test('adds, removes, and re-adds physical rows with stable surviving IDs a
 
   const historyBeforeNoop = controller.getSummary().history.undoCount;
   const allocationsBeforeNoop = ids.count('mixed-filament');
-  const noChange = controller.reconcileFullSpectrumAutoPairs(currentGuard(controller));
+  const noChange = await controller.reconcileFullSpectrumAutoPairs(currentGuard(controller));
   assert.equal(noChange.status, 'unchanged');
   assert.equal(noChange.changed, false);
   assert.equal(controller.getSummary().history.undoCount, historyBeforeNoop);
@@ -137,8 +137,8 @@ await test('adds, removes, and re-adds physical rows with stable surviving IDs a
 
   const staleGuard = currentGuard(controller);
   configurePhysical(controller, [a, b, c]);
-  assert.throws(
-    () => controller.reconcileFullSpectrumAutoPairs(staleGuard),
+  await assert.rejects(
+    controller.reconcileFullSpectrumAutoPairs(staleGuard),
     StaleFullSpectrumAutoPairReconciliationError,
   );
   const afterAdd = allMixed(controller);
@@ -252,7 +252,7 @@ await test('defaults auto generation off without allocating or rewriting importe
   assert.deepEqual(allMixed(controller), [importedBase, importedCustom]);
   assert.equal(ids.count('mixed-filament'), 0);
   const historyBefore = controller.getSummary().history.undoCount;
-  const result = controller.reconcileFullSpectrumAutoPairs(currentGuard(controller));
+  const result = await controller.reconcileFullSpectrumAutoPairs(currentGuard(controller));
   assert.equal(result.status, 'disabled');
   assert.equal(result.changed, false);
   assert.equal(result.physicalCount, 2);
@@ -265,7 +265,7 @@ await test('defaults auto generation off without allocating or rewriting importe
   controller.dispose();
 });
 
-await test('applies the live preference without rewriting on disable and honors count-bound confirmation', () => {
+await test('applies the live preference without rewriting on disable and honors count-bound confirmation', async () => {
   const three = createController('default-off');
   const physicalThree = [physical('a', '#FF0000', 0), physical('b', '#0000FF', 1), physical('c', '#FFFFFF', 2)];
   configurePhysical(three.controller, physicalThree);
@@ -276,20 +276,20 @@ await test('applies the live preference without rewriting on disable and honors 
     confirmationRequired: false,
   });
   const historyBefore = three.controller.getSummary().history.undoCount;
-  const enabled = three.controller.setFullSpectrumAutoPairGenerationEnabled(true);
+  const enabled = await three.controller.setFullSpectrumAutoPairGenerationEnabled(true);
   assert.equal(enabled.status, 'reconciled');
   assert.equal(enabled.createdRowIds.length, 3);
   assert.equal(three.controller.getFullSpectrumAutoPairPolicySnapshot().enabled, true);
   assert.equal(three.controller.getSummary().history.undoCount, historyBefore + 1);
   const rowsBeforeDisable = canonicalStringify(allMixed(three.controller));
-  const disabled = three.controller.setFullSpectrumAutoPairGenerationEnabled(false);
+  const disabled = await three.controller.setFullSpectrumAutoPairGenerationEnabled(false);
   assert.equal(disabled.status, 'disabled');
   assert.equal(disabled.changed, false);
   assert.equal(three.controller.getFullSpectrumAutoPairPolicySnapshot().enabled, false);
   assert.equal(canonicalStringify(allMixed(three.controller)), rowsBeforeDisable);
   assert.equal(three.controller.getSummary().history.undoCount, historyBefore + 1);
-  assert.throws(
-    () => three.controller.setFullSpectrumAutoPairGenerationEnabled('yes' as unknown as boolean),
+  await assert.rejects(
+    three.controller.setFullSpectrumAutoPairGenerationEnabled('yes' as unknown as boolean),
     /must be boolean/i,
   );
   three.controller.dispose();
@@ -303,20 +303,19 @@ await test('applies the live preference without rewriting on disable and honors 
     physical('h', '#FF00FF', 4),
   ];
   configurePhysical(five.controller, physicalFive);
-  assert.throws(
-    () =>
-      five.controller.setFullSpectrumAutoPairGenerationEnabled(true, {
-        confirmedPhysicalCount: 4,
-      }),
+  await assert.rejects(
+    five.controller.setFullSpectrumAutoPairGenerationEnabled(true, {
+      confirmedPhysicalCount: 4,
+    }),
     FullSpectrumAutoPairConfirmationMismatchError,
   );
   assert.equal(five.controller.getFullSpectrumAutoPairPolicySnapshot().enabled, false);
-  const pending = five.controller.setFullSpectrumAutoPairGenerationEnabled(true);
+  const pending = await five.controller.setFullSpectrumAutoPairGenerationEnabled(true);
   assert.equal(pending.status, 'confirmation-required');
   assert.equal(pending.projectedPairCount, 10);
   assert.equal(five.controller.getFullSpectrumAutoPairPolicySnapshot().confirmationRequired, true);
   assert.equal(five.ids.count('mixed-filament'), 0);
-  const confirmed = five.controller.setFullSpectrumAutoPairGenerationEnabled(true, {
+  const confirmed = await five.controller.setFullSpectrumAutoPairGenerationEnabled(true, {
     confirmedPhysicalCount: 5,
   });
   assert.equal(confirmed.status, 'reconciled');
@@ -325,7 +324,7 @@ await test('applies the live preference without rewriting on disable and honors 
   five.controller.dispose();
 });
 
-await test('requires exact per-count confirmation above four physical filaments before allocating pairs', () => {
+await test('requires exact per-count confirmation above four physical filaments before allocating pairs', async () => {
   const { controller, ids } = createController();
   const physicalFive = [
     physical('a', '#FF0000', 0),
@@ -339,7 +338,7 @@ await test('requires exact per-count confirmation above four physical filaments 
   assert.equal(ids.count('mixed-filament'), 0);
 
   const historyBefore = controller.getSummary().history.undoCount;
-  const required = controller.reconcileFullSpectrumAutoPairs(currentGuard(controller));
+  const required = await controller.reconcileFullSpectrumAutoPairs(currentGuard(controller));
   assert.equal(required.status, 'confirmation-required');
   assert.equal(required.changed, false);
   assert.equal(required.physicalCount, 5);
@@ -347,16 +346,15 @@ await test('requires exact per-count confirmation above four physical filaments 
   assert.equal(controller.getSummary().history.undoCount, historyBefore);
   assert.equal(ids.count('mixed-filament'), 0);
 
-  assert.throws(
-    () =>
-      controller.reconcileFullSpectrumAutoPairs(currentGuard(controller), {
-        confirmedPhysicalCount: 4,
-      }),
+  await assert.rejects(
+    controller.reconcileFullSpectrumAutoPairs(currentGuard(controller), {
+      confirmedPhysicalCount: 4,
+    }),
     FullSpectrumAutoPairConfirmationMismatchError,
   );
   assert.equal(ids.count('mixed-filament'), 0);
 
-  const accepted = controller.reconcileFullSpectrumAutoPairs(currentGuard(controller), {
+  const accepted = await controller.reconcileFullSpectrumAutoPairs(currentGuard(controller), {
     confirmedPhysicalCount: 5,
   });
   assert.equal(accepted.status, 'reconciled');
@@ -366,7 +364,7 @@ await test('requires exact per-count confirmation above four physical filaments 
   assert.equal(ids.count('mixed-filament'), 10);
   assert.equal(controller.getSummary().history.undoCount, historyBefore + 1);
 
-  const unchanged = controller.reconcileFullSpectrumAutoPairs(currentGuard(controller));
+  const unchanged = await controller.reconcileFullSpectrumAutoPairs(currentGuard(controller));
   assert.equal(unchanged.status, 'unchanged');
   assert.equal(ids.count('mixed-filament'), 10);
 
@@ -381,7 +379,7 @@ await test('requires exact per-count confirmation above four physical filaments 
   configurePhysical(controller, [...physicalFive, sixth]);
   assert.equal(allMixed(controller).length, 10);
   assert.equal(ids.count('mixed-filament'), 10);
-  const sixRequired = controller.reconcileFullSpectrumAutoPairs(currentGuard(controller));
+  const sixRequired = await controller.reconcileFullSpectrumAutoPairs(currentGuard(controller));
   assert.equal(sixRequired.status, 'confirmation-required');
   assert.equal(sixRequired.physicalCount, 6);
   assert.equal(sixRequired.projectedPairCount, 15);
@@ -397,7 +395,7 @@ await test('keeps an auto-pair tombstone stable through reconciliation and physi
   const pair = allMixed(controller)[0];
   const beforeDeleteHistory = controller.getSummary().history.undoCount;
 
-  const deletion = controller.deleteVirtualFilament(pair.id, virtualGuard(controller));
+  const deletion = await controller.deleteVirtualFilament(pair.id, virtualGuard(controller));
   assert.equal(deletion.outcome, 'tombstoned');
   assert.equal(controller.getSummary().history.undoCount, beforeDeleteHistory + 1);
   assert.equal(controller.getVirtualFilamentLibrarySnapshot().mixed.length, 0);
@@ -406,7 +404,7 @@ await test('keeps an auto-pair tombstone stable through reconciliation and physi
   assert.equal(allMixed(controller)[0].fullSpectrum?.deleted, true);
 
   const allocationCount = ids.count('mixed-filament');
-  assert.equal(controller.reconcileFullSpectrumAutoPairs(currentGuard(controller)).changed, false);
+  assert.equal((await controller.reconcileFullSpectrumAutoPairs(currentGuard(controller))).changed, false);
   assert.equal(ids.count('mixed-filament'), allocationCount);
 
   configurePhysical(controller, [b, a]);
@@ -439,7 +437,7 @@ await test('editing an auto pair keeps its stable custom-origin row and creates 
   const originalBase = allMixed(controller)[0];
   const historyBeforeEdit = controller.getSummary().history.undoCount;
 
-  controller.editVirtualFilament(
+  await controller.editVirtualFilament(
     originalBase.id,
     {
       mode: 'ratio',
@@ -483,7 +481,7 @@ await test('editing an auto pair keeps its stable custom-origin row and creates 
   );
 
   const historyBeforeDelete = controller.getSummary().history.undoCount;
-  const deletion = controller.deleteVirtualFilament(originalBase.id, virtualGuard(controller));
+  const deletion = await controller.deleteVirtualFilament(originalBase.id, virtualGuard(controller));
   assert.equal(deletion.outcome, 'tombstoned');
   assert.equal(controller.getSummary().history.undoCount, historyBeforeDelete + 1);
   assert.ok(allMixed(controller).every((filament) => filament.fullSpectrum?.deleted));

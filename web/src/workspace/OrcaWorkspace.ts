@@ -1270,8 +1270,8 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** One registry-routed, guarded canonical FullSpectrum lifecycle request. */
-  public mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest): void {
-    const result = this.canonicalProject.mutateVirtualFilament(request);
+  public async mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest): Promise<void> {
+    const result = await this.canonicalProject.mutateVirtualFilament(request);
     this.revalidatePublishedGcode();
     this.onSelectionChanged?.(false);
     this.setStatus(
@@ -1290,11 +1290,11 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Apply the explicit app-level auto-pair preference through canonical reconciliation. */
-  public configureFullSpectrumAutoPairs(
+  public async configureFullSpectrumAutoPairs(
     enabled: boolean,
     confirmation?: CanonicalAutoPairReconciliationConfirmation,
-  ): CanonicalAutoPairReconciliationResult {
-    const result = this.canonicalProject.setFullSpectrumAutoPairGenerationEnabled(enabled, confirmation);
+  ): Promise<CanonicalAutoPairReconciliationResult> {
+    const result = await this.canonicalProject.setFullSpectrumAutoPairGenerationEnabled(enabled, confirmation);
     this.setStatus(
       !enabled
         ? 'Automatic virtual-filament pairs are off; existing recipes were preserved.'

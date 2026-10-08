@@ -171,11 +171,11 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   Independent object copies and plate moves have guarded async controller APIs. Cut
   publishes its synchronous copy before queued deletion; a failed/uncertain
   deletion retains that clipboard and late replies never republish clipboard UI.
-  Clone, add-instance, fill-bed and paste await measured staged work, preserving their
-  history boundaries and captured results across late or lost acknowledgements.
+  Clone/add-instance/fill-bed/paste await measured staged work, keeping history and captures.
   Clipboard captures share asset records; paste restores missing bytes in rollback.
-  Settings/range/role/layer-event/filament/wipe-tower routes submit intents: build commands
-  first (prepare errors become invalidRequest); local apply errors keep their message.
+  Settings/range/role/layer-event/filament/wipe-tower routes submit intents; build commands
+  first (prepare errors become invalidRequest), local apply errors keep their message, and
+  batched auto-pair reconciles guard on a scratch-store prediction of the edited state.
 - Prepared command intents use ASCII JSON with UTF-16 unit arrays for all text.
   The shared schema generates TypeScript, Rust and Kotlin types and converters.
   Reject duplicate/unknown/missing fields, positional objects, unsupported versions

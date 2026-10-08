@@ -247,7 +247,10 @@ import type {
   SerializedProject,
 } from '../project/ports';
 import { Bbs3mfProjectSerializer } from '../project/serialization/Bbs3mfProjectSerializer';
-import type { SelectionRef, SelectionSnapshot } from '../project/selection';
+import { SelectionStore, type SelectionRef, type SelectionSnapshot } from '../project/selection';
+import { ProjectStore } from '../project/store';
+import { mixedComponentWire, mixedDistributionWire, fullSpectrumWire, mixedFilamentWire } from '../project/intentWire';
+import type { ProjectCommand } from '../project/history/command';
 import {
   applyProjectSettingsOverrides,
   projectSettingsOverrideSnapshot,
@@ -1449,10 +1452,10 @@ export class CanonicalWorkspaceController {
    * revision. Missing identities are allocated before one reversible command;
    * stale or already-reconciled calls neither allocate nor add history.
    */
-  reconcileFullSpectrumAutoPairs(
+  async reconcileFullSpectrumAutoPairs(
     guard: CanonicalAutoPairReconciliationGuard,
     confirmation?: CanonicalAutoPairReconciliationConfirmation,
-  ): CanonicalAutoPairReconciliationResult {
+  ): Promise<CanonicalAutoPairReconciliationResult> {
     this.assertActive();
     const before = this.session.project.getSnapshot();
     if (before.revision !== guard.expectedRevision || before.hash !== guard.sourceHash) {
@@ -1489,9 +1492,14 @@ export class CanonicalWorkspaceController {
       before.state.filaments.mixed,
     );
     if (reconciliation.changed) {
-      this.session.execute(new ReconcileFullSpectrumAutoPairsCommand(guard, reconciliation.filaments), {
-        coalesce: false,
-      });
+      new ReconcileFullSpectrumAutoPairsCommand(guard, reconciliation.filaments);
+      await this.executeEditIntent((text) => ({
+        reconcileAutoPairs: {
+          guard: { sourceRevision: guard.expectedRevision, sourceHash: text(guard.sourceHash) },
+          filaments: reconciliation.filaments.map((filament) => mixedFilamentWire(filament, text)),
+          label: { absent: {} },
+        },
+      }));
     }
     const after = this.session.project.getSnapshot();
     return Object.freeze({
@@ -1524,10 +1532,10 @@ export class CanonicalWorkspaceController {
    * Turning the preference off deliberately leaves imported, profile-authored,
    * custom, and generated rows byte-semantically intact.
    */
-  setFullSpectrumAutoPairGenerationEnabled(
+  async setFullSpectrumAutoPairGenerationEnabled(
     enabled: boolean,
     confirmation?: CanonicalAutoPairReconciliationConfirmation,
-  ): CanonicalAutoPairReconciliationResult {
+  ): Promise<CanonicalAutoPairReconciliationResult> {
     this.assertActive();
     if (enabled !== true && enabled !== false) {
       throw new Error('Automatic FullSpectrum pair preference must be boolean');
@@ -1536,7 +1544,7 @@ export class CanonicalWorkspaceController {
     const previous = this.autoPairGenerationEnabled;
     this.autoPairGenerationEnabled = enabled;
     try {
-      return this.reconcileFullSpectrumAutoPairs(
+      return await this.reconcileFullSpectrumAutoPairs(
         { expectedRevision: current.revision, sourceHash: current.hash },
         confirmation,
       );
@@ -1546,28 +1554,29 @@ export class CanonicalWorkspaceController {
     }
   }
 
-  mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest):
+  async mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest): Promise<
     | { readonly operation: 'add' | 'duplicate'; readonly filamentId: MixedFilamentId }
     | { readonly operation: 'edit' | 'set-enabled' }
     | {
         readonly operation: 'delete';
         readonly outcome: 'removed' | 'tombstoned';
         readonly dependencyPaths: readonly string[];
-      } {
+      }
+  > {
     const guard = { expectedRevision: request.expectedRevision, sourceHash: request.sourceHash };
     switch (request.operation) {
       case 'add':
         return {
           operation: 'add',
-          filamentId: this.addVirtualFilament(request.draft, guard, request.requestedId),
+          filamentId: await this.addVirtualFilament(request.draft, guard, request.requestedId),
         };
       case 'edit':
-        this.editVirtualFilament(request.filamentId, request.draft, guard);
+        await this.editVirtualFilament(request.filamentId, request.draft, guard);
         return { operation: 'edit' };
       case 'duplicate':
         return {
           operation: 'duplicate',
-          filamentId: this.duplicateVirtualFilament(
+          filamentId: await this.duplicateVirtualFilament(
             request.sourceFilamentId,
             request.draft,
             guard,
@@ -1575,97 +1584,119 @@ export class CanonicalWorkspaceController {
           ),
         };
       case 'set-enabled':
-        this.setVirtualFilamentEnabled(request.filamentId, request.enabled, guard);
+        await this.setVirtualFilamentEnabled(request.filamentId, request.enabled, guard);
         return { operation: 'set-enabled' };
       case 'delete':
-        return { operation: 'delete', ...this.deleteVirtualFilament(request.filamentId, guard) };
+        return { operation: 'delete', ...(await this.deleteVirtualFilament(request.filamentId, guard)) };
     }
   }
 
-  addVirtualFilament(
+  async addVirtualFilament(
     draft: FullSpectrumRecipeDraft,
     guard: CanonicalVirtualFilamentMutationGuard,
     requestedId?: MixedFilamentId,
-  ): MixedFilamentId {
+  ): Promise<MixedFilamentId> {
     const state = this.assertVirtualFilamentMutationGuard(guard);
     const id = requestedId ?? this.options.idSource.next('mixed-filament');
     const filament = createFullSpectrumMixedFilament(id, state.filaments.physical, draft);
-    this.session.execute(new AddMixedFilamentCommand(filament));
+    await this.submitAddMixedFilament(filament);
     return id;
   }
 
-  editVirtualFilament(
+  async editVirtualFilament(
     filamentId: MixedFilamentId,
     draft: FullSpectrumRecipeDraft,
     guard: CanonicalVirtualFilamentMutationGuard,
-  ): void {
+  ): Promise<void> {
     const state = this.assertVirtualFilamentMutationGuard(guard);
     const current = state.filaments.mixed.find((filament) => filament.id === filamentId);
     if (!current) throw new Error(`Unknown mixed filament ${filamentId}`);
     const replacement = replaceFullSpectrumMixedFilament(current, state.filaments.physical, draft);
-    this.session.transaction('Edit mixed filament', () => {
-      this.session.execute(
-        new EditMixedFilamentCommand(filamentId, {
-          name: replacement.name,
-          displayColor: replacement.displayColor,
-          components: replacement.components,
-          distribution: replacement.distribution,
-          fullSpectrum: replacement.fullSpectrum,
-        }),
-      );
-      this.reconcileCurrentAutoPairs();
+    const edit = new EditMixedFilamentCommand(filamentId, {
+      name: replacement.name,
+      displayColor: replacement.displayColor,
+      components: replacement.components,
+      distribution: replacement.distribution,
+      fullSpectrum: replacement.fullSpectrum,
     });
+    await this.executeEditTransaction('Edit mixed filament', [edit], (text) => [
+      {
+        editMixedFilament: {
+          mixedFilamentId: text(filamentId),
+          name: { value: text(replacement.name) },
+          displayColor: { value: text(replacement.displayColor) },
+          components: { value: replacement.components.map((component) => mixedComponentWire(component, text)) },
+          distribution: { value: mixedDistributionWire(replacement.distribution, text) },
+          fullSpectrum: replacement.fullSpectrum
+            ? { value: fullSpectrumWire(replacement.fullSpectrum, text) }
+            : { absent: {} },
+          configJson: { absent: {} },
+        },
+      },
+    ]);
   }
 
-  duplicateVirtualFilament(
+  async duplicateVirtualFilament(
     sourceFilamentId: MixedFilamentId,
     draft: FullSpectrumRecipeDraft,
     guard: CanonicalVirtualFilamentMutationGuard,
     requestedDuplicateId?: MixedFilamentId,
-  ): MixedFilamentId {
+  ): Promise<MixedFilamentId> {
     const state = this.assertVirtualFilamentMutationGuard(guard);
     if (!state.filaments.mixed.some((filament) => filament.id === sourceFilamentId)) {
       throw new Error(`Unknown mixed filament ${sourceFilamentId}`);
     }
     const duplicateId = requestedDuplicateId ?? this.options.idSource.next('mixed-filament');
     const duplicate = createFullSpectrumMixedFilament(duplicateId, state.filaments.physical, draft);
-    this.session.execute(new AddMixedFilamentCommand(duplicate));
+    await this.submitAddMixedFilament(duplicate);
     return duplicateId;
   }
 
-  setVirtualFilamentEnabled(
+  private async submitAddMixedFilament(filament: MixedFilament): Promise<void> {
+    new AddMixedFilamentCommand(filament);
+    await this.executeEditIntent((text) => ({ addMixedFilament: { filament: mixedFilamentWire(filament, text) } }));
+  }
+
+  async setVirtualFilamentEnabled(
     filamentId: MixedFilamentId,
     enabled: boolean,
     guard: CanonicalVirtualFilamentMutationGuard,
-  ): void {
+  ): Promise<void> {
     const state = this.assertVirtualFilamentMutationGuard(guard);
     if (!state.filaments.mixed.some((filament) => filament.id === filamentId)) {
       throw new Error(`Unknown mixed filament ${filamentId}`);
     }
-    this.session.execute(new SetMixedFilamentEnabledCommand(filamentId, enabled, 'virtual-filament-library'));
+    new SetMixedFilamentEnabledCommand(filamentId, enabled, 'virtual-filament-library');
+    await this.executeEditIntent((text) => ({
+      setMixedFilamentEnabled: {
+        mixedFilamentId: text(filamentId),
+        enabled,
+        reason: { value: text('virtual-filament-library') },
+      },
+    }));
   }
 
-  deleteVirtualFilament(
+  async deleteVirtualFilament(
     filamentId: MixedFilamentId,
     guard: CanonicalVirtualFilamentMutationGuard,
-  ): { readonly outcome: 'removed' | 'tombstoned'; readonly dependencyPaths: readonly string[] } {
+  ): Promise<{ readonly outcome: 'removed' | 'tombstoned'; readonly dependencyPaths: readonly string[] }> {
     const state = this.assertVirtualFilamentMutationGuard(guard);
     const filament = state.filaments.mixed.find((candidate) => candidate.id === filamentId);
     if (!filament) throw new Error(`Unknown mixed filament ${filamentId}`);
     const dependencyPaths = findFilamentDependentPaths(state, filamentId);
     if (dependencyPaths.length > 0 || filament.fullSpectrum?.originAuto) {
-      this.session.transaction('Delete mixed filament', () => {
-        this.session.execute(
-          new TombstoneMixedFilamentCommand(
-            filamentId,
-            dependencyPaths.length > 0 ? 'delete-with-canonical-dependencies' : 'delete-auto-pair',
-          ),
-        );
-        if (filament.fullSpectrum?.originAuto) this.reconcileCurrentAutoPairs();
-      });
+      const reason = dependencyPaths.length > 0 ? 'delete-with-canonical-dependencies' : 'delete-auto-pair';
+      const tombstone = new TombstoneMixedFilamentCommand(filamentId, reason);
+      await this.executeEditTransaction(
+        'Delete mixed filament',
+        [tombstone],
+        (text) => [{ tombstoneMixedFilament: { mixedFilamentId: text(filamentId), reason: { value: text(reason) } } }],
+        filament.fullSpectrum?.originAuto === true,
+      );
       return { outcome: 'tombstoned', dependencyPaths: Object.freeze(dependencyPaths) };
     }
-    this.session.execute(new RemoveMixedFilamentCommand(filamentId));
+    new RemoveMixedFilamentCommand(filamentId);
+    await this.executeEditIntent((text) => ({ removeMixedFilament: { mixedFilamentId: text(filamentId) } }));
     return { outcome: 'removed', dependencyPaths: Object.freeze([]) };
   }
 
@@ -4595,23 +4626,48 @@ export class CanonicalWorkspaceController {
     this.session.dispose();
   }
 
-  private reconcileCurrentAutoPairs(): FullSpectrumAutoPairReconciliation | undefined {
-    const current = this.session.project.getSnapshot();
-    if (!this.autoPairGenerationAllowed(current.state.filaments.physical.length)) return undefined;
-    const reconciliation = this.reconcileAutoPairFilaments(
-      current.state.filaments.physical,
-      current.state.filaments.mixed,
-    );
-    if (reconciliation.changed) {
-      this.session.execute(
-        new ReconcileFullSpectrumAutoPairsCommand(
-          { expectedRevision: current.revision, sourceHash: current.hash },
-          reconciliation.filaments,
-        ),
-        { coalesce: false },
-      );
+  /**
+   * `commands` as one guarded transaction, followed when `reconcile` holds by
+   * the automatic-pair reconciliation of the state they leave. That state is
+   * computed on a scratch store first, so the reconciliation carries the
+   * revision and fingerprint it will meet inside the transaction, exactly as
+   * the synchronous route reconciled the committed state.
+   */
+  private async executeEditTransaction(
+    label: string,
+    commands: readonly ProjectCommand[],
+    wire: (text: (value: string) => number[]) => ProjectCommandWire[],
+    reconcile = true,
+  ): Promise<void> {
+    const guard = this.asyncSession.captureGuard();
+    const text = createIntentTextEncoder();
+    const wired = wire(text);
+    if (reconcile) {
+      const before = this.session.project.getSnapshot();
+      const scratch = new ProjectStore(before.state);
+      const context = { project: scratch, selection: new SelectionStore(), assets: this.assets };
+      for (const command of commands) command.apply(context);
+      const after = scratch.getSnapshot();
+      if (this.autoPairGenerationAllowed(after.state.filaments.physical.length)) {
+        const reconciliation = this.reconcileAutoPairFilaments(
+          after.state.filaments.physical,
+          after.state.filaments.mixed,
+        );
+        if (reconciliation.changed) {
+          wired.push({
+            reconcileAutoPairs: {
+              guard: { sourceRevision: before.revision + after.revision, sourceHash: text(after.hash) },
+              filaments: reconciliation.filaments.map((filament) => mixedFilamentWire(filament, text)),
+              label: { absent: {} },
+            },
+          });
+        }
+      }
     }
-    return reconciliation;
+    await this.sessionTransport.transactionIntents(
+      { version: PROJECT_INTENT_VERSION, label: text(label), commands: wired },
+      { guard },
+    );
   }
 
   private reconcileAutoPairFilaments(

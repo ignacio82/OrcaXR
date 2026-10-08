@@ -181,11 +181,11 @@ export class ActionContext {
   viewPrinterCamera(uid?: string): Promise<void> {
     return this.workspace.viewPrinterCamera(uid);
   }
-  mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest): void {
-    this.workspace.mutateVirtualFilament(request);
+  async mutateVirtualFilament(request: CanonicalVirtualFilamentMutationRequest): Promise<void> {
+    await this.workspace.mutateVirtualFilament(request);
   }
-  configureFullSpectrumAutoPairs(enabled: boolean, confirmedPhysicalCount?: number): void {
-    this.workspace.configureFullSpectrumAutoPairs(
+  async configureFullSpectrumAutoPairs(enabled: boolean, confirmedPhysicalCount?: number): Promise<void> {
+    await this.workspace.configureFullSpectrumAutoPairs(
       enabled,
       confirmedPhysicalCount === undefined ? undefined : { confirmedPhysicalCount },
     );

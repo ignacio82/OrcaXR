@@ -98,7 +98,7 @@ await test('adds an exact guarded Ratio row, freezes its projection, and writes 
   );
 
   const id = entityId<'mixed-filament'>('import:virtual-controller-test:ratio');
-  controller.addVirtualFilament(
+  await controller.addVirtualFilament(
     {
       mode: 'ratio',
       name: 'Purple ratio',
@@ -130,10 +130,10 @@ await test('adds an exact guarded Ratio row, freezes its projection, and writes 
   controller.dispose();
 });
 
-await test('rejects stale and incompatible requests without changing canonical state or history', () => {
+await test('rejects stale and incompatible requests without changing canonical state or history', async () => {
   const controller = createController();
   const initial = controller.getVirtualFilamentLibrarySnapshot();
-  controller.addVirtualFilament(
+  await controller.addVirtualFilament(
     {
       mode: 'ratio',
       name: 'Initial',
@@ -144,36 +144,34 @@ await test('rejects stale and incompatible requests without changing canonical s
     { expectedRevision: initial.sourceRevision, sourceHash: initial.sourceHash },
   );
   const beforeStale = controller.getSummary();
-  assert.throws(
-    () =>
-      controller.addVirtualFilament(
-        {
-          mode: 'ratio',
-          name: 'Stale',
-          displayColor: '#123456',
-          componentFilamentIds: [initial.physical[0].id, initial.physical[1].id],
-          mixBPercent: 50,
-        },
-        { expectedRevision: initial.sourceRevision, sourceHash: initial.sourceHash },
-      ),
+  await assert.rejects(
+    controller.addVirtualFilament(
+      {
+        mode: 'ratio',
+        name: 'Stale',
+        displayColor: '#123456',
+        componentFilamentIds: [initial.physical[0].id, initial.physical[1].id],
+        mixBPercent: 50,
+      },
+      { expectedRevision: initial.sourceRevision, sourceHash: initial.sourceHash },
+    ),
     StaleCanonicalVirtualFilamentMutationError,
   );
   assert.deepEqual(controller.getSummary(), beforeStale);
 
   const current = controller.getVirtualFilamentLibrarySnapshot();
   const beforeIncompatible = controller.getSummary();
-  assert.throws(
-    () =>
-      controller.addVirtualFilament(
-        {
-          mode: 'ratio',
-          name: 'PLA plus unsupported material',
-          displayColor: '#123456',
-          componentFilamentIds: [current.physical[0].id, current.physical[2].id],
-          mixBPercent: 50,
-        },
-        { expectedRevision: current.sourceRevision, sourceHash: current.sourceHash },
-      ),
+  await assert.rejects(
+    controller.addVirtualFilament(
+      {
+        mode: 'ratio',
+        name: 'PLA plus unsupported material',
+        displayColor: '#123456',
+        componentFilamentIds: [current.physical[0].id, current.physical[2].id],
+        mixBPercent: 50,
+      },
+      { expectedRevision: current.sourceRevision, sourceHash: current.sourceHash },
+    ),
     /cannot be mixed|compatibility/i,
   );
   assert.deepEqual(controller.getSummary(), beforeIncompatible);
@@ -184,7 +182,7 @@ await test('edits, duplicates, toggles, tombstones referenced rows, removes unre
   const controller = createController();
   let snapshot = controller.getVirtualFilamentLibrarySnapshot();
   const ratioId = entityId<'mixed-filament'>('import:virtual-controller-test:lifecycle-ratio');
-  controller.addVirtualFilament(
+  await controller.addVirtualFilament(
     {
       mode: 'ratio',
       name: 'Lifecycle ratio',
@@ -197,7 +195,7 @@ await test('edits, duplicates, toggles, tombstones referenced rows, removes unre
   );
 
   snapshot = controller.getVirtualFilamentLibrarySnapshot();
-  controller.editVirtualFilament(
+  await controller.editVirtualFilament(
     ratioId,
     {
       mode: 'cycle',
@@ -225,7 +223,7 @@ await test('edits, duplicates, toggles, tombstones referenced rows, removes unre
 
   snapshot = controller.getVirtualFilamentLibrarySnapshot();
   const duplicateId = entityId<'mixed-filament'>('import:virtual-controller-test:lifecycle-copy');
-  controller.duplicateVirtualFilament(
+  await controller.duplicateVirtualFilament(
     ratioId,
     {
       mode: 'gradient',
@@ -240,13 +238,13 @@ await test('edits, duplicates, toggles, tombstones referenced rows, removes unre
   );
   assert.equal(controller.getVirtualFilamentLibrarySnapshot().mixed.length, 5);
 
-  controller.setVirtualFilamentEnabled(duplicateId, false, guard(controller));
+  await controller.setVirtualFilamentEnabled(duplicateId, false, guard(controller));
   assert.equal(
     controller.getVirtualFilamentLibrarySnapshot().mixed.find((row) => row.filament.id === duplicateId)?.filament
       .enabled,
     false,
   );
-  controller.setVirtualFilamentEnabled(duplicateId, true, guard(controller));
+  await controller.setVirtualFilamentEnabled(duplicateId, true, guard(controller));
 
   const model = controller.importBufferGeometry(new THREE.BoxGeometry(10, 10, 10), { name: 'Mixed assignment' });
   const assignmentSnapshot = controller.getFilamentAssignmentSnapshot([{ kind: 'object', id: model.objectId }]);
@@ -257,7 +255,7 @@ await test('edits, duplicates, toggles, tombstones referenced rows, removes unre
   const beforeTombstone = controller
     .getSlicingConfiguration()
     .filaments.mixed.find((filament) => filament.id === ratioId);
-  const deletion = controller.deleteVirtualFilament(ratioId, guard(controller));
+  const deletion = await controller.deleteVirtualFilament(ratioId, guard(controller));
   assert.equal(deletion.outcome, 'tombstoned');
   assert.match(deletion.dependencyPaths.join('\n'), /filamentId/);
   assert.equal(
@@ -273,7 +271,7 @@ await test('edits, duplicates, toggles, tombstones referenced rows, removes unre
     beforeTombstone,
   );
 
-  const removed = controller.deleteVirtualFilament(duplicateId, guard(controller));
+  const removed = await controller.deleteVirtualFilament(duplicateId, guard(controller));
   assert.equal(removed.outcome, 'removed');
   assert.equal(
     controller.getSlicingConfiguration().filaments.mixed.some((filament) => filament.id === duplicateId),
