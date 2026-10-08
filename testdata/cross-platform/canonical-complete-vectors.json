@@ -2,13 +2,13 @@
   "version": 1,
   "sources": {
     "tools/cross-platform/canonical-complete-vectors.mjs": "c095ab1fb186aa57eaa8b3f75e29cde1caa9635ad0e3d9a956b83f5848b6a390",
-    "testdata/cross-platform/canonical-archive-vectors.json": "b93a1113d711b478c8e6898f228050b8b1a14853d4f190c04ce5e139726efaa2",
+    "testdata/cross-platform/canonical-archive-vectors.json": "b9a4b447781b076bd773929ea8fe1b8c00640d825aa5080d017fc5be912e301b",
     "testdata/cross-platform/bbs-metadata-vectors.json": "83c62340c29c223c24a8f1fd6170bdd8b8cc1381591c4cf179a682240a133a40",
     "testdata/cross-platform/bbs-settings-vectors.json": "037804c7b4d99a8775f541a2e004b79a02a2089719e74e13ec81f4790e6fe7f8",
     "web/src/project/serialization/Bbs3mfProjectSerializer.ts": "43d0d198e852d74ca82f30c56b667048620a77c1c0f27becb104c343268665c1",
     "web/src/project/serialization/bbsCore.ts": "c51122f801dcb71fa079c033d9400293774420ef6e24592f54c0931228a115dd",
     "web/src/project/serialization/opcPackage.ts": "7f39787564713dff268e9ff78b5ce2c0726cfb990500866dc7328ef6b7e15677",
-    "web/src/project/serialization/CanonicalEnvelope.ts": "6a8c492078077888e7a67554bbab63b5d3701f71512a034cd20c546925081c90",
+    "web/src/project/serialization/CanonicalEnvelope.ts": "8b0faf1d438e1b460dbdb56c783658ff737d2a1ab425e512113813048a217ee4",
     "web/src/project/domain/canonical.ts": "af4d5f18228dcc903a54d9fa56f187bf7f928a0ad69becfc305248c181218922",
     "web/src/project/assets.ts": "a3fa56557a1447e70cf2121828915360b7d93a2a575433a9d15889561beacbdc"
   },

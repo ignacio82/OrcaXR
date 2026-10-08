@@ -179,7 +179,7 @@ impl<R: Read + Seek> CanonicalArchiveSource<R> {
         {
             return Err(Failure::Envelope.into());
         }
-        let mut state = fields.remove(k!("state")).ok_or(Failure::Envelope)?;
+        let state = fields.remove(k!("state")).ok_or(Failure::Envelope)?;
         if !matches!(state, Value::Object(_)) {
             return Err(Failure::Envelope.into());
         }
@@ -188,22 +188,7 @@ impl<R: Read + Seek> CanonicalArchiveSource<R> {
         };
         // Unknown envelope fields were inspected, but are not part of schema-1 state.
         drop(fields);
-        let dense_channels = legacy::dense(&mut state, &mut cancelled)?;
-        let old_false = legacy::coerce_false(&mut state, &mut cancelled)?;
-        let state = ProjectState::from_value(state)
-            .map_err(|e| Error::Document(DocumentError::Shape(e)))?;
-        let mut project = admit(state, timestamps)?;
-        check_cancel(&mut cancelled)?;
-        if !old_false.is_empty() {
-            let mut candidate = project.to_candidate();
-            drop(project);
-            legacy::remove_false(&mut candidate, &old_false, &mut cancelled)?;
-            project = admit(candidate, timestamps)?;
-        }
-        let migrations = MigrationCounts {
-            dense_channels,
-            false_fuzzy_assignments: old_false.len(),
-        };
+        let (project, migrations) = admit_state(state, timestamps, &mut cancelled)?;
         let mut bundle = ProjectBundleInput::from_admitted(project, limits)
             .map_err(|_| Error::Document(DocumentError::AssetBudget))?;
         let members = archive
@@ -342,6 +327,34 @@ impl<R: Read + Seek> CanonicalArchiveSource<R> {
     ) -> crate::Result<EntryReceipt> {
         self.archive.read_entry(index, out, cancelled)
     }
+}
+/// `admitCanonicalState`: one envelope's schema-1 state migrated (dense
+/// refinement roots, legacy false fuzzy-skin assignments), decoded to its
+/// record shapes and admitted, exactly as an Open stages it.
+pub fn admit_state<P: TimestampPolicy>(
+    mut state: Value,
+    timestamps: &mut P,
+    mut cancelled: impl FnMut() -> bool,
+) -> Result<(ValidatedProject, MigrationCounts), Error<P::Error>> {
+    let dense_channels = legacy::dense(&mut state, &mut cancelled)?;
+    let old_false = legacy::coerce_false(&mut state, &mut cancelled)?;
+    let state =
+        ProjectState::from_value(state).map_err(|e| Error::Document(DocumentError::Shape(e)))?;
+    let mut project = admit(state, timestamps)?;
+    check_cancel(&mut cancelled)?;
+    if !old_false.is_empty() {
+        let mut candidate = project.to_candidate();
+        drop(project);
+        legacy::remove_false(&mut candidate, &old_false, &mut cancelled)?;
+        project = admit(candidate, timestamps)?;
+    }
+    Ok((
+        project,
+        MigrationCounts {
+            dense_channels,
+            false_fuzzy_assignments: old_false.len(),
+        },
+    ))
 }
 fn admit<P: TimestampPolicy>(
     state: ProjectState,

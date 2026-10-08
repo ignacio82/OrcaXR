@@ -1938,7 +1938,15 @@ browser's preservation fallback; shared SVG path/collision checks still run firs
 The differential corpus exposed incomplete persisted SVG recipes accepted by the
 browser when regeneration was postponed. A regression failed before correction;
 browser envelope admission now checks the existing required field shapes, matching
-native schema decoding while preserving valid recipes and unknown fields.
+native schema decoding while preserving valid recipes and unknown fields. That
+check generalized: `assertProjectShape` walks every schema-1 record from a table
+`generate-project-shape.mjs` reads out of the core's `record!`, `text_enum!`,
+`number_enum!`, `bool_literal!` and `entity_kinds!` declarations, with the
+special decoders (sparse assignments, mixed distributions, finite JSON) mirrored
+by hand. It runs where native decodes: after the dense-refinement migration, on
+the state with legacy false fuzzy-skin values read as painted.
+`canonical-shape-vectors` holds every schema position deleted, nulled or
+retyped, and `canonical::admit_state` meets the browser on all of them.
 
 Unowned members follow exact UTF-16 path ordering, compressed-archive/path FNV IDs,
 global collision suffixes, shared media inference, byte digests and provenance.

@@ -1,7 +1,7 @@
 import { cloneJson } from '../domain/canonical';
 import type { AssetId } from '../domain/ids';
-import { isStableEntityId } from '../domain/ids';
 import type { ProjectState } from '../domain/model';
+import { assertProjectShape } from '../domain/projectShape';
 import { assertValidProjectState } from '../domain/validation';
 import { migrateDenseFacetRefinements } from '../migration/denseFacetRefinement';
 
@@ -22,8 +22,20 @@ export function readCanonicalEnvelope(extensionBytes: Uint8Array): CanonicalExte
   migrations: { denseChannels: number; falseFuzzyAssignments: number };
 } {
   const envelope = parseEnvelope(extensionBytes);
-  const state = cloneJson(envelope.state);
-  assertSvgRecipeShapes(state);
+  return { ...envelope, ...admitCanonicalState(envelope.state) };
+}
+
+/**
+ * One envelope's schema-1 state migrated (dense refinement roots, legacy false
+ * fuzzy-skin assignments), checked and admitted, exactly as an Open stages it.
+ * The native core admits the same states (`canonical::admit_state`).
+ */
+export function admitCanonicalState(source: ProjectState): {
+  state: ProjectState;
+  warnings: string[];
+  migrations: { denseChannels: number; falseFuzzyAssignments: number };
+} {
+  const state = cloneJson(source);
   const warnings: string[] = [];
   // Written by a build that stored one refinement root per source triangle.
   const denseRefinementChannels = migrateDenseFacetRefinements(state);
@@ -35,9 +47,13 @@ export function readCanonicalEnvelope(extensionBytes: Uint8Array): CanonicalExte
     );
   }
   const legacyFalseFuzzyAssignments = countLegacyFalseFuzzyAssignments(state);
-  if (legacyFalseFuzzyAssignments > 0) {
+  // Schema-1 structure is checked as the native core decodes it: after the
+  // dense migration, with legacy false fuzzy-skin values read as painted.
+  if (legacyFalseFuzzyAssignments === 0) assertProjectShape(state);
+  else {
     const validationState = cloneJson(state);
     coerceLegacyFalseFuzzyAssignments(validationState);
+    assertProjectShape(validationState);
     assertValidProjectState(validationState);
     removeLegacyFalseFuzzyAssignments(state);
     warnings.push(
@@ -48,7 +64,6 @@ export function readCanonicalEnvelope(extensionBytes: Uint8Array): CanonicalExte
   }
   assertValidProjectState(state);
   return {
-    ...envelope,
     state,
     warnings,
     migrations: {
@@ -94,38 +109,6 @@ function parseEnvelope(bytes: Uint8Array): CanonicalExtensionEnvelope {
     state: parsed.state as unknown as ProjectState,
     assetEntries,
   };
-}
-
-// These persisted fields are required by schema 1 even when unresolved plate
-// coordinates or a missing drawing postpone standard BBS regeneration. Otherwise
-// malformed recipes can enter the editor and fail only on a later export/edit.
-function assertSvgRecipeShapes(state: ProjectState): void {
-  const plates = (state as unknown as Record<string, unknown>).plates;
-  if (!Array.isArray(plates)) return;
-  plates.forEach((plate, pi) => {
-    if (!isRecord(plate) || !Array.isArray(plate.objects)) return;
-    plate.objects.forEach((object, oi) => {
-      if (!isRecord(object) || !Array.isArray(object.volumes)) return;
-      object.volumes.forEach((volume, vi) => {
-        if (!isRecord(volume) || !Object.hasOwn(volume, 'embossSvg')) return;
-        const svg = volume.embossSvg;
-        if (
-          !isRecord(svg) ||
-          typeof svg.pathIn3mf !== 'string' ||
-          typeof svg.drawingAssetId !== 'string' ||
-          !isStableEntityId(svg.drawingAssetId) ||
-          typeof svg.depthMm !== 'number' ||
-          !Number.isFinite(svg.depthMm) ||
-          typeof svg.widthMm !== 'number' ||
-          !Number.isFinite(svg.widthMm) ||
-          typeof svg.useSurface !== 'boolean' ||
-          (Object.hasOwn(svg, 'sourcePath') && typeof svg.sourcePath !== 'string')
-        ) {
-          throw new Error(`Invalid SVG emboss recipe at plates[${pi}].objects[${oi}].volumes[${vi}]`);
-        }
-      });
-    });
-  });
 }
 
 function countLegacyFalseFuzzyAssignments(state: ProjectState): number {

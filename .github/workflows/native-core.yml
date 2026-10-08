@@ -115,6 +115,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-archive.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-model-import.mjs
           node tools/cross-platform/generate-project-staging.mjs
+          node tools/cross-platform/generate-project-shape.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-staging.mjs
           node tools/cross-platform/generate-setting-scopes.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/generate-engine-options.mjs
@@ -178,6 +179,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/foreign-bbs-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/foreign-import-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/hostile-archive-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-shape-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/model-import-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/model-stage-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/model-transaction-vectors.mjs

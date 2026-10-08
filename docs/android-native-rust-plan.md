@@ -1682,9 +1682,9 @@ painting, and FullSpectrum operations that can support real native projects.
   service, with the same input identity and cancellation checks as slicing.
   Serialize incompatible kernel/slice jobs and bound their shared resource use;
   do not load a second unbudgeted engine into the editor process.
-- [ ] Run hostile-file and fuzz corpora against both native and WASM archive
+- [x] Run hostile-file and fuzz corpora against both native and WASM archive
   paths. Keep import failures transactional and diagnostics bounded.
-  `hostile-archive-vectors` holds 467 cases: seeded byte edits of three
+  `hostile-archive-vectors` holds 469 cases: seeded byte edits of three
   canonical and three foreign packages (stored as edits to a base), content
   edits re-zipped with valid CRCs, and hand-built hostile packages (deep,
   truncated and entity-laden XML, a megabyte attribute, invalid UTF-8,
@@ -1696,7 +1696,15 @@ painting, and FullSpectrum operations that can support real native projects.
   next Save regenerates; the browser refuses them while rebuilding the
   member, and native foreign Open now writes those members too. It also
   found the browser admitting canonical envelopes that lack required fields
-  (an asset's `mediaType`, a plate's `printable`), which stays open.
+  (an asset's `mediaType`, a plate's `printable`; both now in the corpus).
+  The browser now checks schema-1 shapes before admission
+  (`assertProjectShape`), from a table `generate-project-shape.mjs` writes
+  out of the core's own `record!`/`text_enum!`/`number_enum!` declarations.
+  `canonical-shape-vectors` then deletes, nulls or retypes every schema
+  position of the model-vector states (6,861 mutations of 988 positions,
+  plus a legacy state whose dense-refinement and false-fuzzy migrations
+  meet each malformed annotation); `canonical::admit_state` matches the
+  browser's acceptance, admitted state and warnings on every one.
 - [ ] Enable complete Rust-backed browser sessions only after all current project
   operations, save/recovery, and old-file compatibility pass their gates.
 

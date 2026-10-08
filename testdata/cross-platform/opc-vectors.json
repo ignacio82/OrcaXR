@@ -27,7 +27,7 @@
     },
     {
       "path": "web/src/project/serialization/CanonicalEnvelope.ts",
-      "sha256": "6a8c492078077888e7a67554bbab63b5d3701f71512a034cd20c546925081c90"
+      "sha256": "8b0faf1d438e1b460dbdb56c783658ff737d2a1ab425e512113813048a217ee4"
     },
     {
       "path": "web/src/project/serialization/deterministicZip.ts",

@@ -1777,7 +1777,7 @@ await test('canonical import refuses incomplete or mistyped persisted SVG recipe
   for (const key of ['drawingAssetId', 'pathIn3mf', 'depthMm', 'useSurface', 'widthMm']) {
     const missing: Record<string, unknown> = { ...recipe };
     delete missing[key];
-    await assert.rejects(open(missing), /Invalid SVG emboss recipe/);
+    await assert.rejects(open(missing), /Invalid project state at plates\[0\]\.objects\[0\]\.volumes\[0\]\.embossSvg/);
   }
   for (const invalid of [
     null,
@@ -1789,7 +1789,7 @@ await test('canonical import refuses incomplete or mistyped persisted SVG recipe
     { ...recipe, useSurface: 0 },
     { ...recipe, sourcePath: null },
   ])
-    await assert.rejects(open(invalid), /Invalid SVG emboss recipe/);
+    await assert.rejects(open(invalid), /Invalid project state at plates\[0\]\.objects\[0\]\.volumes\[0\]\.embossSvg/);
 });
 
 /** A standard BBS package: the same archive without OrcaXR's envelope or assets. */

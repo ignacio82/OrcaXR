@@ -540,7 +540,7 @@ try {
   );
   assert.deepEqual(
     [result.hostile.hostileArchives, result.hostile.hostileAccepted, result.hostile.hostileRefused, result.hostile.hostileUntouched],
-    [467, 55, 412, 412],
+    [469, 55, 414, 414],
   );
   assert.deepEqual([result.models.cases, result.models.committed], [21, 15]);
   assert.deepEqual(

@@ -275,7 +275,7 @@ fn hostile_archives_match_production_browser_open() {
         "{} failures:\n{shown:#?}",
         failures.len()
     );
-    assert_eq!((accepted, refused), (55, 412));
+    assert_eq!((accepted, refused), (55, 414));
 }
 
 #[test]

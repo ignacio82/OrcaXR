@@ -184,6 +184,18 @@ if (rangeFiles.has(rangesPath)) {
     new Map([...rangeFiles, [rangesPath, utf8(ranges.replace('opt_key="layer_height"', 'opt_key="lay\u001cr_height"'))]]),
   );
 }
+// Also found by a widened search: canonical envelopes whose state lacks a
+// field schema 1 requires. The native core's decode refused them while the
+// browser admitted them; both now check the same generated record shapes.
+const canonicalFiles = readSafeZip(bases[0].bytes);
+const envelope = JSON.parse(new TextDecoder().decode(canonicalFiles.get(ORCAXR_EXTENSION_PATH)));
+const withoutField = (edit) => {
+  const next = structuredClone(envelope);
+  edit(next.state);
+  return zip(new Map([...canonicalFiles, [ORCAXR_EXTENSION_PATH, utf8(JSON.stringify(next))]]));
+};
+hostile["canonical-asset-without-media-type"] = withoutField((state) => delete state.sourceAssets[0].mediaType);
+hostile["canonical-plate-without-printable"] = withoutField((state) => delete state.plates[0].printable);
 for (const [name, bytes] of Object.entries(hostile)) {
   cases.push({ name: `hostile/${name}`, archiveBase64: base64(bytes), expected: await expectation(bytes) });
 }
@@ -192,6 +204,8 @@ const sources = [
   "tools/cross-platform/hostile-archive-vectors.mjs",
   "tools/cross-platform/archive-wasm-replay.mjs",
   "web/src/project/serialization/Bbs3mfProjectSerializer.ts",
+  "web/src/project/serialization/CanonicalEnvelope.ts",
+  "web/src/project/domain/projectShape.ts",
   "web/src/project/serialization/deterministicZip.ts",
   "testdata/cross-platform/canonical-complete-vectors.json",
   "testdata/cross-platform/foreign-import-vectors.json",

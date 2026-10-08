@@ -61,7 +61,7 @@ if (isMainThread) {
     // no refusal reaches an edited live session.
     assert.deepEqual(
       [result.hostile.hostileArchives, result.hostile.hostileAccepted, result.hostile.hostileRefused, result.hostile.hostileUntouched],
-      [467, 55, 412, 412],
+      [469, 55, 414, 414],
     );
     assert.deepEqual(
       [result.catalogReplies, result.catalogRefusals],

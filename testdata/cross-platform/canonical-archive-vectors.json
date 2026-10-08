@@ -30,6 +30,10 @@
       "sha256": "1ea97f8215d31b3c80fa713df24201acebab6d0480d7695976e4c5e83ff5d98e"
     },
     {
+      "path": "web/src/project/domain/projectShape.ts",
+      "sha256": "0acd76f8c78b4f81d94c7eb355a38cc02bebcfd75a0b9598bbb6a87813ffe097"
+    },
+    {
       "path": "web/src/project/domain/selectors.ts",
       "sha256": "b91b551fd5509bd7c858d0b654d73d8b21cd4ec719be84fae8b4bf034e925341"
     },
@@ -67,7 +71,7 @@
     },
     {
       "path": "web/src/project/serialization/CanonicalEnvelope.ts",
-      "sha256": "6a8c492078077888e7a67554bbab63b5d3701f71512a034cd20c546925081c90"
+      "sha256": "8b0faf1d438e1b460dbdb56c783658ff737d2a1ab425e512113813048a217ee4"
     },
     {
       "path": "web/src/project/serialization/ProjectSerializerProtocol.ts",

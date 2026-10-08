@@ -239,7 +239,7 @@ try {
   );
   assert.deepEqual(
     [hostile.hostileArchives, hostile.hostileAccepted, hostile.hostileRefused, hostile.hostileUntouched],
-    [467, 55, 412, 412],
+    [469, 55, 414, 414],
   );
   // The browser's model import transactions through the real JNI exports.
   const json = async (path) => JSON.parse(await readFile(new URL(path, root)));
