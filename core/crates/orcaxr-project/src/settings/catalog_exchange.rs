@@ -12,7 +12,7 @@ use crate::{
     ingress::json::{JsonInput, JsonInputError, JsonLimits},
     slicing::{preflight, profile::Target, report},
 };
-use orcaxr_contracts::project_intent_types as wire;
+use orcaxr_contracts::{canonical::Value, project_intent_types as wire};
 use std::fmt;
 
 /// A bounded catalog upload; nothing is built until every byte arrived.
@@ -49,18 +49,12 @@ impl CatalogUpload {
         self,
         collation: &mut C,
     ) -> Result<HostCatalog, LoadError<C::Error>> {
-        let value = self.input.finish().map_err(LoadError::Json)?;
-        Ok(match ProfileCatalog::build(&value, collation) {
-            Ok(catalog) => HostCatalog {
-                diagnostics: catalog.diagnostics().to_vec(),
-                catalog: Some(catalog),
-            },
-            Err(CatalogError::Invalid(diagnostics)) => HostCatalog {
-                catalog: None,
-                diagnostics,
-            },
-            Err(CatalogError::Collation(e)) => return Err(LoadError::Collation(e)),
-        })
+        let value = self.finish().map_err(LoadError::Json)?;
+        HostCatalog::from_value(&value, collation)
+    }
+    /// The parsed catalog document, for a preset library to compose.
+    pub fn finish(self) -> Result<Value, JsonInputError> {
+        self.input.finish()
     }
 }
 
@@ -107,6 +101,23 @@ fn ids(units: &[u16]) -> String {
 }
 
 impl HostCatalog {
+    /// Build a parsed catalog, such as a preset library's composition.
+    pub fn from_value<C: Collation>(
+        value: &Value,
+        collation: &mut C,
+    ) -> Result<Self, LoadError<C::Error>> {
+        Ok(match ProfileCatalog::build(value, collation) {
+            Ok(catalog) => Self {
+                diagnostics: catalog.diagnostics().to_vec(),
+                catalog: Some(catalog),
+            },
+            Err(CatalogError::Invalid(diagnostics)) => Self {
+                catalog: None,
+                diagnostics,
+            },
+            Err(CatalogError::Collation(e)) => return Err(LoadError::Collation(e)),
+        })
+    }
     pub fn catalog(&self) -> Option<&ProfileCatalog> {
         self.catalog.as_ref()
     }

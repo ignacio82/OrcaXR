@@ -20,7 +20,7 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     fn compare(this: &PresetCollator, left: &[u16], right: &[u16]) -> Result<f64, JsValue>;
 }
-struct HostCollation<'a>(&'a PresetCollator);
+pub(crate) struct HostCollation<'a>(pub(crate) &'a PresetCollator);
 impl Collation for HostCollation<'_> {
     type Error = JsValue;
     fn compare(&mut self, left: &[u16], right: &[u16]) -> Result<Ordering, JsValue> {
@@ -35,7 +35,7 @@ impl Collation for HostCollation<'_> {
         })
     }
 }
-fn json_error(e: JsonInputError) -> JsValue {
+pub(crate) fn json_error(e: JsonInputError) -> JsValue {
     error(match e {
         JsonInputError::InvalidLimits => "invalid_limits",
         JsonInputError::Limit => "input_limit",
@@ -68,25 +68,10 @@ impl ProfileCatalogUpload {
     /// `limits`: maximum bytes, nodes, text units, number bytes and depth.
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: f64, limits: &[f64]) -> Result<ProfileCatalogUpload, JsValue> {
-        let [
-            max_bytes,
-            max_nodes,
-            max_text_units,
-            max_number_bytes,
-            max_depth,
-        ] = limits
-        else {
-            return Err(error("invalid_limits"));
-        };
-        let limits = JsonLimits {
-            max_bytes: index(*max_bytes)?,
-            max_nodes: index(*max_nodes)?,
-            max_text_units: index(*max_text_units)?,
-            max_number_bytes: index(*max_number_bytes)?,
-            max_depth: index(*max_depth)?,
-        };
         Ok(Self {
-            inner: Some(CatalogUpload::new(index(bytes)?, limits).map_err(json_error)?),
+            inner: Some(
+                CatalogUpload::new(index(bytes)?, self::limits(limits)?).map_err(json_error)?,
+            ),
         })
     }
     pub fn append(&mut self, offset: f64, bytes: &[u8]) -> Result<(), JsValue> {
@@ -96,7 +81,7 @@ impl ProfileCatalogUpload {
     /// Build the catalog. Without a collator the core's exact ASCII root
     /// collation orders presets and refuses any other text.
     pub fn build(&mut self, collator: Option<PresetCollator>) -> Result<ProfileCatalog, JsValue> {
-        let upload = self.inner.take().ok_or_else(|| error("consumed"))?;
+        let upload = self.take()?;
         let inner = match &collator {
             Some(host) => upload
                 .build(&mut HostCollation(host))
@@ -114,10 +99,37 @@ impl ProfileCatalogUpload {
     }
 }
 
+impl ProfileCatalogUpload {
+    /// The complete upload, once; a consumed upload refuses.
+    pub(crate) fn take(&mut self) -> Result<CatalogUpload, JsValue> {
+        self.inner.take().ok_or_else(|| error("consumed"))
+    }
+}
+/// JSON budgets: maximum bytes, nodes, text units, number bytes and depth.
+pub(crate) fn limits(limits: &[f64]) -> Result<JsonLimits, JsValue> {
+    let [
+        max_bytes,
+        max_nodes,
+        max_text_units,
+        max_number_bytes,
+        max_depth,
+    ] = limits
+    else {
+        return Err(error("invalid_limits"));
+    };
+    Ok(JsonLimits {
+        max_bytes: index(*max_bytes)?,
+        max_nodes: index(*max_nodes)?,
+        max_text_units: index(*max_text_units)?,
+        max_number_bytes: index(*max_number_bytes)?,
+        max_depth: index(*max_depth)?,
+    })
+}
+
 /// A loaded catalog: compiled, or refused with its diagnostics.
 #[wasm_bindgen]
 pub struct ProfileCatalog {
-    inner: HostCatalog,
+    pub(crate) inner: HostCatalog,
 }
 #[wasm_bindgen]
 impl ProfileCatalog {

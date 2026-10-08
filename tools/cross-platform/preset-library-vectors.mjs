@@ -9,6 +9,22 @@ import {
   fnv1a64Text,
 } from "../../web/src/project/domain/canonical.ts";
 import { PINNED_PRESET_SEMANTICS } from "../../web/src/settings/presets/PresetGraph.ts";
+import { ProfileCatalog } from "../../web/src/slicer/ProfileLoader.ts";
+import {
+  encodeProjectLibraryBaseRequest,
+  encodeProjectLibraryBases,
+  encodeProjectLibraryCoerceRequest,
+  encodeProjectLibraryCoercedValue,
+  encodeProjectLibraryCustomPreset,
+  encodeProjectLibraryFormatRequest,
+  encodeProjectLibraryFormattedValue,
+  encodeProjectLibraryInventory,
+  encodeProjectLibraryIssue,
+  encodeProjectLibraryOperation,
+  encodeProjectLibraryOutcome,
+  encodeProjectLibraryUpdatePlan,
+  encodeProjectLibraryView,
+} from "../../contracts/generated/project-intents.ts";
 import {
   PresetLibrary,
   PresetLibraryStore,
@@ -251,52 +267,202 @@ const graphDigest = (graph) =>
       .join("\n"),
   );
 
-/** One step against a live library; returns what it observed. */
-function step(state, op) {
-  const library = state.library;
-  const observed = {};
+// The host exchange, encoded by the generated TypeScript codecs: what a
+// binding returns for each step.
+const units = (value) =>
+  Array.from({ length: value.length }, (_, i) => value.charCodeAt(i));
+const camel = (value) => value.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+const optionalText = (value) =>
+  value === undefined ? { absent: {} } : { value: units(value) };
+const optional = (value, map = (v) => v) =>
+  value === undefined ? { absent: {} } : { value: map(value) };
+const wireIssues = (issues) =>
+  issues.map((i) =>
+    encodeProjectLibraryIssue({
+      code: camel(i.code),
+      error: i.severity === "error",
+      path: units(i.path),
+      message: units(i.message),
+    }),
+  );
+const wireOutcome = (result) => ({
+  outcomeJson: encodeProjectLibraryOutcome({
+    ok: result.ok,
+    issueCount: result.issues.length,
+  }),
+  issueJsons: wireIssues(result.issues),
+});
+const wireLineage = (l) => ({
+  vendor: units(l.vendor),
+  kind: l.kind,
+  name: units(l.name),
+});
+const wireDraft = (d, partial) => ({
+  vendor: optionalText(d.vendor),
+  kind: partial ? optional(d.kind) : d.kind,
+  name: partial ? optionalText(d.name) : units(d.name),
+  inherits: partial ? optionalText(d.inherits) : units(d.inherits),
+  overridesJson: optional(d.overrides, (o) => units(canonicalStringify(o))),
+  license: optionalText(d.license),
+  version: optionalText(d.version),
+  note: optionalText(d.note),
+  source: optional(d.source, camel),
+});
+const wireSelection = (s) => ({
+  vendor: units(s.vendor),
+  model: units(s.model),
+  variants: s.variants.map(units),
+});
+function wireOperation(op, now) {
   switch (op.op) {
     case "install":
-      observed.resultJson = resultJson(
-        library.installPrinter(op.vendor, op.model, op.variants),
-      );
+      return { install: wireSelection(op) };
+    case "setInstalled":
+      return { setInstalled: { selections: op.selections.map(wireSelection) } };
+    case "uninstall":
+      return {
+        uninstall: { vendor: units(op.vendor), model: units(op.model) },
+      };
+    case "create":
+      return { create: { draft: wireDraft(op.draft, false), now: units(now) } };
+    case "update":
+      return {
+        update: {
+          vendor: units(op.vendor),
+          kind: op.presetKind,
+          name: units(op.name),
+          draft: wireDraft(op.draft, true),
+          now: units(now),
+        },
+      };
+    case "delete":
+      return {
+        delete: {
+          vendor: units(op.vendor),
+          kind: op.presetKind,
+          name: units(op.name),
+        },
+      };
+  }
+  return undefined;
+}
+function wireView(library) {
+  let presetCount = 0;
+  try {
+    ProfileCatalog.fromRaw(library.composeCatalog());
+    presetCount = library.graph().list().length;
+  } catch {
+    // A refused composed catalog serves no presets.
+  }
+  return {
+    viewJson: encodeProjectLibraryView({
+      configured: library.isConfigured(),
+      fingerprint: units(library.catalogFingerprint),
+      vendors: library.installedVendors().map(units),
+      customCount: library.state.customPresets.length,
+    }),
+    customJsons: library.state.customPresets.map((p) =>
+      encodeProjectLibraryCustomPreset({
+        vendor: units(p.vendor),
+        kind: p.kind,
+        name: units(p.name),
+        inherits: units(p.inherits),
+        overridesJson: units(canonicalStringify(p.overrides)),
+        provenance: {
+          source: camel(p.provenance.source),
+          license: units(p.provenance.license),
+          version: units(p.provenance.version),
+          derivedFrom: wireLineage(p.provenance.derivedFrom),
+          createdAt: units(p.provenance.createdAt),
+          updatedAt: units(p.provenance.updatedAt),
+          note: optionalText(p.provenance.note),
+        },
+      }),
+    ),
+    presetCount,
+  };
+}
+const wireInventory = (inventory) =>
+  encodeProjectLibraryInventory({
+    vendors: inventory.vendors.map(units),
+    models: inventory.models.map((m) => ({
+      vendor: units(m.vendor),
+      model: units(m.model),
+      installed: m.installed,
+      variants: m.variants.map((v) => ({
+        variant: units(v.variant),
+        presetName: units(v.presetName),
+        presetId: units(v.presetId),
+        nozzleDiameter: optional(v.nozzleDiameter),
+        installed: v.installed,
+      })),
+    })),
+  });
+const wirePlan = (plan) => ({
+  planJson: encodeProjectLibraryUpdatePlan({
+    previousFingerprint: units(plan.previousFingerprint),
+    nextFingerprint: units(plan.nextFingerprint),
+    changed: plan.changed,
+    addedModels: plan.addedModels.map(wireLineage),
+    removedModels: plan.removedModels.map(wireLineage),
+    removedVariants: plan.removedVariants.map(wireLineage),
+    orphanedCustomPresets: plan.orphanedCustomPresets.map(wireLineage),
+    issueCount: plan.issues.length,
+    applicable: plan.applicable,
+  }),
+  issueJsons: wireIssues(plan.issues),
+});
+
+/** One step against a live library; returns what it observed. */
+function step(state, op, now) {
+  const library = state.library;
+  const observed = {};
+  const wire = {};
+  const operation = wireOperation(op, now);
+  if (operation) wire.operationJson = encodeProjectLibraryOperation(operation);
+  const outcome = (result) => {
+    observed.resultJson = resultJson(result);
+    Object.assign(wire, wireOutcome(result));
+  };
+  switch (op.op) {
+    case "install":
+      outcome(library.installPrinter(op.vendor, op.model, op.variants));
       break;
     case "setInstalled":
-      observed.resultJson = resultJson(library.setInstalled(op.selections));
+      outcome(library.setInstalled(op.selections));
       break;
     case "uninstall":
-      observed.resultJson = resultJson(
-        library.uninstallPrinter(op.vendor, op.model),
-      );
+      outcome(library.uninstallPrinter(op.vendor, op.model));
       break;
     case "create":
-      observed.resultJson = resultJson(library.createCustomPreset(op.draft));
+      outcome(library.createCustomPreset(op.draft));
       break;
     case "update":
-      observed.resultJson = resultJson(
+      outcome(
         library.updateCustomPreset(op.vendor, op.presetKind, op.name, op.draft),
       );
       break;
     case "delete":
-      observed.resultJson = resultJson(
-        library.deleteCustomPreset(op.vendor, op.presetKind, op.name),
-      );
+      outcome(library.deleteCustomPreset(op.vendor, op.presetKind, op.name));
       break;
     case "import":
-      observed.resultJson = resultJson(library.importBundle(op.bundle));
+      outcome(library.importBundle(op.bundle));
       break;
     case "export":
+      // Without a stamp the export reads the clock.
+      wire.exportedAt = op.exportedAt ?? now;
       observed.bundle = library.exportBundle(op.exportedAt);
       state.exported.push(observed.bundle);
       break;
-    case "plan":
-      observed.planJson = planJson(
-        library.planCatalogUpdate(catalogs[op.catalog]),
-      );
+    case "plan": {
+      const plan = library.planCatalogUpdate(catalogs[op.catalog]);
+      observed.planJson = planJson(plan);
+      Object.assign(wire, wirePlan(plan));
       break;
+    }
     case "apply": {
       const applied = library.applyCatalogUpdate(catalogs[op.catalog]);
-      observed.resultJson = resultJson(applied);
+      outcome(applied);
       if (applied.library) state.library = applied.library;
       observed.fingerprint = state.library.catalogFingerprint;
       break;
@@ -308,10 +474,21 @@ function step(state, op) {
           ...(op.processId === undefined ? {} : { processId: op.processId }),
         })
         .map((n) => n.id);
+      wire.requestJson = encodeProjectLibraryBaseRequest({
+        kind: op.kind,
+        printerId: optionalText(op.printerId),
+        processId: optionalText(op.processId),
+      });
+      wire.basesJson = encodeProjectLibraryBases({
+        ids: observed.ids.map(units),
+      });
       break;
-    case "inventory":
-      observed.inventoryJson = inventoryJson(library.inventory());
+    case "inventory": {
+      const inventory = library.inventory();
+      observed.inventoryJson = inventoryJson(inventory);
+      wire.inventoryJson = wireInventory(inventory);
       break;
+    }
     case "views":
       observed.configured = library.isConfigured();
       observed.vendors = [...library.installedVendors()];
@@ -325,11 +502,13 @@ function step(state, op) {
         stableStringify(library.composeCatalog()),
       );
       observed.graphDigest = graphDigest(library.graph());
+      Object.assign(wire, wireView(library));
       break;
     default:
       throw Error(`unknown op ${op.op}`);
   }
   observed.stateJson = stableStringify(state.library.state);
+  observed.wire = wire;
   return observed;
 }
 
@@ -366,7 +545,9 @@ function scenario(name, catalog, start, ops) {
         ? { ...op, bundle: op.bundle(state.exported) }
         : op,
     );
-    steps.push({ opJson: json(resolved), ...step(state, resolved) });
+    // What the clock would read: the stamp a binding request carries.
+    const now = clockValues[clock.reads];
+    steps.push({ opJson: json(resolved), ...step(state, resolved, now) });
   }
   for (const s of steps) ascii(JSON.stringify(s));
   return {
@@ -379,6 +560,7 @@ function scenario(name, catalog, start, ops) {
     fingerprint: created.library.catalogFingerprint,
     steps,
     clockReads: clock.reads,
+    wire: { createIssueJsons: wireIssues(created.issues) },
   };
 }
 
@@ -1077,6 +1259,8 @@ const sources = [
   "web/src/settings/presets/PresetLibrary.ts",
   "web/src/settings/presets/PresetGraph.ts",
   "web/src/project/domain/canonical.ts",
+  "web/src/slicer/ProfileLoader.ts",
+  "contracts/project-intents.json",
   catalogPath,
 ];
 const output =
@@ -1098,6 +1282,25 @@ const output =
       formatCases,
       stableCases,
       digestCases,
+      wire: {
+        coerceCases: coerceCases.map((c) => ({
+          requestJson: encodeProjectLibraryCoerceRequest({
+            inheritedJson: optional(c.inheritedJson, units),
+            text: units(c.text),
+          }),
+          replyJson: encodeProjectLibraryCoercedValue({
+            json: units(c.resultJson),
+          }),
+        })),
+        formatCases: formatCases.map((c) => ({
+          requestJson: encodeProjectLibraryFormatRequest({
+            valueJson: optional(c.valueJson, units),
+          }),
+          replyJson: encodeProjectLibraryFormattedValue({
+            text: units(c.text),
+          }),
+        })),
+      },
     },
     null,
     2,

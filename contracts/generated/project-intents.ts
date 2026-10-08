@@ -1772,6 +1772,294 @@ const shapes = {
       "headFilamentIds": "OptionalTexts",
       "toolCount": "Finite"
     }
+  },
+  "LibraryIssueCode": {
+    "kind": "enum",
+    "values": [
+      "invalidState",
+      "invalidBundle",
+      "unsupportedSchema",
+      "engineMismatch",
+      "unknownPrinterModel",
+      "unknownPrinterVariant",
+      "unknownBasePreset",
+      "baseNotInstantiable",
+      "duplicatePresetName",
+      "reservedKey",
+      "unknownPresetKey",
+      "invalidValue",
+      "invalidProvenance",
+      "invalidName",
+      "unknownPreset",
+      "dependentPreset",
+      "graphRejected",
+      "nothingInstalled"
+    ]
+  },
+  "LibraryIssue": {
+    "kind": "object",
+    "fields": {
+      "code": "LibraryIssueCode",
+      "error": "Flag",
+      "path": "EditText",
+      "message": "EditText"
+    }
+  },
+  "LibraryOutcome": {
+    "kind": "object",
+    "fields": {
+      "ok": "Flag",
+      "issueCount": "Counter"
+    }
+  },
+  "LibraryProvenanceSource": {
+    "kind": "enum",
+    "values": [
+      "userDerived",
+      "imported"
+    ]
+  },
+  "OptionalProvenanceSource": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "LibraryProvenanceSource"
+    }
+  },
+  "OptionalPresetKind": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "CatalogPresetKind"
+    }
+  },
+  "LibraryDraft": {
+    "kind": "object",
+    "fields": {
+      "vendor": "OptionalText",
+      "kind": "CatalogPresetKind",
+      "name": "EditText",
+      "inherits": "EditText",
+      "overridesJson": "OptionalJsonText",
+      "license": "OptionalText",
+      "version": "OptionalText",
+      "note": "OptionalText",
+      "source": "OptionalProvenanceSource"
+    }
+  },
+  "LibraryDraftUpdate": {
+    "kind": "object",
+    "fields": {
+      "vendor": "OptionalText",
+      "kind": "OptionalPresetKind",
+      "name": "OptionalText",
+      "inherits": "OptionalText",
+      "overridesJson": "OptionalJsonText",
+      "license": "OptionalText",
+      "version": "OptionalText",
+      "note": "OptionalText",
+      "source": "OptionalProvenanceSource"
+    }
+  },
+  "LibrarySelection": {
+    "kind": "object",
+    "fields": {
+      "vendor": "EditText",
+      "model": "EditText",
+      "variants": "TextList"
+    }
+  },
+  "LibrarySelections": {
+    "kind": "array",
+    "items": "LibrarySelection",
+    "min": 0,
+    "max": 4096
+  },
+  "LibrarySetInstalled": {
+    "kind": "object",
+    "fields": {
+      "selections": "LibrarySelections"
+    }
+  },
+  "LibraryModelRef": {
+    "kind": "object",
+    "fields": {
+      "vendor": "EditText",
+      "model": "EditText"
+    }
+  },
+  "LibraryCreate": {
+    "kind": "object",
+    "fields": {
+      "draft": "LibraryDraft",
+      "now": "EditText"
+    }
+  },
+  "LibraryUpdate": {
+    "kind": "object",
+    "fields": {
+      "vendor": "EditText",
+      "kind": "CatalogPresetKind",
+      "name": "EditText",
+      "draft": "LibraryDraftUpdate",
+      "now": "EditText"
+    }
+  },
+  "LibraryPresetRef": {
+    "kind": "object",
+    "fields": {
+      "vendor": "EditText",
+      "kind": "CatalogPresetKind",
+      "name": "EditText"
+    }
+  },
+  "LibraryOperation": {
+    "kind": "union",
+    "variants": {
+      "install": "LibrarySelection",
+      "setInstalled": "LibrarySetInstalled",
+      "uninstall": "LibraryModelRef",
+      "create": "LibraryCreate",
+      "update": "LibraryUpdate",
+      "delete": "LibraryPresetRef"
+    }
+  },
+  "LibraryVariant": {
+    "kind": "object",
+    "fields": {
+      "variant": "EditText",
+      "presetName": "EditText",
+      "presetId": "EditText",
+      "nozzleDiameter": "OptionalFinite",
+      "installed": "Flag"
+    }
+  },
+  "LibraryVariants": {
+    "kind": "array",
+    "items": "LibraryVariant",
+    "min": 0,
+    "max": 4096
+  },
+  "LibraryModel": {
+    "kind": "object",
+    "fields": {
+      "vendor": "EditText",
+      "model": "EditText",
+      "installed": "Flag",
+      "variants": "LibraryVariants"
+    }
+  },
+  "LibraryModels": {
+    "kind": "array",
+    "items": "LibraryModel",
+    "min": 0,
+    "max": 4096
+  },
+  "LibraryInventory": {
+    "kind": "object",
+    "fields": {
+      "vendors": "TextList",
+      "models": "LibraryModels"
+    }
+  },
+  "LibraryView": {
+    "kind": "object",
+    "fields": {
+      "configured": "Flag",
+      "fingerprint": "EditText",
+      "vendors": "TextList",
+      "customCount": "Counter"
+    }
+  },
+  "LibraryLineage": {
+    "kind": "object",
+    "fields": {
+      "vendor": "EditText",
+      "kind": "CatalogPresetKind",
+      "name": "EditText"
+    }
+  },
+  "LibraryLineages": {
+    "kind": "array",
+    "items": "LibraryLineage",
+    "min": 0,
+    "max": 4096
+  },
+  "LibraryProvenance": {
+    "kind": "object",
+    "fields": {
+      "source": "LibraryProvenanceSource",
+      "license": "EditText",
+      "version": "EditText",
+      "derivedFrom": "LibraryLineage",
+      "createdAt": "EditText",
+      "updatedAt": "EditText",
+      "note": "OptionalText"
+    }
+  },
+  "LibraryCustomPreset": {
+    "kind": "object",
+    "fields": {
+      "vendor": "EditText",
+      "kind": "CatalogPresetKind",
+      "name": "EditText",
+      "inherits": "EditText",
+      "overridesJson": "JsonText",
+      "provenance": "LibraryProvenance"
+    }
+  },
+  "LibraryBaseRequest": {
+    "kind": "object",
+    "fields": {
+      "kind": "CatalogPresetKind",
+      "printerId": "OptionalText",
+      "processId": "OptionalText"
+    }
+  },
+  "LibraryBases": {
+    "kind": "object",
+    "fields": {
+      "ids": "TextList"
+    }
+  },
+  "LibraryUpdatePlan": {
+    "kind": "object",
+    "fields": {
+      "previousFingerprint": "EditText",
+      "nextFingerprint": "EditText",
+      "changed": "Flag",
+      "addedModels": "LibraryLineages",
+      "removedModels": "LibraryLineages",
+      "removedVariants": "LibraryLineages",
+      "orphanedCustomPresets": "LibraryLineages",
+      "issueCount": "Counter",
+      "applicable": "Flag"
+    }
+  },
+  "LibraryCoerceRequest": {
+    "kind": "object",
+    "fields": {
+      "inheritedJson": "OptionalJsonText",
+      "text": "EditText"
+    }
+  },
+  "LibraryCoercedValue": {
+    "kind": "object",
+    "fields": {
+      "json": "JsonText"
+    }
+  },
+  "LibraryFormatRequest": {
+    "kind": "object",
+    "fields": {
+      "valueJson": "OptionalJsonText"
+    }
+  },
+  "LibraryFormattedValue": {
+    "kind": "object",
+    "fields": {
+      "text": "EditText"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -1992,6 +2280,39 @@ export type ProjectCatalogSelectionDiagnosticsWire = readonly ProjectCatalogSele
 export interface ProjectResolvedCatalogSelectionWire {readonly printer: ProjectEditTextWire;readonly process: ProjectOptionalTextWire;readonly filaments: ProjectOptionalTextsWire;readonly substitutions: ProjectCatalogSubstitutionsWire;readonly diagnostics: ProjectCatalogSelectionDiagnosticsWire;readonly complete: ProjectFlagWire;}
 export type ProjectCatalogSelectionWire = {readonly unavailable:ProjectEditTextWire} | {readonly resolved:ProjectResolvedCatalogSelectionWire};
 export interface ProjectCatalogTargetRequestWire {readonly machinePresetId: ProjectEditTextWire;readonly processPresetId: ProjectEditTextWire;readonly filamentPresetId: ProjectEditTextWire;readonly headFilamentIds: ProjectOptionalTextsWire;readonly toolCount: ProjectFiniteWire;}
+export type ProjectLibraryIssueCodeWire = "invalidState" | "invalidBundle" | "unsupportedSchema" | "engineMismatch" | "unknownPrinterModel" | "unknownPrinterVariant" | "unknownBasePreset" | "baseNotInstantiable" | "duplicatePresetName" | "reservedKey" | "unknownPresetKey" | "invalidValue" | "invalidProvenance" | "invalidName" | "unknownPreset" | "dependentPreset" | "graphRejected" | "nothingInstalled";
+export interface ProjectLibraryIssueWire {readonly code: ProjectLibraryIssueCodeWire;readonly error: ProjectFlagWire;readonly path: ProjectEditTextWire;readonly message: ProjectEditTextWire;}
+export interface ProjectLibraryOutcomeWire {readonly ok: ProjectFlagWire;readonly issueCount: ProjectCounterWire;}
+export type ProjectLibraryProvenanceSourceWire = "userDerived" | "imported";
+export type ProjectOptionalProvenanceSourceWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectLibraryProvenanceSourceWire};
+export type ProjectOptionalPresetKindWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectCatalogPresetKindWire};
+export interface ProjectLibraryDraftWire {readonly vendor: ProjectOptionalTextWire;readonly kind: ProjectCatalogPresetKindWire;readonly name: ProjectEditTextWire;readonly inherits: ProjectEditTextWire;readonly overridesJson: ProjectOptionalJsonTextWire;readonly license: ProjectOptionalTextWire;readonly version: ProjectOptionalTextWire;readonly note: ProjectOptionalTextWire;readonly source: ProjectOptionalProvenanceSourceWire;}
+export interface ProjectLibraryDraftUpdateWire {readonly vendor: ProjectOptionalTextWire;readonly kind: ProjectOptionalPresetKindWire;readonly name: ProjectOptionalTextWire;readonly inherits: ProjectOptionalTextWire;readonly overridesJson: ProjectOptionalJsonTextWire;readonly license: ProjectOptionalTextWire;readonly version: ProjectOptionalTextWire;readonly note: ProjectOptionalTextWire;readonly source: ProjectOptionalProvenanceSourceWire;}
+export interface ProjectLibrarySelectionWire {readonly vendor: ProjectEditTextWire;readonly model: ProjectEditTextWire;readonly variants: ProjectTextListWire;}
+export type ProjectLibrarySelectionsWire = readonly ProjectLibrarySelectionWire[];
+export interface ProjectLibrarySetInstalledWire {readonly selections: ProjectLibrarySelectionsWire;}
+export interface ProjectLibraryModelRefWire {readonly vendor: ProjectEditTextWire;readonly model: ProjectEditTextWire;}
+export interface ProjectLibraryCreateWire {readonly draft: ProjectLibraryDraftWire;readonly now: ProjectEditTextWire;}
+export interface ProjectLibraryUpdateWire {readonly vendor: ProjectEditTextWire;readonly kind: ProjectCatalogPresetKindWire;readonly name: ProjectEditTextWire;readonly draft: ProjectLibraryDraftUpdateWire;readonly now: ProjectEditTextWire;}
+export interface ProjectLibraryPresetRefWire {readonly vendor: ProjectEditTextWire;readonly kind: ProjectCatalogPresetKindWire;readonly name: ProjectEditTextWire;}
+export type ProjectLibraryOperationWire = {readonly install:ProjectLibrarySelectionWire} | {readonly setInstalled:ProjectLibrarySetInstalledWire} | {readonly uninstall:ProjectLibraryModelRefWire} | {readonly create:ProjectLibraryCreateWire} | {readonly update:ProjectLibraryUpdateWire} | {readonly delete:ProjectLibraryPresetRefWire};
+export interface ProjectLibraryVariantWire {readonly variant: ProjectEditTextWire;readonly presetName: ProjectEditTextWire;readonly presetId: ProjectEditTextWire;readonly nozzleDiameter: ProjectOptionalFiniteWire;readonly installed: ProjectFlagWire;}
+export type ProjectLibraryVariantsWire = readonly ProjectLibraryVariantWire[];
+export interface ProjectLibraryModelWire {readonly vendor: ProjectEditTextWire;readonly model: ProjectEditTextWire;readonly installed: ProjectFlagWire;readonly variants: ProjectLibraryVariantsWire;}
+export type ProjectLibraryModelsWire = readonly ProjectLibraryModelWire[];
+export interface ProjectLibraryInventoryWire {readonly vendors: ProjectTextListWire;readonly models: ProjectLibraryModelsWire;}
+export interface ProjectLibraryViewWire {readonly configured: ProjectFlagWire;readonly fingerprint: ProjectEditTextWire;readonly vendors: ProjectTextListWire;readonly customCount: ProjectCounterWire;}
+export interface ProjectLibraryLineageWire {readonly vendor: ProjectEditTextWire;readonly kind: ProjectCatalogPresetKindWire;readonly name: ProjectEditTextWire;}
+export type ProjectLibraryLineagesWire = readonly ProjectLibraryLineageWire[];
+export interface ProjectLibraryProvenanceWire {readonly source: ProjectLibraryProvenanceSourceWire;readonly license: ProjectEditTextWire;readonly version: ProjectEditTextWire;readonly derivedFrom: ProjectLibraryLineageWire;readonly createdAt: ProjectEditTextWire;readonly updatedAt: ProjectEditTextWire;readonly note: ProjectOptionalTextWire;}
+export interface ProjectLibraryCustomPresetWire {readonly vendor: ProjectEditTextWire;readonly kind: ProjectCatalogPresetKindWire;readonly name: ProjectEditTextWire;readonly inherits: ProjectEditTextWire;readonly overridesJson: ProjectJsonTextWire;readonly provenance: ProjectLibraryProvenanceWire;}
+export interface ProjectLibraryBaseRequestWire {readonly kind: ProjectCatalogPresetKindWire;readonly printerId: ProjectOptionalTextWire;readonly processId: ProjectOptionalTextWire;}
+export interface ProjectLibraryBasesWire {readonly ids: ProjectTextListWire;}
+export interface ProjectLibraryUpdatePlanWire {readonly previousFingerprint: ProjectEditTextWire;readonly nextFingerprint: ProjectEditTextWire;readonly changed: ProjectFlagWire;readonly addedModels: ProjectLibraryLineagesWire;readonly removedModels: ProjectLibraryLineagesWire;readonly removedVariants: ProjectLibraryLineagesWire;readonly orphanedCustomPresets: ProjectLibraryLineagesWire;readonly issueCount: ProjectCounterWire;readonly applicable: ProjectFlagWire;}
+export interface ProjectLibraryCoerceRequestWire {readonly inheritedJson: ProjectOptionalJsonTextWire;readonly text: ProjectEditTextWire;}
+export interface ProjectLibraryCoercedValueWire {readonly json: ProjectJsonTextWire;}
+export interface ProjectLibraryFormatRequestWire {readonly valueJson: ProjectOptionalJsonTextWire;}
+export interface ProjectLibraryFormattedValueWire {readonly text: ProjectEditTextWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -2043,3 +2364,42 @@ export function encodeProjectCatalogTargetRequest(value:ProjectCatalogTargetRequ
 export function captureProjectCatalogPreflightTarget(value:unknown):ProjectCatalogPreflightTargetWire { return captureIntent("CatalogPreflightTarget",value,shapes,limits) as ProjectCatalogPreflightTargetWire; }
 export function decodeProjectCatalogPreflightTarget(text:string):ProjectCatalogPreflightTargetWire { return captureProjectCatalogPreflightTarget(parseIntentJson(text,limits)); }
 export function encodeProjectCatalogPreflightTarget(value:ProjectCatalogPreflightTargetWire):string { return JSON.stringify(captureProjectCatalogPreflightTarget(value)); }
+export function captureProjectLibraryIssue(value:unknown):ProjectLibraryIssueWire { return captureIntent("LibraryIssue",value,shapes,limits) as ProjectLibraryIssueWire; }
+export function decodeProjectLibraryIssue(text:string):ProjectLibraryIssueWire { return captureProjectLibraryIssue(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryIssue(value:ProjectLibraryIssueWire):string { return JSON.stringify(captureProjectLibraryIssue(value)); }
+export function captureProjectLibraryOutcome(value:unknown):ProjectLibraryOutcomeWire { return captureIntent("LibraryOutcome",value,shapes,limits) as ProjectLibraryOutcomeWire; }
+export function decodeProjectLibraryOutcome(text:string):ProjectLibraryOutcomeWire { return captureProjectLibraryOutcome(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryOutcome(value:ProjectLibraryOutcomeWire):string { return JSON.stringify(captureProjectLibraryOutcome(value)); }
+export function captureProjectLibraryOperation(value:unknown):ProjectLibraryOperationWire { return captureIntent("LibraryOperation",value,shapes,limits) as ProjectLibraryOperationWire; }
+export function decodeProjectLibraryOperation(text:string):ProjectLibraryOperationWire { return captureProjectLibraryOperation(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryOperation(value:ProjectLibraryOperationWire):string { return JSON.stringify(captureProjectLibraryOperation(value)); }
+export function captureProjectLibraryInventory(value:unknown):ProjectLibraryInventoryWire { return captureIntent("LibraryInventory",value,shapes,limits) as ProjectLibraryInventoryWire; }
+export function decodeProjectLibraryInventory(text:string):ProjectLibraryInventoryWire { return captureProjectLibraryInventory(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryInventory(value:ProjectLibraryInventoryWire):string { return JSON.stringify(captureProjectLibraryInventory(value)); }
+export function captureProjectLibraryView(value:unknown):ProjectLibraryViewWire { return captureIntent("LibraryView",value,shapes,limits) as ProjectLibraryViewWire; }
+export function decodeProjectLibraryView(text:string):ProjectLibraryViewWire { return captureProjectLibraryView(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryView(value:ProjectLibraryViewWire):string { return JSON.stringify(captureProjectLibraryView(value)); }
+export function captureProjectLibraryCustomPreset(value:unknown):ProjectLibraryCustomPresetWire { return captureIntent("LibraryCustomPreset",value,shapes,limits) as ProjectLibraryCustomPresetWire; }
+export function decodeProjectLibraryCustomPreset(text:string):ProjectLibraryCustomPresetWire { return captureProjectLibraryCustomPreset(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryCustomPreset(value:ProjectLibraryCustomPresetWire):string { return JSON.stringify(captureProjectLibraryCustomPreset(value)); }
+export function captureProjectLibraryBaseRequest(value:unknown):ProjectLibraryBaseRequestWire { return captureIntent("LibraryBaseRequest",value,shapes,limits) as ProjectLibraryBaseRequestWire; }
+export function decodeProjectLibraryBaseRequest(text:string):ProjectLibraryBaseRequestWire { return captureProjectLibraryBaseRequest(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryBaseRequest(value:ProjectLibraryBaseRequestWire):string { return JSON.stringify(captureProjectLibraryBaseRequest(value)); }
+export function captureProjectLibraryBases(value:unknown):ProjectLibraryBasesWire { return captureIntent("LibraryBases",value,shapes,limits) as ProjectLibraryBasesWire; }
+export function decodeProjectLibraryBases(text:string):ProjectLibraryBasesWire { return captureProjectLibraryBases(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryBases(value:ProjectLibraryBasesWire):string { return JSON.stringify(captureProjectLibraryBases(value)); }
+export function captureProjectLibraryUpdatePlan(value:unknown):ProjectLibraryUpdatePlanWire { return captureIntent("LibraryUpdatePlan",value,shapes,limits) as ProjectLibraryUpdatePlanWire; }
+export function decodeProjectLibraryUpdatePlan(text:string):ProjectLibraryUpdatePlanWire { return captureProjectLibraryUpdatePlan(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryUpdatePlan(value:ProjectLibraryUpdatePlanWire):string { return JSON.stringify(captureProjectLibraryUpdatePlan(value)); }
+export function captureProjectLibraryCoerceRequest(value:unknown):ProjectLibraryCoerceRequestWire { return captureIntent("LibraryCoerceRequest",value,shapes,limits) as ProjectLibraryCoerceRequestWire; }
+export function decodeProjectLibraryCoerceRequest(text:string):ProjectLibraryCoerceRequestWire { return captureProjectLibraryCoerceRequest(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryCoerceRequest(value:ProjectLibraryCoerceRequestWire):string { return JSON.stringify(captureProjectLibraryCoerceRequest(value)); }
+export function captureProjectLibraryCoercedValue(value:unknown):ProjectLibraryCoercedValueWire { return captureIntent("LibraryCoercedValue",value,shapes,limits) as ProjectLibraryCoercedValueWire; }
+export function decodeProjectLibraryCoercedValue(text:string):ProjectLibraryCoercedValueWire { return captureProjectLibraryCoercedValue(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryCoercedValue(value:ProjectLibraryCoercedValueWire):string { return JSON.stringify(captureProjectLibraryCoercedValue(value)); }
+export function captureProjectLibraryFormatRequest(value:unknown):ProjectLibraryFormatRequestWire { return captureIntent("LibraryFormatRequest",value,shapes,limits) as ProjectLibraryFormatRequestWire; }
+export function decodeProjectLibraryFormatRequest(text:string):ProjectLibraryFormatRequestWire { return captureProjectLibraryFormatRequest(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryFormatRequest(value:ProjectLibraryFormatRequestWire):string { return JSON.stringify(captureProjectLibraryFormatRequest(value)); }
+export function captureProjectLibraryFormattedValue(value:unknown):ProjectLibraryFormattedValueWire { return captureIntent("LibraryFormattedValue",value,shapes,limits) as ProjectLibraryFormattedValueWire; }
+export function decodeProjectLibraryFormattedValue(text:string):ProjectLibraryFormattedValueWire { return captureProjectLibraryFormattedValue(parseIntentJson(text,limits)); }
+export function encodeProjectLibraryFormattedValue(value:ProjectLibraryFormattedValueWire):string { return JSON.stringify(captureProjectLibraryFormattedValue(value)); }

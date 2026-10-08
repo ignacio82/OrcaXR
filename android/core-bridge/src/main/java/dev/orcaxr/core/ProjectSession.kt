@@ -22,12 +22,12 @@ abstract class ProjectHandle internal constructor(handle: Long) : AutoCloseable 
     }
     /** Move the result's ownership only once the operation succeeds. Retain the
      * old handle while work runs so concurrent close can still invalidate it. */
-    internal fun <T : AutoCloseable> move(operation: (Long) -> T): T = synchronized(gate) {
+    internal fun <T> move(operation: (Long) -> T): T = synchronized(gate) {
         val current = reference()
         try {
             val result = operation(current)
             if (!handle.compareAndSet(current, 0)) {
-                result.close()
+                (result as? AutoCloseable)?.close()
                 error("closed")
             }
             result

@@ -42,6 +42,61 @@ export class CapturedSelection {
 }
 
 /**
+ * Installed printers and custom presets over a pinned catalog.
+ */
+export class PresetLibrary {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * A `LibraryOperation`; returns its `LibraryOutcome`.
+     */
+    apply(operation: string): string;
+    /**
+     * Consume an upload and move onto it; returns a `LibraryOutcome`.
+     */
+    apply_update(next: ProfileCatalogUpload): string;
+    /**
+     * A `LibraryBaseRequest`; returns `LibraryBases`.
+     */
+    bases(request: string): string;
+    /**
+     * The composed catalog, as the profile catalog the app reads.
+     */
+    catalog(): ProfileCatalog;
+    /**
+     * Consume `upload` as the system catalog. `stored` is the text the host
+     * saved, if any; `limits` (bytes, nodes, text units, number bytes, depth)
+     * bound reading it. Without a collator the exact ASCII root order applies.
+     */
+    static create(upload: ProfileCatalogUpload, stored: Uint8Array | null | undefined, limits: Float64Array, collator?: any | null): PresetLibrary;
+    custom_preset(position: number): string;
+    /**
+     * The bundle to hand the operator, as UTF-8.
+     */
+    export_bundle(exported_at: string, max_bytes: number): Uint8Array;
+    /**
+     * A bundle's bytes; returns its `LibraryOutcome`.
+     */
+    import_bundle(bundle: Uint8Array, limits: Float64Array): string;
+    inventory(): string;
+    /**
+     * The latest outcome's issue at `position`, as a `LibraryIssue`.
+     */
+    issue(position: number): string;
+    issue_count(): number;
+    /**
+     * Consume an upload of a newer catalog; returns a `LibraryUpdatePlan`.
+     */
+    plan_update(next: ProfileCatalogUpload): string;
+    /**
+     * The text to store, as UTF-8.
+     */
+    state(max_bytes: number): Uint8Array;
+    view(): string;
+}
+
+/**
  * A loaded catalog: compiled, or refused with its diagnostics.
  */
 export class ProfileCatalog {
@@ -429,9 +484,19 @@ export class ProjectUpload {
     seal_document(): void;
 }
 
+/**
+ * `coerceOverrideValue`: a `LibraryCoerceRequest` to a `LibraryCoercedValue`.
+ */
+export function coerce_override_value(request: string): string;
+
 export function core_info(): string;
 
 export function evaluate(request: string): string;
+
+/**
+ * `formatOverrideValue`: a `LibraryFormatRequest` to a `LibraryFormattedValue`.
+ */
+export function format_override_value(request: string): string;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -440,6 +505,7 @@ export interface InitOutput {
     readonly __wbg_capturedhistory_free: (a: number, b: number) => void;
     readonly __wbg_capturedproject_free: (a: number, b: number) => void;
     readonly __wbg_capturedselection_free: (a: number, b: number) => void;
+    readonly __wbg_presetlibrary_free: (a: number, b: number) => void;
     readonly __wbg_profilecatalog_free: (a: number, b: number) => void;
     readonly __wbg_profilecatalogupload_free: (a: number, b: number) => void;
     readonly __wbg_projectarchiveimport_free: (a: number, b: number) => void;
@@ -481,8 +547,24 @@ export interface InitOutput {
     readonly capturedselection_id_length: (a: number, b: number) => [number, number, number];
     readonly capturedselection_kind: (a: number, b: number) => [number, number, number];
     readonly capturedselection_primary_index: (a: number) => number;
+    readonly coerce_override_value: (a: number, b: number) => [number, number, number, number];
     readonly core_info: () => [number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
+    readonly format_override_value: (a: number, b: number) => [number, number, number, number];
+    readonly presetlibrary_apply: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly presetlibrary_apply_update: (a: number, b: number) => [number, number, number, number];
+    readonly presetlibrary_bases: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly presetlibrary_catalog: (a: number) => [number, number, number];
+    readonly presetlibrary_create: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly presetlibrary_custom_preset: (a: number, b: number) => [number, number, number, number];
+    readonly presetlibrary_export_bundle: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly presetlibrary_import_bundle: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly presetlibrary_inventory: (a: number) => [number, number, number, number];
+    readonly presetlibrary_issue: (a: number, b: number) => [number, number, number, number];
+    readonly presetlibrary_issue_count: (a: number) => number;
+    readonly presetlibrary_plan_update: (a: number, b: number) => [number, number, number, number];
+    readonly presetlibrary_state: (a: number, b: number) => [number, number, number, number];
+    readonly presetlibrary_view: (a: number) => [number, number, number, number];
     readonly profilecatalog_diagnostic: (a: number, b: number) => [number, number, number, number];
     readonly profilecatalog_diagnostic_count: (a: number) => number;
     readonly profilecatalog_preflight_target: (a: number, b: number, c: number, d: number) => [number, number, number, number];

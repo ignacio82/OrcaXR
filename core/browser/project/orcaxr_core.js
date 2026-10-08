@@ -240,6 +240,313 @@ export class CapturedSelection {
 if (Symbol.dispose) CapturedSelection.prototype[Symbol.dispose] = CapturedSelection.prototype.free;
 
 /**
+ * Installed printers and custom presets over a pinned catalog.
+ */
+export class PresetLibrary {
+    static __wrap(ptr) {
+        const obj = Object.create(PresetLibrary.prototype);
+        obj.__wbg_ptr = ptr;
+        PresetLibraryFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        PresetLibraryFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_presetlibrary_free(ptr, 0);
+    }
+    /**
+     * A `LibraryOperation`; returns its `LibraryOutcome`.
+     * @param {string} operation
+     * @returns {string}
+     */
+    apply(operation) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(operation, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.presetlibrary_apply(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * Consume an upload and move onto it; returns a `LibraryOutcome`.
+     * @param {ProfileCatalogUpload} next
+     * @returns {string}
+     */
+    apply_update(next) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            _assertClass(next, ProfileCatalogUpload);
+            const ret = wasm.presetlibrary_apply_update(this.__wbg_ptr, next.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * A `LibraryBaseRequest`; returns `LibraryBases`.
+     * @param {string} request
+     * @returns {string}
+     */
+    bases(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.presetlibrary_bases(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * The composed catalog, as the profile catalog the app reads.
+     * @returns {ProfileCatalog}
+     */
+    catalog() {
+        const ret = wasm.presetlibrary_catalog(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProfileCatalog.__wrap(ret[0]);
+    }
+    /**
+     * Consume `upload` as the system catalog. `stored` is the text the host
+     * saved, if any; `limits` (bytes, nodes, text units, number bytes, depth)
+     * bound reading it. Without a collator the exact ASCII root order applies.
+     * @param {ProfileCatalogUpload} upload
+     * @param {Uint8Array | null | undefined} stored
+     * @param {Float64Array} limits
+     * @param {any | null} [collator]
+     * @returns {PresetLibrary}
+     */
+    static create(upload, stored, limits, collator) {
+        _assertClass(upload, ProfileCatalogUpload);
+        var ptr0 = isLikeNone(stored) ? 0 : passArray8ToWasm0(stored, wasm.__wbindgen_malloc);
+        var len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArrayF64ToWasm0(limits, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.presetlibrary_create(upload.__wbg_ptr, ptr0, len0, ptr1, len1, isLikeNone(collator) ? 0 : addToExternrefTable0(collator));
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return PresetLibrary.__wrap(ret[0]);
+    }
+    /**
+     * @param {number} position
+     * @returns {string}
+     */
+    custom_preset(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.presetlibrary_custom_preset(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * The bundle to hand the operator, as UTF-8.
+     * @param {string} exported_at
+     * @param {number} max_bytes
+     * @returns {Uint8Array}
+     */
+    export_bundle(exported_at, max_bytes) {
+        const ptr0 = passStringToWasm0(exported_at, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.presetlibrary_export_bundle(this.__wbg_ptr, ptr0, len0, max_bytes);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v2;
+    }
+    /**
+     * A bundle's bytes; returns its `LibraryOutcome`.
+     * @param {Uint8Array} bundle
+     * @param {Float64Array} limits
+     * @returns {string}
+     */
+    import_bundle(bundle, limits) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const ptr0 = passArray8ToWasm0(bundle, wasm.__wbindgen_malloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passArrayF64ToWasm0(limits, wasm.__wbindgen_malloc);
+            const len1 = WASM_VECTOR_LEN;
+            const ret = wasm.presetlibrary_import_bundle(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            var ptr3 = ret[0];
+            var len3 = ret[1];
+            if (ret[3]) {
+                ptr3 = 0; len3 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred4_0 = ptr3;
+            deferred4_1 = len3;
+            return getStringFromWasm0(ptr3, len3);
+        } finally {
+            wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    inventory() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.presetlibrary_inventory(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * The latest outcome's issue at `position`, as a `LibraryIssue`.
+     * @param {number} position
+     * @returns {string}
+     */
+    issue(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.presetlibrary_issue(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {number}
+     */
+    issue_count() {
+        const ret = wasm.presetlibrary_issue_count(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Consume an upload of a newer catalog; returns a `LibraryUpdatePlan`.
+     * @param {ProfileCatalogUpload} next
+     * @returns {string}
+     */
+    plan_update(next) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            _assertClass(next, ProfileCatalogUpload);
+            const ret = wasm.presetlibrary_plan_update(this.__wbg_ptr, next.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * The text to store, as UTF-8.
+     * @param {number} max_bytes
+     * @returns {Uint8Array}
+     */
+    state(max_bytes) {
+        const ret = wasm.presetlibrary_state(this.__wbg_ptr, max_bytes);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * @returns {string}
+     */
+    view() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.presetlibrary_view(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) PresetLibrary.prototype[Symbol.dispose] = PresetLibrary.prototype.free;
+
+/**
  * A loaded catalog: compiled, or refused with its diagnostics.
  */
 export class ProfileCatalog {
@@ -2188,6 +2495,32 @@ export class ProjectUpload {
 if (Symbol.dispose) ProjectUpload.prototype[Symbol.dispose] = ProjectUpload.prototype.free;
 
 /**
+ * `coerceOverrideValue`: a `LibraryCoerceRequest` to a `LibraryCoercedValue`.
+ * @param {string} request
+ * @returns {string}
+ */
+export function coerce_override_value(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.coerce_override_value(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * @returns {string}
  */
 export function core_info() {
@@ -2219,6 +2552,32 @@ export function evaluate(request) {
         return getStringFromWasm0(ret[0], ret[1]);
     } finally {
         wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * `formatOverrideValue`: a `LibraryFormatRequest` to a `LibraryFormattedValue`.
+ * @param {string} request
+ * @returns {string}
+ */
+export function format_override_value(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.format_override_value(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
     }
 }
 function __wbg_get_imports() {
@@ -2281,6 +2640,9 @@ const CapturedProjectFinalization = (typeof FinalizationRegistry === 'undefined'
 const CapturedSelectionFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_capturedselection_free(ptr, 1));
+const PresetLibraryFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_presetlibrary_free(ptr, 1));
 const ProfileCatalogFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_profilecatalog_free(ptr, 1));

@@ -54,6 +54,19 @@ assert.deepEqual(schema.roots, [
   "CatalogSelection",
   "CatalogTargetRequest",
   "CatalogPreflightTarget",
+  "LibraryIssue",
+  "LibraryOutcome",
+  "LibraryOperation",
+  "LibraryInventory",
+  "LibraryView",
+  "LibraryCustomPreset",
+  "LibraryBaseRequest",
+  "LibraryBases",
+  "LibraryUpdatePlan",
+  "LibraryCoerceRequest",
+  "LibraryCoercedValue",
+  "LibraryFormatRequest",
+  "LibraryFormattedValue",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

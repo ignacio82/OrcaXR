@@ -12,7 +12,7 @@ use orcaxr_project::{
 };
 use std::cmp::Ordering;
 
-fn json_code(e: JsonInputError) -> &'static str {
+pub(super) fn json_code(e: JsonInputError) -> &'static str {
     match e {
         JsonInputError::InvalidLimits => "invalid_limits",
         JsonInputError::Limit => "input_limit",
@@ -33,9 +33,9 @@ fn char_array<'local>(env: &mut JNIEnv<'local>, units: &[u16]) -> Result<JObject
 }
 /// `dev.orcaxr.core.PresetCollator.compare(char[], char[])`, called on this
 /// JNI thread while the build runs.
-struct JavaCollation<'a, 'env, 'obj> {
-    env: &'a mut JNIEnv<'env>,
-    collator: &'a JObject<'obj>,
+pub(super) struct JavaCollation<'a, 'env, 'obj> {
+    pub(super) env: &'a mut JNIEnv<'env>,
+    pub(super) collator: &'a JObject<'obj>,
 }
 impl Collation for JavaCollation<'_, '_, '_> {
     type Error = &'static str;
@@ -62,30 +62,34 @@ impl Collation for JavaCollation<'_, '_, '_> {
     }
 }
 
-pub(super) fn catalog_upload_new(
-    env: &mut JNIEnv<'_>,
-    bytes: jlong,
-    limits: JDoubleArray<'_>,
-) -> Result<jlong> {
+/// JSON budgets: maximum bytes, nodes, text units, number bytes and depth.
+pub(super) fn json_limits(env: &mut JNIEnv<'_>, limits: &JDoubleArray<'_>) -> Result<JsonLimits> {
     let [
         max_bytes,
         max_nodes,
         max_text_units,
         max_number_bytes,
         max_depth,
-    ] = option_values::<5>(env, &limits)?;
+    ] = option_values::<5>(env, limits)?;
     let count = |v: f64| {
         (v.is_finite() && v.fract() == 0.0 && (0.0..=layout::MAX_BUDGET as f64).contains(&v))
             .then_some(v as usize)
             .ok_or("invalid_options")
     };
-    let limits = JsonLimits {
+    Ok(JsonLimits {
         max_bytes: count(max_bytes)?,
         max_nodes: count(max_nodes)?,
         max_text_units: count(max_text_units)?,
         max_number_bytes: count(max_number_bytes)?,
         max_depth: count(max_depth)?,
-    };
+    })
+}
+pub(super) fn catalog_upload_new(
+    env: &mut JNIEnv<'_>,
+    bytes: jlong,
+    limits: JDoubleArray<'_>,
+) -> Result<jlong> {
+    let limits = json_limits(env, &limits)?;
     let reserved = registry().reserve(true)?;
     let upload = CatalogUpload::new(index(bytes)?, limits).map_err(json_code)?;
     reserved.insert(Record::CatalogUpload(Box::new(upload)))

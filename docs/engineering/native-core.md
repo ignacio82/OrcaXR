@@ -3149,6 +3149,48 @@ the browser emits occurs. Rust matches every result, state and digest, the
 clock reads, 22 coercions, 12 formats and the stable JSON and WTF-8 digest
 cases.
 
+### Preset library host exchange
+
+`settings::library_exchange` serves the library to hosts. A host creates a
+`HostLibrary` from a catalog upload and the bytes it stored (none, or text
+that may be unreadable, which loads as `unreadable_state`). It then submits
+generated `LibraryOperation`s: the browser's install, create, update and
+delete, plus `setInstalled` and `uninstall`. Create and update carry their
+own `now`, so the exchange never reads a host clock and a replay is
+deterministic. Collation and `Date.parse` validity come from the host on
+every call.
+
+Replies are contract values. An outcome is `{ok, issueCount}` and its issues
+are read one at a time; the latest outcome of creation, an operation, an
+import or a catalog update owns them. Bundles and stored text cross as UTF-8
+bytes under explicit budgets: text that is not JSON is an `invalid-bundle`
+outcome, while a budget breach refuses. Other reads: the view (configured,
+fingerprint, vendors), custom presets with canonical override JSON, the
+inventory, base presets, catalog update plans and applications, and the
+override coercion and formatting helpers. `catalog` builds the composed
+catalog as the profile catalog the app reads, as the browser's catalog
+composer does.
+
+Bindings:
+
+- WASM: `PresetLibrary.create(upload, stored, limits, collator)` consumes a
+  `ProfileCatalogUpload`; `plan_update` and `apply_update` consume one too.
+  Timestamps use the browser's own `Date.parse`.
+- JNI: sixteen exports. Creation consumes the upload slot in place and keeps
+  the host's `PresetCollator` and `LocalTimestampResolver`; a throwing
+  callback becomes `collation_failed` or `timestamp_service`.
+- Kotlin: `ProfileCatalogUpload.library` and `PresetLibrary`, decoding every
+  reply. `ProjectHandle.move` now also consumes into plain values.
+
+The preset library corpus now carries each step's contract encodings. Rust,
+WASM in Node and Chrome (through the browser's collator) and JNI replay all
+14 scenarios from catalog and stored bytes and match 425 replies, with 184
+refusals: consumed uploads, reads past the end, output budgets and
+malformed operations. Inventories compare as decoded values, since number
+spelling is semantic. The Kotlin wrapper passes 25 checks, including bundle
+and stored-text round trips, a reordering collator, and failing collator and
+timestamp callbacks.
+
 ### Canonical slice preflight
 
 `runCanonicalSlicePreflight` is `orcaxr_project::slicing::preflight`. It has two

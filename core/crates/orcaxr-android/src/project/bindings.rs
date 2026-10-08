@@ -302,6 +302,102 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_libraryCreate, library_create, (),
+    handle: jlong,
+    stored: JByteArray<'local>,
+    limits: JDoubleArray<'local>,
+    collator: JObject<'local>,
+    resolver: JObject<'local>,
+    integer_mode: jint,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryApply, library_apply, jstring,
+    handle: jlong,
+    operation: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryImport, library_import, jstring,
+    handle: jlong,
+    bundle: JByteArray<'local>,
+    limits: JDoubleArray<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryIssueCount, library_issue_count, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryIssue, library_issue, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryExport, library_export, jbyteArray,
+    handle: jlong,
+    exported_at: JString<'local>,
+    max_bytes: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryState, library_state, jbyteArray,
+    handle: jlong,
+    max_bytes: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryView, library_view, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryCustomPreset, library_custom_preset, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryInventory, library_inventory, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryBases, library_bases, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryCatalog, library_catalog, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryPlanUpdate, library_plan_update, jstring,
+    handle: jlong,
+    upload: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryApplyUpdate, library_apply_update, jstring,
+    handle: jlong,
+    upload: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryCoerce, library_coerce, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_libraryFormat, library_format, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

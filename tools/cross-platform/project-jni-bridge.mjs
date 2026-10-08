@@ -25,6 +25,7 @@ export function startProjectJni(profile = "debug") {
   signatures.actorExportChecks = ["String", "String", "byte[]", "byte[]", "String", "String", "String"];
   signatures.actorPreflightChecks = ["String", "byte[]", "String", "String"];
   signatures.catalogChecks = ["byte[]", "String"];
+  signatures.libraryChecks = ["byte[]", "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -101,6 +102,7 @@ export function startProjectJni(profile = "debug") {
     // A collator mode the harness maps to a Java object, or none.
     if (type === "PresetCollator")
       return sized(Buffer.from(v ?? "none", "utf8"));
+    if (type === "byte[]" && v == null) return i32(-1);
     if (type === "byte[]") return sized(Buffer.from(v));
     const width = type === "char[]" ? 2 : 8,
       b = Buffer.alloc(v.length * width);
@@ -739,11 +741,75 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return call("catalogTarget", this.handle, request, maxTools);
     }
   }
+  // The upload handle consumed by a native call that closes it itself.
+  const spent = (upload) => {
+    const id = upload.handle;
+    upload.handle = 0;
+    return id;
+  };
+  class PresetLibrary extends Handle {
+    static create(upload, stored, limits, collator) {
+      return consumed(upload, (id) => {
+        call(
+          "libraryCreate",
+          id,
+          stored ?? null,
+          Array.from(limits),
+          collator,
+          zone,
+          profile,
+        );
+        return new PresetLibrary(id);
+      });
+    }
+    apply(operation) {
+      return call("libraryApply", this.handle, operation);
+    }
+    import_bundle(bundle, limits) {
+      return call("libraryImport", this.handle, bundle, Array.from(limits));
+    }
+    issue_count() {
+      return call("libraryIssueCount", this.handle);
+    }
+    issue(i) {
+      return call("libraryIssue", this.handle, i);
+    }
+    export_bundle(exportedAt, maxBytes) {
+      return call("libraryExport", this.handle, exportedAt, maxBytes);
+    }
+    state(maxBytes) {
+      return call("libraryState", this.handle, maxBytes);
+    }
+    view() {
+      return call("libraryView", this.handle);
+    }
+    custom_preset(i) {
+      return call("libraryCustomPreset", this.handle, i);
+    }
+    inventory() {
+      return call("libraryInventory", this.handle);
+    }
+    bases(request) {
+      return call("libraryBases", this.handle, request);
+    }
+    catalog() {
+      return wrap(ProfileCatalog, call("libraryCatalog", this.handle));
+    }
+    plan_update(next) {
+      return call("libraryPlanUpdate", this.handle, spent(next));
+    }
+    apply_update(next) {
+      return call("libraryApplyUpdate", this.handle, spent(next));
+    }
+  }
   return {
     ProjectUpload,
     ProjectSelectionInput,
     ProjectArchiveUpload,
     ProjectModelUpload,
     ProfileCatalogUpload,
+    PresetLibrary,
+    coerce_override_value: (request) => call("libraryCoerce", request),
+    format_override_value: (request) => call("libraryFormat", request),
   };
 }

@@ -1771,6 +1771,294 @@
         "headFilamentIds": "OptionalTexts",
         "toolCount": "Finite"
       }
+    },
+    "LibraryIssueCode": {
+      "kind": "enum",
+      "values": [
+        "invalidState",
+        "invalidBundle",
+        "unsupportedSchema",
+        "engineMismatch",
+        "unknownPrinterModel",
+        "unknownPrinterVariant",
+        "unknownBasePreset",
+        "baseNotInstantiable",
+        "duplicatePresetName",
+        "reservedKey",
+        "unknownPresetKey",
+        "invalidValue",
+        "invalidProvenance",
+        "invalidName",
+        "unknownPreset",
+        "dependentPreset",
+        "graphRejected",
+        "nothingInstalled"
+      ]
+    },
+    "LibraryIssue": {
+      "kind": "object",
+      "fields": {
+        "code": "LibraryIssueCode",
+        "error": "Flag",
+        "path": "EditText",
+        "message": "EditText"
+      }
+    },
+    "LibraryOutcome": {
+      "kind": "object",
+      "fields": {
+        "ok": "Flag",
+        "issueCount": "Counter"
+      }
+    },
+    "LibraryProvenanceSource": {
+      "kind": "enum",
+      "values": [
+        "userDerived",
+        "imported"
+      ]
+    },
+    "OptionalProvenanceSource": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "LibraryProvenanceSource"
+      }
+    },
+    "OptionalPresetKind": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "CatalogPresetKind"
+      }
+    },
+    "LibraryDraft": {
+      "kind": "object",
+      "fields": {
+        "vendor": "OptionalText",
+        "kind": "CatalogPresetKind",
+        "name": "EditText",
+        "inherits": "EditText",
+        "overridesJson": "OptionalJsonText",
+        "license": "OptionalText",
+        "version": "OptionalText",
+        "note": "OptionalText",
+        "source": "OptionalProvenanceSource"
+      }
+    },
+    "LibraryDraftUpdate": {
+      "kind": "object",
+      "fields": {
+        "vendor": "OptionalText",
+        "kind": "OptionalPresetKind",
+        "name": "OptionalText",
+        "inherits": "OptionalText",
+        "overridesJson": "OptionalJsonText",
+        "license": "OptionalText",
+        "version": "OptionalText",
+        "note": "OptionalText",
+        "source": "OptionalProvenanceSource"
+      }
+    },
+    "LibrarySelection": {
+      "kind": "object",
+      "fields": {
+        "vendor": "EditText",
+        "model": "EditText",
+        "variants": "TextList"
+      }
+    },
+    "LibrarySelections": {
+      "kind": "array",
+      "items": "LibrarySelection",
+      "min": 0,
+      "max": 4096
+    },
+    "LibrarySetInstalled": {
+      "kind": "object",
+      "fields": {
+        "selections": "LibrarySelections"
+      }
+    },
+    "LibraryModelRef": {
+      "kind": "object",
+      "fields": {
+        "vendor": "EditText",
+        "model": "EditText"
+      }
+    },
+    "LibraryCreate": {
+      "kind": "object",
+      "fields": {
+        "draft": "LibraryDraft",
+        "now": "EditText"
+      }
+    },
+    "LibraryUpdate": {
+      "kind": "object",
+      "fields": {
+        "vendor": "EditText",
+        "kind": "CatalogPresetKind",
+        "name": "EditText",
+        "draft": "LibraryDraftUpdate",
+        "now": "EditText"
+      }
+    },
+    "LibraryPresetRef": {
+      "kind": "object",
+      "fields": {
+        "vendor": "EditText",
+        "kind": "CatalogPresetKind",
+        "name": "EditText"
+      }
+    },
+    "LibraryOperation": {
+      "kind": "union",
+      "variants": {
+        "install": "LibrarySelection",
+        "setInstalled": "LibrarySetInstalled",
+        "uninstall": "LibraryModelRef",
+        "create": "LibraryCreate",
+        "update": "LibraryUpdate",
+        "delete": "LibraryPresetRef"
+      }
+    },
+    "LibraryVariant": {
+      "kind": "object",
+      "fields": {
+        "variant": "EditText",
+        "presetName": "EditText",
+        "presetId": "EditText",
+        "nozzleDiameter": "OptionalFinite",
+        "installed": "Flag"
+      }
+    },
+    "LibraryVariants": {
+      "kind": "array",
+      "items": "LibraryVariant",
+      "min": 0,
+      "max": 4096
+    },
+    "LibraryModel": {
+      "kind": "object",
+      "fields": {
+        "vendor": "EditText",
+        "model": "EditText",
+        "installed": "Flag",
+        "variants": "LibraryVariants"
+      }
+    },
+    "LibraryModels": {
+      "kind": "array",
+      "items": "LibraryModel",
+      "min": 0,
+      "max": 4096
+    },
+    "LibraryInventory": {
+      "kind": "object",
+      "fields": {
+        "vendors": "TextList",
+        "models": "LibraryModels"
+      }
+    },
+    "LibraryView": {
+      "kind": "object",
+      "fields": {
+        "configured": "Flag",
+        "fingerprint": "EditText",
+        "vendors": "TextList",
+        "customCount": "Counter"
+      }
+    },
+    "LibraryLineage": {
+      "kind": "object",
+      "fields": {
+        "vendor": "EditText",
+        "kind": "CatalogPresetKind",
+        "name": "EditText"
+      }
+    },
+    "LibraryLineages": {
+      "kind": "array",
+      "items": "LibraryLineage",
+      "min": 0,
+      "max": 4096
+    },
+    "LibraryProvenance": {
+      "kind": "object",
+      "fields": {
+        "source": "LibraryProvenanceSource",
+        "license": "EditText",
+        "version": "EditText",
+        "derivedFrom": "LibraryLineage",
+        "createdAt": "EditText",
+        "updatedAt": "EditText",
+        "note": "OptionalText"
+      }
+    },
+    "LibraryCustomPreset": {
+      "kind": "object",
+      "fields": {
+        "vendor": "EditText",
+        "kind": "CatalogPresetKind",
+        "name": "EditText",
+        "inherits": "EditText",
+        "overridesJson": "JsonText",
+        "provenance": "LibraryProvenance"
+      }
+    },
+    "LibraryBaseRequest": {
+      "kind": "object",
+      "fields": {
+        "kind": "CatalogPresetKind",
+        "printerId": "OptionalText",
+        "processId": "OptionalText"
+      }
+    },
+    "LibraryBases": {
+      "kind": "object",
+      "fields": {
+        "ids": "TextList"
+      }
+    },
+    "LibraryUpdatePlan": {
+      "kind": "object",
+      "fields": {
+        "previousFingerprint": "EditText",
+        "nextFingerprint": "EditText",
+        "changed": "Flag",
+        "addedModels": "LibraryLineages",
+        "removedModels": "LibraryLineages",
+        "removedVariants": "LibraryLineages",
+        "orphanedCustomPresets": "LibraryLineages",
+        "issueCount": "Counter",
+        "applicable": "Flag"
+      }
+    },
+    "LibraryCoerceRequest": {
+      "kind": "object",
+      "fields": {
+        "inheritedJson": "OptionalJsonText",
+        "text": "EditText"
+      }
+    },
+    "LibraryCoercedValue": {
+      "kind": "object",
+      "fields": {
+        "json": "JsonText"
+      }
+    },
+    "LibraryFormatRequest": {
+      "kind": "object",
+      "fields": {
+        "valueJson": "OptionalJsonText"
+      }
+    },
+    "LibraryFormattedValue": {
+      "kind": "object",
+      "fields": {
+        "text": "EditText"
+      }
     }
   },
   "roots": [
@@ -1790,7 +2078,20 @@
     "CatalogSelectionRequest",
     "CatalogSelection",
     "CatalogTargetRequest",
-    "CatalogPreflightTarget"
+    "CatalogPreflightTarget",
+    "LibraryIssue",
+    "LibraryOutcome",
+    "LibraryOperation",
+    "LibraryInventory",
+    "LibraryView",
+    "LibraryCustomPreset",
+    "LibraryBaseRequest",
+    "LibraryBases",
+    "LibraryUpdatePlan",
+    "LibraryCoerceRequest",
+    "LibraryCoercedValue",
+    "LibraryFormatRequest",
+    "LibraryFormattedValue"
   ],
   "sessionVersion": 1
 }

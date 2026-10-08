@@ -3631,6 +3631,624 @@ fn read_catalog_target_request(v: &Value) -> Result<CatalogTargetRequest, Invali
         tool_count: read_finite(&object["toolCount"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LibraryIssueCode {
+    InvalidState,
+    InvalidBundle,
+    UnsupportedSchema,
+    EngineMismatch,
+    UnknownPrinterModel,
+    UnknownPrinterVariant,
+    UnknownBasePreset,
+    BaseNotInstantiable,
+    DuplicatePresetName,
+    ReservedKey,
+    UnknownPresetKey,
+    InvalidValue,
+    InvalidProvenance,
+    InvalidName,
+    UnknownPreset,
+    DependentPreset,
+    GraphRejected,
+    NothingInstalled,
+}
+fn read_library_issue_code(v: &Value) -> Result<LibraryIssueCode, InvalidIntent> {
+    match v.as_str() {
+        Some("invalidState") => Ok(LibraryIssueCode::InvalidState),
+        Some("invalidBundle") => Ok(LibraryIssueCode::InvalidBundle),
+        Some("unsupportedSchema") => Ok(LibraryIssueCode::UnsupportedSchema),
+        Some("engineMismatch") => Ok(LibraryIssueCode::EngineMismatch),
+        Some("unknownPrinterModel") => Ok(LibraryIssueCode::UnknownPrinterModel),
+        Some("unknownPrinterVariant") => Ok(LibraryIssueCode::UnknownPrinterVariant),
+        Some("unknownBasePreset") => Ok(LibraryIssueCode::UnknownBasePreset),
+        Some("baseNotInstantiable") => Ok(LibraryIssueCode::BaseNotInstantiable),
+        Some("duplicatePresetName") => Ok(LibraryIssueCode::DuplicatePresetName),
+        Some("reservedKey") => Ok(LibraryIssueCode::ReservedKey),
+        Some("unknownPresetKey") => Ok(LibraryIssueCode::UnknownPresetKey),
+        Some("invalidValue") => Ok(LibraryIssueCode::InvalidValue),
+        Some("invalidProvenance") => Ok(LibraryIssueCode::InvalidProvenance),
+        Some("invalidName") => Ok(LibraryIssueCode::InvalidName),
+        Some("unknownPreset") => Ok(LibraryIssueCode::UnknownPreset),
+        Some("dependentPreset") => Ok(LibraryIssueCode::DependentPreset),
+        Some("graphRejected") => Ok(LibraryIssueCode::GraphRejected),
+        Some("nothingInstalled") => Ok(LibraryIssueCode::NothingInstalled),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryIssue {
+    pub code: LibraryIssueCode,
+    pub error: Flag,
+    pub path: EditText,
+    pub message: EditText,
+}
+fn read_library_issue(v: &Value) -> Result<LibraryIssue, InvalidIntent> {
+    let object = fields(v, &["code", "error", "path", "message"], false)?;
+    Ok(LibraryIssue {
+        code: read_library_issue_code(&object["code"])?,
+        error: read_flag(&object["error"])?,
+        path: read_edit_text(&object["path"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryOutcome {
+    pub ok: Flag,
+    pub issue_count: Counter,
+}
+fn read_library_outcome(v: &Value) -> Result<LibraryOutcome, InvalidIntent> {
+    let object = fields(v, &["ok", "issueCount"], false)?;
+    Ok(LibraryOutcome {
+        ok: read_flag(&object["ok"])?,
+        issue_count: read_counter(&object["issueCount"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LibraryProvenanceSource {
+    UserDerived,
+    Imported,
+}
+fn read_library_provenance_source(v: &Value) -> Result<LibraryProvenanceSource, InvalidIntent> {
+    match v.as_str() {
+        Some("userDerived") => Ok(LibraryProvenanceSource::UserDerived),
+        Some("imported") => Ok(LibraryProvenanceSource::Imported),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalProvenanceSource {
+    Absent(Empty),
+    Value(LibraryProvenanceSource),
+}
+fn read_optional_provenance_source(v: &Value) -> Result<OptionalProvenanceSource, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalProvenanceSource::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalProvenanceSource::Value(
+            read_library_provenance_source(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalPresetKind {
+    Absent(Empty),
+    Value(CatalogPresetKind),
+}
+fn read_optional_preset_kind(v: &Value) -> Result<OptionalPresetKind, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPresetKind::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPresetKind::Value(read_catalog_preset_kind(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryDraft {
+    pub vendor: OptionalText,
+    pub kind: CatalogPresetKind,
+    pub name: EditText,
+    pub inherits: EditText,
+    pub overrides_json: OptionalJsonText,
+    pub license: OptionalText,
+    pub version: OptionalText,
+    pub note: OptionalText,
+    pub source: OptionalProvenanceSource,
+}
+fn read_library_draft(v: &Value) -> Result<LibraryDraft, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "vendor",
+            "kind",
+            "name",
+            "inherits",
+            "overridesJson",
+            "license",
+            "version",
+            "note",
+            "source",
+        ],
+        false,
+    )?;
+    Ok(LibraryDraft {
+        vendor: read_optional_text(&object["vendor"])?,
+        kind: read_catalog_preset_kind(&object["kind"])?,
+        name: read_edit_text(&object["name"])?,
+        inherits: read_edit_text(&object["inherits"])?,
+        overrides_json: read_optional_json_text(&object["overridesJson"])?,
+        license: read_optional_text(&object["license"])?,
+        version: read_optional_text(&object["version"])?,
+        note: read_optional_text(&object["note"])?,
+        source: read_optional_provenance_source(&object["source"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryDraftUpdate {
+    pub vendor: OptionalText,
+    pub kind: OptionalPresetKind,
+    pub name: OptionalText,
+    pub inherits: OptionalText,
+    pub overrides_json: OptionalJsonText,
+    pub license: OptionalText,
+    pub version: OptionalText,
+    pub note: OptionalText,
+    pub source: OptionalProvenanceSource,
+}
+fn read_library_draft_update(v: &Value) -> Result<LibraryDraftUpdate, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "vendor",
+            "kind",
+            "name",
+            "inherits",
+            "overridesJson",
+            "license",
+            "version",
+            "note",
+            "source",
+        ],
+        false,
+    )?;
+    Ok(LibraryDraftUpdate {
+        vendor: read_optional_text(&object["vendor"])?,
+        kind: read_optional_preset_kind(&object["kind"])?,
+        name: read_optional_text(&object["name"])?,
+        inherits: read_optional_text(&object["inherits"])?,
+        overrides_json: read_optional_json_text(&object["overridesJson"])?,
+        license: read_optional_text(&object["license"])?,
+        version: read_optional_text(&object["version"])?,
+        note: read_optional_text(&object["note"])?,
+        source: read_optional_provenance_source(&object["source"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibrarySelection {
+    pub vendor: EditText,
+    pub model: EditText,
+    pub variants: TextList,
+}
+fn read_library_selection(v: &Value) -> Result<LibrarySelection, InvalidIntent> {
+    let object = fields(v, &["vendor", "model", "variants"], false)?;
+    Ok(LibrarySelection {
+        vendor: read_edit_text(&object["vendor"])?,
+        model: read_edit_text(&object["model"])?,
+        variants: read_text_list(&object["variants"])?,
+    })
+}
+pub type LibrarySelections = Vec<LibrarySelection>;
+fn read_library_selections(v: &Value) -> Result<LibrarySelections, InvalidIntent> {
+    list(v, 0, 4096)?
+        .iter()
+        .map(read_library_selection)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibrarySetInstalled {
+    pub selections: LibrarySelections,
+}
+fn read_library_set_installed(v: &Value) -> Result<LibrarySetInstalled, InvalidIntent> {
+    let object = fields(v, &["selections"], false)?;
+    Ok(LibrarySetInstalled {
+        selections: read_library_selections(&object["selections"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryModelRef {
+    pub vendor: EditText,
+    pub model: EditText,
+}
+fn read_library_model_ref(v: &Value) -> Result<LibraryModelRef, InvalidIntent> {
+    let object = fields(v, &["vendor", "model"], false)?;
+    Ok(LibraryModelRef {
+        vendor: read_edit_text(&object["vendor"])?,
+        model: read_edit_text(&object["model"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryCreate {
+    pub draft: LibraryDraft,
+    pub now: EditText,
+}
+fn read_library_create(v: &Value) -> Result<LibraryCreate, InvalidIntent> {
+    let object = fields(v, &["draft", "now"], false)?;
+    Ok(LibraryCreate {
+        draft: read_library_draft(&object["draft"])?,
+        now: read_edit_text(&object["now"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryUpdate {
+    pub vendor: EditText,
+    pub kind: CatalogPresetKind,
+    pub name: EditText,
+    pub draft: LibraryDraftUpdate,
+    pub now: EditText,
+}
+fn read_library_update(v: &Value) -> Result<LibraryUpdate, InvalidIntent> {
+    let object = fields(v, &["vendor", "kind", "name", "draft", "now"], false)?;
+    Ok(LibraryUpdate {
+        vendor: read_edit_text(&object["vendor"])?,
+        kind: read_catalog_preset_kind(&object["kind"])?,
+        name: read_edit_text(&object["name"])?,
+        draft: read_library_draft_update(&object["draft"])?,
+        now: read_edit_text(&object["now"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryPresetRef {
+    pub vendor: EditText,
+    pub kind: CatalogPresetKind,
+    pub name: EditText,
+}
+fn read_library_preset_ref(v: &Value) -> Result<LibraryPresetRef, InvalidIntent> {
+    let object = fields(v, &["vendor", "kind", "name"], false)?;
+    Ok(LibraryPresetRef {
+        vendor: read_edit_text(&object["vendor"])?,
+        kind: read_catalog_preset_kind(&object["kind"])?,
+        name: read_edit_text(&object["name"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LibraryOperation {
+    Install(LibrarySelection),
+    SetInstalled(LibrarySetInstalled),
+    Uninstall(LibraryModelRef),
+    Create(LibraryCreate),
+    Update(LibraryUpdate),
+    Delete(LibraryPresetRef),
+}
+fn read_library_operation(v: &Value) -> Result<LibraryOperation, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "install",
+            "setInstalled",
+            "uninstall",
+            "create",
+            "update",
+            "delete",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "install" => Ok(LibraryOperation::Install(read_library_selection(value)?)),
+        "setInstalled" => Ok(LibraryOperation::SetInstalled(read_library_set_installed(
+            value,
+        )?)),
+        "uninstall" => Ok(LibraryOperation::Uninstall(read_library_model_ref(value)?)),
+        "create" => Ok(LibraryOperation::Create(read_library_create(value)?)),
+        "update" => Ok(LibraryOperation::Update(read_library_update(value)?)),
+        "delete" => Ok(LibraryOperation::Delete(read_library_preset_ref(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryVariant {
+    pub variant: EditText,
+    pub preset_name: EditText,
+    pub preset_id: EditText,
+    pub nozzle_diameter: OptionalFinite,
+    pub installed: Flag,
+}
+fn read_library_variant(v: &Value) -> Result<LibraryVariant, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "variant",
+            "presetName",
+            "presetId",
+            "nozzleDiameter",
+            "installed",
+        ],
+        false,
+    )?;
+    Ok(LibraryVariant {
+        variant: read_edit_text(&object["variant"])?,
+        preset_name: read_edit_text(&object["presetName"])?,
+        preset_id: read_edit_text(&object["presetId"])?,
+        nozzle_diameter: read_optional_finite(&object["nozzleDiameter"])?,
+        installed: read_flag(&object["installed"])?,
+    })
+}
+pub type LibraryVariants = Vec<LibraryVariant>;
+fn read_library_variants(v: &Value) -> Result<LibraryVariants, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_library_variant).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryModel {
+    pub vendor: EditText,
+    pub model: EditText,
+    pub installed: Flag,
+    pub variants: LibraryVariants,
+}
+fn read_library_model(v: &Value) -> Result<LibraryModel, InvalidIntent> {
+    let object = fields(v, &["vendor", "model", "installed", "variants"], false)?;
+    Ok(LibraryModel {
+        vendor: read_edit_text(&object["vendor"])?,
+        model: read_edit_text(&object["model"])?,
+        installed: read_flag(&object["installed"])?,
+        variants: read_library_variants(&object["variants"])?,
+    })
+}
+pub type LibraryModels = Vec<LibraryModel>;
+fn read_library_models(v: &Value) -> Result<LibraryModels, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_library_model).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryInventory {
+    pub vendors: TextList,
+    pub models: LibraryModels,
+}
+fn read_library_inventory(v: &Value) -> Result<LibraryInventory, InvalidIntent> {
+    let object = fields(v, &["vendors", "models"], false)?;
+    Ok(LibraryInventory {
+        vendors: read_text_list(&object["vendors"])?,
+        models: read_library_models(&object["models"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryView {
+    pub configured: Flag,
+    pub fingerprint: EditText,
+    pub vendors: TextList,
+    pub custom_count: Counter,
+}
+fn read_library_view(v: &Value) -> Result<LibraryView, InvalidIntent> {
+    let object = fields(
+        v,
+        &["configured", "fingerprint", "vendors", "customCount"],
+        false,
+    )?;
+    Ok(LibraryView {
+        configured: read_flag(&object["configured"])?,
+        fingerprint: read_edit_text(&object["fingerprint"])?,
+        vendors: read_text_list(&object["vendors"])?,
+        custom_count: read_counter(&object["customCount"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryLineage {
+    pub vendor: EditText,
+    pub kind: CatalogPresetKind,
+    pub name: EditText,
+}
+fn read_library_lineage(v: &Value) -> Result<LibraryLineage, InvalidIntent> {
+    let object = fields(v, &["vendor", "kind", "name"], false)?;
+    Ok(LibraryLineage {
+        vendor: read_edit_text(&object["vendor"])?,
+        kind: read_catalog_preset_kind(&object["kind"])?,
+        name: read_edit_text(&object["name"])?,
+    })
+}
+pub type LibraryLineages = Vec<LibraryLineage>;
+fn read_library_lineages(v: &Value) -> Result<LibraryLineages, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_library_lineage).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryProvenance {
+    pub source: LibraryProvenanceSource,
+    pub license: EditText,
+    pub version: EditText,
+    pub derived_from: LibraryLineage,
+    pub created_at: EditText,
+    pub updated_at: EditText,
+    pub note: OptionalText,
+}
+fn read_library_provenance(v: &Value) -> Result<LibraryProvenance, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "source",
+            "license",
+            "version",
+            "derivedFrom",
+            "createdAt",
+            "updatedAt",
+            "note",
+        ],
+        false,
+    )?;
+    Ok(LibraryProvenance {
+        source: read_library_provenance_source(&object["source"])?,
+        license: read_edit_text(&object["license"])?,
+        version: read_edit_text(&object["version"])?,
+        derived_from: read_library_lineage(&object["derivedFrom"])?,
+        created_at: read_edit_text(&object["createdAt"])?,
+        updated_at: read_edit_text(&object["updatedAt"])?,
+        note: read_optional_text(&object["note"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryCustomPreset {
+    pub vendor: EditText,
+    pub kind: CatalogPresetKind,
+    pub name: EditText,
+    pub inherits: EditText,
+    pub overrides_json: JsonText,
+    pub provenance: LibraryProvenance,
+}
+fn read_library_custom_preset(v: &Value) -> Result<LibraryCustomPreset, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "vendor",
+            "kind",
+            "name",
+            "inherits",
+            "overridesJson",
+            "provenance",
+        ],
+        false,
+    )?;
+    Ok(LibraryCustomPreset {
+        vendor: read_edit_text(&object["vendor"])?,
+        kind: read_catalog_preset_kind(&object["kind"])?,
+        name: read_edit_text(&object["name"])?,
+        inherits: read_edit_text(&object["inherits"])?,
+        overrides_json: read_json_text(&object["overridesJson"])?,
+        provenance: read_library_provenance(&object["provenance"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryBaseRequest {
+    pub kind: CatalogPresetKind,
+    pub printer_id: OptionalText,
+    pub process_id: OptionalText,
+}
+fn read_library_base_request(v: &Value) -> Result<LibraryBaseRequest, InvalidIntent> {
+    let object = fields(v, &["kind", "printerId", "processId"], false)?;
+    Ok(LibraryBaseRequest {
+        kind: read_catalog_preset_kind(&object["kind"])?,
+        printer_id: read_optional_text(&object["printerId"])?,
+        process_id: read_optional_text(&object["processId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryBases {
+    pub ids: TextList,
+}
+fn read_library_bases(v: &Value) -> Result<LibraryBases, InvalidIntent> {
+    let object = fields(v, &["ids"], false)?;
+    Ok(LibraryBases {
+        ids: read_text_list(&object["ids"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryUpdatePlan {
+    pub previous_fingerprint: EditText,
+    pub next_fingerprint: EditText,
+    pub changed: Flag,
+    pub added_models: LibraryLineages,
+    pub removed_models: LibraryLineages,
+    pub removed_variants: LibraryLineages,
+    pub orphaned_custom_presets: LibraryLineages,
+    pub issue_count: Counter,
+    pub applicable: Flag,
+}
+fn read_library_update_plan(v: &Value) -> Result<LibraryUpdatePlan, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "previousFingerprint",
+            "nextFingerprint",
+            "changed",
+            "addedModels",
+            "removedModels",
+            "removedVariants",
+            "orphanedCustomPresets",
+            "issueCount",
+            "applicable",
+        ],
+        false,
+    )?;
+    Ok(LibraryUpdatePlan {
+        previous_fingerprint: read_edit_text(&object["previousFingerprint"])?,
+        next_fingerprint: read_edit_text(&object["nextFingerprint"])?,
+        changed: read_flag(&object["changed"])?,
+        added_models: read_library_lineages(&object["addedModels"])?,
+        removed_models: read_library_lineages(&object["removedModels"])?,
+        removed_variants: read_library_lineages(&object["removedVariants"])?,
+        orphaned_custom_presets: read_library_lineages(&object["orphanedCustomPresets"])?,
+        issue_count: read_counter(&object["issueCount"])?,
+        applicable: read_flag(&object["applicable"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryCoerceRequest {
+    pub inherited_json: OptionalJsonText,
+    pub text: EditText,
+}
+fn read_library_coerce_request(v: &Value) -> Result<LibraryCoerceRequest, InvalidIntent> {
+    let object = fields(v, &["inheritedJson", "text"], false)?;
+    Ok(LibraryCoerceRequest {
+        inherited_json: read_optional_json_text(&object["inheritedJson"])?,
+        text: read_edit_text(&object["text"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryCoercedValue {
+    pub json: JsonText,
+}
+fn read_library_coerced_value(v: &Value) -> Result<LibraryCoercedValue, InvalidIntent> {
+    let object = fields(v, &["json"], false)?;
+    Ok(LibraryCoercedValue {
+        json: read_json_text(&object["json"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryFormatRequest {
+    pub value_json: OptionalJsonText,
+}
+fn read_library_format_request(v: &Value) -> Result<LibraryFormatRequest, InvalidIntent> {
+    let object = fields(v, &["valueJson"], false)?;
+    Ok(LibraryFormatRequest {
+        value_json: read_optional_json_text(&object["valueJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryFormattedValue {
+    pub text: EditText,
+}
+fn read_library_formatted_value(v: &Value) -> Result<LibraryFormattedValue, InvalidIntent> {
+    let object = fields(v, &["text"], false)?;
+    Ok(LibraryFormattedValue {
+        text: read_edit_text(&object["text"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -3775,5 +4393,115 @@ pub fn encode_catalog_preflight_target(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_catalog_preflight_target(&text)?;
+    Ok(text)
+}
+pub fn decode_library_issue(text: &str) -> Result<LibraryIssue, InvalidIntent> {
+    read_library_issue(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_issue(value: &LibraryIssue) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_issue(&text)?;
+    Ok(text)
+}
+pub fn decode_library_outcome(text: &str) -> Result<LibraryOutcome, InvalidIntent> {
+    read_library_outcome(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_outcome(value: &LibraryOutcome) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_outcome(&text)?;
+    Ok(text)
+}
+pub fn decode_library_operation(text: &str) -> Result<LibraryOperation, InvalidIntent> {
+    read_library_operation(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_operation(value: &LibraryOperation) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_operation(&text)?;
+    Ok(text)
+}
+pub fn decode_library_inventory(text: &str) -> Result<LibraryInventory, InvalidIntent> {
+    read_library_inventory(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_inventory(value: &LibraryInventory) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_inventory(&text)?;
+    Ok(text)
+}
+pub fn decode_library_view(text: &str) -> Result<LibraryView, InvalidIntent> {
+    read_library_view(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_view(value: &LibraryView) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_view(&text)?;
+    Ok(text)
+}
+pub fn decode_library_custom_preset(text: &str) -> Result<LibraryCustomPreset, InvalidIntent> {
+    read_library_custom_preset(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_custom_preset(value: &LibraryCustomPreset) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_custom_preset(&text)?;
+    Ok(text)
+}
+pub fn decode_library_base_request(text: &str) -> Result<LibraryBaseRequest, InvalidIntent> {
+    read_library_base_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_base_request(value: &LibraryBaseRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_base_request(&text)?;
+    Ok(text)
+}
+pub fn decode_library_bases(text: &str) -> Result<LibraryBases, InvalidIntent> {
+    read_library_bases(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_bases(value: &LibraryBases) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_bases(&text)?;
+    Ok(text)
+}
+pub fn decode_library_update_plan(text: &str) -> Result<LibraryUpdatePlan, InvalidIntent> {
+    read_library_update_plan(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_update_plan(value: &LibraryUpdatePlan) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_update_plan(&text)?;
+    Ok(text)
+}
+pub fn decode_library_coerce_request(text: &str) -> Result<LibraryCoerceRequest, InvalidIntent> {
+    read_library_coerce_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_coerce_request(
+    value: &LibraryCoerceRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_coerce_request(&text)?;
+    Ok(text)
+}
+pub fn decode_library_coerced_value(text: &str) -> Result<LibraryCoercedValue, InvalidIntent> {
+    read_library_coerced_value(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_coerced_value(value: &LibraryCoercedValue) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_coerced_value(&text)?;
+    Ok(text)
+}
+pub fn decode_library_format_request(text: &str) -> Result<LibraryFormatRequest, InvalidIntent> {
+    read_library_format_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_format_request(
+    value: &LibraryFormatRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_format_request(&text)?;
+    Ok(text)
+}
+pub fn decode_library_formatted_value(text: &str) -> Result<LibraryFormattedValue, InvalidIntent> {
+    read_library_formatted_value(&super::project_intents::parse(text)?)
+}
+pub fn encode_library_formatted_value(
+    value: &LibraryFormattedValue,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_library_formatted_value(&text)?;
     Ok(text)
 }

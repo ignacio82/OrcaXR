@@ -1208,9 +1208,9 @@ and replay coverage for the complete current command inventory.
   queries compare reference results/errors. Canonical slice preflight, live
   profile targets, their host exchange and the option-value codec are now
   native too, as are the preset graph, the compiled profile catalog and its
-  host exchange, and the user preset library. Condition expressions stay
-  unresolved, as in the browser, which ships no evaluator. The library's host
-  exchange and the settings editor's draft commands are not native yet.
+  host exchange, and the user preset library and its host exchange.
+  Condition expressions stay unresolved, as in the browser, which ships no
+  evaluator. The settings editor's draft commands are not native yet.
   - [x] Port generated scope eligibility, layered resolution, import sanitization
     and configuration selectors with independent reference cases.
   - [x] Port canonical slice preflight (`slicing::preflight`) with FullSpectrum
@@ -1238,8 +1238,11 @@ and replay coverage for the complete current command inventory.
     custom presets, bundles, stored state and catalog updates, with the
     browser's non-portable parse message and Infinity acceptance fixed
     (14 scenarios, 131 steps over the bundled and six synthetic catalogs).
-  - [ ] Expose the preset library to hosts and port the settings editor's
-    draft commands.
+  - [x] Expose the preset library to hosts (WASM, JNI, Kotlin): catalog and
+    stored-byte creation, contract operations stamped by the request, bundles
+    and state as bounded bytes, piecewise issues and the composed profile
+    catalog (425 replies and 184 refusals per binding).
+  - [ ] Port the settings editor's field projection and draft commands.
 - [ ] Provide bounded object-tree, inspector, capability, selection, and renderer
   projections. Subscribe to revisioned deltas; do not send the complete project
   or all geometry to every panel after each edit.

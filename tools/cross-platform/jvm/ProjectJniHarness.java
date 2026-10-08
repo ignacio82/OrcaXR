@@ -14,6 +14,9 @@ public final class ProjectJniHarness {
     public static long catalogChecks(byte[] catalog, String expected) {
         return ProjectCatalogChecks.run(catalog, expected);
     }
+    public static long libraryChecks(byte[] catalog, String expected) {
+        return ProjectLibraryChecks.run(catalog, expected);
+    }
     public static long actorPreflightChecks(String source, byte[] mesh, String request, String expected) {
         return ProjectPreflightChecks.run(source, mesh, request, expected);
     }
@@ -117,8 +120,14 @@ public final class ProjectJniHarness {
             if (zone.equals("throw")) return (LocalTimestampResolver) value -> { throw new IllegalStateException("PRIVATE timestamp detail"); };
             return new ProjectTimeZone(ZoneId.of(zone));
         }
+        if (type == byte[].class) {
+            // A negative length is a null reference (optional byte arrays).
+            int length = in.readInt();
+            if (length < 0) return null;
+            if (length > 16 * 1024 * 1024) throw new IOException("test input limit");
+            byte[] v = new byte[length]; in.readFully(v); return v;
+        }
         int n = length();
-        if (type == byte[].class) { byte[] v = new byte[n]; in.readFully(v); return v; }
         if (type == char[].class) { char[] v = new char[n]; for (int i = 0; i < n; i++) v[i] = in.readChar(); return v; }
         if (type == long[].class) { long[] v = new long[n]; for (int i = 0; i < n; i++) v[i] = in.readLong(); return v; }
         if (type == double[].class) { double[] v = new double[n]; for (int i = 0; i < n; i++) v[i] = in.readDouble(); return v; }
@@ -144,6 +153,7 @@ public final class ProjectJniHarness {
             Method method = null;
             if (name.equals("actorExportChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class, String.class, String.class, String.class);
             if (name.equals("catalogChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class);
+            if (name.equals("libraryChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class);
             if (name.equals("actorPreflightChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorClipboardChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class);
             if (name.equals("actorClipboardReplay")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class, long.class, String.class, long[].class);

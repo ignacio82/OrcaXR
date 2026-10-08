@@ -6,6 +6,7 @@ import { startProjectJni, projectJniCore } from "./project-jni-bridge.mjs";
 import { replayProject } from "./project-wasm-replay.mjs";
 import { replayPreflights } from "./project-preflight-replay.mjs";
 import { replayCatalogs } from "./catalog-replay.mjs";
+import { replayLibrary } from "./library-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -318,6 +319,44 @@ try {
     ].join("\n"),
   );
   assert.equal(catalogChecks, 15);
+  // The preset library through the raw exports, then the Kotlin wrapper.
+  const libraryFixture = JSON.parse(
+    await readFile(
+      new URL("testdata/cross-platform/preset-library-vectors.json", root),
+    ),
+  );
+  const libraries = replayLibrary(
+    projectJniCore(jvm.call),
+    libraryFixture,
+    catalogBytes,
+    [undefined],
+  );
+  assert.deepEqual(
+    [libraries.libraryReplies, libraries.libraryRefusals],
+    [425, 184],
+  );
+  const scenario = (name) =>
+    libraryFixture.scenarios.find((s) => s.name === name).steps;
+  const [bundles, custom] = [scenario("acme-bundles"), scenario("acme-custom")];
+  const libraryChecks = jvm.call(
+    "libraryChecks",
+    new TextEncoder().encode(libraryFixture.catalogs.acme),
+    [
+      bundles[0].wire.operationJson,
+      bundles[0].wire.outcomeJson,
+      bundles[1].wire.operationJson,
+      bundles[1].wire.outcomeJson,
+      bundles[5].wire.customJsons[0],
+      custom[4].wire.operationJson,
+      custom[4].wire.outcomeJson,
+      custom[4].wire.issueJsons[0],
+      libraryFixture.wire.coerceCases[17].requestJson,
+      libraryFixture.wire.coerceCases[17].replyJson,
+      libraryFixture.wire.formatCases[10].requestJson,
+      libraryFixture.wire.formatCases[10].replyJson,
+    ].join("\n"),
+  );
+  assert.equal(libraryChecks, 25);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);
@@ -339,6 +378,8 @@ try {
     actorPreflightChecks,
     ...catalogs,
     catalogChecks,
+    ...libraries,
+    libraryChecks,
     ownedQueryTextUnits: ownedQueryText.length,
     ownedBytes: owned.byteLength,
     hostJniSha256: createHash("sha256")

@@ -64,6 +64,22 @@ final class NativeProject {
     static native String catalogProfileConfig(long handle, long position);
     static native String catalogReconcile(long handle, String request);
     static native String catalogTarget(long handle, String request, long maxTools);
+    static native void libraryCreate(long handle, byte[] stored, double[] limits, PresetCollator collator, LocalTimestampResolver resolver, int integerMode);
+    static native String libraryApply(long handle, String operation);
+    static native String libraryImport(long handle, byte[] bundle, double[] limits);
+    static native long libraryIssueCount(long handle);
+    static native String libraryIssue(long handle, long position);
+    static native byte[] libraryExport(long handle, String exportedAt, long maxBytes);
+    static native byte[] libraryState(long handle, long maxBytes);
+    static native String libraryView(long handle);
+    static native String libraryCustomPreset(long handle, long position);
+    static native String libraryInventory(long handle);
+    static native String libraryBases(long handle, String request);
+    static native long libraryCatalog(long handle);
+    static native String libraryPlanUpdate(long handle, long upload);
+    static native String libraryApplyUpdate(long handle, long upload);
+    static native String libraryCoerce(String request);
+    static native String libraryFormat(String request);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

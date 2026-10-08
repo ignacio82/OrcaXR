@@ -2724,6 +2724,419 @@ object ProjectIntents {
             w.field("toolCount") { writeFinite(w, v.toolCount) }
         }
     }
+    enum class LibraryIssueCode {InvalidState,InvalidBundle,UnsupportedSchema,EngineMismatch,UnknownPrinterModel,UnknownPrinterVariant,UnknownBasePreset,BaseNotInstantiable,DuplicatePresetName,ReservedKey,UnknownPresetKey,InvalidValue,InvalidProvenance,InvalidName,UnknownPreset,DependentPreset,GraphRejected,NothingInstalled}
+    private fun readLibraryIssueCode(v: Any): LibraryIssueCode {
+        return when(v) {"invalidState" -> LibraryIssueCode.InvalidState;"invalidBundle" -> LibraryIssueCode.InvalidBundle;"unsupportedSchema" -> LibraryIssueCode.UnsupportedSchema;"engineMismatch" -> LibraryIssueCode.EngineMismatch;"unknownPrinterModel" -> LibraryIssueCode.UnknownPrinterModel;"unknownPrinterVariant" -> LibraryIssueCode.UnknownPrinterVariant;"unknownBasePreset" -> LibraryIssueCode.UnknownBasePreset;"baseNotInstantiable" -> LibraryIssueCode.BaseNotInstantiable;"duplicatePresetName" -> LibraryIssueCode.DuplicatePresetName;"reservedKey" -> LibraryIssueCode.ReservedKey;"unknownPresetKey" -> LibraryIssueCode.UnknownPresetKey;"invalidValue" -> LibraryIssueCode.InvalidValue;"invalidProvenance" -> LibraryIssueCode.InvalidProvenance;"invalidName" -> LibraryIssueCode.InvalidName;"unknownPreset" -> LibraryIssueCode.UnknownPreset;"dependentPreset" -> LibraryIssueCode.DependentPreset;"graphRejected" -> LibraryIssueCode.GraphRejected;"nothingInstalled" -> LibraryIssueCode.NothingInstalled; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeLibraryIssueCode(w: ProjectIntentWriter, v: LibraryIssueCode) {
+        w.literal(when(v) {LibraryIssueCode.InvalidState -> "invalidState";LibraryIssueCode.InvalidBundle -> "invalidBundle";LibraryIssueCode.UnsupportedSchema -> "unsupportedSchema";LibraryIssueCode.EngineMismatch -> "engineMismatch";LibraryIssueCode.UnknownPrinterModel -> "unknownPrinterModel";LibraryIssueCode.UnknownPrinterVariant -> "unknownPrinterVariant";LibraryIssueCode.UnknownBasePreset -> "unknownBasePreset";LibraryIssueCode.BaseNotInstantiable -> "baseNotInstantiable";LibraryIssueCode.DuplicatePresetName -> "duplicatePresetName";LibraryIssueCode.ReservedKey -> "reservedKey";LibraryIssueCode.UnknownPresetKey -> "unknownPresetKey";LibraryIssueCode.InvalidValue -> "invalidValue";LibraryIssueCode.InvalidProvenance -> "invalidProvenance";LibraryIssueCode.InvalidName -> "invalidName";LibraryIssueCode.UnknownPreset -> "unknownPreset";LibraryIssueCode.DependentPreset -> "dependentPreset";LibraryIssueCode.GraphRejected -> "graphRejected";LibraryIssueCode.NothingInstalled -> "nothingInstalled";})
+    }
+    data class LibraryIssue(val code: LibraryIssueCode, val error: Boolean, val path: List<Int>, val message: List<Int>)
+    private fun readLibraryIssue(v: Any): LibraryIssue {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "error", "path", "message"), false)
+        return LibraryIssue(readLibraryIssueCode(obj.get("code")), readFlag(obj.get("error")), readEditText(obj.get("path")), readEditText(obj.get("message")))
+    }
+    private fun writeLibraryIssue(w: ProjectIntentWriter, v: LibraryIssue) {
+        w.obj {
+            w.field("code") { writeLibraryIssueCode(w, v.code) }
+            w.field("error") { writeFlag(w, v.error) }
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    data class LibraryOutcome(val ok: Boolean, val issueCount: Long)
+    private fun readLibraryOutcome(v: Any): LibraryOutcome {
+        val obj = ProjectIntentJson.fields(v, setOf("ok", "issueCount"), false)
+        return LibraryOutcome(readFlag(obj.get("ok")), readCounter(obj.get("issueCount")))
+    }
+    private fun writeLibraryOutcome(w: ProjectIntentWriter, v: LibraryOutcome) {
+        w.obj {
+            w.field("ok") { writeFlag(w, v.ok) }
+            w.field("issueCount") { writeCounter(w, v.issueCount) }
+        }
+    }
+    enum class LibraryProvenanceSource {UserDerived,Imported}
+    private fun readLibraryProvenanceSource(v: Any): LibraryProvenanceSource {
+        return when(v) {"userDerived" -> LibraryProvenanceSource.UserDerived;"imported" -> LibraryProvenanceSource.Imported; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeLibraryProvenanceSource(w: ProjectIntentWriter, v: LibraryProvenanceSource) {
+        w.literal(when(v) {LibraryProvenanceSource.UserDerived -> "userDerived";LibraryProvenanceSource.Imported -> "imported";})
+    }
+    sealed interface OptionalProvenanceSource {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalProvenanceSource
+        data class Value(val value: ProjectIntents.LibraryProvenanceSource) : OptionalProvenanceSource
+    }
+    private fun readOptionalProvenanceSource(v: Any): OptionalProvenanceSource {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalProvenanceSource.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalProvenanceSource.Value(readLibraryProvenanceSource(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalProvenanceSource(w: ProjectIntentWriter, v: OptionalProvenanceSource) {
+        w.obj { when(v) {
+            is OptionalProvenanceSource.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalProvenanceSource.Value -> w.field("value") { writeLibraryProvenanceSource(w, v.value) }
+        } }
+    }
+    sealed interface OptionalPresetKind {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalPresetKind
+        data class Value(val value: ProjectIntents.CatalogPresetKind) : OptionalPresetKind
+    }
+    private fun readOptionalPresetKind(v: Any): OptionalPresetKind {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalPresetKind.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalPresetKind.Value(readCatalogPresetKind(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalPresetKind(w: ProjectIntentWriter, v: OptionalPresetKind) {
+        w.obj { when(v) {
+            is OptionalPresetKind.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalPresetKind.Value -> w.field("value") { writeCatalogPresetKind(w, v.value) }
+        } }
+    }
+    data class LibraryDraft(val vendor: OptionalText, val kind: CatalogPresetKind, val name: List<Int>, val inherits: List<Int>, val overridesJson: OptionalJsonText, val license: OptionalText, val version: OptionalText, val note: OptionalText, val source: OptionalProvenanceSource)
+    private fun readLibraryDraft(v: Any): LibraryDraft {
+        val obj = ProjectIntentJson.fields(v, setOf("vendor", "kind", "name", "inherits", "overridesJson", "license", "version", "note", "source"), false)
+        return LibraryDraft(readOptionalText(obj.get("vendor")), readCatalogPresetKind(obj.get("kind")), readEditText(obj.get("name")), readEditText(obj.get("inherits")), readOptionalJsonText(obj.get("overridesJson")), readOptionalText(obj.get("license")), readOptionalText(obj.get("version")), readOptionalText(obj.get("note")), readOptionalProvenanceSource(obj.get("source")))
+    }
+    private fun writeLibraryDraft(w: ProjectIntentWriter, v: LibraryDraft) {
+        w.obj {
+            w.field("vendor") { writeOptionalText(w, v.vendor) }
+            w.field("kind") { writeCatalogPresetKind(w, v.kind) }
+            w.field("name") { writeEditText(w, v.name) }
+            w.field("inherits") { writeEditText(w, v.inherits) }
+            w.field("overridesJson") { writeOptionalJsonText(w, v.overridesJson) }
+            w.field("license") { writeOptionalText(w, v.license) }
+            w.field("version") { writeOptionalText(w, v.version) }
+            w.field("note") { writeOptionalText(w, v.note) }
+            w.field("source") { writeOptionalProvenanceSource(w, v.source) }
+        }
+    }
+    data class LibraryDraftUpdate(val vendor: OptionalText, val kind: OptionalPresetKind, val name: OptionalText, val inherits: OptionalText, val overridesJson: OptionalJsonText, val license: OptionalText, val version: OptionalText, val note: OptionalText, val source: OptionalProvenanceSource)
+    private fun readLibraryDraftUpdate(v: Any): LibraryDraftUpdate {
+        val obj = ProjectIntentJson.fields(v, setOf("vendor", "kind", "name", "inherits", "overridesJson", "license", "version", "note", "source"), false)
+        return LibraryDraftUpdate(readOptionalText(obj.get("vendor")), readOptionalPresetKind(obj.get("kind")), readOptionalText(obj.get("name")), readOptionalText(obj.get("inherits")), readOptionalJsonText(obj.get("overridesJson")), readOptionalText(obj.get("license")), readOptionalText(obj.get("version")), readOptionalText(obj.get("note")), readOptionalProvenanceSource(obj.get("source")))
+    }
+    private fun writeLibraryDraftUpdate(w: ProjectIntentWriter, v: LibraryDraftUpdate) {
+        w.obj {
+            w.field("vendor") { writeOptionalText(w, v.vendor) }
+            w.field("kind") { writeOptionalPresetKind(w, v.kind) }
+            w.field("name") { writeOptionalText(w, v.name) }
+            w.field("inherits") { writeOptionalText(w, v.inherits) }
+            w.field("overridesJson") { writeOptionalJsonText(w, v.overridesJson) }
+            w.field("license") { writeOptionalText(w, v.license) }
+            w.field("version") { writeOptionalText(w, v.version) }
+            w.field("note") { writeOptionalText(w, v.note) }
+            w.field("source") { writeOptionalProvenanceSource(w, v.source) }
+        }
+    }
+    data class LibrarySelection(val vendor: List<Int>, val model: List<Int>, val variants: List<List<Int>>)
+    private fun readLibrarySelection(v: Any): LibrarySelection {
+        val obj = ProjectIntentJson.fields(v, setOf("vendor", "model", "variants"), false)
+        return LibrarySelection(readEditText(obj.get("vendor")), readEditText(obj.get("model")), readTextList(obj.get("variants")))
+    }
+    private fun writeLibrarySelection(w: ProjectIntentWriter, v: LibrarySelection) {
+        w.obj {
+            w.field("vendor") { writeEditText(w, v.vendor) }
+            w.field("model") { writeEditText(w, v.model) }
+            w.field("variants") { writeTextList(w, v.variants) }
+        }
+    }
+    private fun readLibrarySelections(v: Any): List<LibrarySelection> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readLibrarySelection(array.get(it)) }
+    }
+    private fun writeLibrarySelections(w: ProjectIntentWriter, v: List<LibrarySelection>) {
+        w.array(v, 0, 4096) { writeLibrarySelection(w, it) }
+    }
+    data class LibrarySetInstalled(val selections: List<LibrarySelection>)
+    private fun readLibrarySetInstalled(v: Any): LibrarySetInstalled {
+        val obj = ProjectIntentJson.fields(v, setOf("selections"), false)
+        return LibrarySetInstalled(readLibrarySelections(obj.get("selections")))
+    }
+    private fun writeLibrarySetInstalled(w: ProjectIntentWriter, v: LibrarySetInstalled) {
+        w.obj {
+            w.field("selections") { writeLibrarySelections(w, v.selections) }
+        }
+    }
+    data class LibraryModelRef(val vendor: List<Int>, val model: List<Int>)
+    private fun readLibraryModelRef(v: Any): LibraryModelRef {
+        val obj = ProjectIntentJson.fields(v, setOf("vendor", "model"), false)
+        return LibraryModelRef(readEditText(obj.get("vendor")), readEditText(obj.get("model")))
+    }
+    private fun writeLibraryModelRef(w: ProjectIntentWriter, v: LibraryModelRef) {
+        w.obj {
+            w.field("vendor") { writeEditText(w, v.vendor) }
+            w.field("model") { writeEditText(w, v.model) }
+        }
+    }
+    data class LibraryCreate(val draft: LibraryDraft, val now: List<Int>)
+    private fun readLibraryCreate(v: Any): LibraryCreate {
+        val obj = ProjectIntentJson.fields(v, setOf("draft", "now"), false)
+        return LibraryCreate(readLibraryDraft(obj.get("draft")), readEditText(obj.get("now")))
+    }
+    private fun writeLibraryCreate(w: ProjectIntentWriter, v: LibraryCreate) {
+        w.obj {
+            w.field("draft") { writeLibraryDraft(w, v.draft) }
+            w.field("now") { writeEditText(w, v.now) }
+        }
+    }
+    data class LibraryUpdate(val vendor: List<Int>, val kind: CatalogPresetKind, val name: List<Int>, val draft: LibraryDraftUpdate, val now: List<Int>)
+    private fun readLibraryUpdate(v: Any): LibraryUpdate {
+        val obj = ProjectIntentJson.fields(v, setOf("vendor", "kind", "name", "draft", "now"), false)
+        return LibraryUpdate(readEditText(obj.get("vendor")), readCatalogPresetKind(obj.get("kind")), readEditText(obj.get("name")), readLibraryDraftUpdate(obj.get("draft")), readEditText(obj.get("now")))
+    }
+    private fun writeLibraryUpdate(w: ProjectIntentWriter, v: LibraryUpdate) {
+        w.obj {
+            w.field("vendor") { writeEditText(w, v.vendor) }
+            w.field("kind") { writeCatalogPresetKind(w, v.kind) }
+            w.field("name") { writeEditText(w, v.name) }
+            w.field("draft") { writeLibraryDraftUpdate(w, v.draft) }
+            w.field("now") { writeEditText(w, v.now) }
+        }
+    }
+    data class LibraryPresetRef(val vendor: List<Int>, val kind: CatalogPresetKind, val name: List<Int>)
+    private fun readLibraryPresetRef(v: Any): LibraryPresetRef {
+        val obj = ProjectIntentJson.fields(v, setOf("vendor", "kind", "name"), false)
+        return LibraryPresetRef(readEditText(obj.get("vendor")), readCatalogPresetKind(obj.get("kind")), readEditText(obj.get("name")))
+    }
+    private fun writeLibraryPresetRef(w: ProjectIntentWriter, v: LibraryPresetRef) {
+        w.obj {
+            w.field("vendor") { writeEditText(w, v.vendor) }
+            w.field("kind") { writeCatalogPresetKind(w, v.kind) }
+            w.field("name") { writeEditText(w, v.name) }
+        }
+    }
+    sealed interface LibraryOperation {
+        data class Install(val value: ProjectIntents.LibrarySelection) : LibraryOperation
+        data class SetInstalled(val value: ProjectIntents.LibrarySetInstalled) : LibraryOperation
+        data class Uninstall(val value: ProjectIntents.LibraryModelRef) : LibraryOperation
+        data class Create(val value: ProjectIntents.LibraryCreate) : LibraryOperation
+        data class Update(val value: ProjectIntents.LibraryUpdate) : LibraryOperation
+        data class Delete(val value: ProjectIntents.LibraryPresetRef) : LibraryOperation
+    }
+    private fun readLibraryOperation(v: Any): LibraryOperation {
+        val obj = ProjectIntentJson.fields(v, setOf("install", "setInstalled", "uninstall", "create", "update", "delete"), true)
+        return when(val key = obj.keys().next()) {
+            "install" -> LibraryOperation.Install(readLibrarySelection(obj.get(key)))
+            "setInstalled" -> LibraryOperation.SetInstalled(readLibrarySetInstalled(obj.get(key)))
+            "uninstall" -> LibraryOperation.Uninstall(readLibraryModelRef(obj.get(key)))
+            "create" -> LibraryOperation.Create(readLibraryCreate(obj.get(key)))
+            "update" -> LibraryOperation.Update(readLibraryUpdate(obj.get(key)))
+            "delete" -> LibraryOperation.Delete(readLibraryPresetRef(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeLibraryOperation(w: ProjectIntentWriter, v: LibraryOperation) {
+        w.obj { when(v) {
+            is LibraryOperation.Install -> w.field("install") { writeLibrarySelection(w, v.value) }
+            is LibraryOperation.SetInstalled -> w.field("setInstalled") { writeLibrarySetInstalled(w, v.value) }
+            is LibraryOperation.Uninstall -> w.field("uninstall") { writeLibraryModelRef(w, v.value) }
+            is LibraryOperation.Create -> w.field("create") { writeLibraryCreate(w, v.value) }
+            is LibraryOperation.Update -> w.field("update") { writeLibraryUpdate(w, v.value) }
+            is LibraryOperation.Delete -> w.field("delete") { writeLibraryPresetRef(w, v.value) }
+        } }
+    }
+    data class LibraryVariant(val variant: List<Int>, val presetName: List<Int>, val presetId: List<Int>, val nozzleDiameter: OptionalFinite, val installed: Boolean)
+    private fun readLibraryVariant(v: Any): LibraryVariant {
+        val obj = ProjectIntentJson.fields(v, setOf("variant", "presetName", "presetId", "nozzleDiameter", "installed"), false)
+        return LibraryVariant(readEditText(obj.get("variant")), readEditText(obj.get("presetName")), readEditText(obj.get("presetId")), readOptionalFinite(obj.get("nozzleDiameter")), readFlag(obj.get("installed")))
+    }
+    private fun writeLibraryVariant(w: ProjectIntentWriter, v: LibraryVariant) {
+        w.obj {
+            w.field("variant") { writeEditText(w, v.variant) }
+            w.field("presetName") { writeEditText(w, v.presetName) }
+            w.field("presetId") { writeEditText(w, v.presetId) }
+            w.field("nozzleDiameter") { writeOptionalFinite(w, v.nozzleDiameter) }
+            w.field("installed") { writeFlag(w, v.installed) }
+        }
+    }
+    private fun readLibraryVariants(v: Any): List<LibraryVariant> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readLibraryVariant(array.get(it)) }
+    }
+    private fun writeLibraryVariants(w: ProjectIntentWriter, v: List<LibraryVariant>) {
+        w.array(v, 0, 4096) { writeLibraryVariant(w, it) }
+    }
+    data class LibraryModel(val vendor: List<Int>, val model: List<Int>, val installed: Boolean, val variants: List<LibraryVariant>)
+    private fun readLibraryModel(v: Any): LibraryModel {
+        val obj = ProjectIntentJson.fields(v, setOf("vendor", "model", "installed", "variants"), false)
+        return LibraryModel(readEditText(obj.get("vendor")), readEditText(obj.get("model")), readFlag(obj.get("installed")), readLibraryVariants(obj.get("variants")))
+    }
+    private fun writeLibraryModel(w: ProjectIntentWriter, v: LibraryModel) {
+        w.obj {
+            w.field("vendor") { writeEditText(w, v.vendor) }
+            w.field("model") { writeEditText(w, v.model) }
+            w.field("installed") { writeFlag(w, v.installed) }
+            w.field("variants") { writeLibraryVariants(w, v.variants) }
+        }
+    }
+    private fun readLibraryModels(v: Any): List<LibraryModel> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readLibraryModel(array.get(it)) }
+    }
+    private fun writeLibraryModels(w: ProjectIntentWriter, v: List<LibraryModel>) {
+        w.array(v, 0, 4096) { writeLibraryModel(w, it) }
+    }
+    data class LibraryInventory(val vendors: List<List<Int>>, val models: List<LibraryModel>)
+    private fun readLibraryInventory(v: Any): LibraryInventory {
+        val obj = ProjectIntentJson.fields(v, setOf("vendors", "models"), false)
+        return LibraryInventory(readTextList(obj.get("vendors")), readLibraryModels(obj.get("models")))
+    }
+    private fun writeLibraryInventory(w: ProjectIntentWriter, v: LibraryInventory) {
+        w.obj {
+            w.field("vendors") { writeTextList(w, v.vendors) }
+            w.field("models") { writeLibraryModels(w, v.models) }
+        }
+    }
+    data class LibraryView(val configured: Boolean, val fingerprint: List<Int>, val vendors: List<List<Int>>, val customCount: Long)
+    private fun readLibraryView(v: Any): LibraryView {
+        val obj = ProjectIntentJson.fields(v, setOf("configured", "fingerprint", "vendors", "customCount"), false)
+        return LibraryView(readFlag(obj.get("configured")), readEditText(obj.get("fingerprint")), readTextList(obj.get("vendors")), readCounter(obj.get("customCount")))
+    }
+    private fun writeLibraryView(w: ProjectIntentWriter, v: LibraryView) {
+        w.obj {
+            w.field("configured") { writeFlag(w, v.configured) }
+            w.field("fingerprint") { writeEditText(w, v.fingerprint) }
+            w.field("vendors") { writeTextList(w, v.vendors) }
+            w.field("customCount") { writeCounter(w, v.customCount) }
+        }
+    }
+    data class LibraryLineage(val vendor: List<Int>, val kind: CatalogPresetKind, val name: List<Int>)
+    private fun readLibraryLineage(v: Any): LibraryLineage {
+        val obj = ProjectIntentJson.fields(v, setOf("vendor", "kind", "name"), false)
+        return LibraryLineage(readEditText(obj.get("vendor")), readCatalogPresetKind(obj.get("kind")), readEditText(obj.get("name")))
+    }
+    private fun writeLibraryLineage(w: ProjectIntentWriter, v: LibraryLineage) {
+        w.obj {
+            w.field("vendor") { writeEditText(w, v.vendor) }
+            w.field("kind") { writeCatalogPresetKind(w, v.kind) }
+            w.field("name") { writeEditText(w, v.name) }
+        }
+    }
+    private fun readLibraryLineages(v: Any): List<LibraryLineage> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readLibraryLineage(array.get(it)) }
+    }
+    private fun writeLibraryLineages(w: ProjectIntentWriter, v: List<LibraryLineage>) {
+        w.array(v, 0, 4096) { writeLibraryLineage(w, it) }
+    }
+    data class LibraryProvenance(val source: LibraryProvenanceSource, val license: List<Int>, val version: List<Int>, val derivedFrom: LibraryLineage, val createdAt: List<Int>, val updatedAt: List<Int>, val note: OptionalText)
+    private fun readLibraryProvenance(v: Any): LibraryProvenance {
+        val obj = ProjectIntentJson.fields(v, setOf("source", "license", "version", "derivedFrom", "createdAt", "updatedAt", "note"), false)
+        return LibraryProvenance(readLibraryProvenanceSource(obj.get("source")), readEditText(obj.get("license")), readEditText(obj.get("version")), readLibraryLineage(obj.get("derivedFrom")), readEditText(obj.get("createdAt")), readEditText(obj.get("updatedAt")), readOptionalText(obj.get("note")))
+    }
+    private fun writeLibraryProvenance(w: ProjectIntentWriter, v: LibraryProvenance) {
+        w.obj {
+            w.field("source") { writeLibraryProvenanceSource(w, v.source) }
+            w.field("license") { writeEditText(w, v.license) }
+            w.field("version") { writeEditText(w, v.version) }
+            w.field("derivedFrom") { writeLibraryLineage(w, v.derivedFrom) }
+            w.field("createdAt") { writeEditText(w, v.createdAt) }
+            w.field("updatedAt") { writeEditText(w, v.updatedAt) }
+            w.field("note") { writeOptionalText(w, v.note) }
+        }
+    }
+    data class LibraryCustomPreset(val vendor: List<Int>, val kind: CatalogPresetKind, val name: List<Int>, val inherits: List<Int>, val overridesJson: List<Int>, val provenance: LibraryProvenance)
+    private fun readLibraryCustomPreset(v: Any): LibraryCustomPreset {
+        val obj = ProjectIntentJson.fields(v, setOf("vendor", "kind", "name", "inherits", "overridesJson", "provenance"), false)
+        return LibraryCustomPreset(readEditText(obj.get("vendor")), readCatalogPresetKind(obj.get("kind")), readEditText(obj.get("name")), readEditText(obj.get("inherits")), readJsonText(obj.get("overridesJson")), readLibraryProvenance(obj.get("provenance")))
+    }
+    private fun writeLibraryCustomPreset(w: ProjectIntentWriter, v: LibraryCustomPreset) {
+        w.obj {
+            w.field("vendor") { writeEditText(w, v.vendor) }
+            w.field("kind") { writeCatalogPresetKind(w, v.kind) }
+            w.field("name") { writeEditText(w, v.name) }
+            w.field("inherits") { writeEditText(w, v.inherits) }
+            w.field("overridesJson") { writeJsonText(w, v.overridesJson) }
+            w.field("provenance") { writeLibraryProvenance(w, v.provenance) }
+        }
+    }
+    data class LibraryBaseRequest(val kind: CatalogPresetKind, val printerId: OptionalText, val processId: OptionalText)
+    private fun readLibraryBaseRequest(v: Any): LibraryBaseRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("kind", "printerId", "processId"), false)
+        return LibraryBaseRequest(readCatalogPresetKind(obj.get("kind")), readOptionalText(obj.get("printerId")), readOptionalText(obj.get("processId")))
+    }
+    private fun writeLibraryBaseRequest(w: ProjectIntentWriter, v: LibraryBaseRequest) {
+        w.obj {
+            w.field("kind") { writeCatalogPresetKind(w, v.kind) }
+            w.field("printerId") { writeOptionalText(w, v.printerId) }
+            w.field("processId") { writeOptionalText(w, v.processId) }
+        }
+    }
+    data class LibraryBases(val ids: List<List<Int>>)
+    private fun readLibraryBases(v: Any): LibraryBases {
+        val obj = ProjectIntentJson.fields(v, setOf("ids"), false)
+        return LibraryBases(readTextList(obj.get("ids")))
+    }
+    private fun writeLibraryBases(w: ProjectIntentWriter, v: LibraryBases) {
+        w.obj {
+            w.field("ids") { writeTextList(w, v.ids) }
+        }
+    }
+    data class LibraryUpdatePlan(val previousFingerprint: List<Int>, val nextFingerprint: List<Int>, val changed: Boolean, val addedModels: List<LibraryLineage>, val removedModels: List<LibraryLineage>, val removedVariants: List<LibraryLineage>, val orphanedCustomPresets: List<LibraryLineage>, val issueCount: Long, val applicable: Boolean)
+    private fun readLibraryUpdatePlan(v: Any): LibraryUpdatePlan {
+        val obj = ProjectIntentJson.fields(v, setOf("previousFingerprint", "nextFingerprint", "changed", "addedModels", "removedModels", "removedVariants", "orphanedCustomPresets", "issueCount", "applicable"), false)
+        return LibraryUpdatePlan(readEditText(obj.get("previousFingerprint")), readEditText(obj.get("nextFingerprint")), readFlag(obj.get("changed")), readLibraryLineages(obj.get("addedModels")), readLibraryLineages(obj.get("removedModels")), readLibraryLineages(obj.get("removedVariants")), readLibraryLineages(obj.get("orphanedCustomPresets")), readCounter(obj.get("issueCount")), readFlag(obj.get("applicable")))
+    }
+    private fun writeLibraryUpdatePlan(w: ProjectIntentWriter, v: LibraryUpdatePlan) {
+        w.obj {
+            w.field("previousFingerprint") { writeEditText(w, v.previousFingerprint) }
+            w.field("nextFingerprint") { writeEditText(w, v.nextFingerprint) }
+            w.field("changed") { writeFlag(w, v.changed) }
+            w.field("addedModels") { writeLibraryLineages(w, v.addedModels) }
+            w.field("removedModels") { writeLibraryLineages(w, v.removedModels) }
+            w.field("removedVariants") { writeLibraryLineages(w, v.removedVariants) }
+            w.field("orphanedCustomPresets") { writeLibraryLineages(w, v.orphanedCustomPresets) }
+            w.field("issueCount") { writeCounter(w, v.issueCount) }
+            w.field("applicable") { writeFlag(w, v.applicable) }
+        }
+    }
+    data class LibraryCoerceRequest(val inheritedJson: OptionalJsonText, val text: List<Int>)
+    private fun readLibraryCoerceRequest(v: Any): LibraryCoerceRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("inheritedJson", "text"), false)
+        return LibraryCoerceRequest(readOptionalJsonText(obj.get("inheritedJson")), readEditText(obj.get("text")))
+    }
+    private fun writeLibraryCoerceRequest(w: ProjectIntentWriter, v: LibraryCoerceRequest) {
+        w.obj {
+            w.field("inheritedJson") { writeOptionalJsonText(w, v.inheritedJson) }
+            w.field("text") { writeEditText(w, v.text) }
+        }
+    }
+    data class LibraryCoercedValue(val json: List<Int>)
+    private fun readLibraryCoercedValue(v: Any): LibraryCoercedValue {
+        val obj = ProjectIntentJson.fields(v, setOf("json"), false)
+        return LibraryCoercedValue(readJsonText(obj.get("json")))
+    }
+    private fun writeLibraryCoercedValue(w: ProjectIntentWriter, v: LibraryCoercedValue) {
+        w.obj {
+            w.field("json") { writeJsonText(w, v.json) }
+        }
+    }
+    data class LibraryFormatRequest(val valueJson: OptionalJsonText)
+    private fun readLibraryFormatRequest(v: Any): LibraryFormatRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("valueJson"), false)
+        return LibraryFormatRequest(readOptionalJsonText(obj.get("valueJson")))
+    }
+    private fun writeLibraryFormatRequest(w: ProjectIntentWriter, v: LibraryFormatRequest) {
+        w.obj {
+            w.field("valueJson") { writeOptionalJsonText(w, v.valueJson) }
+        }
+    }
+    data class LibraryFormattedValue(val text: List<Int>)
+    private fun readLibraryFormattedValue(v: Any): LibraryFormattedValue {
+        val obj = ProjectIntentJson.fields(v, setOf("text"), false)
+        return LibraryFormattedValue(readEditText(obj.get("text")))
+    }
+    private fun writeLibraryFormattedValue(w: ProjectIntentWriter, v: LibraryFormattedValue) {
+        w.obj {
+            w.field("text") { writeEditText(w, v.text) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -2758,4 +3171,30 @@ object ProjectIntents {
     fun encodeCatalogTargetRequest(value: CatalogTargetRequest): String = ProjectIntentWriter().also { writeCatalogTargetRequest(it, value) }.finish()
     fun decodeCatalogPreflightTarget(text: String): CatalogPreflightTarget = readCatalogPreflightTarget(ProjectIntentJson.parse(text))
     fun encodeCatalogPreflightTarget(value: CatalogPreflightTarget): String = ProjectIntentWriter().also { writeCatalogPreflightTarget(it, value) }.finish()
+    fun decodeLibraryIssue(text: String): LibraryIssue = readLibraryIssue(ProjectIntentJson.parse(text))
+    fun encodeLibraryIssue(value: LibraryIssue): String = ProjectIntentWriter().also { writeLibraryIssue(it, value) }.finish()
+    fun decodeLibraryOutcome(text: String): LibraryOutcome = readLibraryOutcome(ProjectIntentJson.parse(text))
+    fun encodeLibraryOutcome(value: LibraryOutcome): String = ProjectIntentWriter().also { writeLibraryOutcome(it, value) }.finish()
+    fun decodeLibraryOperation(text: String): LibraryOperation = readLibraryOperation(ProjectIntentJson.parse(text))
+    fun encodeLibraryOperation(value: LibraryOperation): String = ProjectIntentWriter().also { writeLibraryOperation(it, value) }.finish()
+    fun decodeLibraryInventory(text: String): LibraryInventory = readLibraryInventory(ProjectIntentJson.parse(text))
+    fun encodeLibraryInventory(value: LibraryInventory): String = ProjectIntentWriter().also { writeLibraryInventory(it, value) }.finish()
+    fun decodeLibraryView(text: String): LibraryView = readLibraryView(ProjectIntentJson.parse(text))
+    fun encodeLibraryView(value: LibraryView): String = ProjectIntentWriter().also { writeLibraryView(it, value) }.finish()
+    fun decodeLibraryCustomPreset(text: String): LibraryCustomPreset = readLibraryCustomPreset(ProjectIntentJson.parse(text))
+    fun encodeLibraryCustomPreset(value: LibraryCustomPreset): String = ProjectIntentWriter().also { writeLibraryCustomPreset(it, value) }.finish()
+    fun decodeLibraryBaseRequest(text: String): LibraryBaseRequest = readLibraryBaseRequest(ProjectIntentJson.parse(text))
+    fun encodeLibraryBaseRequest(value: LibraryBaseRequest): String = ProjectIntentWriter().also { writeLibraryBaseRequest(it, value) }.finish()
+    fun decodeLibraryBases(text: String): LibraryBases = readLibraryBases(ProjectIntentJson.parse(text))
+    fun encodeLibraryBases(value: LibraryBases): String = ProjectIntentWriter().also { writeLibraryBases(it, value) }.finish()
+    fun decodeLibraryUpdatePlan(text: String): LibraryUpdatePlan = readLibraryUpdatePlan(ProjectIntentJson.parse(text))
+    fun encodeLibraryUpdatePlan(value: LibraryUpdatePlan): String = ProjectIntentWriter().also { writeLibraryUpdatePlan(it, value) }.finish()
+    fun decodeLibraryCoerceRequest(text: String): LibraryCoerceRequest = readLibraryCoerceRequest(ProjectIntentJson.parse(text))
+    fun encodeLibraryCoerceRequest(value: LibraryCoerceRequest): String = ProjectIntentWriter().also { writeLibraryCoerceRequest(it, value) }.finish()
+    fun decodeLibraryCoercedValue(text: String): LibraryCoercedValue = readLibraryCoercedValue(ProjectIntentJson.parse(text))
+    fun encodeLibraryCoercedValue(value: LibraryCoercedValue): String = ProjectIntentWriter().also { writeLibraryCoercedValue(it, value) }.finish()
+    fun decodeLibraryFormatRequest(text: String): LibraryFormatRequest = readLibraryFormatRequest(ProjectIntentJson.parse(text))
+    fun encodeLibraryFormatRequest(value: LibraryFormatRequest): String = ProjectIntentWriter().also { writeLibraryFormatRequest(it, value) }.finish()
+    fun decodeLibraryFormattedValue(text: String): LibraryFormattedValue = readLibraryFormattedValue(ProjectIntentJson.parse(text))
+    fun encodeLibraryFormattedValue(value: LibraryFormattedValue): String = ProjectIntentWriter().also { writeLibraryFormattedValue(it, value) }.finish()
 }

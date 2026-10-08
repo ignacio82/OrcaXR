@@ -3,7 +3,7 @@ use orcaxr_project::{
     ingress::json::{JsonInput, JsonLimits},
     settings::{
         library::*,
-        presets::{AsciiRootCollation, JsonObject, Kind, NonAsciiText, PresetGraph},
+        presets::{AsciiRootCollation, Collation, JsonObject, Kind, NonAsciiText, PresetGraph},
     },
     validation::{V8Timestamps, timestamp},
 };
@@ -531,4 +531,303 @@ fn override_helpers_match_the_browser() {
     }
     assert_eq!(f["coerceCases"].as_array().unwrap().len(), 22);
     assert_eq!(f["formatCases"].as_array().unwrap().len(), 12);
+}
+
+/// The host exchange replays every scenario from catalog and stored bytes and
+/// matches the browser's contract encodings, as the bindings do.
+#[test]
+fn host_exchange_matches_the_browser_codecs() {
+    use orcaxr_contracts::project_intent_types as wire;
+    use orcaxr_project::settings::{catalog_exchange::CatalogUpload, library_exchange::*};
+    let f = corpus();
+    let limits = JsonLimits {
+        max_bytes: 8 << 20,
+        max_nodes: 1 << 20,
+        max_text_units: 8 << 20,
+        max_number_bytes: 64,
+        max_depth: 64,
+    };
+    let bundled = include_bytes!("../../../../web/public/profiles/catalog.json").to_vec();
+    let bytes = |name: &str| {
+        if name == "bundled" {
+            bundled.clone()
+        } else {
+            f["catalogs"][name].as_str().unwrap().as_bytes().to_vec()
+        }
+    };
+    let upload = |name: &str| {
+        let bytes = bytes(name);
+        let mut upload = CatalogUpload::new(bytes.len(), limits).unwrap();
+        for (i, chunk) in bytes.chunks(65536).enumerate() {
+            upload.append(i * 65536, chunk).unwrap();
+        }
+        upload
+    };
+    let same = |actual: &str, expected: &str, label: &str| {
+        let a: Json = serde_json::from_str(actual).unwrap();
+        let e: Json = serde_json::from_str(expected).unwrap();
+        assert_eq!(a, e, "{label}");
+    };
+    let mut replies = 0;
+    for scenario in f["scenarios"].as_array().unwrap() {
+        let name = scenario["name"].as_str().unwrap();
+        // The bindings' host never reads its clock: requests carry `now`.
+        let mut host = host(&[], Rc::new(Cell::new(0)));
+        let stored: Option<Vec<u8>> = scenario["stateJson"]
+            .as_str()
+            .or_else(|| scenario.get("storedText").and_then(Json::as_str))
+            .map(|t| t.as_bytes().to_vec());
+        let mut library = HostLibrary::create(
+            upload(scenario["catalog"].as_str().unwrap()),
+            stored.as_deref(),
+            limits,
+            &mut host,
+        )
+        .unwrap();
+        let issues = |library: &HostLibrary, expected: &Json, label: &str| {
+            let expected = expected.as_array().unwrap();
+            assert_eq!(library.issue_count(), expected.len(), "{label}");
+            for (i, json) in expected.iter().enumerate() {
+                let issue = library.issue(i).unwrap();
+                assert_eq!(
+                    wire::encode_library_issue(&issue).unwrap(),
+                    json.as_str().unwrap(),
+                    "{label} issue {i}"
+                );
+            }
+            assert!(library.issue(expected.len()).is_none());
+            expected.len()
+        };
+        replies += issues(&library, &scenario["wire"]["createIssueJsons"], name);
+        for (index, step) in scenario["steps"].as_array().unwrap().iter().enumerate() {
+            let label = format!("{name} step {index}");
+            let op: Json = serde_json::from_str(step["opJson"].as_str().unwrap()).unwrap();
+            let w = &step["wire"];
+            let text = |key: &str| w[key].as_str().unwrap().to_owned();
+            if let Some(operation) = w["operationJson"].as_str() {
+                let operation = wire::decode_library_operation(operation).unwrap();
+                let outcome = library.apply(&operation, &mut host).unwrap();
+                assert_eq!(
+                    wire::encode_library_outcome(&outcome).unwrap(),
+                    text("outcomeJson"),
+                    "{label}"
+                );
+                replies += issues(&library, &w["issueJsons"], &label);
+            } else {
+                match op["op"].as_str().unwrap() {
+                    "import" => {
+                        let bundle = op["bundle"].as_str().unwrap().as_bytes();
+                        let outcome = library.import(bundle, limits, &mut host).unwrap();
+                        assert_eq!(
+                            wire::encode_library_outcome(&outcome).unwrap(),
+                            text("outcomeJson"),
+                            "{label}"
+                        );
+                        replies += issues(&library, &w["issueJsons"], &label);
+                    }
+                    "export" => {
+                        let at = units(w["exportedAt"].as_str().unwrap());
+                        let bundle = library.export::<NonAsciiText>(&at, 8 << 20).unwrap();
+                        assert_eq!(
+                            String::from_utf8(bundle).unwrap(),
+                            step["bundle"].as_str().unwrap(),
+                            "{label}"
+                        );
+                        assert!(matches!(
+                            library.export::<NonAsciiText>(&at, 1),
+                            Err(ExchangeError::OutputLimit)
+                        ));
+                    }
+                    "plan" => {
+                        let next = upload(op["catalog"].as_str().unwrap());
+                        let plan = library.plan_update(next, &mut host).unwrap();
+                        assert_eq!(
+                            wire::encode_library_update_plan(&plan).unwrap(),
+                            text("planJson"),
+                            "{label}"
+                        );
+                        replies += issues(&library, &w["issueJsons"], &label);
+                    }
+                    "apply" => {
+                        let next = upload(op["catalog"].as_str().unwrap());
+                        let outcome = library.apply_update(next, &mut host).unwrap();
+                        assert_eq!(
+                            wire::encode_library_outcome(&outcome).unwrap(),
+                            text("outcomeJson"),
+                            "{label}"
+                        );
+                        replies += issues(&library, &w["issueJsons"], &label);
+                    }
+                    "bases" => {
+                        let request =
+                            wire::decode_library_base_request(&text("requestJson")).unwrap();
+                        assert_eq!(
+                            wire::encode_library_bases(&library.bases(&request)).unwrap(),
+                            text("basesJson"),
+                            "{label}"
+                        );
+                    }
+                    "inventory" => {
+                        let inventory = library.inventory(&mut host).unwrap();
+                        same(
+                            &wire::encode_library_inventory(&inventory).unwrap(),
+                            &text("inventoryJson"),
+                            &label,
+                        );
+                    }
+                    "views" => {
+                        assert_eq!(
+                            wire::encode_library_view(&library.view()).unwrap(),
+                            text("viewJson"),
+                            "{label}"
+                        );
+                        let customs = w["customJsons"].as_array().unwrap();
+                        for (i, json) in customs.iter().enumerate() {
+                            let preset = library.custom_preset(i).unwrap();
+                            assert_eq!(
+                                wire::encode_library_custom_preset(&preset).unwrap(),
+                                json.as_str().unwrap(),
+                                "{label} custom {i}"
+                            );
+                        }
+                        assert!(library.custom_preset(customs.len()).is_none());
+                        replies += customs.len();
+                        let composed = library.catalog(&mut host).unwrap();
+                        assert_eq!(
+                            composed.preset_count() as u64,
+                            w["presetCount"].as_u64().unwrap(),
+                            "{label}"
+                        );
+                    }
+                    other => panic!("unknown op {other}"),
+                }
+            }
+            let state = library.state::<NonAsciiText>(8 << 20).unwrap();
+            assert_eq!(
+                String::from_utf8(state).unwrap(),
+                step["stateJson"].as_str().unwrap(),
+                "{label} state"
+            );
+            replies += 2;
+        }
+    }
+    for c in f["wire"]["coerceCases"].as_array().unwrap() {
+        let request =
+            wire::decode_library_coerce_request(c["requestJson"].as_str().unwrap()).unwrap();
+        let reply = coerce::<NonAsciiText>(&request).unwrap();
+        assert_eq!(
+            wire::encode_library_coerced_value(&reply).unwrap(),
+            c["replyJson"].as_str().unwrap()
+        );
+        replies += 1;
+    }
+    for c in f["wire"]["formatCases"].as_array().unwrap() {
+        let request =
+            wire::decode_library_format_request(c["requestJson"].as_str().unwrap()).unwrap();
+        let reply = format::<NonAsciiText>(&request).unwrap();
+        assert_eq!(
+            wire::encode_library_formatted_value(&reply).unwrap(),
+            c["replyJson"].as_str().unwrap()
+        );
+        replies += 1;
+    }
+    println!("library exchange: {replies} replies");
+}
+
+/// Refusals change nothing: malformed requests, budgets, a refused catalog,
+/// and host policy failures.
+#[test]
+fn host_exchange_refuses_without_changing_anything() {
+    use orcaxr_contracts::project_intent_types as wire;
+    use orcaxr_project::settings::{catalog_exchange::CatalogUpload, library_exchange::*};
+    let f = corpus();
+    let limits = JsonLimits {
+        max_bytes: 1 << 20,
+        max_nodes: 1 << 16,
+        max_text_units: 1 << 20,
+        max_number_bytes: 64,
+        max_depth: 64,
+    };
+    let upload = |text: &str| {
+        let mut upload = CatalogUpload::new(text.len(), limits).unwrap();
+        upload.append(0, text.as_bytes()).unwrap();
+        upload
+    };
+    let acme = f["catalogs"]["acme"].as_str().unwrap();
+    let mut host = host(&[], Rc::new(Cell::new(0)));
+    // A system catalog that is not a preset graph refuses creation.
+    let broken = f["catalogs"]["broken"].as_str().unwrap();
+    assert!(matches!(
+        HostLibrary::create(upload(broken), None, limits, &mut host),
+        Err(ExchangeError::InvalidCatalog)
+    ));
+    let mut library = HostLibrary::create(upload(acme), None, limits, &mut host).unwrap();
+    let before = library.state::<NonAsciiText>(1 << 20).unwrap();
+    // Overrides must be a JSON object.
+    for overrides in ["[]", "{", "null"] {
+        let operation = wire::LibraryOperation::Create(wire::LibraryCreate {
+            draft: wire::LibraryDraft {
+                vendor: wire::OptionalText::Absent(wire::Empty {}),
+                kind: wire::CatalogPresetKind::Filament,
+                name: units("Mine"),
+                inherits: units("Acme PLA"),
+                overrides_json: wire::OptionalJsonText::Value(units(overrides)),
+                license: wire::OptionalText::Absent(wire::Empty {}),
+                version: wire::OptionalText::Absent(wire::Empty {}),
+                note: wire::OptionalText::Absent(wire::Empty {}),
+                source: wire::OptionalProvenanceSource::Absent(wire::Empty {}),
+            },
+            now: units("2026-08-16T00:00:00.000Z"),
+        });
+        assert!(matches!(
+            library.apply(&operation, &mut host),
+            Err(ExchangeError::InvalidRequest)
+        ));
+    }
+    // A bundle over budget refuses; one that is not JSON is an outcome.
+    let tight = JsonLimits {
+        max_bytes: 4,
+        ..limits
+    };
+    assert!(matches!(
+        library.import(b"{\"a\":1}", tight, &mut host),
+        Err(ExchangeError::Json(
+            orcaxr_project::ingress::json::JsonInputError::Limit
+        ))
+    ));
+    assert!(!library.import(b"{ oops", limits, &mut host).unwrap().ok);
+    // Stored text over budget loads as unreadable state.
+    let stored = HostLibrary::create(
+        upload(acme),
+        Some(br#"{"schemaVersion":1}"#),
+        tight,
+        &mut host,
+    )
+    .unwrap();
+    assert_eq!(
+        stored.issue(0).unwrap().code,
+        wire::LibraryIssueCode::UnsupportedSchema
+    );
+    assert!(matches!(
+        library.state::<NonAsciiText>(4),
+        Err(ExchangeError::OutputLimit)
+    ));
+    // A collation that fails is the host's error.
+    let mut failing = Host {
+        collation: Failing,
+        clock: Box::new(Vec::new) as Box<dyn FnMut() -> Vec<u16>>,
+        timestamps: |_: &[u16]| Ok::<_, &'static str>(true),
+    };
+    assert!(matches!(
+        HostLibrary::create(upload(acme), None, limits, &mut failing),
+        Err(ExchangeError::Host("collation"))
+    ));
+    assert_eq!(library.state::<NonAsciiText>(1 << 20).unwrap(), before);
+}
+struct Failing;
+impl Collation for Failing {
+    type Error = &'static str;
+    fn compare(&mut self, _: &[u16], _: &[u16]) -> Result<std::cmp::Ordering, &'static str> {
+        Err("collation")
+    }
 }

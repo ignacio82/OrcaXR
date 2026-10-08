@@ -16,6 +16,7 @@ mod archive;
 mod bindings;
 mod catalog;
 mod json_sink;
+mod library;
 mod model;
 mod preflight;
 mod registry;
@@ -27,6 +28,7 @@ use jni::{
     objects::{JByteArray, JCharArray, JClass, JDoubleArray, JLongArray, JObject, JString},
     sys::{jboolean, jbyteArray, jcharArray, jdoubleArray, jint, jlong, jstring},
 };
+use library::*;
 use model::*;
 use orcaxr_project::{
     assets::AssetLease,
@@ -100,6 +102,7 @@ enum Record {
     Preflight(Box<Report>),
     CatalogUpload(Box<orcaxr_project::settings::catalog_exchange::CatalogUpload>),
     Catalog(Box<orcaxr_project::settings::catalog_exchange::HostCatalog>),
+    Library(Box<library::Library>),
 }
 fn registry() -> &'static Registry<Record> {
     static REGISTRY: OnceLock<Registry<Record>> = OnceLock::new();

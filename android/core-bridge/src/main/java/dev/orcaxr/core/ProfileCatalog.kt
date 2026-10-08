@@ -28,6 +28,19 @@ class ProfileCatalogUpload(bytes: Long, limits: ProfileCatalogLimits) :
         NativeProject.catalogBuild(it, collator)
         own(it, ::ProfileCatalog)
     }
+    /** Consumes this upload as the system catalog of a preset library. [stored]
+     * is the text the host saved, if any; unreadable text loads an empty
+     * library whose issues say why. Synchronous; run it on an owned task. */
+    fun library(
+        stored: ByteArray?,
+        limits: ProfileCatalogLimits,
+        collator: PresetCollator?,
+        resolver: LocalTimestampResolver,
+        profile: ProjectIntegerProfile,
+    ): PresetLibrary = move {
+        NativeProject.libraryCreate(it, stored, limits.encode(), collator, resolver, profile.bits)
+        own(it, ::PresetLibrary)
+    }
 }
 
 /** A loaded catalog, read one contract value at a time in browser order. */
