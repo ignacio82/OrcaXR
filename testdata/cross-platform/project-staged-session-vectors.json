@@ -36,7 +36,7 @@
     },
     {
       "path": "web/src/project/ProjectSessionEndpoint.ts",
-      "sha256": "8648834031f2e6e11edb9bd6be02ed1b044133dcaeba7f1d02c02aef27f3f51c"
+      "sha256": "9841d4e95a2bc4969172a5069f332f9ca9a1f2ce3fa574b499773a0084b8ee12"
     },
     {
       "path": "web/src/project/AsyncEditorSession.ts",
@@ -44,7 +44,7 @@
     },
     {
       "path": "web/src/project/ProjectSessionClient.ts",
-      "sha256": "1adf26dfbb4bb55d57d48f647f8aebb80736613fc22438df8a7a17783742d66f"
+      "sha256": "03c95a741858f22a46fc3cd77906494fa33ca5aba76519805103112be9f34eff"
     },
     {
       "path": "web/src/project/session.ts",

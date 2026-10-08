@@ -27,7 +27,11 @@ export type ProjectSessionExchange = (request: string) => Promise<string>;
 export type ProjectSessionClientErrorCode = ProjectSessionErrorWire | 'outcomeUnknown';
 
 export class ProjectSessionClientError extends Error {
-  constructor(readonly code: ProjectSessionClientErrorCode) {
+  /** The rejected request, when the session answered it. */
+  constructor(
+    readonly code: ProjectSessionClientErrorCode,
+    readonly requestId?: number,
+  ) {
     super(
       code === 'outcomeUnknown'
         ? 'The project operation outcome could not be verified. Refresh the session before editing again.'
@@ -220,7 +224,7 @@ export class ProjectSessionClient {
           }
           if (reply.requestId !== requestId || !sameSessionGeneration(reply.generation, this.generation))
             return this.uncertain();
-          if ('error' in reply.result) throw new ProjectSessionClientError(reply.result.error);
+          if ('error' in reply.result) throw new ProjectSessionClientError(reply.result.error, requestId);
           return reply;
         },
         () => this.uncertain(),

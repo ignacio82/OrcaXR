@@ -173,9 +173,9 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   deletion retains that clipboard and late replies never republish clipboard UI.
   Clone, add-instance, fill-bed and paste await measured staged work, preserving their
   history boundaries and captured results across late or lost acknowledgements.
-  Clipboard captures share selected immutable asset records; paste restores missing
-  bytes and declarations inside its rollback boundary, including SVG drawings.
-  Other editing routes, remote projections and worker/JNI integration remain open.
+  Clipboard captures share asset records; paste restores missing bytes in rollback.
+  Settings/height-range/role/layer-event routes submit intents: construct commands
+  first (prepare errors become invalidRequest); local apply errors keep their message.
 - Prepared command intents use ASCII JSON with UTF-16 unit arrays for all text.
   The shared schema generates TypeScript, Rust and Kotlin types and converters.
   Reject duplicate/unknown/missing fields, positional objects, unsupported versions

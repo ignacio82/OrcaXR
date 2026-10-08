@@ -51,6 +51,8 @@ export class LocalProjectSessionTransport {
   ) {
     this.owner = session.captureGuard().generation;
     this.endpoint = new ProjectSessionEndpoint(session, generation, schemaVersion);
+    // In process, a refused command reports the browser's own error.
+    this.endpoint.retainCommandFailures();
     this.client = new ProjectSessionClient((text) => this.endpoint.handle(text), generation, schemaVersion);
   }
 
@@ -129,6 +131,13 @@ export class LocalProjectSessionTransport {
     this.endpoint.dispose();
   }
 
+  private localFailure(error: unknown): unknown {
+    if (error instanceof ProjectSessionClientError && error.code === 'commandFailed' && error.requestId !== undefined) {
+      const failure = this.endpoint.takeCommandFailure(error.requestId);
+      if (failure !== undefined) return failure;
+    }
+    return localError(error);
+  }
   private guard(supplied?: AsyncSessionGuard) {
     const guard = supplied ?? this.session.captureGuard();
     if (guard.generation !== this.owner) throw new AsyncSessionError('stale');
@@ -150,7 +159,7 @@ export class LocalProjectSessionTransport {
       return ticket.result
         .then((receipt) => this.acknowledgement(receipt, value))
         .catch((error) => {
-          throw localError(error);
+          throw this.localFailure(error);
         })
         .finally(() => signal?.removeEventListener('abort', cancel));
     } catch (error) {

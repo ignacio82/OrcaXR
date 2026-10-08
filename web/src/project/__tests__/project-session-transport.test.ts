@@ -420,7 +420,12 @@ await test('local bridge preserves owner guards, captured history and atomic rol
       label: intentText('Rollback'),
       commands: [command, { deletePlate: { plateId: intentText(s.fixture.state.activePlateId) } }],
     }),
-    { code: 'commandFailed' },
+    // In process the bridge reports the command's own error; the wire carries
+    // only `commandFailed` (below).
+    (error: unknown) =>
+      error instanceof Error &&
+      !(error instanceof ProjectSessionClientError) &&
+      /Cannot delete the last plate/.test(error.message),
   );
   assert.deepEqual(s.session.project.getSnapshot().state, before.state);
   assert.equal(s.session.commands.getHistorySnapshot().undoCount, 0);
@@ -513,5 +518,21 @@ await test('underlying disposal blocks negotiation and sanitized failures reveal
   assert.deepEqual(decodeProjectSessionReply(reply).result, { error: 'commandFailed' });
   assert.ok(!reply.includes('private'));
   live.session.dispose();
+
+  // An in-process owner may keep the command's own error, once; the wire
+  // still carries only the code.
+  const retained = setup();
+  await retained.send(hello);
+  retained.endpoint.retainCommandFailures();
+  const failing = retained.execute();
+  failing.execute.intent.command.renamePlate.plateId = intentText('import:private:missing');
+  const request = retained.request(failing);
+  const retainedReply = await retained.endpoint.handle(request);
+  assert.deepEqual(decodeProjectSessionReply(retainedReply).result, { error: 'commandFailed' });
+  assert.ok(!retainedReply.includes('private'));
+  const requestId = (JSON.parse(request) as { requestId: number }).requestId;
+  assert.match(String(retained.endpoint.takeCommandFailure(requestId)), /import:private:missing/);
+  assert.equal(retained.endpoint.takeCommandFailure(requestId), undefined);
+  retained.session.dispose();
 });
 console.log(`Project session transport: ${passed} lifecycle and ownership regressions passed.`);

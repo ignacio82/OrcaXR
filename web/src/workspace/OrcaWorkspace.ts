@@ -1257,8 +1257,8 @@ export class OrcaWorkspace extends xb.Script {
    * will do mid-print, so the published artifact is revalidated immediately:
    * the G-code on disk no longer matches the project that produced it.
    */
-  public mutateLayerEvent(request: CanonicalLayerEventMutationRequest): void {
-    this.canonicalProject.mutateLayerEvent(request);
+  public async mutateLayerEvent(request: CanonicalLayerEventMutationRequest): Promise<void> {
+    await this.canonicalProject.mutateLayerEvent(request);
     this.revalidatePublishedGcode();
     this.setStatus(
       request.operation === 'delete'
@@ -1320,14 +1320,14 @@ export class OrcaWorkspace extends xb.Script {
     return this.canonicalProject.createLayerRangeId();
   }
 
-  public convertSemanticVolumeRole(request: CanonicalSemanticVolumeRoleRequest): void {
-    this.canonicalProject.convertSemanticVolumeRole(request);
+  public async convertSemanticVolumeRole(request: CanonicalSemanticVolumeRoleRequest): Promise<void> {
+    await this.canonicalProject.convertSemanticVolumeRole(request);
     this.revalidatePublishedGcode();
     this.setStatus(t('workspace.orcaWorkspace.updatedTheSelectedPartRole', 'Updated the selected part role.'));
   }
 
-  public editSemanticLayerRange(request: CanonicalSemanticLayerRangeRequest): void {
-    this.canonicalProject.editSemanticLayerRange(request);
+  public async editSemanticLayerRange(request: CanonicalSemanticLayerRangeRequest): Promise<void> {
+    await this.canonicalProject.editSemanticLayerRange(request);
     this.revalidatePublishedGcode();
     this.onSelectionChanged?.(false);
     this.setStatus(
@@ -7350,14 +7350,20 @@ export class OrcaWorkspace extends xb.Script {
         );
       },
       authorLayerEvent: (type, topZMm) => {
+        // The headset authors through the same registry action as the DOM.
+        if (!this.actionContext) return;
         const summary = this.canonicalProject.getSummary();
-        this.mutateLayerEvent({
-          expectedRevision: summary.revision,
-          sourceHash: summary.projectHash,
-          operation: 'add',
-          type,
-          topZMm,
-        });
+        void this.actionRegistry
+          .invoke('layer_event_mutate', 'xr-inspector', this.actionContext, this.actionContext.ui.get(), {
+            layerEventMutation: {
+              expectedRevision: summary.revision,
+              sourceHash: summary.projectHash,
+              operation: 'add',
+              type,
+              topZMm,
+            },
+          })
+          .catch((error: unknown) => this.setStatus(error instanceof Error ? error.message : String(error)));
       },
       activeTool: () => this.tool || null,
       paintSwatches: () => this.xrPaintSwatches(),
@@ -8932,9 +8938,9 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  public setNegativePart(): boolean {
+  public async setNegativePart(): Promise<boolean> {
     try {
-      this.canonicalProject.setNegativePart();
+      await this.canonicalProject.setNegativePart();
       this.setStatus(t('workspace.orcaWorkspace.setNegativePartSuccess', 'Set part as negative volume.'));
       this.syncTransformProxy();
       return true;
@@ -8947,9 +8953,9 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  public addHeightRange(): boolean {
+  public async addHeightRange(): Promise<boolean> {
     try {
-      this.canonicalProject.addHeightRange();
+      await this.canonicalProject.addHeightRange();
       this.setStatus(t('workspace.orcaWorkspace.addedHeightRangeModifier', 'Added height-range modifier.'));
       this.syncTransformProxy();
       return true;

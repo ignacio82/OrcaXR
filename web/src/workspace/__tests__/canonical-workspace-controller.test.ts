@@ -927,7 +927,7 @@ await test('projects role decisions and applies guarded conversion with exact un
   const blockerDecision = before.selectedVolume?.roleDecisions.find((entry) => entry.role === 'support-blocker');
   assert.deepEqual(blockerDecision?.decision, { allowed: true, noop: false });
 
-  controller.convertSemanticVolumeRole({
+  await controller.convertSemanticVolumeRole({
     ...semanticGuard(before),
     volumeId: fixture.ids.volume,
     nextRole: 'support-blocker',
@@ -941,7 +941,7 @@ await test('projects role decisions and applies guarded conversion with exact un
   assert.notEqual(convertedHash, beforeHash);
 
   const historyBeforeNoop = controller.getSummary().history;
-  controller.convertSemanticVolumeRole({
+  await controller.convertSemanticVolumeRole({
     ...semanticGuard(converted),
     volumeId: fixture.ids.volume,
     nextRole: 'support-blocker',
@@ -963,13 +963,12 @@ await test('projects role decisions and applies guarded conversion with exact un
   blocked.controller.selectVolume(blocked.fixture.ids.volume);
   const blockedSnapshot = blocked.controller.getSemanticObjectEditorSnapshot()!;
   const blockedBefore = semanticFootprint(blocked.controller);
-  assert.throws(
-    () =>
-      blocked.controller.convertSemanticVolumeRole({
-        ...semanticGuard(blockedSnapshot),
-        volumeId: blocked.fixture.ids.volume,
-        nextRole: 'negative-volume',
-      }),
+  await assert.rejects(
+    blocked.controller.convertSemanticVolumeRole({
+      ...semanticGuard(blockedSnapshot),
+      volumeId: blocked.fixture.ids.volume,
+      nextRole: 'negative-volume',
+    }),
     /last model part/,
   );
   assert.deepEqual(semanticFootprint(blocked.controller), blockedBefore);
@@ -984,7 +983,7 @@ await test('runs the guarded add/edit/split/merge/delete height-range lifecycle 
   const hashes = [controller.getSummary().projectHash];
   const gapRangeId = controller.createLayerRangeId();
 
-  controller.editSemanticLayerRange({
+  await controller.editSemanticLayerRange({
     ...semanticGuard(initial),
     operation: 'add',
     layerRangeId: gapRangeId,
@@ -1003,7 +1002,7 @@ await test('runs the guarded add/edit/split/merge/delete height-range lifecycle 
     /touch without a gap/,
   );
 
-  controller.editSemanticLayerRange({
+  await controller.editSemanticLayerRange({
     ...semanticGuard(added),
     operation: 'edit',
     layerRangeId: gapRangeId,
@@ -1022,7 +1021,7 @@ await test('runs the guarded add/edit/split/merge/delete height-range lifecycle 
   );
 
   const upperRangeId = controller.createLayerRangeId();
-  controller.editSemanticLayerRange({
+  await controller.editSemanticLayerRange({
     ...semanticGuard(edited),
     operation: 'split',
     layerRangeId: gapRangeId,
@@ -1041,7 +1040,7 @@ await test('runs the guarded add/edit/split/merge/delete height-range lifecycle 
     otherRangeId: gapRangeId,
   });
 
-  controller.editSemanticLayerRange({
+  await controller.editSemanticLayerRange({
     ...semanticGuard(split),
     operation: 'merge',
     firstRangeId: gapRangeId,
@@ -1055,7 +1054,7 @@ await test('runs the guarded add/edit/split/merge/delete height-range lifecycle 
   ]);
   assert.equal(merged.selectedLayerRange?.id, gapRangeId);
 
-  controller.editSemanticLayerRange({
+  await controller.editSemanticLayerRange({
     ...semanticGuard(merged),
     operation: 'delete',
     layerRangeId: gapRangeId,
@@ -1103,13 +1102,12 @@ await test('rejects stale guards, hash drift, collisions, and cross-object owner
   controller.selectVolume(fixture.ids.volume);
   const volumeSnapshot = controller.getSemanticObjectEditorSnapshot()!;
   let beforeFailure = semanticFootprint(controller);
-  assert.throws(
-    () =>
-      controller.convertSemanticVolumeRole({
-        ...semanticGuard(volumeSnapshot),
-        volumeId: secondIds.volume,
-        nextRole: 'model',
-      }),
+  await assert.rejects(
+    controller.convertSemanticVolumeRole({
+      ...semanticGuard(volumeSnapshot),
+      volumeId: secondIds.volume,
+      nextRole: 'model',
+    }),
     /is not owned by object/,
   );
   assert.deepEqual(semanticFootprint(controller), beforeFailure);
@@ -1117,67 +1115,62 @@ await test('rejects stale guards, hash drift, collisions, and cross-object owner
   controller.selectLayerRange(fixture.ids.range);
   const rangeSnapshot = controller.getSemanticObjectEditorSnapshot()!;
   beforeFailure = semanticFootprint(controller);
-  assert.throws(
-    () =>
-      controller.editSemanticLayerRange({
-        ...semanticGuard(rangeSnapshot),
-        operation: 'edit',
-        layerRangeId: secondIds.range,
-        minZMm: 0,
-        maxZMm: 4,
-      }),
+  await assert.rejects(
+    controller.editSemanticLayerRange({
+      ...semanticGuard(rangeSnapshot),
+      operation: 'edit',
+      layerRangeId: secondIds.range,
+      minZMm: 0,
+      maxZMm: 4,
+    }),
     /is not owned by object/,
   );
   assert.deepEqual(semanticFootprint(controller), beforeFailure);
 
-  assert.throws(
-    () =>
-      controller.editSemanticLayerRange({
-        ...semanticGuard(rangeSnapshot),
-        operation: 'add',
-        layerRangeId: secondIds.range,
-        minZMm: 7,
-        maxZMm: 9,
-      }),
+  await assert.rejects(
+    controller.editSemanticLayerRange({
+      ...semanticGuard(rangeSnapshot),
+      operation: 'add',
+      layerRangeId: secondIds.range,
+      minZMm: 7,
+      maxZMm: 9,
+    }),
     /already exists in the project/,
   );
   assert.deepEqual(semanticFootprint(controller), beforeFailure);
 
   await controller.renameObject(fixture.ids.object, 'Renamed before stale edit');
   const afterRename = semanticFootprint(controller);
-  assert.throws(
-    () =>
-      controller.editSemanticLayerRange({
-        ...semanticGuard(rangeSnapshot),
-        operation: 'edit',
-        layerRangeId: fixture.ids.range,
-        minZMm: 0,
-        maxZMm: 4,
-      }),
+  await assert.rejects(
+    controller.editSemanticLayerRange({
+      ...semanticGuard(rangeSnapshot),
+      operation: 'edit',
+      layerRangeId: fixture.ids.range,
+      minZMm: 0,
+      maxZMm: 4,
+    }),
     /stale canonical project revision/,
   );
   assert.deepEqual(semanticFootprint(controller), afterRename);
 
   const current = controller.getSemanticObjectEditorSnapshot()!;
-  assert.throws(
-    () =>
-      controller.editSemanticLayerRange({
-        ...semanticGuard(current),
-        expectedRevision: current.sourceRevision - 1,
-        operation: 'delete',
-        layerRangeId: fixture.ids.range,
-      }),
+  await assert.rejects(
+    controller.editSemanticLayerRange({
+      ...semanticGuard(current),
+      expectedRevision: current.sourceRevision - 1,
+      operation: 'delete',
+      layerRangeId: fixture.ids.range,
+    }),
     /stale canonical project revision/,
   );
   assert.deepEqual(semanticFootprint(controller), afterRename);
-  assert.throws(
-    () =>
-      controller.editSemanticLayerRange({
-        ...semanticGuard(current),
-        sourceHash: `${current.sourceHash}:drift`,
-        operation: 'delete',
-        layerRangeId: fixture.ids.range,
-      }),
+  await assert.rejects(
+    controller.editSemanticLayerRange({
+      ...semanticGuard(current),
+      sourceHash: `${current.sourceHash}:drift`,
+      operation: 'delete',
+      layerRangeId: fixture.ids.range,
+    }),
     /stale canonical project revision/,
   );
   assert.deepEqual(semanticFootprint(controller), afterRename);
@@ -1425,13 +1418,13 @@ await test('adds support blocker volume to selected object and supports undo/red
   controller.dispose();
 });
 
-await test('adds height range modifier to selected object and supports undo/redo', () => {
+await test('adds height range modifier to selected object and supports undo/redo', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(20, 20, 20);
   controller.importBufferGeometry(geometry, { name: 'Main Object' });
   assert.equal(controller.getSummary().objectCount, 1);
 
-  const res = controller.addHeightRange(0, 5);
+  const res = await controller.addHeightRange(0, 5);
   assert.ok(res.layerRangeId);
 
   const obj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
@@ -1452,13 +1445,13 @@ await test('adds height range modifier to selected object and supports undo/redo
   controller.dispose();
 });
 
-await test('adds negative volume to selected object and supports undo/redo', () => {
+await test('adds negative volume to selected object and supports undo/redo', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(20, 20, 20);
   controller.importBufferGeometry(geometry, { name: 'Main Object' });
   assert.equal(controller.getSummary().objectCount, 1);
 
-  controller.setNegativePart();
+  await controller.setNegativePart();
 
   const obj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
   assert.equal(obj.volumes.length, 2);

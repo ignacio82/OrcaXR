@@ -1,6 +1,10 @@
 import { AsyncTransformGesture, type TransformGestureHost } from './AsyncTransformGesture';
 import { LocalProjectSessionTransport, ProjectReceiptUnavailableError } from '../project/LocalProjectSessionTransport';
-import { PROJECT_INTENT_VERSION, type ProjectCommandWire } from '../../../contracts/generated/project-intents';
+import {
+  PROJECT_INTENT_VERSION,
+  type ProjectCommandWire,
+  type ProjectLayerEventTypeWire,
+} from '../../../contracts/generated/project-intents';
 import { createIntentTextEncoder } from '../project/PreparedProjectCommands';
 import {
   captureInstanceCommand,
@@ -1141,16 +1145,22 @@ export class CanonicalWorkspaceController {
     return this.options.idSource.next('layer-range');
   }
 
-  convertSemanticVolumeRole(request: CanonicalSemanticVolumeRoleRequest): void {
+  /** One part's semantic role, as a guarded asynchronous intent. */
+  async convertSemanticVolumeRole(request: CanonicalSemanticVolumeRoleRequest): Promise<void> {
     const state = this.assertSemanticObjectMutationGuard(request);
     const found = findVolume(state, request.volumeId);
     if (!found || found.object.id !== request.objectId) {
       throw new Error(`Volume ${request.volumeId} is not owned by object ${request.objectId}`);
     }
-    this.session.execute(new ConvertVolumeRoleCommand(request.volumeId, request.nextRole));
+    // The command validates the role pair on construction.
+    new ConvertVolumeRoleCommand(request.volumeId, request.nextRole);
+    await this.executeEditIntent((text) => ({
+      convertVolumeRole: { volumeId: text(request.volumeId), role: camelWire(request.nextRole) },
+    }));
   }
 
-  editSemanticLayerRange(request: CanonicalSemanticLayerRangeRequest): void {
+  /** One height-range edit on one object, as a guarded asynchronous intent. */
+  async editSemanticLayerRange(request: CanonicalSemanticLayerRangeRequest): Promise<void> {
     const state = this.assertSemanticObjectMutationGuard(request);
     const object = findObject(state, request.objectId)?.object;
     if (!object) throw new Error(`Unknown object ${request.objectId}`);
@@ -1159,42 +1169,66 @@ export class CanonicalWorkspaceController {
         throw new Error(`Layer range ${rangeId} is not owned by object ${request.objectId}`);
       }
     };
+    // Each command validates its own arguments on construction; refuse here
+    // with its error rather than the session's `invalidRequest`.
     switch (request.operation) {
       case 'add':
-        this.session.execute(
-          new AddLayerRangeCommand(request.objectId, {
-            id: request.layerRangeId,
+        new AddLayerRangeCommand(request.objectId, {
+          id: request.layerRangeId,
+          minZMm: request.minZMm,
+          maxZMm: request.maxZMm,
+          config: {},
+        });
+        return this.executeEditIntent((text) => ({
+          addLayerRange: {
+            objectId: text(request.objectId),
+            layerRangeId: text(request.layerRangeId),
             minZMm: request.minZMm,
             maxZMm: request.maxZMm,
-            config: {},
-          }),
-        );
-        return;
+          },
+        }));
       case 'edit':
         requireOwned(request.layerRangeId);
-        this.session.execute(
-          new EditLayerRangeBoundsCommand(request.objectId, request.layerRangeId, {
-            minZMm: request.minZMm,
-            maxZMm: request.maxZMm,
-          }),
-        );
-        return;
+        new EditLayerRangeBoundsCommand(request.objectId, request.layerRangeId, {
+          minZMm: request.minZMm,
+          maxZMm: request.maxZMm,
+        });
+        return this.executeEditIntent((text) => ({
+          editLayerRangeBounds: {
+            objectId: text(request.objectId),
+            layerRangeId: text(request.layerRangeId),
+            minZMm: { value: request.minZMm },
+            maxZMm: { value: request.maxZMm },
+          },
+        }));
       case 'split':
         requireOwned(request.layerRangeId);
-        this.session.execute(
-          new SplitLayerRangeCommand(request.objectId, request.layerRangeId, request.splitZMm, request.upperRangeId),
-        );
-        return;
+        new SplitLayerRangeCommand(request.objectId, request.layerRangeId, request.splitZMm, request.upperRangeId);
+        return this.executeEditIntent((text) => ({
+          splitLayerRange: {
+            objectId: text(request.objectId),
+            layerRangeId: text(request.layerRangeId),
+            splitZMm: request.splitZMm,
+            upperRangeId: text(request.upperRangeId),
+          },
+        }));
       case 'merge':
         requireOwned(request.firstRangeId);
         requireOwned(request.secondRangeId);
-        this.session.execute(
-          new MergeLayerRangesCommand(request.objectId, request.firstRangeId, request.secondRangeId),
-        );
-        return;
+        new MergeLayerRangesCommand(request.objectId, request.firstRangeId, request.secondRangeId);
+        return this.executeEditIntent((text) => ({
+          mergeLayerRanges: {
+            objectId: text(request.objectId),
+            firstRangeId: text(request.firstRangeId),
+            secondRangeId: text(request.secondRangeId),
+          },
+        }));
       case 'delete':
         requireOwned(request.layerRangeId);
-        this.session.execute(new DeleteLayerRangeCommand(request.objectId, request.layerRangeId));
+        new DeleteLayerRangeCommand(request.objectId, request.layerRangeId);
+        return this.executeEditIntent((text) => ({
+          deleteLayerRange: { objectId: text(request.objectId), layerRangeId: text(request.layerRangeId) },
+        }));
     }
   }
 
@@ -1277,8 +1311,8 @@ export class CanonicalWorkspaceController {
     });
   }
 
-  /** One guarded add/edit/delete of a layer event on the active plate. */
-  mutateLayerEvent(request: CanonicalLayerEventMutationRequest): CustomGcodeId | undefined {
+  /** One guarded add/edit/delete of a layer event on the active plate, as an asynchronous intent. */
+  async mutateLayerEvent(request: CanonicalLayerEventMutationRequest): Promise<CustomGcodeId | undefined> {
     this.assertActive();
     const project = this.session.project.getSnapshot();
     if (!Number.isSafeInteger(request.expectedRevision) || request.expectedRevision < 0) {
@@ -1287,29 +1321,63 @@ export class CanonicalWorkspaceController {
     if (project.revision !== request.expectedRevision || project.hash !== request.sourceHash) {
       throw new StaleCanonicalLayerEventMutationError();
     }
+    const optional = <T, W>(value: T | undefined, wire: (value: T) => W) =>
+      value === undefined ? { absent: {} } : { value: wire(value) };
     switch (request.operation) {
       case 'add': {
         const id = this.options.idSource.next('custom-gcode');
-        this.session.execute(
-          new AddLayerEventCommand({
-            id,
-            plateId: project.state.activePlateId,
-            type: request.type,
-            topZMm: request.topZMm,
-            ...(request.toolIndex !== undefined ? { toolIndex: request.toolIndex } : {}),
-            ...(request.filamentId !== undefined ? { filamentId: request.filamentId } : {}),
-            ...(request.color !== undefined ? { color: request.color } : {}),
-            ...(request.message !== undefined ? { message: request.message } : {}),
-            ...(request.code !== undefined ? { code: request.code } : {}),
-          }),
-        );
+        const event = {
+          id,
+          plateId: project.state.activePlateId,
+          type: request.type,
+          topZMm: request.topZMm,
+          ...(request.toolIndex !== undefined ? { toolIndex: request.toolIndex } : {}),
+          ...(request.filamentId !== undefined ? { filamentId: request.filamentId } : {}),
+          ...(request.color !== undefined ? { color: request.color } : {}),
+          ...(request.message !== undefined ? { message: request.message } : {}),
+          ...(request.code !== undefined ? { code: request.code } : {}),
+        };
+        // The command validates the event on construction.
+        new AddLayerEventCommand(event);
+        await this.executeEditIntent((text) => ({
+          addLayerEvent: {
+            customGcodeId: text(id),
+            plateId: text(event.plateId),
+            eventType: camelWire(event.type),
+            topZMm: event.topZMm,
+            toolIndex: optional(request.toolIndex, (v) => v),
+            filamentId: optional(request.filamentId, text),
+            color: optional(request.color, text),
+            message: optional(request.message, text),
+            code: optional(request.code, text),
+          },
+        }));
         return id;
       }
-      case 'edit':
-        this.session.execute(new EditLayerEventCommand(request.id, request.patch));
+      case 'edit': {
+        new EditLayerEventCommand(request.id, request.patch);
+        const patch = request.patch;
+        const has = (key: keyof LayerEventPatch) => Object.prototype.hasOwnProperty.call(patch, key);
+        // An absent key keeps a field; a present `undefined` clears it.
+        const patched = <T, W>(key: keyof LayerEventPatch, value: T | undefined, wire: (value: T) => W) =>
+          !has(key) ? { keep: {} } : value === undefined ? { clear: {} } : { value: wire(value) };
+        await this.executeEditIntent((text) => ({
+          editLayerEvent: {
+            customGcodeId: text(request.id),
+            eventType: optional(patch.type, (type) => camelWire<ProjectLayerEventTypeWire>(type)),
+            topZMm: optional(patch.topZMm, (v) => v),
+            toolIndex: patched('toolIndex', patch.toolIndex, (v) => v),
+            filamentId: patched('filamentId', patch.filamentId, text),
+            color: patched('color', patch.color, text),
+            message: patched('message', patch.message, text),
+            code: optional(patch.code, text),
+          },
+        }));
         return request.id;
+      }
       case 'delete':
-        this.session.execute(new DeleteLayerEventCommand(request.id));
+        new DeleteLayerEventCommand(request.id);
+        await this.executeEditIntent((text) => ({ deleteLayerEvent: { customGcodeId: text(request.id) } }));
         return undefined;
     }
   }
@@ -2246,7 +2314,7 @@ export class CanonicalWorkspaceController {
     // The command validates on construction; refuse here with its own error
     // rather than a prepared-intent wrapper.
     new SetProjectSettingsOverridesCommand(guard, update);
-    await this.executeSettingsIntent((text) => ({
+    await this.executeEditIntent((text) => ({
       setProjectSettingsOverrides: {
         guard: { sourceRevision: guard.sourceRevision, sourceHash: text(guard.sourceHash) },
         inheritedConfigJson: text(canonicalStringify(update.inheritedConfig)),
@@ -2269,7 +2337,7 @@ export class CanonicalWorkspaceController {
     }
     if (target.scope === 'project') {
       const update = projectScopeUpdate(before, overrides);
-      await this.executeSettingsIntent((text) => ({
+      await this.executeEditIntent((text) => ({
         setProjectSettingsOverrides: {
           guard: { sourceRevision: guard.sourceRevision, sourceHash: text(guard.sourceHash) },
           inheritedConfigJson: text(canonicalStringify(update.inheritedConfig)),
@@ -2282,7 +2350,7 @@ export class CanonicalWorkspaceController {
       // an out-of-scope key with the command's `SettingScopeError`.
       scopedOverrideSnapshot(before, target);
       new SetScopedOverridesCommand(guard, target, overrides);
-      await this.executeSettingsIntent((text) => ({
+      await this.executeEditIntent((text) => ({
         setScopedOverrides: {
           guard: { sourceRevision: guard.sourceRevision, sourceHash: text(guard.sourceHash) },
           target:
@@ -2300,10 +2368,8 @@ export class CanonicalWorkspaceController {
     return scopedOverrideSnapshot(this.session.project.getSnapshot(), target);
   }
 
-  /** One settings command, guarded by the session revision it was read at. */
-  private async executeSettingsIntent(
-    command: (text: (value: string) => number[]) => ProjectCommandWire,
-  ): Promise<void> {
+  /** One edit command, guarded by the session revision it was read at. */
+  private async executeEditIntent(command: (text: (value: string) => number[]) => ProjectCommandWire): Promise<void> {
     const guard = this.asyncSession.captureGuard();
     const text = createIntentTextEncoder();
     await this.sessionTransport.executeIntent({ version: PROJECT_INTENT_VERSION, command: command(text) }, { guard });
@@ -3285,7 +3351,7 @@ export class CanonicalWorkspaceController {
   /**
    * Add a height-range modifier to the selected object.
    */
-  addHeightRange(minZMm?: number, maxZMm?: number): { objectId: ObjectId; layerRangeId: LayerRangeId } {
+  async addHeightRange(minZMm?: number, maxZMm?: number): Promise<{ objectId: ObjectId; layerRangeId: LayerRangeId }> {
     this.assertActive();
     const project = this.session.project.getSnapshot();
     const selection = this.session.selection.getSnapshot();
@@ -3326,22 +3392,18 @@ export class CanonicalWorkspaceController {
     }
 
     const layerRangeId = this.options.idSource.next('layer-range');
-    this.session.execute(
-      new AddLayerRangeCommand(targetObject.id, {
-        id: layerRangeId,
-        minZMm: minZ,
-        maxZMm: maxZ,
-        config: {},
-      }),
-      { coalesce: false },
-    );
-    return { objectId: targetObject.id, layerRangeId };
+    const objectId = targetObject.id;
+    new AddLayerRangeCommand(objectId, { id: layerRangeId, minZMm: minZ, maxZMm: maxZ, config: {} });
+    await this.executeEditIntent((text) => ({
+      addLayerRange: { objectId: text(objectId), layerRangeId: text(layerRangeId), minZMm: minZ!, maxZMm: maxZ! },
+    }));
+    return { objectId, layerRangeId };
   }
 
   /**
    * Turn the selected volume into a negative part, or add a negative volume primitive.
    */
-  setNegativePart(): void {
+  async setNegativePart(): Promise<void> {
     this.assertActive();
     const selection = this.session.selection.getSnapshot();
     const primary = selection.primary;
@@ -3354,7 +3416,7 @@ export class CanonicalWorkspaceController {
       if (found && found.volume.role !== 'negative-volume') {
         const editor = this.getSemanticObjectEditorSnapshot();
         if (editor) {
-          this.convertSemanticVolumeRole({
+          await this.convertSemanticVolumeRole({
             objectId: found.object.id,
             volumeId: found.volume.id,
             expectedRevision: editor.sourceRevision,
@@ -5239,4 +5301,9 @@ function createPrimitiveCylinderGeometry(
   }
 
   return { positions, indices };
+}
+
+/** A browser kebab-case name as its contract's camelCase enum value. */
+function camelWire<T extends string>(value: string): T {
+  return value.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase()) as T;
 }

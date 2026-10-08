@@ -128,14 +128,14 @@ export class ActionContext {
   ): void {
     this.workspace.setFilamentAssignments(entities, filamentId, guard);
   }
-  mutateLayerEvent(request: CanonicalLayerEventMutationRequest): void {
-    this.workspace.mutateLayerEvent(request);
+  async mutateLayerEvent(request: CanonicalLayerEventMutationRequest): Promise<void> {
+    await this.workspace.mutateLayerEvent(request);
   }
-  convertSemanticVolumeRole(request: CanonicalSemanticVolumeRoleRequest): void {
-    this.workspace.convertSemanticVolumeRole(request);
+  async convertSemanticVolumeRole(request: CanonicalSemanticVolumeRoleRequest): Promise<void> {
+    await this.workspace.convertSemanticVolumeRole(request);
   }
-  editSemanticLayerRange(request: CanonicalSemanticLayerRangeRequest): void {
-    this.workspace.editSemanticLayerRange(request);
+  async editSemanticLayerRange(request: CanonicalSemanticLayerRangeRequest): Promise<void> {
+    await this.workspace.editSemanticLayerRange(request);
   }
   async applyProjectSettings(
     inheritedConfig: Readonly<ConfigMap>,
@@ -391,11 +391,11 @@ export class ActionContext {
   addSupportBlocker(): void {
     this.workspace.addSupportBlocker();
   }
-  setNegativePart(): void {
-    this.workspace.setNegativePart();
+  async setNegativePart(): Promise<void> {
+    await this.workspace.setNegativePart();
   }
-  addHeightRange(): void {
-    this.workspace.addHeightRange();
+  async addHeightRange(): Promise<void> {
+    await this.workspace.addHeightRange();
   }
   variableLayerHeight(): void {
     this.workspace.variableLayerHeight();

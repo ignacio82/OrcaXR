@@ -908,13 +908,20 @@ and replay coverage for the complete current command inventory.
   `setProjectSettingsOverrides` and `setScopedOverrides` intents through the same
   adapter, the intents a native settings session returns. Stale guards, unknown
   nodes and out-of-scope keys refuse with the browser's own errors before
-  submission; the synchronous workspace settings wrappers are gone. Other
-  workflows, remote projections and production worker/JNI execution are not
-  migrated yet. Browser capture and placement planning still run synchronously.
+  submission; the synchronous workspace settings wrappers are gone. Height-range,
+  part-role and layer-event edits (with the height-range and negative-part tools
+  and the headset's layer-event author, now through its registry action) submit
+  their intents the same way, validating each command before submission. In
+  process, a command the session refuses reports the browser's own error; the
+  wire still carries only `commandFailed`. Other workflows, remote projections
+  and production worker/JNI execution are not migrated yet. Browser capture and
+  placement planning still run synchronously.
   - [x] Route the plate/history, rename, transform and specified lifecycle/staged
     browser actions through guarded asynchronous acknowledgements.
   - [x] Route project and scoped settings commits through guarded settings
     intents.
+  - [x] Route height-range, part-role and layer-event edits through guarded
+    intents, keeping the browser's own refusal messages in process.
   - [ ] Migrate remaining editing/import/save/slice routes and isolate
     preparation work; preserve the registry boundary for every mutation.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,

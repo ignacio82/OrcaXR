@@ -84,6 +84,22 @@ export class ProjectSessionEndpoint {
   private stagingUsed = { resources: 0, commands: 0, units: 0, assetBytes: 0 };
   private stagedSequence = 0;
   private readonly staged = new Map<number, { readonly guard: AsyncSessionGuard; readonly slot: StagedWorkSlot }>();
+  private commandFailures?: Map<number, unknown>;
+
+  /**
+   * For an in-process owner only: keep each failed command's own error, by
+   * request, for {@link takeCommandFailure}. The wire still carries only
+   * `commandFailed`; a remote session never sees the error itself.
+   */
+  retainCommandFailures(): void {
+    this.commandFailures ??= new Map();
+  }
+  /** The error a retained failed command threw, once. */
+  takeCommandFailure(requestId: number): unknown {
+    const failure = this.commandFailures?.get(requestId);
+    this.commandFailures?.delete(requestId);
+    return failure;
+  }
 
   configureStaging(limits: ProjectStagingLimits): void {
     if (this.disposed) throw new AsyncSessionError('disposed');
@@ -283,7 +299,16 @@ export class ProjectSessionEndpoint {
             return respond({ receiptUnavailable: changed });
           }
         },
-        (error) => respond({ error: sessionErrorCode(error) }),
+        (error) => {
+          const code = sessionErrorCode(error);
+          if (code === 'commandFailed' && this.commandFailures) {
+            this.commandFailures.set(request.requestId, error);
+            // An owner that never asks cannot grow this past the queue bound.
+            if (this.commandFailures.size > MAX_RETAINED_COMMAND_FAILURES)
+              this.commandFailures.delete(this.commandFailures.keys().next().value as number);
+          }
+          return respond({ error: code });
+        },
       )
       .finally(() => this.pending.delete(request.requestId));
   }
@@ -307,6 +332,7 @@ export class ProjectSessionEndpoint {
     });
   }
 }
+const MAX_RETAINED_COMMAND_FAILURES = 64;
 function sessionErrorCode(error: unknown): ProjectSessionErrorWire {
   if (error instanceof StagedInputError) return error.code === 'limit' ? 'resourceLimit' : 'invalidRequest';
   if (error instanceof AsyncSessionError) return error.code === 'invalid-request' ? 'invalidRequest' : error.code;

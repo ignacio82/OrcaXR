@@ -97,7 +97,7 @@ export const objectsActions: Action[] = [
         ctx.reportCapabilityUnavailable('Convert semantic volume role', 'Select a part and choose a compatible role.');
         return;
       }
-      ctx.convertSemanticVolumeRole(invocation.semanticVolumeRole);
+      return ctx.convertSemanticVolumeRole(invocation.semanticVolumeRole);
     },
   },
   {
@@ -112,7 +112,7 @@ export const objectsActions: Action[] = [
         ctx.reportCapabilityUnavailable('Author layer events', 'Choose a layer event to add, edit, or delete.');
         return;
       }
-      ctx.mutateLayerEvent(invocation.layerEventMutation);
+      return ctx.mutateLayerEvent(invocation.layerEventMutation);
     },
   },
   {
@@ -130,7 +130,7 @@ export const objectsActions: Action[] = [
         );
         return;
       }
-      ctx.editSemanticLayerRange(invocation.semanticLayerRange);
+      return ctx.editSemanticLayerRange(invocation.semanticLayerRange);
     },
   },
 ];
