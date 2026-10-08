@@ -165,7 +165,7 @@ import {
   type MultiInstanceTransformMode,
   type MultiInstanceTransformOrigin,
 } from './multiInstanceTransform';
-import { authoredProjectPreflightTarget } from './AuthoredSlicingTarget';
+import { authoredProjectPreflightTarget, catalogPreflightTarget } from './AuthoredSlicingTarget';
 import { deriveLiveProfilePreflightConstraints, LiveProfileSlicePreflight } from './ProfilePreflightConstraints';
 import { PaintOverlayRegistry } from './PaintOverlayRegistry';
 
@@ -4635,38 +4635,6 @@ export class OrcaWorkspace extends xb.Script {
     });
   }
 
-  private exactCatalogPrimaryProfile(): SlicerProfile | undefined {
-    const profile = this.profile;
-    if (
-      !profile?.machinePresetId ||
-      !profile.processPresetId ||
-      !profile.filamentPresetId ||
-      !this.catalog.profiles.includes(profile)
-    ) {
-      return undefined;
-    }
-    return profile;
-  }
-
-  private exactLiveFilamentProfiles(toolCount: number): readonly (SlicerProfile | undefined)[] {
-    const primary = this.exactCatalogPrimaryProfile();
-    if (!primary?.machinePresetId || !primary.processPresetId) {
-      return Object.freeze(new Array<SlicerProfile | undefined>(toolCount).fill(undefined));
-    }
-    return Object.freeze(
-      Array.from({ length: toolCount }, (_, toolId) => {
-        const filamentPresetId = this.headFilaments[toolId]?.presetId;
-        if (!filamentPresetId) return undefined;
-        return this.catalog.profiles.find(
-          (candidate) =>
-            candidate.machinePresetId === primary.machinePresetId &&
-            candidate.processPresetId === primary.processPresetId &&
-            candidate.filamentPresetId === filamentPresetId,
-        );
-      }),
-    );
-  }
-
   private createLiveProfilePreflight(): LiveProfileSlicePreflight {
     const slicing = this.canonicalProject.getSlicingConfiguration();
     const toolCount = slicing.printer.toolCount;
@@ -4679,11 +4647,14 @@ export class OrcaWorkspace extends xb.Script {
       );
     }
     return new LiveProfileSlicePreflight(
-      deriveLiveProfilePreflightConstraints({
-        primaryProfile: this.exactCatalogPrimaryProfile(),
-        filamentProfiles: this.exactLiveFilamentProfiles(toolCount),
-        toolCount,
-      }),
+      deriveLiveProfilePreflightConstraints(
+        catalogPreflightTarget(
+          this.catalog.profiles,
+          this.profile,
+          this.headFilaments.map((head) => head?.presetId),
+          toolCount,
+        ),
+      ),
     );
   }
 

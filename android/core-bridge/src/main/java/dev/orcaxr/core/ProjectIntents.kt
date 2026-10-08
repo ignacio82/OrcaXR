@@ -2458,6 +2458,272 @@ object ProjectIntents {
             w.field("toolId") { writeCounter(w, v.toolId) }
         }
     }
+    sealed interface OptionalCounter {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalCounter
+        data class Value(val value: Long) : OptionalCounter
+    }
+    private fun readOptionalCounter(v: Any): OptionalCounter {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalCounter.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalCounter.Value(readCounter(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalCounter(w: ProjectIntentWriter, v: OptionalCounter) {
+        w.obj { when(v) {
+            is OptionalCounter.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalCounter.Value -> w.field("value") { writeCounter(w, v.value) }
+        } }
+    }
+    private fun readTextList(v: Any): List<List<Int>> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readEditText(array.get(it)) }
+    }
+    private fun writeTextList(w: ProjectIntentWriter, v: List<List<Int>>) {
+        w.array(v, 0, 4096) { writeEditText(w, it) }
+    }
+    sealed interface OptionalTextList {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalTextList
+        data class Value(val value: List<List<Int>>) : OptionalTextList
+    }
+    private fun readOptionalTextList(v: Any): OptionalTextList {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalTextList.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalTextList.Value(readTextList(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalTextList(w: ProjectIntentWriter, v: OptionalTextList) {
+        w.obj { when(v) {
+            is OptionalTextList.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalTextList.Value -> w.field("value") { writeTextList(w, v.value) }
+        } }
+    }
+    private fun readOptionalTexts(v: Any): List<OptionalText> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readOptionalText(array.get(it)) }
+    }
+    private fun writeOptionalTexts(w: ProjectIntentWriter, v: List<OptionalText>) {
+        w.array(v, 0, 64) { writeOptionalText(w, it) }
+    }
+    data class CatalogProfile(val id: List<Int>, val displayName: List<Int>, val machineName: List<Int>, val processName: List<Int>, val filamentName: List<Int>, val filamentPresetName: List<Int>, val filamentVendor: OptionalText, val machinePresetId: List<Int>, val processPresetId: List<Int>, val filamentPresetId: List<Int>)
+    private fun readCatalogProfile(v: Any): CatalogProfile {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "displayName", "machineName", "processName", "filamentName", "filamentPresetName", "filamentVendor", "machinePresetId", "processPresetId", "filamentPresetId"), false)
+        return CatalogProfile(readEditText(obj.get("id")), readEditText(obj.get("displayName")), readEditText(obj.get("machineName")), readEditText(obj.get("processName")), readEditText(obj.get("filamentName")), readEditText(obj.get("filamentPresetName")), readOptionalText(obj.get("filamentVendor")), readEditText(obj.get("machinePresetId")), readEditText(obj.get("processPresetId")), readEditText(obj.get("filamentPresetId")))
+    }
+    private fun writeCatalogProfile(w: ProjectIntentWriter, v: CatalogProfile) {
+        w.obj {
+            w.field("id") { writeEditText(w, v.id) }
+            w.field("displayName") { writeEditText(w, v.displayName) }
+            w.field("machineName") { writeEditText(w, v.machineName) }
+            w.field("processName") { writeEditText(w, v.processName) }
+            w.field("filamentName") { writeEditText(w, v.filamentName) }
+            w.field("filamentPresetName") { writeEditText(w, v.filamentPresetName) }
+            w.field("filamentVendor") { writeOptionalText(w, v.filamentVendor) }
+            w.field("machinePresetId") { writeEditText(w, v.machinePresetId) }
+            w.field("processPresetId") { writeEditText(w, v.processPresetId) }
+            w.field("filamentPresetId") { writeEditText(w, v.filamentPresetId) }
+        }
+    }
+    data class CatalogConfigEntry(val key: List<Int>, val value: List<Int>)
+    private fun readCatalogConfigEntry(v: Any): CatalogConfigEntry {
+        val obj = ProjectIntentJson.fields(v, setOf("key", "value"), false)
+        return CatalogConfigEntry(readEditText(obj.get("key")), readEditText(obj.get("value")))
+    }
+    private fun writeCatalogConfigEntry(w: ProjectIntentWriter, v: CatalogConfigEntry) {
+        w.obj {
+            w.field("key") { writeEditText(w, v.key) }
+            w.field("value") { writeEditText(w, v.value) }
+        }
+    }
+    private fun readCatalogConfigEntries(v: Any): List<CatalogConfigEntry> {
+        val array = ProjectIntentJson.list(v, 0, 8192)
+        return List(array.length()) { readCatalogConfigEntry(array.get(it)) }
+    }
+    private fun writeCatalogConfigEntries(w: ProjectIntentWriter, v: List<CatalogConfigEntry>) {
+        w.array(v, 0, 8192) { writeCatalogConfigEntry(w, it) }
+    }
+    data class CatalogConfig(val entries: List<CatalogConfigEntry>)
+    private fun readCatalogConfig(v: Any): CatalogConfig {
+        val obj = ProjectIntentJson.fields(v, setOf("entries"), false)
+        return CatalogConfig(readCatalogConfigEntries(obj.get("entries")))
+    }
+    private fun writeCatalogConfig(w: ProjectIntentWriter, v: CatalogConfig) {
+        w.obj {
+            w.field("entries") { writeCatalogConfigEntries(w, v.entries) }
+        }
+    }
+    enum class CatalogDiagnosticCode {ProfileCorpusPinnedOverlay,InvalidPresetGraph,NoCompatibleProcess,NoCompatibleFilament,UnresolvedCompatibility}
+    private fun readCatalogDiagnosticCode(v: Any): CatalogDiagnosticCode {
+        return when(v) {"profileCorpusPinnedOverlay" -> CatalogDiagnosticCode.ProfileCorpusPinnedOverlay;"invalidPresetGraph" -> CatalogDiagnosticCode.InvalidPresetGraph;"noCompatibleProcess" -> CatalogDiagnosticCode.NoCompatibleProcess;"noCompatibleFilament" -> CatalogDiagnosticCode.NoCompatibleFilament;"unresolvedCompatibility" -> CatalogDiagnosticCode.UnresolvedCompatibility; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeCatalogDiagnosticCode(w: ProjectIntentWriter, v: CatalogDiagnosticCode) {
+        w.literal(when(v) {CatalogDiagnosticCode.ProfileCorpusPinnedOverlay -> "profileCorpusPinnedOverlay";CatalogDiagnosticCode.InvalidPresetGraph -> "invalidPresetGraph";CatalogDiagnosticCode.NoCompatibleProcess -> "noCompatibleProcess";CatalogDiagnosticCode.NoCompatibleFilament -> "noCompatibleFilament";CatalogDiagnosticCode.UnresolvedCompatibility -> "unresolvedCompatibility";})
+    }
+    data class CatalogDiagnostic(val code: CatalogDiagnosticCode, val error: Boolean, val message: List<Int>, val machineName: OptionalText, val processName: OptionalText, val presetId: OptionalText)
+    private fun readCatalogDiagnostic(v: Any): CatalogDiagnostic {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "error", "message", "machineName", "processName", "presetId"), false)
+        return CatalogDiagnostic(readCatalogDiagnosticCode(obj.get("code")), readFlag(obj.get("error")), readEditText(obj.get("message")), readOptionalText(obj.get("machineName")), readOptionalText(obj.get("processName")), readOptionalText(obj.get("presetId")))
+    }
+    private fun writeCatalogDiagnostic(w: ProjectIntentWriter, v: CatalogDiagnostic) {
+        w.obj {
+            w.field("code") { writeCatalogDiagnosticCode(w, v.code) }
+            w.field("error") { writeFlag(w, v.error) }
+            w.field("message") { writeEditText(w, v.message) }
+            w.field("machineName") { writeOptionalText(w, v.machineName) }
+            w.field("processName") { writeOptionalText(w, v.processName) }
+            w.field("presetId") { writeOptionalText(w, v.presetId) }
+        }
+    }
+    enum class CatalogPresetKind {Machine,Process,Filament}
+    private fun readCatalogPresetKind(v: Any): CatalogPresetKind {
+        return when(v) {"machine" -> CatalogPresetKind.Machine;"process" -> CatalogPresetKind.Process;"filament" -> CatalogPresetKind.Filament; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeCatalogPresetKind(w: ProjectIntentWriter, v: CatalogPresetKind) {
+        w.literal(when(v) {CatalogPresetKind.Machine -> "machine";CatalogPresetKind.Process -> "process";CatalogPresetKind.Filament -> "filament";})
+    }
+    enum class CatalogPresetSource {System,User,Project,External,Default,Unknown}
+    private fun readCatalogPresetSource(v: Any): CatalogPresetSource {
+        return when(v) {"system" -> CatalogPresetSource.System;"user" -> CatalogPresetSource.User;"project" -> CatalogPresetSource.Project;"external" -> CatalogPresetSource.External;"default" -> CatalogPresetSource.Default;"unknown" -> CatalogPresetSource.Unknown; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeCatalogPresetSource(w: ProjectIntentWriter, v: CatalogPresetSource) {
+        w.literal(when(v) {CatalogPresetSource.System -> "system";CatalogPresetSource.User -> "user";CatalogPresetSource.Project -> "project";CatalogPresetSource.External -> "external";CatalogPresetSource.Default -> "default";CatalogPresetSource.Unknown -> "unknown";})
+    }
+    data class CatalogPreset(val id: List<Int>, val vendor: List<Int>, val kind: CatalogPresetKind, val name: List<Int>, val parentId: OptionalText, val source: CatalogPresetSource, val isSystem: Boolean, val isDefault: Boolean, val isVisible: Boolean)
+    private fun readCatalogPreset(v: Any): CatalogPreset {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "vendor", "kind", "name", "parentId", "source", "isSystem", "isDefault", "isVisible"), false)
+        return CatalogPreset(readEditText(obj.get("id")), readEditText(obj.get("vendor")), readCatalogPresetKind(obj.get("kind")), readEditText(obj.get("name")), readOptionalText(obj.get("parentId")), readCatalogPresetSource(obj.get("source")), readFlag(obj.get("isSystem")), readFlag(obj.get("isDefault")), readFlag(obj.get("isVisible")))
+    }
+    private fun writeCatalogPreset(w: ProjectIntentWriter, v: CatalogPreset) {
+        w.obj {
+            w.field("id") { writeEditText(w, v.id) }
+            w.field("vendor") { writeEditText(w, v.vendor) }
+            w.field("kind") { writeCatalogPresetKind(w, v.kind) }
+            w.field("name") { writeEditText(w, v.name) }
+            w.field("parentId") { writeOptionalText(w, v.parentId) }
+            w.field("source") { writeCatalogPresetSource(w, v.source) }
+            w.field("isSystem") { writeFlag(w, v.isSystem) }
+            w.field("isDefault") { writeFlag(w, v.isDefault) }
+            w.field("isVisible") { writeFlag(w, v.isVisible) }
+        }
+    }
+    data class CatalogSelectionRequest(val printerId: List<Int>, val processId: OptionalText, val filamentIds: List<OptionalText>, val installedVendors: OptionalTextList)
+    private fun readCatalogSelectionRequest(v: Any): CatalogSelectionRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("printerId", "processId", "filamentIds", "installedVendors"), false)
+        return CatalogSelectionRequest(readEditText(obj.get("printerId")), readOptionalText(obj.get("processId")), readOptionalTexts(obj.get("filamentIds")), readOptionalTextList(obj.get("installedVendors")))
+    }
+    private fun writeCatalogSelectionRequest(w: ProjectIntentWriter, v: CatalogSelectionRequest) {
+        w.obj {
+            w.field("printerId") { writeEditText(w, v.printerId) }
+            w.field("processId") { writeOptionalText(w, v.processId) }
+            w.field("filamentIds") { writeOptionalTexts(w, v.filamentIds) }
+            w.field("installedVendors") { writeOptionalTextList(w, v.installedVendors) }
+        }
+    }
+    enum class CatalogSubstitutionReason {Missing,Incompatible,NoCompatiblePreset}
+    private fun readCatalogSubstitutionReason(v: Any): CatalogSubstitutionReason {
+        return when(v) {"missing" -> CatalogSubstitutionReason.Missing;"incompatible" -> CatalogSubstitutionReason.Incompatible;"noCompatiblePreset" -> CatalogSubstitutionReason.NoCompatiblePreset; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeCatalogSubstitutionReason(w: ProjectIntentWriter, v: CatalogSubstitutionReason) {
+        w.literal(when(v) {CatalogSubstitutionReason.Missing -> "missing";CatalogSubstitutionReason.Incompatible -> "incompatible";CatalogSubstitutionReason.NoCompatiblePreset -> "noCompatiblePreset";})
+    }
+    data class CatalogSubstitution(val kind: CatalogPresetKind, val slot: OptionalCounter, val previousId: OptionalText, val nextId: OptionalText, val reason: CatalogSubstitutionReason)
+    private fun readCatalogSubstitution(v: Any): CatalogSubstitution {
+        val obj = ProjectIntentJson.fields(v, setOf("kind", "slot", "previousId", "nextId", "reason"), false)
+        return CatalogSubstitution(readCatalogPresetKind(obj.get("kind")), readOptionalCounter(obj.get("slot")), readOptionalText(obj.get("previousId")), readOptionalText(obj.get("nextId")), readCatalogSubstitutionReason(obj.get("reason")))
+    }
+    private fun writeCatalogSubstitution(w: ProjectIntentWriter, v: CatalogSubstitution) {
+        w.obj {
+            w.field("kind") { writeCatalogPresetKind(w, v.kind) }
+            w.field("slot") { writeOptionalCounter(w, v.slot) }
+            w.field("previousId") { writeOptionalText(w, v.previousId) }
+            w.field("nextId") { writeOptionalText(w, v.nextId) }
+            w.field("reason") { writeCatalogSubstitutionReason(w, v.reason) }
+        }
+    }
+    private fun readCatalogSubstitutions(v: Any): List<CatalogSubstitution> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readCatalogSubstitution(array.get(it)) }
+    }
+    private fun writeCatalogSubstitutions(w: ProjectIntentWriter, v: List<CatalogSubstitution>) {
+        w.array(v, 0, 4096) { writeCatalogSubstitution(w, it) }
+    }
+    enum class CatalogSelectionDiagnosticCode {UnresolvedCondition,NoCompatibleProcess,NoCompatibleFilament}
+    private fun readCatalogSelectionDiagnosticCode(v: Any): CatalogSelectionDiagnosticCode {
+        return when(v) {"unresolvedCondition" -> CatalogSelectionDiagnosticCode.UnresolvedCondition;"noCompatibleProcess" -> CatalogSelectionDiagnosticCode.NoCompatibleProcess;"noCompatibleFilament" -> CatalogSelectionDiagnosticCode.NoCompatibleFilament; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeCatalogSelectionDiagnosticCode(w: ProjectIntentWriter, v: CatalogSelectionDiagnosticCode) {
+        w.literal(when(v) {CatalogSelectionDiagnosticCode.UnresolvedCondition -> "unresolvedCondition";CatalogSelectionDiagnosticCode.NoCompatibleProcess -> "noCompatibleProcess";CatalogSelectionDiagnosticCode.NoCompatibleFilament -> "noCompatibleFilament";})
+    }
+    data class CatalogSelectionDiagnostic(val code: CatalogSelectionDiagnosticCode, val presetId: OptionalText, val slot: OptionalCounter, val message: List<Int>)
+    private fun readCatalogSelectionDiagnostic(v: Any): CatalogSelectionDiagnostic {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "presetId", "slot", "message"), false)
+        return CatalogSelectionDiagnostic(readCatalogSelectionDiagnosticCode(obj.get("code")), readOptionalText(obj.get("presetId")), readOptionalCounter(obj.get("slot")), readEditText(obj.get("message")))
+    }
+    private fun writeCatalogSelectionDiagnostic(w: ProjectIntentWriter, v: CatalogSelectionDiagnostic) {
+        w.obj {
+            w.field("code") { writeCatalogSelectionDiagnosticCode(w, v.code) }
+            w.field("presetId") { writeOptionalText(w, v.presetId) }
+            w.field("slot") { writeOptionalCounter(w, v.slot) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    private fun readCatalogSelectionDiagnostics(v: Any): List<CatalogSelectionDiagnostic> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readCatalogSelectionDiagnostic(array.get(it)) }
+    }
+    private fun writeCatalogSelectionDiagnostics(w: ProjectIntentWriter, v: List<CatalogSelectionDiagnostic>) {
+        w.array(v, 0, 131072) { writeCatalogSelectionDiagnostic(w, it) }
+    }
+    data class ResolvedCatalogSelection(val printer: List<Int>, val process: OptionalText, val filaments: List<OptionalText>, val substitutions: List<CatalogSubstitution>, val diagnostics: List<CatalogSelectionDiagnostic>, val complete: Boolean)
+    private fun readResolvedCatalogSelection(v: Any): ResolvedCatalogSelection {
+        val obj = ProjectIntentJson.fields(v, setOf("printer", "process", "filaments", "substitutions", "diagnostics", "complete"), false)
+        return ResolvedCatalogSelection(readEditText(obj.get("printer")), readOptionalText(obj.get("process")), readOptionalTexts(obj.get("filaments")), readCatalogSubstitutions(obj.get("substitutions")), readCatalogSelectionDiagnostics(obj.get("diagnostics")), readFlag(obj.get("complete")))
+    }
+    private fun writeResolvedCatalogSelection(w: ProjectIntentWriter, v: ResolvedCatalogSelection) {
+        w.obj {
+            w.field("printer") { writeEditText(w, v.printer) }
+            w.field("process") { writeOptionalText(w, v.process) }
+            w.field("filaments") { writeOptionalTexts(w, v.filaments) }
+            w.field("substitutions") { writeCatalogSubstitutions(w, v.substitutions) }
+            w.field("diagnostics") { writeCatalogSelectionDiagnostics(w, v.diagnostics) }
+            w.field("complete") { writeFlag(w, v.complete) }
+        }
+    }
+    sealed interface CatalogSelection {
+        data class Unavailable(val value: List<Int>) : CatalogSelection
+        data class Resolved(val value: ProjectIntents.ResolvedCatalogSelection) : CatalogSelection
+    }
+    private fun readCatalogSelection(v: Any): CatalogSelection {
+        val obj = ProjectIntentJson.fields(v, setOf("unavailable", "resolved"), true)
+        return when(val key = obj.keys().next()) {
+            "unavailable" -> CatalogSelection.Unavailable(readEditText(obj.get(key)))
+            "resolved" -> CatalogSelection.Resolved(readResolvedCatalogSelection(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeCatalogSelection(w: ProjectIntentWriter, v: CatalogSelection) {
+        w.obj { when(v) {
+            is CatalogSelection.Unavailable -> w.field("unavailable") { writeEditText(w, v.value) }
+            is CatalogSelection.Resolved -> w.field("resolved") { writeResolvedCatalogSelection(w, v.value) }
+        } }
+    }
+    data class CatalogTargetRequest(val machinePresetId: List<Int>, val processPresetId: List<Int>, val filamentPresetId: List<Int>, val headFilamentIds: List<OptionalText>, val toolCount: Double)
+    private fun readCatalogTargetRequest(v: Any): CatalogTargetRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("machinePresetId", "processPresetId", "filamentPresetId", "headFilamentIds", "toolCount"), false)
+        return CatalogTargetRequest(readEditText(obj.get("machinePresetId")), readEditText(obj.get("processPresetId")), readEditText(obj.get("filamentPresetId")), readOptionalTexts(obj.get("headFilamentIds")), readFinite(obj.get("toolCount")))
+    }
+    private fun writeCatalogTargetRequest(w: ProjectIntentWriter, v: CatalogTargetRequest) {
+        w.obj {
+            w.field("machinePresetId") { writeEditText(w, v.machinePresetId) }
+            w.field("processPresetId") { writeEditText(w, v.processPresetId) }
+            w.field("filamentPresetId") { writeEditText(w, v.filamentPresetId) }
+            w.field("headFilamentIds") { writeOptionalTexts(w, v.headFilamentIds) }
+            w.field("toolCount") { writeFinite(w, v.toolCount) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -2476,4 +2742,20 @@ object ProjectIntents {
     fun encodePreflightOmission(value: PreflightOmission): String = ProjectIntentWriter().also { writePreflightOmission(it, value) }.finish()
     fun decodePreflightEntity(text: String): PreflightEntity = readPreflightEntity(ProjectIntentJson.parse(text))
     fun encodePreflightEntity(value: PreflightEntity): String = ProjectIntentWriter().also { writePreflightEntity(it, value) }.finish()
+    fun decodeCatalogProfile(text: String): CatalogProfile = readCatalogProfile(ProjectIntentJson.parse(text))
+    fun encodeCatalogProfile(value: CatalogProfile): String = ProjectIntentWriter().also { writeCatalogProfile(it, value) }.finish()
+    fun decodeCatalogConfig(text: String): CatalogConfig = readCatalogConfig(ProjectIntentJson.parse(text))
+    fun encodeCatalogConfig(value: CatalogConfig): String = ProjectIntentWriter().also { writeCatalogConfig(it, value) }.finish()
+    fun decodeCatalogDiagnostic(text: String): CatalogDiagnostic = readCatalogDiagnostic(ProjectIntentJson.parse(text))
+    fun encodeCatalogDiagnostic(value: CatalogDiagnostic): String = ProjectIntentWriter().also { writeCatalogDiagnostic(it, value) }.finish()
+    fun decodeCatalogPreset(text: String): CatalogPreset = readCatalogPreset(ProjectIntentJson.parse(text))
+    fun encodeCatalogPreset(value: CatalogPreset): String = ProjectIntentWriter().also { writeCatalogPreset(it, value) }.finish()
+    fun decodeCatalogSelectionRequest(text: String): CatalogSelectionRequest = readCatalogSelectionRequest(ProjectIntentJson.parse(text))
+    fun encodeCatalogSelectionRequest(value: CatalogSelectionRequest): String = ProjectIntentWriter().also { writeCatalogSelectionRequest(it, value) }.finish()
+    fun decodeCatalogSelection(text: String): CatalogSelection = readCatalogSelection(ProjectIntentJson.parse(text))
+    fun encodeCatalogSelection(value: CatalogSelection): String = ProjectIntentWriter().also { writeCatalogSelection(it, value) }.finish()
+    fun decodeCatalogTargetRequest(text: String): CatalogTargetRequest = readCatalogTargetRequest(ProjectIntentJson.parse(text))
+    fun encodeCatalogTargetRequest(value: CatalogTargetRequest): String = ProjectIntentWriter().also { writeCatalogTargetRequest(it, value) }.finish()
+    fun decodeCatalogPreflightTarget(text: String): CatalogPreflightTarget = readCatalogPreflightTarget(ProjectIntentJson.parse(text))
+    fun encodeCatalogPreflightTarget(value: CatalogPreflightTarget): String = ProjectIntentWriter().also { writeCatalogPreflightTarget(it, value) }.finish()
 }

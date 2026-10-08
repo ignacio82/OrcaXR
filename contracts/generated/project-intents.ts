@@ -1574,6 +1574,204 @@ const shapes = {
       "path": "EditText",
       "toolId": "Counter"
     }
+  },
+  "OptionalCounter": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "Counter"
+    }
+  },
+  "TextList": {
+    "kind": "array",
+    "items": "EditText",
+    "min": 0,
+    "max": 4096
+  },
+  "OptionalTextList": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "TextList"
+    }
+  },
+  "OptionalTexts": {
+    "kind": "array",
+    "items": "OptionalText",
+    "min": 0,
+    "max": 64
+  },
+  "CatalogProfile": {
+    "kind": "object",
+    "fields": {
+      "id": "EditText",
+      "displayName": "EditText",
+      "machineName": "EditText",
+      "processName": "EditText",
+      "filamentName": "EditText",
+      "filamentPresetName": "EditText",
+      "filamentVendor": "OptionalText",
+      "machinePresetId": "EditText",
+      "processPresetId": "EditText",
+      "filamentPresetId": "EditText"
+    }
+  },
+  "CatalogConfigEntry": {
+    "kind": "object",
+    "fields": {
+      "key": "EditText",
+      "value": "EditText"
+    }
+  },
+  "CatalogConfigEntries": {
+    "kind": "array",
+    "items": "CatalogConfigEntry",
+    "min": 0,
+    "max": 8192
+  },
+  "CatalogConfig": {
+    "kind": "object",
+    "fields": {
+      "entries": "CatalogConfigEntries"
+    }
+  },
+  "CatalogDiagnosticCode": {
+    "kind": "enum",
+    "values": [
+      "profileCorpusPinnedOverlay",
+      "invalidPresetGraph",
+      "noCompatibleProcess",
+      "noCompatibleFilament",
+      "unresolvedCompatibility"
+    ]
+  },
+  "CatalogDiagnostic": {
+    "kind": "object",
+    "fields": {
+      "code": "CatalogDiagnosticCode",
+      "error": "Flag",
+      "message": "EditText",
+      "machineName": "OptionalText",
+      "processName": "OptionalText",
+      "presetId": "OptionalText"
+    }
+  },
+  "CatalogPresetKind": {
+    "kind": "enum",
+    "values": [
+      "machine",
+      "process",
+      "filament"
+    ]
+  },
+  "CatalogPresetSource": {
+    "kind": "enum",
+    "values": [
+      "system",
+      "user",
+      "project",
+      "external",
+      "default",
+      "unknown"
+    ]
+  },
+  "CatalogPreset": {
+    "kind": "object",
+    "fields": {
+      "id": "EditText",
+      "vendor": "EditText",
+      "kind": "CatalogPresetKind",
+      "name": "EditText",
+      "parentId": "OptionalText",
+      "source": "CatalogPresetSource",
+      "isSystem": "Flag",
+      "isDefault": "Flag",
+      "isVisible": "Flag"
+    }
+  },
+  "CatalogSelectionRequest": {
+    "kind": "object",
+    "fields": {
+      "printerId": "EditText",
+      "processId": "OptionalText",
+      "filamentIds": "OptionalTexts",
+      "installedVendors": "OptionalTextList"
+    }
+  },
+  "CatalogSubstitutionReason": {
+    "kind": "enum",
+    "values": [
+      "missing",
+      "incompatible",
+      "noCompatiblePreset"
+    ]
+  },
+  "CatalogSubstitution": {
+    "kind": "object",
+    "fields": {
+      "kind": "CatalogPresetKind",
+      "slot": "OptionalCounter",
+      "previousId": "OptionalText",
+      "nextId": "OptionalText",
+      "reason": "CatalogSubstitutionReason"
+    }
+  },
+  "CatalogSubstitutions": {
+    "kind": "array",
+    "items": "CatalogSubstitution",
+    "min": 0,
+    "max": 4096
+  },
+  "CatalogSelectionDiagnosticCode": {
+    "kind": "enum",
+    "values": [
+      "unresolvedCondition",
+      "noCompatibleProcess",
+      "noCompatibleFilament"
+    ]
+  },
+  "CatalogSelectionDiagnostic": {
+    "kind": "object",
+    "fields": {
+      "code": "CatalogSelectionDiagnosticCode",
+      "presetId": "OptionalText",
+      "slot": "OptionalCounter",
+      "message": "EditText"
+    }
+  },
+  "CatalogSelectionDiagnostics": {
+    "kind": "array",
+    "items": "CatalogSelectionDiagnostic",
+    "min": 0,
+    "max": 131072
+  },
+  "ResolvedCatalogSelection": {
+    "kind": "object",
+    "fields": {
+      "printer": "EditText",
+      "process": "OptionalText",
+      "filaments": "OptionalTexts",
+      "substitutions": "CatalogSubstitutions",
+      "diagnostics": "CatalogSelectionDiagnostics",
+      "complete": "Flag"
+    }
+  },
+  "CatalogSelection": {
+    "kind": "union",
+    "variants": {
+      "unavailable": "EditText",
+      "resolved": "ResolvedCatalogSelection"
+    }
+  },
+  "CatalogTargetRequest": {
+    "kind": "object",
+    "fields": {
+      "machinePresetId": "EditText",
+      "processPresetId": "EditText",
+      "filamentPresetId": "EditText",
+      "headFilamentIds": "OptionalTexts",
+      "toolCount": "Finite"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -1771,6 +1969,29 @@ export type ProjectPreflightActionsWire = readonly ProjectPreflightActionWire[];
 export interface ProjectPreflightIssueWire {readonly id: ProjectEditTextWire;readonly code: ProjectPreflightCodeWire;readonly detailCode: ProjectOptionalTextWire;readonly severity: ProjectPreflightSeverityWire;readonly message: ProjectEditTextWire;readonly help: ProjectEditTextWire;readonly path: ProjectOptionalTextWire;readonly entities: ProjectPreflightEntitiesWire;readonly actions: ProjectPreflightActionsWire;}
 export type ProjectPreflightOmissionCodeWire = "materialNotDeclared" | "temperatureLowerBoundNotDeclared" | "temperatureUpperBoundNotDeclared" | "temperatureRangeInvalid";
 export interface ProjectPreflightOmissionWire {readonly code: ProjectPreflightOmissionCodeWire;readonly message: ProjectEditTextWire;readonly path: ProjectEditTextWire;readonly toolId: ProjectCounterWire;}
+export type ProjectOptionalCounterWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectCounterWire};
+export type ProjectTextListWire = readonly ProjectEditTextWire[];
+export type ProjectOptionalTextListWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectTextListWire};
+export type ProjectOptionalTextsWire = readonly ProjectOptionalTextWire[];
+export interface ProjectCatalogProfileWire {readonly id: ProjectEditTextWire;readonly displayName: ProjectEditTextWire;readonly machineName: ProjectEditTextWire;readonly processName: ProjectEditTextWire;readonly filamentName: ProjectEditTextWire;readonly filamentPresetName: ProjectEditTextWire;readonly filamentVendor: ProjectOptionalTextWire;readonly machinePresetId: ProjectEditTextWire;readonly processPresetId: ProjectEditTextWire;readonly filamentPresetId: ProjectEditTextWire;}
+export interface ProjectCatalogConfigEntryWire {readonly key: ProjectEditTextWire;readonly value: ProjectEditTextWire;}
+export type ProjectCatalogConfigEntriesWire = readonly ProjectCatalogConfigEntryWire[];
+export interface ProjectCatalogConfigWire {readonly entries: ProjectCatalogConfigEntriesWire;}
+export type ProjectCatalogDiagnosticCodeWire = "profileCorpusPinnedOverlay" | "invalidPresetGraph" | "noCompatibleProcess" | "noCompatibleFilament" | "unresolvedCompatibility";
+export interface ProjectCatalogDiagnosticWire {readonly code: ProjectCatalogDiagnosticCodeWire;readonly error: ProjectFlagWire;readonly message: ProjectEditTextWire;readonly machineName: ProjectOptionalTextWire;readonly processName: ProjectOptionalTextWire;readonly presetId: ProjectOptionalTextWire;}
+export type ProjectCatalogPresetKindWire = "machine" | "process" | "filament";
+export type ProjectCatalogPresetSourceWire = "system" | "user" | "project" | "external" | "default" | "unknown";
+export interface ProjectCatalogPresetWire {readonly id: ProjectEditTextWire;readonly vendor: ProjectEditTextWire;readonly kind: ProjectCatalogPresetKindWire;readonly name: ProjectEditTextWire;readonly parentId: ProjectOptionalTextWire;readonly source: ProjectCatalogPresetSourceWire;readonly isSystem: ProjectFlagWire;readonly isDefault: ProjectFlagWire;readonly isVisible: ProjectFlagWire;}
+export interface ProjectCatalogSelectionRequestWire {readonly printerId: ProjectEditTextWire;readonly processId: ProjectOptionalTextWire;readonly filamentIds: ProjectOptionalTextsWire;readonly installedVendors: ProjectOptionalTextListWire;}
+export type ProjectCatalogSubstitutionReasonWire = "missing" | "incompatible" | "noCompatiblePreset";
+export interface ProjectCatalogSubstitutionWire {readonly kind: ProjectCatalogPresetKindWire;readonly slot: ProjectOptionalCounterWire;readonly previousId: ProjectOptionalTextWire;readonly nextId: ProjectOptionalTextWire;readonly reason: ProjectCatalogSubstitutionReasonWire;}
+export type ProjectCatalogSubstitutionsWire = readonly ProjectCatalogSubstitutionWire[];
+export type ProjectCatalogSelectionDiagnosticCodeWire = "unresolvedCondition" | "noCompatibleProcess" | "noCompatibleFilament";
+export interface ProjectCatalogSelectionDiagnosticWire {readonly code: ProjectCatalogSelectionDiagnosticCodeWire;readonly presetId: ProjectOptionalTextWire;readonly slot: ProjectOptionalCounterWire;readonly message: ProjectEditTextWire;}
+export type ProjectCatalogSelectionDiagnosticsWire = readonly ProjectCatalogSelectionDiagnosticWire[];
+export interface ProjectResolvedCatalogSelectionWire {readonly printer: ProjectEditTextWire;readonly process: ProjectOptionalTextWire;readonly filaments: ProjectOptionalTextsWire;readonly substitutions: ProjectCatalogSubstitutionsWire;readonly diagnostics: ProjectCatalogSelectionDiagnosticsWire;readonly complete: ProjectFlagWire;}
+export type ProjectCatalogSelectionWire = {readonly unavailable:ProjectEditTextWire} | {readonly resolved:ProjectResolvedCatalogSelectionWire};
+export interface ProjectCatalogTargetRequestWire {readonly machinePresetId: ProjectEditTextWire;readonly processPresetId: ProjectEditTextWire;readonly filamentPresetId: ProjectEditTextWire;readonly headFilamentIds: ProjectOptionalTextsWire;readonly toolCount: ProjectFiniteWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -1798,3 +2019,27 @@ export function encodeProjectPreflightOmission(value:ProjectPreflightOmissionWir
 export function captureProjectPreflightEntity(value:unknown):ProjectPreflightEntityWire { return captureIntent("PreflightEntity",value,shapes,limits) as ProjectPreflightEntityWire; }
 export function decodeProjectPreflightEntity(text:string):ProjectPreflightEntityWire { return captureProjectPreflightEntity(parseIntentJson(text,limits)); }
 export function encodeProjectPreflightEntity(value:ProjectPreflightEntityWire):string { return JSON.stringify(captureProjectPreflightEntity(value)); }
+export function captureProjectCatalogProfile(value:unknown):ProjectCatalogProfileWire { return captureIntent("CatalogProfile",value,shapes,limits) as ProjectCatalogProfileWire; }
+export function decodeProjectCatalogProfile(text:string):ProjectCatalogProfileWire { return captureProjectCatalogProfile(parseIntentJson(text,limits)); }
+export function encodeProjectCatalogProfile(value:ProjectCatalogProfileWire):string { return JSON.stringify(captureProjectCatalogProfile(value)); }
+export function captureProjectCatalogConfig(value:unknown):ProjectCatalogConfigWire { return captureIntent("CatalogConfig",value,shapes,limits) as ProjectCatalogConfigWire; }
+export function decodeProjectCatalogConfig(text:string):ProjectCatalogConfigWire { return captureProjectCatalogConfig(parseIntentJson(text,limits)); }
+export function encodeProjectCatalogConfig(value:ProjectCatalogConfigWire):string { return JSON.stringify(captureProjectCatalogConfig(value)); }
+export function captureProjectCatalogDiagnostic(value:unknown):ProjectCatalogDiagnosticWire { return captureIntent("CatalogDiagnostic",value,shapes,limits) as ProjectCatalogDiagnosticWire; }
+export function decodeProjectCatalogDiagnostic(text:string):ProjectCatalogDiagnosticWire { return captureProjectCatalogDiagnostic(parseIntentJson(text,limits)); }
+export function encodeProjectCatalogDiagnostic(value:ProjectCatalogDiagnosticWire):string { return JSON.stringify(captureProjectCatalogDiagnostic(value)); }
+export function captureProjectCatalogPreset(value:unknown):ProjectCatalogPresetWire { return captureIntent("CatalogPreset",value,shapes,limits) as ProjectCatalogPresetWire; }
+export function decodeProjectCatalogPreset(text:string):ProjectCatalogPresetWire { return captureProjectCatalogPreset(parseIntentJson(text,limits)); }
+export function encodeProjectCatalogPreset(value:ProjectCatalogPresetWire):string { return JSON.stringify(captureProjectCatalogPreset(value)); }
+export function captureProjectCatalogSelectionRequest(value:unknown):ProjectCatalogSelectionRequestWire { return captureIntent("CatalogSelectionRequest",value,shapes,limits) as ProjectCatalogSelectionRequestWire; }
+export function decodeProjectCatalogSelectionRequest(text:string):ProjectCatalogSelectionRequestWire { return captureProjectCatalogSelectionRequest(parseIntentJson(text,limits)); }
+export function encodeProjectCatalogSelectionRequest(value:ProjectCatalogSelectionRequestWire):string { return JSON.stringify(captureProjectCatalogSelectionRequest(value)); }
+export function captureProjectCatalogSelection(value:unknown):ProjectCatalogSelectionWire { return captureIntent("CatalogSelection",value,shapes,limits) as ProjectCatalogSelectionWire; }
+export function decodeProjectCatalogSelection(text:string):ProjectCatalogSelectionWire { return captureProjectCatalogSelection(parseIntentJson(text,limits)); }
+export function encodeProjectCatalogSelection(value:ProjectCatalogSelectionWire):string { return JSON.stringify(captureProjectCatalogSelection(value)); }
+export function captureProjectCatalogTargetRequest(value:unknown):ProjectCatalogTargetRequestWire { return captureIntent("CatalogTargetRequest",value,shapes,limits) as ProjectCatalogTargetRequestWire; }
+export function decodeProjectCatalogTargetRequest(text:string):ProjectCatalogTargetRequestWire { return captureProjectCatalogTargetRequest(parseIntentJson(text,limits)); }
+export function encodeProjectCatalogTargetRequest(value:ProjectCatalogTargetRequestWire):string { return JSON.stringify(captureProjectCatalogTargetRequest(value)); }
+export function captureProjectCatalogPreflightTarget(value:unknown):ProjectCatalogPreflightTargetWire { return captureIntent("CatalogPreflightTarget",value,shapes,limits) as ProjectCatalogPreflightTargetWire; }
+export function decodeProjectCatalogPreflightTarget(text:string):ProjectCatalogPreflightTargetWire { return captureProjectCatalogPreflightTarget(parseIntentJson(text,limits)); }
+export function encodeProjectCatalogPreflightTarget(value:ProjectCatalogPreflightTargetWire):string { return JSON.stringify(captureProjectCatalogPreflightTarget(value)); }

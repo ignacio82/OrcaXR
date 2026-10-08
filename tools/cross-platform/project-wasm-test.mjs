@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { isMainThread, Worker, parentPort } from "node:worker_threads";
 import { replayProject } from "./project-wasm-replay.mjs";
 import { replayPreflights } from "./project-preflight-replay.mjs";
+import { replayCatalogs } from "./catalog-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -36,6 +37,10 @@ if (isMainThread) {
     assert.deepEqual(
       [result.archives.cases, result.archives.accepted, result.archives.saves],
       [1341, 1225, 1223],
+    );
+    assert.deepEqual(
+      [result.catalogReplies, result.catalogRefusals],
+      [506, 12],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -220,8 +225,30 @@ if (isMainThread) {
     layout,
     fixture.generation,
   );
+  const catalogFixture = JSON.parse(
+    await readFile(
+      new URL("testdata/cross-platform/preset-catalog-vectors.json", root),
+    ),
+  );
+  const catalogBytes = new Uint8Array(
+    await readFile(new URL("web/public/profiles/catalog.json", root)),
+  );
+  // The bundled catalog through the browser's own collation callback.
+  const english = new Intl.Collator("en");
+  const text = (units) => String.fromCharCode(...units);
+  const catalogs = replayCatalogs(core, catalogFixture, catalogBytes, {
+    compare: (left, right) => english.compare(text(left), text(right)),
+  });
   parentPort.postMessage(
-    { ...metrics, ...staged, ...boundaries, ...queries, ...preflights, owned },
+    {
+      ...metrics,
+      ...staged,
+      ...boundaries,
+      ...queries,
+      ...preflights,
+      ...catalogs,
+      owned,
+    },
     [owned.buffer, queries.ownedQueryText.buffer],
   );
 }

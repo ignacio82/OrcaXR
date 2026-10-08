@@ -21,6 +21,7 @@ const input = {
   "long[]": "JLongArray<'local>",
   LocalTimestampResolver: "JObject<'local>",
   ProjectJsonSink: "JObject<'local>",
+  PresetCollator: "JObject<'local>",
 };
 const output = {
   int: "jint",

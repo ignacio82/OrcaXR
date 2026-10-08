@@ -46,6 +46,14 @@ assert.deepEqual(schema.roots, [
   "PreflightIssue",
   "PreflightOmission",
   "PreflightEntity",
+  "CatalogProfile",
+  "CatalogConfig",
+  "CatalogDiagnostic",
+  "CatalogPreset",
+  "CatalogSelectionRequest",
+  "CatalogSelection",
+  "CatalogTargetRequest",
+  "CatalogPreflightTarget",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

@@ -683,3 +683,64 @@ fn deduplicate(diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
     }
     unique.into_iter().map(|(_, d)| d).collect()
 }
+
+impl ProfileCatalog {
+    /// `catalogPreflightTarget`: the exact profile of the selected machine,
+    /// process and primary filament, then per physical tool the profile with
+    /// that machine and process and the head's filament. An inexact or missing
+    /// preset leaves its slot unbound for preflight to report. A target with
+    /// more than `max_tools` tools is refused instead of allocated.
+    pub fn preflight_target(
+        &self,
+        machine: &str,
+        process: &str,
+        filament: &str,
+        heads: &[Option<String>],
+        tool_count: f64,
+        max_tools: usize,
+    ) -> Result<crate::slicing::profile::Target, crate::slicing::preflight::Error> {
+        use crate::slicing::profile::{Profile as TargetProfile, Source, Target};
+        // `Array.from({ length })` applies ToLength.
+        let length = if tool_count.is_nan() || tool_count <= 0.0 {
+            0.0
+        } else {
+            tool_count.floor()
+        };
+        if length > max_tools as f64 {
+            return Err(crate::slicing::preflight::Error::Limits);
+        }
+        let find = |filament: &str| {
+            self.profiles.iter().find(|p| {
+                p.machine_preset_id == machine
+                    && p.process_preset_id == process
+                    && p.filament_preset_id == filament
+            })
+        };
+        let exact = (!machine.is_empty() && !process.is_empty() && !filament.is_empty())
+            .then(|| find(filament))
+            .flatten();
+        let target = |p: &Profile| TargetProfile {
+            machine_preset_id: Some(crate::model::Text::from_utf8(&p.machine_preset_id)),
+            process_preset_id: Some(crate::model::Text::from_utf8(&p.process_preset_id)),
+            filament_preset_id: Some(crate::model::Text::from_utf8(&p.filament_preset_id)),
+            config: p.config(),
+        };
+        let filaments = (0..length as usize)
+            .map(|tool| {
+                let head = heads
+                    .get(tool)
+                    .cloned()
+                    .flatten()
+                    .filter(|h| !h.is_empty())?;
+                exact?;
+                find(&head).map(target)
+            })
+            .collect();
+        Ok(Target {
+            primary: exact.map(target),
+            filaments,
+            tool_count,
+            source: Source::Catalog,
+        })
+    }
+}

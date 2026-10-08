@@ -2,6 +2,7 @@
 //! These read-only views borrow immutable input values; explicit public exports
 //! copy. They neither validate option values nor execute project commands.
 pub mod catalog;
+pub mod catalog_exchange;
 mod generated;
 pub mod options;
 pub mod presets;

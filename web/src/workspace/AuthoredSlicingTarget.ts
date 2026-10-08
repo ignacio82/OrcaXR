@@ -26,6 +26,41 @@ export function authoredProjectPreflightTarget(
   };
 }
 
+/**
+ * The preflight target of a catalog selection: the exact catalog profile for
+ * the live machine/process/primary-filament presets, and for every physical
+ * tool the catalog profile with the same machine and process and that head's
+ * filament preset. A missing or inexact preset leaves its slot unbound, which
+ * preflight reports instead of guessing.
+ */
+export function catalogPreflightTarget(
+  profiles: readonly SlicerProfile[],
+  primary: SlicerProfile | null | undefined,
+  headFilamentPresetIds: readonly (string | undefined)[],
+  toolCount: number,
+): LiveProfilePreflightTarget {
+  const exact =
+    primary?.machinePresetId && primary.processPresetId && primary.filamentPresetId && profiles.includes(primary)
+      ? primary
+      : undefined;
+  return {
+    primaryProfile: exact,
+    filamentProfiles: Object.freeze(
+      Array.from({ length: toolCount }, (_, toolId) => {
+        const filamentPresetId = headFilamentPresetIds[toolId];
+        if (!exact || !filamentPresetId) return undefined;
+        return profiles.find(
+          (candidate) =>
+            candidate.machinePresetId === exact.machinePresetId &&
+            candidate.processPresetId === exact.processPresetId &&
+            candidate.filamentPresetId === filamentPresetId,
+        );
+      }),
+    ),
+    toolCount,
+  };
+}
+
 function authoredProjectProfile(config: Record<string, string>): SlicerProfile {
   return {
     id: 'authored-project',

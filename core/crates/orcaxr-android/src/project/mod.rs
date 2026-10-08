@@ -14,12 +14,14 @@ macro_rules! export {
 }
 mod archive;
 mod bindings;
+mod catalog;
 mod json_sink;
 mod model;
 mod preflight;
 mod registry;
 mod timestamps;
 use archive::*;
+use catalog::*;
 use jni::{
     JNIEnv,
     objects::{JByteArray, JCharArray, JClass, JDoubleArray, JLongArray, JObject, JString},
@@ -96,6 +98,8 @@ enum Record {
     ImportBase(Box<orcaxr_archive::models::host::Base>),
     ImportPreview(Box<model::Preview>),
     Preflight(Box<Report>),
+    CatalogUpload(Box<orcaxr_project::settings::catalog_exchange::CatalogUpload>),
+    Catalog(Box<orcaxr_project::settings::catalog_exchange::HostCatalog>),
 }
 fn registry() -> &'static Registry<Record> {
     static REGISTRY: OnceLock<Registry<Record>> = OnceLock::new();
@@ -134,6 +138,16 @@ access!(with_session, Session, Box<Session>);
 access!(with_project, Project, ProjectSnapshot);
 access!(with_export, Export, ExportCapture);
 access!(with_preflight, Preflight, Box<Report>);
+access!(
+    with_catalog_upload,
+    CatalogUpload,
+    Box<orcaxr_project::settings::catalog_exchange::CatalogUpload>
+);
+access!(
+    with_catalog,
+    Catalog,
+    Box<orcaxr_project::settings::catalog_exchange::HostCatalog>
+);
 access!(with_selection, Selection, SelectionSnapshot);
 access!(with_history, History, HistorySnapshot);
 access!(with_asset, Asset, AssetLease);

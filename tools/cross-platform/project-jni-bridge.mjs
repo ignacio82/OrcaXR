@@ -24,6 +24,7 @@ export function startProjectJni(profile = "debug") {
   signatures.actorPreparationChecks = ["String"];
   signatures.actorExportChecks = ["String", "String", "byte[]", "byte[]", "String", "String", "String"];
   signatures.actorPreflightChecks = ["String", "byte[]", "String", "String"];
+  signatures.catalogChecks = ["byte[]", "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -97,6 +98,9 @@ export function startProjectJni(profile = "debug") {
     if (type === "String" && v === null) return i32(-1);
     if (type === "String" || type === "LocalTimestampResolver")
       return sized(Buffer.from(v, "utf8"));
+    // A collator mode the harness maps to a Java object, or none.
+    if (type === "PresetCollator")
+      return sized(Buffer.from(v ?? "none", "utf8"));
     if (type === "byte[]") return sized(Buffer.from(v));
     const width = type === "char[]" ? 2 : 8,
       b = Buffer.alloc(v.length * width);
@@ -692,5 +696,54 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return call("historyDirtyCategories", this.handle);
     }
   }
-  return { ProjectUpload, ProjectSelectionInput, ProjectArchiveUpload, ProjectModelUpload };
+  class ProfileCatalogUpload extends Handle {
+    constructor(bytes, limits) {
+      super(call("catalogUploadNew", bytes, Array.from(limits)));
+    }
+    append(offset, bytes) {
+      call("catalogUploadAppend", this.handle, offset, bytes);
+    }
+    build(collator) {
+      return consumed(this, (id) => {
+        call("catalogBuild", id, collator);
+        return new ProfileCatalog(id);
+      });
+    }
+  }
+  class ProfileCatalog extends Handle {
+    diagnostic_count() {
+      return call("catalogDiagnosticCount", this.handle);
+    }
+    diagnostic(i) {
+      return call("catalogDiagnostic", this.handle, i);
+    }
+    preset_count() {
+      return call("catalogPresetCount", this.handle);
+    }
+    preset(i) {
+      return call("catalogPreset", this.handle, i);
+    }
+    profile_count() {
+      return call("catalogProfileCount", this.handle);
+    }
+    profile(i) {
+      return call("catalogProfile", this.handle, i);
+    }
+    profile_config(i) {
+      return call("catalogProfileConfig", this.handle, i);
+    }
+    reconcile(request) {
+      return call("catalogReconcile", this.handle, request);
+    }
+    preflight_target(request, maxTools) {
+      return call("catalogTarget", this.handle, request, maxTools);
+    }
+  }
+  return {
+    ProjectUpload,
+    ProjectSelectionInput,
+    ProjectArchiveUpload,
+    ProjectModelUpload,
+    ProfileCatalogUpload,
+  };
 }

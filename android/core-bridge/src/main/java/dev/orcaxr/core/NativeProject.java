@@ -49,6 +49,21 @@ final class NativeProject {
     static native String preflightOmission(long handle, long position);
     static native String preflightInstance(long handle, long position);
     static native String preflightFilament(long handle, long position);
+    // Profile catalog: stream catalog JSON under explicit limits (bytes, nodes,
+    // text units, number bytes, depth); building consumes the upload in place.
+    // A null collator uses the core's exact ASCII root order.
+    static native long catalogUploadNew(long bytes, double[] limits);
+    static native void catalogUploadAppend(long handle, long offset, byte[] bytes);
+    static native void catalogBuild(long handle, PresetCollator collator);
+    static native long catalogDiagnosticCount(long handle);
+    static native String catalogDiagnostic(long handle, long position);
+    static native long catalogPresetCount(long handle);
+    static native String catalogPreset(long handle, long position);
+    static native long catalogProfileCount(long handle);
+    static native String catalogProfile(long handle, long position);
+    static native String catalogProfileConfig(long handle, long position);
+    static native String catalogReconcile(long handle, String request);
+    static native String catalogTarget(long handle, String request, long maxTools);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

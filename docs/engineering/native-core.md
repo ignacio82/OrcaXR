@@ -3062,8 +3062,46 @@ platform collator rather than relying on a guess.
 profiles, every preset's flattening, 2,699 compatibility assessments and 58
 reconciliations. Nine synthetic catalogs cover every refusal and rule (429
 assessments, 12 reconciliations), and 4,007 collation pairs pin the ASCII
-order. Host catalog endpoints, user presets and condition evaluation are not
-yet native.
+order. User presets and condition evaluation are not yet native.
+
+### Profile catalog host exchange
+
+`settings::catalog_exchange` serves the catalog to hosts. A `CatalogUpload`
+streams catalog JSON through the bounded document parser (explicit byte,
+node, text-unit, number and depth budgets). Building consumes the upload with
+the built-in ASCII root collation or a host collator. A refused graph still
+loads, with its diagnostics and no profiles, as the browser's catalog does.
+
+Reads return generated contract values, one at a time:
+
+- diagnostics;
+- every preset in picker order;
+- compiled profiles and their engine configurations;
+- selection reconciliation;
+- `catalogPreflightTarget`. The selected machine, process and primary
+  filament, plus each head's filament, become the `CatalogPreflightTarget` of
+  a live `PreflightRequest`. The workspace now builds its own catalog target
+  through the same helper.
+
+Bindings:
+
+- WASM: `ProfileCatalogUpload` and `ProfileCatalog`. A collator is any
+  object with `compare(Uint16Array, Uint16Array)`; the browser passes
+  `Intl.Collator('en')`.
+- JNI: twelve exports. The `PresetCollator` callback receives complete UTF-16
+  char arrays, and a throwing callback becomes `collation_failed` without
+  exposing its text.
+- Kotlin: `ProfileCatalogUpload` and `ProfileCatalog`, decoding every reply.
+
+The preset corpus now also pins the exchanges of the bundled and a refused
+catalog: diagnostics, all 353 presets, 42 sampled profiles with their
+configurations, 60 reconciliations and 5 catalog targets. Rust, WASM in Node
+and Chrome (through the browser's own collator) and JNI match all 506
+replies. Each also checks 12 refusals: out-of-order chunks, rebuilds, reads
+past the end, malformed requests and tool budgets. Number spelling is
+semantic, so targets compare as decoded values. The Kotlin wrapper passes 15
+checks, including a host collator that reorders presets, a throwing collator
+and upload budgets.
 
 ### Canonical slice preflight
 

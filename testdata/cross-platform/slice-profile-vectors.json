@@ -11,7 +11,7 @@
     },
     {
       "path": "web/src/workspace/AuthoredSlicingTarget.ts",
-      "sha256": "7180572be5aa77e1962a394f99f5dad263861313b31ef1b036b1c5d62c4e0a34"
+      "sha256": "21790377f261674347b9a8d32db304f9b070766a8f9092e900dbdd86480cb402"
     },
     {
       "path": "web/src/settings/configSerialization.ts",
@@ -27,7 +27,7 @@
     },
     {
       "path": "contracts/project-intents.json",
-      "sha256": "1cbe052080b9330d159b3e5f7f60e8f2f896d0a929bc72f58c7358dc277d8377"
+      "sha256": "4151d495f3b8e7d030c3039131d90336b5ed1193186560b24531d3a0c71097b5"
     }
   ],
   "stringVectorKeys": [

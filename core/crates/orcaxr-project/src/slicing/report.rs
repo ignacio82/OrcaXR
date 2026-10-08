@@ -81,6 +81,40 @@ fn profile(value: &wire::OptionalPreflightProfile) -> Option<Profile> {
     })
 }
 
+/// The catalog target of a request: preset identities and only the facts
+/// the derivation reads, the inverse of the request's decoding.
+pub fn catalog_target(target: &Target) -> wire::CatalogPreflightTarget {
+    let facts = |p: &Option<Profile>| match p {
+        None => wire::OptionalPreflightProfile::Absent(wire::Empty {}),
+        Some(p) => {
+            let id = |t: &Option<Text>| match t {
+                Some(t) => wire::OptionalText::Value(t.units().to_vec()),
+                None => wire::OptionalText::Absent(wire::Empty {}),
+            };
+            let fact = |key: &str| match p.config.get(&key.encode_utf16().collect::<Vec<_>>()) {
+                Some(value) => wire::OptionalText::Value(value.clone()),
+                None => wire::OptionalText::Absent(wire::Empty {}),
+            };
+            wire::OptionalPreflightProfile::Value(wire::PreflightProfile {
+                machine_preset_id: id(&p.machine_preset_id),
+                process_preset_id: id(&p.process_preset_id),
+                filament_preset_id: id(&p.filament_preset_id),
+                printable_area: fact("printable_area"),
+                printable_height: fact("printable_height"),
+                nozzle_diameter: fact("nozzle_diameter"),
+                filament_type: fact("filament_type"),
+                nozzle_temperature_range_low: fact("nozzle_temperature_range_low"),
+                nozzle_temperature_range_high: fact("nozzle_temperature_range_high"),
+            })
+        }
+    };
+    wire::CatalogPreflightTarget {
+        tool_count: target.tool_count,
+        primary: facts(&target.primary),
+        filaments: target.filaments.iter().map(facts).collect(),
+    }
+}
+
 impl Report {
     /// Derive the request's target, preflight the plate and attest the result.
     pub fn run(

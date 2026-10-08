@@ -3201,6 +3201,436 @@ fn read_preflight_omission(v: &Value) -> Result<PreflightOmission, InvalidIntent
         tool_id: read_counter(&object["toolId"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalCounter {
+    Absent(Empty),
+    Value(Counter),
+}
+fn read_optional_counter(v: &Value) -> Result<OptionalCounter, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalCounter::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalCounter::Value(read_counter(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type TextList = Vec<EditText>;
+fn read_text_list(v: &Value) -> Result<TextList, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_edit_text).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalTextList {
+    Absent(Empty),
+    Value(TextList),
+}
+fn read_optional_text_list(v: &Value) -> Result<OptionalTextList, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalTextList::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalTextList::Value(read_text_list(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type OptionalTexts = Vec<OptionalText>;
+fn read_optional_texts(v: &Value) -> Result<OptionalTexts, InvalidIntent> {
+    list(v, 0, 64)?.iter().map(read_optional_text).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogProfile {
+    pub id: EditText,
+    pub display_name: EditText,
+    pub machine_name: EditText,
+    pub process_name: EditText,
+    pub filament_name: EditText,
+    pub filament_preset_name: EditText,
+    pub filament_vendor: OptionalText,
+    pub machine_preset_id: EditText,
+    pub process_preset_id: EditText,
+    pub filament_preset_id: EditText,
+}
+fn read_catalog_profile(v: &Value) -> Result<CatalogProfile, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "id",
+            "displayName",
+            "machineName",
+            "processName",
+            "filamentName",
+            "filamentPresetName",
+            "filamentVendor",
+            "machinePresetId",
+            "processPresetId",
+            "filamentPresetId",
+        ],
+        false,
+    )?;
+    Ok(CatalogProfile {
+        id: read_edit_text(&object["id"])?,
+        display_name: read_edit_text(&object["displayName"])?,
+        machine_name: read_edit_text(&object["machineName"])?,
+        process_name: read_edit_text(&object["processName"])?,
+        filament_name: read_edit_text(&object["filamentName"])?,
+        filament_preset_name: read_edit_text(&object["filamentPresetName"])?,
+        filament_vendor: read_optional_text(&object["filamentVendor"])?,
+        machine_preset_id: read_edit_text(&object["machinePresetId"])?,
+        process_preset_id: read_edit_text(&object["processPresetId"])?,
+        filament_preset_id: read_edit_text(&object["filamentPresetId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogConfigEntry {
+    pub key: EditText,
+    pub value: EditText,
+}
+fn read_catalog_config_entry(v: &Value) -> Result<CatalogConfigEntry, InvalidIntent> {
+    let object = fields(v, &["key", "value"], false)?;
+    Ok(CatalogConfigEntry {
+        key: read_edit_text(&object["key"])?,
+        value: read_edit_text(&object["value"])?,
+    })
+}
+pub type CatalogConfigEntries = Vec<CatalogConfigEntry>;
+fn read_catalog_config_entries(v: &Value) -> Result<CatalogConfigEntries, InvalidIntent> {
+    list(v, 0, 8192)?
+        .iter()
+        .map(read_catalog_config_entry)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogConfig {
+    pub entries: CatalogConfigEntries,
+}
+fn read_catalog_config(v: &Value) -> Result<CatalogConfig, InvalidIntent> {
+    let object = fields(v, &["entries"], false)?;
+    Ok(CatalogConfig {
+        entries: read_catalog_config_entries(&object["entries"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CatalogDiagnosticCode {
+    ProfileCorpusPinnedOverlay,
+    InvalidPresetGraph,
+    NoCompatibleProcess,
+    NoCompatibleFilament,
+    UnresolvedCompatibility,
+}
+fn read_catalog_diagnostic_code(v: &Value) -> Result<CatalogDiagnosticCode, InvalidIntent> {
+    match v.as_str() {
+        Some("profileCorpusPinnedOverlay") => Ok(CatalogDiagnosticCode::ProfileCorpusPinnedOverlay),
+        Some("invalidPresetGraph") => Ok(CatalogDiagnosticCode::InvalidPresetGraph),
+        Some("noCompatibleProcess") => Ok(CatalogDiagnosticCode::NoCompatibleProcess),
+        Some("noCompatibleFilament") => Ok(CatalogDiagnosticCode::NoCompatibleFilament),
+        Some("unresolvedCompatibility") => Ok(CatalogDiagnosticCode::UnresolvedCompatibility),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogDiagnostic {
+    pub code: CatalogDiagnosticCode,
+    pub error: Flag,
+    pub message: EditText,
+    pub machine_name: OptionalText,
+    pub process_name: OptionalText,
+    pub preset_id: OptionalText,
+}
+fn read_catalog_diagnostic(v: &Value) -> Result<CatalogDiagnostic, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "code",
+            "error",
+            "message",
+            "machineName",
+            "processName",
+            "presetId",
+        ],
+        false,
+    )?;
+    Ok(CatalogDiagnostic {
+        code: read_catalog_diagnostic_code(&object["code"])?,
+        error: read_flag(&object["error"])?,
+        message: read_edit_text(&object["message"])?,
+        machine_name: read_optional_text(&object["machineName"])?,
+        process_name: read_optional_text(&object["processName"])?,
+        preset_id: read_optional_text(&object["presetId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CatalogPresetKind {
+    Machine,
+    Process,
+    Filament,
+}
+fn read_catalog_preset_kind(v: &Value) -> Result<CatalogPresetKind, InvalidIntent> {
+    match v.as_str() {
+        Some("machine") => Ok(CatalogPresetKind::Machine),
+        Some("process") => Ok(CatalogPresetKind::Process),
+        Some("filament") => Ok(CatalogPresetKind::Filament),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CatalogPresetSource {
+    System,
+    User,
+    Project,
+    External,
+    Default,
+    Unknown,
+}
+fn read_catalog_preset_source(v: &Value) -> Result<CatalogPresetSource, InvalidIntent> {
+    match v.as_str() {
+        Some("system") => Ok(CatalogPresetSource::System),
+        Some("user") => Ok(CatalogPresetSource::User),
+        Some("project") => Ok(CatalogPresetSource::Project),
+        Some("external") => Ok(CatalogPresetSource::External),
+        Some("default") => Ok(CatalogPresetSource::Default),
+        Some("unknown") => Ok(CatalogPresetSource::Unknown),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogPreset {
+    pub id: EditText,
+    pub vendor: EditText,
+    pub kind: CatalogPresetKind,
+    pub name: EditText,
+    pub parent_id: OptionalText,
+    pub source: CatalogPresetSource,
+    pub is_system: Flag,
+    pub is_default: Flag,
+    pub is_visible: Flag,
+}
+fn read_catalog_preset(v: &Value) -> Result<CatalogPreset, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "id",
+            "vendor",
+            "kind",
+            "name",
+            "parentId",
+            "source",
+            "isSystem",
+            "isDefault",
+            "isVisible",
+        ],
+        false,
+    )?;
+    Ok(CatalogPreset {
+        id: read_edit_text(&object["id"])?,
+        vendor: read_edit_text(&object["vendor"])?,
+        kind: read_catalog_preset_kind(&object["kind"])?,
+        name: read_edit_text(&object["name"])?,
+        parent_id: read_optional_text(&object["parentId"])?,
+        source: read_catalog_preset_source(&object["source"])?,
+        is_system: read_flag(&object["isSystem"])?,
+        is_default: read_flag(&object["isDefault"])?,
+        is_visible: read_flag(&object["isVisible"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogSelectionRequest {
+    pub printer_id: EditText,
+    pub process_id: OptionalText,
+    pub filament_ids: OptionalTexts,
+    pub installed_vendors: OptionalTextList,
+}
+fn read_catalog_selection_request(v: &Value) -> Result<CatalogSelectionRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &["printerId", "processId", "filamentIds", "installedVendors"],
+        false,
+    )?;
+    Ok(CatalogSelectionRequest {
+        printer_id: read_edit_text(&object["printerId"])?,
+        process_id: read_optional_text(&object["processId"])?,
+        filament_ids: read_optional_texts(&object["filamentIds"])?,
+        installed_vendors: read_optional_text_list(&object["installedVendors"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CatalogSubstitutionReason {
+    Missing,
+    Incompatible,
+    NoCompatiblePreset,
+}
+fn read_catalog_substitution_reason(v: &Value) -> Result<CatalogSubstitutionReason, InvalidIntent> {
+    match v.as_str() {
+        Some("missing") => Ok(CatalogSubstitutionReason::Missing),
+        Some("incompatible") => Ok(CatalogSubstitutionReason::Incompatible),
+        Some("noCompatiblePreset") => Ok(CatalogSubstitutionReason::NoCompatiblePreset),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogSubstitution {
+    pub kind: CatalogPresetKind,
+    pub slot: OptionalCounter,
+    pub previous_id: OptionalText,
+    pub next_id: OptionalText,
+    pub reason: CatalogSubstitutionReason,
+}
+fn read_catalog_substitution(v: &Value) -> Result<CatalogSubstitution, InvalidIntent> {
+    let object = fields(
+        v,
+        &["kind", "slot", "previousId", "nextId", "reason"],
+        false,
+    )?;
+    Ok(CatalogSubstitution {
+        kind: read_catalog_preset_kind(&object["kind"])?,
+        slot: read_optional_counter(&object["slot"])?,
+        previous_id: read_optional_text(&object["previousId"])?,
+        next_id: read_optional_text(&object["nextId"])?,
+        reason: read_catalog_substitution_reason(&object["reason"])?,
+    })
+}
+pub type CatalogSubstitutions = Vec<CatalogSubstitution>;
+fn read_catalog_substitutions(v: &Value) -> Result<CatalogSubstitutions, InvalidIntent> {
+    list(v, 0, 4096)?
+        .iter()
+        .map(read_catalog_substitution)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CatalogSelectionDiagnosticCode {
+    UnresolvedCondition,
+    NoCompatibleProcess,
+    NoCompatibleFilament,
+}
+fn read_catalog_selection_diagnostic_code(
+    v: &Value,
+) -> Result<CatalogSelectionDiagnosticCode, InvalidIntent> {
+    match v.as_str() {
+        Some("unresolvedCondition") => Ok(CatalogSelectionDiagnosticCode::UnresolvedCondition),
+        Some("noCompatibleProcess") => Ok(CatalogSelectionDiagnosticCode::NoCompatibleProcess),
+        Some("noCompatibleFilament") => Ok(CatalogSelectionDiagnosticCode::NoCompatibleFilament),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogSelectionDiagnostic {
+    pub code: CatalogSelectionDiagnosticCode,
+    pub preset_id: OptionalText,
+    pub slot: OptionalCounter,
+    pub message: EditText,
+}
+fn read_catalog_selection_diagnostic(
+    v: &Value,
+) -> Result<CatalogSelectionDiagnostic, InvalidIntent> {
+    let object = fields(v, &["code", "presetId", "slot", "message"], false)?;
+    Ok(CatalogSelectionDiagnostic {
+        code: read_catalog_selection_diagnostic_code(&object["code"])?,
+        preset_id: read_optional_text(&object["presetId"])?,
+        slot: read_optional_counter(&object["slot"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+pub type CatalogSelectionDiagnostics = Vec<CatalogSelectionDiagnostic>;
+fn read_catalog_selection_diagnostics(
+    v: &Value,
+) -> Result<CatalogSelectionDiagnostics, InvalidIntent> {
+    list(v, 0, 131072)?
+        .iter()
+        .map(read_catalog_selection_diagnostic)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedCatalogSelection {
+    pub printer: EditText,
+    pub process: OptionalText,
+    pub filaments: OptionalTexts,
+    pub substitutions: CatalogSubstitutions,
+    pub diagnostics: CatalogSelectionDiagnostics,
+    pub complete: Flag,
+}
+fn read_resolved_catalog_selection(v: &Value) -> Result<ResolvedCatalogSelection, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "printer",
+            "process",
+            "filaments",
+            "substitutions",
+            "diagnostics",
+            "complete",
+        ],
+        false,
+    )?;
+    Ok(ResolvedCatalogSelection {
+        printer: read_edit_text(&object["printer"])?,
+        process: read_optional_text(&object["process"])?,
+        filaments: read_optional_texts(&object["filaments"])?,
+        substitutions: read_catalog_substitutions(&object["substitutions"])?,
+        diagnostics: read_catalog_selection_diagnostics(&object["diagnostics"])?,
+        complete: read_flag(&object["complete"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CatalogSelection {
+    Unavailable(EditText),
+    Resolved(ResolvedCatalogSelection),
+}
+fn read_catalog_selection(v: &Value) -> Result<CatalogSelection, InvalidIntent> {
+    let object = fields(v, &["unavailable", "resolved"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "unavailable" => Ok(CatalogSelection::Unavailable(read_edit_text(value)?)),
+        "resolved" => Ok(CatalogSelection::Resolved(read_resolved_catalog_selection(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogTargetRequest {
+    pub machine_preset_id: EditText,
+    pub process_preset_id: EditText,
+    pub filament_preset_id: EditText,
+    pub head_filament_ids: OptionalTexts,
+    pub tool_count: Finite,
+}
+fn read_catalog_target_request(v: &Value) -> Result<CatalogTargetRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "machinePresetId",
+            "processPresetId",
+            "filamentPresetId",
+            "headFilamentIds",
+            "toolCount",
+        ],
+        false,
+    )?;
+    Ok(CatalogTargetRequest {
+        machine_preset_id: read_edit_text(&object["machinePresetId"])?,
+        process_preset_id: read_edit_text(&object["processPresetId"])?,
+        filament_preset_id: read_edit_text(&object["filamentPresetId"])?,
+        head_filament_ids: read_optional_texts(&object["headFilamentIds"])?,
+        tool_count: read_finite(&object["toolCount"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -3271,5 +3701,79 @@ pub fn decode_preflight_entity(text: &str) -> Result<PreflightEntity, InvalidInt
 pub fn encode_preflight_entity(value: &PreflightEntity) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_preflight_entity(&text)?;
+    Ok(text)
+}
+pub fn decode_catalog_profile(text: &str) -> Result<CatalogProfile, InvalidIntent> {
+    read_catalog_profile(&super::project_intents::parse(text)?)
+}
+pub fn encode_catalog_profile(value: &CatalogProfile) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_catalog_profile(&text)?;
+    Ok(text)
+}
+pub fn decode_catalog_config(text: &str) -> Result<CatalogConfig, InvalidIntent> {
+    read_catalog_config(&super::project_intents::parse(text)?)
+}
+pub fn encode_catalog_config(value: &CatalogConfig) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_catalog_config(&text)?;
+    Ok(text)
+}
+pub fn decode_catalog_diagnostic(text: &str) -> Result<CatalogDiagnostic, InvalidIntent> {
+    read_catalog_diagnostic(&super::project_intents::parse(text)?)
+}
+pub fn encode_catalog_diagnostic(value: &CatalogDiagnostic) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_catalog_diagnostic(&text)?;
+    Ok(text)
+}
+pub fn decode_catalog_preset(text: &str) -> Result<CatalogPreset, InvalidIntent> {
+    read_catalog_preset(&super::project_intents::parse(text)?)
+}
+pub fn encode_catalog_preset(value: &CatalogPreset) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_catalog_preset(&text)?;
+    Ok(text)
+}
+pub fn decode_catalog_selection_request(
+    text: &str,
+) -> Result<CatalogSelectionRequest, InvalidIntent> {
+    read_catalog_selection_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_catalog_selection_request(
+    value: &CatalogSelectionRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_catalog_selection_request(&text)?;
+    Ok(text)
+}
+pub fn decode_catalog_selection(text: &str) -> Result<CatalogSelection, InvalidIntent> {
+    read_catalog_selection(&super::project_intents::parse(text)?)
+}
+pub fn encode_catalog_selection(value: &CatalogSelection) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_catalog_selection(&text)?;
+    Ok(text)
+}
+pub fn decode_catalog_target_request(text: &str) -> Result<CatalogTargetRequest, InvalidIntent> {
+    read_catalog_target_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_catalog_target_request(
+    value: &CatalogTargetRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_catalog_target_request(&text)?;
+    Ok(text)
+}
+pub fn decode_catalog_preflight_target(
+    text: &str,
+) -> Result<CatalogPreflightTarget, InvalidIntent> {
+    read_catalog_preflight_target(&super::project_intents::parse(text)?)
+}
+pub fn encode_catalog_preflight_target(
+    value: &CatalogPreflightTarget,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_catalog_preflight_target(&text)?;
     Ok(text)
 }

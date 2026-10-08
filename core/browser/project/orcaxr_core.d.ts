@@ -41,6 +41,49 @@ export class CapturedSelection {
     primary_index(): number;
 }
 
+/**
+ * A loaded catalog: compiled, or refused with its diagnostics.
+ */
+export class ProfileCatalog {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    diagnostic(position: number): string;
+    diagnostic_count(): number;
+    /**
+     * `CatalogTargetRequest` in, the `CatalogPreflightTarget` of a
+     * `PreflightRequest` out. More than `max_tools` tools is refused.
+     */
+    preflight_target(target: string, max_tools: number): string;
+    preset(position: number): string;
+    preset_count(): number;
+    profile(position: number): string;
+    profile_config(position: number): string;
+    profile_count(): number;
+    /**
+     * `CatalogSelectionRequest` in, `CatalogSelection` out.
+     */
+    reconcile(selection: string): string;
+}
+
+/**
+ * Own in a task worker; `build` consumes it.
+ */
+export class ProfileCatalogUpload {
+    free(): void;
+    [Symbol.dispose](): void;
+    append(offset: number, bytes: Uint8Array): void;
+    /**
+     * Build the catalog. Without a collator the core's exact ASCII root
+     * collation orders presets and refuses any other text.
+     */
+    build(collator?: any | null): ProfileCatalog;
+    /**
+     * `limits`: maximum bytes, nodes, text units, number bytes and depth.
+     */
+    constructor(bytes: number, limits: Float64Array);
+}
+
 export class ProjectArchiveImport {
     private constructor();
     free(): void;
@@ -397,6 +440,8 @@ export interface InitOutput {
     readonly __wbg_capturedhistory_free: (a: number, b: number) => void;
     readonly __wbg_capturedproject_free: (a: number, b: number) => void;
     readonly __wbg_capturedselection_free: (a: number, b: number) => void;
+    readonly __wbg_profilecatalog_free: (a: number, b: number) => void;
+    readonly __wbg_profilecatalogupload_free: (a: number, b: number) => void;
     readonly __wbg_projectarchiveimport_free: (a: number, b: number) => void;
     readonly __wbg_projectarchiveoutput_free: (a: number, b: number) => void;
     readonly __wbg_projectarchiveupload_free: (a: number, b: number) => void;
@@ -438,6 +483,18 @@ export interface InitOutput {
     readonly capturedselection_primary_index: (a: number) => number;
     readonly core_info: () => [number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
+    readonly profilecatalog_diagnostic: (a: number, b: number) => [number, number, number, number];
+    readonly profilecatalog_diagnostic_count: (a: number) => number;
+    readonly profilecatalog_preflight_target: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly profilecatalog_preset: (a: number, b: number) => [number, number, number, number];
+    readonly profilecatalog_preset_count: (a: number) => number;
+    readonly profilecatalog_profile: (a: number, b: number) => [number, number, number, number];
+    readonly profilecatalog_profile_config: (a: number, b: number) => [number, number, number, number];
+    readonly profilecatalog_profile_count: (a: number) => number;
+    readonly profilecatalog_reconcile: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly profilecatalogupload_append: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly profilecatalogupload_build: (a: number, b: number) => [number, number, number];
+    readonly profilecatalogupload_new: (a: number, b: number, c: number) => [number, number, number];
     readonly projectarchiveimport_document: (a: number) => [number, number, number];
     readonly projectarchiveimport_format: (a: number) => number;
     readonly projectarchiveimport_warning: (a: number, b: number, c: number, d: number) => [number, number, number, number];

@@ -15,6 +15,18 @@ import {
   ProfileCatalogLoadError,
 } from "../../web/src/slicer/ProfileLoader.ts";
 import { META_KEYS, SAFE_KEYS } from "../../web/src/slicer/profileKeys.ts";
+import { compareCanonicalText } from "../../web/src/project/domain/canonical.ts";
+import { catalogPreflightTarget } from "../../web/src/workspace/AuthoredSlicingTarget.ts";
+import {
+  encodeProjectCatalogConfig,
+  encodeProjectCatalogDiagnostic,
+  encodeProjectCatalogPreflightTarget,
+  encodeProjectCatalogPreset,
+  encodeProjectCatalogProfile,
+  encodeProjectCatalogSelection,
+  encodeProjectCatalogSelectionRequest,
+  encodeProjectCatalogTargetRequest,
+} from "../../contracts/generated/project-intents.ts";
 
 const root = new URL("../../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
@@ -494,6 +506,224 @@ cases.synthetic = evaluate(
   },
 );
 
+// The host exchange, encoded by the generated TypeScript codecs: what a
+// binding reads back from the bundled catalog and from a refused one.
+const units = (value) =>
+  Array.from({ length: value.length }, (_, i) => value.charCodeAt(i));
+const camel = (value) => value.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+const optionalText = (value) =>
+  value === undefined || value === null
+    ? { absent: {} }
+    : { value: units(value) };
+const optionalCounter = (value) =>
+  value === undefined ? { absent: {} } : { value };
+const facts = (profile) =>
+  profile
+    ? {
+        value: {
+          machinePresetId: optionalText(profile.machinePresetId),
+          processPresetId: optionalText(profile.processPresetId),
+          filamentPresetId: optionalText(profile.filamentPresetId),
+          printableArea: optionalText(profile.config.printable_area),
+          printableHeight: optionalText(profile.config.printable_height),
+          nozzleDiameter: optionalText(profile.config.nozzle_diameter),
+          filamentType: optionalText(profile.config.filament_type),
+          nozzleTemperatureRangeLow: optionalText(
+            profile.config.nozzle_temperature_range_low,
+          ),
+          nozzleTemperatureRangeHigh: optionalText(
+            profile.config.nozzle_temperature_range_high,
+          ),
+        },
+      }
+    : { absent: {} };
+function exchange(input, requests, targets) {
+  let catalog;
+  let diagnostics;
+  try {
+    catalog = ProfileCatalog.fromRaw(input);
+    diagnostics = catalog.diagnostics;
+  } catch (error) {
+    assert.ok(error instanceof ProfileCatalogLoadError);
+    diagnostics = error.diagnostics;
+  }
+  const profiles = catalog?.profiles ?? [];
+  const graph = catalog ? PresetGraph.build(input) : undefined;
+  const sample = profiles.filter(
+    (_, i) => i % 37 === 0 || i === profiles.length - 1,
+  );
+  return {
+    diagnosticJsons: diagnostics.map((d) =>
+      encodeProjectCatalogDiagnostic({
+        code: camel(d.code),
+        error: d.severity === "error",
+        message: units(d.message),
+        machineName: optionalText(d.machineName),
+        processName: optionalText(d.processName),
+        presetId: optionalText(d.presetId),
+      }),
+    ),
+    presetJsons: (graph?.list() ?? []).map((n) =>
+      encodeProjectCatalogPreset({
+        id: units(n.id),
+        vendor: units(n.vendor),
+        kind: n.kind,
+        name: units(n.name),
+        parentId: optionalText(n.parentId),
+        source: n.source,
+        isSystem: n.isSystem,
+        isDefault: n.isDefault,
+        isVisible: n.isVisible,
+      }),
+    ),
+    profileCount: profiles.length,
+    profiles: sample.map((p) => ({
+      index: profiles.indexOf(p),
+      profileJson: encodeProjectCatalogProfile({
+        id: units(p.id),
+        displayName: units(p.displayName),
+        machineName: units(p.machineName),
+        processName: units(p.processName),
+        filamentName: units(p.filamentName),
+        filamentPresetName: units(p.filamentPresetName),
+        filamentVendor: optionalText(p.filamentVendor),
+        machinePresetId: units(p.machinePresetId),
+        processPresetId: units(p.processPresetId),
+        filamentPresetId: units(p.filamentPresetId),
+      }),
+      configJson: encodeProjectCatalogConfig({
+        entries: Object.keys(p.config)
+          .sort(compareCanonicalText)
+          .map((key) => ({ key: units(key), value: units(p.config[key]) })),
+      }),
+    })),
+    selections: requests.map((request) => {
+      const result = catalog
+        ? catalog.reconcileSelection(request)
+        : {
+            unavailableReason:
+              "The profile catalog has not loaded or failed validation.",
+          };
+      const s = result.selection;
+      return {
+        requestJson: encodeProjectCatalogSelectionRequest({
+          printerId: units(request.printerId),
+          processId: optionalText(request.processId),
+          filamentIds: (request.filamentIds ?? []).map(optionalText),
+          installedVendors: request.installedVendors
+            ? { value: request.installedVendors.map(units) }
+            : { absent: {} },
+        }),
+        resultJson: encodeProjectCatalogSelection(
+          s
+            ? {
+                resolved: {
+                  printer: units(s.printer.id),
+                  process: optionalText(s.process?.id),
+                  filaments: s.filaments.map((f) => optionalText(f?.id)),
+                  substitutions: s.substitutions.map((x) => ({
+                    kind: x.kind,
+                    slot: optionalCounter(x.slot),
+                    previousId: optionalText(x.previousId),
+                    nextId: optionalText(x.nextId),
+                    reason: camel(x.reason),
+                  })),
+                  diagnostics: s.diagnostics.map((d) => ({
+                    code: camel(d.code),
+                    presetId: optionalText(d.presetId),
+                    slot: optionalCounter(d.slot),
+                    message: units(d.message),
+                  })),
+                  complete: s.complete,
+                },
+              }
+            : { unavailable: units(result.unavailableReason) },
+        ),
+      };
+    }),
+    targets: targets.map(({ machine, process, filament, heads, toolCount }) => {
+      const primary = profiles.find(
+        (p) =>
+          p.machinePresetId === machine &&
+          p.processPresetId === process &&
+          p.filamentPresetId === filament,
+      );
+      const target = catalogPreflightTarget(
+        profiles,
+        primary,
+        heads,
+        toolCount,
+      );
+      return {
+        requestJson: encodeProjectCatalogTargetRequest({
+          machinePresetId: units(machine),
+          processPresetId: units(process),
+          filamentPresetId: units(filament),
+          headFilamentIds: heads.map(optionalText),
+          toolCount,
+        }),
+        resultJson: encodeProjectCatalogPreflightTarget({
+          toolCount,
+          primary: facts(target.primaryProfile),
+          filaments: Array.from(target.filamentProfiles, facts),
+        }),
+      };
+    }),
+  };
+}
+const bundledProfiles = ProfileCatalog.fromRaw(corpus).profiles;
+const u1 = bundledProfiles.find((p) => p.machineName.includes("U1"));
+const sameProcess = bundledProfiles.filter(
+  (p) =>
+    p.machinePresetId === u1.machinePresetId &&
+    p.processPresetId === u1.processPresetId,
+);
+const targetRequests = [
+  {
+    machine: u1.machinePresetId,
+    process: u1.processPresetId,
+    filament: u1.filamentPresetId,
+    heads: sameProcess.slice(0, 4).map((p) => p.filamentPresetId),
+    toolCount: 4,
+  },
+  {
+    machine: u1.machinePresetId,
+    process: u1.processPresetId,
+    filament: u1.filamentPresetId,
+    heads: [
+      sameProcess[1].filamentPresetId,
+      undefined,
+      "",
+      "preset:x:filament:y",
+    ],
+    toolCount: 2.5,
+  },
+  {
+    machine: u1.machinePresetId,
+    process: bundledProfiles.at(-1).processPresetId,
+    filament: u1.filamentPresetId,
+    heads: [u1.filamentPresetId],
+    toolCount: 1,
+  },
+  { machine: "", process: "", filament: "", heads: [], toolCount: 0 },
+];
+const exchangeRequests = JSON.parse(
+  JSON.stringify(real.selections.map((s) => JSON.parse(s.requestJson))),
+).map((r) => ({
+  ...r,
+  ...(r.filamentIds
+    ? { filamentIds: r.filamentIds.map((id) => id ?? undefined) }
+    : {}),
+}));
+const exchanges = {
+  bundled: exchange(corpus, exchangeRequests, targetRequests),
+  refused: exchange(
+    canonical(refusals.references),
+    exchangeRequests.slice(0, 2),
+    targetRequests.slice(0, 1),
+  ),
+};
+
 // The exact catalog each case builds from, for the native replay.
 for (const [name, input] of Object.entries({ ...refusals, narrow, synthetic }))
   cases[name].inputJson = json(input);
@@ -503,6 +733,8 @@ const sources = [
   "web/src/settings/presets/PresetGraph.ts",
   "web/src/slicer/ProfileLoader.ts",
   "web/src/slicer/profileKeys.ts",
+  "web/src/workspace/AuthoredSlicingTarget.ts",
+  "contracts/project-intents.json",
   "web/src/settings/configSerialization.ts",
   catalogPath,
 ];
@@ -519,6 +751,7 @@ const output =
       collationJson: json(collation),
       real,
       cases,
+      exchanges,
     },
     null,
     2,

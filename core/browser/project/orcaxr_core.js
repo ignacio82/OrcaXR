@@ -239,6 +239,248 @@ export class CapturedSelection {
 }
 if (Symbol.dispose) CapturedSelection.prototype[Symbol.dispose] = CapturedSelection.prototype.free;
 
+/**
+ * A loaded catalog: compiled, or refused with its diagnostics.
+ */
+export class ProfileCatalog {
+    static __wrap(ptr) {
+        const obj = Object.create(ProfileCatalog.prototype);
+        obj.__wbg_ptr = ptr;
+        ProfileCatalogFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProfileCatalogFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_profilecatalog_free(ptr, 0);
+    }
+    /**
+     * @param {number} position
+     * @returns {string}
+     */
+    diagnostic(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.profilecatalog_diagnostic(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {number}
+     */
+    diagnostic_count() {
+        const ret = wasm.profilecatalog_diagnostic_count(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * `CatalogTargetRequest` in, the `CatalogPreflightTarget` of a
+     * `PreflightRequest` out. More than `max_tools` tools is refused.
+     * @param {string} target
+     * @param {number} max_tools
+     * @returns {string}
+     */
+    preflight_target(target, max_tools) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(target, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.profilecatalog_preflight_target(this.__wbg_ptr, ptr0, len0, max_tools);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * @param {number} position
+     * @returns {string}
+     */
+    preset(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.profilecatalog_preset(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {number}
+     */
+    preset_count() {
+        const ret = wasm.profilecatalog_preset_count(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {number} position
+     * @returns {string}
+     */
+    profile(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.profilecatalog_profile(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @param {number} position
+     * @returns {string}
+     */
+    profile_config(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.profilecatalog_profile_config(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {number}
+     */
+    profile_count() {
+        const ret = wasm.profilecatalog_profile_count(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * `CatalogSelectionRequest` in, `CatalogSelection` out.
+     * @param {string} selection
+     * @returns {string}
+     */
+    reconcile(selection) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(selection, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.profilecatalog_reconcile(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ProfileCatalog.prototype[Symbol.dispose] = ProfileCatalog.prototype.free;
+
+/**
+ * Own in a task worker; `build` consumes it.
+ */
+export class ProfileCatalogUpload {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProfileCatalogUploadFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_profilecatalogupload_free(ptr, 0);
+    }
+    /**
+     * @param {number} offset
+     * @param {Uint8Array} bytes
+     */
+    append(offset, bytes) {
+        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.profilecatalogupload_append(this.__wbg_ptr, offset, ptr0, len0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * Build the catalog. Without a collator the core's exact ASCII root
+     * collation orders presets and refuses any other text.
+     * @param {any | null} [collator]
+     * @returns {ProfileCatalog}
+     */
+    build(collator) {
+        const ret = wasm.profilecatalogupload_build(this.__wbg_ptr, isLikeNone(collator) ? 0 : addToExternrefTable0(collator));
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProfileCatalog.__wrap(ret[0]);
+    }
+    /**
+     * `limits`: maximum bytes, nodes, text units, number bytes and depth.
+     * @param {number} bytes
+     * @param {Float64Array} limits
+     */
+    constructor(bytes, limits) {
+        const ptr0 = passArrayF64ToWasm0(limits, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.profilecatalogupload_new(bytes, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0];
+        ProfileCatalogUploadFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+}
+if (Symbol.dispose) ProfileCatalogUpload.prototype[Symbol.dispose] = ProfileCatalogUpload.prototype.free;
+
 export class ProjectArchiveImport {
     static __wrap(ptr) {
         const obj = Object.create(ProjectArchiveImport.prototype);
@@ -1993,6 +2235,10 @@ function __wbg_get_imports() {
         __wbg___wbindgen_throw_41e9ee4f547fc59a: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
+        __wbg_compare_30d8e60a815f47b5: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4) {
+            const ret = arg0.compare(getArrayU16FromWasm0(arg1, arg2), getArrayU16FromWasm0(arg3, arg4));
+            return ret;
+        }, arguments); },
         __wbg_concat_31b84501191b3bea: function() { return handleError(function (arg0, arg1) {
             const ret = arg0.concat(arg1);
             return ret;
@@ -2035,6 +2281,12 @@ const CapturedProjectFinalization = (typeof FinalizationRegistry === 'undefined'
 const CapturedSelectionFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_capturedselection_free(ptr, 1));
+const ProfileCatalogFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_profilecatalog_free(ptr, 1));
+const ProfileCatalogUploadFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_profilecatalogupload_free(ptr, 1));
 const ProjectArchiveImportFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectarchiveimport_free(ptr, 1));

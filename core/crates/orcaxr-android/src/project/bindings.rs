@@ -231,6 +231,77 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_catalogUploadNew, catalog_upload_new, jlong,
+    bytes: jlong,
+    limits: JDoubleArray<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogUploadAppend, catalog_upload_append, (),
+    handle: jlong,
+    offset: jlong,
+    bytes: JByteArray<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogBuild, catalog_build, (),
+    handle: jlong,
+    collator: JObject<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogDiagnosticCount, catalog_diagnostic_count, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogDiagnostic, catalog_diagnostic, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogPresetCount, catalog_preset_count, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogPreset, catalog_preset, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogProfileCount, catalog_profile_count, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogProfile, catalog_profile, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogProfileConfig, catalog_profile_config, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogReconcile, catalog_reconcile, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogTarget, catalog_target, jstring,
+    handle: jlong,
+    request: JString<'local>,
+    max_tools: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

@@ -1573,6 +1573,204 @@
         "path": "EditText",
         "toolId": "Counter"
       }
+    },
+    "OptionalCounter": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "Counter"
+      }
+    },
+    "TextList": {
+      "kind": "array",
+      "items": "EditText",
+      "min": 0,
+      "max": 4096
+    },
+    "OptionalTextList": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "TextList"
+      }
+    },
+    "OptionalTexts": {
+      "kind": "array",
+      "items": "OptionalText",
+      "min": 0,
+      "max": 64
+    },
+    "CatalogProfile": {
+      "kind": "object",
+      "fields": {
+        "id": "EditText",
+        "displayName": "EditText",
+        "machineName": "EditText",
+        "processName": "EditText",
+        "filamentName": "EditText",
+        "filamentPresetName": "EditText",
+        "filamentVendor": "OptionalText",
+        "machinePresetId": "EditText",
+        "processPresetId": "EditText",
+        "filamentPresetId": "EditText"
+      }
+    },
+    "CatalogConfigEntry": {
+      "kind": "object",
+      "fields": {
+        "key": "EditText",
+        "value": "EditText"
+      }
+    },
+    "CatalogConfigEntries": {
+      "kind": "array",
+      "items": "CatalogConfigEntry",
+      "min": 0,
+      "max": 8192
+    },
+    "CatalogConfig": {
+      "kind": "object",
+      "fields": {
+        "entries": "CatalogConfigEntries"
+      }
+    },
+    "CatalogDiagnosticCode": {
+      "kind": "enum",
+      "values": [
+        "profileCorpusPinnedOverlay",
+        "invalidPresetGraph",
+        "noCompatibleProcess",
+        "noCompatibleFilament",
+        "unresolvedCompatibility"
+      ]
+    },
+    "CatalogDiagnostic": {
+      "kind": "object",
+      "fields": {
+        "code": "CatalogDiagnosticCode",
+        "error": "Flag",
+        "message": "EditText",
+        "machineName": "OptionalText",
+        "processName": "OptionalText",
+        "presetId": "OptionalText"
+      }
+    },
+    "CatalogPresetKind": {
+      "kind": "enum",
+      "values": [
+        "machine",
+        "process",
+        "filament"
+      ]
+    },
+    "CatalogPresetSource": {
+      "kind": "enum",
+      "values": [
+        "system",
+        "user",
+        "project",
+        "external",
+        "default",
+        "unknown"
+      ]
+    },
+    "CatalogPreset": {
+      "kind": "object",
+      "fields": {
+        "id": "EditText",
+        "vendor": "EditText",
+        "kind": "CatalogPresetKind",
+        "name": "EditText",
+        "parentId": "OptionalText",
+        "source": "CatalogPresetSource",
+        "isSystem": "Flag",
+        "isDefault": "Flag",
+        "isVisible": "Flag"
+      }
+    },
+    "CatalogSelectionRequest": {
+      "kind": "object",
+      "fields": {
+        "printerId": "EditText",
+        "processId": "OptionalText",
+        "filamentIds": "OptionalTexts",
+        "installedVendors": "OptionalTextList"
+      }
+    },
+    "CatalogSubstitutionReason": {
+      "kind": "enum",
+      "values": [
+        "missing",
+        "incompatible",
+        "noCompatiblePreset"
+      ]
+    },
+    "CatalogSubstitution": {
+      "kind": "object",
+      "fields": {
+        "kind": "CatalogPresetKind",
+        "slot": "OptionalCounter",
+        "previousId": "OptionalText",
+        "nextId": "OptionalText",
+        "reason": "CatalogSubstitutionReason"
+      }
+    },
+    "CatalogSubstitutions": {
+      "kind": "array",
+      "items": "CatalogSubstitution",
+      "min": 0,
+      "max": 4096
+    },
+    "CatalogSelectionDiagnosticCode": {
+      "kind": "enum",
+      "values": [
+        "unresolvedCondition",
+        "noCompatibleProcess",
+        "noCompatibleFilament"
+      ]
+    },
+    "CatalogSelectionDiagnostic": {
+      "kind": "object",
+      "fields": {
+        "code": "CatalogSelectionDiagnosticCode",
+        "presetId": "OptionalText",
+        "slot": "OptionalCounter",
+        "message": "EditText"
+      }
+    },
+    "CatalogSelectionDiagnostics": {
+      "kind": "array",
+      "items": "CatalogSelectionDiagnostic",
+      "min": 0,
+      "max": 131072
+    },
+    "ResolvedCatalogSelection": {
+      "kind": "object",
+      "fields": {
+        "printer": "EditText",
+        "process": "OptionalText",
+        "filaments": "OptionalTexts",
+        "substitutions": "CatalogSubstitutions",
+        "diagnostics": "CatalogSelectionDiagnostics",
+        "complete": "Flag"
+      }
+    },
+    "CatalogSelection": {
+      "kind": "union",
+      "variants": {
+        "unavailable": "EditText",
+        "resolved": "ResolvedCatalogSelection"
+      }
+    },
+    "CatalogTargetRequest": {
+      "kind": "object",
+      "fields": {
+        "machinePresetId": "EditText",
+        "processPresetId": "EditText",
+        "filamentPresetId": "EditText",
+        "headFilamentIds": "OptionalTexts",
+        "toolCount": "Finite"
+      }
     }
   },
   "roots": [
@@ -1584,7 +1782,15 @@
     "PreflightSummary",
     "PreflightIssue",
     "PreflightOmission",
-    "PreflightEntity"
+    "PreflightEntity",
+    "CatalogProfile",
+    "CatalogConfig",
+    "CatalogDiagnostic",
+    "CatalogPreset",
+    "CatalogSelectionRequest",
+    "CatalogSelection",
+    "CatalogTargetRequest",
+    "CatalogPreflightTarget"
   ],
   "sessionVersion": 1
 }

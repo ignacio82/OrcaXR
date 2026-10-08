@@ -2,6 +2,8 @@ use wasm_bindgen::prelude::*;
 #[cfg(feature = "project")]
 mod archive;
 #[cfg(feature = "project")]
+mod catalog;
+#[cfg(feature = "project")]
 mod model;
 #[cfg(feature = "project")]
 mod project;

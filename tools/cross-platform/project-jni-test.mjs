@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { startProjectJni, projectJniCore } from "./project-jni-bridge.mjs";
 import { replayProject } from "./project-wasm-replay.mjs";
 import { replayPreflights } from "./project-preflight-replay.mjs";
+import { replayCatalogs } from "./catalog-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -282,6 +283,41 @@ try {
     );
   }
   assert.equal(actorPreflightChecks, 115);
+  // The profile catalog through the raw exports, then the Kotlin wrapper.
+  const catalogFixture = JSON.parse(
+    await readFile(
+      new URL("testdata/cross-platform/preset-catalog-vectors.json", root),
+    ),
+  );
+  const catalogBytes = new Uint8Array(
+    await readFile(new URL("web/public/profiles/catalog.json", root)),
+  );
+  const catalogs = replayCatalogs(
+    projectJniCore(jvm.call),
+    catalogFixture,
+    catalogBytes,
+    undefined,
+  );
+  assert.deepEqual(
+    [catalogs.catalogReplies, catalogs.catalogRefusals],
+    [506, 12],
+  );
+  const bundled = catalogFixture.exchanges.bundled;
+  const catalogChecks = jvm.call(
+    "catalogChecks",
+    catalogBytes,
+    [
+      bundled.diagnosticJsons[0],
+      bundled.presetJsons[0],
+      bundled.profiles[0].profileJson,
+      bundled.profiles[0].configJson,
+      bundled.selections[0].requestJson,
+      bundled.selections[0].resultJson,
+      bundled.targets[0].requestJson,
+      bundled.targets[0].resultJson,
+    ].join("\n"),
+  );
+  assert.equal(catalogChecks, 15);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);
@@ -301,6 +337,8 @@ try {
     providerDocumentChecks,
     ...preflights,
     actorPreflightChecks,
+    ...catalogs,
+    catalogChecks,
     ownedQueryTextUnits: ownedQueryText.length,
     ownedBytes: owned.byteLength,
     hostJniSha256: createHash("sha256")

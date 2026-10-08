@@ -373,3 +373,92 @@ fn synthetic_catalogs_cover_every_refusal_and_selection_rule() {
     assert_eq!(replayed, (429, 12));
     assert_eq!(cases.len(), 9);
 }
+
+#[test]
+fn host_exchange_matches_the_browser_codecs() {
+    use orcaxr_contracts::project_intent_types as wire;
+    use orcaxr_project::{ingress::json::JsonLimits, settings::catalog_exchange::*};
+    let f = corpus();
+    let limits = JsonLimits {
+        max_bytes: 8 << 20,
+        max_nodes: 1 << 20,
+        max_text_units: 8 << 20,
+        max_number_bytes: 64,
+        max_depth: 64,
+    };
+    let bundled = include_bytes!("../../../../web/public/profiles/catalog.json").to_vec();
+    let refused = f["cases"]["references"]["inputJson"]
+        .as_str()
+        .unwrap()
+        .as_bytes()
+        .to_vec();
+    for (name, bytes) in [("bundled", bundled), ("refused", refused)] {
+        let expected = &f["exchanges"][name];
+        let mut upload = CatalogUpload::new(bytes.len(), limits).unwrap();
+        for (i, chunk) in bytes.chunks(65536).enumerate() {
+            upload.append(i * 65536, chunk).unwrap();
+        }
+        let host = upload.build(&mut AsciiRootCollation).unwrap();
+        let all = |key: &str, count: usize, read: &dyn Fn(usize) -> Option<String>| {
+            let items = strings(&expected[key]);
+            assert_eq!(count, items.len(), "{name} {key}");
+            for (i, json) in items.iter().enumerate() {
+                assert_eq!(read(i).as_deref(), Some(*json), "{name} {key}[{i}]");
+            }
+            assert_eq!(read(items.len()), None);
+        };
+        all("diagnosticJsons", host.diagnostic_count(), &|i| {
+            host.diagnostic(i)
+                .map(|v| wire::encode_catalog_diagnostic(&v).unwrap())
+        });
+        all("presetJsons", host.preset_count(), &|i| {
+            host.preset(i)
+                .map(|v| wire::encode_catalog_preset(&v).unwrap())
+        });
+        assert_eq!(
+            host.profile_count() as u64,
+            expected["profileCount"].as_u64().unwrap()
+        );
+        for p in expected["profiles"].as_array().unwrap() {
+            let index = p["index"].as_u64().unwrap() as usize;
+            let profile = wire::encode_catalog_profile(&host.profile(index).unwrap()).unwrap();
+            assert_eq!(
+                profile,
+                p["profileJson"].as_str().unwrap(),
+                "{name} profile {index}"
+            );
+            let config = wire::encode_catalog_config(&host.profile_config(index).unwrap()).unwrap();
+            assert_eq!(
+                config,
+                p["configJson"].as_str().unwrap(),
+                "{name} config {index}"
+            );
+        }
+        assert!(host.profile(host.profile_count()).is_none());
+        for s in expected["selections"].as_array().unwrap() {
+            let request =
+                wire::decode_catalog_selection_request(s["requestJson"].as_str().unwrap()).unwrap();
+            let result = wire::encode_catalog_selection(&host.reconcile(&request)).unwrap();
+            assert_eq!(
+                result,
+                s["resultJson"].as_str().unwrap(),
+                "{name} {}",
+                s["requestJson"]
+            );
+        }
+        for t in expected["targets"].as_array().unwrap() {
+            let request =
+                wire::decode_catalog_target_request(t["requestJson"].as_str().unwrap()).unwrap();
+            // Numbers are semantic on the wire (serde writes 4 as 4.0).
+            let expected =
+                wire::decode_catalog_preflight_target(t["resultJson"].as_str().unwrap()).unwrap();
+            assert_eq!(
+                host.preflight_target(&request, 64).unwrap(),
+                expected,
+                "{name} {}",
+                t["requestJson"]
+            );
+            assert!(host.preflight_target(&request, 0).is_err() || request.tool_count < 1.0);
+        }
+    }
+}

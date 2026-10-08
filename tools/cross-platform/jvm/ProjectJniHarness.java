@@ -11,6 +11,9 @@ public final class ProjectJniHarness {
     public static long actorExportChecks(String source, String canonical, byte[] mesh, byte[] svg, String empty, String large, String largeCanonical) {
         return ProjectActorExportChecks.run(source, canonical, mesh, svg, empty, large, largeCanonical);
     }
+    public static long catalogChecks(byte[] catalog, String expected) {
+        return ProjectCatalogChecks.run(catalog, expected);
+    }
     public static long actorPreflightChecks(String source, byte[] mesh, String request, String expected) {
         return ProjectPreflightChecks.run(source, mesh, request, expected);
     }
@@ -101,6 +104,14 @@ public final class ProjectJniHarness {
             byte[] bytes = new byte[length]; in.readFully(bytes);
             return new String(bytes, StandardCharsets.UTF_8);
         }
+        if (type == PresetCollator.class) {
+            return switch (string()) {
+                case "none" -> null;
+                case "throw" -> (PresetCollator) (left, right) -> { throw new IllegalStateException("PRIVATE collator detail"); };
+                case "reverse" -> (PresetCollator) (left, right) -> java.util.Arrays.compare(right, left);
+                default -> (PresetCollator) java.util.Arrays::compare;
+            };
+        }
         if (type == LocalTimestampResolver.class) {
             String zone = string();
             if (zone.equals("throw")) return (LocalTimestampResolver) value -> { throw new IllegalStateException("PRIVATE timestamp detail"); };
@@ -132,6 +143,7 @@ public final class ProjectJniHarness {
             try { name = string(); } catch (EOFException end) { return; }
             Method method = null;
             if (name.equals("actorExportChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class, String.class, String.class, String.class);
+            if (name.equals("catalogChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class);
             if (name.equals("actorPreflightChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorClipboardChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class);
             if (name.equals("actorClipboardReplay")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class, long.class, String.class, long[].class);
