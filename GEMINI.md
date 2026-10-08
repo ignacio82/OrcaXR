@@ -173,7 +173,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   deletion retains that clipboard and late replies never republish clipboard UI.
   Clone/add-instance/fill-bed/paste await measured staged work, keeping history and captures.
   Clipboard captures share asset records; paste restores missing bytes in rollback.
-  Settings/range/role/layer-event/filament/wipe-tower/helper/split/brim/sync/mesh/paint routes submit intents; build commands
+  Settings/range/role/layer-event/filament/wipe-tower/helper/split/brim/sync/mesh/paint/profile routes submit; build commands
   first (prepare errors become invalidRequest), local apply errors keep their message, and
   batched auto-pair reconciles guard on a scratch-store prediction of the edited state.
 - Prepared command intents use ASCII JSON with UTF-16 unit arrays for all text.

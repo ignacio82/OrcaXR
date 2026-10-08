@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import * as THREE from 'three';
 
 class TestAudioContext {
   readonly destination = {};
@@ -256,6 +257,41 @@ await test('a reported grade with no preset of its own falls back to the vendorâ
     'Snapmaker PLA @U1',
     'an unknown grade still keeps the vendor and type the machine reported',
   );
+  workspace.dispose();
+});
+
+await test('profile changes commit through the guarded route, coalesce, and survive a racing edit', async () => {
+  const { workspace, bindPreset } = build('PLA');
+  await workspace.slicingConfigurationSettled();
+  const filamentConfigs = () =>
+    (
+      workspace as unknown as {
+        canonicalProject: { getSlicingConfiguration(): { filaments: { physical: { presetId?: string }[] } } };
+      }
+    ).canonicalProject
+      .getSlicingConfiguration()
+      .filaments.physical.map((filament) => filament.presetId);
+  const undoBefore = workspace.getCanonicalSummary().history.undoCount;
+
+  // Two changes in one turn commit once, from the latest live state.
+  bindPreset(0, 'Snapmaker PLA Matte @U1');
+  bindPreset(0, 'Snapmaker PLA SnapSpeed @U1');
+  const pendingPreset = filamentConfigs()[0];
+  await workspace.slicingConfigurationSettled();
+  assert.notEqual(filamentConfigs()[0], pendingPreset, 'the commit lands on acknowledgement');
+  assert.equal(filamentConfigs()[0], workspace.getHeadFilamentPresetId(0));
+  assert.equal(workspace.getCanonicalSummary().history.undoCount, undoBefore + 1, 'one commit for the turn');
+
+  // An edit landing while the commit is queued is read, not lost.
+  bindPreset(0, 'Snapmaker PLA Matte @U1');
+  const geometry = new THREE.BoxGeometry(10, 10, 10);
+  (
+    workspace as unknown as { canonicalProject: { importBufferGeometry(g: THREE.BufferGeometry): unknown } }
+  ).canonicalProject.importBufferGeometry(geometry);
+  geometry.dispose();
+  await workspace.slicingConfigurationSettled();
+  assert.equal(filamentConfigs()[0], workspace.getHeadFilamentPresetId(0));
+  assert.equal(workspace.getCanonicalSummary().instanceCount, 1, 'the racing edit survives');
   workspace.dispose();
 });
 

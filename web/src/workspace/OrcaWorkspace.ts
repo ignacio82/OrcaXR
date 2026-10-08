@@ -172,7 +172,7 @@ import { PaintOverlayRegistry } from './PaintOverlayRegistry';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import type { ActionRegistry, ActionSurface, TransformEditRequest, ActionInvocation } from '../actions/ActionRegistry';
-import type { AsyncSessionAcknowledgement } from '../project/AsyncEditorSession';
+import { AsyncSessionError, type AsyncSessionAcknowledgement } from '../project/AsyncEditorSession';
 import { type ContextTarget } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/ActionContext';
 import type { CanonicalUiFacts } from '../actions/canonicalUiFacts';
@@ -1043,7 +1043,7 @@ export class OrcaWorkspace extends xb.Script {
     this.uiCore = new UICore(this);
     this.palette.onChanged = () => {
       this.synchronizeHeadSlotLengths();
-      this.applyLiveSlicingConfiguration();
+      void this.applyLiveSlicingConfiguration();
       this.xrShell?.draw();
       this.onPaletteChanged?.();
       this.recomputePreflight();
@@ -1484,7 +1484,7 @@ export class OrcaWorkspace extends xb.Script {
     if (this.disposed) throw new Error('The workspace is closed.');
     if (this.catalog.profiles.length === 0)
       throw new Error('No usable printer profiles were loaded. Retry when the connection is available.');
-    this.applyCatalogDefaultProfile();
+    await this.applyCatalogDefaultProfile();
   }
 
   /** Release every listener, subscription, UI card, and owned GPU resource. */
@@ -2834,6 +2834,7 @@ export class OrcaWorkspace extends xb.Script {
       // `applyLiveSlicingConfiguration` rebuilds canonical filaments from the
       // palette and the head presets.
       const rebound = this.adoptPrinterFilamentPresets(slots);
+      await this.slicingConfigurationSettled();
       this.refreshPaintOverlays();
       this.recomputePreflight();
       this.onProfileChanged?.();
@@ -2912,7 +2913,7 @@ export class OrcaWorkspace extends xb.Script {
       changed = true;
     }
     if (changed) this.selectProfilePresets({ filamentPresetIds: nextPresetIds });
-    else this.applyLiveSlicingConfiguration();
+    else void this.applyLiveSlicingConfiguration();
     return { rebound, unmatched };
   }
 
@@ -3982,7 +3983,7 @@ export class OrcaWorkspace extends xb.Script {
   public setHeadNozzle(index: number, nozzle: string): void {
     if (index < 0 || index >= this.headNozzles.length || this.headNozzles[index] === nozzle) return;
     this.headNozzles[index] = nozzle;
-    this.applyLiveSlicingConfiguration();
+    void this.applyLiveSlicingConfiguration();
     this.recomputePreflight();
     this.rebuildHeadsPanel();
   }
@@ -3997,7 +3998,7 @@ export class OrcaWorkspace extends xb.Script {
     this.headFilaments.push(this.headSelectionFromProfile(this.profile));
     this.headNozzles.push(profileNozzleForTool(this.profile, this.headNozzles.length));
     this.palette.add();
-    this.applyLiveSlicingConfiguration();
+    void this.applyLiveSlicingConfiguration();
     this.rebuildHeadsPanel();
     this.onProfileChanged?.();
   }
@@ -4007,7 +4008,7 @@ export class OrcaWorkspace extends xb.Script {
     this.headFilaments.splice(index, 1);
     this.headNozzles.splice(index, 1);
     this.palette.remove(index);
-    this.applyLiveSlicingConfiguration();
+    void this.applyLiveSlicingConfiguration();
     this.rebuildHeadsPanel();
     this.onProfileChanged?.();
   }
@@ -4303,7 +4304,7 @@ export class OrcaWorkspace extends xb.Script {
     return disambiguatePresetOptionLabels([...choices.values()]);
   }
 
-  private applyCatalogDefaultProfile(): void {
+  private async applyCatalogDefaultProfile(): Promise<void> {
     if (this.profile || this.projectImportInProgress || this.importedProjectOwnsSlicingConfiguration) return;
     const fallback =
       this.catalog.find('Snapmaker U1 (0.4 nozzle)', '0.20 Standard', 'Snapmaker PLA') ??
@@ -4322,9 +4323,16 @@ export class OrcaWorkspace extends xb.Script {
     } else {
       this.setProfile(fallback);
     }
+    if (!isPristineStartup) return;
     // Initial catalog defaults establish a new document's baseline. No authored
-    // revision may take this path, including edits made while profiles loaded.
-    if (isPristineStartup) this.canonicalProject.resetProject();
+    // revision may take this path, including edits made while profiles loaded
+    // or while the defaults were committing: only the defaults' own commit may
+    // stand between the pristine document and the reset.
+    await this.slicingConfigurationSettled();
+    const after = this.canonicalProject.getSummary();
+    if (this.disposed || after.objectCount !== 0 || after.history.undoCount > 1 || after.history.redoCount !== 0)
+      return;
+    this.canonicalProject.resetProject();
   }
 
   /**
@@ -4361,7 +4369,9 @@ export class OrcaWorkspace extends xb.Script {
     if (current) {
       this.profile = this.catalog.profiles.find((candidate) => candidate.id === current.id) ?? null;
     }
-    this.applyCatalogDefaultProfile();
+    this.applyCatalogDefaultProfile().catch((error: unknown) =>
+      this.setStatus(`Profile defaults failed: ${error instanceof Error ? error.message : String(error)}`),
+    );
     this.onProfileChanged?.();
   }
 
@@ -4635,7 +4645,7 @@ export class OrcaWorkspace extends xb.Script {
     } finally {
       this.applyingProfile = false;
     }
-    this.applyLiveSlicingConfiguration();
+    void this.applyLiveSlicingConfiguration();
 
     this.rebuildHeadsPanel();
     this.refreshXrProfileValues();
@@ -4679,8 +4689,48 @@ export class OrcaWorkspace extends xb.Script {
     );
   }
 
-  /** Commit the exact profile/filament state consumed by canonical save and slice. */
-  private applyLiveSlicingConfiguration(): void {
+  private slicingCommits: Promise<void> = Promise.resolve();
+  private slicingCommitQueued = false;
+
+  /**
+   * Commit the exact profile/filament state consumed by canonical save and
+   * slice, through the guarded asynchronous session route. Commits run one at
+   * a time and each reads the live profile state when it runs, so a request
+   * made while one is queued joins it rather than committing a stale view.
+   * Never rejects: a refused commit is reported as status, so a synchronous
+   * UI flow may leave it running.
+   */
+  private applyLiveSlicingConfiguration(): Promise<void> {
+    if (!this.profile || this.applyingProfile || this.disposed || this.slicingCommitQueued) {
+      return this.slicingCommits;
+    }
+    this.slicingCommitQueued = true;
+    this.slicingCommits = this.slicingCommits.then(async () => {
+      this.slicingCommitQueued = false;
+      // A commit refused as stale lost a race with an edit that landed while
+      // it was queued. Recomputing it reads that edit and the live profile
+      // afresh, so retrying is a new edit, not a rebase of the refused one.
+      for (let attempt = 1; ; attempt++) {
+        try {
+          await this.commitLiveSlicingConfiguration();
+          return;
+        } catch (error) {
+          const stale = error instanceof AsyncSessionError && error.code === 'stale';
+          if (stale && attempt < 4) continue;
+          this.setStatus(`Profile change failed: ${error instanceof Error ? error.message : String(error)}`);
+          return;
+        }
+      }
+    });
+    return this.slicingCommits;
+  }
+
+  /** Resolves once every requested profile commit has been acknowledged or refused. */
+  public slicingConfigurationSettled(): Promise<void> {
+    return this.slicingCommits;
+  }
+
+  private async commitLiveSlicingConfiguration(): Promise<void> {
     const profile = this.profile;
     if (!profile || this.applyingProfile || this.disposed) return;
     this.synchronizeHeadSlotLengths();
@@ -4737,7 +4787,7 @@ export class OrcaWorkspace extends xb.Script {
         `The selected profile would orphan mixed-filament component ${orphanedComponent.filamentId}; remap it before changing profiles.`,
       );
     }
-    this.canonicalProject.setSlicingConfiguration({
+    await this.canonicalProject.applySlicingConfiguration({
       printer: {
         profileId: profile.machineName,
         toolCount: Math.max(1, slots.length),
@@ -4748,11 +4798,15 @@ export class OrcaWorkspace extends xb.Script {
         mixed: previous.filaments.mixed,
       },
     });
+    if (this.disposed) return;
     this.bedMm = bedSizeFromProfile(profile.config);
     this.canonicalProject.setPrinterSpaceMapping({
       bedSizeMm: [this.bedMm.x, this.bedMm.y],
       worldUnitsPerMm: CURRENT_THREE_WORLD_UNITS_PER_MM,
     });
+    // What reads the committed configuration refreshes once it is committed.
+    this.recomputePreflight();
+    this.onProfileChanged?.();
   }
 
   private synchronizePrinterMappingFromCanonicalConfig(): void {
@@ -9757,7 +9811,9 @@ export class OrcaWorkspace extends xb.Script {
       return true;
     } finally {
       this.projectImportInProgress = false;
-      this.applyCatalogDefaultProfile();
+      this.applyCatalogDefaultProfile().catch((error: unknown) =>
+        this.setStatus(`Profile defaults failed: ${error instanceof Error ? error.message : String(error)}`),
+      );
     }
   }
 

@@ -18,6 +18,7 @@ import {
   captureEditSvgPartCommand,
   captureInstanceCommand,
   captureMeshBooleanCommand,
+  captureReplaceProjectCommand,
   captureReplaceVolumeMeshCommand,
   captureClipboardPasteCommand,
   captureSplitVolumeToPartsCommand,
@@ -297,10 +298,12 @@ const STAGING_ASSET_ID = entityId<'asset'>('import:orcaxr:canonical-workspace-st
 // Explicit logical limits for the transitional browser host. These bound
 // retained command input, not heap residency or synchronous preparation latency.
 const INSTANCE_INPUT_LIMITS = Object.freeze({ maxUnits: 16 * 1024 * 1024, maxNodes: 1024 * 1024, maxDepth: 128 });
+/** A whole next project state, as a profile change commits it. */
+const STATE_INPUT_LIMITS = Object.freeze({ maxUnits: 64 * 1024 * 1024, maxNodes: 16 * 1024 * 1024, maxDepth: 128 });
 const INSTANCE_STAGING_LIMITS = Object.freeze({
   maxResources: 4,
   maxCommands: 4096,
-  maxUnits: INSTANCE_INPUT_LIMITS.maxUnits,
+  maxUnits: STATE_INPUT_LIMITS.maxUnits,
   // New mesh bytes a staged edit carries (helper volumes, split parts) belong
   // to the staged resource until it commits; the clipboard's own asset budget.
   maxAssetBytes: 512 * 1024 * 1024,
@@ -2704,6 +2707,28 @@ export class CanonicalWorkspaceController {
    */
   setSlicingConfiguration(configuration: CanonicalSlicingConfiguration): void {
     this.assertActive();
+    const next = this.nextSlicingState(configuration);
+    if (next) this.session.execute(new ReplaceProjectCommand(next, 'Update slicing configuration'));
+  }
+
+  /**
+   * {@link setSlicingConfiguration} through the guarded asynchronous session
+   * route: the next state commits as staged project replacement, so a
+   * configuration of any size travels as measured staged work.
+   */
+  async applySlicingConfiguration(configuration: CanonicalSlicingConfiguration): Promise<void> {
+    this.assertActive();
+    const guard = this.asyncSession.captureGuard();
+    const next = this.nextSlicingState(configuration);
+    if (!next) return;
+    await this.executeStagedEdit(
+      captureReplaceProjectCommand(next, 'Update slicing configuration', STATE_INPUT_LIMITS),
+      guard,
+    );
+  }
+
+  /** The validated state a slicing configuration leads to, or nothing when it is the current one. */
+  private nextSlicingState(configuration: CanonicalSlicingConfiguration): ProjectState | undefined {
     const state = this.session.project.getSnapshot().state;
     const submitsOverrides = Object.prototype.hasOwnProperty.call(configuration, 'settingsOverrides');
     if (submitsOverrides && configuration.settingsOverrides === undefined) {
@@ -2732,7 +2757,7 @@ export class CanonicalWorkspaceController {
         filaments: state.filaments,
       }) === canonicalStringify(requested)
     ) {
-      return;
+      return undefined;
     }
     const next = cloneProjectState(state);
     next.printer = requested.printer;
@@ -2744,7 +2769,7 @@ export class CanonicalWorkspaceController {
     next.filaments = requested.filaments;
     const reconciled = this.withReconciledAutoPairs(next);
     assertValidProjectState(reconciled);
-    this.session.execute(new ReplaceProjectCommand(reconciled, 'Update slicing configuration'));
+    return reconciled;
   }
 
   importBufferGeometry(
