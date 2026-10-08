@@ -10,6 +10,8 @@ mod library;
 #[cfg(feature = "project")]
 mod model;
 #[cfg(feature = "project")]
+mod printer;
+#[cfg(feature = "project")]
 mod project;
 
 #[wasm_bindgen]

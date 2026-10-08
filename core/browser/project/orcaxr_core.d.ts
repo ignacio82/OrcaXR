@@ -124,6 +124,23 @@ export class PresetLibrary {
 }
 
 /**
+ * The print job status model: fed `/printer/objects/query` results and
+ * `notify_status_update` params as received, it answers `PrintJobSnapshot`s.
+ */
+export class PrintJobStatus {
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * `undefined` when the patch concerns no object the model reads.
+     */
+    apply_notification(text: string, now_ms: number): string | undefined;
+    apply_query(text: string, now_ms: number): string;
+    constructor();
+    reset(): string;
+    snapshot(): string;
+}
+
+/**
  * A loaded catalog: compiled, or refused with its diagnostics.
  */
 export class ProfileCatalog {
@@ -887,6 +904,7 @@ export interface InitOutput {
     readonly __wbg_capturedproject_free: (a: number, b: number) => void;
     readonly __wbg_capturedselection_free: (a: number, b: number) => void;
     readonly __wbg_presetlibrary_free: (a: number, b: number) => void;
+    readonly __wbg_printjobstatus_free: (a: number, b: number) => void;
     readonly __wbg_profilecatalog_free: (a: number, b: number) => void;
     readonly __wbg_profilecatalogupload_free: (a: number, b: number) => void;
     readonly __wbg_projectarchiveimport_free: (a: number, b: number) => void;
@@ -968,6 +986,11 @@ export interface InitOutput {
     readonly presetlibrary_plan_update: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_state: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_view: (a: number) => [number, number, number, number];
+    readonly printjobstatus_apply_notification: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly printjobstatus_apply_query: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly printjobstatus_new: () => number;
+    readonly printjobstatus_reset: (a: number) => [number, number, number, number];
+    readonly printjobstatus_snapshot: (a: number) => [number, number, number, number];
     readonly profilecatalog_diagnostic: (a: number, b: number) => [number, number, number, number];
     readonly profilecatalog_diagnostic_count: (a: number) => number;
     readonly profilecatalog_preflight_target: (a: number, b: number, c: number, d: number) => [number, number, number, number];

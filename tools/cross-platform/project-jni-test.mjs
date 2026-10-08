@@ -34,6 +34,7 @@ import { stagedCommandJson } from "./project-staged-replay.mjs";
 import { replayArchives, archiveCases, replayHostileArchives } from "./archive-wasm-replay.mjs";
 import { replayModelImports } from "./model-import-replay.mjs";
 import { replayObjectTree } from "./object-tree-replay.mjs";
+import { replayPrintJobStatus } from "./print-job-status-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -907,6 +908,35 @@ try {
       .join("\n"),
   );
   assert.equal(treeChecks, 605);
+  // The print job status model through the real JNI exports, then the Kotlin
+  // wrapper over every trace.
+  const printJobFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/print-job-status-vectors.json", root)),
+  );
+  const printJobs = replayPrintJobStatus(projectJniCore(jvm.call), printJobFixture);
+  assert.deepEqual(
+    [printJobs.printJobSnapshots, printJobs.printJobIgnored, printJobs.printJobRefusals],
+    [790, 76, 7],
+  );
+  const printJobChecks = jvm.call(
+    "printJobStatusChecks",
+    printJobFixture.traces
+      .flatMap((trace) => [
+        "T",
+        ...trace.steps.map((s) =>
+          [
+            { query: "Q", notify: "N", reset: "X" }[s.op],
+            String(s.nowMs ?? 0),
+            s.text ?? "",
+            s.refusal !== undefined ? "R" : s.ignored ? "I" : "S",
+            s.refusal ?? s.snapshotJson ?? "",
+            s.currentJson,
+          ].join("\t"),
+        ),
+      ])
+      .join("\n"),
+  );
+  assert.equal(printJobChecks, 1747);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

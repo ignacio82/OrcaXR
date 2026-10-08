@@ -11,12 +11,13 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = ["gcode"]
 gcode = ["dep:orcaxr-gcode"]
-project = ["dep:orcaxr-project", "dep:orcaxr-archive"]
+project = ["dep:orcaxr-project", "dep:orcaxr-archive", "dep:orcaxr-printer"]
 
 [dependencies]
 orcaxr-contracts.workspace = true
 orcaxr-archive = { workspace = true, optional = true }
 orcaxr-gcode = { workspace = true, optional = true }
+orcaxr-printer = { workspace = true, optional = true }
 orcaxr-project = { workspace = true, optional = true }
 wasm-bindgen.workspace = true
 

@@ -9773,6 +9773,135 @@ fn read_object_tree_reply(v: &Value) -> Result<ObjectTreeReply, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalFlag {
+    Absent(Empty),
+    Value(Flag),
+}
+fn read_optional_flag(v: &Value) -> Result<OptionalFlag, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalFlag::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalFlag::Value(read_flag(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintJobState {
+    Standby,
+    Printing,
+    Paused,
+    Complete,
+    Cancelled,
+    Error,
+    Unknown,
+}
+fn read_print_job_state(v: &Value) -> Result<PrintJobState, InvalidIntent> {
+    match v.as_str() {
+        Some("standby") => Ok(PrintJobState::Standby),
+        Some("printing") => Ok(PrintJobState::Printing),
+        Some("paused") => Ok(PrintJobState::Paused),
+        Some("complete") => Ok(PrintJobState::Complete),
+        Some("cancelled") => Ok(PrintJobState::Cancelled),
+        Some("error") => Ok(PrintJobState::Error),
+        Some("unknown") => Ok(PrintJobState::Unknown),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintJobTemperature {
+    pub actual_c: Finite,
+    pub target_c: Finite,
+}
+fn read_print_job_temperature(v: &Value) -> Result<PrintJobTemperature, InvalidIntent> {
+    let object = fields(v, &["actualC", "targetC"], false)?;
+    Ok(PrintJobTemperature {
+        actual_c: read_finite(&object["actualC"])?,
+        target_c: read_finite(&object["targetC"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalPrintJobTemperature {
+    Absent(Empty),
+    Value(PrintJobTemperature),
+}
+fn read_optional_print_job_temperature(
+    v: &Value,
+) -> Result<OptionalPrintJobTemperature, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPrintJobTemperature::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPrintJobTemperature::Value(
+            read_print_job_temperature(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintJobSnapshot {
+    pub state: PrintJobState,
+    pub klippy_state: OptionalText,
+    pub filename: OptionalText,
+    pub virtual_sd_active: OptionalFlag,
+    pub message: OptionalText,
+    pub progress: OptionalFinite,
+    pub current_layer: OptionalFinite,
+    pub total_layers: OptionalFinite,
+    pub print_duration_s: OptionalFinite,
+    pub total_duration_s: OptionalFinite,
+    pub filament_used_mm: OptionalFinite,
+    pub estimated_remaining_s: OptionalFinite,
+    pub extruder: OptionalPrintJobTemperature,
+    pub bed: OptionalPrintJobTemperature,
+    pub updated_at_ms: Finite,
+}
+fn read_print_job_snapshot(v: &Value) -> Result<PrintJobSnapshot, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "state",
+            "klippyState",
+            "filename",
+            "virtualSdActive",
+            "message",
+            "progress",
+            "currentLayer",
+            "totalLayers",
+            "printDurationS",
+            "totalDurationS",
+            "filamentUsedMm",
+            "estimatedRemainingS",
+            "extruder",
+            "bed",
+            "updatedAtMs",
+        ],
+        false,
+    )?;
+    Ok(PrintJobSnapshot {
+        state: read_print_job_state(&object["state"])?,
+        klippy_state: read_optional_text(&object["klippyState"])?,
+        filename: read_optional_text(&object["filename"])?,
+        virtual_sd_active: read_optional_flag(&object["virtualSdActive"])?,
+        message: read_optional_text(&object["message"])?,
+        progress: read_optional_finite(&object["progress"])?,
+        current_layer: read_optional_finite(&object["currentLayer"])?,
+        total_layers: read_optional_finite(&object["totalLayers"])?,
+        print_duration_s: read_optional_finite(&object["printDurationS"])?,
+        total_duration_s: read_optional_finite(&object["totalDurationS"])?,
+        filament_used_mm: read_optional_finite(&object["filamentUsedMm"])?,
+        estimated_remaining_s: read_optional_finite(&object["estimatedRemainingS"])?,
+        extruder: read_optional_print_job_temperature(&object["extruder"])?,
+        bed: read_optional_print_job_temperature(&object["bed"])?,
+        updated_at_ms: read_finite(&object["updatedAtMs"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -10721,5 +10850,13 @@ pub fn decode_object_tree_reply(text: &str) -> Result<ObjectTreeReply, InvalidIn
 pub fn encode_object_tree_reply(value: &ObjectTreeReply) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_object_tree_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_print_job_snapshot(text: &str) -> Result<PrintJobSnapshot, InvalidIntent> {
+    read_print_job_snapshot(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_job_snapshot(value: &PrintJobSnapshot) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_job_snapshot(&text)?;
     Ok(text)
 }

@@ -207,6 +207,7 @@ dependencies = [
  "orcaxr-archive",
  "orcaxr-contracts",
  "orcaxr-gcode",
+ "orcaxr-printer",
  "orcaxr-project",
 ]
 
@@ -244,6 +245,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "orcaxr-printer"
+version = "0.1.0"
+dependencies = [
+ "orcaxr-contracts",
+ "serde_json",
+]
+
+[[package]]
 name = "orcaxr-project"
 version = "0.1.0"
 dependencies = [
@@ -260,6 +269,7 @@ dependencies = [
  "orcaxr-archive",
  "orcaxr-contracts",
  "orcaxr-gcode",
+ "orcaxr-printer",
  "orcaxr-project",
  "wasm-bindgen",
 ]

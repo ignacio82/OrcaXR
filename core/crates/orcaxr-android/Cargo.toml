@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 orcaxr-archive.workspace = true
 orcaxr-contracts.workspace = true
 orcaxr-gcode.workspace = true
+orcaxr-printer.workspace = true
 orcaxr-project.workspace = true
 jni.workspace = true
 

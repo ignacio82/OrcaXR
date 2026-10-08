@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/orcaxr-contracts", "crates/orcaxr-project", "crates/orcaxr-archive", "crates/orcaxr-gcode", "crates/orcaxr-wasm", "crates/orcaxr-android"]
+members = ["crates/orcaxr-contracts", "crates/orcaxr-project", "crates/orcaxr-archive", "crates/orcaxr-gcode", "crates/orcaxr-printer", "crates/orcaxr-wasm", "crates/orcaxr-android"]
 resolver = "3"
 
 [workspace.package]
@@ -13,6 +13,7 @@ orcaxr-contracts = { path = "crates/orcaxr-contracts" }
 orcaxr-project = { path = "crates/orcaxr-project" }
 orcaxr-archive = { path = "crates/orcaxr-archive" }
 orcaxr-gcode = { path = "crates/orcaxr-gcode" }
+orcaxr-printer = { path = "crates/orcaxr-printer" }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.150", features = ["float_roundtrip"] }
 ryu-js = "=1.0.3"

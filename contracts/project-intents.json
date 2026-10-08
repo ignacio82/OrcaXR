@@ -4682,6 +4682,59 @@
         "selected": "ObjectTreeSelection",
         "ignored": "Empty"
       }
+    },
+    "OptionalFlag": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "Flag"
+      }
+    },
+    "PrintJobState": {
+      "kind": "enum",
+      "values": [
+        "standby",
+        "printing",
+        "paused",
+        "complete",
+        "cancelled",
+        "error",
+        "unknown"
+      ]
+    },
+    "PrintJobTemperature": {
+      "kind": "object",
+      "fields": {
+        "actualC": "Finite",
+        "targetC": "Finite"
+      }
+    },
+    "OptionalPrintJobTemperature": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "PrintJobTemperature"
+      }
+    },
+    "PrintJobSnapshot": {
+      "kind": "object",
+      "fields": {
+        "state": "PrintJobState",
+        "klippyState": "OptionalText",
+        "filename": "OptionalText",
+        "virtualSdActive": "OptionalFlag",
+        "message": "OptionalText",
+        "progress": "OptionalFinite",
+        "currentLayer": "OptionalFinite",
+        "totalLayers": "OptionalFinite",
+        "printDurationS": "OptionalFinite",
+        "totalDurationS": "OptionalFinite",
+        "filamentUsedMm": "OptionalFinite",
+        "estimatedRemainingS": "OptionalFinite",
+        "extruder": "OptionalPrintJobTemperature",
+        "bed": "OptionalPrintJobTemperature",
+        "updatedAtMs": "Finite"
+      }
     }
   },
   "roots": [
@@ -4794,7 +4847,8 @@
     "ExplosionRequest",
     "ExplosionReply",
     "ObjectTreeRequest",
-    "ObjectTreeReply"
+    "ObjectTreeReply",
+    "PrintJobSnapshot"
   ],
   "sessionVersion": 1
 }

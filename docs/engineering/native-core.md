@@ -3537,6 +3537,33 @@ Rust matches all of them; WASM in Node and Chrome and JNI answer the 943 on
 the fixture states with the host's own folding, refuse a non-ASCII filter
 without a folder, and 605 Kotlin checks cover the wrapper.
 
+### Printer policy
+
+`orcaxr-printer` holds Moonraker workflow policy shared by every host, with
+no I/O: hosts own transports, clocks and credentials and feed it the text
+they received. `status` ports `PrintJobStatusModel`. A `/printer/objects/query`
+result replaces earlier readings; `notify_status_update` params (or a bare
+status) merge into the objects the model reads, nested records field by
+field, and a patch that names none of them as an own key is ignored. The
+projection keeps unreported fields absent, reads `canceled` as `cancelled`,
+clamps progress, accepts whole layer numbers from zero, defaults a missing
+target temperature to 0 and withholds the remaining-time extrapolation at or
+below 2% progress. Text is parsed by `canonical::parse_javascript`: the
+`JSON.parse` grammar, the last of duplicate keys and out-of-range numbers as
+infinities (then treated as unreported), within bounds above what the browser
+transport admits.
+
+Bindings: WASM `PrintJobStatus`, the JNI `printJobStatus*` exports and Kotlin
+`PrintJobStatus`. `print-job-status-vectors.mjs` records 68 browser traces
+(873 steps: lifecycles, errors and cancels, query and notification shapes,
+nested merges, numbers, text and refusals, plus 60 seeded traces); Rust,
+WASM in Node and Chrome and JNI answer every step and leave the browser's
+snapshot after each, and 1,747 Kotlin checks cover the wrapper. Porting fixed
+two browser defects with regressions: `key in PRINT_JOB_OBJECTS` matched
+`Object.prototype` names, so a `constructor` patch refreshed the snapshot,
+and merging into object literals let a `__proto__` key replace a record's
+prototype, so a patch could make the state `printing` by inheritance.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

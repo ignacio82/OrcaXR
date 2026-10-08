@@ -86,7 +86,9 @@ export class PrintJobStatusModel {
   applyNotification(params: unknown, nowMs = Date.now()): PrintJobSnapshot | null {
     const status = Array.isArray(params) ? params[0] : params;
     if (!isRecord(status)) return null;
-    if (!Object.keys(status).some((key) => key in PRINT_JOB_OBJECTS)) return null;
+    // Own keys only: `in` would also find Object.prototype names such as
+    // `constructor`, so an unrelated patch would refresh the snapshot.
+    if (!Object.keys(status).some((key) => Object.hasOwn(PRINT_JOB_OBJECTS, key))) return null;
     return this.applyStatus(status, nowMs);
   }
 
@@ -217,7 +219,10 @@ function temperature(source: Record<string, unknown> | undefined): PrintJobTempe
  * layer that changed, and replacing the record wholesale would drop the total.
  */
 function mergeRecords(previous: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
-  const merged: Record<string, unknown> = { ...previous };
+  // Without a prototype, a patch key `__proto__` is an ordinary field; on an
+  // object literal the assignment below would replace the record's prototype
+  // and let a patch supply fields (`state`, `info`) by inheritance.
+  const merged: Record<string, unknown> = Object.assign(Object.create(null) as Record<string, unknown>, previous);
   for (const [key, value] of Object.entries(patch)) {
     const existing = merged[key];
     merged[key] = isRecord(existing) && isRecord(value) ? mergeRecords(existing, value) : value;

@@ -1871,6 +1871,14 @@ credential storage, and explicit permission/error flows.
   and run the browser transport through the same policy. Preserve authoritative
   query versus partial-notification merging, reconnection generations, unknown
   readiness, tool mapping, and immutable command/job identities.
+  `orcaxr-printer` now holds the print job status model (`status`): host text
+  parsed as `JSON.parse` reads it, a full query replacing earlier readings and
+  patches merging field by field, projected into a `PrintJobSnapshot`. 68
+  browser traces (873 steps) agree in Rust, WASM (Node and Chrome) and JNI,
+  with 1,747 Kotlin checks. Porting fixed two browser defects: a patch keyed
+  only by an `Object.prototype` name refreshed the snapshot, and a `__proto__`
+  patch key supplied `print_stats` fields by inheritance. Session, submission
+  and transport policies remain.
 - [ ] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
   credential entry, and optional discovery. Discovery proposes verified endpoints
   and cannot overwrite preferences while a stale probe completes.

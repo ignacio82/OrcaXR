@@ -7127,6 +7127,84 @@ object ProjectIntents {
             is ObjectTreeReply.Ignored -> w.field("ignored") { writeEmpty(w, v.value) }
         } }
     }
+    sealed interface OptionalFlag {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalFlag
+        data class Value(val value: Boolean) : OptionalFlag
+    }
+    private fun readOptionalFlag(v: Any): OptionalFlag {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalFlag.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalFlag.Value(readFlag(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalFlag(w: ProjectIntentWriter, v: OptionalFlag) {
+        w.obj { when(v) {
+            is OptionalFlag.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalFlag.Value -> w.field("value") { writeFlag(w, v.value) }
+        } }
+    }
+    enum class PrintJobState {Standby,Printing,Paused,Complete,Cancelled,Error,Unknown}
+    private fun readPrintJobState(v: Any): PrintJobState {
+        return when(v) {"standby" -> PrintJobState.Standby;"printing" -> PrintJobState.Printing;"paused" -> PrintJobState.Paused;"complete" -> PrintJobState.Complete;"cancelled" -> PrintJobState.Cancelled;"error" -> PrintJobState.Error;"unknown" -> PrintJobState.Unknown; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrintJobState(w: ProjectIntentWriter, v: PrintJobState) {
+        w.literal(when(v) {PrintJobState.Standby -> "standby";PrintJobState.Printing -> "printing";PrintJobState.Paused -> "paused";PrintJobState.Complete -> "complete";PrintJobState.Cancelled -> "cancelled";PrintJobState.Error -> "error";PrintJobState.Unknown -> "unknown";})
+    }
+    data class PrintJobTemperature(val actualC: Double, val targetC: Double)
+    private fun readPrintJobTemperature(v: Any): PrintJobTemperature {
+        val obj = ProjectIntentJson.fields(v, setOf("actualC", "targetC"), false)
+        return PrintJobTemperature(readFinite(obj.get("actualC")), readFinite(obj.get("targetC")))
+    }
+    private fun writePrintJobTemperature(w: ProjectIntentWriter, v: PrintJobTemperature) {
+        w.obj {
+            w.field("actualC") { writeFinite(w, v.actualC) }
+            w.field("targetC") { writeFinite(w, v.targetC) }
+        }
+    }
+    sealed interface OptionalPrintJobTemperature {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalPrintJobTemperature
+        data class Value(val value: ProjectIntents.PrintJobTemperature) : OptionalPrintJobTemperature
+    }
+    private fun readOptionalPrintJobTemperature(v: Any): OptionalPrintJobTemperature {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalPrintJobTemperature.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalPrintJobTemperature.Value(readPrintJobTemperature(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalPrintJobTemperature(w: ProjectIntentWriter, v: OptionalPrintJobTemperature) {
+        w.obj { when(v) {
+            is OptionalPrintJobTemperature.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalPrintJobTemperature.Value -> w.field("value") { writePrintJobTemperature(w, v.value) }
+        } }
+    }
+    data class PrintJobSnapshot(val state: PrintJobState, val klippyState: OptionalText, val filename: OptionalText, val virtualSdActive: OptionalFlag, val message: OptionalText, val progress: OptionalFinite, val currentLayer: OptionalFinite, val totalLayers: OptionalFinite, val printDurationS: OptionalFinite, val totalDurationS: OptionalFinite, val filamentUsedMm: OptionalFinite, val estimatedRemainingS: OptionalFinite, val extruder: OptionalPrintJobTemperature, val bed: OptionalPrintJobTemperature, val updatedAtMs: Double)
+    private fun readPrintJobSnapshot(v: Any): PrintJobSnapshot {
+        val obj = ProjectIntentJson.fields(v, setOf("state", "klippyState", "filename", "virtualSdActive", "message", "progress", "currentLayer", "totalLayers", "printDurationS", "totalDurationS", "filamentUsedMm", "estimatedRemainingS", "extruder", "bed", "updatedAtMs"), false)
+        return PrintJobSnapshot(readPrintJobState(obj.get("state")), readOptionalText(obj.get("klippyState")), readOptionalText(obj.get("filename")), readOptionalFlag(obj.get("virtualSdActive")), readOptionalText(obj.get("message")), readOptionalFinite(obj.get("progress")), readOptionalFinite(obj.get("currentLayer")), readOptionalFinite(obj.get("totalLayers")), readOptionalFinite(obj.get("printDurationS")), readOptionalFinite(obj.get("totalDurationS")), readOptionalFinite(obj.get("filamentUsedMm")), readOptionalFinite(obj.get("estimatedRemainingS")), readOptionalPrintJobTemperature(obj.get("extruder")), readOptionalPrintJobTemperature(obj.get("bed")), readFinite(obj.get("updatedAtMs")))
+    }
+    private fun writePrintJobSnapshot(w: ProjectIntentWriter, v: PrintJobSnapshot) {
+        w.obj {
+            w.field("state") { writePrintJobState(w, v.state) }
+            w.field("klippyState") { writeOptionalText(w, v.klippyState) }
+            w.field("filename") { writeOptionalText(w, v.filename) }
+            w.field("virtualSdActive") { writeOptionalFlag(w, v.virtualSdActive) }
+            w.field("message") { writeOptionalText(w, v.message) }
+            w.field("progress") { writeOptionalFinite(w, v.progress) }
+            w.field("currentLayer") { writeOptionalFinite(w, v.currentLayer) }
+            w.field("totalLayers") { writeOptionalFinite(w, v.totalLayers) }
+            w.field("printDurationS") { writeOptionalFinite(w, v.printDurationS) }
+            w.field("totalDurationS") { writeOptionalFinite(w, v.totalDurationS) }
+            w.field("filamentUsedMm") { writeOptionalFinite(w, v.filamentUsedMm) }
+            w.field("estimatedRemainingS") { writeOptionalFinite(w, v.estimatedRemainingS) }
+            w.field("extruder") { writeOptionalPrintJobTemperature(w, v.extruder) }
+            w.field("bed") { writeOptionalPrintJobTemperature(w, v.bed) }
+            w.field("updatedAtMs") { writeFinite(w, v.updatedAtMs) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -7347,4 +7425,6 @@ object ProjectIntents {
     fun encodeObjectTreeRequest(value: ObjectTreeRequest): String = ProjectIntentWriter().also { writeObjectTreeRequest(it, value) }.finish()
     fun decodeObjectTreeReply(text: String): ObjectTreeReply = readObjectTreeReply(ProjectIntentJson.parse(text))
     fun encodeObjectTreeReply(value: ObjectTreeReply): String = ProjectIntentWriter().also { writeObjectTreeReply(it, value) }.finish()
+    fun decodePrintJobSnapshot(text: String): PrintJobSnapshot = readPrintJobSnapshot(ProjectIntentJson.parse(text))
+    fun encodePrintJobSnapshot(value: PrintJobSnapshot): String = ProjectIntentWriter().also { writePrintJobSnapshot(it, value) }.finish()
 }

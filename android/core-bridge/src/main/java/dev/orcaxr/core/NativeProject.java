@@ -101,6 +101,11 @@ final class NativeProject {
     static native String editorIntent(long handle);
     static native String projectPaintPalette(long handle, String request);
     static native String projectObjectTree(long handle, String request, SearchFolding folder);
+    static native long printJobStatusNew();
+    static native String printJobStatusQuery(long handle, String text, double nowMs);
+    static native String printJobStatusNotify(long handle, String text, double nowMs);
+    static native String printJobStatusReset(long handle);
+    static native String printJobStatusSnapshot(long handle);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

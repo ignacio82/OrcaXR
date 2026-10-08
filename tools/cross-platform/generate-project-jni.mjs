@@ -13,6 +13,7 @@ const source = readFileSync(
 const input = {
   int: "jint",
   long: "jlong",
+  double: "jdouble",
   boolean: "jboolean",
   String: "JString<'local>",
   "byte[]": "JByteArray<'local>",

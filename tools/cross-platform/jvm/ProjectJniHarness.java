@@ -68,6 +68,9 @@ public final class ProjectJniHarness {
     public static long objectTreeChecks(String source, byte[] mesh, String script) {
         return ProjectObjectTreeChecks.run(source, mesh, script);
     }
+    public static long printJobStatusChecks(String script) {
+        return ProjectPrintJobStatusChecks.run(script);
+    }
     /** [assets] concatenated, split at the comma-separated [lengths]. */
     public static long meshPacketChecks(String source, byte[] assets, String lengths, String script) {
         java.util.List<byte[]> split = new java.util.ArrayList<>();
@@ -161,6 +164,7 @@ public final class ProjectJniHarness {
     private static Object argument(Class<?> type) throws IOException {
         if (type == int.class) return in.readInt();
         if (type == long.class) return in.readLong();
+        if (type == double.class) return in.readDouble();
         if (type == boolean.class) return in.readBoolean();
         if (type == String.class) {
             // A negative length is a null reference (optional JNI strings).
@@ -246,6 +250,7 @@ public final class ProjectJniHarness {
             if (name.equals("svgPartChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class);
             if (name.equals("assemblyChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("objectTreeChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class);
+            if (name.equals("printJobStatusChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("meshPacketChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorPreflightChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorClipboardChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class);

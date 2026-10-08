@@ -692,6 +692,117 @@ export class PresetLibrary {
 if (Symbol.dispose) PresetLibrary.prototype[Symbol.dispose] = PresetLibrary.prototype.free;
 
 /**
+ * The print job status model: fed `/printer/objects/query` results and
+ * `notify_status_update` params as received, it answers `PrintJobSnapshot`s.
+ */
+export class PrintJobStatus {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        PrintJobStatusFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_printjobstatus_free(ptr, 0);
+    }
+    /**
+     * `undefined` when the patch concerns no object the model reads.
+     * @param {string} text
+     * @param {number} now_ms
+     * @returns {string | undefined}
+     */
+    apply_notification(text, now_ms) {
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.printjobstatus_apply_notification(this.__wbg_ptr, ptr0, len0, now_ms);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        let v2;
+        if (ret[0] !== 0) {
+            v2 = getStringFromWasm0(ret[0], ret[1]);
+            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        }
+        return v2;
+    }
+    /**
+     * @param {string} text
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    apply_query(text, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.printjobstatus_apply_query(this.__wbg_ptr, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    constructor() {
+        const ret = wasm.printjobstatus_new();
+        this.__wbg_ptr = ret;
+        PrintJobStatusFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @returns {string}
+     */
+    reset() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.printjobstatus_reset(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    snapshot() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.printjobstatus_snapshot(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) PrintJobStatus.prototype[Symbol.dispose] = PrintJobStatus.prototype.free;
+
+/**
  * A loaded catalog: compiled, or refused with its diagnostics.
  */
 export class ProfileCatalog {
@@ -4234,6 +4345,9 @@ const CapturedSelectionFinalization = (typeof FinalizationRegistry === 'undefine
 const PresetLibraryFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_presetlibrary_free(ptr, 1));
+const PrintJobStatusFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_printjobstatus_free(ptr, 1));
 const ProfileCatalogFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_profilecatalog_free(ptr, 1));

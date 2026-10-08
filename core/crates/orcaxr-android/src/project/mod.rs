@@ -20,6 +20,7 @@ mod json_sink;
 mod library;
 mod model;
 mod preflight;
+mod printer;
 mod registry;
 mod timestamps;
 use archive::*;
@@ -28,7 +29,7 @@ use editor::*;
 use jni::{
     JNIEnv,
     objects::{JByteArray, JCharArray, JClass, JDoubleArray, JLongArray, JObject, JString},
-    sys::{jboolean, jbyteArray, jcharArray, jdoubleArray, jint, jlong, jstring},
+    sys::{jboolean, jbyteArray, jcharArray, jdouble, jdoubleArray, jint, jlong, jstring},
 };
 use library::*;
 use model::*;
@@ -54,6 +55,7 @@ use orcaxr_project::{
     store::ProjectSnapshot,
 };
 use preflight::*;
+use printer::*;
 use registry::Registry;
 use std::{
     io::{self, Write},
@@ -115,6 +117,7 @@ enum Record {
     SvgPart(Box<orcaxr_project::svg::PreparedSvgPart>),
     PaintOverlay(Box<orcaxr_project::facets::overlay::Overlay>),
     PickScene(Box<orcaxr_project::picking::PickScene>),
+    PrintJobStatus(Box<orcaxr_printer::status::JobStatus>),
 }
 fn registry() -> &'static Registry<Record> {
     static REGISTRY: OnceLock<Registry<Record>> = OnceLock::new();

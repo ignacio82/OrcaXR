@@ -26,13 +26,50 @@ pub fn parse(source: &str) -> Result<Value, CoreError> {
         source,
         offset: 0,
         nodes: 0,
+        max_nodes: MAX_NODES,
+        max_depth: MAX_DEPTH,
+        saturate: false,
     };
-    let value = parser.value(0)?;
-    parser.space();
-    if parser.offset != source.len() {
-        return Err(CoreError::invalid_json());
+    parser.document()
+}
+
+/// Bounds for [`parse_javascript`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct JsonLimits {
+    pub bytes: usize,
+    pub nodes: usize,
+    pub depth: usize,
+}
+
+/// `JSON.parse` over text a host received (a printer's reply or event): the
+/// same grammar, the last of duplicate keys, and a number beyond binary64's
+/// range read as the signed infinity JavaScript makes it. Callers must check
+/// finiteness; such a value never reaches the canonical writer. Input beyond
+/// `limits` is refused.
+pub fn parse_javascript(source: &str, limits: JsonLimits) -> Result<Value, CoreError> {
+    if source.len() > limits.bytes {
+        return Err(CoreError::input_limit());
     }
-    Ok(value)
+    let mut parser = Parser {
+        source,
+        offset: 0,
+        nodes: 0,
+        max_nodes: limits.nodes,
+        max_depth: limits.depth,
+        saturate: true,
+    };
+    parser.document()
+}
+
+impl Parser<'_> {
+    fn document(&mut self) -> Result<Value, CoreError> {
+        let value = self.value(0)?;
+        self.space();
+        if self.offset != self.source.len() {
+            return Err(CoreError::invalid_json());
+        }
+        Ok(value)
+    }
 }
 
 impl Value {
@@ -108,6 +145,10 @@ struct Parser<'a> {
     source: &'a str,
     offset: usize,
     nodes: usize,
+    max_nodes: usize,
+    max_depth: usize,
+    /// Read an out-of-range number as JavaScript does instead of refusing it.
+    saturate: bool,
 }
 
 impl Parser<'_> {
@@ -144,7 +185,7 @@ impl Parser<'_> {
     fn value(&mut self, depth: usize) -> Result<Value, CoreError> {
         self.space();
         self.nodes += 1;
-        if depth > MAX_DEPTH || self.nodes > MAX_NODES {
+        if depth > self.max_depth || self.nodes > self.max_nodes {
             return Err(CoreError::input_limit());
         }
         match self.peek() {
@@ -269,7 +310,7 @@ impl Parser<'_> {
         let number: f64 = self.source[start..self.offset]
             .parse()
             .map_err(|_| CoreError::invalid_json())?;
-        if !number.is_finite() {
+        if !number.is_finite() && !self.saturate {
             return Err(CoreError::non_finite());
         }
         Ok(Value::Number(number))

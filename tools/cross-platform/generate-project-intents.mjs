@@ -147,6 +147,7 @@ assert.deepEqual(schema.roots, [
   "ExplosionReply",
   "ObjectTreeRequest",
   "ObjectTreeReply",
+  "PrintJobSnapshot",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

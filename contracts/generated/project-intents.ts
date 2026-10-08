@@ -4683,6 +4683,59 @@ const shapes = {
       "selected": "ObjectTreeSelection",
       "ignored": "Empty"
     }
+  },
+  "OptionalFlag": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "Flag"
+    }
+  },
+  "PrintJobState": {
+    "kind": "enum",
+    "values": [
+      "standby",
+      "printing",
+      "paused",
+      "complete",
+      "cancelled",
+      "error",
+      "unknown"
+    ]
+  },
+  "PrintJobTemperature": {
+    "kind": "object",
+    "fields": {
+      "actualC": "Finite",
+      "targetC": "Finite"
+    }
+  },
+  "OptionalPrintJobTemperature": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "PrintJobTemperature"
+    }
+  },
+  "PrintJobSnapshot": {
+    "kind": "object",
+    "fields": {
+      "state": "PrintJobState",
+      "klippyState": "OptionalText",
+      "filename": "OptionalText",
+      "virtualSdActive": "OptionalFlag",
+      "message": "OptionalText",
+      "progress": "OptionalFinite",
+      "currentLayer": "OptionalFinite",
+      "totalLayers": "OptionalFinite",
+      "printDurationS": "OptionalFinite",
+      "totalDurationS": "OptionalFinite",
+      "filamentUsedMm": "OptionalFinite",
+      "estimatedRemainingS": "OptionalFinite",
+      "extruder": "OptionalPrintJobTemperature",
+      "bed": "OptionalPrintJobTemperature",
+      "updatedAtMs": "Finite"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -5250,6 +5303,11 @@ export type ProjectObjectTreeRowsWire = readonly ProjectObjectTreeRowWire[];
 export interface ProjectObjectTreePageWire {readonly totalRows: ProjectCounterWire;readonly focusKey: ProjectOptionalTextWire;readonly filterActive: ProjectFlagWire;readonly rows: ProjectObjectTreeRowsWire;}
 export interface ProjectObjectTreeSelectionWire {readonly refs: ProjectObjectTreeEntitiesWire;readonly primary: ProjectOptionalObjectTreeEntityWire;readonly anchorKey: ProjectOptionalTextWire;}
 export type ProjectObjectTreeReplyWire = {readonly page:ProjectObjectTreePageWire} | {readonly selected:ProjectObjectTreeSelectionWire} | {readonly ignored:ProjectEmptyWire};
+export type ProjectOptionalFlagWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectFlagWire};
+export type ProjectPrintJobStateWire = "standby" | "printing" | "paused" | "complete" | "cancelled" | "error" | "unknown";
+export interface ProjectPrintJobTemperatureWire {readonly actualC: ProjectFiniteWire;readonly targetC: ProjectFiniteWire;}
+export type ProjectOptionalPrintJobTemperatureWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectPrintJobTemperatureWire};
+export interface ProjectPrintJobSnapshotWire {readonly state: ProjectPrintJobStateWire;readonly klippyState: ProjectOptionalTextWire;readonly filename: ProjectOptionalTextWire;readonly virtualSdActive: ProjectOptionalFlagWire;readonly message: ProjectOptionalTextWire;readonly progress: ProjectOptionalFiniteWire;readonly currentLayer: ProjectOptionalFiniteWire;readonly totalLayers: ProjectOptionalFiniteWire;readonly printDurationS: ProjectOptionalFiniteWire;readonly totalDurationS: ProjectOptionalFiniteWire;readonly filamentUsedMm: ProjectOptionalFiniteWire;readonly estimatedRemainingS: ProjectOptionalFiniteWire;readonly extruder: ProjectOptionalPrintJobTemperatureWire;readonly bed: ProjectOptionalPrintJobTemperatureWire;readonly updatedAtMs: ProjectFiniteWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -5580,3 +5638,6 @@ export function encodeProjectObjectTreeRequest(value:ProjectObjectTreeRequestWir
 export function captureProjectObjectTreeReply(value:unknown):ProjectObjectTreeReplyWire { return captureIntent("ObjectTreeReply",value,shapes,limits) as ProjectObjectTreeReplyWire; }
 export function decodeProjectObjectTreeReply(text:string):ProjectObjectTreeReplyWire { return captureProjectObjectTreeReply(parseIntentJson(text,limits)); }
 export function encodeProjectObjectTreeReply(value:ProjectObjectTreeReplyWire):string { return JSON.stringify(captureProjectObjectTreeReply(value)); }
+export function captureProjectPrintJobSnapshot(value:unknown):ProjectPrintJobSnapshotWire { return captureIntent("PrintJobSnapshot",value,shapes,limits) as ProjectPrintJobSnapshotWire; }
+export function decodeProjectPrintJobSnapshot(text:string):ProjectPrintJobSnapshotWire { return captureProjectPrintJobSnapshot(parseIntentJson(text,limits)); }
+export function encodeProjectPrintJobSnapshot(value:ProjectPrintJobSnapshotWire):string { return JSON.stringify(captureProjectPrintJobSnapshot(value)); }

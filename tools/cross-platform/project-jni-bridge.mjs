@@ -44,6 +44,7 @@ export function startProjectJni(profile = "debug") {
   signatures.meshPacketChecks = ["String", "byte[]", "String", "String"];
   signatures.assemblyChecks = ["String"];
   signatures.objectTreeChecks = ["String", "byte[]", "String"];
+  signatures.printJobStatusChecks = ["String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -111,6 +112,11 @@ export function startProjectJni(profile = "debug") {
     if (type === "long") {
       const b = Buffer.alloc(8);
       b.writeBigInt64BE(BigInt(v));
+      return b;
+    }
+    if (type === "double") {
+      const b = Buffer.alloc(8);
+      b.writeDoubleBE(v);
       return b;
     }
     if (type === "boolean") return Buffer.from([v ? 1 : 0]);
@@ -1042,7 +1048,25 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return call("editorIntent", this.handle);
     }
   }
+  class PrintJobStatus extends Handle {
+    constructor() {
+      super(call("printJobStatusNew"));
+    }
+    apply_query(text, nowMs) {
+      return call("printJobStatusQuery", this.handle, text, nowMs);
+    }
+    apply_notification(text, nowMs) {
+      return call("printJobStatusNotify", this.handle, text, nowMs);
+    }
+    reset() {
+      return call("printJobStatusReset", this.handle);
+    }
+    snapshot() {
+      return call("printJobStatusSnapshot", this.handle);
+    }
+  }
   return {
+    PrintJobStatus,
     ProjectUpload,
     ProjectSelectionInput,
     ProjectArchiveUpload,

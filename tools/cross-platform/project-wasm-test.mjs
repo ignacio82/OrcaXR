@@ -25,6 +25,7 @@ import { replayEmboss } from "./emboss-replay.mjs";
 import { replaySvgParts } from "./svg-part-replay.mjs";
 import { replayMeshPackets } from "./mesh-packet-replay.mjs";
 import { replayObjectTree } from "./object-tree-replay.mjs";
+import { replayPrintJobStatus } from "./print-job-status-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -210,6 +211,11 @@ if (isMainThread) {
         result.objectTreeRefusals,
       ],
       [5, 367, 546, 21, 9],
+    );
+    // The print job status model: every trace step and the snapshot after it.
+    assert.deepEqual(
+      [result.printJobSnapshots, result.printJobIgnored, result.printJobRefusals],
+      [790, 76, 7],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -607,6 +613,12 @@ if (isMainThread) {
       },
     },
   );
+  const printJobs = replayPrintJobStatus(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/print-job-status-vectors.json", root)),
+    ),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -643,6 +655,7 @@ if (isMainThread) {
       ...packets,
       ...assembled,
       ...trees,
+      ...printJobs,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

@@ -154,4 +154,29 @@ test('formats durations and declares exactly the objects it subscribes to', () =
   ]);
 });
 
+// A patch keyed only by an Object.prototype name concerns none of these
+// objects; `in` once matched it and refreshed the snapshot.
+test('ignores a notification keyed only by an Object.prototype name', () => {
+  const model = new PrintJobStatusModel();
+  const seeded = model.applyQuery(QUERY, 1_000);
+  for (const key of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
+    assert.equal(model.applyNotification(JSON.parse(`[{"${key}": {"state": "error"}}, 1]`), 2_000), null, key);
+  }
+  assert.equal(model.snapshot, seeded);
+});
+
+// Merging assigned into an object literal, so a `__proto__` patch key replaced
+// the record's prototype and its fields leaked in by inheritance.
+test('a __proto__ field in a patch is data, never inherited state', () => {
+  const model = new PrintJobStatusModel();
+  model.applyQuery({ status: { print_stats: { filename: 'a.gcode' } } }, 1_000);
+  const snapshot = model.applyNotification(
+    JSON.parse('[{"print_stats": {"__proto__": {"state": "printing", "info": {"total_layer": 9}}}}, 1]'),
+    2_000,
+  );
+  assert.equal(snapshot?.state, 'unknown');
+  assert.equal(snapshot?.totalLayers, undefined);
+  assert.equal(snapshot?.filename, 'a.gcode');
+});
+
 console.log(`\nPrint job status: ${passed} tests passed.`);

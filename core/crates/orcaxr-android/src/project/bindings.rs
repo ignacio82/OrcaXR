@@ -521,6 +521,34 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_printJobStatusNew, print_job_status_new, jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printJobStatusQuery, print_job_status_query, jstring,
+    handle: jlong,
+    text: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printJobStatusNotify, print_job_status_notify, jstring,
+    handle: jlong,
+    text: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printJobStatusReset, print_job_status_reset, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printJobStatusSnapshot, print_job_status_snapshot, jstring,
+    handle: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,
