@@ -53,6 +53,9 @@ const cssTotal = css.reduce((sum, file) => sum + file.bytes, 0);
 // Raised again from 10,500,000 on 2026-08-25 for the immersive shell redesign,
 // which added ~29 KB of spatial UI and moved ~66 KB of it out of the main chunk
 // into its own on-demand `immersive` chunk — the main chunk fell 37 KB.
-assert.ok(jsTotal <= 10_600_000, `JavaScript total is ${jsTotal} bytes (budget 10,600,000).`);
+// Raised again from 10,600,000 on 2026-10-08 when canonical admission gained the
+// schema-1 shape table generated from the native core (7.5 KB, in the lazily
+// loaded serializer chunk; the main chunk did not grow).
+assert.ok(jsTotal <= 10_650_000, `JavaScript total is ${jsTotal} bytes (budget 10,650,000).`);
 assert.ok(cssTotal <= 200_000, `CSS total is ${cssTotal} bytes (budget 200,000).`);
 console.log(`Bundle budgets passed: main=${main.bytes}, JS total=${jsTotal}, CSS total=${cssTotal}.`);
