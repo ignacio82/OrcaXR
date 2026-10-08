@@ -236,6 +236,18 @@ pub(super) fn session_capabilities(
     })?;
     string(env, json)
 }
+pub(super) fn session_render(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_render_request)?;
+    let json = with_session(handle, |s| {
+        let page = s.render_page(&request).map_err(|refusal| refusal.code())?;
+        encoded(&page, wire::encode_render_page)
+    })?;
+    string(env, json)
+}
 pub(super) fn project_settings_targets(
     env: &mut JNIEnv<'_>,
     handle: jlong,

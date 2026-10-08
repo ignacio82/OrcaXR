@@ -2914,6 +2914,86 @@
         "total": "Counter",
         "actions": "ActionCapabilityList"
       }
+    },
+    "RenderCursor": {
+      "kind": "object",
+      "fields": {
+        "revision": "Counter",
+        "semanticHash": "Fingerprint"
+      }
+    },
+    "OptionalRenderCursor": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "RenderCursor"
+      }
+    },
+    "RenderRequest": {
+      "kind": "object",
+      "fields": {
+        "base": "OptionalRenderCursor",
+        "target": "OptionalRenderCursor",
+        "start": "Counter",
+        "count": "Counter"
+      }
+    },
+    "RenderPlate": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id",
+        "order": "Order",
+        "printable": "Flag",
+        "active": "Flag"
+      }
+    },
+    "RenderInstance": {
+      "kind": "object",
+      "fields": {
+        "instanceId": "Id",
+        "objectId": "Id",
+        "plateId": "Id",
+        "transform": "Transform",
+        "printable": "Flag"
+      }
+    },
+    "RenderVolume": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id",
+        "objectId": "Id",
+        "role": "VolumeRoleName",
+        "assetId": "Id",
+        "triangleCount": "Counter",
+        "transform": "Transform",
+        "color": "OptionalText"
+      }
+    },
+    "RenderChange": {
+      "kind": "union",
+      "variants": {
+        "plate": "RenderPlate",
+        "instance": "RenderInstance",
+        "volume": "RenderVolume",
+        "removePlate": "Id",
+        "removeInstance": "Id",
+        "removeVolume": "Id"
+      }
+    },
+    "RenderChanges": {
+      "kind": "array",
+      "items": "RenderChange",
+      "min": 0,
+      "max": 64
+    },
+    "RenderPage": {
+      "kind": "object",
+      "fields": {
+        "base": "OptionalRenderCursor",
+        "target": "RenderCursor",
+        "total": "Counter",
+        "changes": "RenderChanges"
+      }
     }
   },
   "roots": [
@@ -2972,7 +3052,9 @@
     "PaintPaletteRequest",
     "PaintPalette",
     "CapabilityRequest",
-    "CapabilityPage"
+    "CapabilityPage",
+    "RenderRequest",
+    "RenderPage"
   ],
   "sessionVersion": 1
 }

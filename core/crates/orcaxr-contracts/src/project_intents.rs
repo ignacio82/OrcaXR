@@ -151,8 +151,25 @@ impl Write for Output {
         Ok(())
     }
 }
+/// Numbers as JavaScript writes them (`JSON.stringify`), so every binding's
+/// wire text is byte-identical to the browser's: `1` not `1.0`, `0` for `-0`.
+struct JsNumbers;
+impl serde_json::ser::Formatter for JsNumbers {
+    fn write_f64<W: ?Sized + Write>(&mut self, writer: &mut W, value: f64) -> std::io::Result<()> {
+        // Only finite values reach the formatter; the serializer writes the
+        // rest as `null`, which every decoder then refuses.
+        if value == 0.0 {
+            writer.write_all(b"0")
+        } else {
+            writer.write_all(ryu_js::Buffer::new().format_finite(value).as_bytes())
+        }
+    }
+}
 pub(crate) fn encode(value: &impl serde::Serialize) -> Result<String, InvalidIntent> {
     let mut output = Output(Vec::new());
-    serde_json::to_writer(&mut output, value).map_err(|_| InvalidIntent)?;
+    let mut serializer = serde_json::Serializer::with_formatter(&mut output, JsNumbers);
+    value
+        .serialize(&mut serializer)
+        .map_err(|_| InvalidIntent)?;
     String::from_utf8(output.0).map_err(|_| InvalidIntent)
 }

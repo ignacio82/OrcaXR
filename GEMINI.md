@@ -177,16 +177,16 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   first (prepare errors become invalidRequest), local apply errors keep their message, and
   batched auto-pair reconciles guard on a scratch-store prediction of the edited state.
 - Prepared command intents use ASCII JSON with UTF-16 unit arrays for all text.
-  The shared schema generates TypeScript, Rust and Kotlin types and converters.
+  The shared schema generates TS/Rust/Kotlin types and converters; Rust writes JS numbers.
   Reject duplicate/unknown/missing fields, positional objects, unsupported versions
   and exhausted byte/node/depth budgets before domain execution. Local submission
   captures data properties without getters or mutable caller-owned descendants.
-  Kotlin protocol JSON uses a portable bounded parser and shared lexical checks.
-  Android JsonReader still needs those checks for G-code metadata decoding.
-- A pending `EditorSession.open` owns its source revision/asset guard and operation
-  identity. Newer opens, reset and disposal invalidate it; a failed newer open
-  cannot revive an older read. Cooperative cancellation never replaces the final
-  owner/identity check before commit.
+  Kotlin protocol JSON uses a portable bounded parser and shared lexical checks (Android
+  JsonReader needs them for G-code metadata). Renderers page `render` deltas from the shown
+  snapshot (unknown base = rebuild); colours use `volumeDisplayColor`, as the Three surface does.
+- A pending `EditorSession.open` owns its source revision/asset guard and operation identity.
+  Newer opens, reset and disposal invalidate it; a failed newer open cannot revive an older
+  read. Cooperative cancellation never replaces the final owner/identity check before commit.
 - `ActionRegistry` is the sole invocation/availability gateway for DOM, XR,
   menus, shortcuts, command palette and contextual Objects actions. A capability
   marked implemented needs a real handler and evidence. DOM-only dialogs declare

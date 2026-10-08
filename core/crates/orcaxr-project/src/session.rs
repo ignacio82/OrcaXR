@@ -119,6 +119,7 @@ pub struct ProjectSession<P> {
     pending: VecDeque<Pending>,
     staging: StagingPool,
     open_operation: std::sync::Weak<()>,
+    render: crate::render::RenderFeed,
 }
 impl<P: TimestampPolicy> ProjectSession<P> {
     /// The host supplies a fresh connection nonce independently of project IDs.
@@ -156,6 +157,7 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             pending: VecDeque::new(),
             staging: StagingPool::default(),
             open_operation: std::sync::Weak::new(),
+            render: crate::render::RenderFeed::default(),
         })
     }
     /// Local immutable views for the host's future bounded projections. These
@@ -307,9 +309,22 @@ impl<P: TimestampPolicy> ProjectSession<P> {
         self.disposed = true;
         self.open_operation = std::sync::Weak::new();
         self.staging.clear();
+        self.render.clear();
         for pending in &mut self.pending {
             pending.release_prepared();
         }
+    }
+    /// A page of the renderer deltas from the snapshot a host shows to its
+    /// target, over acknowledged state only (`render`).
+    pub fn render_page(
+        &mut self,
+        request: &wire::RenderRequest,
+    ) -> Result<wire::RenderPage, crate::render::Refusal> {
+        if self.disposed {
+            return Err(crate::render::Refusal::Disposed);
+        }
+        let current = self.bus.snapshot();
+        self.render.page(&current, request)
     }
 
     pub fn submit(&mut self, text: &str) -> Submission {

@@ -3237,10 +3237,14 @@ with a stale guard — mostly valid and sometimes not. Requests are raw JSON,
 so a shape the contract refuses is refused by both sessions' own decoders.
 After every step the reply, canonical state, semantic hash, asset
 fingerprint, selection, history, history revision and the registry facts
-the session decides must agree. CI runs twelve seeds of a hundred steps over
-each of the 19 states (22,800 steps, about a third of them refusals);
+the session decides must agree, and a host following each session's
+renderer deltas from what it shows — with seeded page sizes, an occasional
+unknown base and an occasional oversized page — must receive the same pages
+as text. CI runs twelve seeds of a hundred steps over each of the 19 states
+(22,800 steps, about a third of them refusals, and 23,154 render pages);
 `ORCAXR_DIFFERENTIAL_SEEDS` and `ORCAXR_DIFFERENTIAL_STEPS` widen the search
-locally, and 142,500 steps over fifty seeds agreed throughout.
+locally, and 142,500 steps over fifty seeds agreed throughout, with 144,585
+render pages.
 
 ### Capability exchange
 
@@ -3268,6 +3272,49 @@ pages byte for byte; WASM in Node and Chrome and JNI open each state as a
 real session, take the same selection and edit (matching its replies) and
 match the pages, with 183 refusals; 15 Kotlin checks cover the wrapper,
 including a selection the session, not the host, reports.
+
+### Renderer deltas
+
+`render` in the project crate (`renderProjection.ts` in the browser) is the
+renderer's view of a project, normalized so one edit changes few records: a
+plate carries its order, printable flag and whether it is active; an
+instance its object, plate, transform and printable flag; a volume — once
+per object, not per instance — its object, role, mesh asset, triangle count,
+transform and resolved display colour (a physical tool's colour or a mixed
+recipe's, absent when nothing is assigned). Switching plates touches plates,
+recolouring a tool touches the volumes that use it, and moving an instance
+touches that instance alone. Names, paint and settings are other
+projections; geometry bytes are read from the asset repository by ID. The
+browser's Three surface resolves colours through the same rule.
+
+A host subscribes by revision rather than receiving the project after each
+edit. A `RenderRequest` names the snapshot the host shows (`base`, a
+revision and semantic hash), optionally the snapshot being paged (`target`,
+the session's acknowledged one when absent), a start and a count of at most
+64. The `RenderPage` carries the base it applies to, the target, the total
+and the changes: removals first, children before parents, in the base's
+order, then new or changed records, parents before children, in the
+target's order. The session retains the last eight snapshots it served, so
+a host pages toward a target even after newer edits and asks for the next
+delta from the target it applied; a base it no longer holds is answered
+from empty with no base, which tells the host to rebuild, and a released
+target refuses `stale`. Disposal releases them and refuses `disposed`.
+
+Bindings: WASM `ProjectSession.render`, the JNI export `sessionRender` and
+Kotlin `ProjectSession.render`.
+
+`render-delta-vectors.mjs` follows real TypeScript sessions opened from the
+19 distinct trace states through a full sync, an empty delta, and deltas
+after acknowledged moves, an added and re-activated plate, an object's
+filament, a duplicate, printable toggles paged across a newer edit, a
+deletion and renames, then an unknown base, an unknown target, an oversized
+page and the released opening snapshot. Rust, WASM in Node and Chrome and
+JNI open each state as a real session, take the same edits (matching their
+replies) and answer all 259 pages byte for byte, with 57 refusals; a Rust
+check applies the delta between every pair of corpus projects to its base
+and rebuilds the target, and 41 Kotlin checks cover the wrapper. Intent
+encoding in Rust now writes numbers as JavaScript does (`1`, not `1.0`), so
+every binding's wire text is byte-identical to the browser's.
 
 ### Preset graph and profile catalog
 

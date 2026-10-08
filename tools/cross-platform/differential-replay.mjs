@@ -2,7 +2,8 @@
 // TypeScript session (the authority) and the Rust session over WASM, side by
 // side, and are compared after every step — the reply, the canonical state
 // and its semantic hash, the asset fingerprint, selection, history, history
-// revision and the registry facts the session decides. Each step is generated
+// revision, the registry facts the session decides and the renderer deltas
+// a host following each session would apply. Each step is generated
 // from the authority's current state, mostly valid and sometimes not, so
 // refusals are compared too. The fixed seeds run in CI;
 // ORCAXR_DIFFERENTIAL_SEEDS=<count> widens the search locally.
@@ -17,7 +18,18 @@ import {
 import { InMemoryAssetRepository } from "../../web/src/project/assets.ts";
 import { canonicalStringify } from "../../web/src/project/domain/canonical.ts";
 import { canonicalUiFacts } from "../../web/src/actions/canonicalUiFacts.ts";
-import { encodeProjectCapabilityRequest } from "../../contracts/generated/project-intents.ts";
+import {
+  RenderFeed,
+  RenderRefusal,
+  renderPageWire,
+  renderRequestFromWire,
+} from "../../web/src/project/renderProjection.ts";
+import {
+  decodeProjectRenderRequest,
+  encodeProjectCapabilityRequest,
+  encodeProjectRenderPage,
+  encodeProjectRenderRequest,
+} from "../../contracts/generated/project-intents.ts";
 
 const root = new URL("../../", import.meta.url);
 const json = async (path) =>
@@ -548,7 +560,60 @@ function generate(rng, state, ids, counter, snapshot) {
 }
 
 let comparedSteps = 0,
-  refusedSteps = 0;
+  refusedSteps = 0,
+  renderPages = 0,
+  renderChanges = 0;
+const text = (u) => String.fromCharCode(...u);
+const cursorWire = (cursor) =>
+  cursor
+    ? {
+        value: {
+          revision: cursor.revision,
+          semanticHash: units(cursor.semanticHash),
+        },
+      }
+    : { absent: {} };
+// One render request through both sessions, compared as text. Refusals must
+// agree on their code.
+function renderBoth(feed, native, request, where) {
+  const wireRequest = encodeProjectRenderRequest({
+    base: cursorWire(request.base),
+    target: cursorWire(request.target),
+    start: request.start,
+    count: request.count,
+  });
+  let expected, refusal;
+  try {
+    expected = encodeProjectRenderPage(
+      renderPageWire(
+        feed.page(
+          renderRequestFromWire(decodeProjectRenderRequest(wireRequest), text),
+        ),
+        units,
+      ),
+    );
+  } catch (error) {
+    if (!(error instanceof RenderRefusal)) throw error;
+    refusal = error.code.replace("-", "_");
+  }
+  let actual, nativeRefusal;
+  try {
+    actual = native.render(wireRequest);
+  } catch (error) {
+    nativeRefusal = String(error?.message ?? error);
+  }
+  if (refusal || nativeRefusal) {
+    if (!refusal || !nativeRefusal?.includes(refusal))
+      throw Error(`${where}: render refusal ${refusal} vs ${nativeRefusal}`);
+    return undefined;
+  }
+  if (actual !== expected)
+    throw Error(
+      `${where}: render page differs\nTS   ${expected.slice(0, 600)}\nRust ${actual.slice(0, 600)}`,
+    );
+  renderPages++;
+  return JSON.parse(expected);
+}
 for (let seed = 1; seed <= SEEDS; seed++) {
   for (const fixture of distinct) {
     const rng = random(seed * 7919 + distinct.indexOf(fixture));
@@ -601,6 +666,34 @@ for (let seed = 1; seed <= SEEDS; seed++) {
     upload.append_asset(0, bytes);
     upload.finish_asset();
     const native = upload.open(Float64Array.from(nonce));
+    // A host following each session's renderer deltas from what it shows,
+    // paging with its own seeded sizes, sometimes from a base neither
+    // session served and sometimes asking for an oversized page.
+    const feed = new RenderFeed(() => reference.project.getSnapshot());
+    const renderRng = random(seed * 104729 + distinct.indexOf(fixture));
+    let shown;
+    const renderSync = (where) => {
+      if (renderRng.chance(0.02))
+        renderBoth(feed, native, { base: shown, start: 0, count: 65 }, where);
+      const base = renderRng.chance(0.03)
+        ? { revision: 9_007_199_254_740_991, semanticHash: "fnv1a64:0" }
+        : shown;
+      const count = 1 + renderRng.int(64);
+      const first = renderBoth(feed, native, { base, start: 0, count }, where);
+      const target = {
+        revision: first.target.revision,
+        semanticHash: text(first.target.semanticHash),
+      };
+      renderChanges += first.changes.length;
+      for (let start = count; start < first.total; start += count)
+        renderChanges += renderBoth(
+          feed,
+          native,
+          { base, target, start, count },
+          where,
+        ).changes.length;
+      shown = target;
+    };
     let sequence = 0;
     const ids = { n: 0 };
     const exchange = async (operation, step) => {
@@ -700,6 +793,7 @@ for (let seed = 1; seed <= SEEDS; seed++) {
             },
           };
         if (operation) await exchange(operation, step);
+        renderSync(`${label} step ${step}`);
         const want = referenceObserve(reference, assets);
         const got = nativeObserve(native);
         for (const key of Object.keys(want))
@@ -756,5 +850,7 @@ console.log(
     states: distinct.length,
     steps: comparedSteps,
     refusals: refusedSteps,
+    renderPages,
+    renderChanges,
   }),
 );

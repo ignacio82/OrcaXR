@@ -438,6 +438,20 @@ impl ProjectSession {
             .map_err(|refusal| error(refusal.code()))?;
         wire::encode_capability_page(&page).map_err(|_| error("output_limit"))
     }
+    /// A `RenderRequest`: a page of the renderer deltas from the snapshot the
+    /// host shows to the session's acknowledged one; returns a `RenderPage`.
+    pub fn render(&mut self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request = wire::decode_render_request(request).map_err(|_| error("invalid_request"))?;
+        let page = self
+            .inner
+            .render_page(&request)
+            .map_err(|refusal| error(refusal.code()))?;
+        wire::encode_render_page(&page).map_err(|_| error("output_limit"))
+    }
     pub fn asset_fingerprint(&self) -> String {
         self.inner.assets().bundle_fingerprint().into()
     }

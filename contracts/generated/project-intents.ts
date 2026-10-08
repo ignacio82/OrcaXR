@@ -2915,6 +2915,86 @@ const shapes = {
       "total": "Counter",
       "actions": "ActionCapabilityList"
     }
+  },
+  "RenderCursor": {
+    "kind": "object",
+    "fields": {
+      "revision": "Counter",
+      "semanticHash": "Fingerprint"
+    }
+  },
+  "OptionalRenderCursor": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "RenderCursor"
+    }
+  },
+  "RenderRequest": {
+    "kind": "object",
+    "fields": {
+      "base": "OptionalRenderCursor",
+      "target": "OptionalRenderCursor",
+      "start": "Counter",
+      "count": "Counter"
+    }
+  },
+  "RenderPlate": {
+    "kind": "object",
+    "fields": {
+      "plateId": "Id",
+      "order": "Order",
+      "printable": "Flag",
+      "active": "Flag"
+    }
+  },
+  "RenderInstance": {
+    "kind": "object",
+    "fields": {
+      "instanceId": "Id",
+      "objectId": "Id",
+      "plateId": "Id",
+      "transform": "Transform",
+      "printable": "Flag"
+    }
+  },
+  "RenderVolume": {
+    "kind": "object",
+    "fields": {
+      "volumeId": "Id",
+      "objectId": "Id",
+      "role": "VolumeRoleName",
+      "assetId": "Id",
+      "triangleCount": "Counter",
+      "transform": "Transform",
+      "color": "OptionalText"
+    }
+  },
+  "RenderChange": {
+    "kind": "union",
+    "variants": {
+      "plate": "RenderPlate",
+      "instance": "RenderInstance",
+      "volume": "RenderVolume",
+      "removePlate": "Id",
+      "removeInstance": "Id",
+      "removeVolume": "Id"
+    }
+  },
+  "RenderChanges": {
+    "kind": "array",
+    "items": "RenderChange",
+    "min": 0,
+    "max": 64
+  },
+  "RenderPage": {
+    "kind": "object",
+    "fields": {
+      "base": "OptionalRenderCursor",
+      "target": "RenderCursor",
+      "total": "Counter",
+      "changes": "RenderChanges"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -3264,6 +3344,15 @@ export interface ProjectActionCapabilityWire {readonly id: ProjectEditTextWire;r
 export type ProjectActionCapabilityListWire = readonly ProjectActionCapabilityWire[];
 export interface ProjectWorkspaceFactsWire {readonly modelCount: ProjectCounterWire;readonly plateCount: ProjectCounterWire;readonly hasSelection: ProjectFlagWire;readonly hasInstanceSelection: ProjectFlagWire;readonly canUndo: ProjectFlagWire;readonly canRedo: ProjectFlagWire;readonly dirty: ProjectFlagWire;}
 export interface ProjectCapabilityPageWire {readonly sourceRevision: ProjectCounterWire;readonly historyRevision: ProjectCounterWire;readonly facts: ProjectWorkspaceFactsWire;readonly total: ProjectCounterWire;readonly actions: ProjectActionCapabilityListWire;}
+export interface ProjectRenderCursorWire {readonly revision: ProjectCounterWire;readonly semanticHash: ProjectFingerprintWire;}
+export type ProjectOptionalRenderCursorWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectRenderCursorWire};
+export interface ProjectRenderRequestWire {readonly base: ProjectOptionalRenderCursorWire;readonly target: ProjectOptionalRenderCursorWire;readonly start: ProjectCounterWire;readonly count: ProjectCounterWire;}
+export interface ProjectRenderPlateWire {readonly plateId: ProjectIdWire;readonly order: ProjectOrderWire;readonly printable: ProjectFlagWire;readonly active: ProjectFlagWire;}
+export interface ProjectRenderInstanceWire {readonly instanceId: ProjectIdWire;readonly objectId: ProjectIdWire;readonly plateId: ProjectIdWire;readonly transform: ProjectTransformWire;readonly printable: ProjectFlagWire;}
+export interface ProjectRenderVolumeWire {readonly volumeId: ProjectIdWire;readonly objectId: ProjectIdWire;readonly role: ProjectVolumeRoleNameWire;readonly assetId: ProjectIdWire;readonly triangleCount: ProjectCounterWire;readonly transform: ProjectTransformWire;readonly color: ProjectOptionalTextWire;}
+export type ProjectRenderChangeWire = {readonly plate:ProjectRenderPlateWire} | {readonly instance:ProjectRenderInstanceWire} | {readonly volume:ProjectRenderVolumeWire} | {readonly removePlate:ProjectIdWire} | {readonly removeInstance:ProjectIdWire} | {readonly removeVolume:ProjectIdWire};
+export type ProjectRenderChangesWire = readonly ProjectRenderChangeWire[];
+export interface ProjectRenderPageWire {readonly base: ProjectOptionalRenderCursorWire;readonly target: ProjectRenderCursorWire;readonly total: ProjectCounterWire;readonly changes: ProjectRenderChangesWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -3432,3 +3521,9 @@ export function encodeProjectCapabilityRequest(value:ProjectCapabilityRequestWir
 export function captureProjectCapabilityPage(value:unknown):ProjectCapabilityPageWire { return captureIntent("CapabilityPage",value,shapes,limits) as ProjectCapabilityPageWire; }
 export function decodeProjectCapabilityPage(text:string):ProjectCapabilityPageWire { return captureProjectCapabilityPage(parseIntentJson(text,limits)); }
 export function encodeProjectCapabilityPage(value:ProjectCapabilityPageWire):string { return JSON.stringify(captureProjectCapabilityPage(value)); }
+export function captureProjectRenderRequest(value:unknown):ProjectRenderRequestWire { return captureIntent("RenderRequest",value,shapes,limits) as ProjectRenderRequestWire; }
+export function decodeProjectRenderRequest(text:string):ProjectRenderRequestWire { return captureProjectRenderRequest(parseIntentJson(text,limits)); }
+export function encodeProjectRenderRequest(value:ProjectRenderRequestWire):string { return JSON.stringify(captureProjectRenderRequest(value)); }
+export function captureProjectRenderPage(value:unknown):ProjectRenderPageWire { return captureIntent("RenderPage",value,shapes,limits) as ProjectRenderPageWire; }
+export function decodeProjectRenderPage(text:string):ProjectRenderPageWire { return captureProjectRenderPage(parseIntentJson(text,limits)); }
+export function encodeProjectRenderPage(value:ProjectRenderPageWire):string { return JSON.stringify(captureProjectRenderPage(value)); }

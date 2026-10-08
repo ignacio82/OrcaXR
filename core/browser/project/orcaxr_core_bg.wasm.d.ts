@@ -171,6 +171,7 @@ export const projectsession_is_export_current: (a: number, b: number) => number;
 export const projectsession_is_open_current: (a: number, b: number) => number;
 export const projectsession_pending_count: (a: number) => number;
 export const projectsession_release_staged: (a: number, b: number) => [number, number, number];
+export const projectsession_render: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_reset_document: (a: number, b: number, c: number) => [number, number, number];
 export const projectsession_run_next: (a: number) => number;
 export const projectsession_select: (a: number, b: number, c: number, d: number) => [number, number, number];

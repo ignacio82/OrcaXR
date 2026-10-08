@@ -10,6 +10,7 @@ import { replayLibrary } from "./library-replay.mjs";
 import { replayEditor } from "./editor-replay.mjs";
 import { replayProjection } from "./projection-replay.mjs";
 import { replayCapabilities } from "./capability-replay.mjs";
+import { replayRender } from "./render-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -440,6 +441,33 @@ try {
       .join("\n"),
   );
   assert.equal(capabilityChecks, 15);
+  // Render deltas over live sessions, then the Kotlin wrapper.
+  const renderFixture = JSON.parse(
+    await readFile(
+      new URL("testdata/cross-platform/render-delta-vectors.json", root),
+    ),
+  );
+  const renders = replayRender(projectJniCore(jvm.call), renderFixture, layout);
+  assert.deepEqual(
+    [renders.renderPages, renders.renderRefusals, renders.renderRequests],
+    [259, 57, 209],
+  );
+  const renderState = renderFixture.states[0];
+  const renderChecks = jvm.call(
+    "renderChecks",
+    renderState.stateJson,
+    Uint8Array.from(renderState.asset.bytes),
+    renderState.script
+      .map((e) =>
+        "request" in e
+          ? `R\t${e.request}`
+          : "page" in e
+            ? `P\t${e.render}\t${e.page}`
+            : `X\t${e.render}\t${e.refusal}`,
+      )
+      .join("\n"),
+  );
+  assert.equal(renderChecks, 41);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);
@@ -468,6 +496,8 @@ try {
     ...projections,
     ...capabilities,
     capabilityChecks,
+    ...renders,
+    renderChecks,
     ownedQueryTextUnits: ownedQueryText.length,
     ownedBytes: owned.byteLength,
     hostJniSha256: createHash("sha256")

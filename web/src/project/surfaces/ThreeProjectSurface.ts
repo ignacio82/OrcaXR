@@ -3,32 +3,13 @@ import * as THREE from 'three';
 import { contentDigest, type AssetPayload, type AssetRepository } from '../assets';
 import { canonicalStringify } from '../domain/canonical';
 import type { AssetId, InstanceId, ObjectId, PlateId, VolumeId } from '../domain/ids';
-import type { ProjectObject, ProjectState, ProjectVolume, Transform, Vec3 } from '../domain/model';
-import { resolveFilament } from '../domain/selectors';
+import type { ProjectState, ProjectVolume, Transform, Vec3 } from '../domain/model';
 import { assertValidProjectState } from '../domain/validation';
 import { decodeIndexedMeshAsset } from '../meshCodec';
 import type { EditorSurfacePort } from '../ports';
+import { volumeDisplayColor } from '../renderProjection';
 import { selectionKey, type SelectionRef, type SelectionSnapshot } from '../selection';
 import type { ProjectSnapshot } from '../store';
-
-/**
- * Display colour for one volume: the stable filament it resolves to, projected
- * exactly as the palette does — a physical tool's own colour, or a mixed
- * recipe's stored display colour. An unassigned volume returns undefined so the
- * caller keeps the neutral material instead of inventing a colour.
- */
-function resolveVolumeFilamentColor(
-  state: ProjectState,
-  object: ProjectObject,
-  volume: ProjectVolume,
-): string | undefined {
-  const filamentId = resolveFilament(object, volume).effective;
-  if (!filamentId) return undefined;
-  const physical = state.filaments.physical.find((filament) => filament.id === filamentId);
-  if (physical) return physical.color;
-  const mixed = state.filaments.mixed.find((filament) => filament.id === filamentId);
-  return mixed?.displayColor;
-}
 
 /** The live workspace's current 1 mm -> 1.75 mm-world visual magnification. */
 export const CURRENT_THREE_WORLD_UNITS_PER_MM = 0.00175;
@@ -387,7 +368,7 @@ export class ThreeProjectSurface implements EditorSurfacePort {
                 `Volume ${volume.id} triangle count differs from decoded asset ${volume.source.assetId}`,
               );
             }
-            const filamentColor = resolveVolumeFilamentColor(state, object, volume);
+            const filamentColor = volumeDisplayColor(state, object, volume);
             return { volume, geometry, ...(filamentColor ? { filamentColor } : {}) };
           });
           for (const instance of object.instances) {

@@ -1309,9 +1309,9 @@ and replay coverage for the complete current command inventory.
   budget before allocation. The independent corpus compares 5,987 nodes across
   365 admitted captures. This covers canonical hierarchy, numeric inspector data,
   transforms, filament inheritance and source declarations. Settings pages, the
-  paint palette and action capabilities over live sessions are served too; full
-  tree presentation/paint summaries, qualified renderer packets and revisioned
-  projection subscriptions are not.
+  paint palette, action capabilities and revisioned renderer deltas over live
+  sessions are served too; full tree presentation/paint summaries and paint
+  overlay packets are not.
   - [x] Expose bounded captured hierarchy/inspector/transform/filament queries
     through WASM/JNI with generated packet validation and independent replay.
   - [x] Port the settings projection (`settings::scoped`): scoped edit
@@ -1329,7 +1329,12 @@ and replay coverage for the complete current command inventory.
   - [x] Serve capabilities to hosts over live sessions, with the facts the
     session decides (`canonicalUiFacts`, shared with the browser shell) and
     structured reason codes (366 pages per binding; facts at 1,981 trace steps).
-  - [ ] Add renderer projections and revisioned deltas.
+  - [x] Add renderer projections and revisioned deltas (`render`): normalized
+    plate, instance and volume records with resolved colours, paged deltas
+    from the snapshot a host shows, retained served targets, reset and stale
+    answers (259 pages and 57 refusals per binding; 23,154 differential
+    pages agree in CI and 144,585 locally; the browser surface shares the
+    colour rule).
 - [ ] Make worker/service generation changes invalidate pending replies. Implement
   explicit session disposal and recovery after the core worker fails; recover
   only from acknowledged snapshots/journal entries, never an optimistic UI view.

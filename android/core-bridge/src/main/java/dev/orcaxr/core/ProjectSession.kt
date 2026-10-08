@@ -172,6 +172,13 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun capabilities(request: ProjectIntents.CapabilityRequest): ProjectIntents.CapabilityPage = read {
         ProjectIntents.decodeCapabilityPage(NativeProject.sessionCapabilities(it, ProjectIntents.encodeCapabilityRequest(request)))
     }
+    /** A page of renderer deltas from the snapshot the host shows
+     * ([ProjectIntents.RenderRequest.base]) to the session's acknowledged one.
+     * Apply every page of a target before showing it; a page without a base
+     * starts from empty, and `stale` means restart from the current target. */
+    fun render(request: ProjectIntents.RenderRequest): ProjectIntents.RenderPage = read {
+        ProjectIntents.decodeRenderPage(NativeProject.sessionRender(it, ProjectIntents.encodeRenderRequest(request)))
+    }
     fun assetFingerprint(): String = read { NativeProject.assetFingerprint(it) }
     fun asset(position: Long): ProjectAsset = read { own(NativeProject.asset(it, position), ::ProjectAsset) }
     fun captureGuard(): ProjectGuard = read { own(NativeProject.captureGuard(it), ::ProjectGuard) }

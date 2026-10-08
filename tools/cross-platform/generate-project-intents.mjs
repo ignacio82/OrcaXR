@@ -93,6 +93,8 @@ assert.deepEqual(schema.roots, [
   "PaintPalette",
   "CapabilityRequest",
   "CapabilityPage",
+  "RenderRequest",
+  "RenderPage",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

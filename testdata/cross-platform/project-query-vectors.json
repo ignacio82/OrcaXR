@@ -8,7 +8,7 @@
     "web/src/project/domain/validation.ts": "4b9efafe6c58e752814722ceacb710fdc79f0896f00c1f9215b5991c41df6fae",
     "web/src/project/objects/projection.ts": "0285845aea2a8030087c37540bf3c68d47cad0a4e181f7ed09f1564b4e20df58",
     "testdata/cross-platform/project-model-vectors.json": "7c8510f7a0b3009f17baa7c74ffb1c11ca83d5ed279a8b6c9a369ff775027f51",
-    "testdata/cross-platform/project-session-vectors.json": "f62ba1faf078a5a34f8493245ea4c71e4ca8d67f6e9774f5e653dd51533d9de8",
+    "testdata/cross-platform/project-session-vectors.json": "5ed0d77d34948b7ff8d804a4ec4865046b8e6568291f9609ffc102e70b73e0e9",
     "testdata/cross-platform/project-validation-vectors.json": "6950306199f9543c0a770d685d13e9e93a2e965725df096e6fbf84b0a59f7518",
     "tools/cross-platform/project-query-vectors.mjs": "da14daed687342c789794607ccad0df9eb921b240ea879a6b160a9ab23160a4d"
   },

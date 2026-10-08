@@ -468,6 +468,11 @@ export class ProjectSession {
     is_open_current(ticket: ProjectOpen): boolean;
     pending_count(): number;
     release_staged(id: number): boolean;
+    /**
+     * A `RenderRequest`: a page of the renderer deltas from the snapshot the
+     * host shows to the session's acknowledged one; returns a `RenderPage`.
+     */
+    render(request: string): string;
     reset_document(guard: ProjectGuard, document: ProjectDocument): ProjectEffects;
     run_next(): ProjectReply | undefined;
     select(guard: ProjectGuard, input: ProjectSelectionInput, primary: number): ProjectEffects;
@@ -764,6 +769,7 @@ export interface InitOutput {
     readonly projectsession_is_open_current: (a: number, b: number) => number;
     readonly projectsession_pending_count: (a: number) => number;
     readonly projectsession_release_staged: (a: number, b: number) => [number, number, number];
+    readonly projectsession_render: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_reset_document: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_run_next: (a: number) => number;
     readonly projectsession_select: (a: number, b: number, c: number, d: number) => [number, number, number];

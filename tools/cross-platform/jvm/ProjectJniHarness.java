@@ -23,6 +23,9 @@ public final class ProjectJniHarness {
     public static long capabilityChecks(String source, byte[] mesh, String expected) {
         return ProjectCapabilityChecks.run(source, mesh, expected);
     }
+    public static long renderChecks(String source, byte[] mesh, String script) {
+        return ProjectRenderChecks.run(source, mesh, script);
+    }
     public static long actorPreflightChecks(String source, byte[] mesh, String request, String expected) {
         return ProjectPreflightChecks.run(source, mesh, request, expected);
     }
@@ -169,6 +172,7 @@ public final class ProjectJniHarness {
             if (name.equals("libraryChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class);
             if (name.equals("editorChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("capabilityChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class);
+            if (name.equals("renderChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class);
             if (name.equals("actorPreflightChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorClipboardChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class);
             if (name.equals("actorClipboardReplay")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class, long.class, String.class, long[].class);

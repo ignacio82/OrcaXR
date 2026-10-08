@@ -32,6 +32,7 @@ pub mod layer_heights;
 pub mod mesh;
 pub mod model;
 pub mod query;
+pub mod render;
 pub mod selection;
 pub mod session;
 pub mod settings;

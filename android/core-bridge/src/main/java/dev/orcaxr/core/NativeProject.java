@@ -102,6 +102,8 @@ final class NativeProject {
     static native String projectPaintPalette(long handle, String request);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
+    // Render deltas: a RenderRequest against the session's acknowledged state.
+    static native String sessionRender(long handle, String request);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

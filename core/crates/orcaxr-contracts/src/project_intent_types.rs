@@ -6036,6 +6036,187 @@ fn read_capability_page(v: &Value) -> Result<CapabilityPage, InvalidIntent> {
         actions: read_action_capability_list(&object["actions"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderCursor {
+    pub revision: Counter,
+    pub semantic_hash: Fingerprint,
+}
+fn read_render_cursor(v: &Value) -> Result<RenderCursor, InvalidIntent> {
+    let object = fields(v, &["revision", "semanticHash"], false)?;
+    Ok(RenderCursor {
+        revision: read_counter(&object["revision"])?,
+        semantic_hash: read_fingerprint(&object["semanticHash"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalRenderCursor {
+    Absent(Empty),
+    Value(RenderCursor),
+}
+fn read_optional_render_cursor(v: &Value) -> Result<OptionalRenderCursor, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalRenderCursor::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalRenderCursor::Value(read_render_cursor(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderRequest {
+    pub base: OptionalRenderCursor,
+    pub target: OptionalRenderCursor,
+    pub start: Counter,
+    pub count: Counter,
+}
+fn read_render_request(v: &Value) -> Result<RenderRequest, InvalidIntent> {
+    let object = fields(v, &["base", "target", "start", "count"], false)?;
+    Ok(RenderRequest {
+        base: read_optional_render_cursor(&object["base"])?,
+        target: read_optional_render_cursor(&object["target"])?,
+        start: read_counter(&object["start"])?,
+        count: read_counter(&object["count"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderPlate {
+    pub plate_id: Id,
+    pub order: Order,
+    pub printable: Flag,
+    pub active: Flag,
+}
+fn read_render_plate(v: &Value) -> Result<RenderPlate, InvalidIntent> {
+    let object = fields(v, &["plateId", "order", "printable", "active"], false)?;
+    Ok(RenderPlate {
+        plate_id: read_id(&object["plateId"])?,
+        order: read_order(&object["order"])?,
+        printable: read_flag(&object["printable"])?,
+        active: read_flag(&object["active"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderInstance {
+    pub instance_id: Id,
+    pub object_id: Id,
+    pub plate_id: Id,
+    pub transform: Transform,
+    pub printable: Flag,
+}
+fn read_render_instance(v: &Value) -> Result<RenderInstance, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "instanceId",
+            "objectId",
+            "plateId",
+            "transform",
+            "printable",
+        ],
+        false,
+    )?;
+    Ok(RenderInstance {
+        instance_id: read_id(&object["instanceId"])?,
+        object_id: read_id(&object["objectId"])?,
+        plate_id: read_id(&object["plateId"])?,
+        transform: read_transform(&object["transform"])?,
+        printable: read_flag(&object["printable"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderVolume {
+    pub volume_id: Id,
+    pub object_id: Id,
+    pub role: VolumeRoleName,
+    pub asset_id: Id,
+    pub triangle_count: Counter,
+    pub transform: Transform,
+    pub color: OptionalText,
+}
+fn read_render_volume(v: &Value) -> Result<RenderVolume, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "volumeId",
+            "objectId",
+            "role",
+            "assetId",
+            "triangleCount",
+            "transform",
+            "color",
+        ],
+        false,
+    )?;
+    Ok(RenderVolume {
+        volume_id: read_id(&object["volumeId"])?,
+        object_id: read_id(&object["objectId"])?,
+        role: read_volume_role_name(&object["role"])?,
+        asset_id: read_id(&object["assetId"])?,
+        triangle_count: read_counter(&object["triangleCount"])?,
+        transform: read_transform(&object["transform"])?,
+        color: read_optional_text(&object["color"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RenderChange {
+    Plate(RenderPlate),
+    Instance(RenderInstance),
+    Volume(RenderVolume),
+    RemovePlate(Id),
+    RemoveInstance(Id),
+    RemoveVolume(Id),
+}
+fn read_render_change(v: &Value) -> Result<RenderChange, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "plate",
+            "instance",
+            "volume",
+            "removePlate",
+            "removeInstance",
+            "removeVolume",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "plate" => Ok(RenderChange::Plate(read_render_plate(value)?)),
+        "instance" => Ok(RenderChange::Instance(read_render_instance(value)?)),
+        "volume" => Ok(RenderChange::Volume(read_render_volume(value)?)),
+        "removePlate" => Ok(RenderChange::RemovePlate(read_id(value)?)),
+        "removeInstance" => Ok(RenderChange::RemoveInstance(read_id(value)?)),
+        "removeVolume" => Ok(RenderChange::RemoveVolume(read_id(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type RenderChanges = Vec<RenderChange>;
+fn read_render_changes(v: &Value) -> Result<RenderChanges, InvalidIntent> {
+    list(v, 0, 64)?.iter().map(read_render_change).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderPage {
+    pub base: OptionalRenderCursor,
+    pub target: RenderCursor,
+    pub total: Counter,
+    pub changes: RenderChanges,
+}
+fn read_render_page(v: &Value) -> Result<RenderPage, InvalidIntent> {
+    let object = fields(v, &["base", "target", "total", "changes"], false)?;
+    Ok(RenderPage {
+        base: read_optional_render_cursor(&object["base"])?,
+        target: read_render_cursor(&object["target"])?,
+        total: read_counter(&object["total"])?,
+        changes: read_render_changes(&object["changes"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -6518,5 +6699,21 @@ pub fn decode_capability_page(text: &str) -> Result<CapabilityPage, InvalidInten
 pub fn encode_capability_page(value: &CapabilityPage) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_capability_page(&text)?;
+    Ok(text)
+}
+pub fn decode_render_request(text: &str) -> Result<RenderRequest, InvalidIntent> {
+    read_render_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_render_request(value: &RenderRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_render_request(&text)?;
+    Ok(text)
+}
+pub fn decode_render_page(text: &str) -> Result<RenderPage, InvalidIntent> {
+    read_render_page(&super::project_intents::parse(text)?)
+}
+pub fn encode_render_page(value: &RenderPage) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_render_page(&text)?;
     Ok(text)
 }

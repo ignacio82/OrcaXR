@@ -4310,6 +4310,141 @@ object ProjectIntents {
             w.field("actions") { writeActionCapabilityList(w, v.actions) }
         }
     }
+    data class RenderCursor(val revision: Long, val semanticHash: List<Int>)
+    private fun readRenderCursor(v: Any): RenderCursor {
+        val obj = ProjectIntentJson.fields(v, setOf("revision", "semanticHash"), false)
+        return RenderCursor(readCounter(obj.get("revision")), readFingerprint(obj.get("semanticHash")))
+    }
+    private fun writeRenderCursor(w: ProjectIntentWriter, v: RenderCursor) {
+        w.obj {
+            w.field("revision") { writeCounter(w, v.revision) }
+            w.field("semanticHash") { writeFingerprint(w, v.semanticHash) }
+        }
+    }
+    sealed interface OptionalRenderCursor {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalRenderCursor
+        data class Value(val value: ProjectIntents.RenderCursor) : OptionalRenderCursor
+    }
+    private fun readOptionalRenderCursor(v: Any): OptionalRenderCursor {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalRenderCursor.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalRenderCursor.Value(readRenderCursor(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalRenderCursor(w: ProjectIntentWriter, v: OptionalRenderCursor) {
+        w.obj { when(v) {
+            is OptionalRenderCursor.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalRenderCursor.Value -> w.field("value") { writeRenderCursor(w, v.value) }
+        } }
+    }
+    data class RenderRequest(val base: OptionalRenderCursor, val target: OptionalRenderCursor, val start: Long, val count: Long)
+    private fun readRenderRequest(v: Any): RenderRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("base", "target", "start", "count"), false)
+        return RenderRequest(readOptionalRenderCursor(obj.get("base")), readOptionalRenderCursor(obj.get("target")), readCounter(obj.get("start")), readCounter(obj.get("count")))
+    }
+    private fun writeRenderRequest(w: ProjectIntentWriter, v: RenderRequest) {
+        w.obj {
+            w.field("base") { writeOptionalRenderCursor(w, v.base) }
+            w.field("target") { writeOptionalRenderCursor(w, v.target) }
+            w.field("start") { writeCounter(w, v.start) }
+            w.field("count") { writeCounter(w, v.count) }
+        }
+    }
+    data class RenderPlate(val plateId: List<Int>, val order: Double, val printable: Boolean, val active: Boolean)
+    private fun readRenderPlate(v: Any): RenderPlate {
+        val obj = ProjectIntentJson.fields(v, setOf("plateId", "order", "printable", "active"), false)
+        return RenderPlate(readId(obj.get("plateId")), readOrder(obj.get("order")), readFlag(obj.get("printable")), readFlag(obj.get("active")))
+    }
+    private fun writeRenderPlate(w: ProjectIntentWriter, v: RenderPlate) {
+        w.obj {
+            w.field("plateId") { writeId(w, v.plateId) }
+            w.field("order") { writeOrder(w, v.order) }
+            w.field("printable") { writeFlag(w, v.printable) }
+            w.field("active") { writeFlag(w, v.active) }
+        }
+    }
+    data class RenderInstance(val instanceId: List<Int>, val objectId: List<Int>, val plateId: List<Int>, val transform: Transform, val printable: Boolean)
+    private fun readRenderInstance(v: Any): RenderInstance {
+        val obj = ProjectIntentJson.fields(v, setOf("instanceId", "objectId", "plateId", "transform", "printable"), false)
+        return RenderInstance(readId(obj.get("instanceId")), readId(obj.get("objectId")), readId(obj.get("plateId")), readTransform(obj.get("transform")), readFlag(obj.get("printable")))
+    }
+    private fun writeRenderInstance(w: ProjectIntentWriter, v: RenderInstance) {
+        w.obj {
+            w.field("instanceId") { writeId(w, v.instanceId) }
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("plateId") { writeId(w, v.plateId) }
+            w.field("transform") { writeTransform(w, v.transform) }
+            w.field("printable") { writeFlag(w, v.printable) }
+        }
+    }
+    data class RenderVolume(val volumeId: List<Int>, val objectId: List<Int>, val role: VolumeRoleName, val assetId: List<Int>, val triangleCount: Long, val transform: Transform, val color: OptionalText)
+    private fun readRenderVolume(v: Any): RenderVolume {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeId", "objectId", "role", "assetId", "triangleCount", "transform", "color"), false)
+        return RenderVolume(readId(obj.get("volumeId")), readId(obj.get("objectId")), readVolumeRoleName(obj.get("role")), readId(obj.get("assetId")), readCounter(obj.get("triangleCount")), readTransform(obj.get("transform")), readOptionalText(obj.get("color")))
+    }
+    private fun writeRenderVolume(w: ProjectIntentWriter, v: RenderVolume) {
+        w.obj {
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("role") { writeVolumeRoleName(w, v.role) }
+            w.field("assetId") { writeId(w, v.assetId) }
+            w.field("triangleCount") { writeCounter(w, v.triangleCount) }
+            w.field("transform") { writeTransform(w, v.transform) }
+            w.field("color") { writeOptionalText(w, v.color) }
+        }
+    }
+    sealed interface RenderChange {
+        data class Plate(val value: ProjectIntents.RenderPlate) : RenderChange
+        data class Instance(val value: ProjectIntents.RenderInstance) : RenderChange
+        data class Volume(val value: ProjectIntents.RenderVolume) : RenderChange
+        data class RemovePlate(val value: List<Int>) : RenderChange
+        data class RemoveInstance(val value: List<Int>) : RenderChange
+        data class RemoveVolume(val value: List<Int>) : RenderChange
+    }
+    private fun readRenderChange(v: Any): RenderChange {
+        val obj = ProjectIntentJson.fields(v, setOf("plate", "instance", "volume", "removePlate", "removeInstance", "removeVolume"), true)
+        return when(val key = obj.keys().next()) {
+            "plate" -> RenderChange.Plate(readRenderPlate(obj.get(key)))
+            "instance" -> RenderChange.Instance(readRenderInstance(obj.get(key)))
+            "volume" -> RenderChange.Volume(readRenderVolume(obj.get(key)))
+            "removePlate" -> RenderChange.RemovePlate(readId(obj.get(key)))
+            "removeInstance" -> RenderChange.RemoveInstance(readId(obj.get(key)))
+            "removeVolume" -> RenderChange.RemoveVolume(readId(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeRenderChange(w: ProjectIntentWriter, v: RenderChange) {
+        w.obj { when(v) {
+            is RenderChange.Plate -> w.field("plate") { writeRenderPlate(w, v.value) }
+            is RenderChange.Instance -> w.field("instance") { writeRenderInstance(w, v.value) }
+            is RenderChange.Volume -> w.field("volume") { writeRenderVolume(w, v.value) }
+            is RenderChange.RemovePlate -> w.field("removePlate") { writeId(w, v.value) }
+            is RenderChange.RemoveInstance -> w.field("removeInstance") { writeId(w, v.value) }
+            is RenderChange.RemoveVolume -> w.field("removeVolume") { writeId(w, v.value) }
+        } }
+    }
+    private fun readRenderChanges(v: Any): List<RenderChange> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readRenderChange(array.get(it)) }
+    }
+    private fun writeRenderChanges(w: ProjectIntentWriter, v: List<RenderChange>) {
+        w.array(v, 0, 64) { writeRenderChange(w, it) }
+    }
+    data class RenderPage(val base: OptionalRenderCursor, val target: RenderCursor, val total: Long, val changes: List<RenderChange>)
+    private fun readRenderPage(v: Any): RenderPage {
+        val obj = ProjectIntentJson.fields(v, setOf("base", "target", "total", "changes"), false)
+        return RenderPage(readOptionalRenderCursor(obj.get("base")), readRenderCursor(obj.get("target")), readCounter(obj.get("total")), readRenderChanges(obj.get("changes")))
+    }
+    private fun writeRenderPage(w: ProjectIntentWriter, v: RenderPage) {
+        w.obj {
+            w.field("base") { writeOptionalRenderCursor(w, v.base) }
+            w.field("target") { writeRenderCursor(w, v.target) }
+            w.field("total") { writeCounter(w, v.total) }
+            w.field("changes") { writeRenderChanges(w, v.changes) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -4422,4 +4557,8 @@ object ProjectIntents {
     fun encodeCapabilityRequest(value: CapabilityRequest): String = ProjectIntentWriter().also { writeCapabilityRequest(it, value) }.finish()
     fun decodeCapabilityPage(text: String): CapabilityPage = readCapabilityPage(ProjectIntentJson.parse(text))
     fun encodeCapabilityPage(value: CapabilityPage): String = ProjectIntentWriter().also { writeCapabilityPage(it, value) }.finish()
+    fun decodeRenderRequest(text: String): RenderRequest = readRenderRequest(ProjectIntentJson.parse(text))
+    fun encodeRenderRequest(value: RenderRequest): String = ProjectIntentWriter().also { writeRenderRequest(it, value) }.finish()
+    fun decodeRenderPage(text: String): RenderPage = readRenderPage(ProjectIntentJson.parse(text))
+    fun encodeRenderPage(value: RenderPage): String = ProjectIntentWriter().also { writeRenderPage(it, value) }.finish()
 }

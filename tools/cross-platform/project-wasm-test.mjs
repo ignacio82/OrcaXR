@@ -10,6 +10,7 @@ import { replayLibrary } from "./library-replay.mjs";
 import { replayEditor } from "./editor-replay.mjs";
 import { replayProjection } from "./projection-replay.mjs";
 import { replayCapabilities } from "./capability-replay.mjs";
+import { replayRender } from "./render-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -62,6 +63,11 @@ if (isMainThread) {
     assert.deepEqual(
       [result.capabilityPages, result.capabilityRefusals],
       [366, 183],
+    );
+    // Render deltas over live sessions, edited and paged.
+    assert.deepEqual(
+      [result.renderPages, result.renderRefusals, result.renderRequests],
+      [259, 57, 209],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -303,6 +309,15 @@ if (isMainThread) {
     ),
     layout,
   );
+  const renders = replayRender(
+    core,
+    JSON.parse(
+      await readFile(
+        new URL("testdata/cross-platform/render-delta-vectors.json", root),
+      ),
+    ),
+    layout,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -323,6 +338,7 @@ if (isMainThread) {
       ...editors,
       ...projections,
       ...capabilities,
+      ...renders,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

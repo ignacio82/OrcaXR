@@ -28,6 +28,7 @@ export function startProjectJni(profile = "debug") {
   signatures.libraryChecks = ["byte[]", "String"];
   signatures.editorChecks = ["String"];
   signatures.capabilityChecks = ["String", "byte[]", "String"];
+  signatures.renderChecks = ["String", "byte[]", "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -326,6 +327,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     capabilities(request) {
       return call("sessionCapabilities", this.handle, request);
+    }
+    render(request) {
+      return call("sessionRender", this.handle, request);
     }
     asset_fingerprint() {
       return call("assetFingerprint", this.handle);
