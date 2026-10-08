@@ -3062,7 +3062,7 @@ platform collator rather than relying on a guess.
 profiles, every preset's flattening, 2,699 compatibility assessments and 58
 reconciliations. Nine synthetic catalogs cover every refusal and rule (429
 assessments, 12 reconciliations), and 4,007 collation pairs pin the ASCII
-order. User presets and condition evaluation are not yet native.
+order.
 
 ### Profile catalog host exchange
 
@@ -3102,6 +3102,52 @@ past the end, malformed requests and tool budgets. Number spelling is
 semantic, so targets compare as decoded values. The Kotlin wrapper passes 15
 checks, including a host collator that reorders presets, a throwing collator
 and upload budgets.
+
+### User preset library
+
+`settings::library` ports `PresetLibrary.ts`: the printers an operator
+installed and the presets they authored, over the pinned catalog. A host
+supplies three policies per call through `LibraryHost`: the `en` collation,
+the clock that stamps provenance, and `Date.parse` validity.
+
+- Installing is visibility, not deletion. An uninstalled machine preset stays
+  in the composed catalog with `instantiation: "false"`, because nozzle
+  variants inherit from one another.
+- A custom preset is an overlay on a base: `inherits` plus the keys it
+  changes. Names (at most 120 units, unique per vendor, never a system
+  name), bases (present, instantiable, acyclic), override keys (not
+  library-owned, defined by some system preset of the kind, JSON at most
+  eight levels deep) and provenance (licence, version, timestamps, lineage)
+  are checked with the browser's messages and order.
+- Every change rebuilds the composed graph before it replaces the state, so
+  a refusal leaves the library exactly as it was. Uninstalling, renaming or
+  deleting a base of another preset is refused.
+- Bundles are sorted JSON (`stable_stringify`) pinned to the engine commit;
+  import is all or nothing. Stored state drops and reports unreadable
+  entries, and unreadable text becomes `unreadable_state`, a schema the
+  build refuses, as the browser store does.
+- `plan_catalog_update` reports added and removed models, removed variants
+  and orphaned presets. `apply_catalog_update` moves onto the new catalog
+  when nothing would be orphaned.
+- The catalog fingerprint is FNV-1a over the WTF-8 of every preset's sorted
+  identity and payload, joined by U+0001 as the browser joins them.
+- `coerce_override_value` and `format_override_value` read and present
+  typed override text in the inherited value's shape.
+
+Two browser behaviours were not portable and are fixed in the browser. A
+bundle that is not JSON reported the engine's own parse message; it now
+reports "Bundle is not valid JSON.". A number that overflows to Infinity was
+accepted into bundles and stored state; it is now malformed text in both,
+since neither storage nor a native host can hold it. Override issues follow
+JavaScript property order (`js_keys`: array indices first), not map order.
+
+`preset-library-vectors.mjs` replays 14 scenarios (131 steps) over the
+bundled corpus and six synthetic catalogs: installs, custom preset edits,
+base lists, inventories, composed catalog and graph digests, 4 exports, 24
+imports, 8 plans and 4 applies, and stored values and text. Every issue code
+the browser emits occurs. Rust matches every result, state and digest, the
+clock reads, 22 coercions, 12 formats and the stable JSON and WTF-8 digest
+cases.
 
 ### Canonical slice preflight
 
@@ -3627,6 +3673,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/projec
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-resolution-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-codec-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-catalog-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-library-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-validation-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slice-preflight-vectors.mjs

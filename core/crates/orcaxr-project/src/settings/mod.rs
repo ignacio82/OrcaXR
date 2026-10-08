@@ -4,6 +4,7 @@
 pub mod catalog;
 pub mod catalog_exchange;
 mod generated;
+pub mod library;
 pub mod options;
 pub mod presets;
 mod project;

@@ -6,7 +6,7 @@
 //! classes differ and `{:.N}` rounds ties to even, so ports use these helpers
 //! instead of `str::parse`, `str::trim` or `format!`.
 use orcaxr_contracts::canonical::Value;
-use std::str::FromStr;
+use std::{collections::BTreeMap, str::FromStr};
 
 /// ECMAScript WhiteSpace and LineTerminator code points (`\s`, `trim`).
 pub fn is_space(c: char) -> bool {
@@ -293,11 +293,8 @@ fn stringify(value: &Value, out: &mut Vec<u16>) {
             out.push(u16::from(b']'));
         }
         Value::Object(fields) => {
-            let mut keys: Vec<&Vec<u16>> = fields.keys().collect();
-            // Array indices come first, numerically; the sort is stable.
-            keys.sort_by_key(|key| array_index(key).map_or((1, 0), |i| (0, i)));
             out.push(u16::from(b'{'));
-            for (index, key) in keys.into_iter().enumerate() {
+            for (index, key) in js_keys(fields).into_iter().enumerate() {
                 if index > 0 {
                     out.push(u16::from(b','));
                 }
@@ -308,6 +305,14 @@ fn stringify(value: &Value, out: &mut Vec<u16>) {
             out.push(u16::from(b'}'));
         }
     }
+}
+/// `Object.keys` order for an object parsed from canonical JSON: array-index
+/// keys numerically, then the others in canonical (UTF-16) order.
+pub fn js_keys<V>(fields: &BTreeMap<Vec<u16>, V>) -> Vec<&Vec<u16>> {
+    let mut keys: Vec<&Vec<u16>> = fields.keys().collect();
+    // The sort is stable, so the other keys keep their canonical order.
+    keys.sort_by_key(|key| array_index(key).map_or((1, 0), |i| (0, i)));
+    keys
 }
 /// A canonical array index: `0` or a decimal without a leading zero, below
 /// 2^32 - 1.

@@ -457,11 +457,22 @@ test('a bundle from another engine, schema, or format is refused whole', () => {
   ok(lib.installPrinter('Acme', 'Acme Small Printer', ['0.4']), 'install something first');
   const before = stableStringify(lib.state as never);
 
-  assert.deepEqual(codes(lib.importBundle('{ not json')), ['invalid-bundle']);
+  const malformed = lib.importBundle('{ not json');
+  assert.deepEqual(codes(malformed), ['invalid-bundle']);
+  assert.equal(malformed.issues[0].message, 'Bundle is not valid JSON.');
   assert.deepEqual(codes(lib.importBundle('[]')), ['invalid-bundle']);
   assert.deepEqual(codes(lib.importBundle(JSON.stringify({ format: 'something-else' }))), ['invalid-bundle']);
 
   const base = JSON.parse(lib.exportBundle('2026-08-16T00:00:00.000Z'));
+  // An overflowing number is malformed text, never an Infinity override.
+  const overflow = JSON.stringify({
+    ...base,
+    customPresets: [{ kind: 'filament', name: 'Hot', inherits: 'Acme PLA', overrides: { nozzle_temperature: [1] } }],
+  }).replace('[1]', '[1e999]');
+  assert.deepEqual(
+    lib.importBundle(overflow).issues.map((issue) => issue.message),
+    ['Bundle is not valid JSON.'],
+  );
   assert.deepEqual(codes(lib.importBundle(JSON.stringify({ ...base, schemaVersion: 99 }))), ['unsupported-schema']);
   assert.deepEqual(codes(lib.importBundle(JSON.stringify({ ...base, engine: { repository: '', commit: 'abc' } }))), [
     'engine-mismatch',
@@ -660,6 +671,12 @@ test('the store persists, reloads, and survives storage that refuses to write', 
     ['unsupported-schema'],
   );
   assert.equal(corrupted.library.isConfigured(), false);
+
+  backing.set('orcaxr.preset-library', '{"schemaVersion":1e999}');
+  assert.deepEqual(
+    new PresetLibraryStore(fixture(), storage).loadIssues.map((issue) => issue.message),
+    ['Stored preset library uses schema version -1; this build reads 1.'],
+  );
 
   const refusing = new PresetLibraryStore(fixture(), {
     getItem: () => {

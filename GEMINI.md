@@ -195,7 +195,8 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   defaults; imported projects slice as authored, never rebound to a bundled preset.
   Rust `slicing::{preflight,profile}` and `settings::options` (generated from the
   pinned schema) replay browser vectors; ordering is UTF-16, never `localeCompare`,
-  except preset order: `settings::presets` keeps `en` collation via a host `Collation`.
+  except preset order (`settings::{presets,library}`: `en` via a host `Collation`).
+  Read TS byte-exact (`cat -A`): preset fingerprints join on a literal U+0001.
 - Published G-code binds exact project/revision/config/asset/engine identities.
   Preview, download and send reject drift. Keep output hashing and authoritative
   sidecar provenance intact; missing information remains unavailable.

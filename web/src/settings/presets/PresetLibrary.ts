@@ -660,15 +660,11 @@ export class PresetLibrary {
     const issues: PresetLibraryIssue[] = [];
     let parsed: unknown;
     try {
-      parsed = JSON.parse(text);
-    } catch (error) {
-      return failed([
-        issue(
-          'invalid-bundle',
-          '$',
-          `Bundle is not valid JSON: ${error instanceof Error ? error.message : 'parse error'}`,
-        ),
-      ]);
+      parsed = parseFiniteJson(text);
+    } catch {
+      // The engine's own parse message differs between runtimes; the native
+      // core reports the same fixed text.
+      return failed([issue('invalid-bundle', '$', 'Bundle is not valid JSON.')]);
     }
     if (!isPlainObject(parsed)) return failed([issue('invalid-bundle', '$', 'Bundle must be a JSON object.')]);
     if (parsed.format !== PRESET_BUNDLE_FORMAT) {
@@ -1151,7 +1147,7 @@ export class PresetLibraryStore {
     const raw = safeRead(storage, key);
     if (raw !== null) {
       try {
-        persisted = JSON.parse(raw);
+        persisted = parseFiniteJson(raw);
       } catch {
         persisted = { schemaVersion: -1 };
       }
@@ -1192,6 +1188,17 @@ function safeRead(storage: PresetLibraryKeyValueStorage | undefined, key: string
   } catch {
     return null;
   }
+}
+
+/**
+ * `JSON.parse`, refusing a number that overflows to Infinity. No store, bundle
+ * or native host can hold one, so such text is malformed rather than a value.
+ */
+function parseFiniteJson(text: string): unknown {
+  return JSON.parse(text, (_key, value: unknown) => {
+    if (typeof value === 'number' && !Number.isFinite(value)) throw new SyntaxError('Non-finite JSON number');
+    return value;
+  });
 }
 
 function customPresetPayload(preset: CustomPresetRecord): PresetJsonObject {
