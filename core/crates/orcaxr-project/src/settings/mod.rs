@@ -10,6 +10,7 @@ pub mod library_exchange;
 pub mod options;
 pub mod presets;
 mod project;
+pub mod scoped;
 use crate::model::{ConfigMap, Encode, Text};
 pub use generated::{SCOPE_ORDER, SOURCE_COMMIT, SOURCE_DIGEST, SOURCE_FILES};
 use orcaxr_contracts::canonical::{Value, write_string};

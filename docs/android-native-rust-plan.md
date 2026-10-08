@@ -1265,7 +1265,12 @@ and replay coverage for the complete current command inventory.
   qualified renderer packets or revisioned projection subscriptions.
   - [x] Expose bounded captured hierarchy/inspector/transform/filament queries
     through WASM/JNI with generated packet validation and independent replay.
-  - [ ] Add paint/settings/capability/renderer projections and revisioned deltas.
+  - [x] Port the settings projection (`settings::scoped`): scoped edit
+    targets, node override snapshots with foreign keys and the chain,
+    explanations and the project override snapshot (17 targets, 119
+    explanations).
+  - [ ] Expose the settings projection on project captures, and add paint,
+    capability and renderer projections and revisioned deltas.
 - [ ] Make worker/service generation changes invalidate pending replies. Implement
   explicit session disposal and recovery after the core worker fails; recover
   only from acknowledged snapshots/journal entries, never an optimistic UI view.

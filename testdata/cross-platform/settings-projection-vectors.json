@@ -1,0 +1,296 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "path": "tools/cross-platform/settings-projection-vectors.mjs",
+      "sha256": "77ea2fe2febb280736230696a60af001ecb7562b924bdea3e2978bcfee1c690b"
+    },
+    {
+      "path": "web/src/project/scopedOverrides.ts",
+      "sha256": "fd94aedae58593c5ac51b76af7def57d7fc743af83c90666a1e79fda5918f413"
+    },
+    {
+      "path": "web/src/project/settingsOverrides.ts",
+      "sha256": "d5632d40558f4658f980f78d14be67371d717a38e15e53c7aca39c77eef6d52a"
+    },
+    {
+      "path": "web/src/project/domain/settingScopes.ts",
+      "sha256": "794fe8104ea2750904aca911b0661a25196b82df96fdaa95f6834608bcc4b6bb"
+    },
+    {
+      "path": "web/src/project/__tests__/fixtures.ts",
+      "sha256": "ed0ced7a9c80be9e872988f5d2352176d814d59eae9ee94263f2fc8984a143ba"
+    }
+  ],
+  "keys": [
+    "layer_height",
+    "wall_loops",
+    "sparse_infill_density",
+    "print_sequence",
+    "curr_bed_type",
+    "brim_type",
+    "not_a_setting"
+  ],
+  "states": [
+    {
+      "name": "fixture",
+      "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+      "revision": 0,
+      "hash": "fnv1a64:4c8be3a3d4a004d2",
+      "projectJson": "{\"effectiveConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"inheritedConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"overrides\":{},\"sourceHash\":\"fnv1a64:4c8be3a3d4a004d2\",\"sourceRevision\":0}",
+      "targets": [
+        {
+          "id": "project",
+          "scope": "project",
+          "label": "Foundation fixture",
+          "path": "Foundation fixture",
+          "overrideCount": 0,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":true,\"label\":\"Project\",\"overrides\":{},\"scope\":\"project\"}],\"effectiveConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"foreign\":{},\"foreignIssues\":[],\"inheritedConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"label\":\"Project\",\"overrides\":{},\"sourceHash\":\"fnv1a64:4c8be3a3d4a004d2\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[],\"source\":\"base\",\"value\":0.24},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"base\",\"value\":15},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "plate:078bfd75-9aa9-410f-816e-690593e4a91f",
+          "scope": "plate",
+          "targetId": "078bfd75-9aa9-410f-816e-690593e4a91f",
+          "label": "Plate 1",
+          "path": "Plate 1",
+          "overrideCount": 0,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{},\"scope\":\"project\"},{\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"isTarget\":true,\"label\":\"Plate 1\",\"overrides\":{},\"scope\":\"plate\"}],\"effectiveConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"foreign\":{\"layer_height\":0.2},\"foreignIssues\":[{\"code\":\"setting-not-in-scope\",\"key\":\"layer_height\",\"message\":\"layer_height cannot be set on a plate; the engine reads it from the project, object or height range\",\"path\":\"plate[078bfd75-9aa9-410f-816e-690593e4a91f].layer_height\",\"scope\":\"plate\"}],\"inheritedConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"label\":\"Plate 1\",\"overrides\":{},\"sourceHash\":\"fnv1a64:4c8be3a3d4a004d2\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[],\"source\":\"base\",\"value\":0.24},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"base\",\"value\":15},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "object:60c4270b-c049-442a-8313-7564f4cad7ce",
+          "scope": "object",
+          "targetId": "60c4270b-c049-442a-8313-7564f4cad7ce",
+          "label": "Tiny triangle",
+          "path": "Plate 1 › Tiny triangle",
+          "overrideCount": 2,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{},\"scope\":\"project\"},{\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"isTarget\":false,\"label\":\"Plate 1\",\"overrides\":{},\"scope\":\"plate\"},{\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"isTarget\":true,\"label\":\"Tiny triangle\",\"overrides\":{\"layer_height\":0.2,\"wall_loops\":2},\"scope\":\"object\"}],\"effectiveConfig\":{\"layer_height\":0.2,\"sparse_infill_density\":15,\"wall_loops\":2},\"foreign\":{},\"foreignIssues\":[],\"inheritedConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"label\":\"Tiny triangle\",\"overrides\":{\"layer_height\":0.2,\"wall_loops\":2},\"sourceHash\":\"fnv1a64:4c8be3a3d4a004d2\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[],\"source\":\"object\",\"sourceId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"value\":0.2},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"object\",\"sourceId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"value\":2},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"base\",\"value\":15},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "part:8f0301bf-3cf5-4f43-8ec7-11cfb3df8106",
+          "scope": "part",
+          "targetId": "8f0301bf-3cf5-4f43-8ec7-11cfb3df8106",
+          "label": "Body",
+          "path": "Plate 1 › Tiny triangle › Body",
+          "overrideCount": 1,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{},\"scope\":\"project\"},{\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"isTarget\":false,\"label\":\"Plate 1\",\"overrides\":{},\"scope\":\"plate\"},{\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"isTarget\":false,\"label\":\"Tiny triangle\",\"overrides\":{\"layer_height\":0.2,\"wall_loops\":2},\"scope\":\"object\"},{\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"isTarget\":true,\"label\":\"Body\",\"overrides\":{\"wall_loops\":3},\"scope\":\"part\"}],\"effectiveConfig\":{\"layer_height\":0.2,\"sparse_infill_density\":15,\"wall_loops\":3},\"foreign\":{},\"foreignIssues\":[],\"inheritedConfig\":{\"layer_height\":0.2,\"sparse_infill_density\":15,\"wall_loops\":2},\"label\":\"Body\",\"overrides\":{\"wall_loops\":3},\"sourceHash\":\"fnv1a64:4c8be3a3d4a004d2\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[],\"source\":\"object\",\"sourceId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"value\":0.2},{\"key\":\"wall_loops\",\"shadowed\":[{\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"scope\":\"object\",\"value\":2}],\"source\":\"part\",\"sourceId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"value\":3},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"base\",\"value\":15},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "layerRange:6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1",
+          "scope": "layerRange",
+          "targetId": "6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1",
+          "label": "0–5 mm",
+          "path": "Plate 1 › Tiny triangle › 0–5 mm",
+          "overrideCount": 1,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{},\"scope\":\"project\"},{\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"isTarget\":false,\"label\":\"Plate 1\",\"overrides\":{},\"scope\":\"plate\"},{\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"isTarget\":false,\"label\":\"Tiny triangle\",\"overrides\":{\"layer_height\":0.2,\"wall_loops\":2},\"scope\":\"object\"},{\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"isTarget\":true,\"label\":\"0–5 mm\",\"overrides\":{\"layer_height\":0.12},\"scope\":\"layerRange\"}],\"effectiveConfig\":{\"layer_height\":0.12,\"sparse_infill_density\":15,\"wall_loops\":2},\"foreign\":{},\"foreignIssues\":[],\"inheritedConfig\":{\"layer_height\":0.2,\"sparse_infill_density\":15,\"wall_loops\":2},\"label\":\"0–5 mm\",\"overrides\":{\"layer_height\":0.12},\"sourceHash\":\"fnv1a64:4c8be3a3d4a004d2\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[{\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"scope\":\"object\",\"value\":0.2}],\"source\":\"layerRange\",\"sourceId\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"value\":0.12},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"object\",\"sourceId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"value\":2},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"base\",\"value\":15},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        }
+      ],
+      "unknown": [
+        {
+          "scope": "plate",
+          "targetId": "00000000-0000-4000-8000-000000000001",
+          "message": "No plate node matches 00000000-0000-4000-8000-000000000001"
+        },
+        {
+          "scope": "object",
+          "targetId": "00000000-0000-4000-8000-000000000002",
+          "message": "No object node matches 00000000-0000-4000-8000-000000000002"
+        },
+        {
+          "scope": "part",
+          "targetId": "00000000-0000-4000-8000-000000000003",
+          "message": "No part node matches 00000000-0000-4000-8000-000000000003"
+        },
+        {
+          "scope": "layerRange",
+          "targetId": "import:missing:range",
+          "message": "No layerRange node matches import:missing:range"
+        }
+      ]
+    },
+    {
+      "name": "full",
+      "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"curr_bed_type\":\"Cool Plate\",\"layer_height\":0.16,\"sparse_infill_density\":25,\"wall_loops\":2},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Scène — full\",\"plates\":[{\"config\":{\"layer_height\":0.2,\"print_sequence\":\"by object\",\"wall_loops\":9},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"brim_type\":\"outer_only\",\"layer_height\":0.18,\"print_sequence\":\"by layer\"},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0},{\"config\":{\"brim_type\":\"no_brim\",\"layer_height\":0.08},\"id\":\"d5fa0a2d-10ff-48c0-a885-ce310620a61e\",\"maxZMm\":7.300000000000001,\"minZMm\":5.1}],\"name\":\"\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"layer_height\":0.1,\"sparse_infill_density\":30,\"wall_loops\":4},\"id\":\"722e9b1c-9710-4a10-9543-d376ba68eb07\",\"name\":\"\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":5,\"printable\":true},{\"config\":{},\"id\":\"756fcd0a-810b-4a1e-8059-a93c3285de8a\",\"name\":\"\",\"objects\":[{\"config\":{},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"5208cdc2-2f57-483a-9e34-b79ede3d51b4\",\"instances\":[{\"id\":\"21da6140-9e5d-4c0a-a187-7c59d0424e47\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[],\"name\":\"Second été\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"dd2ff360-7d3b-43db-8a61-4b43abbbfd73\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":2,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"settingsBaseConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.2,\"wall_loops\":2},\"settingsOverrides\":{\"curr_bed_type\":\"Cool Plate\",\"layer_height\":0.16,\"sparse_infill_density\":25},\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+      "revision": 0,
+      "hash": "fnv1a64:1f2aeb0658798043",
+      "projectJson": "{\"effectiveConfig\":{\"curr_bed_type\":\"Cool Plate\",\"layer_height\":0.16,\"sparse_infill_density\":25,\"wall_loops\":2},\"inheritedConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.2,\"wall_loops\":2},\"overrides\":{\"curr_bed_type\":\"Cool Plate\",\"layer_height\":0.16,\"sparse_infill_density\":25},\"sourceHash\":\"fnv1a64:1f2aeb0658798043\",\"sourceRevision\":0}",
+      "targets": [
+        {
+          "id": "project",
+          "scope": "project",
+          "label": "Scène — full",
+          "path": "Scène — full",
+          "overrideCount": 2,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":true,\"label\":\"Project\",\"overrides\":{\"layer_height\":0.16,\"sparse_infill_density\":25},\"scope\":\"project\"}],\"effectiveConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.16,\"sparse_infill_density\":25,\"wall_loops\":2},\"foreign\":{\"curr_bed_type\":\"Cool Plate\"},\"foreignIssues\":[{\"code\":\"setting-not-in-scope\",\"key\":\"curr_bed_type\",\"message\":\"curr_bed_type cannot be set on a project; the engine reads it from the plate\",\"path\":\"project.curr_bed_type\",\"scope\":\"project\"}],\"inheritedConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.2,\"wall_loops\":2},\"label\":\"Project\",\"overrides\":{\"layer_height\":0.16,\"sparse_infill_density\":25},\"sourceHash\":\"fnv1a64:1f2aeb0658798043\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[],\"source\":\"project\",\"value\":0.16},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"base\",\"value\":2},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"project\",\"value\":25},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\",\"value\":\"PEI\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "plate:756fcd0a-810b-4a1e-8059-a93c3285de8a",
+          "scope": "plate",
+          "targetId": "756fcd0a-810b-4a1e-8059-a93c3285de8a",
+          "label": "Plate",
+          "path": "Plate",
+          "overrideCount": 0,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{\"layer_height\":0.16,\"sparse_infill_density\":25},\"scope\":\"project\"},{\"id\":\"756fcd0a-810b-4a1e-8059-a93c3285de8a\",\"isTarget\":true,\"label\":\"Plate\",\"overrides\":{},\"scope\":\"plate\"}],\"effectiveConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.16,\"sparse_infill_density\":25,\"wall_loops\":2},\"foreign\":{},\"foreignIssues\":[],\"inheritedConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.16,\"sparse_infill_density\":25,\"wall_loops\":2},\"label\":\"Plate\",\"overrides\":{},\"sourceHash\":\"fnv1a64:1f2aeb0658798043\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[],\"source\":\"project\",\"value\":0.16},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"base\",\"value\":2},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"project\",\"value\":25},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\",\"value\":\"PEI\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "object:5208cdc2-2f57-483a-9e34-b79ede3d51b4",
+          "scope": "object",
+          "targetId": "5208cdc2-2f57-483a-9e34-b79ede3d51b4",
+          "label": "Second été",
+          "path": "Plate › Second été",
+          "overrideCount": 0,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{\"layer_height\":0.16,\"sparse_infill_density\":25},\"scope\":\"project\"},{\"id\":\"756fcd0a-810b-4a1e-8059-a93c3285de8a\",\"isTarget\":false,\"label\":\"Plate\",\"overrides\":{},\"scope\":\"plate\"},{\"id\":\"5208cdc2-2f57-483a-9e34-b79ede3d51b4\",\"isTarget\":true,\"label\":\"Second été\",\"overrides\":{},\"scope\":\"object\"}],\"effectiveConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.16,\"sparse_infill_density\":25,\"wall_loops\":2},\"foreign\":{},\"foreignIssues\":[],\"inheritedConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.16,\"sparse_infill_density\":25,\"wall_loops\":2},\"label\":\"Second été\",\"overrides\":{},\"sourceHash\":\"fnv1a64:1f2aeb0658798043\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[],\"source\":\"project\",\"value\":0.16},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"base\",\"value\":2},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"project\",\"value\":25},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\",\"value\":\"PEI\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "part:dd2ff360-7d3b-43db-8a61-4b43abbbfd73",
+          "scope": "part",
+          "targetId": "dd2ff360-7d3b-43db-8a61-4b43abbbfd73",
+          "label": "Body",
+          "path": "Plate › Second été › Body",
+          "overrideCount": 0,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{\"layer_height\":0.16,\"sparse_infill_density\":25},\"scope\":\"project\"},{\"id\":\"756fcd0a-810b-4a1e-8059-a93c3285de8a\",\"isTarget\":false,\"label\":\"Plate\",\"overrides\":{},\"scope\":\"plate\"},{\"id\":\"5208cdc2-2f57-483a-9e34-b79ede3d51b4\",\"isTarget\":false,\"label\":\"Second été\",\"overrides\":{},\"scope\":\"object\"},{\"id\":\"dd2ff360-7d3b-43db-8a61-4b43abbbfd73\",\"isTarget\":true,\"label\":\"Body\",\"overrides\":{},\"scope\":\"part\"}],\"effectiveConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.16,\"sparse_infill_density\":25,\"wall_loops\":2},\"foreign\":{},\"foreignIssues\":[],\"inheritedConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.16,\"sparse_infill_density\":25,\"wall_loops\":2},\"label\":\"Body\",\"overrides\":{},\"sourceHash\":\"fnv1a64:1f2aeb0658798043\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[],\"source\":\"project\",\"value\":0.16},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"base\",\"value\":2},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"project\",\"value\":25},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\",\"value\":\"PEI\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "plate:078bfd75-9aa9-410f-816e-690593e4a91f",
+          "scope": "plate",
+          "targetId": "078bfd75-9aa9-410f-816e-690593e4a91f",
+          "label": "Plate 1",
+          "path": "Plate 1",
+          "overrideCount": 1,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{\"layer_height\":0.16,\"sparse_infill_density\":25},\"scope\":\"project\"},{\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"isTarget\":true,\"label\":\"Plate 1\",\"overrides\":{\"print_sequence\":\"by object\"},\"scope\":\"plate\"}],\"effectiveConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.16,\"print_sequence\":\"by object\",\"sparse_infill_density\":25,\"wall_loops\":2},\"foreign\":{\"layer_height\":0.2,\"wall_loops\":9},\"foreignIssues\":[{\"code\":\"setting-not-in-scope\",\"key\":\"layer_height\",\"message\":\"layer_height cannot be set on a plate; the engine reads it from the project, object or height range\",\"path\":\"plate[078bfd75-9aa9-410f-816e-690593e4a91f].layer_height\",\"scope\":\"plate\"},{\"code\":\"setting-not-in-scope\",\"key\":\"wall_loops\",\"message\":\"wall_loops cannot be set on a plate; the engine reads it from the project, object, part or height range\",\"path\":\"plate[078bfd75-9aa9-410f-816e-690593e4a91f].wall_loops\",\"scope\":\"plate\"}],\"inheritedConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.16,\"sparse_infill_density\":25,\"wall_loops\":2},\"label\":\"Plate 1\",\"overrides\":{\"print_sequence\":\"by object\"},\"sourceHash\":\"fnv1a64:1f2aeb0658798043\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[],\"source\":\"project\",\"value\":0.16},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"base\",\"value\":2},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"project\",\"value\":25},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"plate\",\"sourceId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"value\":\"by object\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\",\"value\":\"PEI\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "object:60c4270b-c049-442a-8313-7564f4cad7ce",
+          "scope": "object",
+          "targetId": "60c4270b-c049-442a-8313-7564f4cad7ce",
+          "label": "Object",
+          "path": "Plate 1 › Object",
+          "overrideCount": 2,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{\"layer_height\":0.16,\"sparse_infill_density\":25},\"scope\":\"project\"},{\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"isTarget\":false,\"label\":\"Plate 1\",\"overrides\":{\"print_sequence\":\"by object\"},\"scope\":\"plate\"},{\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"isTarget\":true,\"label\":\"Object\",\"overrides\":{\"brim_type\":\"outer_only\",\"layer_height\":0.18},\"scope\":\"object\"}],\"effectiveConfig\":{\"brim_type\":\"outer_only\",\"curr_bed_type\":\"PEI\",\"layer_height\":0.18,\"print_sequence\":\"by object\",\"sparse_infill_density\":25,\"wall_loops\":2},\"foreign\":{\"print_sequence\":\"by layer\"},\"foreignIssues\":[{\"code\":\"setting-not-in-scope\",\"key\":\"print_sequence\",\"message\":\"print_sequence cannot be set on a object; the engine reads it from the project or plate\",\"path\":\"object[60c4270b-c049-442a-8313-7564f4cad7ce].print_sequence\",\"scope\":\"object\"}],\"inheritedConfig\":{\"curr_bed_type\":\"PEI\",\"layer_height\":0.16,\"print_sequence\":\"by object\",\"sparse_infill_density\":25,\"wall_loops\":2},\"label\":\"Object\",\"overrides\":{\"brim_type\":\"outer_only\",\"layer_height\":0.18},\"sourceHash\":\"fnv1a64:1f2aeb0658798043\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[{\"scope\":\"project\",\"value\":0.16}],\"source\":\"object\",\"sourceId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"value\":0.18},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"base\",\"value\":2},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"project\",\"value\":25},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"plate\",\"sourceId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"value\":\"by object\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\",\"value\":\"PEI\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"object\",\"sourceId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"value\":\"outer_only\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "part:8f0301bf-3cf5-4f43-8ec7-11cfb3df8106",
+          "scope": "part",
+          "targetId": "8f0301bf-3cf5-4f43-8ec7-11cfb3df8106",
+          "label": "Body",
+          "path": "Plate 1 › Object › Body",
+          "overrideCount": 1,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{\"layer_height\":0.16,\"sparse_infill_density\":25},\"scope\":\"project\"},{\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"isTarget\":false,\"label\":\"Plate 1\",\"overrides\":{\"print_sequence\":\"by object\"},\"scope\":\"plate\"},{\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"isTarget\":false,\"label\":\"Object\",\"overrides\":{\"brim_type\":\"outer_only\",\"layer_height\":0.18},\"scope\":\"object\"},{\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"isTarget\":true,\"label\":\"Body\",\"overrides\":{\"wall_loops\":3},\"scope\":\"part\"}],\"effectiveConfig\":{\"brim_type\":\"outer_only\",\"curr_bed_type\":\"PEI\",\"layer_height\":0.18,\"print_sequence\":\"by object\",\"sparse_infill_density\":25,\"wall_loops\":3},\"foreign\":{},\"foreignIssues\":[],\"inheritedConfig\":{\"brim_type\":\"outer_only\",\"curr_bed_type\":\"PEI\",\"layer_height\":0.18,\"print_sequence\":\"by object\",\"sparse_infill_density\":25,\"wall_loops\":2},\"label\":\"Body\",\"overrides\":{\"wall_loops\":3},\"sourceHash\":\"fnv1a64:1f2aeb0658798043\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[{\"scope\":\"project\",\"value\":0.16}],\"source\":\"object\",\"sourceId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"value\":0.18},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"part\",\"sourceId\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"value\":3},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"project\",\"value\":25},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"plate\",\"sourceId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"value\":\"by object\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\",\"value\":\"PEI\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"object\",\"sourceId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"value\":\"outer_only\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "part:722e9b1c-9710-4a10-9543-d376ba68eb07",
+          "scope": "part",
+          "targetId": "722e9b1c-9710-4a10-9543-d376ba68eb07",
+          "label": "Part",
+          "path": "Plate 1 › Object › Part",
+          "overrideCount": 2,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{\"layer_height\":0.16,\"sparse_infill_density\":25},\"scope\":\"project\"},{\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"isTarget\":false,\"label\":\"Plate 1\",\"overrides\":{\"print_sequence\":\"by object\"},\"scope\":\"plate\"},{\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"isTarget\":false,\"label\":\"Object\",\"overrides\":{\"brim_type\":\"outer_only\",\"layer_height\":0.18},\"scope\":\"object\"},{\"id\":\"722e9b1c-9710-4a10-9543-d376ba68eb07\",\"isTarget\":true,\"label\":\"Part\",\"overrides\":{\"sparse_infill_density\":30,\"wall_loops\":4},\"scope\":\"part\"}],\"effectiveConfig\":{\"brim_type\":\"outer_only\",\"curr_bed_type\":\"PEI\",\"layer_height\":0.18,\"print_sequence\":\"by object\",\"sparse_infill_density\":30,\"wall_loops\":4},\"foreign\":{\"layer_height\":0.1},\"foreignIssues\":[{\"code\":\"setting-not-in-scope\",\"key\":\"layer_height\",\"message\":\"layer_height cannot be set on a part; the engine reads it from the project, object or height range\",\"path\":\"part[722e9b1c-9710-4a10-9543-d376ba68eb07].layer_height\",\"scope\":\"part\"}],\"inheritedConfig\":{\"brim_type\":\"outer_only\",\"curr_bed_type\":\"PEI\",\"layer_height\":0.18,\"print_sequence\":\"by object\",\"sparse_infill_density\":25,\"wall_loops\":2},\"label\":\"Part\",\"overrides\":{\"sparse_infill_density\":30,\"wall_loops\":4},\"sourceHash\":\"fnv1a64:1f2aeb0658798043\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[{\"scope\":\"project\",\"value\":0.16}],\"source\":\"object\",\"sourceId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"value\":0.18},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"part\",\"sourceId\":\"722e9b1c-9710-4a10-9543-d376ba68eb07\",\"value\":4},{\"key\":\"sparse_infill_density\",\"shadowed\":[{\"scope\":\"project\",\"value\":25}],\"source\":\"part\",\"sourceId\":\"722e9b1c-9710-4a10-9543-d376ba68eb07\",\"value\":30},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"plate\",\"sourceId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"value\":\"by object\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\",\"value\":\"PEI\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"object\",\"sourceId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"value\":\"outer_only\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "layerRange:6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1",
+          "scope": "layerRange",
+          "targetId": "6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1",
+          "label": "0–5 mm",
+          "path": "Plate 1 › Object › 0–5 mm",
+          "overrideCount": 1,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{\"layer_height\":0.16,\"sparse_infill_density\":25},\"scope\":\"project\"},{\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"isTarget\":false,\"label\":\"Plate 1\",\"overrides\":{\"print_sequence\":\"by object\"},\"scope\":\"plate\"},{\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"isTarget\":false,\"label\":\"Object\",\"overrides\":{\"brim_type\":\"outer_only\",\"layer_height\":0.18},\"scope\":\"object\"},{\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"isTarget\":true,\"label\":\"0–5 mm\",\"overrides\":{\"layer_height\":0.12},\"scope\":\"layerRange\"}],\"effectiveConfig\":{\"brim_type\":\"outer_only\",\"curr_bed_type\":\"PEI\",\"layer_height\":0.12,\"print_sequence\":\"by object\",\"sparse_infill_density\":25,\"wall_loops\":2},\"foreign\":{},\"foreignIssues\":[],\"inheritedConfig\":{\"brim_type\":\"outer_only\",\"curr_bed_type\":\"PEI\",\"layer_height\":0.18,\"print_sequence\":\"by object\",\"sparse_infill_density\":25,\"wall_loops\":2},\"label\":\"0–5 mm\",\"overrides\":{\"layer_height\":0.12},\"sourceHash\":\"fnv1a64:1f2aeb0658798043\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[{\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"scope\":\"object\",\"value\":0.18},{\"scope\":\"project\",\"value\":0.16}],\"source\":\"layerRange\",\"sourceId\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"value\":0.12},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"base\",\"value\":2},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"project\",\"value\":25},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"plate\",\"sourceId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"value\":\"by object\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\",\"value\":\"PEI\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"object\",\"sourceId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"value\":\"outer_only\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "layerRange:d5fa0a2d-10ff-48c0-a885-ce310620a61e",
+          "scope": "layerRange",
+          "targetId": "d5fa0a2d-10ff-48c0-a885-ce310620a61e",
+          "label": "5.1–7.300000000000001 mm",
+          "path": "Plate 1 › Object › 5.1–7.300000000000001 mm",
+          "overrideCount": 1,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{\"layer_height\":0.16,\"sparse_infill_density\":25},\"scope\":\"project\"},{\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"isTarget\":false,\"label\":\"Plate 1\",\"overrides\":{\"print_sequence\":\"by object\"},\"scope\":\"plate\"},{\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"isTarget\":false,\"label\":\"Object\",\"overrides\":{\"brim_type\":\"outer_only\",\"layer_height\":0.18},\"scope\":\"object\"},{\"id\":\"d5fa0a2d-10ff-48c0-a885-ce310620a61e\",\"isTarget\":true,\"label\":\"5.1–7.300000000000001 mm\",\"overrides\":{\"layer_height\":0.08},\"scope\":\"layerRange\"}],\"effectiveConfig\":{\"brim_type\":\"outer_only\",\"curr_bed_type\":\"PEI\",\"layer_height\":0.08,\"print_sequence\":\"by object\",\"sparse_infill_density\":25,\"wall_loops\":2},\"foreign\":{\"brim_type\":\"no_brim\"},\"foreignIssues\":[{\"code\":\"setting-not-in-scope\",\"key\":\"brim_type\",\"message\":\"brim_type cannot be set on a height range; the engine reads it from the project or object\",\"path\":\"layerRange[d5fa0a2d-10ff-48c0-a885-ce310620a61e].brim_type\",\"scope\":\"layerRange\"}],\"inheritedConfig\":{\"brim_type\":\"outer_only\",\"curr_bed_type\":\"PEI\",\"layer_height\":0.18,\"print_sequence\":\"by object\",\"sparse_infill_density\":25,\"wall_loops\":2},\"label\":\"5.1–7.300000000000001 mm\",\"overrides\":{\"layer_height\":0.08},\"sourceHash\":\"fnv1a64:1f2aeb0658798043\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[{\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"scope\":\"object\",\"value\":0.18},{\"scope\":\"project\",\"value\":0.16}],\"source\":\"layerRange\",\"sourceId\":\"d5fa0a2d-10ff-48c0-a885-ce310620a61e\",\"value\":0.08},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"base\",\"value\":2},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"project\",\"value\":25},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"plate\",\"sourceId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"value\":\"by object\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\",\"value\":\"PEI\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"object\",\"sourceId\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"value\":\"outer_only\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        }
+      ],
+      "unknown": [
+        {
+          "scope": "plate",
+          "targetId": "00000000-0000-4000-8000-000000000001",
+          "message": "No plate node matches 00000000-0000-4000-8000-000000000001"
+        },
+        {
+          "scope": "object",
+          "targetId": "00000000-0000-4000-8000-000000000002",
+          "message": "No object node matches 00000000-0000-4000-8000-000000000002"
+        },
+        {
+          "scope": "part",
+          "targetId": "00000000-0000-4000-8000-000000000003",
+          "message": "No part node matches 00000000-0000-4000-8000-000000000003"
+        },
+        {
+          "scope": "layerRange",
+          "targetId": "import:missing:range",
+          "message": "No layerRange node matches import:missing:range"
+        }
+      ]
+    },
+    {
+      "name": "empty",
+      "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"\",\"objects\":[],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+      "revision": 0,
+      "hash": "fnv1a64:07e84a6b61f7e87d",
+      "projectJson": "{\"effectiveConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"inheritedConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"overrides\":{},\"sourceHash\":\"fnv1a64:07e84a6b61f7e87d\",\"sourceRevision\":0}",
+      "targets": [
+        {
+          "id": "project",
+          "scope": "project",
+          "label": "Foundation fixture",
+          "path": "Foundation fixture",
+          "overrideCount": 0,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":true,\"label\":\"Project\",\"overrides\":{},\"scope\":\"project\"}],\"effectiveConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"foreign\":{},\"foreignIssues\":[],\"inheritedConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"label\":\"Project\",\"overrides\":{},\"sourceHash\":\"fnv1a64:07e84a6b61f7e87d\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[],\"source\":\"base\",\"value\":0.24},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"base\",\"value\":15},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        },
+        {
+          "id": "plate:078bfd75-9aa9-410f-816e-690593e4a91f",
+          "scope": "plate",
+          "targetId": "078bfd75-9aa9-410f-816e-690593e4a91f",
+          "label": "Plate",
+          "path": "Plate",
+          "overrideCount": 0,
+          "snapshotJson": "{\"chain\":[{\"isTarget\":false,\"label\":\"Project\",\"overrides\":{},\"scope\":\"project\"},{\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"isTarget\":true,\"label\":\"Plate\",\"overrides\":{},\"scope\":\"plate\"}],\"effectiveConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"foreign\":{\"layer_height\":0.2},\"foreignIssues\":[{\"code\":\"setting-not-in-scope\",\"key\":\"layer_height\",\"message\":\"layer_height cannot be set on a plate; the engine reads it from the project, object or height range\",\"path\":\"plate[078bfd75-9aa9-410f-816e-690593e4a91f].layer_height\",\"scope\":\"plate\"}],\"inheritedConfig\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"label\":\"Plate\",\"overrides\":{},\"sourceHash\":\"fnv1a64:07e84a6b61f7e87d\",\"sourceRevision\":0}",
+          "explanationsJson": "[{\"key\":\"layer_height\",\"shadowed\":[],\"source\":\"base\",\"value\":0.24},{\"key\":\"wall_loops\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"sparse_infill_density\",\"shadowed\":[],\"source\":\"base\",\"value\":15},{\"key\":\"print_sequence\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"curr_bed_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"brim_type\",\"shadowed\":[],\"source\":\"base\"},{\"key\":\"not_a_setting\",\"shadowed\":[],\"source\":\"base\"}]"
+        }
+      ],
+      "unknown": [
+        {
+          "scope": "plate",
+          "targetId": "00000000-0000-4000-8000-000000000001",
+          "message": "No plate node matches 00000000-0000-4000-8000-000000000001"
+        },
+        {
+          "scope": "object",
+          "targetId": "00000000-0000-4000-8000-000000000002",
+          "message": "No object node matches 00000000-0000-4000-8000-000000000002"
+        },
+        {
+          "scope": "part",
+          "targetId": "00000000-0000-4000-8000-000000000003",
+          "message": "No part node matches 00000000-0000-4000-8000-000000000003"
+        },
+        {
+          "scope": "layerRange",
+          "targetId": "import:missing:range",
+          "message": "No layerRange node matches import:missing:range"
+        }
+      ]
+    }
+  ]
+}

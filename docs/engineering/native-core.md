@@ -3096,6 +3096,33 @@ seventh definition's steps, all Full Spectrum rule combinations and every
 row view. Rust, WASM in Node and Chrome and JNI match 14,938 replies, with
 78 refusals each. The Kotlin wrapper passes 24 checks.
 
+### Settings projection
+
+`settings::scoped` ports the read side of `scopedOverrides.ts` and
+`settingsOverrides.ts` over a project snapshot:
+
+- `targets`: every node a scoped edit can address, in the order a person
+  scans the scene (project, then plates by order with their objects, parts
+  and height ranges), with the browser's labels, `›` paths, fallback names,
+  height-range labels (`0.1–0.3 mm`, numbers as JavaScript prints them) and
+  in-scope override counts;
+- `snapshot`: one node's in-scope overrides, the keys it stores but does not
+  own with their `setting-not-in-scope` issues, the chain above it, and the
+  configuration resolved without and with it; an unknown node is the
+  browser's `No … node matches …`;
+- `explain`: one key's value, winning scope (or the base configuration) and
+  what it shadowed;
+- `project_overrides`: the project scope's inherited, override and
+  effective configurations.
+
+A settings surface decodes `inheritedConfig` and `overrides` into the
+settings editor exactly as the browser panels do.
+`settings-projection-vectors.mjs` builds three states from the browser's own
+project fixture (foreign keys, unnamed nodes, reordered plates, Unicode
+names, fractional heights, an empty plate) and pins 17 targets, their
+snapshots, 119 explanations and the unknown-node refusals. Rust matches all
+of them.
+
 ### Preset graph and profile catalog
 
 `settings::presets` ports `PresetGraph`, the pinned v2.3.4 preset semantics:
@@ -3787,6 +3814,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/projec
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-resolution-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-codec-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-editor-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-projection-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-catalog-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-library-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs
