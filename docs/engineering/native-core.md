@@ -2986,6 +2986,61 @@ range-reduction branch, thresholds, huge and subnormal inputs), 2,512 exp and
 1,509 hypot cases as bit patterns. The AMF rotation decoder, previously on
 `libm` trig, now uses it too.
 
+### Canonical slice preflight
+
+`runCanonicalSlicePreflight` is `orcaxr_project::slicing::preflight`. It has two
+entry points. `preflight` takes a `ValidatedProject` and reuses its admission
+report. `preflight_candidate` validates any typed candidate first, so graph
+errors become blocking `invalid-project-state` issues, as in the browser. Both
+also take an asset snapshot, the plate, typed `Constraints` and explicit
+`Limits`.
+
+`Constraints::validate` refuses malformed input first, with the browser's
+messages. The checks then run in the browser's order:
+
+- unknown and excluded plates, and plates with no printable instance;
+- empty model meshes;
+- exact model-volume bounds against the build volume, with `toFixed(3)`
+  formatting, plus sinking and AABB overlaps;
+- engine filament capacity;
+- the filaments each printable object uses. These come from object and volume
+  overrides, whole-facet paint, refined leaves, layer ranges and the wipe tower,
+  in first-use order;
+- disabled and deleted assignments, printer tool capability, unavailable
+  components and FullSpectrum material compatibility
+  (`filaments::compatibility`, the pinned category matrix);
+- gradient clamps, duplicates and dropped tools;
+- profile attestation, tool ranges, nozzle, material and temperature
+  constraints;
+- prime-tower relative E, ooze conflicts, diameter warnings and the brim
+  footprint (`wipe_tower_footprint_margin_mm`);
+- custom G-code NUL bytes and UTF-8 size.
+
+Issue IDs join code, detail, path and entity references. Issues sort by
+severity, code and ID, and equal IDs keep evaluation order, as in the stable
+browser sort. `Preflight::to_value` is the browser result shape.
+
+Unreadable meshes report the browser's own messages. Descriptor and payload
+agreement are checked per volume. `mesh::validate_indexed` decides decode
+refusals in `decodeIndexedMeshAsset` order. Bounds accumulate through
+`Mesh::accumulate_bounds`, which separates zero quaternions from non-finite
+transformed vertices. Each decoded mesh, or its refusal, is reused for the rest
+of the run. Budget and cancellation failures refuse the whole preflight; they
+are never reported as project faults.
+
+The browser's `Number`, `String(number)`, `toFixed` and `trim` conversions now
+have one home: `js_math::convert`. The archive re-exports it, and the layer-event
+key and the validation, split and facet messages use it instead of private
+copies.
+
+`slice-preflight-vectors.mjs` runs the production function over 76 cases.
+Together they cover all 28 codes, 8 mesh-refusal messages and 12 constraint
+refusals: lone surrogates, coerced config spellings, scope-filtered plate keys,
+tool order and the Unicode upper/lower-case mappings. Rust compares each result
+as canonical JSON bytes, checks that the admitted path agrees, and pins budget
+and cancellation refusals. Host endpoints and profile-derived constraints
+(`ProfilePreflightConstraints`) are not yet native.
+
 ## Edited canonical archive interchange
 
 `archive_interchange` and `test-archive-interchange.mjs` exercise actual archive
@@ -3389,6 +3444,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/projec
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-resolution-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-validation-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slice-preflight-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-store-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-command-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-session-vectors.mjs

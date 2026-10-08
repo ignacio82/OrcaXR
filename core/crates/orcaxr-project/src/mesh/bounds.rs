@@ -11,13 +11,15 @@ pub struct Bounds {
     pub max: [f64; 3],
 }
 impl Bounds {
-    fn empty() -> Self {
+    /// The accumulator before any vertex: infinite and refused by `finish`.
+    pub fn empty() -> Self {
         Self {
             min: [f64::INFINITY; 3],
             max: [f64::NEG_INFINITY; 3],
         }
     }
-    fn finish(self) -> Result<Self, Error> {
+    /// Refuse an accumulator that never saw a finite vertex.
+    pub fn finish(self) -> Result<Self, Error> {
         if self.min.iter().chain(&self.max).all(|v| v.is_finite()) {
             Ok(self)
         } else {
@@ -115,6 +117,17 @@ impl Mesh {
         let mut result = Bounds::empty();
         accumulate(self, &mut result, volume, instance, &mut cancelled)?;
         result.finish()
+    }
+    /// Widen `bounds` by this mesh after volume then instance TRS. Callers
+    /// that union several volumes report a failure at the volume that caused it.
+    pub fn accumulate_bounds(
+        &self,
+        bounds: &mut Bounds,
+        volume: &Transform,
+        instance: &Transform,
+        mut cancelled: impl FnMut() -> bool,
+    ) -> Result<(), Error> {
+        accumulate(self, bounds, volume, instance, &mut cancelled)
     }
 }
 #[derive(Debug, Clone, Copy, Default)]

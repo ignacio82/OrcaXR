@@ -194,6 +194,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Canonical slice preflight uses exact catalog/imported configuration. Three
   display defaults are never safety inputs. Imported projects slice as authored,
   without silently rebinding to a convenient bundled preset or dropping settings.
+  Rust `slicing::preflight` must keep replaying `slice-preflight-vectors.json`.
 - Published G-code binds exact project/revision/config/asset/engine identities.
   Preview, download and send reject drift. Keep output hashing and authoritative
   sidecar provenance intact; missing information remains unavailable.
@@ -214,7 +215,8 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   The Rust compatibility helpers now reproduce pinned V8 timestamp syntax and
   exact four-decimal collision keys. Browser `Math.sin/cos/exp/hypot/min/max` in
   ported code must use `orcaxr_project::js_math` (V8 12.4's own fdlibm port): the
-  `libm` crate's FreeBSD trig differs from V8 in the last bit for ~1% of inputs. Legacy timezone overflow needs an explicit
+  `libm` crate's FreeBSD trig differs from V8 in the last bit for ~1% of inputs;
+  `Number`/`String`/`toFixed`/`trim` go through `js_math::convert`. Legacy timezone overflow needs an explicit
   V8 integer profile; timezone-less dates need a host resolver with matching DST
   and historical rules. Resolver failure must propagate, never default to UTC
   or become an invalid-data diagnostic. Graph admission uses that explicit policy.

@@ -120,28 +120,8 @@ fn fixed(value: f64, decimals: u32) -> Result<NumericText, Error> {
     if value.abs() >= 1e21 {
         return number(value);
     }
-    let bits = value.abs().to_bits();
-    let exponent = ((bits >> 52) & 0x7ff) as i32;
-    let mantissa = (bits & ((1u64 << 52) - 1)) | if exponent == 0 { 0 } else { 1 << 52 };
-    // Exact |value| * 10^decimals (four or six). Below 10^21 a rounding carry
-    // fit in u128. Multiplication in f64 would round before the required step.
     let scale = 10u128.pow(decimals);
-    let numerator = u128::from(mantissa) * scale;
-    let shift = if exponent == 0 {
-        -1074
-    } else {
-        exponent - 1075
-    };
-    let rounded = if shift >= 0 {
-        numerator << shift
-    } else {
-        let right = (-shift) as u32;
-        if right >= 128 {
-            0
-        } else {
-            (numerator + (1u128 << (right - 1))) >> right
-        }
-    };
+    let rounded = orcaxr_project::js_math::convert::fixed_scaled(value, decimals);
     let mut result = Buffer::new();
     write!(
         &mut result,

@@ -504,11 +504,7 @@ pub(super) fn safe_integer(n: f64) -> bool {
 pub(super) fn number_key(n: f64) -> u64 {
     if n == 0.0 { 0 } else { n.to_bits() }
 }
-pub(super) fn js_number(n: f64) -> String {
-    let mut bytes = Vec::new();
-    Value::Number(n).write_canonical(&mut bytes).unwrap();
-    String::from_utf8(bytes).unwrap()
-}
+pub(super) use crate::js_math::convert::number_to_string as js_number;
 pub(super) fn fields(value: &JsonObject) -> &BTreeMap<Vec<u16>, Value> {
     let Value::Object(fields) = value.value() else {
         unreachable!("typed JSON object")

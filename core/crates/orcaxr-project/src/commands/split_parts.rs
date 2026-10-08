@@ -69,14 +69,7 @@ pub(super) struct SplitVolumeToParts {
     previous: Option<Arc<Previous>>,
 }
 
-/// `String(n)` for a finite number (what a template literal prints).
-fn js_number(n: f64) -> String {
-    let mut out = Vec::new();
-    Value::Number(n)
-        .write_canonical(&mut out)
-        .expect("finite numbers encode");
-    String::from_utf8(out).expect("ASCII")
-}
+use crate::js_math::convert::number_to_string as js_number;
 /// `assertTransform` for a typed transform: dimensions and finiteness hold by
 /// construction; zero scale and a zero rotation are refused.
 fn assert_transform(transform: &Transform, label: &str) -> Result<(), PreparationError> {

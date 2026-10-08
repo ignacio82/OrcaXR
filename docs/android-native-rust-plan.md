@@ -1209,7 +1209,11 @@ and replay coverage for the complete current command inventory.
   not option-value/profile validation, native settings commands or preflight.
   - [x] Port generated scope eligibility, layered resolution, import sanitization
     and configuration selectors with independent reference cases.
-  - [ ] Complete option/profile validation, settings commands and slice preflight.
+  - [x] Port canonical slice preflight (`slicing::preflight`) with FullSpectrum
+    material compatibility, exact mesh-refusal messages, explicit budgets and a
+    76-case browser corpus covering all 28 issue codes and 12 constraint refusals.
+  - [ ] Complete option/profile validation, settings commands, profile-derived
+    preflight constraints and host preflight endpoints.
 - [ ] Provide bounded object-tree, inspector, capability, selection, and renderer
   projections. Subscribe to revisioned deltas; do not send the complete project
   or all geometry to every panel after each edit.

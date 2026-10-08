@@ -390,19 +390,4 @@ fn number_key(value: f64) -> u64 {
         value.to_bits()
     }
 }
-fn js_number(value: f64) -> String {
-    if value.is_nan() {
-        return "NaN".into();
-    }
-    if !value.is_finite() {
-        return if value.is_sign_positive() {
-            "Infinity"
-        } else {
-            "-Infinity"
-        }
-        .into();
-    }
-    let mut bytes = Vec::new();
-    Value::Number(value).write_canonical(&mut bytes).unwrap();
-    String::from_utf8(bytes).unwrap()
-}
+use crate::js_math::convert::number_to_string as js_number;

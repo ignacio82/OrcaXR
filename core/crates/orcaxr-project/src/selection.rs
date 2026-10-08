@@ -14,6 +14,30 @@ pub enum SelectionRef {
     Filament(FilamentId),
 }
 impl SelectionRef {
+    /// The browser's `SelectionRef.kind`.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Project => "project",
+            Self::Plate(_) => "plate",
+            Self::Object(_) => "object",
+            Self::Volume(_) => "volume",
+            Self::Instance(_) => "instance",
+            Self::LayerRange(_) => "layer-range",
+            Self::Filament(_) => "filament",
+        }
+    }
+    /// The referenced entity ID; the project has none.
+    pub fn id(&self) -> Option<&[u16]> {
+        match self {
+            Self::Project => None,
+            Self::Plate(id) => Some(id.as_utf16()),
+            Self::Object(id) => Some(id.as_utf16()),
+            Self::Volume(id) => Some(id.as_utf16()),
+            Self::Instance(id) => Some(id.as_utf16()),
+            Self::LayerRange(id) => Some(id.as_utf16()),
+            Self::Filament(id) => Some(id.as_utf16()),
+        }
+    }
     pub fn exists(&self, state: &ProjectState) -> bool {
         match self {
             Self::Project => true,

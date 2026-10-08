@@ -5,7 +5,9 @@
 //! crate follows later FreeBSD revisions and differs in the last bit for about
 //! one argument in a hundred. `hypot` is V8's scaled, compensated sum, and
 //! `min`/`max` keep JavaScript's NaN and signed-zero rules. The
-//! `js-math-vectors.json` corpus pins all of this against V8.
+//! `js-math-vectors.json` corpus pins all of this against V8. `convert` holds
+//! the matching `Number`/`String`/`toFixed` conversions.
+pub mod convert;
 mod fdlibm;
 
 pub use fdlibm::{cos, exp, sin};
