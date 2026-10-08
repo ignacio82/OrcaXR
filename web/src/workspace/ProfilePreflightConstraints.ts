@@ -1,3 +1,4 @@
+import { compareCanonicalText } from '../project/domain/canonical';
 import type { FilamentId, PlateId } from '../project/domain/ids';
 import type {
   CanonicalSlicePreflightPort,
@@ -251,8 +252,8 @@ export class LiveProfileSlicePreflight implements CanonicalSlicePreflightPort {
       [...canonical.issues, ...profileIssues].sort(
         (left, right) =>
           severityRank(left.severity) - severityRank(right.severity) ||
-          left.code.localeCompare(right.code) ||
-          left.id.localeCompare(right.id),
+          compareCanonicalText(left.code, right.code) ||
+          compareCanonicalText(left.id, right.id),
       ),
     );
     const blockingCount = issues.filter((issue) => issue.severity === 'error').length;

@@ -46,19 +46,6 @@ pub const DEFAULT_CUSTOM_GCODE_LIMIT: f64 = 256.0 * 1024.0;
 pub const DEFAULT_GEOMETRY_TOLERANCE_MM: f64 = 1e-5;
 const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 
-macro_rules! names {
-    ($(#[$meta:meta])* $name:ident { $($variant:ident => $text:literal),+ $(,)? }) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        pub enum $name { $($variant),+ }
-        impl $name {
-            pub const ALL: &'static [Self] = &[$(Self::$variant),+];
-            pub fn as_str(self) -> &'static str {
-                match self { $(Self::$variant => $text),+ }
-            }
-        }
-    };
-}
 names!(
     /// `SlicePreflightCode`.
     Code {
@@ -153,7 +140,7 @@ pub struct Preflight {
     pub used_filament_ids: Vec<FilamentId>,
 }
 
-fn object<const N: usize>(fields: [(&str, Option<Value>); N]) -> Value {
+pub(super) fn object<const N: usize>(fields: [(&str, Option<Value>); N]) -> Value {
     Value::Object(
         fields
             .into_iter()
@@ -161,7 +148,7 @@ fn object<const N: usize>(fields: [(&str, Option<Value>); N]) -> Value {
             .collect(),
     )
 }
-fn string(units: &[u16]) -> Value {
+pub(super) fn string(units: &[u16]) -> Value {
     Value::String(units.to_vec())
 }
 fn entity_value(entity: &SelectionRef) -> Value {
@@ -173,7 +160,7 @@ fn entity_value(entity: &SelectionRef) -> Value {
         ("id", entity.id().map(string)),
     ])
 }
-fn ascii(text: &str) -> Value {
+pub(super) fn ascii(text: &str) -> Value {
     Value::String(text.encode_utf16().collect())
 }
 impl Issue {
@@ -298,6 +285,63 @@ pub struct Constraints {
     pub require_profile_attestation: bool,
     pub custom_gcode_byte_limit: Option<f64>,
     pub geometry_tolerance_mm: Option<f64>,
+}
+
+impl Constraints {
+    /// `SlicePreflightConstraints` as canonical JSON; absent members are left
+    /// out and an absent tool slot is `null`.
+    pub fn to_value(&self) -> Value {
+        let n = |v: Option<f64>| v.map(Value::Number);
+        let volume = |b: &BuildVolume| {
+            object([
+                ("minXmm", n(Some(b.min_x_mm))),
+                ("maxXmm", n(Some(b.max_x_mm))),
+                ("minYmm", n(Some(b.min_y_mm))),
+                ("maxYmm", n(Some(b.max_y_mm))),
+                ("minZmm", n(b.min_z_mm)),
+                ("maxZmm", n(Some(b.max_z_mm))),
+            ])
+        };
+        let tool = |t: &Option<ToolConstraints>| {
+            t.as_ref().map_or(Value::Null, |t| {
+                object([
+                    ("nozzleDiameterMm", n(t.nozzle_diameter_mm)),
+                    (
+                        "supportedMaterials",
+                        t.supported_materials.as_ref().map(|list| {
+                            Value::Array(list.iter().map(|m| string(m.units())).collect())
+                        }),
+                    ),
+                    ("minHotendTemperatureC", n(t.min_hotend_temperature_c)),
+                    ("maxHotendTemperatureC", n(t.max_hotend_temperature_c)),
+                ])
+            })
+        };
+        object([
+            ("buildVolume", self.build_volume.as_ref().map(volume)),
+            (
+                "tools",
+                (!self.tools.is_empty())
+                    .then(|| Value::Array(self.tools.iter().map(tool).collect())),
+            ),
+            (
+                "printer",
+                self.printer.as_ref().map(|p| {
+                    object([
+                        ("physicalToolCount", n(Some(p.physical_tool_count))),
+                        ("maxTotalFilaments", n(p.max_total_filaments)),
+                    ])
+                }),
+            ),
+            (
+                "requireProfileAttestation",
+                self.require_profile_attestation
+                    .then_some(Value::Bool(true)),
+            ),
+            ("customGcodeByteLimit", n(self.custom_gcode_byte_limit)),
+            ("geometryToleranceMm", n(self.geometry_tolerance_mm)),
+        ])
+    }
 }
 
 /// `assertPreflightConstraints`: malformed constraints are refused instead of
@@ -2169,14 +2213,9 @@ fn check_custom_gcode(
     }
 }
 
-/// `finish`: errors first, then code and ID in UTF-16 order; ties keep their
-/// evaluation order, as the browser's stable sort does.
-fn finish(
-    plate_id: &PlateId,
-    mut issues: Vec<Issue>,
-    mut printable: Vec<InstanceId>,
-    used: Ordered<Vec<u16>>,
-) -> Preflight {
+/// Errors first, then code and ID in UTF-16 order; ties keep their evaluation
+/// order, as the browser's stable sort does.
+pub(super) fn sort_issues(issues: &mut [Issue]) {
     let rank = |s: Severity| match s {
         Severity::Error => 0,
         Severity::Warning => 1,
@@ -2187,6 +2226,16 @@ fn finish(
             .then_with(|| a.code.as_str().cmp(b.code.as_str()))
             .then_with(|| a.id.units().cmp(b.id.units()))
     });
+}
+
+/// `finish`: sorted issues, sorted printable instances and used filaments.
+fn finish(
+    plate_id: &PlateId,
+    mut issues: Vec<Issue>,
+    mut printable: Vec<InstanceId>,
+    used: Ordered<Vec<u16>>,
+) -> Preflight {
+    sort_issues(&mut issues);
     let blocking_count = issues
         .iter()
         .filter(|i| i.severity == Severity::Error)

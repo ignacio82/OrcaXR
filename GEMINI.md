@@ -194,7 +194,8 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Canonical slice preflight uses exact catalog/imported configuration. Three
   display defaults are never safety inputs. Imported projects slice as authored,
   without silently rebinding to a convenient bundled preset or dropping settings.
-  Rust `slicing::preflight` must keep replaying `slice-preflight-vectors.json`.
+  Rust `slicing::preflight`/`profile` replay `slice-preflight`/`slice-profile`
+  vectors; issue order is UTF-16, never `localeCompare`.
 - Published G-code binds exact project/revision/config/asset/engine identities.
   Preview, download and send reject drift. Keep output hashing and authoritative
   sidecar provenance intact; missing information remains unavailable.

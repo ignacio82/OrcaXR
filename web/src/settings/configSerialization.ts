@@ -7,7 +7,7 @@
  * Keep the schema out of the browser bundle: it is intentionally large, while
  * this classifier is needed by lightweight profile/config import paths.
  */
-const STRING_VECTOR_KEYS = new Set<string>([
+export const STRING_VECTOR_KEYS: ReadonlySet<string> = new Set<string>([
   'adaptive_pressure_advance_model',
   'compatible_machine_expression_group',
   'compatible_printers',

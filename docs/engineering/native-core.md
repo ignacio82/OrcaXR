@@ -3038,8 +3038,40 @@ Together they cover all 28 codes, 8 mesh-refusal messages and 12 constraint
 refusals: lone surrogates, coerced config spellings, scope-filtered plate keys,
 tool order and the Unicode upper/lower-case mappings. Rust compares each result
 as canonical JSON bytes, checks that the admitted path agrees, and pins budget
-and cancellation refusals. Host endpoints and profile-derived constraints
-(`ProfilePreflightConstraints`) are not yet native.
+and cancellation refusals. Host endpoints are not yet native.
+
+### Live profile preflight targets
+
+`slicing::profile` ports `deriveLiveProfilePreflightConstraints` and
+`LiveProfileSlicePreflight`. `derive` reads only the engine wire strings a
+target declares. These are `printable_area` (exactly four distinct
+axis-aligned corners, decimal coordinates only), `printable_height`, a
+per-tool or uniform `nozzle_diameter`, and each tool's scalar
+`filament_type` and temperature range. Missing required facts fail closed as
+blocking diagnostics; missing optional facts are recorded as omissions.
+
+A catalog target needs exact machine, process and filament preset identities.
+An authored project attests from its own configuration. `attest` merges
+blocking diagnostics into the canonical result as `missing-profile-attestation`
+errors, and `preflight_target` derives, preflights and attests in one call.
+Tool counts above the host's `max_tools` are refused rather than allocated.
+
+`authored_target` builds an imported project's target from canonical state
+alone: `settingsBaseConfig ?? config` plus the physical filaments, through
+`engine_wire_config`. That function joins arrays with the option's PrintConfig
+delimiter, writes objects with `js_math::convert::json_stringify`, and slices
+the project's per-tool filament vectors. The browser helpers moved from
+`OrcaWorkspace` into `AuthoredSlicingTarget.ts`, so both shells share one
+source.
+
+The browser's merged sort used `localeCompare`, so issue order depended on the
+viewer's locale; filament IDs differing only in case swapped under a collation.
+It now uses the canonical UTF-16 comparison, with a regression test.
+
+`slice-profile-vectors.mjs` pins 31 derivations, 5 authored targets from
+canonical states, 4 merged attestations and the 26 string-vector keys. Covered
+cases include signed-zero corners, hex heights, and single-key objects rendered
+as JSON. The catalog itself is not native, so a host supplies catalog profiles.
 
 ## Edited canonical archive interchange
 
@@ -3445,6 +3477,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settin
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-validation-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slice-preflight-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slice-profile-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-store-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-command-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-session-vectors.mjs

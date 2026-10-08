@@ -1212,8 +1212,12 @@ and replay coverage for the complete current command inventory.
   - [x] Port canonical slice preflight (`slicing::preflight`) with FullSpectrum
     material compatibility, exact mesh-refusal messages, explicit budgets and a
     76-case browser corpus covering all 28 issue codes and 12 constraint refusals.
-  - [ ] Complete option/profile validation, settings commands, profile-derived
-    preflight constraints and host preflight endpoints.
+  - [x] Port live profile preflight targets (`slicing::profile`): catalog and
+    authored-project constraint derivation, attestation merging and the
+    authored target from canonical state (31 derivations, 5 authored targets,
+    4 attestations). The browser's locale-dependent merged sort is fixed.
+  - [ ] Complete option/profile validation, settings commands, a native
+    profile catalog and host preflight endpoints.
 - [ ] Provide bounded object-tree, inspector, capability, selection, and renderer
   projections. Subscribe to revisioned deltas; do not send the complete project
   or all geometry to every panel after each edit.

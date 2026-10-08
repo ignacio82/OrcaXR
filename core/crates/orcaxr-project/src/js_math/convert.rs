@@ -266,6 +266,93 @@ pub fn value_to_string(value: &Value) -> Vec<u16> {
     }
 }
 
+/// `JSON.stringify(value)` for JSON values. Object members follow JavaScript
+/// property order for an object parsed from canonical JSON: array-index keys in
+/// numeric order, then the other keys in canonical (UTF-16) order. Lone
+/// surrogates are escaped, as ES2019's well-formed `JSON.stringify` does.
+pub fn json_stringify(value: &Value) -> Vec<u16> {
+    let mut out = Vec::new();
+    stringify(value, &mut out);
+    out
+}
+fn stringify(value: &Value, out: &mut Vec<u16>) {
+    match value {
+        Value::Null => out.extend("null".encode_utf16()),
+        Value::Bool(b) => out.extend((if *b { "true" } else { "false" }).encode_utf16()),
+        Value::Number(n) if n.is_finite() => out.extend(number_to_string(*n).encode_utf16()),
+        Value::Number(_) => out.extend("null".encode_utf16()),
+        Value::String(units) => quote(units, out),
+        Value::Array(items) => {
+            out.push(u16::from(b'['));
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    out.push(u16::from(b','));
+                }
+                stringify(item, out);
+            }
+            out.push(u16::from(b']'));
+        }
+        Value::Object(fields) => {
+            let mut keys: Vec<&Vec<u16>> = fields.keys().collect();
+            // Array indices come first, numerically; the sort is stable.
+            keys.sort_by_key(|key| array_index(key).map_or((1, 0), |i| (0, i)));
+            out.push(u16::from(b'{'));
+            for (index, key) in keys.into_iter().enumerate() {
+                if index > 0 {
+                    out.push(u16::from(b','));
+                }
+                quote(key, out);
+                out.push(u16::from(b':'));
+                stringify(&fields[key], out);
+            }
+            out.push(u16::from(b'}'));
+        }
+    }
+}
+/// A canonical array index: `0` or a decimal without a leading zero, below
+/// 2^32 - 1.
+fn array_index(key: &[u16]) -> Option<u64> {
+    if key.is_empty() || key.len() > 10 || (key.len() > 1 && key[0] == u16::from(b'0')) {
+        return None;
+    }
+    let mut value = 0u64;
+    for unit in key {
+        let digit = char::from_u32(u32::from(*unit))?.to_digit(10)?;
+        value = value * 10 + u64::from(digit);
+    }
+    (value < 4_294_967_295).then_some(value)
+}
+/// `QuoteJSONString`.
+fn quote(units: &[u16], out: &mut Vec<u16>) {
+    out.push(u16::from(b'"'));
+    for decoded in char::decode_utf16(units.iter().copied()) {
+        match decoded {
+            Ok(c) => {
+                let escape = match c {
+                    '\u{8}' => Some("\\b"),
+                    '\t' => Some("\\t"),
+                    '\n' => Some("\\n"),
+                    '\u{c}' => Some("\\f"),
+                    '\r' => Some("\\r"),
+                    '"' => Some("\\\""),
+                    '\\' => Some("\\\\"),
+                    _ => None,
+                };
+                if let Some(escape) = escape {
+                    out.extend(escape.encode_utf16());
+                } else if (c as u32) < 0x20 {
+                    out.extend(format!("\\u{:04x}", c as u32).encode_utf16());
+                } else {
+                    let mut buffer = [0u16; 2];
+                    out.extend_from_slice(c.encode_utf16(&mut buffer));
+                }
+            }
+            Err(lone) => out.extend(format!("\\u{:04x}", lone.unpaired_surrogate()).encode_utf16()),
+        }
+    }
+    out.push(u16::from(b'"'));
+}
+
 /// `Number(value)` (ToNumber) for JSON values; `None` is `undefined`.
 pub fn value_to_number(value: Option<&Value>) -> f64 {
     match value {
@@ -346,5 +433,30 @@ mod tests {
         ] {
             assert_eq!(to_fixed(value, digits), text, "{value}.toFixed({digits})");
         }
+    }
+    #[test]
+    fn json_stringify_matches_ecmascript() {
+        let key = |k: &str| k.encode_utf16().collect::<Vec<_>>();
+        let value = Value::Object(
+            [
+                (
+                    key("b"),
+                    Value::Array(vec![Value::Number(-0.0), Value::Null]),
+                ),
+                (key("10"), Value::Bool(true)),
+                (key("2"), Value::Number(1e21)),
+                (
+                    key("01"),
+                    Value::String(vec![0xd800, 0x22, 0x5c, 0x0a, 0x01, 0x2028]),
+                ),
+                (key("4294967295"), Value::Object(Default::default())),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        assert_eq!(
+            String::from_utf16(&json_stringify(&value)).unwrap(),
+            "{\"2\":1e+21,\"10\":true,\"01\":\"\\ud800\\\"\\\\\\n\\u0001\u{2028}\",\"4294967295\":{},\"b\":[0,null]}"
+        );
     }
 }

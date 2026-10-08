@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 
+import { cloneProjectState } from '../../project/domain/canonical';
+import { entityId } from '../../project/domain/ids';
 import { createProjectFixture } from '../../project/__tests__/fixtures';
 import type { CanonicalProjectSliceSnapshot } from '../../project/slicing/types';
 import type { SlicerProfile } from '../../slicer/ProfileLoader';
@@ -155,6 +157,44 @@ test('merges stable profile-attestation errors into canonical preflight evidence
   assert.ok(result.issues.every((issue) => issue.actions.length === 0));
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(result.issues), true);
+});
+
+test('orders merged attestation evidence by UTF-16 code units, not the host locale', () => {
+  const fixture = createProjectFixture();
+  const state = cloneProjectState(fixture.state);
+  state.printer.toolCount = 4;
+  for (const [id, toolId] of [
+    ['import:case:B', 2],
+    ['import:case:a', 3],
+  ] as const) {
+    state.filaments.physical.push({
+      ...state.filaments.physical[0],
+      id: entityId<'physical-filament'>(id),
+      name: id,
+      toolId,
+      enabled: false,
+    });
+  }
+  const object = state.plates[0].objects[0];
+  object.filamentId = entityId<'physical-filament'>('import:case:a');
+  object.layerRanges[0].filamentId = entityId<'physical-filament'>('import:case:B');
+  const derivation = deriveLiveProfilePreflightConstraints({
+    primaryProfile: undefined,
+    filamentProfiles: [],
+    toolCount: 4,
+  });
+  const result = new LiveProfileSlicePreflight(derivation).evaluate(
+    { state, assets: [fixture.asset], sourceRevision: 1, sourceHash: 'h', sourceAssetHash: 'a' },
+    fixture.ids.plate,
+  );
+  // 'B' (U+0042) precedes 'a' (U+0061); a locale collation would swap them.
+  assert.deepEqual(
+    result.issues.filter((issue) => issue.code === 'disabled-filament-assignment').map((issue) => issue.entities[0]),
+    [
+      { kind: 'filament', id: 'import:case:B' },
+      { kind: 'filament', id: 'import:case:a' },
+    ],
+  );
 });
 
 function profile(filament: string, config: Readonly<Record<string, string>>): SlicerProfile {
