@@ -43,7 +43,7 @@
     },
     {
       "path": "web/src/project/filaments/recreateModelColors.ts",
-      "sha256": "fc247fa5d0e09421993f6d01e0b7cddb4feb4053edcb281938e7e14d889aa201"
+      "sha256": "537e340e20c5b68e4da827df374b3c68f3927dd645a2fa9e182c7a7ec156c07f"
     },
     {
       "path": "web/src/project/objects/splitToObjectsCommands.ts",

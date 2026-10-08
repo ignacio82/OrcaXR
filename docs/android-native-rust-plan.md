@@ -931,11 +931,16 @@ and replay coverage for the complete current command inventory.
   state when it runs, a stale refusal recomputes rather than rebases, and what
   reads the committed configuration refreshes on acknowledgement. Primitives,
   library and calibration models and single-gauge placement add their object and
-  mesh bytes as staged work, identical bytes stored once. In
-  process, a command the session refuses reports the browser's own error; the
-  wire still carries only `commandFailed`. Other workflows, remote projections
-  and production worker/JNI execution are not migrated yet. Browser capture and
-  placement planning still run synchronously.
+  mesh bytes as staged work, identical bytes stored once. Model, geometry and
+  project imports commit as one staged `importProject` entry after the preview's
+  checks, model colour recreation submits its intent with adopted tool IDs drawn
+  first, and slices, saves and exports capture only after queued edits settle.
+  In process, a command the session refuses reports the browser's own error; the
+  wire still carries only `commandFailed`. New-project resets and calibration
+  sessions replace the document rather than edit it, so they stay session
+  lifecycle operations. Remote projections and production worker/JNI execution
+  are not migrated yet, and browser capture and placement planning still run
+  synchronously on the UI thread.
   - [x] Route the plate/history, rename, transform and specified lifecycle/staged
     browser actions through guarded asynchronous acknowledgements.
   - [x] Route project and scoped settings commits through guarded settings
@@ -959,8 +964,10 @@ and replay coverage for the complete current command inventory.
     reserving the slicer while it waits.
   - [x] Commit model, geometry and project imports through guarded staged work
     (`importProject`), bundle-checked in both bindings before anything changes.
-  - [ ] Migrate remaining editing/import/save/slice routes and isolate
-    preparation work; preserve the registry boundary for every mutation.
+  - [x] Route model colour recreation through a guarded intent.
+  - [ ] Isolate preparation work (staged capture and measurement, placement
+    planning) off the UI thread; preserve the registry boundary for every
+    mutation.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,
   immutable asset repository, selectors, and session lifecycle into Rust.
   Use immutable shared asset ownership and bounded history; transform/undo must

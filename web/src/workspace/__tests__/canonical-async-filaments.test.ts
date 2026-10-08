@@ -9,6 +9,8 @@ import { AsyncSessionError } from '../../project/AsyncEditorSession';
 import { entityId, seededRandom, UuidIdSource } from '../../project/domain/ids';
 import { identityTransform, type PhysicalFilament } from '../../project/domain/model';
 import { BbsProjectImportParser } from '../../project/import/BbsProjectImportParser';
+import { ReplaceProjectCommand } from '../../project/commands';
+import { cloneProjectState } from '../../project/domain/canonical';
 import { CanonicalWorkspaceController } from '../CanonicalWorkspaceController';
 
 function setup() {
@@ -104,6 +106,54 @@ await test('wipe-tower placement waits for acknowledgement and refuses a competi
     await assert.rejects(competing, stale);
     assert.deepEqual(footprint(controller), newer);
     assert.equal(controller.getPlateWipeTower(plateId), undefined);
+  } finally {
+    controller.dispose();
+  }
+});
+
+await test('a recreate plan applies as one guarded intent: slots adopted, a recipe assigned, exact undo', async () => {
+  const { controller } = setup();
+  try {
+    // A volume whose source colour no loaded filament matches.
+    const session = controller['session'];
+    const state = cloneProjectState(session.project.getSnapshot().state);
+    const volume = state.plates[0].objects[0].volumes[0];
+    volume.extensionData = { 'orcaxr:sourceMaterial': { color: '#FF8000', name: 'Orange part' } };
+    delete state.plates[0].objects[0].filamentId;
+    delete volume.filamentId;
+    session.execute(new ReplaceProjectCommand(state));
+    const before = footprint(controller);
+    const printerSlots = [
+      { toolId: 0, color: '#FF0000', material: 'PLA', subType: 'Matte', vendor: 'Snapmaker' },
+      { toolId: 1, color: '#FFFF00', material: 'PLA' },
+      { toolId: 2, color: '#FFFFFF', material: 'PLA', vendor: 'Snapmaker' },
+      { toolId: 3, color: '#000000', material: 'PLA', subType: 'Matte' },
+    ];
+    const plan = controller.planRecreateModelColors({ printerSlots, allowNewFullSpectrumRecipes: true });
+    assert.equal(plan.matches.length, 1);
+    const pending = controller.recreateModelColors(plan);
+    assert.deepEqual(footprint(controller), before, 'nothing applies before acknowledgement');
+    assert.equal(await pending, true);
+
+    const after = session.project.getSnapshot().state;
+    assert.deepEqual(
+      after.filaments.physical.map((filament) => [filament.toolId, filament.color]),
+      printerSlots.map((slot) => [slot.toolId, slot.color]),
+    );
+    assert.equal(after.printer.toolCount, 4);
+    assert.equal(after.filaments.mixed.length, 1);
+    assert.equal(after.plates[0].objects[0].volumes[0].filamentId, after.filaments.mixed[0].id);
+    const physicalIds = new Set(after.filaments.physical.map((filament) => filament.id));
+    assert.ok(after.filaments.mixed[0].components.every((component) => physicalIds.has(component.filamentId as never)));
+    const summary = controller.getSummary();
+    assert.equal(summary.history.undoCount, before.summary.history.undoCount + 1);
+    assert.equal(summary.history.undoLabel, 'Recreate 1 model color');
+
+    // A plan read before a newer edit refuses before anything is submitted.
+    assert.equal(await controller.undoAsync(), true);
+    assert.equal(controller.captureProjectExportGuard().semanticHash, before.identity.semanticHash);
+    controller.setProjectConfig({ edit_probe: 'newer' });
+    await assert.rejects(controller.recreateModelColors(plan), /stale|changed/i);
   } finally {
     controller.dispose();
   }

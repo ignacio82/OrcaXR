@@ -13,7 +13,7 @@
     },
     {
       "path": "testdata/cross-platform/project-command-vectors.json",
-      "sha256": "432b3d4573943a525bc2604976744242d46ceb6d306a4214e4575ae29c014380"
+      "sha256": "08859c2e68c270204d74bc4743ab80d383cc778d729e46a5271e7cf47b28ad15"
     },
     {
       "path": "web/src/project/session.ts",

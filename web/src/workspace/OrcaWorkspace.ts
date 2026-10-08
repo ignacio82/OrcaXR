@@ -9632,7 +9632,7 @@ export class OrcaWorkspace extends xb.Script {
         overrides = result.overrides;
       }
 
-      const applied = this.canonicalProject.recreateModelColors(plan, overrides);
+      const applied = await this.canonicalProject.recreateModelColors(plan, overrides);
       if (applied) {
         if (plan.printerSlotsToAdopt && plan.printerSlotsToAdopt.length > 0) {
           this.adoptPrinterFilamentPresets(

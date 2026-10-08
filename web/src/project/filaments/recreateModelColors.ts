@@ -581,15 +581,20 @@ export class RecreateModelColorsCommand extends SnapshotFilamentCommand {
 }
 
 /** Execute a color recreation plan within a single atomic history transaction. */
-export function executeRecreateModelColors(
-  session: EditorSession,
+/**
+ * The command inputs a plan resolves to against the current project: stale
+ * plans refuse, and undefined means there is nothing to do. New mixed recipes
+ * and candidate tools draw their IDs here; tools adopted from printer slots
+ * without a candidate draw theirs when the command applies.
+ */
+export function prepareRecreateModelColors(
+  currentSnapshot: { readonly revision: number; readonly hash: string; readonly state: ProjectState },
   plan: RecreateModelColorsPlan,
   idSource: IdSource,
   overrides?: ReadonlyMap<string, FilamentId>,
-): boolean {
-  if (plan.matches.length === 0) return false;
+): PreparedRecreateModelColors | undefined {
+  if (plan.matches.length === 0) return undefined;
 
-  const currentSnapshot = session.project.getSnapshot();
   if (
     plan.sourceRevision !== 0 &&
     (currentSnapshot.revision !== plan.sourceRevision || currentSnapshot.hash !== plan.sourceHash)
@@ -665,16 +670,39 @@ export function executeRecreateModelColors(
     newMixedFilaments.length === 0 &&
     (!plan.printerSlotsToAdopt || plan.printerSlotsToAdopt.length === 0)
   ) {
-    return false;
+    return undefined;
   }
-
-  const command = new RecreateModelColorsCommand(
+  return {
     mappings,
     newMixedFilaments,
-    plan.printerSlotsToAdopt,
-    resolvedPhysicalCandidates,
-    idSource,
+    ...(plan.printerSlotsToAdopt ? { printerSlots: plan.printerSlotsToAdopt } : {}),
+    candidates: resolvedPhysicalCandidates,
+  };
+}
+
+export interface PreparedRecreateModelColors {
+  readonly mappings: readonly RecreateModelColorsApplyMapping[];
+  readonly newMixedFilaments: readonly MixedFilament[];
+  readonly printerSlots?: readonly PrinterFilamentSlotFacts[];
+  readonly candidates: readonly PhysicalFilament[];
+}
+
+export function executeRecreateModelColors(
+  session: EditorSession,
+  plan: RecreateModelColorsPlan,
+  idSource: IdSource,
+  overrides?: ReadonlyMap<string, FilamentId>,
+): boolean {
+  const prepared = prepareRecreateModelColors(session.project.getSnapshot(), plan, idSource, overrides);
+  if (!prepared) return false;
+  session.execute(
+    new RecreateModelColorsCommand(
+      prepared.mappings,
+      prepared.newMixedFilaments,
+      prepared.printerSlots,
+      prepared.candidates,
+      idSource,
+    ),
   );
-  session.execute(command);
   return true;
 }

@@ -147,7 +147,8 @@ import {
 } from '../project/filaments/mixedCommands';
 import {
   planRecreateModelColors,
-  executeRecreateModelColors,
+  prepareRecreateModelColors,
+  RecreateModelColorsCommand,
   type RecreateModelColorsPlan,
   type RecreateModelColorsOptions,
 } from '../project/filaments/recreateModelColors';
@@ -4670,10 +4671,59 @@ export class CanonicalWorkspaceController {
     });
   }
 
-  /** Execute a calculated color recreation plan atomically on the canonical project session. */
-  recreateModelColors(plan: RecreateModelColorsPlan, overrides?: ReadonlyMap<string, FilamentId>): boolean {
+  /**
+   * Apply a calculated color recreation plan as one guarded intent: false when
+   * it has nothing to do, a stale plan refuses before anything is submitted.
+   * Tools adopted from printer slots without a candidate get IDs drawn here,
+   * in slot order, so every binding names them identically.
+   */
+  async recreateModelColors(
+    plan: RecreateModelColorsPlan,
+    overrides?: ReadonlyMap<string, FilamentId>,
+  ): Promise<boolean> {
     this.assertActive();
-    return executeRecreateModelColors(this.session, plan, this.options.idSource, overrides);
+    const snapshot = this.session.project.getSnapshot();
+    const prepared = prepareRecreateModelColors(snapshot, plan, this.options.idSource, overrides);
+    if (!prepared) return false;
+    const existing = new Set(snapshot.state.filaments.physical.map((filament) => filament.toolId));
+    const candidates = new Set(prepared.candidates.map((filament) => filament.toolId));
+    const adopted = new Set(
+      (prepared.printerSlots ?? [])
+        .map((slot) => slot.toolId)
+        .filter((toolId) => !existing.has(toolId) && !candidates.has(toolId)),
+    );
+    const newIds = [...adopted].map(() => this.options.idSource.next('physical-filament'));
+    new RecreateModelColorsCommand(
+      prepared.mappings,
+      prepared.newMixedFilaments,
+      prepared.printerSlots,
+      prepared.candidates,
+    );
+    await this.executeEditIntent((text) => ({
+      recreateModelColors: {
+        mappings: prepared.mappings.map((mapping) => ({
+          sourceColor: text(mapping.sourceColor),
+          destinationFilamentId: text(mapping.destinationFilamentId),
+          sourceFilamentIds: mapping.sourceFilamentIds
+            ? { value: mapping.sourceFilamentIds.map(text) }
+            : { absent: {} },
+        })),
+        newMixedFilaments: prepared.newMixedFilaments.map((mixed) => mixedFilamentWire(mixed, text)),
+        printerSlots: (prepared.printerSlots ?? []).map((slot) => ({
+          toolId: slot.toolId,
+          color: text(slot.color),
+          material: text(slot.material),
+          subType: slot.subType === undefined ? { absent: {} } : { value: text(slot.subType) },
+          vendor: slot.vendor === undefined ? { absent: {} } : { value: text(slot.vendor) },
+        })),
+        candidateTools: prepared.candidates.map((filament) => ({
+          toolId: filament.toolId,
+          filamentId: text(filament.id),
+        })),
+        newFilamentIds: newIds.length > 0 ? { value: newIds.map(text) } : { absent: {} },
+      },
+    }));
+    return true;
   }
 
   saveCanonical3mf(cancellation?: CancellationToken): Promise<SerializedProject> {
