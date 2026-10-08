@@ -12,7 +12,7 @@ import {
   type Vec3,
 } from '../domain/model';
 import { canonicalStringify, cloneJson, deepFreeze } from '../domain/canonical';
-import type { FacetRefinedRootSet } from '../domain/facetRefinement';
+import { expandFacetRefinementRoots, type FacetRefinedRootSet } from '../domain/facetRefinement';
 import { triangleRangesFromIndices, validateFacetAnnotations } from './sparse';
 import {
   FacetAnnotationValidationError,
@@ -502,6 +502,54 @@ export function applyFacetRefinedStateUpdates(
   return deepFreeze({
     version: ORCA_REFINEMENT_ENCODING_VERSION,
     roots,
+  });
+}
+
+/**
+ * The encoded roots a stroke over `selection` commits through the refined
+ * path: the selected leaves painted with `target`, refined Gap Fill's
+ * per-fragment targets, or — for Gap Fill over unrefined facets — the dense
+ * roots with each fragment replaced, which the commit boundary collapses
+ * again. `undefined` means the stroke commits as triangle ranges.
+ */
+export function facetRefinementAfterSelection(
+  channel: FacetAnnotationChannel,
+  selection: FacetRegionSelection,
+  assignments: readonly TriangleAssignments<JsonValue>[],
+  triangleCount: number,
+  target: FacetRegionState,
+): FacetRefinedRootSet | undefined {
+  if (selection.refinement) {
+    if (selection.gapFillReplacements !== undefined) {
+      return applyFacetRefinedStateUpdates(
+        channel,
+        selection.refinement,
+        selection.gapFillReplacements.flatMap((replacement) =>
+          (replacement.refinedLeaves ?? []).map((leaf) => ({
+            ...leaf,
+            target: replacement.target,
+          })),
+        ),
+      );
+    }
+    return applyFacetRefinedSelection(channel, selection.refinement, target);
+  }
+  if (selection.gapFillReplacements === undefined) return undefined;
+
+  const roots = expandFacetRefinementRoots(undefined, assignments, triangleCount);
+  const replacementByTriangle = new Map<number, FacetRegionState>();
+  for (const replacement of selection.gapFillReplacements) {
+    for (const triangle of replacement.triangleIndices) replacementByTriangle.set(triangle, replacement.target);
+  }
+  return deepFreeze({
+    version: ORCA_REFINEMENT_ENCODING_VERSION,
+    roots: roots.map((root, triangle): FacetRefinementNode => {
+      const replacement = replacementByTriangle.get(triangle);
+      if (!replacement) return root;
+      return replacement.kind === 'unpainted'
+        ? { kind: 'leaf', state: { kind: 'unpainted' } }
+        : { kind: 'leaf', state: { kind: 'assigned', value: cloneJson(replacement.value) } };
+    }),
   });
 }
 

@@ -3236,6 +3236,23 @@ overlays — plus 44 refusals (including every malformed-refinement issue) and
 2 stale topologies. Rust reproduces all 5,938 cases, 59 of them refined, and
 every mesh's neighbour table exactly.
 
+A stroke commits the tree `region::refinement_after` returns (the browser's
+`facetRefinementAfterSelection`, which `PaintStrokeService` commits): a
+refined selection's selected leaves painted with the target, or refined Gap
+Fill's per-fragment leaf targets (`apply_refined_selection` and
+`apply_refined_updates`, the browser's `applyFacetRefinedSelection` and
+`applyFacetRefinedStateUpdates`), with every branch the update makes
+homogeneous collapsed as `remove_useless_children()` does; Gap Fill over
+unrefined facets yields the dense roots with each fragment replaced, and any
+other selection commits ranges (`None`). The helpers check the selection as
+the browser checks a host's — split topology, depth and node budgets, leaf
+states for the channel, then the leaf list's order and states — and each
+update's leaf reference, target state, existence and uniqueness. The corpus
+records 190 commit trees (every refined selection painting and erasing,
+refined and dense Gap Fill) and eleven refusals over a small materialized
+selection; a 66-level split chain is recorded as its shape because it nests
+past JSON readers' limits. Rust reproduces all of them.
+
 Hosts select over a live session (`facets::region_exchange`, the browser's
 `FacetRegionExchange.ts`). A `FacetRegionRequest` names a volume, a channel,
 the seed facet, the tool and the optional clipping plane, selection transform

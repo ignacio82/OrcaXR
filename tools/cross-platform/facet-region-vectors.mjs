@@ -4,13 +4,16 @@
 // overhang gate, and Gap Fill over every channel, plus each validation
 // refusal and a stale topology. Meshes include a closed cube, an icosphere, an
 // open terrain, a patchwork grid and a non-manifold fan with a degenerate
-// facet. Replayed by Rust.
+// facet. Then the tree each refined commit leaves and the commit helpers'
+// refusals. Replayed by Rust.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import {
   applyFacetRefinedSelection,
+  applyFacetRefinedStateUpdates,
   buildOrcaFaceNeighbors,
+  facetRefinementAfterSelection,
   materializeFacetRefinement,
   selectFacetRegion,
 } from "../../web/src/project/annotations/FacetRegionSelection.ts";
@@ -245,6 +248,7 @@ const TRANSFORMS = [
 
 // --- Cases -------------------------------------------------------------------
 const cases = [];
+const selections = [];
 const refinedJson = (refined) => ({
   ...(refined.edgeLimitMm === undefined
     ? {}
@@ -317,6 +321,7 @@ function run(name, meshIndex, channel, annotations, request, options = {}) {
     request,
     result,
   });
+  selections.push(selection);
   return selection;
 }
 
@@ -996,6 +1001,224 @@ refuse(
   meshes.length - 1,
 );
 
+// Refined commits (`facetRefinementAfterSelection`): the tree each selection
+// that commits through the refined path leaves — refined strokes painting and
+// erasing, refined Gap Fill's per-fragment targets and dense Gap Fill — then
+// the commit helpers' refusals.
+const PAINT_TARGET = {
+  color: "filament:green",
+  support: "block",
+  seam: "avoid",
+  fuzzySkin: true,
+  brim: false,
+};
+const commits = [];
+selections.forEach((selection, index) => {
+  const replacements = selection?.gapFillReplacements;
+  if (!selection?.refinement && !replacements?.length) return;
+  const c = cases[index];
+  const targets = replacements
+    ? [undefined]
+    : [
+        { kind: "assigned", value: PAINT_TARGET[c.channel] },
+        { kind: "unpainted" },
+      ];
+  for (const target of targets) {
+    const after = facetRefinementAfterSelection(
+      c.channel,
+      selection,
+      c.assignments,
+      c.request.guard.triangleCount,
+      target ?? { kind: "unpainted" },
+    );
+    commits.push({
+      case: index,
+      ...(target ? { target } : {}),
+      roots: JSON.parse(JSON.stringify(after.roots)),
+    });
+  }
+});
+
+const commitRefusals = [];
+// `recorded` stands in for a selection too deep for JSON readers' nesting
+// limits; `chain` says how the replay rebuilds it.
+function refuseCommit(name, channel, selection, updates, recorded) {
+  try {
+    applyFacetRefinedStateUpdates(channel, selection, updates);
+  } catch (error) {
+    if (!(error instanceof FacetAnnotationValidationError)) throw error;
+    commitRefusals.push({
+      name,
+      channel,
+      selection: refinedJson(recorded?.selection ?? selection),
+      ...(recorded ? { chain: recorded.chain } : {}),
+      updates: JSON.parse(JSON.stringify(updates)),
+      issues: error.issues.map((i) => ({ ...i })),
+    });
+    return;
+  }
+  throw new Error(`commit refusal ${name} was accepted`);
+}
+{
+  // A small refined selection: the cube with one facet painted and one
+  // subdivided, its first and last leaves selected.
+  const leaf = () => ({ kind: "leaf", state: { kind: "unpainted" } });
+  const materialized = materializeFacetRefinement({
+    mesh: { vertices: meshes[0].vertices, triangles: meshes[0].triangles },
+    annotations: {
+      ...emptyAnnotations(1),
+      color: [{ value: "filament:red", triangles: [0] }],
+    },
+    channel: "color",
+    guard: { topologyRevision: 1, triangleCount: 12 },
+    refinement: {
+      version: 2,
+      triangleCount: 12,
+      splits: [
+        {
+          triangle: 3,
+          node: {
+            kind: "split",
+            splitSides: 3,
+            specialSide: 0,
+            children: [
+              {
+                kind: "leaf",
+                state: { kind: "assigned", value: "filament:green" },
+              },
+              leaf(),
+              leaf(),
+              leaf(),
+            ],
+          },
+        },
+      ],
+    },
+  });
+  const stroke = {
+    ...materialized,
+    leaves: materialized.leaves.map((l, i, all) => ({
+      ...l,
+      selected: i === 0 || i === all.length - 1,
+    })),
+  };
+  const unpainted = { kind: "unpainted" };
+  const roots = stroke.encoding.roots;
+  const withRoots = (replace) => ({
+    ...stroke,
+    encoding: { version: 2, roots: roots.map((r, i) => replace(r, i)) },
+  });
+  const withLeaves = (leaves) => ({ ...stroke, leaves });
+  const selected = stroke.leaves.filter((leaf) => leaf.selected);
+  const updatesFor = (target) =>
+    selected.map((leaf) => ({
+      sourceTriangle: leaf.sourceTriangle,
+      path: [...leaf.path],
+      target,
+    }));
+  const split = roots.findIndex((r) => r.kind === "split");
+  const whole = roots.findIndex((r) => r.kind === "leaf");
+  assert.ok(split >= 0 && whole >= 0 && selected.length > 1);
+
+  refuseCommit("states of another channel", "support", stroke, []);
+  refuseCommit(
+    "target of another channel",
+    "color",
+    stroke,
+    updatesFor({ kind: "assigned", value: true }),
+  );
+  refuseCommit("missing leaves", "color", stroke, [
+    { sourceTriangle: whole, path: [0], target: unpainted },
+    { sourceTriangle: split, path: [], target: unpainted },
+  ]);
+  refuseCommit("duplicate leaf", "color", stroke, [
+    ...updatesFor(unpainted).slice(0, 1),
+    ...updatesFor(unpainted).slice(0, 1),
+  ]);
+  refuseCommit("leaf references", "color", stroke, [
+    { sourceTriangle: -1, path: [], target: unpainted },
+    { sourceTriangle: roots.length, path: [], target: unpainted },
+    { sourceTriangle: 1.5, path: [], target: unpainted },
+    { sourceTriangle: whole, path: [4], target: unpainted },
+    { sourceTriangle: whole, path: [-1], target: unpainted },
+    { sourceTriangle: whole, path: [0.5], target: unpainted },
+  ]);
+  refuseCommit(
+    "leaf count",
+    "color",
+    withLeaves(stroke.leaves.slice(0, -1)),
+    [],
+  );
+  refuseCommit(
+    "leaf order",
+    "color",
+    withLeaves([...stroke.leaves].reverse()),
+    [],
+  );
+  refuseCommit(
+    "leaf state",
+    "color",
+    withLeaves(
+      stroke.leaves.map((l, i) =>
+        i === 0
+          ? {
+              ...l,
+              state:
+                l.state.kind === "unpainted"
+                  ? { kind: "assigned", value: "filament:red" }
+                  : unpainted,
+            }
+          : l,
+      ),
+    ),
+    [],
+  );
+  refuseCommit(
+    "split topology",
+    "color",
+    withRoots((r, i) =>
+      i === split
+        ? {
+            kind: "split",
+            splitSides: 3,
+            specialSide: 1,
+            children: [leaf(), leaf(), leaf(), leaf()],
+          }
+        : i === whole
+          ? { kind: "split", splitSides: 2, specialSide: 0, children: [leaf()] }
+          : r,
+    ),
+    [],
+  );
+  refuseCommit(
+    "encoded state",
+    "color",
+    withRoots((r, i) =>
+      i === whole
+        ? { kind: "leaf", state: { kind: "assigned", value: true } }
+        : r,
+    ),
+    [],
+  );
+  // A chain of one-side splits, each holding an unpainted leaf and the next.
+  const chain = (depth) =>
+    depth === 0
+      ? leaf()
+      : {
+          kind: "split",
+          splitSides: 1,
+          specialSide: 0,
+          children: [leaf(), chain(depth - 1)],
+        };
+  refuseCommit(
+    "depth",
+    "color",
+    withRoots((r, i) => (i === whole ? chain(66) : r)),
+    [],
+    { selection: stroke, chain: { root: whole, levels: 66 } },
+  );
+}
+
 const neighbors = meshes
   .slice(0, -1)
   .map((mesh) => buildOrcaFaceNeighbors(mesh).map((n) => [...n]));
@@ -1016,6 +1239,8 @@ const output =
       meshes,
       neighbors,
       cases,
+      commits,
+      commitRefusals,
     },
     null,
     0,
@@ -1033,5 +1258,5 @@ const refinedCount = cases.filter(
   (c) => c.result.refinement || c.result.materialized,
 ).length;
 console.log(
-  `facet regions: ${meshes.length} meshes, ${cases.length} cases (${count("triangleIndices")} selections, ${refinedCount} refined, ${count("issues")} refusals, ${count("stale")} stale)`,
+  `facet regions: ${meshes.length} meshes, ${cases.length} cases (${count("triangleIndices")} selections, ${refinedCount} refined, ${count("issues")} refusals, ${count("stale")} stale), ${commits.length} commits, ${commitRefusals.length} commit refusals`,
 );

@@ -6,6 +6,7 @@
 use super::*;
 use crate::facets::{ENCODING_VERSION, MAX_DEPTH, node_budget};
 use orcaxr_contracts::canonical::Value;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// One `(sourceTriangle, path)` leaf key.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,7 +169,7 @@ pub(super) fn encoding_issues(request: &Request<'_>, issues: &mut Vec<Issue>) {
 /// Stands in for a missing JavaScript property.
 static UNDEFINED: Value = Value::Null;
 
-type Fields = std::collections::BTreeMap<Vec<u16>, Value>;
+type Fields = BTreeMap<Vec<u16>, Value>;
 
 fn field<'a>(fields: &'a Fields, name: &str) -> Option<&'a Value> {
     fields.get(&name.encode_utf16().collect::<Vec<_>>())
@@ -1163,7 +1164,7 @@ fn gap_fill(
         let source_index = index_of(&source_state);
         let mut queue = vec![start];
         let mut component = Vec::new();
-        let mut neighbor_states = std::collections::BTreeSet::new();
+        let mut neighbor_states = BTreeSet::new();
         let mut head = 0;
         while head < queue.len() {
             let current = queue[head];
@@ -1612,5 +1613,281 @@ fn freeze(workspace: &Workspace, selected: &[bool], edge_limit: Option<f64>) -> 
                 }
             })
             .collect(),
+    }
+}
+
+// --- Commit helpers (`applyFacetRefinedSelection`/`StateUpdates`) ----------
+
+/// One per-leaf paint target, keyed by `(sourceTriangle, path)` as a host
+/// sends it (`FacetRefinedStateUpdate`); unchecked numbers are refused.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StateUpdate {
+    pub source_triangle: f64,
+    pub path: Vec<f64>,
+    pub target: RegionState,
+}
+impl StateUpdate {
+    pub fn new(source_triangle: u32, path: &[u8], target: &RegionState) -> Self {
+        Self {
+            source_triangle: f64::from(source_triangle),
+            path: path.iter().map(|&child| f64::from(child)).collect(),
+            target: target.clone(),
+        }
+    }
+}
+
+/// `applyFacetRefinedSelection`: the selector leaves pre-stroke states, so
+/// this paints every selected leaf with `target` and collapses each branch it
+/// makes homogeneous; an adaptive split the target already matches vanishes.
+pub fn apply_selection(
+    channel: Channel,
+    selection: &RefinedSelection,
+    target: &RegionState,
+) -> Result<Vec<EncodedNode>, RegionError> {
+    let updates: Vec<StateUpdate> = selection
+        .leaves
+        .iter()
+        .filter(|leaf| leaf.selected)
+        .map(|leaf| StateUpdate::new(leaf.source_triangle, &leaf.path, target))
+        .collect();
+    apply_updates(channel, selection, &updates)
+}
+
+/// `applyFacetRefinedStateUpdates`: disjoint per-leaf targets, as refined Gap
+/// Fill needs, then every now-homogeneous branch collapsed
+/// (`remove_useless_children()`). The selection is checked as the browser
+/// checks a host's: tree shape and budgets, then its leaf list.
+pub fn apply_updates(
+    channel: Channel,
+    selection: &RefinedSelection,
+    updates: &[StateUpdate],
+) -> Result<Vec<EncodedNode>, RegionError> {
+    let encoded = commit_leaves(channel, selection)?;
+    let available: BTreeSet<(u32, Vec<u8>)> = encoded
+        .iter()
+        .map(|(source, path, _)| (*source, path.clone()))
+        .collect();
+    let mut targets: BTreeMap<(u32, Vec<u8>), RegionState> = Default::default();
+    let mut issues = Vec::new();
+    for (index, update) in updates.iter().enumerate() {
+        let path = format!("updates[{index}]");
+        let in_range = safe_integer(update.source_triangle)
+            && update.source_triangle >= 0.0
+            && update.source_triangle < selection.roots.len() as f64
+            && update
+                .path
+                .iter()
+                .all(|&child| safe_integer(child) && (0.0..=3.0).contains(&child));
+        if !in_range {
+            issues.push(Issue::new(
+                "invalid-refined-leaf-reference",
+                path,
+                "Refined leaf references require an in-range source triangle and child path",
+            ));
+            continue;
+        }
+        if !region_state_valid(channel, &update.target) {
+            issues.push(Issue::new(
+                "invalid-facet-refinement-state",
+                format!("{path}.target"),
+                format!(
+                    "Refined leaf target is invalid for the {} channel",
+                    channel.name()
+                ),
+            ));
+            continue;
+        }
+        let key = (
+            update.source_triangle as u32,
+            update.path.iter().map(|&p| p as u8).collect::<Vec<_>>(),
+        );
+        if !available.contains(&key) {
+            issues.push(Issue::new(
+                "missing-refined-leaf",
+                path,
+                "Refined leaf update does not resolve to a leaf in this selector result",
+            ));
+            continue;
+        }
+        if targets.contains_key(&key) {
+            issues.push(Issue::new(
+                "duplicate-refined-leaf-update",
+                path,
+                "A refined leaf may be updated at most once per commit",
+            ));
+            continue;
+        }
+        targets.insert(key, update.target.clone());
+    }
+    if !issues.is_empty() {
+        return Err(RegionError::Invalid(issues));
+    }
+    Ok(selection
+        .roots
+        .iter()
+        .enumerate()
+        .map(|(source, root)| apply_node_updates(root, source as u32, &mut Vec::new(), &targets))
+        .collect())
+}
+
+fn apply_node_updates(
+    node: &EncodedNode,
+    source: u32,
+    path: &mut Vec<u8>,
+    targets: &BTreeMap<(u32, Vec<u8>), RegionState>,
+) -> EncodedNode {
+    match node {
+        EncodedNode::Leaf(state) => EncodedNode::Leaf(
+            targets
+                .get(&(source, path.clone()))
+                .unwrap_or(state)
+                .clone(),
+        ),
+        EncodedNode::Split {
+            split_sides,
+            special_side,
+            children,
+        } => {
+            let children: Vec<EncodedNode> = children
+                .iter()
+                .enumerate()
+                .map(|(i, child)| {
+                    path.push(i as u8);
+                    let node = apply_node_updates(child, source, path, targets);
+                    path.pop();
+                    node
+                })
+                .collect();
+            if let Some(EncodedNode::Leaf(first)) = children.first()
+                && children
+                    .iter()
+                    .all(|c| matches!(c, EncodedNode::Leaf(state) if state == first))
+            {
+                return EncodedNode::Leaf(first.clone());
+            }
+            EncodedNode::Split {
+                split_sides: *split_sides,
+                special_side: *special_side,
+                children,
+            }
+        }
+    }
+}
+
+/// `validateRefinedCommitSelection` over a typed selection: the encoded tree's
+/// shape and budget, then its leaves against the selection's leaf list.
+fn commit_leaves(
+    channel: Channel,
+    selection: &RefinedSelection,
+) -> Result<Vec<(u32, Vec<u8>, RegionState)>, RegionError> {
+    let budget = node_budget(selection.roots.len() as f64);
+    let mut issues = Vec::new();
+    let mut encoded = Vec::new();
+    let mut stack: Vec<(&EncodedNode, u32, Vec<u8>, usize)> = selection
+        .roots
+        .iter()
+        .enumerate()
+        .map(|(source, node)| (node, source as u32, Vec::new(), 0))
+        .rev()
+        .collect();
+    let mut count = 0.0;
+    while let Some((node, source, path, depth)) = stack.pop() {
+        count += 1.0;
+        if count > budget {
+            issues.push(Issue::new(
+                "facet-refinement-limit-exceeded",
+                "selection.encoding",
+                format!(
+                    "Facet refinement may contain at most {} nodes",
+                    js_number(budget)
+                ),
+            ));
+            break;
+        }
+        let node_path = format!(
+            "selection.encoding.roots[{source}]{}",
+            path.iter()
+                .map(|c| format!(".children[{c}]"))
+                .collect::<String>()
+        );
+        match node {
+            EncodedNode::Leaf(state) => {
+                if region_state_valid(channel, state) {
+                    encoded.push((source, path, state.clone()));
+                } else {
+                    issues.push(Issue::new(
+                        "invalid-facet-refinement-state",
+                        format!("{node_path}.state"),
+                        format!(
+                            "Refined leaf state is invalid for the {} channel",
+                            channel.name()
+                        ),
+                    ));
+                }
+            }
+            EncodedNode::Split {
+                split_sides,
+                special_side,
+                children,
+            } => {
+                if !(1..=3).contains(split_sides)
+                    || *special_side > 2
+                    || (*split_sides == 3 && *special_side != 0)
+                    || children.len() != usize::from(*split_sides) + 1
+                {
+                    issues.push(Issue::new(
+                        "invalid-facet-refinement-split",
+                        node_path,
+                        "Refined split topology is invalid",
+                    ));
+                    continue;
+                }
+                if depth >= MAX_DEPTH {
+                    issues.push(Issue::new(
+                        "facet-refinement-limit-exceeded",
+                        node_path,
+                        format!("Facet refinement may contain at most {MAX_DEPTH} split levels"),
+                    ));
+                    continue;
+                }
+                for (i, child) in children.iter().enumerate().rev() {
+                    let mut child_path = path.clone();
+                    child_path.push(i as u8);
+                    stack.push((child, source, child_path, depth + 1));
+                }
+            }
+        }
+    }
+    if issues.is_empty() && selection.leaves.len() != encoded.len() {
+        issues.push(Issue::new(
+            "invalid-refined-selection-leaves",
+            "selection.leaves",
+            "Refined selection leaf list must cover every encoded leaf exactly once",
+        ));
+    }
+    if issues.is_empty() {
+        for (index, leaf) in selection.leaves.iter().enumerate() {
+            let matches = encoded.get(index).is_some_and(|(source, path, state)| {
+                leaf.source_triangle == *source && &leaf.path == path && &leaf.state == state
+            });
+            if !matches {
+                issues.push(Issue::new(
+                    "invalid-refined-selection-leaves",
+                    format!("selection.leaves[{index}]"),
+                    "Refined selection leaves must match deterministic encoded leaf order and state",
+                ));
+            }
+        }
+    }
+    if !issues.is_empty() {
+        return Err(RegionError::Invalid(issues));
+    }
+    Ok(encoded)
+}
+
+fn region_state_valid(channel: Channel, state: &RegionState) -> bool {
+    match state {
+        RegionState::Unpainted => true,
+        RegionState::Assigned(value) => channel_value(channel, value),
     }
 }

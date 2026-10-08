@@ -8,11 +8,10 @@ import {
   ORCA_OVERHANG_ANGLE_MAX_DEGREES,
   ORCA_SMART_FILL_ANGLE_MAX_DEGREES,
   ORCA_SMART_FILL_ANGLE_MIN_DEGREES,
-  applyFacetRefinedSelection,
-  applyFacetRefinedStateUpdates,
   commitFacetRefinement,
   commitFacetAnnotationStroke,
   captureFacetAnnotationGuard,
+  facetRefinementAfterSelection,
   selectFacetRegion,
   StaleFacetAnnotationResultError,
   triangleRangesFromIndices,
@@ -31,12 +30,9 @@ import {
   type TriangleRange,
 } from '../annotations';
 import type { FacetRefinementCommitRequest } from '../annotations/FacetAnnotationStrokeCommand';
-import { cloneJson, deepFreeze } from '../domain/canonical';
-import { expandFacetRefinementRoots, type FacetRefinedRootSet } from '../domain/facetRefinement';
+import type { FacetRefinedRootSet } from '../domain/facetRefinement';
 import type { FilamentId, VolumeId } from '../domain/ids';
 import {
-  ORCA_REFINEMENT_ENCODING_VERSION,
-  type FacetAnnotations,
   type FacetRefinementNode,
   JsonValue,
   ProjectState,
@@ -215,10 +211,10 @@ export class PaintStrokeService {
       request.mode === 'erase' || request.value === undefined
         ? { kind: 'unpainted' }
         : { kind: 'assigned', value: request.value as JsonValue };
-    const refinementAfter = selectionRefinementAfter(
+    const refinementAfter = facetRefinementAfterSelection(
       channel,
       selection,
-      volume.annotations[channel],
+      volume.annotations[channel] as readonly TriangleAssignments<JsonValue>[],
       volume.source.triangleCount,
       target,
     );
@@ -250,10 +246,10 @@ export class PaintStrokeService {
       request.mode === 'erase' || request.value === undefined
         ? { kind: 'unpainted' }
         : { kind: 'assigned', value: request.value as JsonValue };
-    const refinementAfter = selectionRefinementAfter(
+    const refinementAfter = facetRefinementAfterSelection(
       channel,
       selection,
-      volume.annotations[channel],
+      volume.annotations[channel] as readonly TriangleAssignments<JsonValue>[],
       volume.source.triangleCount,
       target,
     );
@@ -652,53 +648,6 @@ export class PaintStrokeService {
 
 function assertGuardTargetsVolume(guard: FacetAnnotationGuard | undefined, volumeId: VolumeId): void {
   if (guard && guard.volumeId !== volumeId) throw new StaleFacetAnnotationResultError('project');
-}
-
-function selectionRefinementAfter(
-  channel: PaintChannel,
-  selection: FacetRegionSelection,
-  assignments: FacetAnnotations[PaintChannel],
-  triangleCount: number,
-  target: FacetRegionState,
-): FacetRefinedRootSet | undefined {
-  if (selection.refinement) {
-    if (selection.gapFillReplacements !== undefined) {
-      return applyFacetRefinedStateUpdates(
-        channel,
-        selection.refinement,
-        selection.gapFillReplacements.flatMap((replacement) =>
-          (replacement.refinedLeaves ?? []).map((leaf) => ({
-            ...leaf,
-            target: replacement.target,
-          })),
-        ),
-      );
-    }
-    return applyFacetRefinedSelection(channel, selection.refinement, target);
-  }
-  if (selection.gapFillReplacements === undefined) return undefined;
-
-  // Gap Fill without a refined selection still commits through the refined
-  // path, so it needs the dense root form the commit boundary collapses again.
-  const roots = expandFacetRefinementRoots(
-    undefined,
-    assignments as readonly TriangleAssignments<JsonValue>[],
-    triangleCount,
-  );
-  const replacementByTriangle = new Map<number, FacetRegionState>();
-  for (const replacement of selection.gapFillReplacements) {
-    for (const triangle of replacement.triangleIndices) replacementByTriangle.set(triangle, replacement.target);
-  }
-  return deepFreeze({
-    version: ORCA_REFINEMENT_ENCODING_VERSION,
-    roots: roots.map((root, triangle): FacetRefinementNode => {
-      const replacement = replacementByTriangle.get(triangle);
-      if (!replacement) return root;
-      return replacement.kind === 'unpainted'
-        ? { kind: 'leaf', state: { kind: 'unpainted' } }
-        : { kind: 'leaf', state: { kind: 'assigned', value: cloneJson(replacement.value) } };
-    }),
-  });
 }
 
 /** Displayed filament-ID order used by Gap Fill's neighbour precedence. */

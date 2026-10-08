@@ -1528,8 +1528,11 @@ painting, and FullSpectrum operations that can support real native projects.
     persisted or dense refinement, adaptive splitting under brushes and height
     bands, leaf-level Fill and Gap Fill, and materialized overlays (59 refined
     cases exact).
-  - [ ] Finish picking, refined session replies and commit helpers,
-    preparation kernels, renderer packets and device qualification.
+  - [x] Port the refined commit helpers: the tree a stroke commits, with
+    homogeneous branches collapsed, for refined strokes and refined or dense
+    Gap Fill, and the helpers' refusals (190 trees and 11 refusals exact).
+  - [ ] Finish picking, refined session replies, preparation kernels,
+    renderer packets and device qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.

@@ -1,17 +1,19 @@
 //! Facet region selection against the browser: face neighbours of every corpus
 //! mesh, then Triangle, Fill, Height Range, Gap Fill, Circle and Sphere
-//! selections, refusals and stale topologies, each equal to
-//! `selectFacetRegion`'s result.
+//! selections, refined ones included, refusals and stale topologies, each equal
+//! to `selectFacetRegion`'s result; the tree each refined commit leaves
+//! (`facetRefinementAfterSelection`) and the commit helpers' refusals.
 use orcaxr_contracts::canonical::{self, Value as Canonical};
 use orcaxr_project::facets::{
     Channel, PaintValue,
     region::{
         self, Assignment, Brush, ClippingPlane, EncodedNode, GapFillReplacement, LeafRef, Mesh,
-        RefinedLeaf, RefinedSelection, RegionError, RegionState, Request, Selection, Tool,
-        Transform,
+        RefinedLeaf, RefinedSelection, RegionError, RegionState, Request, Selection, StateUpdate,
+        Tool, Transform,
     },
 };
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 /// Vertices and triangles, as the fixture lists them.
 type CorpusMesh = (Vec<[f64; 3]>, Vec<[f64; 3]>);
@@ -185,8 +187,17 @@ fn region_selection_matches_the_browser() {
         assert_eq!(actual, expected, "neighbours of mesh {i}");
     }
 
+    // The tree each refined commit leaves, by the case whose selection it commits.
+    let mut commits_by_case: BTreeMap<usize, Vec<&Value>> = BTreeMap::new();
+    for commit in f["commits"].as_array().unwrap() {
+        commits_by_case
+            .entry(commit["case"].as_u64().unwrap() as usize)
+            .or_default()
+            .push(commit);
+    }
     let (mut selections, mut refusals, mut stale, mut materialized) = (0, 0, 0, 0);
-    for case in f["cases"].as_array().unwrap() {
+    let mut commits = 0;
+    for (index, case) in f["cases"].as_array().unwrap().iter().enumerate() {
         let name = case["name"].as_str().unwrap();
         let assignments: Vec<Assignment> = case["assignments"]
             .as_array()
@@ -297,12 +308,115 @@ fn region_selection_matches_the_browser() {
                 }),
                 refinement: result.get("refinement").map(refined),
             };
-            assert_eq!(actual, Ok(expected), "{name}");
+            assert_eq!(actual.as_ref(), Ok(&expected), "{name}");
+            let after = |target: &RegionState| {
+                region::refinement_after(
+                    request.channel,
+                    &expected,
+                    &assignments,
+                    request.guard_triangle_count as usize,
+                    target,
+                )
+            };
+            match commits_by_case.remove(&index) {
+                Some(entries) => {
+                    for commit in entries {
+                        let target = commit.get("target").map_or(RegionState::Unpainted, state);
+                        let roots = commit["roots"].as_array().unwrap().iter().map(node);
+                        assert_eq!(after(&target), Ok(Some(roots.collect())), "{name} commit");
+                        commits += 1;
+                    }
+                }
+                // A source-facet stroke commits ranges, not a tree.
+                None if expected.refinement.is_none()
+                    && expected.gap_fill_replacements.is_none() =>
+                {
+                    assert_eq!(after(&RegionState::Unpainted), Ok(None), "{name}");
+                }
+                None => {}
+            }
             selections += 1;
         }
     }
+    assert!(commits_by_case.is_empty());
     assert_eq!(
-        (selections, refusals, stale, materialized),
-        (5889, 44, 2, 3)
+        (selections, refusals, stale, materialized, commits),
+        (5889, 44, 2, 3, 190)
     );
+}
+
+fn update(v: &Value) -> StateUpdate {
+    StateUpdate {
+        source_triangle: number(&v["sourceTriangle"]),
+        path: v["path"].as_array().unwrap().iter().map(number).collect(),
+        target: state(&v["target"]),
+    }
+}
+fn issues(v: &Value) -> Vec<(String, String, String)> {
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|i| {
+            (
+                i["code"].as_str().unwrap().to_owned(),
+                i["path"].as_str().unwrap().to_owned(),
+                i["message"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect()
+}
+fn actual_issues(error: RegionError) -> Vec<(String, String, String)> {
+    let RegionError::Invalid(issues) = error else {
+        panic!("expected issues, got {error:?}");
+    };
+    issues
+        .into_iter()
+        .map(|i| (i.code.to_owned(), i.path, i.message))
+        .collect()
+}
+
+/// One-side splits nested `levels` deep, each holding an unpainted leaf and
+/// the next, as the generator's `chain`.
+fn split_chain(levels: u64) -> EncodedNode {
+    (0..levels).fold(EncodedNode::Leaf(RegionState::Unpainted), |inner, _| {
+        EncodedNode::Split {
+            split_sides: 1,
+            special_side: 0,
+            children: vec![EncodedNode::Leaf(RegionState::Unpainted), inner],
+        }
+    })
+}
+
+/// The commit helpers refuse a malformed selection or update list with the
+/// browser's issues.
+#[test]
+fn refined_commit_refusals_match_the_browser() {
+    let f = fixture();
+    let mut count = 0;
+    for case in f["commitRefusals"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let updates: Vec<StateUpdate> = case["updates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(update)
+            .collect();
+        let mut selection = refined(&case["selection"]);
+        if let Some(chain) = case.get("chain") {
+            selection.roots[chain["root"].as_u64().unwrap() as usize] =
+                split_chain(chain["levels"].as_u64().unwrap());
+        }
+        let actual = region::apply_refined_updates(
+            channel(case["channel"].as_str().unwrap()),
+            &selection,
+            &updates,
+        );
+        assert_eq!(
+            actual.map_err(actual_issues),
+            Err(issues(&case["issues"])),
+            "{name}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 11);
 }

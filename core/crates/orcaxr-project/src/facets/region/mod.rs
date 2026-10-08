@@ -20,7 +20,10 @@ use crate::js_math;
 use orcaxr_contracts::canonical::Value;
 
 mod refined;
-pub use refined::{EncodedNode, LeafRef, RefinedLeaf, RefinedSelection};
+pub use refined::{
+    EncodedNode, LeafRef, RefinedLeaf, RefinedSelection, StateUpdate,
+    apply_selection as apply_refined_selection, apply_updates as apply_refined_updates,
+};
 
 pub const TRIANGLE_SELECTOR_EPSILON: f64 = 1e-4;
 pub const SMART_FILL_ANGLE_MIN_DEGREES: f64 = 0.0;
@@ -209,6 +212,59 @@ pub fn materialize(request: &Request<'_>) -> Result<RefinedSelection, RegionErro
     };
     checked(&internal)?;
     refined::materialize(&internal)
+}
+
+/// `facetRefinementAfterSelection`: the encoded roots a stroke over
+/// `selection` commits through the refined path — the selected leaves painted
+/// with `target`, refined Gap Fill's per-fragment targets, or, for Gap Fill
+/// over unrefined facets, the dense roots with each fragment replaced (the
+/// commit boundary collapses them again). `None` commits as triangle ranges.
+pub fn refinement_after(
+    channel: Channel,
+    selection: &Selection,
+    assignments: &[Assignment],
+    triangle_count: usize,
+    target: &RegionState,
+) -> Result<Option<Vec<EncodedNode>>, RegionError> {
+    if let Some(refinement) = &selection.refinement {
+        return match &selection.gap_fill_replacements {
+            Some(replacements) => {
+                let updates: Vec<StateUpdate> = replacements
+                    .iter()
+                    .flat_map(|replacement| {
+                        replacement.refined_leaves.iter().flatten().map(|leaf| {
+                            StateUpdate::new(leaf.source_triangle, &leaf.path, &replacement.target)
+                        })
+                    })
+                    .collect();
+                refined::apply_updates(channel, refinement, &updates)
+            }
+            None => refined::apply_selection(channel, refinement, target),
+        }
+        .map(Some);
+    }
+    let Some(replacements) = &selection.gap_fill_replacements else {
+        return Ok(None);
+    };
+    // `expandFacetRefinementRoots` without an encoding: later assignments win
+    // and out-of-range facets are skipped.
+    let mut roots = vec![EncodedNode::Leaf(RegionState::Unpainted); triangle_count];
+    for assignment in assignments {
+        for &triangle in &assignment.triangles {
+            if triangle >= 0.0 && triangle < triangle_count as f64 {
+                roots[triangle as usize] =
+                    EncodedNode::Leaf(RegionState::Assigned(assignment.value.clone()));
+            }
+        }
+    }
+    for replacement in replacements {
+        for &triangle in &replacement.triangle_indices {
+            if let Some(root) = roots.get_mut(triangle as usize) {
+                *root = EncodedNode::Leaf(replacement.target.clone());
+            }
+        }
+    }
+    Ok(Some(roots))
 }
 
 /// Request, mesh, staleness and annotation checks, in the browser's order.
