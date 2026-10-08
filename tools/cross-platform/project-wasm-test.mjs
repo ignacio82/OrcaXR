@@ -30,7 +30,7 @@ import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
 import { projectStagedBoundaries } from "./project-staged-boundaries.mjs";
 import { projectClipboardBoundaries } from "./project-clipboard-boundaries.mjs";
-import { replayArchives, archiveCases } from "./archive-wasm-replay.mjs";
+import { replayArchives, archiveCases, replayHostileArchives } from "./archive-wasm-replay.mjs";
 import { replayModelImports } from "./model-import-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
@@ -56,6 +56,12 @@ if (isMainThread) {
     assert.deepEqual(
       [result.archives.cases, result.archives.accepted, result.archives.saves],
       [1341, 1225, 1223],
+    );
+    // Hostile archives: the browser's acceptance, format, warnings and state;
+    // no refusal reaches an edited live session.
+    assert.deepEqual(
+      [result.hostile.hostileArchives, result.hostile.hostileAccepted, result.hostile.hostileRefused, result.hostile.hostileUntouched],
+      [467, 55, 412, 412],
     );
     assert.deepEqual(
       [result.catalogReplies, result.catalogRefusals],
@@ -275,6 +281,14 @@ if (isMainThread) {
       (text) => new Uint8Array(Buffer.from(text, "base64")),
     ),
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
+  metrics.hostile = await replayHostileArchives(
+    core,
+    layout,
+    JSON.parse(await readFile(new URL("contracts/project-archive.json", root))),
+    JSON.parse(await readFile(new URL("testdata/cross-platform/hostile-archive-vectors.json", root))),
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    (text) => new Uint8Array(Buffer.from(text, "base64")),
   );
   const json = async (path) => JSON.parse(await readFile(new URL(path, root)));
   metrics.models = await replayModelImports(

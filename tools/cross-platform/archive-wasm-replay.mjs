@@ -245,3 +245,156 @@ export function archiveCases(canonical, foreign, readPath, base64) {
   }
   return out;
 }
+
+/**
+ * Deterministic byte edits of a base archive, shared with the hostile-archive
+ * generator so a mutated case is stored as its edits rather than its bytes.
+ * Each edit applies to the result of the ones before it.
+ */
+export function applyArchiveEdits(base, edits) {
+  let bytes = Array.from(base);
+  for (const edit of edits) {
+    if ("flip" in edit) {
+      const [at, bit] = edit.flip;
+      if (at < bytes.length) bytes[at] ^= 1 << bit;
+    } else if ("set" in edit) {
+      const [at, value] = edit.set;
+      if (at < bytes.length) bytes[at] = value;
+    } else if ("truncate" in edit) {
+      bytes = bytes.slice(0, edit.truncate);
+    } else if ("insert" in edit) {
+      const [at, inserted] = edit.insert;
+      bytes.splice(Math.min(at, bytes.length), 0, ...inserted);
+    } else if ("remove" in edit) {
+      const [at, count] = edit.remove;
+      bytes.splice(at, count);
+    } else {
+      throw new Error(`unknown archive edit ${JSON.stringify(edit)}`);
+    }
+  }
+  return Uint8Array.from(bytes);
+}
+
+/**
+ * Hostile archives (`hostile-archive-vectors.json`) through the binding:
+ * each is refused exactly when the browser refused it, and an accepted one
+ * reports the browser's format and warnings and adopts to the browser's
+ * state. A refusal never reaches a session: an edited live session keeps its
+ * revision and hash across every refused Open.
+ */
+export async function replayHostileArchives(core, hostLayout, archiveLayout, corpus, sha256, base64) {
+  const encode = new TextEncoder();
+  const decode = new TextDecoder("utf-8", { fatal: true });
+  const policy = Float64Array.from(BROWSER_EQUIVALENT_POLICY);
+  const check = (ok, label) => {
+    if (!ok) throw new Error(label);
+  };
+  const units = (text) => (typeof text === "string" ? Array.from({ length: text.length }, (_, i) => text.charCodeAt(i)) : text);
+  const sameUnits = (a, b) => a.length === b.length && a.every((u, i) => u === b[i]);
+  const generation = [0, 1, 2, 3];
+  const session = () => {
+    const source = encode.encode(EMPTY);
+    const upload = new core.ProjectUpload(
+      hostLayout.version,
+      source.length,
+      Float64Array.from([source.length, 1_000_000, 2_000_000, 1024, 128, 100, 16 * 2 ** 20, 32 * 2 ** 20, 100, 32 * 2 ** 20]),
+    );
+    upload.append_document(0, source);
+    upload.seal_document();
+    return upload.open(Float64Array.from(generation));
+  };
+  let sequence = 0;
+  const submit = (owner, operation) => {
+    const reply =
+      owner.submit(JSON.stringify({ protocolVersion: 1, generation, requestId: ++sequence, operation })) ?? owner.run_next();
+    return JSON.parse(reply.wire()).result;
+  };
+  const mark = (owner) => {
+    const snapshot = owner.snapshot();
+    try {
+      return `${snapshot.revision()}:${snapshot.hash()}`;
+    } finally {
+      snapshot.free();
+    }
+  };
+  const live = session();
+  const counts = { cases: 0, accepted: 0, refused: 0, untouched: 0 };
+  try {
+    check(submit(live, { hello: { minProtocolVersion: 1, maxProtocolVersion: 1, projectSchemaVersion: 1, intentVersion: 1 } }).welcome, "hello");
+    const guard = submit(live, { query: {} }).acknowledged.guard;
+    const renamed = submit(live, {
+      execute: { guard, intent: { version: 1, command: { renameProject: { name: units("Edited before hostile Opens") } } } },
+    });
+    check(renamed.acknowledged?.changed === true, "the live session is edited");
+    const edited = mark(live);
+    for (const c of corpus.cases) {
+      counts.cases++;
+      const bytes = c.archiveBase64
+        ? base64(c.archiveBase64)
+        : applyArchiveEdits(base64(corpus.bases[c.base].archiveBase64), c.edits);
+      let imported;
+      try {
+        const upload = new core.ProjectArchiveUpload(archiveLayout.version, bytes.length, policy);
+        for (let p = 0; p < bytes.length; p += archiveLayout.maxChunkBytes)
+          upload.append(p, bytes.subarray(p, p + archiveLayout.maxChunkBytes));
+        imported = upload.prepare();
+      } catch (error) {
+        check(!c.expected.accepted, `${c.name}: binding refused (${error})`);
+        check(mark(live) === edited, `${c.name}: a refused Open changed the live session`);
+        counts.refused++;
+        counts.untouched++;
+        continue;
+      }
+      const owner = session();
+      try {
+        check(c.expected.accepted, `${c.name}: binding accepted a browser refusal`);
+        check(imported.format() === archiveLayout.formats.indexOf(c.expected.format), `${c.name}: format`);
+        const warnings = Array.from({ length: imported.warning_count() }, (_, i) => {
+          const length = imported.warning_length(i);
+          const out = [];
+          for (let p = 0; p < length; p += hostLayout.maxTextChunkUnits)
+            out.push(...imported.warning(i, p, Math.min(hostLayout.maxTextChunkUnits, length - p)));
+          return out;
+        });
+        const expected = c.expected.warnings.map(units);
+        check(warnings.length === expected.length && warnings.every((w, i) => sameUnits(w, expected[i])), `${c.name}: warnings`);
+        const ticket = owner.begin_open();
+        const document = imported.document();
+        try {
+          owner.finish_open(ticket, document).free();
+        } finally {
+          document.free();
+          ticket.free();
+        }
+        const capture = owner.snapshot();
+        let json;
+        try {
+          const exported = capture.export_json(512 * 2 ** 20);
+          try {
+            const out = new Uint8Array(exported.length());
+            for (let p = 0; p < out.length; p += hostLayout.maxChunkBytes)
+              out.set(exported.read(p, Math.min(hostLayout.maxChunkBytes, out.length - p)), p);
+            json = decode.decode(out);
+          } finally {
+            exported.free();
+          }
+        } finally {
+          capture.free();
+        }
+        check((await sha256(encode.encode(json))) === c.expected.stateSha256, `${c.name}: state`);
+        counts.accepted++;
+      } finally {
+        imported.free();
+        owner.free();
+      }
+    }
+  } finally {
+    live.free();
+  }
+  return {
+    hostileArchives: counts.cases,
+    hostileAccepted: counts.accepted,
+    hostileRefused: counts.refused,
+    hostileUntouched: counts.untouched,
+  };
+}

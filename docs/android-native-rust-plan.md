@@ -1684,6 +1684,19 @@ painting, and FullSpectrum operations that can support real native projects.
   do not load a second unbudgeted engine into the editor process.
 - [ ] Run hostile-file and fuzz corpora against both native and WASM archive
   paths. Keep import failures transactional and diagnostics bounded.
+  `hostile-archive-vectors` holds 467 cases: seeded byte edits of three
+  canonical and three foreign packages (stored as edits to a base), content
+  edits re-zipped with valid CRCs, and hand-built hostile packages (deep,
+  truncated and entity-laden XML, a megabyte attribute, invalid UTF-8,
+  UTF-16, case-colliding, traversing, absolute and NUL-bearing members, a
+  nested package, a compression-ratio bomb). Rust, WASM (Node and Chrome) and
+  JNI meet the browser's acceptance, format, warnings and adopted state on
+  every case, and no refusal changes an edited live session. A widened search
+  (4,815 cases) found native accepting control characters in metadata the
+  next Save regenerates; the browser refuses them while rebuilding the
+  member, and native foreign Open now writes those members too. It also
+  found the browser admitting canonical envelopes that lack required fields
+  (an asset's `mediaType`, a plate's `printable`), which stays open.
 - [ ] Enable complete Rust-backed browser sessions only after all current project
   operations, save/recovery, and old-file compatibility pass their gates.
 

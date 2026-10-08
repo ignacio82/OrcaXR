@@ -53,8 +53,7 @@ engine (`libslic3r` via WASM) as the computational core.
 
 - **Primary:** Web browsers and XR devices via WebXR/XRBlocks.
 - **Target printers:** Snapmaker U1 (4-head toolchanger), Elegoo Centauri
-  Carbon. Both are Klipper + Moonraker; this codebase has *no* serial,
-  USB, or vendor-cloud printer support.
+  Carbon. Both are Klipper + Moonraker; this codebase has *no* serial, USB, or vendor-cloud printer support.
 - **Current release:** no native Android application; native PCVR is not targeted.
 - **Under development:** native Android for phones, tablets,
   Googlebook and Android XR, with selective shared Rust migration. See the
@@ -267,7 +266,8 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   structural staging uses the one-part reader and bounded cross-part resolver for
   basic 3MF meshes, units, components and build items. It also decodes standard
   BBS paint roots into sparse facet channels under shared package budgets and
-  retains bounded unknown object/component/build/facet attributes. `bbs::foreign` matches browser
+  retains bounded unknown object/component/build/facet attributes. Foreign Open writes the metadata
+  members a Save regenerates (to a sink), so values XML 1.0 cannot carry refuse as in the browser. `bbs::foreign` matches browser
   foreign import; `models` matches its STL/OBJ/AMF/ZIP decode/stage/preview/undoable commit (WASM/JNI/actor). Archive Open/Save are owned WASM/JNI tasks; all limits derive from
   `contracts/project-archive.json`; Kotlin `ProjectDocuments` adapts provider streams (truncates only
   after packaging). Project WASM exposes immutable effects/captures; Node-worker replay agrees.

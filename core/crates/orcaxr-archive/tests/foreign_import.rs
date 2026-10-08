@@ -5,7 +5,10 @@
 #[allow(dead_code)]
 #[path = "support/canonical_complete.rs"]
 mod support;
-use orcaxr_archive::{Archive, ZipLimits, bbs::foreign, canonical::CompletedCanonicalArchive};
+use orcaxr_archive::{
+    Archive, ZipLimits, archive_layout::ArchiveOptions, bbs::foreign,
+    canonical::CompletedCanonicalArchive, open as archive_open, policy::Policy,
+};
 use orcaxr_project::model::Encode;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -169,6 +172,110 @@ fn foreign_import_matches_production_browser_open() {
         failures.len()
     );
     assert_eq!((accepted, refused), (949, 7));
+}
+
+/// `applyArchiveEdits` (`archive-wasm-replay.mjs`): byte edits of a base,
+/// each applied to the result of the ones before it.
+fn apply_edits(base: &[u8], edits: &Value) -> Vec<u8> {
+    let mut bytes = base.to_vec();
+    let at = |pair: &Value, i: usize| pair[i].as_u64().unwrap() as usize;
+    for edit in edits.as_array().unwrap() {
+        if let Some(flip) = edit.get("flip") {
+            if at(flip, 0) < bytes.len() {
+                bytes[at(flip, 0)] ^= 1 << at(flip, 1);
+            }
+        } else if let Some(set) = edit.get("set") {
+            if at(set, 0) < bytes.len() {
+                bytes[at(set, 0)] = at(set, 1) as u8;
+            }
+        } else if let Some(length) = edit.get("truncate") {
+            bytes.truncate(length.as_u64().unwrap() as usize);
+        } else if let Some(insert) = edit.get("insert") {
+            let position = at(insert, 0).min(bytes.len());
+            let inserted: Vec<u8> = insert[1]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|b| b.as_u64().unwrap() as u8)
+                .collect();
+            bytes.splice(position..position, inserted);
+        } else {
+            let remove = &edit["remove"];
+            let from = at(remove, 0).min(bytes.len());
+            let to = (from + at(remove, 1)).min(bytes.len());
+            bytes.drain(from..to);
+        }
+    }
+    bytes
+}
+
+/// Canonical or foreign, as the host's one Open dispatches, under the
+/// production policy the bindings derive from browser-equivalent budgets
+/// (`archive-wasm-replay.mjs`), not the tighter test limits above.
+fn open_any(bytes: Vec<u8>) -> Result<CompletedCanonicalArchive, String> {
+    let policy = Policy::new(ArchiveOptions {
+        archive_bytes: 1 << 30,
+        entries: 4096,
+        entry_bytes: 512 << 20,
+        total_bytes: 2 << 30,
+        vertices: 16_000_000,
+        triangles: 16_000_000,
+        records: 2_000_000,
+        text_units: 64 << 20,
+        paint_nodes: 256_000_000,
+        assets: 4096,
+        asset_bytes: 512 << 20,
+        total_asset_bytes: 2 << 30,
+        warnings: 1_000_000,
+    });
+    let archive =
+        Archive::open(Cursor::new(bytes), policy.zip(), || false).map_err(|e| format!("{e:?}"))?;
+    archive_open::open(archive, policy.open(), &mut support::utc(), || false)
+        .map_err(|e| format!("{e:?}"))
+}
+
+#[test]
+fn hostile_archives_match_production_browser_open() {
+    let corpus: Value = serde_json::from_str(include_str!(
+        "../../../../testdata/cross-platform/hostile-archive-vectors.json"
+    ))
+    .unwrap();
+    let bases: Vec<Vec<u8>> = corpus["bases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|b| base64(b["archiveBase64"].as_str().unwrap()))
+        .collect();
+    let mut failures = Vec::new();
+    let (mut accepted, mut refused) = (0, 0);
+    for case in corpus["cases"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let bytes = match &case["archiveBase64"] {
+            Value::String(text) => base64(text),
+            _ => apply_edits(
+                &bases[case["base"].as_u64().unwrap() as usize],
+                &case["edits"],
+            ),
+        };
+        let expected = &case["expected"];
+        match (open_any(bytes), expected["accepted"].as_bool().unwrap()) {
+            (Ok(completed), true) => {
+                failures.extend(compare(name, &completed, expected));
+                completed.into_prepared().unwrap();
+                accepted += 1;
+            }
+            (Err(_), false) => refused += 1,
+            (Ok(_), false) => failures.push(format!("{name}: native accepted a browser refusal")),
+            (Err(e), true) => failures.push(format!("{name}: native refused: {e}")),
+        }
+    }
+    let shown: Vec<_> = failures.iter().take(12).collect();
+    assert!(
+        failures.is_empty(),
+        "{} failures:\n{shown:#?}",
+        failures.len()
+    );
+    assert_eq!((accepted, refused), (55, 412));
 }
 
 #[test]

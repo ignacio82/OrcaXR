@@ -347,6 +347,16 @@ pub fn import<R: Read + Seek, P: TimestampPolicy>(
                 .map_err(CanonicalFailure::Bbs)?;
                 settings::Authoring::new(&model, limits.complete.settings, &mut cancelled)
                     .map_err(CanonicalFailure::Settings)?;
+                // `buildBbsCore` writes every metadata member it regenerates,
+                // so a key or value XML 1.0 cannot carry (a control character
+                // in a config key, say) refuses the Open there. Planning alone
+                // never reaches the writer's character checks; writing the
+                // members to nowhere refuses the same packages.
+                for member in bbs_metadata::Member::ALL {
+                    metadata
+                        .write(member, &mut std::io::sink(), &mut cancelled)
+                        .map_err(CanonicalFailure::Bbs)?;
+                }
                 regenerated
                     .extend([model::PATH, settings::PATH, opc::MODEL_RELS].map(str::to_owned));
                 for m in bbs_metadata::Member::ALL {

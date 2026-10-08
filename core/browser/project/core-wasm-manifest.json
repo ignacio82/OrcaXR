@@ -56,7 +56,7 @@
     "core/crates/orcaxr-archive/src/bbs/foreign/js.rs": "2f7c7f9e3a39c978b8bb87ff7285914066f118236bed4350722a69e1bf151d35",
     "core/crates/orcaxr-archive/src/bbs/foreign/metadata.rs": "baba2589298fd8c87934c045bbc2fb4c527fa2e3a28c0a7d327bd95337364593",
     "core/crates/orcaxr-archive/src/bbs/foreign/mixed.rs": "3aef9c3c7cb65b857809198a0d10c582c22d02c295d778148d2ff28a4f5808da",
-    "core/crates/orcaxr-archive/src/bbs/foreign/mod.rs": "42e6fd6d53269fe73b9907bb18252ed9cb981945d49f2b1bba592fd890c6e319",
+    "core/crates/orcaxr-archive/src/bbs/foreign/mod.rs": "e1ddc576e5b509aef5d16dfe5d87e5906c104de0e15d0d6780a4cb4086583c38",
     "core/crates/orcaxr-archive/src/bbs/foreign/plates.rs": "bc1f5a2e49d61b0ec791a8bbd87c8774bb7408563e43d68306b688c89314157a",
     "core/crates/orcaxr-archive/src/bbs/foreign/scan.rs": "c53be2791b8e5f5518bf6f2b3df9d2d1dd9e9079492487ab18bbeb9971e70ec4",
     "core/crates/orcaxr-archive/src/bbs/mod.rs": "d3731eb66a2fac066456e7523dbe29a2e910629acef318e299f6c0e1c6bc1fd3",
@@ -129,7 +129,7 @@
     "core/crates/orcaxr-archive/tests/canonical_complete.rs": "b32760545160ed808e5cfb51722094a3c1d7b04f6e58986fcb29b75275394fa8",
     "core/crates/orcaxr-archive/tests/canonical_write.rs": "c1cf6e6dfa0de66e5bfc080021e35609448cb471def8fb7914dc3c19d85ceb23",
     "core/crates/orcaxr-archive/tests/foreign_bbs_vectors.rs": "7f8bdbe319ab4500dbdef4def523ffbb3963289ba4c39e1e1c0513dac076dd35",
-    "core/crates/orcaxr-archive/tests/foreign_import.rs": "13c4ee3a97f532b17668b2247cdd0a0b8abd657f5c8c52cd153e3b3a2dbb2d58",
+    "core/crates/orcaxr-archive/tests/foreign_import.rs": "bde9514f527165196fb9cafd2ed44014173e3aab8b5e4946404e89b7bf96d32f",
     "core/crates/orcaxr-archive/tests/model_host.rs": "1909862219cb22807d8369f0175127178c69757cffe5e04c0d1062a5b61b197a",
     "core/crates/orcaxr-archive/tests/model_import.rs": "0756182addbefc8473cf5b267d4a9e78480f67e83653753ecc5d7448e0ec79b6",
     "core/crates/orcaxr-archive/tests/model_stage.rs": "f39fa96eb11da5922771906b97025725c05be9862eae3ddd39e9a888e65ce0d7",
@@ -389,7 +389,7 @@
   "outputs": {
     "orcaxr_core.d.ts": "692737e4853ceb1db3691f654ddd317323442cf9ec97fb8569a632c3385d8282",
     "orcaxr_core.js": "262aeffa4eee3ebc57634efd81907bff929cc92eec0dd66327a181ecc7fcd259",
-    "orcaxr_core_bg.wasm": "12dbe00444683271890c65a0ff15b4b651afd15b56f110ce92e26f927b655bde",
+    "orcaxr_core_bg.wasm": "b3ed5bd723b66352a7438c1b33278ff07c1707309484d156138821e57f29aee6",
     "orcaxr_core_bg.wasm.d.ts": "54dfaab40242e88c022d1b7d052cff81dba051f637f633e4c97037a3dfb74aa8"
   },
   "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",

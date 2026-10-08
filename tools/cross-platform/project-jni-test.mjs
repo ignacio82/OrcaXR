@@ -31,7 +31,7 @@ import { replayStagedProject } from "./project-staged-replay.mjs";
 import { projectStagedBoundaries } from "./project-staged-boundaries.mjs";
 import { projectClipboardBoundaries } from "./project-clipboard-boundaries.mjs";
 import { stagedCommandJson } from "./project-staged-replay.mjs";
-import { replayArchives, archiveCases } from "./archive-wasm-replay.mjs";
+import { replayArchives, archiveCases, replayHostileArchives } from "./archive-wasm-replay.mjs";
 import { replayModelImports } from "./model-import-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
@@ -227,6 +227,20 @@ try {
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
   );
   assert.deepEqual([archives.cases, archives.accepted, archives.saves], [1341, 1225, 1223]);
+  // Hostile archives through the real JNI exports; no refusal reaches an
+  // edited live session.
+  const hostile = await replayHostileArchives(
+    projectJniCore(jvm.call),
+    layout,
+    JSON.parse(await readFile(new URL("contracts/project-archive.json", root))),
+    JSON.parse(await readFile(new URL("testdata/cross-platform/hostile-archive-vectors.json", root))),
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    (text) => new Uint8Array(Buffer.from(text, "base64")),
+  );
+  assert.deepEqual(
+    [hostile.hostileArchives, hostile.hostileAccepted, hostile.hostileRefused, hostile.hostileUntouched],
+    [467, 55, 412, 412],
+  );
   // The browser's model import transactions through the real JNI exports.
   const json = async (path) => JSON.parse(await readFile(new URL(path, root)));
   const models = await replayModelImports(
