@@ -1,10 +1,11 @@
 //! Facet region selection against the browser: face neighbours of every corpus
-//! mesh, then Triangle, Fill, Height Range and Gap Fill selections, refusals
-//! and stale topologies, each equal to `selectFacetRegion`'s result.
+//! mesh, then Triangle, Fill, Height Range, Gap Fill, Circle and Sphere
+//! selections, refusals and stale topologies, each equal to
+//! `selectFacetRegion`'s result.
 use orcaxr_project::facets::{
     Channel, PaintValue,
     region::{
-        self, Assignment, ClippingPlane, GapFillReplacement, Mesh, RegionError, RegionState,
+        self, Assignment, Brush, ClippingPlane, GapFillReplacement, Mesh, RegionError, RegionState,
         Request, Selection, Tool, Transform,
     },
 };
@@ -81,6 +82,20 @@ fn tool(v: &Value) -> Tool {
                 .map(paint)
                 .collect(),
         },
+        "circle" | "sphere" => {
+            let brush = Brush {
+                center: vec3(&v["center"]),
+                previous_center: v.get("previousCenter").map(vec3),
+                camera_position: vec3(&v["cameraPosition"]),
+                radius_mm: number(&v["radiusMm"]),
+                triangle_splitting: v.get("triangleSplitting").and_then(Value::as_bool),
+            };
+            if v["kind"] == "circle" {
+                Tool::Circle(brush)
+            } else {
+                Tool::Sphere(brush)
+            }
+        }
         kind => panic!("unexpected tool {kind}"),
     }
 }
@@ -214,14 +229,21 @@ fn region_selection_matches_the_browser() {
             selections += 1;
         }
     }
-    assert_eq!((selections, refusals, stale), (3700, 17, 2));
+    assert_eq!((selections, refusals, stale), (5833, 20, 2));
 }
 
-/// Brushes and refined selection are a later stage; they refuse, not guess.
+/// Refined selection is a later stage; it refuses rather than guesses.
 #[test]
-fn brushes_and_refinement_are_not_ported_yet() {
+fn refined_selection_is_not_ported_yet() {
     let vertices = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
     let triangles = [[0.0, 1.0, 2.0]];
+    let brush = Brush {
+        center: [0.2, 0.2, 0.0],
+        previous_center: None,
+        camera_position: [0.2, 0.2, 10.0],
+        radius_mm: 1.0,
+        triangle_splitting: Some(true),
+    };
     let base = Request {
         mesh: Mesh {
             vertices: &vertices,
@@ -233,7 +255,7 @@ fn brushes_and_refinement_are_not_ported_yet() {
         guard_topology_revision: 0.0,
         guard_triangle_count: 1.0,
         seed_triangle: 0.0,
-        tool: Tool::Brush,
+        tool: Tool::Circle(brush.clone()),
         clipping_plane: None,
         transform: None,
         highlight_by_angle_degrees: None,
@@ -241,7 +263,10 @@ fn brushes_and_refinement_are_not_ported_yet() {
     };
     assert_eq!(region::select(&base), Err(RegionError::Unsupported));
     let refined = Request {
-        tool: Tool::Triangle { hit: None },
+        tool: Tool::Sphere(Brush {
+            triangle_splitting: None,
+            ..brush
+        }),
         refined: true,
         ..base.clone()
     };

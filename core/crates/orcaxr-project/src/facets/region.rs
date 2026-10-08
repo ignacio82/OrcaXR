@@ -9,8 +9,11 @@
 //! operation — every value is an `f64` holding a float32 — so thresholds land
 //! on the same side. `Math.cos` is the fdlibm port.
 //!
-//! Brushes (Circle, Sphere) and refined (subdivided) selection are not ported
-//! yet; a request that needs them is refused with [`RegionError::Unsupported`].
+//! Circle and Sphere brushes reproduce the upstream single-point and dragged
+//! Capsule2D/3D containment, cursor-ray and edge tests with connected
+//! propagation; only Circle culls back-facing neighbours. Refined (subdivided)
+//! selection is not ported yet; a request that needs it is refused with
+//! [`RegionError::Unsupported`].
 use super::validation::Issue;
 use super::{Channel, PaintValue};
 use crate::js_math;
@@ -18,6 +21,8 @@ use crate::js_math;
 pub const TRIANGLE_SELECTOR_EPSILON: f64 = 1e-4;
 pub const SMART_FILL_ANGLE_MIN_DEGREES: f64 = 0.0;
 pub const SMART_FILL_ANGLE_MAX_DEGREES: f64 = 90.0;
+pub const BRUSH_RADIUS_MIN_MM: f64 = 0.4;
+pub const BRUSH_RADIUS_MAX_MM: f64 = 8.0;
 pub const HEIGHT_RANGE_MIN_MM: f64 = 0.1;
 pub const HEIGHT_RANGE_MAX_MM: f64 = 8.0;
 pub const GAP_AREA_MIN_MM2: f64 = 0.0;
@@ -75,8 +80,8 @@ pub enum Tool {
         /// Assigned states in pinned order; unpainted is implicit state zero.
         state_order: Vec<PaintValue>,
     },
-    /// Circle or Sphere: not ported yet.
-    Brush,
+    Circle(Brush),
+    Sphere(Brush),
 }
 
 /// One channel's assignments as canonical state stores them.
@@ -137,7 +142,7 @@ pub enum RegionError {
     Invalid(Vec<Issue>),
     /// `StaleFacetAnnotationResultError('topology')`.
     StaleTopology,
-    /// Brushes and refined selection are not ported yet.
+    /// Refined selection is not ported yet.
     Unsupported,
 }
 
@@ -155,14 +160,14 @@ pub fn face_neighbors(mesh: Mesh<'_>) -> Result<Vec<[i64; 3]>, RegionError> {
 
 /// `selectFacetRegion` for source facets.
 pub fn select(request: &Request<'_>) -> Result<Selection, RegionError> {
-    if request.refined || matches!(request.tool, Tool::Brush) {
-        return Err(RegionError::Unsupported);
-    }
-    if let Tool::HeightRange {
-        triangle_splitting: Some(true),
-        ..
-    } = request.tool
-    {
+    let splitting = match &request.tool {
+        Tool::HeightRange {
+            triangle_splitting, ..
+        } => *triangle_splitting,
+        Tool::Circle(brush) | Tool::Sphere(brush) => brush.triangle_splitting,
+        _ => None,
+    };
+    if request.refined || splitting == Some(true) {
         return Err(RegionError::Unsupported);
     }
     let issues = request_issues(request);
@@ -196,7 +201,8 @@ pub fn select(request: &Request<'_>) -> Result<Selection, RegionError> {
             max_area_mm2,
             state_order,
         } => Ok(gap_fill(request, *max_area_mm2, state_order)),
-        Tool::Brush => Err(RegionError::Unsupported),
+        Tool::Circle(brush) => Ok(brush_region(request, BrushKind::Circle, brush)),
+        Tool::Sphere(brush) => Ok(brush_region(request, BrushKind::Sphere, brush)),
     }
 }
 
@@ -488,6 +494,436 @@ fn point_clipped(point: &Vec3, plane: &ClippingPlane) -> bool {
     ) > 0.0
 }
 
+// --- Brushes --------------------------------------------------------------
+
+/// Circle and Sphere brush geometry, in volume-local mesh coordinates.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Brush {
+    pub center: Vec3,
+    /// The previous ray hit of one dragged segment: Capsule2D / Capsule3D.
+    pub previous_center: Option<Vec3>,
+    pub camera_position: Vec3,
+    /// The pinned UI radius in world millimetres.
+    pub radius_mm: f64,
+    pub triangle_splitting: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BrushKind {
+    Circle,
+    Sphere,
+}
+
+struct Cursor {
+    kind: BrushKind,
+    center: Vec3,
+    second_center: Option<Vec3>,
+    direction: Vec3,
+    radius: f64,
+    radius_squared: f64,
+    uniform: bool,
+    transform: Transform,
+    normal_matrix: Option<[Vec3; 3]>,
+}
+
+fn uniform_scaling(transform: &Transform) -> bool {
+    let s = transform.scaling_factors;
+    (s[0] - s[1]).abs() < TRIANGLE_SELECTOR_EPSILON
+        && (s[1] - s[2]).abs() < TRIANGLE_SELECTOR_EPSILON
+}
+
+fn resolve_cursor(kind: BrushKind, brush: &Brush, transform: Transform) -> Cursor {
+    let scale = transform.scaling_factors;
+    let uniform = uniform_scaling(&transform);
+    let local_center = float_vector(brush.previous_center.as_ref().unwrap_or(&brush.center));
+    let local_second = brush.previous_center.map(|_| float_vector(&brush.center));
+    let local_source = float_vector(&brush.camera_position);
+    let place = |p: Vec3| {
+        if uniform {
+            p
+        } else {
+            transform_point(&transform, &p)
+        }
+    };
+    let center = place(local_center);
+    let second_center = local_second.map(place);
+    let source = place(local_source);
+    let radius_input = fr(brush.radius_mm);
+    let scaled = if uniform {
+        radius_input / scale[0]
+    } else {
+        radius_input
+    };
+    Cursor {
+        kind,
+        center,
+        second_center,
+        direction: normalize(&sub(&center, &source)),
+        radius: fr(scaled),
+        radius_squared: if uniform {
+            fr(scaled * scaled)
+        } else {
+            mul(radius_input, radius_input)
+        },
+        uniform,
+        transform,
+        normal_matrix: (!uniform).then(|| inverse_transpose(&transform.linear)),
+    }
+}
+
+fn brush_region(request: &Request<'_>, kind: BrushKind, brush: &Brush) -> Selection {
+    let mesh = request.mesh;
+    let count = mesh.triangles.len();
+    let cursor = resolve_cursor(kind, brush, request.transform.unwrap_or(IDENTITY));
+    let filter = overhang_filter(request);
+    let neighbors = validated_neighbors(mesh);
+    let normals: Option<Vec<Vec3>> = (kind == BrushKind::Circle).then(|| {
+        mesh.triangles
+            .iter()
+            .map(|t| face_normal(mesh.vertices, t))
+            .collect()
+    });
+    let mut visited = vec![false; count];
+    let mut selected = vec![false; count];
+    let mut queue = vec![request.seed_triangle as usize];
+    let mut head = 0;
+    while head < queue.len() {
+        let current = queue[head];
+        head += 1;
+        if visited[current] {
+            continue;
+        }
+        if !passes_overhang(mesh, current, filter.as_ref()) {
+            visited[current] = true;
+            continue;
+        }
+        if brush_intersects(mesh, current, &cursor, request.clipping_plane.as_ref()) {
+            selected[current] = true;
+            for &neighbor in &neighbors[current] {
+                if neighbor < 0 || visited[neighbor as usize] {
+                    continue;
+                }
+                if let Some(normals) = &normals
+                    && !circle_facet_visible(&normals[neighbor as usize], &cursor)
+                {
+                    continue;
+                }
+                queue.push(neighbor as usize);
+            }
+        }
+        visited[current] = true;
+    }
+    selection(flagged(&selected), count)
+}
+
+fn brush_intersects(
+    mesh: Mesh<'_>,
+    triangle: usize,
+    cursor: &Cursor,
+    plane: Option<&ClippingPlane>,
+) -> bool {
+    let local = mesh.triangles[triangle].map(|v| mesh.vertices[v as usize]);
+    if local.iter().any(|p| brush_contains(p, cursor, plane)) {
+        return true;
+    }
+    if pointer_inside_triangle(&local, cursor, &cursor.center) {
+        return true;
+    }
+    if let Some(second) = &cursor.second_center
+        && pointer_inside_triangle(&local, cursor, second)
+    {
+        return true;
+    }
+    let points = local.map(|p| {
+        if cursor.uniform {
+            float_vector(&p)
+        } else {
+            transform_point(&cursor.transform, &p)
+        }
+    });
+    (0..3).any(|edge| {
+        let (a, b) = (&points[edge], &points[(edge + 1) % 3]);
+        match (&cursor.second_center, cursor.kind) {
+            (None, BrushKind::Sphere) => line_touches_sphere(a, b, &cursor.center, cursor.radius),
+            (None, BrushKind::Circle) => line_touches_circle(a, b, &cursor.center, cursor),
+            (Some(second), BrushKind::Sphere) => {
+                line_touches_capsule(a, b, &cursor.center, second, cursor.radius)
+            }
+            (Some(_), BrushKind::Circle) => line_touches_circle_capsule(a, b, cursor),
+        }
+    })
+}
+
+fn brush_contains(local: &Vec3, cursor: &Cursor, plane: Option<&ClippingPlane>) -> bool {
+    let point = if cursor.uniform {
+        float_vector(local)
+    } else {
+        transform_point(&cursor.transform, local)
+    };
+    let difference = sub(&cursor.center, &point);
+    let inside = match (&cursor.second_center, cursor.kind) {
+        (Some(_), BrushKind::Sphere) => capsule_contains_3d(&point, cursor),
+        (Some(_), BrushKind::Circle) => capsule_contains_2d(&point, cursor),
+        (None, BrushKind::Sphere) => squared_norm(&difference) < cursor.radius_squared,
+        (None, BrushKind::Circle) => {
+            let along = scale(&cursor.direction, dot(&difference, &cursor.direction));
+            squared_norm(&sub(&difference, &along)) < cursor.radius_squared
+        }
+    };
+    inside && !plane.is_some_and(|plane| point_clipped(local, plane))
+}
+
+fn capsule_contains_3d(point: &Vec3, cursor: &Cursor) -> bool {
+    let second = cursor.second_center.as_ref().unwrap();
+    let first_difference = sub(&cursor.center, point);
+    let second_difference = sub(second, point);
+    if squared_norm(&first_difference) < cursor.radius_squared
+        || squared_norm(&second_difference) < cursor.radius_squared
+    {
+        return true;
+    }
+    let centers = sub(second, &cursor.center);
+    dot(&first_difference, &centers) <= 0.0
+        && dot(&second_difference, &centers) >= 0.0
+        && fr(norm(&cross(&first_difference, &centers)) / norm(&centers)) <= cursor.radius
+}
+
+fn capsule_contains_2d(point: &Vec3, cursor: &Cursor) -> bool {
+    let second = cursor.second_center.as_ref().unwrap();
+    let first_difference = sub(&cursor.center, point);
+    let first_projected = project_perpendicular(&first_difference, &cursor.direction);
+    if squared_norm(&first_projected) < cursor.radius_squared {
+        return true;
+    }
+    let second_difference = sub(second, point);
+    let second_projected = project_perpendicular(&second_difference, &cursor.direction);
+    if squared_norm(&second_projected) < cursor.radius_squared {
+        return true;
+    }
+    let centers = sub(second, &cursor.center);
+    let centers_projected = project_perpendicular(&centers, &cursor.direction);
+    if dot(&first_projected, &centers_projected) > 0.0
+        || dot(&second_projected, &centers_projected) < 0.0
+    {
+        return false;
+    }
+    let rectangle_direction = cross(&centers, &cursor.direction);
+    let to_rectangle = scale(&normalize(&rectangle_direction), cursor.radius);
+    let a = sub(&cursor.center, &to_rectangle);
+    let d = add(&cursor.center, &to_rectangle);
+    dot(&sub(&a, point), &rectangle_direction) <= 0.0
+        && dot(&sub(&d, point), &rectangle_direction) >= 0.0
+}
+
+fn project_perpendicular(vector: &Vec3, direction: &Vec3) -> Vec3 {
+    sub(vector, &scale(direction, dot(vector, direction)))
+}
+
+fn pointer_inside_triangle(points: &[Vec3; 3], cursor: &Cursor, center: &Vec3) -> bool {
+    let [a, b, c] = points.map(|p| {
+        if cursor.uniform {
+            float_vector(&p)
+        } else {
+            transform_point(&cursor.transform, &p)
+        }
+    });
+    let first_ray = add(center, &cursor.direction);
+    let second_ray = sub(center, &cursor.direction);
+    if signed_volume_positive(&first_ray, &a, &b, &c)
+        == signed_volume_positive(&second_ray, &a, &b, &c)
+    {
+        return false;
+    }
+    let positive = signed_volume_positive(&first_ray, &second_ray, &a, &b);
+    signed_volume_positive(&first_ray, &second_ray, &b, &c) == positive
+        && signed_volume_positive(&first_ray, &second_ray, &c, &a) == positive
+}
+
+fn signed_volume_positive(first: &Vec3, second: &Vec3, third: &Vec3, fourth: &Vec3) -> bool {
+    dot(
+        &cross(&sub(second, first), &sub(third, first)),
+        &sub(fourth, first),
+    ) > 0.0
+}
+
+fn line_touches_sphere(first: &Vec3, second: &Vec3, center: &Vec3, radius: f64) -> bool {
+    let radius_squared = mul(radius, radius);
+    let direction = sub(second, first);
+    let origins = sub(first, center);
+    let first_distance = dot(&origins, &origins);
+    if first_distance <= radius_squared || squared_norm(&sub(second, center)) <= radius_squared {
+        return true;
+    }
+    let direction_squared = dot(&direction, &direction);
+    let origin_direction = dot(&origins, &direction);
+    let c = sub1(first_distance, radius_squared);
+    let discriminant = sub1(
+        mul(origin_direction, origin_direction),
+        mul(direction_squared, c),
+    );
+    if discriminant < 0.0 {
+        return false;
+    }
+    let root = fr(discriminant.sqrt());
+    let first_t = fr(sub1(-origin_direction, root) / direction_squared);
+    if (0.0..=1.0).contains(&first_t) {
+        return true;
+    }
+    let second_t = fr(add1(-origin_direction, root) / direction_squared);
+    (0.0..=1.0).contains(&second_t) && root > 0.0
+}
+
+fn line_touches_circle(first: &Vec3, second: &Vec3, center: &Vec3, cursor: &Cursor) -> bool {
+    let edge = sub(second, first);
+    let edge_length = norm(&edge);
+    let normalized = normalize(&edge);
+    let along = dot(&sub(center, first), &normalized);
+    let offset = sub(&add(first, &scale(&normalized, along)), center);
+    let direction_distance = dot(&offset, &cursor.direction);
+    let projected = sub1(
+        squared_norm(&offset),
+        mul(direction_distance, direction_distance),
+    );
+    projected < cursor.radius_squared && along >= 0.0 && along <= edge_length
+}
+
+fn line_touches_capsule(first: &Vec3, second: &Vec3, a: &Vec3, b: &Vec3, radius: f64) -> bool {
+    line_touches_sphere(first, second, a, radius)
+        || line_touches_sphere(first, second, b, radius)
+        || line_touches_finite_cylinder(first, second, a, b, radius)
+}
+
+fn line_touches_finite_cylinder(
+    first: &Vec3,
+    second: &Vec3,
+    start: &Vec3,
+    end: &Vec3,
+    radius: f64,
+) -> bool {
+    let axis = sub(end, start);
+    let inside = |point: &Vec3| {
+        let first_difference = sub(start, point);
+        let second_difference = sub(end, point);
+        dot(&first_difference, &axis) <= 0.0
+            && dot(&second_difference, &axis) >= 0.0
+            && fr(norm(&cross(&first_difference, &axis)) / norm(&axis)) <= radius
+    };
+    if inside(first) || inside(second) {
+        return true;
+    }
+    let origins = sub(first, start);
+    let direction = sub(second, first);
+    let origin_axis = dot(&origins, &axis);
+    let line_axis = dot(&direction, &axis);
+    let axis_squared = dot(&axis, &axis);
+    let line_squared = dot(&direction, &direction);
+    let origin_line = dot(&origins, &direction);
+    let origin_squared = dot(&origins, &origins);
+    let a = sub1(mul(axis_squared, line_squared), mul(line_axis, line_axis));
+    let b = sub1(mul(axis_squared, origin_line), mul(line_axis, origin_axis));
+    let c = sub1(
+        mul(axis_squared, sub1(origin_squared, mul(radius, radius))),
+        mul(origin_axis, origin_axis),
+    );
+    let discriminant = sub1(mul(b, b), mul(a, c));
+    if discriminant < 0.0 {
+        return false;
+    }
+    let root = fr(discriminant.sqrt());
+    for t in [fr(sub1(-b, root) / a), fr(add1(-b, root) / a)] {
+        if (0.0..=1.0).contains(&t) {
+            let endcap = add1(origin_axis, mul(t, line_axis));
+            if endcap >= 0.0 && endcap <= axis_squared {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn line_touches_circle_capsule(first: &Vec3, second: &Vec3, cursor: &Cursor) -> bool {
+    let second_center = cursor.second_center.as_ref().unwrap();
+    if line_touches_circle(first, second, &cursor.center, cursor)
+        || line_touches_circle(first, second, second_center, cursor)
+    {
+        return true;
+    }
+    let centers = sub(second_center, &cursor.center);
+    let rectangle_direction = cross(&centers, &cursor.direction);
+    let to_rectangle = scale(&normalize(&rectangle_direction), cursor.radius);
+    let a = sub(&cursor.center, &to_rectangle);
+    let d = add(&cursor.center, &to_rectangle);
+    line_crosses_rectangle(
+        first,
+        second,
+        &a,
+        &sub(&d, &a),
+        &cursor.center,
+        second_center,
+        &centers,
+    ) || line_crosses_rectangle(
+        first,
+        second,
+        &d,
+        &sub(&a, &d),
+        &cursor.center,
+        second_center,
+        &centers,
+    )
+}
+
+fn line_crosses_rectangle(
+    first: &Vec3,
+    second: &Vec3,
+    origin: &Vec3,
+    normal: &Vec3,
+    first_center: &Vec3,
+    second_center: &Vec3,
+    centers: &Vec3,
+) -> bool {
+    let Some(intersection) = line_plane_intersection(first, second, origin, normal) else {
+        return false;
+    };
+    let start = dot(first_center, centers);
+    let position = dot(&intersection, centers);
+    let end = dot(second_center, centers);
+    start <= position && position <= end
+}
+
+fn line_plane_intersection(
+    first: &Vec3,
+    second: &Vec3,
+    origin: &Vec3,
+    normal: &Vec3,
+) -> Option<Vec3> {
+    let direction = sub(second, first);
+    let denominator = dot(normal, &direction);
+    if denominator == 0.0 {
+        return None;
+    }
+    let plane_distance = dot(normal, origin);
+    let along = fr(sub1(plane_distance, dot(normal, first)) / denominator);
+    if !(0.0..=1.0).contains(&along) {
+        return None;
+    }
+    Some(add(first, &scale(&direction, along)))
+}
+
+fn circle_facet_visible(normal: &Vec3, cursor: &Cursor) -> bool {
+    let transformed = match &cursor.normal_matrix {
+        None => *normal,
+        Some(matrix) => multiply_matrix_vector(matrix, normal),
+    };
+    dot(&transformed, &cursor.direction) < 0.0
+}
+
+fn add(a: &Vec3, b: &Vec3) -> Vec3 {
+    [add1(a[0], b[0]), add1(a[1], b[1]), add1(a[2], b[2])]
+}
+fn scale(v: &Vec3, s: f64) -> Vec3 {
+    [mul(v[0], s), mul(v[1], s), mul(v[2], s)]
+}
+
 // --- Validation -----------------------------------------------------------
 
 fn request_issues(request: &Request<'_>) -> Vec<Issue> {
@@ -635,7 +1071,29 @@ fn request_issues(request: &Request<'_>) -> Vec<Issue> {
             }
         }
         Tool::Triangle { hit } => hit_issue(hit, &mut issues),
-        Tool::Brush => {}
+        Tool::Circle(brush) | Tool::Sphere(brush) => {
+            if !finite_float_vector(&brush.center)
+                || !finite_float_vector(&brush.camera_position)
+                || brush
+                    .previous_center
+                    .is_some_and(|p| !finite_float_vector(&p))
+            {
+                issues.push(Issue::new(
+                    "invalid-brush-position",
+                    "tool",
+                    "Brush centers and camera position must contain three finite float32 coordinates",
+                ));
+            }
+            if !brush.radius_mm.is_finite()
+                || !(BRUSH_RADIUS_MIN_MM..=BRUSH_RADIUS_MAX_MM).contains(&brush.radius_mm)
+            {
+                issues.push(Issue::new(
+                    "invalid-brush-radius",
+                    "tool.radiusMm",
+                    "Brush radius must be finite and in [0.4, 8] mm",
+                ));
+            }
+        }
     }
     if let Some(plane) = &request.clipping_plane
         && (!finite_float_vector(&plane.normal)
@@ -648,16 +1106,71 @@ fn request_issues(request: &Request<'_>) -> Vec<Issue> {
             "Clipping plane must have a non-zero finite float32 normal and finite float32 offset",
         ));
     }
-    if let Some(transform) = &request.transform
-        && !transform_valid(transform)
-    {
+    let transform_ok = request.transform.as_ref().is_none_or(transform_valid);
+    if !transform_ok {
         issues.push(Issue::new(
             "invalid-facet-selection-transform",
             "transform",
             "Facet selection transform must be finite, invertible, and have positive scaling factors",
         ));
     }
+    if let Tool::Circle(brush) | Tool::Sphere(brush) = &request.tool
+        && finite_float_vector(&brush.center)
+        && finite_float_vector(&brush.camera_position)
+        && brush
+            .previous_center
+            .is_none_or(|p| finite_float_vector(&p))
+        && brush.radius_mm.is_finite()
+        && transform_ok
+    {
+        brush_issues(brush, &request.transform.unwrap_or(IDENTITY), &mut issues);
+    }
     issues
+}
+
+/// The brush must resolve to a ray, a sweep and a radius once transformed.
+fn brush_issues(brush: &Brush, transform: &Transform, issues: &mut Vec<Issue>) {
+    let uniform = uniform_scaling(transform);
+    let place = |p: &Vec3| {
+        if uniform {
+            float_vector(p)
+        } else {
+            transform_point(transform, p)
+        }
+    };
+    let center = place(brush.previous_center.as_ref().unwrap_or(&brush.center));
+    let source = place(&brush.camera_position);
+    let direction_squared = squared_norm(&sub(&center, &source));
+    let resolved_radius = if uniform {
+        fr(fr(brush.radius_mm) / transform.scaling_factors[0])
+    } else {
+        fr(brush.radius_mm)
+    };
+    if direction_squared == 0.0 || !direction_squared.is_finite() {
+        issues.push(Issue::new(
+            "invalid-brush-direction",
+            "tool.cameraPosition",
+            "Brush center and camera position must resolve to distinct float32 points",
+        ));
+    }
+    if brush.previous_center.is_some() {
+        let sweep_squared = squared_norm(&sub(&place(&brush.center), &center));
+        if sweep_squared == 0.0 || !sweep_squared.is_finite() {
+            issues.push(Issue::new(
+                "invalid-brush-sweep",
+                "tool.previousCenter",
+                "Swept brush centers must resolve to distinct float32 points",
+            ));
+        }
+    }
+    // Not positive, NaN included.
+    if resolved_radius.is_nan() || resolved_radius <= 0.0 || !resolved_radius.is_finite() {
+        issues.push(Issue::new(
+            "invalid-resolved-brush-radius",
+            "transform.scalingFactors",
+            "Brush radius must remain positive and finite after uniform-scale conversion",
+        ));
+    }
 }
 
 fn transform_valid(transform: &Transform) -> bool {

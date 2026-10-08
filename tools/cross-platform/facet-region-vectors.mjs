@@ -402,6 +402,96 @@ meshes.forEach((mesh, m) => {
   }
 });
 
+// Circle and Sphere brushes: single points and dragged capsules aimed at a
+// facet centroid from the front and from an oblique camera, at several radii,
+// under uniform and non-uniform transforms, clipping and the overhang gate.
+const BRUSH_TRANSFORMS = [
+  undefined,
+  {
+    linear: [
+      [2, 0, 0],
+      [0, 2, 0],
+      [0, 0, 2],
+    ],
+    translation: [1, 1, 0],
+    scalingFactors: [2, 2, 2],
+  },
+  ...TRANSFORMS.slice(1),
+];
+const centroid = (mesh, t) =>
+  [0, 1, 2].map(
+    (k) =>
+      mesh.triangles[t].reduce((sum, v) => sum + mesh.vertices[v][k], 0) / 3,
+  );
+meshes.forEach((mesh, m) => {
+  const count = mesh.triangles.length;
+  const annotations = {
+    ...emptyAnnotations(3),
+    color: paint(rng, "color", count),
+  };
+  const guard = { topologyRevision: 3, triangleCount: count };
+  const zs = mesh.vertices.map((v) => v[2]);
+  const middle = (Math.min(...zs) + Math.max(...zs)) / 2;
+  for (const seed of [...new Set([0, count >> 1, rng.int(count)])]) {
+    const center = centroid(mesh, seed);
+    const other = centroid(
+      mesh,
+      (seed + 1 + rng.int(Math.min(4, count - 1))) % count,
+    );
+    for (const kind of ["circle", "sphere"]) {
+      for (const camera of [
+        [center[0], center[1], center[2] + 60],
+        [center[0] + 40, center[1] - 30, center[2] + 25],
+      ]) {
+        for (const radiusMm of [0.4, 1.5, 4, 8]) {
+          BRUSH_TRANSFORMS.forEach((transform, t) => {
+            for (const previous of [undefined, other]) {
+              run(
+                `${mesh.name} ${kind} ${seed} r${radiusMm} t${t}${previous ? " drag" : ""}`,
+                m,
+                "color",
+                annotations,
+                {
+                  guard,
+                  seedTriangle: seed,
+                  tool: {
+                    kind,
+                    center,
+                    cameraPosition: camera,
+                    radiusMm,
+                    ...(previous ? { previousCenter: previous } : {}),
+                  },
+                  ...(transform ? { transform } : {}),
+                },
+              );
+            }
+          });
+        }
+        run(
+          `${mesh.name} ${kind} ${seed} clipped overhang`,
+          m,
+          "color",
+          annotations,
+          {
+            guard,
+            seedTriangle: seed,
+            tool: {
+              kind,
+              center,
+              cameraPosition: camera,
+              radiusMm: 4,
+              previousCenter: other,
+              triangleSplitting: false,
+            },
+            clippingPlane: { normal: [0, 0, 1], offset: middle },
+            highlightByAngleDegrees: 45,
+          },
+        );
+      }
+    }
+  }
+});
+
 // Refusals, each with the browser's issues; then a stale topology.
 const base = {
   ...emptyAnnotations(1),
@@ -481,6 +571,65 @@ refuse(
   },
   "support",
 );
+refuse("brush position and radius", {
+  guard,
+  seedTriangle: 0,
+  tool: {
+    kind: "circle",
+    center: [0, 0, 1e39],
+    cameraPosition: [0, 0, 50],
+    radiusMm: 0.3,
+  },
+});
+refuse("brush direction and sweep", {
+  guard,
+  seedTriangle: 0,
+  tool: {
+    kind: "sphere",
+    center: [1, 1, 1],
+    previousCenter: [1, 1, 1],
+    cameraPosition: [1, 1, 1],
+    radiusMm: 2,
+  },
+});
+refuse("resolved brush radius", {
+  guard,
+  seedTriangle: 0,
+  tool: {
+    kind: "circle",
+    center: [0, 0, 0],
+    cameraPosition: [0, 0, 50],
+    radiusMm: 0.4,
+  },
+  transform: {
+    linear: [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ],
+    translation: [0, 0, 0],
+    scalingFactors: [1e39, 1e39, 1e39],
+  },
+});
+refuse("vanishing brush radius", {
+  guard,
+  seedTriangle: 0,
+  tool: {
+    kind: "circle",
+    center: [0, 0, 0],
+    cameraPosition: [0, 0, 50],
+    radiusMm: 0.4,
+  },
+  transform: {
+    linear: [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ],
+    translation: [0, 0, 0],
+    scalingFactors: [1e46, 1e46, 1e46],
+  },
+});
 refuse("clipping plane", {
   guard,
   seedTriangle: 0,

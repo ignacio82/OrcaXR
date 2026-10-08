@@ -1518,10 +1518,11 @@ painting, and FullSpectrum operations that can support real native projects.
     transformed bounds; verify the two-million-vertex/triangle ownership probe.
   - [x] Port facet region selection for source facets (`facets::region`):
     face neighbours, Triangle, Fill with smart-fill angles and clipping, Height
-    Range under transforms and the overhang gate, and Gap Fill, float32-exact
-    against the browser (3,719 cases, 17 refusals).
-  - [ ] Bind the geometry operations and finish picking, brushes and refined
-    selection, preparation kernels, renderer packets and device qualification.
+    Range under transforms and the overhang gate, Gap Fill, and Circle/Sphere
+    brushes with dragged capsules, float32-exact against the browser (5,855
+    cases, 20 refusals).
+  - [ ] Bind the geometry operations and finish picking and refined selection,
+    preparation kernels, renderer packets and device qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.
