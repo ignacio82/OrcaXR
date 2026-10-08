@@ -196,6 +196,41 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_exportPreflight, export_preflight, jlong,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_preflightSummary, preflight_summary, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_preflightIssue, preflight_issue, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_preflightOmission, preflight_omission, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_preflightInstance, preflight_instance, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_preflightFilament, preflight_filament, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

@@ -868,6 +868,41 @@ export class ProjectEffects {
 }
 if (Symbol.dispose) ProjectEffects.prototype[Symbol.dispose] = ProjectEffects.prototype.free;
 
+export class ProjectExport {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectExport.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectExportFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectExportFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectexport_free(ptr, 0);
+    }
+    /**
+     * Live slice preflight of exactly this frozen bundle from a contract
+     * `PreflightRequest`. Synchronous; run it on a worker.
+     * @param {string} request
+     * @returns {ProjectPreflight}
+     */
+    preflight(request) {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectexport_preflight(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectPreflight.__wrap(ret[0]);
+    }
+}
+if (Symbol.dispose) ProjectExport.prototype[Symbol.dispose] = ProjectExport.prototype.free;
+
 export class ProjectGuard {
     static __wrap(ptr) {
         const obj = Object.create(ProjectGuard.prototype);
@@ -1060,6 +1095,138 @@ export class ProjectOpen {
     }
 }
 if (Symbol.dispose) ProjectOpen.prototype[Symbol.dispose] = ProjectOpen.prototype.free;
+
+/**
+ * One live preflight result, read item by item as contract JSON.
+ */
+export class ProjectPreflight {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectPreflight.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectPreflightFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectPreflightFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectpreflight_free(ptr, 0);
+    }
+    /**
+     * @param {number} position
+     * @returns {string}
+     */
+    issue(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectpreflight_issue(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @param {number} position
+     * @returns {string}
+     */
+    omission(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectpreflight_omission(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @param {number} position
+     * @returns {string}
+     */
+    printable_instance(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectpreflight_printable_instance(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    summary() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectpreflight_summary(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @param {number} position
+     * @returns {string}
+     */
+    used_filament(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectpreflight_used_filament(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ProjectPreflight.prototype[Symbol.dispose] = ProjectPreflight.prototype.free;
 
 export class ProjectQueryList {
     static __wrap(ptr) {
@@ -1367,6 +1534,19 @@ export class ProjectSession {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ProjectClipboard.__wrap(ret[0]);
+    }
+    /**
+     * Freeze the project and its assets for an export or a live preflight.
+     * @param {ProjectGuard} guard
+     * @returns {ProjectExport}
+     */
+    capture_export(guard) {
+        _assertClass(guard, ProjectGuard);
+        const ret = wasm.projectsession_capture_export(this.__wbg_ptr, guard.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectExport.__wrap(ret[0]);
     }
     /**
      * @returns {ProjectGuard}
@@ -1882,6 +2062,9 @@ const ProjectDocumentFinalization = (typeof FinalizationRegistry === 'undefined'
 const ProjectEffectsFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projecteffects_free(ptr, 1));
+const ProjectExportFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectexport_free(ptr, 1));
 const ProjectGuardFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectguard_free(ptr, 1));
@@ -1897,6 +2080,9 @@ const ProjectModelUploadFinalization = (typeof FinalizationRegistry === 'undefin
 const ProjectOpenFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectopen_free(ptr, 1));
+const ProjectPreflightFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectpreflight_free(ptr, 1));
 const ProjectQueryListFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectquerylist_free(ptr, 1));

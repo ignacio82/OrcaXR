@@ -2204,6 +2204,260 @@ object ProjectIntents {
             w.field("result") { writeSessionResult(w, v.result) }
         }
     }
+    data class PreflightProfile(val machinePresetId: OptionalText, val processPresetId: OptionalText, val filamentPresetId: OptionalText, val printableArea: OptionalText, val printableHeight: OptionalText, val nozzleDiameter: OptionalText, val filamentType: OptionalText, val nozzleTemperatureRangeLow: OptionalText, val nozzleTemperatureRangeHigh: OptionalText)
+    private fun readPreflightProfile(v: Any): PreflightProfile {
+        val obj = ProjectIntentJson.fields(v, setOf("machinePresetId", "processPresetId", "filamentPresetId", "printableArea", "printableHeight", "nozzleDiameter", "filamentType", "nozzleTemperatureRangeLow", "nozzleTemperatureRangeHigh"), false)
+        return PreflightProfile(readOptionalText(obj.get("machinePresetId")), readOptionalText(obj.get("processPresetId")), readOptionalText(obj.get("filamentPresetId")), readOptionalText(obj.get("printableArea")), readOptionalText(obj.get("printableHeight")), readOptionalText(obj.get("nozzleDiameter")), readOptionalText(obj.get("filamentType")), readOptionalText(obj.get("nozzleTemperatureRangeLow")), readOptionalText(obj.get("nozzleTemperatureRangeHigh")))
+    }
+    private fun writePreflightProfile(w: ProjectIntentWriter, v: PreflightProfile) {
+        w.obj {
+            w.field("machinePresetId") { writeOptionalText(w, v.machinePresetId) }
+            w.field("processPresetId") { writeOptionalText(w, v.processPresetId) }
+            w.field("filamentPresetId") { writeOptionalText(w, v.filamentPresetId) }
+            w.field("printableArea") { writeOptionalText(w, v.printableArea) }
+            w.field("printableHeight") { writeOptionalText(w, v.printableHeight) }
+            w.field("nozzleDiameter") { writeOptionalText(w, v.nozzleDiameter) }
+            w.field("filamentType") { writeOptionalText(w, v.filamentType) }
+            w.field("nozzleTemperatureRangeLow") { writeOptionalText(w, v.nozzleTemperatureRangeLow) }
+            w.field("nozzleTemperatureRangeHigh") { writeOptionalText(w, v.nozzleTemperatureRangeHigh) }
+        }
+    }
+    sealed interface OptionalPreflightProfile {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalPreflightProfile
+        data class Value(val value: ProjectIntents.PreflightProfile) : OptionalPreflightProfile
+    }
+    private fun readOptionalPreflightProfile(v: Any): OptionalPreflightProfile {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalPreflightProfile.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalPreflightProfile.Value(readPreflightProfile(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalPreflightProfile(w: ProjectIntentWriter, v: OptionalPreflightProfile) {
+        w.obj { when(v) {
+            is OptionalPreflightProfile.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalPreflightProfile.Value -> w.field("value") { writePreflightProfile(w, v.value) }
+        } }
+    }
+    private fun readPreflightProfiles(v: Any): List<OptionalPreflightProfile> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readOptionalPreflightProfile(array.get(it)) }
+    }
+    private fun writePreflightProfiles(w: ProjectIntentWriter, v: List<OptionalPreflightProfile>) {
+        w.array(v, 0, 64) { writeOptionalPreflightProfile(w, it) }
+    }
+    data class CatalogPreflightTarget(val toolCount: Double, val primary: OptionalPreflightProfile, val filaments: List<OptionalPreflightProfile>)
+    private fun readCatalogPreflightTarget(v: Any): CatalogPreflightTarget {
+        val obj = ProjectIntentJson.fields(v, setOf("toolCount", "primary", "filaments"), false)
+        return CatalogPreflightTarget(readFinite(obj.get("toolCount")), readOptionalPreflightProfile(obj.get("primary")), readPreflightProfiles(obj.get("filaments")))
+    }
+    private fun writeCatalogPreflightTarget(w: ProjectIntentWriter, v: CatalogPreflightTarget) {
+        w.obj {
+            w.field("toolCount") { writeFinite(w, v.toolCount) }
+            w.field("primary") { writeOptionalPreflightProfile(w, v.primary) }
+            w.field("filaments") { writePreflightProfiles(w, v.filaments) }
+        }
+    }
+    sealed interface PreflightTarget {
+        data class Authored(val value: ProjectIntents.Empty) : PreflightTarget
+        data class Catalog(val value: ProjectIntents.CatalogPreflightTarget) : PreflightTarget
+    }
+    private fun readPreflightTarget(v: Any): PreflightTarget {
+        val obj = ProjectIntentJson.fields(v, setOf("authored", "catalog"), true)
+        return when(val key = obj.keys().next()) {
+            "authored" -> PreflightTarget.Authored(readEmpty(obj.get(key)))
+            "catalog" -> PreflightTarget.Catalog(readCatalogPreflightTarget(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePreflightTarget(w: ProjectIntentWriter, v: PreflightTarget) {
+        w.obj { when(v) {
+            is PreflightTarget.Authored -> w.field("authored") { writeEmpty(w, v.value) }
+            is PreflightTarget.Catalog -> w.field("catalog") { writeCatalogPreflightTarget(w, v.value) }
+        } }
+    }
+    data class PreflightBudget(val assetBytes: Long, val vertices: Long, val indices: Long, val assets: Long, val vertexVisits: Long, val tools: Long)
+    private fun readPreflightBudget(v: Any): PreflightBudget {
+        val obj = ProjectIntentJson.fields(v, setOf("assetBytes", "vertices", "indices", "assets", "vertexVisits", "tools"), false)
+        return PreflightBudget(readCounter(obj.get("assetBytes")), readCounter(obj.get("vertices")), readCounter(obj.get("indices")), readCounter(obj.get("assets")), readCounter(obj.get("vertexVisits")), readCounter(obj.get("tools")))
+    }
+    private fun writePreflightBudget(w: ProjectIntentWriter, v: PreflightBudget) {
+        w.obj {
+            w.field("assetBytes") { writeCounter(w, v.assetBytes) }
+            w.field("vertices") { writeCounter(w, v.vertices) }
+            w.field("indices") { writeCounter(w, v.indices) }
+            w.field("assets") { writeCounter(w, v.assets) }
+            w.field("vertexVisits") { writeCounter(w, v.vertexVisits) }
+            w.field("tools") { writeCounter(w, v.tools) }
+        }
+    }
+    data class PreflightRequest(val version: Int, val plateId: List<Int>, val target: PreflightTarget, val budget: PreflightBudget)
+    private fun readPreflightRequest(v: Any): PreflightRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("version", "plateId", "target", "budget"), false)
+        return PreflightRequest(readVersion(obj.get("version")), readId(obj.get("plateId")), readPreflightTarget(obj.get("target")), readPreflightBudget(obj.get("budget")))
+    }
+    private fun writePreflightRequest(w: ProjectIntentWriter, v: PreflightRequest) {
+        w.obj {
+            w.field("version") { writeVersion(w, v.version) }
+            w.field("plateId") { writeId(w, v.plateId) }
+            w.field("target") { writePreflightTarget(w, v.target) }
+            w.field("budget") { writePreflightBudget(w, v.budget) }
+        }
+    }
+    data class PreflightSummary(val plateId: List<Int>, val canSlice: Boolean, val blockingCount: Long, val issueCount: Long, val omissionCount: Long, val printableInstanceCount: Long, val usedFilamentCount: Long)
+    private fun readPreflightSummary(v: Any): PreflightSummary {
+        val obj = ProjectIntentJson.fields(v, setOf("plateId", "canSlice", "blockingCount", "issueCount", "omissionCount", "printableInstanceCount", "usedFilamentCount"), false)
+        return PreflightSummary(readId(obj.get("plateId")), readFlag(obj.get("canSlice")), readCounter(obj.get("blockingCount")), readCounter(obj.get("issueCount")), readCounter(obj.get("omissionCount")), readCounter(obj.get("printableInstanceCount")), readCounter(obj.get("usedFilamentCount")))
+    }
+    private fun writePreflightSummary(w: ProjectIntentWriter, v: PreflightSummary) {
+        w.obj {
+            w.field("plateId") { writeId(w, v.plateId) }
+            w.field("canSlice") { writeFlag(w, v.canSlice) }
+            w.field("blockingCount") { writeCounter(w, v.blockingCount) }
+            w.field("issueCount") { writeCounter(w, v.issueCount) }
+            w.field("omissionCount") { writeCounter(w, v.omissionCount) }
+            w.field("printableInstanceCount") { writeCounter(w, v.printableInstanceCount) }
+            w.field("usedFilamentCount") { writeCounter(w, v.usedFilamentCount) }
+        }
+    }
+    enum class PreflightCode {InvalidProjectState,UnknownPlate,PlateNotPrintable,NoPrintableInstance,EmptyModelMesh,UnreadableModelMesh,InstanceOutsideBuildVolume,InstanceBelowBuildPlate,InstanceAabbOverlap,DisabledFilamentAssignment,DeletedMixedFilamentAssignment,DisabledMixedComponent,IncompatibleMixedComponents,MixedFilamentUnsupportedPrinter,FilamentToolOutOfRange,FilamentCountExceedsEngineLimit,GradientRecipeOutOfBounds,FilamentNozzleMismatch,UnsupportedFilamentMaterial,InvalidFilamentTemperature,FilamentTemperatureOutOfRange,MissingProfileAttestation,WipeTowerOutsideBuildVolume,WipeTowerRequiresPhysicalFilament,WipeTowerRequiresRelativeE,WipeTowerOozePreventionConflict,WipeTowerMixedExtruderDiameters,UnsafeCustomGcode}
+    private fun readPreflightCode(v: Any): PreflightCode {
+        return when(v) {"invalidProjectState" -> PreflightCode.InvalidProjectState;"unknownPlate" -> PreflightCode.UnknownPlate;"plateNotPrintable" -> PreflightCode.PlateNotPrintable;"noPrintableInstance" -> PreflightCode.NoPrintableInstance;"emptyModelMesh" -> PreflightCode.EmptyModelMesh;"unreadableModelMesh" -> PreflightCode.UnreadableModelMesh;"instanceOutsideBuildVolume" -> PreflightCode.InstanceOutsideBuildVolume;"instanceBelowBuildPlate" -> PreflightCode.InstanceBelowBuildPlate;"instanceAabbOverlap" -> PreflightCode.InstanceAabbOverlap;"disabledFilamentAssignment" -> PreflightCode.DisabledFilamentAssignment;"deletedMixedFilamentAssignment" -> PreflightCode.DeletedMixedFilamentAssignment;"disabledMixedComponent" -> PreflightCode.DisabledMixedComponent;"incompatibleMixedComponents" -> PreflightCode.IncompatibleMixedComponents;"mixedFilamentUnsupportedPrinter" -> PreflightCode.MixedFilamentUnsupportedPrinter;"filamentToolOutOfRange" -> PreflightCode.FilamentToolOutOfRange;"filamentCountExceedsEngineLimit" -> PreflightCode.FilamentCountExceedsEngineLimit;"gradientRecipeOutOfBounds" -> PreflightCode.GradientRecipeOutOfBounds;"filamentNozzleMismatch" -> PreflightCode.FilamentNozzleMismatch;"unsupportedFilamentMaterial" -> PreflightCode.UnsupportedFilamentMaterial;"invalidFilamentTemperature" -> PreflightCode.InvalidFilamentTemperature;"filamentTemperatureOutOfRange" -> PreflightCode.FilamentTemperatureOutOfRange;"missingProfileAttestation" -> PreflightCode.MissingProfileAttestation;"wipeTowerOutsideBuildVolume" -> PreflightCode.WipeTowerOutsideBuildVolume;"wipeTowerRequiresPhysicalFilament" -> PreflightCode.WipeTowerRequiresPhysicalFilament;"wipeTowerRequiresRelativeE" -> PreflightCode.WipeTowerRequiresRelativeE;"wipeTowerOozePreventionConflict" -> PreflightCode.WipeTowerOozePreventionConflict;"wipeTowerMixedExtruderDiameters" -> PreflightCode.WipeTowerMixedExtruderDiameters;"unsafeCustomGcode" -> PreflightCode.UnsafeCustomGcode; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePreflightCode(w: ProjectIntentWriter, v: PreflightCode) {
+        w.literal(when(v) {PreflightCode.InvalidProjectState -> "invalidProjectState";PreflightCode.UnknownPlate -> "unknownPlate";PreflightCode.PlateNotPrintable -> "plateNotPrintable";PreflightCode.NoPrintableInstance -> "noPrintableInstance";PreflightCode.EmptyModelMesh -> "emptyModelMesh";PreflightCode.UnreadableModelMesh -> "unreadableModelMesh";PreflightCode.InstanceOutsideBuildVolume -> "instanceOutsideBuildVolume";PreflightCode.InstanceBelowBuildPlate -> "instanceBelowBuildPlate";PreflightCode.InstanceAabbOverlap -> "instanceAabbOverlap";PreflightCode.DisabledFilamentAssignment -> "disabledFilamentAssignment";PreflightCode.DeletedMixedFilamentAssignment -> "deletedMixedFilamentAssignment";PreflightCode.DisabledMixedComponent -> "disabledMixedComponent";PreflightCode.IncompatibleMixedComponents -> "incompatibleMixedComponents";PreflightCode.MixedFilamentUnsupportedPrinter -> "mixedFilamentUnsupportedPrinter";PreflightCode.FilamentToolOutOfRange -> "filamentToolOutOfRange";PreflightCode.FilamentCountExceedsEngineLimit -> "filamentCountExceedsEngineLimit";PreflightCode.GradientRecipeOutOfBounds -> "gradientRecipeOutOfBounds";PreflightCode.FilamentNozzleMismatch -> "filamentNozzleMismatch";PreflightCode.UnsupportedFilamentMaterial -> "unsupportedFilamentMaterial";PreflightCode.InvalidFilamentTemperature -> "invalidFilamentTemperature";PreflightCode.FilamentTemperatureOutOfRange -> "filamentTemperatureOutOfRange";PreflightCode.MissingProfileAttestation -> "missingProfileAttestation";PreflightCode.WipeTowerOutsideBuildVolume -> "wipeTowerOutsideBuildVolume";PreflightCode.WipeTowerRequiresPhysicalFilament -> "wipeTowerRequiresPhysicalFilament";PreflightCode.WipeTowerRequiresRelativeE -> "wipeTowerRequiresRelativeE";PreflightCode.WipeTowerOozePreventionConflict -> "wipeTowerOozePreventionConflict";PreflightCode.WipeTowerMixedExtruderDiameters -> "wipeTowerMixedExtruderDiameters";PreflightCode.UnsafeCustomGcode -> "unsafeCustomGcode";})
+    }
+    enum class PreflightSeverity {Error,Warning}
+    private fun readPreflightSeverity(v: Any): PreflightSeverity {
+        return when(v) {"error" -> PreflightSeverity.Error;"warning" -> PreflightSeverity.Warning; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePreflightSeverity(w: ProjectIntentWriter, v: PreflightSeverity) {
+        w.literal(when(v) {PreflightSeverity.Error -> "error";PreflightSeverity.Warning -> "warning";})
+    }
+    enum class PreflightActionId {Reveal,DropToBed,MoveInsideBuildVolume,ChooseFilament,ChooseProfile,EditCustomGcode,DisableWipeTower}
+    private fun readPreflightActionId(v: Any): PreflightActionId {
+        return when(v) {"reveal" -> PreflightActionId.Reveal;"dropToBed" -> PreflightActionId.DropToBed;"moveInsideBuildVolume" -> PreflightActionId.MoveInsideBuildVolume;"chooseFilament" -> PreflightActionId.ChooseFilament;"chooseProfile" -> PreflightActionId.ChooseProfile;"editCustomGcode" -> PreflightActionId.EditCustomGcode;"disableWipeTower" -> PreflightActionId.DisableWipeTower; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePreflightActionId(w: ProjectIntentWriter, v: PreflightActionId) {
+        w.literal(when(v) {PreflightActionId.Reveal -> "reveal";PreflightActionId.DropToBed -> "dropToBed";PreflightActionId.MoveInsideBuildVolume -> "moveInsideBuildVolume";PreflightActionId.ChooseFilament -> "chooseFilament";PreflightActionId.ChooseProfile -> "chooseProfile";PreflightActionId.EditCustomGcode -> "editCustomGcode";PreflightActionId.DisableWipeTower -> "disableWipeTower";})
+    }
+    sealed interface PreflightEntity {
+        data class Project(val value: ProjectIntents.Empty) : PreflightEntity
+        data class Plate(val value: List<Int>) : PreflightEntity
+        data class Object(val value: List<Int>) : PreflightEntity
+        data class Volume(val value: List<Int>) : PreflightEntity
+        data class Instance(val value: List<Int>) : PreflightEntity
+        data class LayerRange(val value: List<Int>) : PreflightEntity
+        data class Filament(val value: List<Int>) : PreflightEntity
+    }
+    private fun readPreflightEntity(v: Any): PreflightEntity {
+        val obj = ProjectIntentJson.fields(v, setOf("project", "plate", "object", "volume", "instance", "layerRange", "filament"), true)
+        return when(val key = obj.keys().next()) {
+            "project" -> PreflightEntity.Project(readEmpty(obj.get(key)))
+            "plate" -> PreflightEntity.Plate(readId(obj.get(key)))
+            "object" -> PreflightEntity.Object(readId(obj.get(key)))
+            "volume" -> PreflightEntity.Volume(readId(obj.get(key)))
+            "instance" -> PreflightEntity.Instance(readId(obj.get(key)))
+            "layerRange" -> PreflightEntity.LayerRange(readId(obj.get(key)))
+            "filament" -> PreflightEntity.Filament(readId(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePreflightEntity(w: ProjectIntentWriter, v: PreflightEntity) {
+        w.obj { when(v) {
+            is PreflightEntity.Project -> w.field("project") { writeEmpty(w, v.value) }
+            is PreflightEntity.Plate -> w.field("plate") { writeId(w, v.value) }
+            is PreflightEntity.Object -> w.field("object") { writeId(w, v.value) }
+            is PreflightEntity.Volume -> w.field("volume") { writeId(w, v.value) }
+            is PreflightEntity.Instance -> w.field("instance") { writeId(w, v.value) }
+            is PreflightEntity.LayerRange -> w.field("layerRange") { writeId(w, v.value) }
+            is PreflightEntity.Filament -> w.field("filament") { writeId(w, v.value) }
+        } }
+    }
+    private fun readPreflightEntities(v: Any): List<PreflightEntity> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readPreflightEntity(array.get(it)) }
+    }
+    private fun writePreflightEntities(w: ProjectIntentWriter, v: List<PreflightEntity>) {
+        w.array(v, 0, 131072) { writePreflightEntity(w, it) }
+    }
+    sealed interface OptionalPreflightEntity {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalPreflightEntity
+        data class Value(val value: ProjectIntents.PreflightEntity) : OptionalPreflightEntity
+    }
+    private fun readOptionalPreflightEntity(v: Any): OptionalPreflightEntity {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalPreflightEntity.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalPreflightEntity.Value(readPreflightEntity(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalPreflightEntity(w: ProjectIntentWriter, v: OptionalPreflightEntity) {
+        w.obj { when(v) {
+            is OptionalPreflightEntity.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalPreflightEntity.Value -> w.field("value") { writePreflightEntity(w, v.value) }
+        } }
+    }
+    data class PreflightAction(val id: PreflightActionId, val label: List<Int>, val entity: OptionalPreflightEntity, val settingKey: OptionalText)
+    private fun readPreflightAction(v: Any): PreflightAction {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "label", "entity", "settingKey"), false)
+        return PreflightAction(readPreflightActionId(obj.get("id")), readLabel(obj.get("label")), readOptionalPreflightEntity(obj.get("entity")), readOptionalText(obj.get("settingKey")))
+    }
+    private fun writePreflightAction(w: ProjectIntentWriter, v: PreflightAction) {
+        w.obj {
+            w.field("id") { writePreflightActionId(w, v.id) }
+            w.field("label") { writeLabel(w, v.label) }
+            w.field("entity") { writeOptionalPreflightEntity(w, v.entity) }
+            w.field("settingKey") { writeOptionalText(w, v.settingKey) }
+        }
+    }
+    private fun readPreflightActions(v: Any): List<PreflightAction> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readPreflightAction(array.get(it)) }
+    }
+    private fun writePreflightActions(w: ProjectIntentWriter, v: List<PreflightAction>) {
+        w.array(v, 0, 131072) { writePreflightAction(w, it) }
+    }
+    data class PreflightIssue(val id: List<Int>, val code: PreflightCode, val detailCode: OptionalText, val severity: PreflightSeverity, val message: List<Int>, val help: List<Int>, val path: OptionalText, val entities: List<PreflightEntity>, val actions: List<PreflightAction>)
+    private fun readPreflightIssue(v: Any): PreflightIssue {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "code", "detailCode", "severity", "message", "help", "path", "entities", "actions"), false)
+        return PreflightIssue(readEditText(obj.get("id")), readPreflightCode(obj.get("code")), readOptionalText(obj.get("detailCode")), readPreflightSeverity(obj.get("severity")), readEditText(obj.get("message")), readEditText(obj.get("help")), readOptionalText(obj.get("path")), readPreflightEntities(obj.get("entities")), readPreflightActions(obj.get("actions")))
+    }
+    private fun writePreflightIssue(w: ProjectIntentWriter, v: PreflightIssue) {
+        w.obj {
+            w.field("id") { writeEditText(w, v.id) }
+            w.field("code") { writePreflightCode(w, v.code) }
+            w.field("detailCode") { writeOptionalText(w, v.detailCode) }
+            w.field("severity") { writePreflightSeverity(w, v.severity) }
+            w.field("message") { writeEditText(w, v.message) }
+            w.field("help") { writeEditText(w, v.help) }
+            w.field("path") { writeOptionalText(w, v.path) }
+            w.field("entities") { writePreflightEntities(w, v.entities) }
+            w.field("actions") { writePreflightActions(w, v.actions) }
+        }
+    }
+    enum class PreflightOmissionCode {MaterialNotDeclared,TemperatureLowerBoundNotDeclared,TemperatureUpperBoundNotDeclared,TemperatureRangeInvalid}
+    private fun readPreflightOmissionCode(v: Any): PreflightOmissionCode {
+        return when(v) {"materialNotDeclared" -> PreflightOmissionCode.MaterialNotDeclared;"temperatureLowerBoundNotDeclared" -> PreflightOmissionCode.TemperatureLowerBoundNotDeclared;"temperatureUpperBoundNotDeclared" -> PreflightOmissionCode.TemperatureUpperBoundNotDeclared;"temperatureRangeInvalid" -> PreflightOmissionCode.TemperatureRangeInvalid; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePreflightOmissionCode(w: ProjectIntentWriter, v: PreflightOmissionCode) {
+        w.literal(when(v) {PreflightOmissionCode.MaterialNotDeclared -> "materialNotDeclared";PreflightOmissionCode.TemperatureLowerBoundNotDeclared -> "temperatureLowerBoundNotDeclared";PreflightOmissionCode.TemperatureUpperBoundNotDeclared -> "temperatureUpperBoundNotDeclared";PreflightOmissionCode.TemperatureRangeInvalid -> "temperatureRangeInvalid";})
+    }
+    data class PreflightOmission(val code: PreflightOmissionCode, val message: List<Int>, val path: List<Int>, val toolId: Long)
+    private fun readPreflightOmission(v: Any): PreflightOmission {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message", "path", "toolId"), false)
+        return PreflightOmission(readPreflightOmissionCode(obj.get("code")), readEditText(obj.get("message")), readEditText(obj.get("path")), readCounter(obj.get("toolId")))
+    }
+    private fun writePreflightOmission(w: ProjectIntentWriter, v: PreflightOmission) {
+        w.obj {
+            w.field("code") { writePreflightOmissionCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("toolId") { writeCounter(w, v.toolId) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -2212,4 +2466,14 @@ object ProjectIntents {
     fun encodeSessionRequest(value: SessionRequest): String = ProjectIntentWriter().also { writeSessionRequest(it, value) }.finish()
     fun decodeSessionReply(text: String): SessionReply = readSessionReply(ProjectIntentJson.parse(text))
     fun encodeSessionReply(value: SessionReply): String = ProjectIntentWriter().also { writeSessionReply(it, value) }.finish()
+    fun decodePreflightRequest(text: String): PreflightRequest = readPreflightRequest(ProjectIntentJson.parse(text))
+    fun encodePreflightRequest(value: PreflightRequest): String = ProjectIntentWriter().also { writePreflightRequest(it, value) }.finish()
+    fun decodePreflightSummary(text: String): PreflightSummary = readPreflightSummary(ProjectIntentJson.parse(text))
+    fun encodePreflightSummary(value: PreflightSummary): String = ProjectIntentWriter().also { writePreflightSummary(it, value) }.finish()
+    fun decodePreflightIssue(text: String): PreflightIssue = readPreflightIssue(ProjectIntentJson.parse(text))
+    fun encodePreflightIssue(value: PreflightIssue): String = ProjectIntentWriter().also { writePreflightIssue(it, value) }.finish()
+    fun decodePreflightOmission(text: String): PreflightOmission = readPreflightOmission(ProjectIntentJson.parse(text))
+    fun encodePreflightOmission(value: PreflightOmission): String = ProjectIntentWriter().also { writePreflightOmission(it, value) }.finish()
+    fun decodePreflightEntity(text: String): PreflightEntity = readPreflightEntity(ProjectIntentJson.parse(text))
+    fun encodePreflightEntity(value: PreflightEntity): String = ProjectIntentWriter().also { writePreflightEntity(it, value) }.finish()
 }

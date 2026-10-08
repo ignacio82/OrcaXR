@@ -2745,6 +2745,462 @@ fn read_session_reply(v: &Value) -> Result<SessionReply, InvalidIntent> {
         result: read_session_result(&object["result"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreflightProfile {
+    pub machine_preset_id: OptionalText,
+    pub process_preset_id: OptionalText,
+    pub filament_preset_id: OptionalText,
+    pub printable_area: OptionalText,
+    pub printable_height: OptionalText,
+    pub nozzle_diameter: OptionalText,
+    pub filament_type: OptionalText,
+    pub nozzle_temperature_range_low: OptionalText,
+    pub nozzle_temperature_range_high: OptionalText,
+}
+fn read_preflight_profile(v: &Value) -> Result<PreflightProfile, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "machinePresetId",
+            "processPresetId",
+            "filamentPresetId",
+            "printableArea",
+            "printableHeight",
+            "nozzleDiameter",
+            "filamentType",
+            "nozzleTemperatureRangeLow",
+            "nozzleTemperatureRangeHigh",
+        ],
+        false,
+    )?;
+    Ok(PreflightProfile {
+        machine_preset_id: read_optional_text(&object["machinePresetId"])?,
+        process_preset_id: read_optional_text(&object["processPresetId"])?,
+        filament_preset_id: read_optional_text(&object["filamentPresetId"])?,
+        printable_area: read_optional_text(&object["printableArea"])?,
+        printable_height: read_optional_text(&object["printableHeight"])?,
+        nozzle_diameter: read_optional_text(&object["nozzleDiameter"])?,
+        filament_type: read_optional_text(&object["filamentType"])?,
+        nozzle_temperature_range_low: read_optional_text(&object["nozzleTemperatureRangeLow"])?,
+        nozzle_temperature_range_high: read_optional_text(&object["nozzleTemperatureRangeHigh"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalPreflightProfile {
+    Absent(Empty),
+    Value(PreflightProfile),
+}
+fn read_optional_preflight_profile(v: &Value) -> Result<OptionalPreflightProfile, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPreflightProfile::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPreflightProfile::Value(read_preflight_profile(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type PreflightProfiles = Vec<OptionalPreflightProfile>;
+fn read_preflight_profiles(v: &Value) -> Result<PreflightProfiles, InvalidIntent> {
+    list(v, 0, 64)?
+        .iter()
+        .map(read_optional_preflight_profile)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogPreflightTarget {
+    pub tool_count: Finite,
+    pub primary: OptionalPreflightProfile,
+    pub filaments: PreflightProfiles,
+}
+fn read_catalog_preflight_target(v: &Value) -> Result<CatalogPreflightTarget, InvalidIntent> {
+    let object = fields(v, &["toolCount", "primary", "filaments"], false)?;
+    Ok(CatalogPreflightTarget {
+        tool_count: read_finite(&object["toolCount"])?,
+        primary: read_optional_preflight_profile(&object["primary"])?,
+        filaments: read_preflight_profiles(&object["filaments"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PreflightTarget {
+    Authored(Empty),
+    Catalog(CatalogPreflightTarget),
+}
+fn read_preflight_target(v: &Value) -> Result<PreflightTarget, InvalidIntent> {
+    let object = fields(v, &["authored", "catalog"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "authored" => Ok(PreflightTarget::Authored(read_empty(value)?)),
+        "catalog" => Ok(PreflightTarget::Catalog(read_catalog_preflight_target(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreflightBudget {
+    pub asset_bytes: Counter,
+    pub vertices: Counter,
+    pub indices: Counter,
+    pub assets: Counter,
+    pub vertex_visits: Counter,
+    pub tools: Counter,
+}
+fn read_preflight_budget(v: &Value) -> Result<PreflightBudget, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "assetBytes",
+            "vertices",
+            "indices",
+            "assets",
+            "vertexVisits",
+            "tools",
+        ],
+        false,
+    )?;
+    Ok(PreflightBudget {
+        asset_bytes: read_counter(&object["assetBytes"])?,
+        vertices: read_counter(&object["vertices"])?,
+        indices: read_counter(&object["indices"])?,
+        assets: read_counter(&object["assets"])?,
+        vertex_visits: read_counter(&object["vertexVisits"])?,
+        tools: read_counter(&object["tools"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreflightRequest {
+    pub version: Version,
+    pub plate_id: Id,
+    pub target: PreflightTarget,
+    pub budget: PreflightBudget,
+}
+fn read_preflight_request(v: &Value) -> Result<PreflightRequest, InvalidIntent> {
+    let object = fields(v, &["version", "plateId", "target", "budget"], false)?;
+    Ok(PreflightRequest {
+        version: read_version(&object["version"])?,
+        plate_id: read_id(&object["plateId"])?,
+        target: read_preflight_target(&object["target"])?,
+        budget: read_preflight_budget(&object["budget"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreflightSummary {
+    pub plate_id: Id,
+    pub can_slice: Flag,
+    pub blocking_count: Counter,
+    pub issue_count: Counter,
+    pub omission_count: Counter,
+    pub printable_instance_count: Counter,
+    pub used_filament_count: Counter,
+}
+fn read_preflight_summary(v: &Value) -> Result<PreflightSummary, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "plateId",
+            "canSlice",
+            "blockingCount",
+            "issueCount",
+            "omissionCount",
+            "printableInstanceCount",
+            "usedFilamentCount",
+        ],
+        false,
+    )?;
+    Ok(PreflightSummary {
+        plate_id: read_id(&object["plateId"])?,
+        can_slice: read_flag(&object["canSlice"])?,
+        blocking_count: read_counter(&object["blockingCount"])?,
+        issue_count: read_counter(&object["issueCount"])?,
+        omission_count: read_counter(&object["omissionCount"])?,
+        printable_instance_count: read_counter(&object["printableInstanceCount"])?,
+        used_filament_count: read_counter(&object["usedFilamentCount"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PreflightCode {
+    InvalidProjectState,
+    UnknownPlate,
+    PlateNotPrintable,
+    NoPrintableInstance,
+    EmptyModelMesh,
+    UnreadableModelMesh,
+    InstanceOutsideBuildVolume,
+    InstanceBelowBuildPlate,
+    InstanceAabbOverlap,
+    DisabledFilamentAssignment,
+    DeletedMixedFilamentAssignment,
+    DisabledMixedComponent,
+    IncompatibleMixedComponents,
+    MixedFilamentUnsupportedPrinter,
+    FilamentToolOutOfRange,
+    FilamentCountExceedsEngineLimit,
+    GradientRecipeOutOfBounds,
+    FilamentNozzleMismatch,
+    UnsupportedFilamentMaterial,
+    InvalidFilamentTemperature,
+    FilamentTemperatureOutOfRange,
+    MissingProfileAttestation,
+    WipeTowerOutsideBuildVolume,
+    WipeTowerRequiresPhysicalFilament,
+    WipeTowerRequiresRelativeE,
+    WipeTowerOozePreventionConflict,
+    WipeTowerMixedExtruderDiameters,
+    UnsafeCustomGcode,
+}
+fn read_preflight_code(v: &Value) -> Result<PreflightCode, InvalidIntent> {
+    match v.as_str() {
+        Some("invalidProjectState") => Ok(PreflightCode::InvalidProjectState),
+        Some("unknownPlate") => Ok(PreflightCode::UnknownPlate),
+        Some("plateNotPrintable") => Ok(PreflightCode::PlateNotPrintable),
+        Some("noPrintableInstance") => Ok(PreflightCode::NoPrintableInstance),
+        Some("emptyModelMesh") => Ok(PreflightCode::EmptyModelMesh),
+        Some("unreadableModelMesh") => Ok(PreflightCode::UnreadableModelMesh),
+        Some("instanceOutsideBuildVolume") => Ok(PreflightCode::InstanceOutsideBuildVolume),
+        Some("instanceBelowBuildPlate") => Ok(PreflightCode::InstanceBelowBuildPlate),
+        Some("instanceAabbOverlap") => Ok(PreflightCode::InstanceAabbOverlap),
+        Some("disabledFilamentAssignment") => Ok(PreflightCode::DisabledFilamentAssignment),
+        Some("deletedMixedFilamentAssignment") => Ok(PreflightCode::DeletedMixedFilamentAssignment),
+        Some("disabledMixedComponent") => Ok(PreflightCode::DisabledMixedComponent),
+        Some("incompatibleMixedComponents") => Ok(PreflightCode::IncompatibleMixedComponents),
+        Some("mixedFilamentUnsupportedPrinter") => {
+            Ok(PreflightCode::MixedFilamentUnsupportedPrinter)
+        }
+        Some("filamentToolOutOfRange") => Ok(PreflightCode::FilamentToolOutOfRange),
+        Some("filamentCountExceedsEngineLimit") => {
+            Ok(PreflightCode::FilamentCountExceedsEngineLimit)
+        }
+        Some("gradientRecipeOutOfBounds") => Ok(PreflightCode::GradientRecipeOutOfBounds),
+        Some("filamentNozzleMismatch") => Ok(PreflightCode::FilamentNozzleMismatch),
+        Some("unsupportedFilamentMaterial") => Ok(PreflightCode::UnsupportedFilamentMaterial),
+        Some("invalidFilamentTemperature") => Ok(PreflightCode::InvalidFilamentTemperature),
+        Some("filamentTemperatureOutOfRange") => Ok(PreflightCode::FilamentTemperatureOutOfRange),
+        Some("missingProfileAttestation") => Ok(PreflightCode::MissingProfileAttestation),
+        Some("wipeTowerOutsideBuildVolume") => Ok(PreflightCode::WipeTowerOutsideBuildVolume),
+        Some("wipeTowerRequiresPhysicalFilament") => {
+            Ok(PreflightCode::WipeTowerRequiresPhysicalFilament)
+        }
+        Some("wipeTowerRequiresRelativeE") => Ok(PreflightCode::WipeTowerRequiresRelativeE),
+        Some("wipeTowerOozePreventionConflict") => {
+            Ok(PreflightCode::WipeTowerOozePreventionConflict)
+        }
+        Some("wipeTowerMixedExtruderDiameters") => {
+            Ok(PreflightCode::WipeTowerMixedExtruderDiameters)
+        }
+        Some("unsafeCustomGcode") => Ok(PreflightCode::UnsafeCustomGcode),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PreflightSeverity {
+    Error,
+    Warning,
+}
+fn read_preflight_severity(v: &Value) -> Result<PreflightSeverity, InvalidIntent> {
+    match v.as_str() {
+        Some("error") => Ok(PreflightSeverity::Error),
+        Some("warning") => Ok(PreflightSeverity::Warning),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PreflightActionId {
+    Reveal,
+    DropToBed,
+    MoveInsideBuildVolume,
+    ChooseFilament,
+    ChooseProfile,
+    EditCustomGcode,
+    DisableWipeTower,
+}
+fn read_preflight_action_id(v: &Value) -> Result<PreflightActionId, InvalidIntent> {
+    match v.as_str() {
+        Some("reveal") => Ok(PreflightActionId::Reveal),
+        Some("dropToBed") => Ok(PreflightActionId::DropToBed),
+        Some("moveInsideBuildVolume") => Ok(PreflightActionId::MoveInsideBuildVolume),
+        Some("chooseFilament") => Ok(PreflightActionId::ChooseFilament),
+        Some("chooseProfile") => Ok(PreflightActionId::ChooseProfile),
+        Some("editCustomGcode") => Ok(PreflightActionId::EditCustomGcode),
+        Some("disableWipeTower") => Ok(PreflightActionId::DisableWipeTower),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PreflightEntity {
+    Project(Empty),
+    Plate(Id),
+    Object(Id),
+    Volume(Id),
+    Instance(Id),
+    LayerRange(Id),
+    Filament(Id),
+}
+fn read_preflight_entity(v: &Value) -> Result<PreflightEntity, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "project",
+            "plate",
+            "object",
+            "volume",
+            "instance",
+            "layerRange",
+            "filament",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "project" => Ok(PreflightEntity::Project(read_empty(value)?)),
+        "plate" => Ok(PreflightEntity::Plate(read_id(value)?)),
+        "object" => Ok(PreflightEntity::Object(read_id(value)?)),
+        "volume" => Ok(PreflightEntity::Volume(read_id(value)?)),
+        "instance" => Ok(PreflightEntity::Instance(read_id(value)?)),
+        "layerRange" => Ok(PreflightEntity::LayerRange(read_id(value)?)),
+        "filament" => Ok(PreflightEntity::Filament(read_id(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type PreflightEntities = Vec<PreflightEntity>;
+fn read_preflight_entities(v: &Value) -> Result<PreflightEntities, InvalidIntent> {
+    list(v, 0, 131072)?
+        .iter()
+        .map(read_preflight_entity)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalPreflightEntity {
+    Absent(Empty),
+    Value(PreflightEntity),
+}
+fn read_optional_preflight_entity(v: &Value) -> Result<OptionalPreflightEntity, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPreflightEntity::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPreflightEntity::Value(read_preflight_entity(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreflightAction {
+    pub id: PreflightActionId,
+    pub label: Label,
+    pub entity: OptionalPreflightEntity,
+    pub setting_key: OptionalText,
+}
+fn read_preflight_action(v: &Value) -> Result<PreflightAction, InvalidIntent> {
+    let object = fields(v, &["id", "label", "entity", "settingKey"], false)?;
+    Ok(PreflightAction {
+        id: read_preflight_action_id(&object["id"])?,
+        label: read_label(&object["label"])?,
+        entity: read_optional_preflight_entity(&object["entity"])?,
+        setting_key: read_optional_text(&object["settingKey"])?,
+    })
+}
+pub type PreflightActions = Vec<PreflightAction>;
+fn read_preflight_actions(v: &Value) -> Result<PreflightActions, InvalidIntent> {
+    list(v, 0, 131072)?
+        .iter()
+        .map(read_preflight_action)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreflightIssue {
+    pub id: EditText,
+    pub code: PreflightCode,
+    pub detail_code: OptionalText,
+    pub severity: PreflightSeverity,
+    pub message: EditText,
+    pub help: EditText,
+    pub path: OptionalText,
+    pub entities: PreflightEntities,
+    pub actions: PreflightActions,
+}
+fn read_preflight_issue(v: &Value) -> Result<PreflightIssue, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "id",
+            "code",
+            "detailCode",
+            "severity",
+            "message",
+            "help",
+            "path",
+            "entities",
+            "actions",
+        ],
+        false,
+    )?;
+    Ok(PreflightIssue {
+        id: read_edit_text(&object["id"])?,
+        code: read_preflight_code(&object["code"])?,
+        detail_code: read_optional_text(&object["detailCode"])?,
+        severity: read_preflight_severity(&object["severity"])?,
+        message: read_edit_text(&object["message"])?,
+        help: read_edit_text(&object["help"])?,
+        path: read_optional_text(&object["path"])?,
+        entities: read_preflight_entities(&object["entities"])?,
+        actions: read_preflight_actions(&object["actions"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PreflightOmissionCode {
+    MaterialNotDeclared,
+    TemperatureLowerBoundNotDeclared,
+    TemperatureUpperBoundNotDeclared,
+    TemperatureRangeInvalid,
+}
+fn read_preflight_omission_code(v: &Value) -> Result<PreflightOmissionCode, InvalidIntent> {
+    match v.as_str() {
+        Some("materialNotDeclared") => Ok(PreflightOmissionCode::MaterialNotDeclared),
+        Some("temperatureLowerBoundNotDeclared") => {
+            Ok(PreflightOmissionCode::TemperatureLowerBoundNotDeclared)
+        }
+        Some("temperatureUpperBoundNotDeclared") => {
+            Ok(PreflightOmissionCode::TemperatureUpperBoundNotDeclared)
+        }
+        Some("temperatureRangeInvalid") => Ok(PreflightOmissionCode::TemperatureRangeInvalid),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreflightOmission {
+    pub code: PreflightOmissionCode,
+    pub message: EditText,
+    pub path: EditText,
+    pub tool_id: Counter,
+}
+fn read_preflight_omission(v: &Value) -> Result<PreflightOmission, InvalidIntent> {
+    let object = fields(v, &["code", "message", "path", "toolId"], false)?;
+    Ok(PreflightOmission {
+        code: read_preflight_omission_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+        path: read_edit_text(&object["path"])?,
+        tool_id: read_counter(&object["toolId"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -2775,5 +3231,45 @@ pub fn decode_session_reply(text: &str) -> Result<SessionReply, InvalidIntent> {
 pub fn encode_session_reply(value: &SessionReply) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_session_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_preflight_request(text: &str) -> Result<PreflightRequest, InvalidIntent> {
+    read_preflight_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_preflight_request(value: &PreflightRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_preflight_request(&text)?;
+    Ok(text)
+}
+pub fn decode_preflight_summary(text: &str) -> Result<PreflightSummary, InvalidIntent> {
+    read_preflight_summary(&super::project_intents::parse(text)?)
+}
+pub fn encode_preflight_summary(value: &PreflightSummary) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_preflight_summary(&text)?;
+    Ok(text)
+}
+pub fn decode_preflight_issue(text: &str) -> Result<PreflightIssue, InvalidIntent> {
+    read_preflight_issue(&super::project_intents::parse(text)?)
+}
+pub fn encode_preflight_issue(value: &PreflightIssue) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_preflight_issue(&text)?;
+    Ok(text)
+}
+pub fn decode_preflight_omission(text: &str) -> Result<PreflightOmission, InvalidIntent> {
+    read_preflight_omission(&super::project_intents::parse(text)?)
+}
+pub fn encode_preflight_omission(value: &PreflightOmission) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_preflight_omission(&text)?;
+    Ok(text)
+}
+pub fn decode_preflight_entity(text: &str) -> Result<PreflightEntity, InvalidIntent> {
+    read_preflight_entity(&super::project_intents::parse(text)?)
+}
+pub fn encode_preflight_entity(value: &PreflightEntity) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_preflight_entity(&text)?;
     Ok(text)
 }

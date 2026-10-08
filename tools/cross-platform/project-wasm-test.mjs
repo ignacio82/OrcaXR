@@ -4,6 +4,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { isMainThread, Worker, parentPort } from "node:worker_threads";
 import { replayProject } from "./project-wasm-replay.mjs";
+import { replayPreflights } from "./project-preflight-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -35,6 +36,11 @@ if (isMainThread) {
     assert.deepEqual(
       [result.archives.cases, result.archives.accepted, result.archives.saves],
       [1341, 1225, 1223],
+    );
+    // Live preflights through the binding, reply for reply.
+    assert.deepEqual(
+      [result.preflightCases, result.preflightItems, result.preflightRefusals],
+      [7, 59, 42],
     );
     // The browser's model import transactions, including undo/redo.
     assert.deepEqual([result.models.cases, result.models.committed], [21, 15]);
@@ -204,8 +210,18 @@ if (isMainThread) {
     ),
   );
   const queries = replayProjectQueries(core, queryFixture, queryLayout);
+  const preflights = replayPreflights(
+    core,
+    JSON.parse(
+      await readFile(
+        new URL("testdata/cross-platform/slice-profile-vectors.json", root),
+      ),
+    ),
+    layout,
+    fixture.generation,
+  );
   parentPort.postMessage(
-    { ...metrics, ...staged, ...boundaries, ...queries, owned },
+    { ...metrics, ...staged, ...boundaries, ...queries, ...preflights, owned },
     [owned.buffer, queries.ownedQueryText.buffer],
   );
 }

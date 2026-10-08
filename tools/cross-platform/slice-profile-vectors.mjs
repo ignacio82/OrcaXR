@@ -15,6 +15,14 @@ import {
 } from "../../web/src/workspace/ProfilePreflightConstraints.ts";
 import { authoredProjectPreflightTarget } from "../../web/src/workspace/AuthoredSlicingTarget.ts";
 import { createProjectFixture } from "../../web/src/project/__tests__/fixtures.ts";
+import {
+  encodeProjectPreflightEntity,
+  encodeProjectPreflightIssue,
+  encodeProjectPreflightOmission,
+  encodeProjectPreflightRequest,
+  encodeProjectPreflightSummary,
+  PROJECT_INTENT_VERSION,
+} from "../../contracts/generated/project-intents.ts";
 
 const root = new URL("../../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
@@ -289,14 +297,72 @@ function author(name, state) {
   author("third-tool", state);
 }
 
-// Attestation errors merge into the canonical result.
+// Live preflights: attestation errors merge into the canonical result. Each
+// case also pins the host exchange in the generated contract encoding.
+const units = (text) =>
+  Array.from({ length: text.length }, (_, i) => text.charCodeAt(i));
+const camel = (text) => text.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+const optionalText = (text) =>
+  text === undefined ? { absent: {} } : { value: units(text) };
+const entityWire = (entity) =>
+  entity.kind === "project"
+    ? { project: {} }
+    : { [camel(entity.kind)]: units(entity.id) };
+const profileWire = (profile) =>
+  profile
+    ? {
+        value: {
+          machinePresetId: optionalText(profile.machinePresetId),
+          processPresetId: optionalText(profile.processPresetId),
+          filamentPresetId: optionalText(profile.filamentPresetId),
+          printableArea: optionalText(profile.config.printable_area),
+          printableHeight: optionalText(profile.config.printable_height),
+          nozzleDiameter: optionalText(profile.config.nozzle_diameter),
+          filamentType: optionalText(profile.config.filament_type),
+          nozzleTemperatureRangeLow: optionalText(
+            profile.config.nozzle_temperature_range_low,
+          ),
+          nozzleTemperatureRangeHigh: optionalText(
+            profile.config.nozzle_temperature_range_high,
+          ),
+        },
+      }
+    : { absent: {} };
+const budget = {
+  assetBytes: 1 << 20,
+  vertices: 1 << 16,
+  indices: 1 << 16,
+  assets: 16,
+  vertexVisits: 1 << 20,
+  tools: 64,
+};
+const issueWire = (issue) => ({
+  id: units(issue.id),
+  code: camel(issue.code),
+  detailCode: optionalText(issue.detailCode),
+  severity: issue.severity,
+  message: units(issue.message),
+  help: units(issue.help),
+  path: optionalText(issue.path),
+  entities: issue.entities.map(entityWire),
+  actions: issue.actions.map((action) => ({
+    id: camel(action.id),
+    label: units(action.label),
+    entity: action.entity
+      ? { value: entityWire(action.entity) }
+      : { absent: {} },
+    settingKey: optionalText(action.settingKey),
+  })),
+});
 const attestations = [];
 function attest(name, state, assets, target) {
   const derivation = deriveLiveProfilePreflightConstraints(target);
+  const plateId = state.activePlateId;
   const result = new LiveProfileSlicePreflight(derivation).evaluate(
     { state, assets, sourceRevision: 1, sourceHash: "h", sourceAssetHash: "a" },
-    state.activePlateId,
+    plateId,
   );
+  const authoredTarget = target.source === "authored-project";
   attestations.push({
     name,
     stateJson: canonicalStringify(state),
@@ -306,8 +372,54 @@ function attest(name, state, assets, target) {
     })),
     targetJson: canonicalStringify(targetJson(target)),
     resultJson: canonicalStringify(result),
+    requestJson: encodeProjectPreflightRequest({
+      version: PROJECT_INTENT_VERSION,
+      plateId: units(plateId),
+      target: authoredTarget
+        ? { authored: {} }
+        : {
+            catalog: {
+              toolCount: target.toolCount,
+              primary: profileWire(target.primaryProfile),
+              filaments: Array.from(target.filamentProfiles, profileWire),
+            },
+          },
+      budget,
+    }),
+    summaryJson: encodeProjectPreflightSummary({
+      plateId: units(result.plateId),
+      canSlice: result.canSlice,
+      blockingCount: result.blockingCount,
+      issueCount: result.issues.length,
+      omissionCount: derivation.omissions.length,
+      printableInstanceCount: result.printableInstanceIds.length,
+      usedFilamentCount: result.usedFilamentIds.length,
+    }),
+    issueJsons: result.issues.map((issue) =>
+      encodeProjectPreflightIssue(issueWire(issue)),
+    ),
+    omissionJsons: derivation.omissions.map((omission) =>
+      encodeProjectPreflightOmission({
+        code: camel(omission.code),
+        message: units(omission.message),
+        path: units(omission.path),
+        toolId: omission.toolId,
+      }),
+    ),
+    instanceJsons: result.printableInstanceIds.map((id) =>
+      encodeProjectPreflightEntity({ instance: units(id) }),
+    ),
+    filamentJsons: result.usedFilamentIds.map((id) =>
+      encodeProjectPreflightEntity({ filament: units(id) }),
+    ),
   });
 }
+const authoredLive = (state) =>
+  authoredProjectPreflightTarget({
+    printer: state.printer,
+    config: state.settingsBaseConfig ?? state.config,
+    filaments: state.filaments,
+  });
 {
   const fixture = createProjectFixture();
   const state = cloneProjectState(fixture.state);
@@ -326,8 +438,20 @@ function attest(name, state, assets, target) {
     filamentProfiles: [pla],
     toolCount: 1,
   });
+  // An imported project without its own bed facts cannot be attested.
+  attest("authored-incomplete", state, [fixture.asset], authoredLive(state));
+  state.config = {
+    ...state.config,
+    printable_area: "0x0,8x0,8x8,0x8",
+    printable_height: 250,
+    nozzle_diameter: [0.4, 0.6],
+    filament_type: ["PLA", "PETG"],
+    nozzle_temperature_range_low: "190,230",
+  };
+  attest("authored-attested", state, [fixture.asset], authoredLive(state));
   state.filaments.physical[1].toolId = 3;
   state.printer.toolCount = 4;
+  attest("authored-sparse-tools", state, [fixture.asset], authoredLive(state));
   attest("unmatched-tool-entity", state, [fixture.asset], {
     primaryProfile: profile("pla", { ...pla.config, printable_height: "x" }),
     filamentProfiles: [pla, undefined, undefined, pla],
@@ -342,6 +466,7 @@ const sources = [
   "web/src/settings/configSerialization.ts",
   "web/src/project/slicing/preflight.ts",
   "web/src/project/__tests__/fixtures.ts",
+  "contracts/project-intents.json",
 ];
 const output =
   JSON.stringify(

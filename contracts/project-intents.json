@@ -4,7 +4,7 @@
   "maxBytes": 1048576,
   "maxNodes": 131072,
   "maxDepth": 12,
-  "description": "Prepared project commands and session messages. Text is lossless UTF-16 units. Project transport, command format and persisted schema versions are distinct.",
+  "description": "Prepared project commands, session messages and slice preflight exchanges. Text is lossless UTF-16 units. Project transport, command format and persisted schema versions are distinct.",
   "definitions": {
     "Unit": {
       "kind": "integer",
@@ -1375,13 +1375,216 @@
         "requestId": "Counter",
         "result": "SessionResult"
       }
+    },
+    "PreflightProfile": {
+      "kind": "object",
+      "fields": {
+        "machinePresetId": "OptionalText",
+        "processPresetId": "OptionalText",
+        "filamentPresetId": "OptionalText",
+        "printableArea": "OptionalText",
+        "printableHeight": "OptionalText",
+        "nozzleDiameter": "OptionalText",
+        "filamentType": "OptionalText",
+        "nozzleTemperatureRangeLow": "OptionalText",
+        "nozzleTemperatureRangeHigh": "OptionalText"
+      }
+    },
+    "OptionalPreflightProfile": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "PreflightProfile"
+      }
+    },
+    "PreflightProfiles": {
+      "kind": "array",
+      "items": "OptionalPreflightProfile",
+      "min": 0,
+      "max": 64
+    },
+    "CatalogPreflightTarget": {
+      "kind": "object",
+      "fields": {
+        "toolCount": "Finite",
+        "primary": "OptionalPreflightProfile",
+        "filaments": "PreflightProfiles"
+      }
+    },
+    "PreflightTarget": {
+      "kind": "union",
+      "variants": {
+        "authored": "Empty",
+        "catalog": "CatalogPreflightTarget"
+      }
+    },
+    "PreflightBudget": {
+      "kind": "object",
+      "fields": {
+        "assetBytes": "Counter",
+        "vertices": "Counter",
+        "indices": "Counter",
+        "assets": "Counter",
+        "vertexVisits": "Counter",
+        "tools": "Counter"
+      }
+    },
+    "PreflightRequest": {
+      "kind": "object",
+      "fields": {
+        "version": "Version",
+        "plateId": "Id",
+        "target": "PreflightTarget",
+        "budget": "PreflightBudget"
+      }
+    },
+    "PreflightSummary": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id",
+        "canSlice": "Flag",
+        "blockingCount": "Counter",
+        "issueCount": "Counter",
+        "omissionCount": "Counter",
+        "printableInstanceCount": "Counter",
+        "usedFilamentCount": "Counter"
+      }
+    },
+    "PreflightCode": {
+      "kind": "enum",
+      "values": [
+        "invalidProjectState",
+        "unknownPlate",
+        "plateNotPrintable",
+        "noPrintableInstance",
+        "emptyModelMesh",
+        "unreadableModelMesh",
+        "instanceOutsideBuildVolume",
+        "instanceBelowBuildPlate",
+        "instanceAabbOverlap",
+        "disabledFilamentAssignment",
+        "deletedMixedFilamentAssignment",
+        "disabledMixedComponent",
+        "incompatibleMixedComponents",
+        "mixedFilamentUnsupportedPrinter",
+        "filamentToolOutOfRange",
+        "filamentCountExceedsEngineLimit",
+        "gradientRecipeOutOfBounds",
+        "filamentNozzleMismatch",
+        "unsupportedFilamentMaterial",
+        "invalidFilamentTemperature",
+        "filamentTemperatureOutOfRange",
+        "missingProfileAttestation",
+        "wipeTowerOutsideBuildVolume",
+        "wipeTowerRequiresPhysicalFilament",
+        "wipeTowerRequiresRelativeE",
+        "wipeTowerOozePreventionConflict",
+        "wipeTowerMixedExtruderDiameters",
+        "unsafeCustomGcode"
+      ]
+    },
+    "PreflightSeverity": {
+      "kind": "enum",
+      "values": [
+        "error",
+        "warning"
+      ]
+    },
+    "PreflightActionId": {
+      "kind": "enum",
+      "values": [
+        "reveal",
+        "dropToBed",
+        "moveInsideBuildVolume",
+        "chooseFilament",
+        "chooseProfile",
+        "editCustomGcode",
+        "disableWipeTower"
+      ]
+    },
+    "PreflightEntity": {
+      "kind": "union",
+      "variants": {
+        "project": "Empty",
+        "plate": "Id",
+        "object": "Id",
+        "volume": "Id",
+        "instance": "Id",
+        "layerRange": "Id",
+        "filament": "Id"
+      }
+    },
+    "PreflightEntities": {
+      "kind": "array",
+      "items": "PreflightEntity",
+      "min": 0,
+      "max": 131072
+    },
+    "OptionalPreflightEntity": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "PreflightEntity"
+      }
+    },
+    "PreflightAction": {
+      "kind": "object",
+      "fields": {
+        "id": "PreflightActionId",
+        "label": "Label",
+        "entity": "OptionalPreflightEntity",
+        "settingKey": "OptionalText"
+      }
+    },
+    "PreflightActions": {
+      "kind": "array",
+      "items": "PreflightAction",
+      "min": 0,
+      "max": 131072
+    },
+    "PreflightIssue": {
+      "kind": "object",
+      "fields": {
+        "id": "EditText",
+        "code": "PreflightCode",
+        "detailCode": "OptionalText",
+        "severity": "PreflightSeverity",
+        "message": "EditText",
+        "help": "EditText",
+        "path": "OptionalText",
+        "entities": "PreflightEntities",
+        "actions": "PreflightActions"
+      }
+    },
+    "PreflightOmissionCode": {
+      "kind": "enum",
+      "values": [
+        "materialNotDeclared",
+        "temperatureLowerBoundNotDeclared",
+        "temperatureUpperBoundNotDeclared",
+        "temperatureRangeInvalid"
+      ]
+    },
+    "PreflightOmission": {
+      "kind": "object",
+      "fields": {
+        "code": "PreflightOmissionCode",
+        "message": "EditText",
+        "path": "EditText",
+        "toolId": "Counter"
+      }
     }
   },
   "roots": [
     "Intent",
     "Batch",
     "SessionRequest",
-    "SessionReply"
+    "SessionReply",
+    "PreflightRequest",
+    "PreflightSummary",
+    "PreflightIssue",
+    "PreflightOmission",
+    "PreflightEntity"
   ],
   "sessionVersion": 1
 }

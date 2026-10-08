@@ -41,6 +41,11 @@ assert.deepEqual(schema.roots, [
   "Batch",
   "SessionRequest",
   "SessionReply",
+  "PreflightRequest",
+  "PreflightSummary",
+  "PreflightIssue",
+  "PreflightOmission",
+  "PreflightEntity",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

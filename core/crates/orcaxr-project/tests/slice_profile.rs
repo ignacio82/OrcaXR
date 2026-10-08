@@ -1,9 +1,12 @@
-use orcaxr_contracts::canonical::{Value, parse};
+use orcaxr_contracts::{
+    canonical::{Value, parse},
+    project_intent_types as wire,
+};
 use orcaxr_project::{
     assets::AssetRepository,
     mesh,
     model::*,
-    slicing::{preflight::*, profile::*},
+    slicing::{preflight::*, profile::*, report::Report},
     validation::*,
 };
 use serde_json::Value as Json;
@@ -174,8 +177,94 @@ fn attestation_errors_merge_into_the_canonical_result() {
             "{}",
             case["name"]
         );
+        // The host exchange: one request, then piecewise contract replies.
+        let snapshot = repository.capture_internal();
+        let request =
+            wire::decode_preflight_request(case["requestJson"].as_str().unwrap()).unwrap();
+        let report = Report::run(&project, &snapshot, &request, || false).unwrap();
+        assert_eq!(report.preflight(), &result, "{}", case["name"]);
+        assert_eq!(
+            wire::encode_preflight_summary(&report.summary()).unwrap(),
+            case["summaryJson"].as_str().unwrap()
+        );
+        let all = |key: &str, read: &dyn Fn(usize) -> Option<String>| {
+            let expected = case[key].as_array().unwrap();
+            for (i, json) in expected.iter().enumerate() {
+                assert_eq!(
+                    read(i).as_deref(),
+                    json.as_str(),
+                    "{} {key}[{i}]",
+                    case["name"]
+                );
+            }
+            assert_eq!(read(expected.len()), None);
+        };
+        all("issueJsons", &|i| {
+            report
+                .issue(i)
+                .map(|v| wire::encode_preflight_issue(&v).unwrap())
+        });
+        all("omissionJsons", &|i| {
+            report
+                .omission(i)
+                .map(|v| wire::encode_preflight_omission(&v).unwrap())
+        });
+        all("instanceJsons", &|i| {
+            report
+                .printable_instance(i)
+                .map(|v| wire::encode_preflight_entity(&v).unwrap())
+        });
+        all("filamentJsons", &|i| {
+            report
+                .used_filament(i)
+                .map(|v| wire::encode_preflight_entity(&v).unwrap())
+        });
     }
-    assert_eq!(cases.len(), 4);
+    assert_eq!(cases.len(), 7);
+}
+
+#[test]
+fn host_requests_refuse_bad_plates_budgets_and_cancellation() {
+    let f = corpus();
+    let case = &f["attestations"][4];
+    let project =
+        ValidatedProject::new(ProjectData::new(state(case)).unwrap(), &mut utc()).unwrap();
+    let mut repository = AssetRepository::new();
+    for asset in case["assets"].as_array().unwrap() {
+        let bytes: Vec<u8> = asset["bytes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|b| b.as_u64().unwrap() as u8)
+            .collect();
+        repository
+            .put(
+                &parse(asset["descriptorJson"].as_str().unwrap()).unwrap(),
+                &bytes,
+            )
+            .unwrap();
+    }
+    let snapshot = repository.capture_internal();
+    let request = wire::decode_preflight_request(case["requestJson"].as_str().unwrap()).unwrap();
+    let refuse = |request: &wire::PreflightRequest, cancelled: bool| {
+        Report::run(&project, &snapshot, request, || cancelled)
+            .unwrap_err()
+            .to_string()
+    };
+    assert_eq!(refuse(&request, true), "cancelled");
+    let mut bad = request.clone();
+    bad.plate_id = "plate 1".encode_utf16().collect();
+    assert_eq!(refuse(&bad, false), "invalid_request");
+    for narrow in [
+        |b: &mut wire::PreflightBudget| b.tools = 1,
+        |b: &mut wire::PreflightBudget| b.vertex_visits = 2,
+        |b: &mut wire::PreflightBudget| b.assets = 0,
+        |b: &mut wire::PreflightBudget| b.asset_bytes = 35,
+    ] {
+        let mut small = request.clone();
+        narrow(&mut small.budget);
+        assert_eq!(refuse(&small, false), "resource_limit");
+    }
 }
 
 #[test]

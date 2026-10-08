@@ -1376,6 +1376,204 @@ const shapes = {
       "requestId": "Counter",
       "result": "SessionResult"
     }
+  },
+  "PreflightProfile": {
+    "kind": "object",
+    "fields": {
+      "machinePresetId": "OptionalText",
+      "processPresetId": "OptionalText",
+      "filamentPresetId": "OptionalText",
+      "printableArea": "OptionalText",
+      "printableHeight": "OptionalText",
+      "nozzleDiameter": "OptionalText",
+      "filamentType": "OptionalText",
+      "nozzleTemperatureRangeLow": "OptionalText",
+      "nozzleTemperatureRangeHigh": "OptionalText"
+    }
+  },
+  "OptionalPreflightProfile": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "PreflightProfile"
+    }
+  },
+  "PreflightProfiles": {
+    "kind": "array",
+    "items": "OptionalPreflightProfile",
+    "min": 0,
+    "max": 64
+  },
+  "CatalogPreflightTarget": {
+    "kind": "object",
+    "fields": {
+      "toolCount": "Finite",
+      "primary": "OptionalPreflightProfile",
+      "filaments": "PreflightProfiles"
+    }
+  },
+  "PreflightTarget": {
+    "kind": "union",
+    "variants": {
+      "authored": "Empty",
+      "catalog": "CatalogPreflightTarget"
+    }
+  },
+  "PreflightBudget": {
+    "kind": "object",
+    "fields": {
+      "assetBytes": "Counter",
+      "vertices": "Counter",
+      "indices": "Counter",
+      "assets": "Counter",
+      "vertexVisits": "Counter",
+      "tools": "Counter"
+    }
+  },
+  "PreflightRequest": {
+    "kind": "object",
+    "fields": {
+      "version": "Version",
+      "plateId": "Id",
+      "target": "PreflightTarget",
+      "budget": "PreflightBudget"
+    }
+  },
+  "PreflightSummary": {
+    "kind": "object",
+    "fields": {
+      "plateId": "Id",
+      "canSlice": "Flag",
+      "blockingCount": "Counter",
+      "issueCount": "Counter",
+      "omissionCount": "Counter",
+      "printableInstanceCount": "Counter",
+      "usedFilamentCount": "Counter"
+    }
+  },
+  "PreflightCode": {
+    "kind": "enum",
+    "values": [
+      "invalidProjectState",
+      "unknownPlate",
+      "plateNotPrintable",
+      "noPrintableInstance",
+      "emptyModelMesh",
+      "unreadableModelMesh",
+      "instanceOutsideBuildVolume",
+      "instanceBelowBuildPlate",
+      "instanceAabbOverlap",
+      "disabledFilamentAssignment",
+      "deletedMixedFilamentAssignment",
+      "disabledMixedComponent",
+      "incompatibleMixedComponents",
+      "mixedFilamentUnsupportedPrinter",
+      "filamentToolOutOfRange",
+      "filamentCountExceedsEngineLimit",
+      "gradientRecipeOutOfBounds",
+      "filamentNozzleMismatch",
+      "unsupportedFilamentMaterial",
+      "invalidFilamentTemperature",
+      "filamentTemperatureOutOfRange",
+      "missingProfileAttestation",
+      "wipeTowerOutsideBuildVolume",
+      "wipeTowerRequiresPhysicalFilament",
+      "wipeTowerRequiresRelativeE",
+      "wipeTowerOozePreventionConflict",
+      "wipeTowerMixedExtruderDiameters",
+      "unsafeCustomGcode"
+    ]
+  },
+  "PreflightSeverity": {
+    "kind": "enum",
+    "values": [
+      "error",
+      "warning"
+    ]
+  },
+  "PreflightActionId": {
+    "kind": "enum",
+    "values": [
+      "reveal",
+      "dropToBed",
+      "moveInsideBuildVolume",
+      "chooseFilament",
+      "chooseProfile",
+      "editCustomGcode",
+      "disableWipeTower"
+    ]
+  },
+  "PreflightEntity": {
+    "kind": "union",
+    "variants": {
+      "project": "Empty",
+      "plate": "Id",
+      "object": "Id",
+      "volume": "Id",
+      "instance": "Id",
+      "layerRange": "Id",
+      "filament": "Id"
+    }
+  },
+  "PreflightEntities": {
+    "kind": "array",
+    "items": "PreflightEntity",
+    "min": 0,
+    "max": 131072
+  },
+  "OptionalPreflightEntity": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "PreflightEntity"
+    }
+  },
+  "PreflightAction": {
+    "kind": "object",
+    "fields": {
+      "id": "PreflightActionId",
+      "label": "Label",
+      "entity": "OptionalPreflightEntity",
+      "settingKey": "OptionalText"
+    }
+  },
+  "PreflightActions": {
+    "kind": "array",
+    "items": "PreflightAction",
+    "min": 0,
+    "max": 131072
+  },
+  "PreflightIssue": {
+    "kind": "object",
+    "fields": {
+      "id": "EditText",
+      "code": "PreflightCode",
+      "detailCode": "OptionalText",
+      "severity": "PreflightSeverity",
+      "message": "EditText",
+      "help": "EditText",
+      "path": "OptionalText",
+      "entities": "PreflightEntities",
+      "actions": "PreflightActions"
+    }
+  },
+  "PreflightOmissionCode": {
+    "kind": "enum",
+    "values": [
+      "materialNotDeclared",
+      "temperatureLowerBoundNotDeclared",
+      "temperatureUpperBoundNotDeclared",
+      "temperatureRangeInvalid"
+    ]
+  },
+  "PreflightOmission": {
+    "kind": "object",
+    "fields": {
+      "code": "PreflightOmissionCode",
+      "message": "EditText",
+      "path": "EditText",
+      "toolId": "Counter"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -1554,6 +1752,25 @@ export type ProjectCancelStatusWire = "requested" | "notPending";
 export type ProjectSessionErrorWire = "invalidRequest" | "unsupportedVersion" | "wrongSession" | "notReady" | "duplicateRequest" | "stale" | "cancelled" | "busy" | "disposed" | "commandFailed" | "resourceLimit";
 export type ProjectSessionResultWire = {readonly acknowledged:ProjectSessionAcknowledgementWire} | {readonly welcome:ProjectWelcomeWire} | {readonly cancelled:ProjectCancelStatusWire} | {readonly closed:ProjectEmptyWire} | {readonly error:ProjectSessionErrorWire} | {readonly receiptUnavailable:ProjectFlagWire} | {readonly released:ProjectFlagWire};
 export interface ProjectSessionReplyWire {readonly protocolVersion: ProjectSessionVersionWire;readonly generation: ProjectGenerationWire;readonly requestId: ProjectCounterWire;readonly result: ProjectSessionResultWire;}
+export interface ProjectPreflightProfileWire {readonly machinePresetId: ProjectOptionalTextWire;readonly processPresetId: ProjectOptionalTextWire;readonly filamentPresetId: ProjectOptionalTextWire;readonly printableArea: ProjectOptionalTextWire;readonly printableHeight: ProjectOptionalTextWire;readonly nozzleDiameter: ProjectOptionalTextWire;readonly filamentType: ProjectOptionalTextWire;readonly nozzleTemperatureRangeLow: ProjectOptionalTextWire;readonly nozzleTemperatureRangeHigh: ProjectOptionalTextWire;}
+export type ProjectOptionalPreflightProfileWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectPreflightProfileWire};
+export type ProjectPreflightProfilesWire = readonly ProjectOptionalPreflightProfileWire[];
+export interface ProjectCatalogPreflightTargetWire {readonly toolCount: ProjectFiniteWire;readonly primary: ProjectOptionalPreflightProfileWire;readonly filaments: ProjectPreflightProfilesWire;}
+export type ProjectPreflightTargetWire = {readonly authored:ProjectEmptyWire} | {readonly catalog:ProjectCatalogPreflightTargetWire};
+export interface ProjectPreflightBudgetWire {readonly assetBytes: ProjectCounterWire;readonly vertices: ProjectCounterWire;readonly indices: ProjectCounterWire;readonly assets: ProjectCounterWire;readonly vertexVisits: ProjectCounterWire;readonly tools: ProjectCounterWire;}
+export interface ProjectPreflightRequestWire {readonly version: ProjectVersionWire;readonly plateId: ProjectIdWire;readonly target: ProjectPreflightTargetWire;readonly budget: ProjectPreflightBudgetWire;}
+export interface ProjectPreflightSummaryWire {readonly plateId: ProjectIdWire;readonly canSlice: ProjectFlagWire;readonly blockingCount: ProjectCounterWire;readonly issueCount: ProjectCounterWire;readonly omissionCount: ProjectCounterWire;readonly printableInstanceCount: ProjectCounterWire;readonly usedFilamentCount: ProjectCounterWire;}
+export type ProjectPreflightCodeWire = "invalidProjectState" | "unknownPlate" | "plateNotPrintable" | "noPrintableInstance" | "emptyModelMesh" | "unreadableModelMesh" | "instanceOutsideBuildVolume" | "instanceBelowBuildPlate" | "instanceAabbOverlap" | "disabledFilamentAssignment" | "deletedMixedFilamentAssignment" | "disabledMixedComponent" | "incompatibleMixedComponents" | "mixedFilamentUnsupportedPrinter" | "filamentToolOutOfRange" | "filamentCountExceedsEngineLimit" | "gradientRecipeOutOfBounds" | "filamentNozzleMismatch" | "unsupportedFilamentMaterial" | "invalidFilamentTemperature" | "filamentTemperatureOutOfRange" | "missingProfileAttestation" | "wipeTowerOutsideBuildVolume" | "wipeTowerRequiresPhysicalFilament" | "wipeTowerRequiresRelativeE" | "wipeTowerOozePreventionConflict" | "wipeTowerMixedExtruderDiameters" | "unsafeCustomGcode";
+export type ProjectPreflightSeverityWire = "error" | "warning";
+export type ProjectPreflightActionIdWire = "reveal" | "dropToBed" | "moveInsideBuildVolume" | "chooseFilament" | "chooseProfile" | "editCustomGcode" | "disableWipeTower";
+export type ProjectPreflightEntityWire = {readonly project:ProjectEmptyWire} | {readonly plate:ProjectIdWire} | {readonly object:ProjectIdWire} | {readonly volume:ProjectIdWire} | {readonly instance:ProjectIdWire} | {readonly layerRange:ProjectIdWire} | {readonly filament:ProjectIdWire};
+export type ProjectPreflightEntitiesWire = readonly ProjectPreflightEntityWire[];
+export type ProjectOptionalPreflightEntityWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectPreflightEntityWire};
+export interface ProjectPreflightActionWire {readonly id: ProjectPreflightActionIdWire;readonly label: ProjectLabelWire;readonly entity: ProjectOptionalPreflightEntityWire;readonly settingKey: ProjectOptionalTextWire;}
+export type ProjectPreflightActionsWire = readonly ProjectPreflightActionWire[];
+export interface ProjectPreflightIssueWire {readonly id: ProjectEditTextWire;readonly code: ProjectPreflightCodeWire;readonly detailCode: ProjectOptionalTextWire;readonly severity: ProjectPreflightSeverityWire;readonly message: ProjectEditTextWire;readonly help: ProjectEditTextWire;readonly path: ProjectOptionalTextWire;readonly entities: ProjectPreflightEntitiesWire;readonly actions: ProjectPreflightActionsWire;}
+export type ProjectPreflightOmissionCodeWire = "materialNotDeclared" | "temperatureLowerBoundNotDeclared" | "temperatureUpperBoundNotDeclared" | "temperatureRangeInvalid";
+export interface ProjectPreflightOmissionWire {readonly code: ProjectPreflightOmissionCodeWire;readonly message: ProjectEditTextWire;readonly path: ProjectEditTextWire;readonly toolId: ProjectCounterWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -1566,3 +1783,18 @@ export function encodeProjectSessionRequest(value:ProjectSessionRequestWire):str
 export function captureProjectSessionReply(value:unknown):ProjectSessionReplyWire { return captureIntent("SessionReply",value,shapes,limits) as ProjectSessionReplyWire; }
 export function decodeProjectSessionReply(text:string):ProjectSessionReplyWire { return captureProjectSessionReply(parseIntentJson(text,limits)); }
 export function encodeProjectSessionReply(value:ProjectSessionReplyWire):string { return JSON.stringify(captureProjectSessionReply(value)); }
+export function captureProjectPreflightRequest(value:unknown):ProjectPreflightRequestWire { return captureIntent("PreflightRequest",value,shapes,limits) as ProjectPreflightRequestWire; }
+export function decodeProjectPreflightRequest(text:string):ProjectPreflightRequestWire { return captureProjectPreflightRequest(parseIntentJson(text,limits)); }
+export function encodeProjectPreflightRequest(value:ProjectPreflightRequestWire):string { return JSON.stringify(captureProjectPreflightRequest(value)); }
+export function captureProjectPreflightSummary(value:unknown):ProjectPreflightSummaryWire { return captureIntent("PreflightSummary",value,shapes,limits) as ProjectPreflightSummaryWire; }
+export function decodeProjectPreflightSummary(text:string):ProjectPreflightSummaryWire { return captureProjectPreflightSummary(parseIntentJson(text,limits)); }
+export function encodeProjectPreflightSummary(value:ProjectPreflightSummaryWire):string { return JSON.stringify(captureProjectPreflightSummary(value)); }
+export function captureProjectPreflightIssue(value:unknown):ProjectPreflightIssueWire { return captureIntent("PreflightIssue",value,shapes,limits) as ProjectPreflightIssueWire; }
+export function decodeProjectPreflightIssue(text:string):ProjectPreflightIssueWire { return captureProjectPreflightIssue(parseIntentJson(text,limits)); }
+export function encodeProjectPreflightIssue(value:ProjectPreflightIssueWire):string { return JSON.stringify(captureProjectPreflightIssue(value)); }
+export function captureProjectPreflightOmission(value:unknown):ProjectPreflightOmissionWire { return captureIntent("PreflightOmission",value,shapes,limits) as ProjectPreflightOmissionWire; }
+export function decodeProjectPreflightOmission(text:string):ProjectPreflightOmissionWire { return captureProjectPreflightOmission(parseIntentJson(text,limits)); }
+export function encodeProjectPreflightOmission(value:ProjectPreflightOmissionWire):string { return JSON.stringify(captureProjectPreflightOmission(value)); }
+export function captureProjectPreflightEntity(value:unknown):ProjectPreflightEntityWire { return captureIntent("PreflightEntity",value,shapes,limits) as ProjectPreflightEntityWire; }
+export function decodeProjectPreflightEntity(text:string):ProjectPreflightEntityWire { return captureProjectPreflightEntity(parseIntentJson(text,limits)); }
+export function encodeProjectPreflightEntity(value:ProjectPreflightEntityWire):string { return JSON.stringify(captureProjectPreflightEntity(value)); }

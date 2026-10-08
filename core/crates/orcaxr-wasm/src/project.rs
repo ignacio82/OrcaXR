@@ -1,8 +1,10 @@
 //! Explicitly owned project host handles. Large reads are opt-in captures, never
 //! part of a command acknowledgement. Use an owned worker; release every handle.
+use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_project::{
     assets::AssetLease,
     clipboard::ClipboardCapture,
+    export::ExportCapture,
     history::{DomainEvent, HistoryOptions, HistorySnapshot},
     host_layout as layout,
     ids::*,
@@ -17,6 +19,7 @@ use orcaxr_project::{
         DocumentOpen, LocalGuard, PreparedDocument, ProjectSession as Session, Response,
         StagingLimits, Submission,
     },
+    slicing::report::Report,
     staging_layout as staging,
     store::ProjectSnapshot,
 };
@@ -450,6 +453,12 @@ impl ProjectSession {
     }
     pub fn is_export_current(&self, guard: &ProjectGuard) -> bool {
         self.inner.is_export_current(&guard.inner)
+    }
+    /// Freeze the project and its assets for an export or a live preflight.
+    pub fn capture_export(&self, guard: &ProjectGuard) -> Result<ProjectExport, JsValue> {
+        ExportCapture::new(&self.inner, &guard.inner)
+            .map(|inner| ProjectExport { inner })
+            .ok_or_else(|| error("stale"))
     }
     /// Call only after the host confirms successful save handoff. Merely reading
     /// or serializing a capture never clears dirty state.
@@ -1001,5 +1010,67 @@ impl CapturedHistory {
     }
     pub fn dirty_categories(&self) -> String {
         categories(&self.inner.dirty_categories)
+    }
+}
+
+#[wasm_bindgen]
+pub struct ProjectExport {
+    inner: ExportCapture,
+}
+#[wasm_bindgen]
+impl ProjectExport {
+    /// Live slice preflight of exactly this frozen bundle from a contract
+    /// `PreflightRequest`. Synchronous; run it on a worker.
+    pub fn preflight(&self, request: &str) -> Result<ProjectPreflight, JsValue> {
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_preflight_request(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .preflight(&request, || false)
+            .map(|inner| ProjectPreflight { inner })
+            .map_err(|e| error(&e.to_string()))
+    }
+}
+/// One live preflight result, read item by item as contract JSON.
+#[wasm_bindgen]
+pub struct ProjectPreflight {
+    inner: Report,
+}
+fn contract<T>(
+    value: Option<T>,
+    encode: fn(&T) -> Result<String, orcaxr_contracts::project_intents::InvalidIntent>,
+) -> Result<String, JsValue> {
+    encode(&value.ok_or_else(|| error("invalid_range"))?).map_err(|_| error("output_limit"))
+}
+#[wasm_bindgen]
+impl ProjectPreflight {
+    pub fn summary(&self) -> Result<String, JsValue> {
+        contract(Some(self.inner.summary()), wire::encode_preflight_summary)
+    }
+    pub fn issue(&self, position: f64) -> Result<String, JsValue> {
+        contract(
+            self.inner.issue(index(position)?),
+            wire::encode_preflight_issue,
+        )
+    }
+    pub fn omission(&self, position: f64) -> Result<String, JsValue> {
+        contract(
+            self.inner.omission(index(position)?),
+            wire::encode_preflight_omission,
+        )
+    }
+    pub fn printable_instance(&self, position: f64) -> Result<String, JsValue> {
+        contract(
+            self.inner.printable_instance(index(position)?),
+            wire::encode_preflight_entity,
+        )
+    }
+    pub fn used_filament(&self, position: f64) -> Result<String, JsValue> {
+        contract(
+            self.inner.used_filament(index(position)?),
+            wire::encode_preflight_entity,
+        )
     }
 }

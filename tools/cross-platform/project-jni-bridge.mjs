@@ -23,6 +23,7 @@ export function startProjectJni(profile = "debug") {
   );
   signatures.actorPreparationChecks = ["String"];
   signatures.actorExportChecks = ["String", "String", "byte[]", "byte[]", "String", "String", "String"];
+  signatures.actorPreflightChecks = ["String", "byte[]", "String", "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -330,6 +331,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     is_export_current(g) {
       return call("isCurrent", this.handle, g.handle, true);
     }
+    capture_export(g) {
+      return new ProjectExport(call("captureExport", this.handle, g.handle));
+    }
     acknowledge_checkpoint(g) {
       return wrap(
         ProjectEffects,
@@ -367,6 +371,28 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
         guard.free();
         throw e;
       }
+    }
+  }
+  class ProjectExport extends Handle {
+    preflight(request) {
+      return new ProjectPreflight(call("exportPreflight", this.handle, request));
+    }
+  }
+  class ProjectPreflight extends Handle {
+    summary() {
+      return call("preflightSummary", this.handle);
+    }
+    issue(position) {
+      return call("preflightIssue", this.handle, position);
+    }
+    omission(position) {
+      return call("preflightOmission", this.handle, position);
+    }
+    printable_instance(position) {
+      return call("preflightInstance", this.handle, position);
+    }
+    used_filament(position) {
+      return call("preflightFilament", this.handle, position);
     }
   }
   class ProjectModelUpload extends Handle {

@@ -200,6 +200,29 @@ class ProjectExportCapture internal constructor(handle: Long) : ProjectHandle(ha
     fun writeArchive(options: ProjectArchiveOptions): ProjectArchiveOutput = read {
         own(NativeProject.exportArchive(it, ProjectArchive.VERSION, options.encode()), ::ProjectArchiveOutput)
     }
+    /** Live slice preflight of exactly this frozen bundle. Synchronous; run it on
+     * the export worker. Closing this capture cancels the native preflight. */
+    fun preflight(request: ProjectIntents.PreflightRequest): ProjectPreflight = read {
+        own(NativeProject.exportPreflight(it, ProjectIntents.encodePreflightRequest(request)), ::ProjectPreflight)
+    }
+}
+/** One live preflight result, read item by item in canonical issue order. */
+class ProjectPreflight internal constructor(handle: Long) : ProjectHandle(handle) {
+    fun summary(): ProjectIntents.PreflightSummary = read {
+        ProjectIntents.decodePreflightSummary(NativeProject.preflightSummary(it))
+    }
+    fun issue(position: Long): ProjectIntents.PreflightIssue = read {
+        ProjectIntents.decodePreflightIssue(NativeProject.preflightIssue(it, position))
+    }
+    fun omission(position: Long): ProjectIntents.PreflightOmission = read {
+        ProjectIntents.decodePreflightOmission(NativeProject.preflightOmission(it, position))
+    }
+    fun printableInstance(position: Long): ProjectIntents.PreflightEntity = read {
+        ProjectIntents.decodePreflightEntity(NativeProject.preflightInstance(it, position))
+    }
+    fun usedFilament(position: Long): ProjectIntents.PreflightEntity = read {
+        ProjectIntents.decodePreflightEntity(NativeProject.preflightFilament(it, position))
+    }
 }
 data class ProjectStagingUsage(val resources: Long, val commands: Long, val units: Long, val assetBytes: Long)
 data class ProjectClipboardInfo(val volumes: Long, val instances: Long, val layerRanges: Long, val assets: Long, val bytes: Long)

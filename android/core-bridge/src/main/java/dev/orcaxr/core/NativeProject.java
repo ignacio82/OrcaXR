@@ -41,6 +41,14 @@ final class NativeProject {
     static native long exportArchive(long handle, int version, double[] options);
     static native long archiveLength(long handle);
     static native byte[] archiveRead(long handle, long start, long count);
+    // Live slice preflight of an export capture from a contract PreflightRequest;
+    // closing the capture cancels it. Replies are contract JSON, one item each.
+    static native long exportPreflight(long handle, String request);
+    static native String preflightSummary(long handle);
+    static native String preflightIssue(long handle, long position);
+    static native String preflightOmission(long handle, long position);
+    static native String preflightInstance(long handle, long position);
+    static native String preflightFilament(long handle, long position);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

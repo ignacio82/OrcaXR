@@ -1205,8 +1205,9 @@ and replay coverage for the complete current command inventory.
   Rust scope eligibility, strict layer validation/resolution, explanations,
   explicit import sanitization and project config selectors now exist. The table
   comes from the browser's pinned extractor; 3,439 layer cases and 100 graph
-  queries compare reference results/errors. This is scope-policy computation,
-  not option-value/profile validation, native settings commands or preflight.
+  queries compare reference results/errors. Canonical slice preflight, live
+  profile targets and their host exchange are now native too. Option-value and
+  profile validation, settings commands and the profile catalog are not yet.
   - [x] Port generated scope eligibility, layered resolution, import sanitization
     and configuration selectors with independent reference cases.
   - [x] Port canonical slice preflight (`slicing::preflight`) with FullSpectrum
@@ -1216,8 +1217,11 @@ and replay coverage for the complete current command inventory.
     authored-project constraint derivation, attestation merging and the
     authored target from canonical state (31 derivations, 5 authored targets,
     4 attestations). The browser's locale-dependent merged sort is fixed.
-  - [ ] Complete option/profile validation, settings commands, a native
-    profile catalog and host preflight endpoints.
+  - [x] Expose live preflight on export captures through WASM, JNI and Kotlin
+    with generated contract codecs, piecewise replies, budgets and
+    cancellation (7 live cases, 59 replies, 42 refusals per binding).
+  - [ ] Complete option/profile validation, settings commands and a native
+    profile catalog.
 - [ ] Provide bounded object-tree, inspector, capability, selection, and renderer
   projections. Subscribe to revisioned deltas; do not send the complete project
   or all geometry to every panel after each edit.

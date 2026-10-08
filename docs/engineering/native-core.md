@@ -3073,6 +3073,39 @@ canonical states, 4 merged attestations and the 26 string-vector keys. Covered
 cases include signed-zero corners, hex heights, and single-key objects rendered
 as JSON. The catalog itself is not native, so a host supplies catalog profiles.
 
+### Live preflight host exchange
+
+Hosts run a live preflight on an `ExportCapture`, the frozen project and asset
+bundle a save or slice already uses, so the result can never describe a newer
+edit. The shared intent contract adds `PreflightRequest` and its replies.
+Generated codecs exist for TypeScript, Rust and Kotlin, with the same
+byte/node/depth budgets.
+
+A request names the plate, a target and explicit budgets: mesh bytes,
+vertices, indices, decoded assets, vertex visits and tools. The target is
+either `authored` (the project's own configuration) or `catalog`. A catalog
+target carries preset identities plus only the six facts the derivation reads
+for the primary and each tool. `slicing::report::Report` holds the attested
+result and its derivation. Hosts read it piecewise: a summary with counts,
+then each issue, omission, printable instance and used filament as its own
+contract value, so a large plate never needs one oversized message.
+
+Malformed requests, non-stable plate IDs, budgets and cancellation refuse
+with stable codes: `invalid_request`, `resource_limit` and `cancelled`.
+
+- WASM: `ProjectSession.capture_export(guard)` returns `ProjectExport`, whose
+  `preflight(json)` returns `ProjectPreflight`.
+- JNI: `exportPreflight` plus five per-item readers. Closing the capture slot
+  cancels a running preflight.
+- Kotlin: `ProjectExportCapture.preflight(request)` returns a
+  `ProjectPreflight` of decoded contract values.
+
+The profile corpus now pins 7 live cases, 3 of them authored. It records
+their TypeScript-encoded request and replies. Rust's `Report`, WASM (Node and
+Chrome) and the JNI bridge each match 59 replies across the 7 cases and 42
+refusals. The Kotlin wrapper re-encodes every decoded value and checks budget
+and closed-capture refusals: 115 checks.
+
 ## Edited canonical archive interchange
 
 `archive_interchange` and `test-archive-interchange.mjs` exercise actual archive

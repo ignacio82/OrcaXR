@@ -88,11 +88,11 @@
     },
     {
       "path": "contracts/project-intents.json",
-      "sha256": "1f13b3dfa5c13234bf6529b6a0c5e7d24379b9905aa931b644f18b31e11831e0"
+      "sha256": "1cbe052080b9330d159b3e5f7f60e8f2f896d0a929bc72f58c7358dc277d8377"
     },
     {
       "path": "contracts/generated/project-intents.ts",
-      "sha256": "ce54b70a4e9ef32e300c48a9f90128c9e177caa96899dec131b4fac571c1ca1a"
+      "sha256": "801d398a19955736ac8ff1b9d4c81b9085b88ad13837b0e8396047aa2a782a7e"
     },
     {
       "path": "contracts/runtime/project-intents.ts",

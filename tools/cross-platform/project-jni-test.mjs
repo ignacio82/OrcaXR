@@ -4,6 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { startProjectJni, projectJniCore } from "./project-jni-bridge.mjs";
 import { replayProject } from "./project-wasm-replay.mjs";
+import { replayPreflights } from "./project-preflight-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -247,6 +248,40 @@ try {
     archiveCase.expected.warnings.length,
   );
   assert.equal(providerDocumentChecks, 6);
+  // Live preflights through the raw exports, then the Kotlin wrapper and codecs.
+  const preflightFixture = JSON.parse(
+    await readFile(
+      new URL("testdata/cross-platform/slice-profile-vectors.json", root),
+    ),
+  );
+  const preflights = replayPreflights(
+    projectJniCore(jvm.call),
+    preflightFixture,
+    layout,
+    fixture.generation,
+  );
+  assert.deepEqual(
+    [preflights.preflightCases, preflights.preflightItems, preflights.preflightRefusals],
+    [7, 59, 42],
+  );
+  let actorPreflightChecks = 0;
+  for (const c of preflightFixture.attestations) {
+    assert.equal(c.assets.length, 1);
+    actorPreflightChecks += jvm.call(
+      "actorPreflightChecks",
+      c.stateJson,
+      Uint8Array.from(c.assets[0].bytes),
+      c.requestJson,
+      [
+        c.summaryJson,
+        c.issueJsons.join("\n"),
+        c.omissionJsons.join("\n"),
+        c.instanceJsons.join("\n"),
+        c.filamentJsons.join("\n"),
+      ].join("\n--\n"),
+    );
+  }
+  assert.equal(actorPreflightChecks, 115);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);
@@ -264,6 +299,8 @@ try {
     actorImportChecks,
     actorArchiveChecks,
     providerDocumentChecks,
+    ...preflights,
+    actorPreflightChecks,
     ownedQueryTextUnits: ownedQueryText.length,
     ownedBytes: owned.byteLength,
     hostJniSha256: createHash("sha256")

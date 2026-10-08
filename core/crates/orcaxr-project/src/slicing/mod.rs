@@ -1,5 +1,6 @@
 //! Slice-time checks over immutable canonical captures
-//! (`web/src/project/slicing`). No engine runs here.
+//! (`web/src/project/slicing` and the workspace's live profile target), and
+//! their host exchange. No engine runs here.
 macro_rules! names {
     ($(#[$meta:meta])* $name:ident { $($variant:ident => $text:literal),+ $(,)? }) => {
         $(#[$meta])*
@@ -15,3 +16,4 @@ macro_rules! names {
 }
 pub mod preflight;
 pub mod profile;
+pub mod report;

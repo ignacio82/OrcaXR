@@ -190,6 +190,17 @@ export class ProjectEffects {
     selection(position: number, previous: boolean): CapturedSelection;
 }
 
+export class ProjectExport {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Live slice preflight of exactly this frozen bundle from a contract
+     * `PreflightRequest`. Synchronous; run it on a worker.
+     */
+    preflight(request: string): ProjectPreflight;
+}
+
 export class ProjectGuard {
     private constructor();
     free(): void;
@@ -238,6 +249,20 @@ export class ProjectOpen {
     private constructor();
     free(): void;
     [Symbol.dispose](): void;
+}
+
+/**
+ * One live preflight result, read item by item as contract JSON.
+ */
+export class ProjectPreflight {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    issue(position: number): string;
+    omission(position: number): string;
+    printable_instance(position: number): string;
+    summary(): string;
+    used_filament(position: number): string;
 }
 
 export class ProjectQueryList {
@@ -294,6 +319,10 @@ export class ProjectSession {
     begin_open(): ProjectOpen;
     cancel_open(ticket: ProjectOpen): boolean;
     capture_clipboard(guard: ProjectGuard, node: ProjectQueryNode, version: number, options: Float64Array): ProjectClipboard;
+    /**
+     * Freeze the project and its assets for an export or a live preflight.
+     */
+    capture_export(guard: ProjectGuard): ProjectExport;
     capture_guard(): ProjectGuard;
     capture_import_base(): ProjectImportBase;
     clipboard_upload(guard: ProjectGuard, clipboard: ProjectClipboard, version: number, bytes: number, options: Float64Array): ProjectCommandUpload;
@@ -377,11 +406,13 @@ export interface InitOutput {
     readonly __wbg_projectcommandupload_free: (a: number, b: number) => void;
     readonly __wbg_projectdocument_free: (a: number, b: number) => void;
     readonly __wbg_projecteffects_free: (a: number, b: number) => void;
+    readonly __wbg_projectexport_free: (a: number, b: number) => void;
     readonly __wbg_projectguard_free: (a: number, b: number) => void;
     readonly __wbg_projectimportbase_free: (a: number, b: number) => void;
     readonly __wbg_projectimportpreview_free: (a: number, b: number) => void;
     readonly __wbg_projectmodelupload_free: (a: number, b: number) => void;
     readonly __wbg_projectopen_free: (a: number, b: number) => void;
+    readonly __wbg_projectpreflight_free: (a: number, b: number) => void;
     readonly __wbg_projectquerylist_free: (a: number, b: number) => void;
     readonly __wbg_projectquerynode_free: (a: number, b: number) => void;
     readonly __wbg_projectreply_free: (a: number, b: number) => void;
@@ -447,12 +478,18 @@ export interface InitOutput {
     readonly projecteffects_reason: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly projecteffects_reason_length: (a: number, b: number) => [number, number, number];
     readonly projecteffects_selection: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectexport_preflight: (a: number, b: number, c: number) => [number, number, number];
     readonly projectimportbase_prepare_model: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number];
     readonly projectimportpreview_blocked: (a: number) => [number, number, number];
     readonly projectimportpreview_length: (a: number) => number;
     readonly projectimportpreview_read: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectmodelupload_append: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectmodelupload_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly projectpreflight_issue: (a: number, b: number) => [number, number, number, number];
+    readonly projectpreflight_omission: (a: number, b: number) => [number, number, number, number];
+    readonly projectpreflight_printable_instance: (a: number, b: number) => [number, number, number, number];
+    readonly projectpreflight_summary: (a: number) => [number, number, number, number];
+    readonly projectpreflight_used_filament: (a: number, b: number) => [number, number, number, number];
     readonly projectquerylist_count: (a: number) => number;
     readonly projectquerylist_node: (a: number, b: number) => [number, number, number];
     readonly projectquerylist_page: (a: number, b: number, c: number) => [number, number, number, number];
@@ -472,6 +509,7 @@ export interface InitOutput {
     readonly projectsession_begin_open: (a: number) => [number, number, number];
     readonly projectsession_cancel_open: (a: number, b: number) => number;
     readonly projectsession_capture_clipboard: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly projectsession_capture_export: (a: number, b: number) => [number, number, number];
     readonly projectsession_capture_guard: (a: number) => [number, number, number];
     readonly projectsession_capture_import_base: (a: number) => [number, number, number];
     readonly projectsession_clipboard_upload: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];

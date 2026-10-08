@@ -16,6 +16,7 @@ mod archive;
 mod bindings;
 mod json_sink;
 mod model;
+mod preflight;
 mod registry;
 mod timestamps;
 use archive::*;
@@ -46,6 +47,7 @@ use orcaxr_project::{
     staging_layout as staging,
     store::ProjectSnapshot,
 };
+use preflight::*;
 use registry::Registry;
 use std::{
     io::{self, Write},
@@ -93,6 +95,7 @@ enum Record {
     ModelUpload(Box<model::Upload>),
     ImportBase(Box<orcaxr_archive::models::host::Base>),
     ImportPreview(Box<model::Preview>),
+    Preflight(Box<Report>),
 }
 fn registry() -> &'static Registry<Record> {
     static REGISTRY: OnceLock<Registry<Record>> = OnceLock::new();
@@ -130,6 +133,7 @@ access!(with_upload, Upload, Box<Upload>);
 access!(with_session, Session, Box<Session>);
 access!(with_project, Project, ProjectSnapshot);
 access!(with_export, Export, ExportCapture);
+access!(with_preflight, Preflight, Box<Report>);
 access!(with_selection, Selection, SelectionSnapshot);
 access!(with_history, History, HistorySnapshot);
 access!(with_asset, Asset, AssetLease);
@@ -769,18 +773,22 @@ fn upload_open(env: &mut JNIEnv<'_>, handle: jlong, generation: JLongArray<'_>) 
         Ok(())
     })
 }
-fn submit(env: &mut JNIEnv<'_>, handle: jlong, request: JString<'_>) -> Result<jlong> {
+/// A protocol message within the shared intent byte budget.
+fn intent_text(env: &mut JNIEnv<'_>, request: &JString<'_>) -> Result<String> {
     let length = env
-        .call_method(&request, "length", "()I", &[])
+        .call_method(request, "length", "()I", &[])
         .and_then(|v| v.i())
         .map_err(|_| "invalid_request")?;
     if length < 0 || length as usize > orcaxr_contracts::project_intent_types::MAX_BYTES {
         return Err("input_limit");
     }
-    let request: String = env
-        .get_string(&request)
+    Ok(env
+        .get_string(request)
         .map_err(|_| "invalid_request")?
-        .into();
+        .into())
+}
+fn submit(env: &mut JNIEnv<'_>, handle: jlong, request: JString<'_>) -> Result<jlong> {
+    let request = intent_text(env, &request)?;
     let reserved = registry().reserve(false)?;
     match with_session(handle, |s| Ok(s.submit(&request)))? {
         Submission::Ready(reply) => reserved.insert(Record::Reply(reply)),
