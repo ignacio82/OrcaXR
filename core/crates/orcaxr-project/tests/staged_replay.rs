@@ -435,6 +435,17 @@ fn capture_asset_command(v: &Value) -> Result<CapturedCommand, wire::SessionErro
             Recipe::Text(Arc::new(decoded(&v["configurationJson"])?)),
             LIMIT,
         ),
+        "importProject" => CapturedCommand::import_project(
+            decoded(&v["stateJson"])?,
+            v["assets"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(staged_asset)
+                .collect::<Result<_, _>>()?,
+            Text::new(utf16(&v["label"])),
+            LIMIT,
+        ),
         "replaceProject" => CapturedCommand::replace_project(
             decoded(&v["stateJson"])?,
             (!v["label"].is_null()).then(|| Text::new(utf16(&v["label"]))),
@@ -685,5 +696,5 @@ fn staged_ownership_and_protocol_match_independent_typescript_authority() {
             }
         }
     }
-    assert_eq!((groups, requests), (934, 690));
+    assert_eq!((groups, requests), (952, 704));
 }

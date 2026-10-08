@@ -1,10 +1,9 @@
 import {
+  assertProjectBundle,
   InMemoryAssetRepository,
-  type AssetPayload,
   type AssetRepository,
   type AssetRepositorySnapshot,
 } from './assets';
-import { canonicalStringify } from './domain/canonical';
 import type { PlateId } from './domain/ids';
 import type { ProjectState } from './domain/model';
 import { findPlate } from './domain/selectors';
@@ -83,7 +82,7 @@ export class EditorSession {
     this.project = new ProjectStore(options.initialState);
     this.selection = options.selection ?? new SelectionStore();
     this.assets = options.assets ?? new InMemoryAssetRepository();
-    assertBundleAssets(options.initialState, this.assets.list());
+    assertProjectBundle(options.initialState, this.assets.list());
     this.commands = new CommandBus(
       { project: this.project, selection: this.selection, assets: this.assets },
       options.history,
@@ -269,7 +268,7 @@ export class EditorSession {
       // its cached fingerprint, without copying current mesh payloads.
       const staged = new InMemoryAssetRepository();
       staged.restore(nextAssets);
-      assertBundleAssets(parsed.state, staged.list());
+      assertProjectBundle(parsed.state, staged.list());
       const warnings = [...parsed.warnings];
       assertCurrent();
 
@@ -296,7 +295,7 @@ export class EditorSession {
     assertValidProjectState(state);
     const staged = new InMemoryAssetRepository();
     staged.restore(assets);
-    assertBundleAssets(state, staged.list());
+    assertProjectBundle(state, staged.list());
 
     this.openOperation = undefined;
     this.assets.restore(assets);
@@ -366,7 +365,7 @@ export class EditorSession {
   private archiveSnapshot(): ProjectArchiveSnapshot {
     const snapshot = this.project.getSnapshot();
     const assets = this.assets.list();
-    assertBundleAssets(snapshot.state, assets);
+    assertProjectBundle(snapshot.state, assets);
     return {
       state: snapshot.state,
       assets,
@@ -488,21 +487,4 @@ function projectionHealthEqual(left: ProjectProjectionHealthSnapshot, right: Pro
       );
     })
   );
-}
-
-function assertBundleAssets(state: ProjectState, assets: readonly AssetPayload[]): void {
-  const supplied = new Map(assets.map((payload) => [payload.descriptor.id, payload]));
-  const expected = new Map(state.sourceAssets.map((descriptor) => [descriptor.id, descriptor]));
-  for (const descriptor of state.sourceAssets) {
-    const payload = supplied.get(descriptor.id);
-    if (!payload) throw new Error(`Project bundle is missing source asset ${descriptor.id}`);
-    if (canonicalStringify(payload.descriptor) !== canonicalStringify(descriptor)) {
-      throw new Error(`Project bundle metadata differs for source asset ${descriptor.id}`);
-    }
-  }
-  for (const payload of assets) {
-    if (!expected.has(payload.descriptor.id)) {
-      throw new Error(`Project bundle contains undeclared asset ${payload.descriptor.id}`);
-    }
-  }
 }

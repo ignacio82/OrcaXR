@@ -8,6 +8,30 @@ export interface AssetPayload {
   bytes: Uint8Array;
 }
 
+/**
+ * A project and the payloads it travels with agree exactly: every declared
+ * source asset is present with identical metadata, and nothing is undeclared.
+ */
+export function assertProjectBundle(
+  state: { readonly sourceAssets: readonly SourceAssetDescriptor[] },
+  assets: readonly AssetPayload[],
+): void {
+  const supplied = new Map(assets.map((payload) => [payload.descriptor.id, payload]));
+  const expected = new Set(state.sourceAssets.map((descriptor) => descriptor.id));
+  for (const descriptor of state.sourceAssets) {
+    const payload = supplied.get(descriptor.id);
+    if (!payload) throw new Error(`Project bundle is missing source asset ${descriptor.id}`);
+    if (canonicalStringify(payload.descriptor) !== canonicalStringify(descriptor)) {
+      throw new Error(`Project bundle metadata differs for source asset ${descriptor.id}`);
+    }
+  }
+  for (const payload of assets) {
+    if (!expected.has(payload.descriptor.id)) {
+      throw new Error(`Project bundle contains undeclared asset ${payload.descriptor.id}`);
+    }
+  }
+}
+
 export interface AssetRepositorySnapshot {
   readonly entries: AssetPayload[];
 }

@@ -957,6 +957,8 @@ and replay coverage for the complete current command inventory.
   - [x] Capture slices, saves and exports only after every queued edit is
     acknowledged or refused (`settled()`, an ordered query), with one slice
     reserving the slicer while it waits.
+  - [x] Commit model, geometry and project imports through guarded staged work
+    (`importProject`), bundle-checked in both bindings before anything changes.
   - [ ] Migrate remaining editing/import/save/slice routes and isolate
     preparation work; preserve the registry boundary for every mutation.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,
@@ -1047,8 +1049,8 @@ and replay coverage for the complete current command inventory.
   and history retention accounting. Test every command's failed and stale cases.
   Every browser command class now has a native port. Each replays browser-authored
   traces: prepared intents (67 traces / 1,659 steps), captured records (11 / 197),
-  clipboard (17 / 130), payload-carrying commands (24 / 348) and staged work
-  (56 / 934). The history below records how the families arrived.
+  clipboard (17 / 130), payload-carrying commands (25 / 360) and staged work
+  (57 / 952). The history below records how the families arrived.
   The native command owner first executed nineteen prepared intents: seven plate
   commands, three entity renames, instance printability, single/batch transforms,
   object/instance deletion, plate clearing, independent object duplication,
@@ -1248,8 +1250,8 @@ and replay coverage for the complete current command inventory.
     publishing, the encoding and result are validated by issue count, and a
     result that changes nothing executes nothing. Otherwise the prepared
     stroke command applies. Traces cover every channel, staleness, non-model
-    volumes, root counts, both validation stages and noops (asset corpus 24 /
-    348; staged 56 / 934 through Rust, WASM and JNI).
+    volumes, root counts, both validation stages and noops (asset corpus 25 /
+    360; staged 57 / 952 through Rust, WASM and JNI).
 - [x] Port settings resolution, physical/mixed filament identities, profile
   selection semantics, and canonical slice preflight. Consume the generated
   pinned schema/catalog rather than reconstructing defaults in Kotlin.

@@ -20,6 +20,7 @@ import {
   captureInstanceCommand,
   captureMeshBooleanCommand,
   captureReplaceProjectCommand,
+  captureImportProjectCommand,
   captureReplaceVolumeMeshCommand,
   captureClipboardPasteCommand,
   captureSplitVolumeToPartsCommand,
@@ -180,6 +181,8 @@ import {
   ImportCancellationController,
   type ProjectImportParserPort,
   type ProjectImportSource,
+  type ImportCommitConfirmation,
+  type ImportCommitResult,
 } from '../project/import/types';
 import { decodeIndexedMeshAsset, encodeIndexedMeshAsset } from '../project/meshCodec';
 import type { MeshTopologyReplacementGuard } from '../project/objects/topologyCommands';
@@ -199,7 +202,7 @@ import {
 import { objectAssetIds } from '../project/objects/commands';
 import { computeCanonicalInstanceBounds, type CanonicalBounds3 } from '../project/objects/bounds';
 import { exportCanonicalInstancesAsBinaryStl, exportCanonicalVolumeAsBinaryStl } from '../project/objects/stlExport';
-import { writeDeterministicZip } from '../project/serialization/deterministicZip';
+import { DEFAULT_ZIP_LIMITS, writeDeterministicZip } from '../project/serialization/deterministicZip';
 import { type InstanceTransformChange } from '../project/objects/transformCommands';
 import {
   centerInstancesOnPlate,
@@ -301,13 +304,23 @@ const STAGING_ASSET_ID = entityId<'asset'>('import:orcaxr:canonical-workspace-st
 const INSTANCE_INPUT_LIMITS = Object.freeze({ maxUnits: 16 * 1024 * 1024, maxNodes: 1024 * 1024, maxDepth: 128 });
 /** A whole next project state, as a profile change commits it. */
 const STATE_INPUT_LIMITS = Object.freeze({ maxUnits: 64 * 1024 * 1024, maxNodes: 16 * 1024 * 1024, maxDepth: 128 });
+/** A whole imported project and its asset set, bounded by the archive limits
+ * the importer already enforced. */
+const IMPORT_INPUT_LIMITS = Object.freeze({
+  maxUnits: 256 * 1024 * 1024,
+  maxNodes: 64 * 1024 * 1024,
+  maxDepth: 128,
+  maxAssets: DEFAULT_ZIP_LIMITS.maxEntries,
+  maxAssetBytes: DEFAULT_ZIP_LIMITS.maxTotalUncompressedBytes,
+});
 const INSTANCE_STAGING_LIMITS = Object.freeze({
   maxResources: 4,
   maxCommands: 4096,
-  maxUnits: STATE_INPUT_LIMITS.maxUnits,
-  // New mesh bytes a staged edit carries (helper volumes, split parts) belong
-  // to the staged resource until it commits; the clipboard's own asset budget.
-  maxAssetBytes: 512 * 1024 * 1024,
+  // An import commits a whole project as one staged command.
+  maxUnits: IMPORT_INPUT_LIMITS.maxUnits,
+  // New mesh bytes a staged edit carries (helper volumes, split parts, an
+  // import's asset set) belong to the staged resource until it commits.
+  maxAssetBytes: IMPORT_INPUT_LIMITS.maxAssetBytes,
 });
 const CLIPBOARD_ASSET_LIMITS = Object.freeze({ maxAssets: 4096, maxBytes: 512 * 1024 * 1024 });
 /** Staged edits that carry new mesh bytes: helper volumes and split parts. */
@@ -4728,6 +4741,21 @@ export class CanonicalWorkspaceController {
       this.importCancellations.delete(lifecycle);
       throw error;
     }
+  }
+
+  /**
+   * Commit a prepared import through the guarded session route: the whole next
+   * project and its assets as one staged `Import <filename>` entry. The preview's
+   * own checks run first; the commit is refused, changing nothing, if an edit
+   * lands in between, and the preview then stays cancellable.
+   */
+  confirmImport(prepared: PreparedProjectImport, confirmation: ImportCommitConfirmation): Promise<ImportCommitResult> {
+    this.assertActive();
+    return prepared.confirmAsync(confirmation, ({ state, assets, label }) => {
+      // Captured with the preview's checks, before anything else can land.
+      const guard = this.asyncSession.captureGuard();
+      return this.executeStagedEdit(captureImportProjectCommand(state, assets, label, IMPORT_INPUT_LIMITS), guard);
+    });
   }
 
   /**

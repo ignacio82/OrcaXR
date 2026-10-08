@@ -10,6 +10,7 @@ import { SelectionStore } from "../../web/src/project/selection.ts";
 import { CommandBus } from "../../web/src/project/history/commandBus.ts";
 import { prepareProjectIntent } from "../../web/src/project/PreparedProjectCommands.ts";
 import { AddObjectCommand, AddObjectWithAssetCommand, ReplaceProjectCommand } from "../../web/src/project/commands.ts";
+import { ImportProjectCommand } from "../../web/src/project/import/ImportProjectCommand.ts";
 import { AddVolumeCommand } from "../../web/src/project/objects/semanticVolumeCommands.ts";
 import { ReplaceVolumeMeshCommand } from "../../web/src/project/objects/topologyCommands.ts";
 import { MeshBooleanCommand } from "../../web/src/project/objects/meshBooleanCommands.ts";
@@ -60,6 +61,7 @@ function prepare(c) {
     case "meshBoolean": return new MeshBooleanCommand(guardFrom(c.guard), payload(c.asset), c.op);
     case "splitVolumeToParts": return new SplitVolumeToPartsCommand(guardFrom(c.guard), partsFrom(c.parts));
     case "replaceProject": return c.label === null ? new ReplaceProjectCommand(JSON.parse(c.stateJson)) : new ReplaceProjectCommand(JSON.parse(c.stateJson), string(c.label));
+    case "importProject": return new ImportProjectCommand(JSON.parse(c.stateJson), c.assets.map(payload), string(c.label));
     case "addSvgPart": return new AddSvgPartCommand(placementFrom(c.placement), { asset: payload(c.asset), drawing: payload(c.drawing), mesh: { triangleCount: c.triangleCount }, part: JSON.parse(c.partJson) }, string(c.name));
     case "editSvgPart": return new EditSvgPartCommand(string(c.volumeId), { asset: payload(c.asset), drawing: payload(c.drawing), mesh: { triangleCount: c.triangleCount }, part: JSON.parse(c.partJson) });
     case "addEmbossText": return new AddEmbossTextCommand(placementFrom(c.placement), JSON.parse(c.configurationJson), { asset: payload(c.asset), mesh: { triangleCount: c.triangleCount } });
@@ -552,6 +554,30 @@ const splitCommand = (ids, state) => {
   return splitParts(guard, parts);
 };
 const splitBytes = probeRun(splitProbe, splitCommand);
+// Whole-project import: the next project and its complete asset set as one
+// entry; selection cleared; a duplicate asset, or one the state declares but
+// the set lacks, is refused before anything changes.
+const importProject = (next, assets, label = "Import next.3mf") => ({ kind: "importProject", stateJson: canonicalStringify(next), assets: assets.map(wirePayload), label: units(label) });
+scenario("import-project", {}, () => {}, ({ execute, run, state, ids }) => {
+  run({ kind: "selection", refs: [{ kind: "object", id: units(ids.object) }] });
+  const fresh = mesh("import:asset:imported", 12);
+  const imported = replacedState(state(), next => {
+    next.name = "Imported\u0000\ud800";
+    next.sourceAssets = [fresh.descriptor];
+    next.plates[0].objects = next.plates[0].objects.map(object => ({
+      ...object,
+      volumes: object.volumes.map(volume => ({ ...volume, source: { ...volume.source, assetId: fresh.descriptor.id, triangleCount: 4 }, annotations: { ...volume.annotations, color: [] } })),
+    }));
+  });
+  roundtrip(execute, run, importProject(imported, [fresh]));
+  run({ kind: "redo" });
+  // The same import again is a fresh entry, not a no-op.
+  execute(importProject(imported, [fresh], "Import again.3mf"));
+  // Refused, changing nothing.
+  execute(importProject(imported, [fresh, fresh], "Import duplicate.3mf"));
+  execute(importProject(imported, [], "Import missing.3mf"));
+  run({ kind: "undo" }); run({ kind: "undo" }); run({ kind: "redo" });
+});
 const replaceProjectCommand = (ids, state) => replaceProject(replacedState(state, next => (next.name = "Retained replacement")));
 const replaceProjectBytes = probeRun(createProjectFixture(), replaceProjectCommand);
 for (const [label, bytes, command, mutate] of [["object", objectBytes, ids => addObjectWithAsset(ids.plate, probeObject, probeAsset)], ["volume", volumeBytes, ids => addVolume(ids.object, probeVolume, probeAsset)],

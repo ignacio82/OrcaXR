@@ -51,7 +51,7 @@
     },
     {
       "path": "web/src/project/assets.ts",
-      "sha256": "e8e10fac5d3821abbd3fd69e2949f3551d6a0db4c52ee43d678663aeabd2bba7"
+      "sha256": "a3fa56557a1447e70cf2121828915360b7d93a2a575433a9d15889561beacbdc"
     },
     {
       "path": "web/src/project/__tests__/fixtures.ts",

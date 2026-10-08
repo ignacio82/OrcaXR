@@ -31,6 +31,7 @@ import {
   captureAddEmbossTextCommand,
   captureEditEmbossTextCommand,
   captureReplaceProjectCommand,
+  captureImportProjectCommand,
   splitToObjectsStagedWork,
   facetRefinementStagedWork,
   singleStagedWork,
@@ -157,6 +158,8 @@ function captureAssetCommand(c) {
       );
     case "replaceProject":
       return captureReplaceProjectCommand(JSON.parse(c.stateJson), text(c.label), input);
+    case "importProject":
+      return captureImportProjectCommand(JSON.parse(c.stateJson), c.assets.map(payload), text(c.label), input);
     default:
       throw new Error(`unknown asset command ${c.kind}`);
   }

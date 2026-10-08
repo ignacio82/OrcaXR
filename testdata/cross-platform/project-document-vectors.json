@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "sources": {
     "tools/cross-platform/project-document-vectors.mjs": "ea0cc20ff815faf682cd2efd45482d8804a935a448ea23f7ddb3fc10b9cf3e16",
-    "web/src/project/session.ts": "c749fe8da3bbb84e9fb0457029d8d6764460fc7364e48154ab57045cf19dae62",
-    "web/src/project/assets.ts": "e8e10fac5d3821abbd3fd69e2949f3551d6a0db4c52ee43d678663aeabd2bba7",
+    "web/src/project/session.ts": "2a18e6bc7429afd10e6e9d706f681f300b2f911b75b9e5816ecc40356220b8f9",
+    "web/src/project/assets.ts": "a3fa56557a1447e70cf2121828915360b7d93a2a575433a9d15889561beacbdc",
     "web/src/project/history/commandBus.ts": "1ceb7e35e92ab0cdc18db529c3ad3f487edac2b3a25f42545abad925a541e86c",
-    "testdata/cross-platform/project-clipboard-vectors.json": "67ba6c37345ed7ea51e6461a76817e1cc0a69de471c8131d1acda6856086c0f7",
+    "testdata/cross-platform/project-clipboard-vectors.json": "777946023f38e5004fc562875e36825c336dfe440129e60ce909954653537dbf",
     "testdata/cross-platform/project-model-vectors.json": "7c8510f7a0b3009f17baa7c74ffb1c11ca83d5ed279a8b6c9a369ff775027f51"
   },
   "documents": [

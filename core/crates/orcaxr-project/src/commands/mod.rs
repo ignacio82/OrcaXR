@@ -134,11 +134,34 @@ enum Kind {
 /// redo restores the exact repository version it produced.
 #[derive(Clone)]
 struct Import {
-    next: ValidatedProject,
-    payloads: Option<Arc<[crate::assets::AssetPayload]>>,
+    next: ImportNext,
+    /// Consumed by the first apply.
+    source: Option<ImportSource>,
     next_version: Option<crate::assets::AssetSnapshot>,
     previous: Option<(ValidatedProject, crate::assets::AssetSnapshot)>,
     next_bytes: u64,
+}
+/// A committed preview arrives validated; staged work carries the state and
+/// validates it on the first apply, against the assets it installs, as the
+/// browser's command does. Redo replays the project that apply produced.
+#[derive(Clone)]
+enum ImportNext {
+    Validated(ValidatedProject),
+    State(Arc<ProjectState>),
+}
+impl ImportNext {
+    fn state(&self) -> &ProjectState {
+        match self {
+            Self::Validated(project) => project.state(),
+            Self::State(state) => state,
+        }
+    }
+}
+#[derive(Clone)]
+enum ImportSource {
+    Payloads(Arc<[crate::assets::AssetPayload]>),
+    /// Staged records, adopted without another copy.
+    Leases(Arc<[crate::assets::AssetLease]>),
 }
 impl PreparedCommand {
     /// A committed import, labelled `Import <filename>` by the caller.
@@ -151,14 +174,95 @@ impl PreparedCommand {
         Self {
             label,
             kind: Kind::Import(Box::new(Import {
-                next,
-                payloads: Some(payloads.into()),
+                next: ImportNext::Validated(next),
+                source: Some(ImportSource::Payloads(payloads.into())),
                 next_version: None,
                 previous: None,
                 next_bytes,
             })),
         }
     }
+    /// A staged import: the whole next project and every asset it declares,
+    /// in the order the repository restores them (`ImportProjectCommand`).
+    pub fn import_staged(label: Text, state: ProjectState, assets: &[StagedAsset]) -> Self {
+        let leases: Vec<_> = assets.iter().map(|a| a.lease().clone()).collect();
+        let next_bytes = leases.iter().map(|l| l.bytes().len() as u64).sum();
+        Self {
+            label,
+            kind: Kind::Import(Box::new(Import {
+                next: ImportNext::State(Arc::new(state)),
+                source: Some(ImportSource::Leases(leases.into())),
+                next_version: None,
+                previous: None,
+                next_bytes,
+            })),
+        }
+    }
+}
+/// `assertProjectBundle`: every declared source asset is supplied with
+/// identical metadata (the last supply of an ID counts, as in a map), and no
+/// supplied asset is undeclared; then no ID is supplied twice. Messages are
+/// the browser's.
+fn check_import_bundle<E>(
+    state: &ProjectState,
+    supplied: &[&Value],
+) -> Result<(), CommandError<E>> {
+    let id = |descriptor: &Value| match descriptor {
+        Value::Object(fields) => match fields.get(&"id".encode_utf16().collect::<Vec<_>>()) {
+            Some(Value::String(units)) => Some(units.clone()),
+            _ => None,
+        },
+        _ => None,
+    };
+    let ids: Vec<Option<Vec<u16>>> = supplied.iter().map(|d| id(d)).collect();
+    for declared in state.source_assets.iter() {
+        let units = declared.id.as_utf16();
+        let Some(index) = ids.iter().rposition(|i| i.as_deref() == Some(units)) else {
+            return Err(CommandError::Domain(text_parts(
+                "Project bundle is missing source asset ",
+                units,
+                "",
+            )));
+        };
+        if !declared
+            .matches_value(supplied[index])
+            .map_err(|_| CommandError::Encoding)?
+        {
+            return Err(CommandError::Domain(text_parts(
+                "Project bundle metadata differs for source asset ",
+                units,
+                "",
+            )));
+        }
+    }
+    for units in ids.iter().flatten() {
+        if !state
+            .source_assets
+            .iter()
+            .any(|d| d.id.as_utf16() == units.as_slice())
+        {
+            return Err(CommandError::Domain(text_parts(
+                "Project bundle contains undeclared asset ",
+                units,
+                "",
+            )));
+        }
+    }
+    // The repository restore's own first refusal, in its words.
+    for (index, units) in ids.iter().enumerate() {
+        if let Some(units) = units
+            && ids[..index]
+                .iter()
+                .any(|seen| seen.as_deref() == Some(units.as_slice()))
+        {
+            return Err(CommandError::Domain(text_parts(
+                "Asset snapshot contains duplicate ID ",
+                units,
+                "",
+            )));
+        }
+    }
+    Ok(())
 }
 pub struct PreparedBatch {
     pub label: Text,
@@ -1039,19 +1143,45 @@ impl<P: TimestampPolicy> ProjectCommand<P> for PreparedCommand {
                         .restore_internal(version)
                         .map_err(restore_error)?,
                     None => {
-                        let payloads = import
-                            .payloads
-                            .as_deref()
+                        let source = import
+                            .source
+                            .as_ref()
                             .ok_or_else(|| unapplied("ImportProjectCommand"))?;
-                        context
-                            .assets_mut()
-                            .restore(payloads)
-                            .map_err(restore_error)?;
+                        // The project and its payloads must agree before
+                        // anything changes (`assertProjectBundle`).
+                        let supplied: Vec<&Value> = match source {
+                            ImportSource::Payloads(payloads) => {
+                                payloads.iter().map(|p| &p.descriptor).collect()
+                            }
+                            ImportSource::Leases(leases) => {
+                                leases.iter().map(|l| l.descriptor()).collect()
+                            }
+                        };
+                        check_import_bundle(import.next.state(), &supplied)?;
+                        match source {
+                            ImportSource::Payloads(payloads) => context
+                                .assets_mut()
+                                .restore(payloads)
+                                .map_err(restore_error)?,
+                            ImportSource::Leases(leases) => context
+                                .assets_mut()
+                                .restore_leases(leases)
+                                .map_err(restore_error)?,
+                        }
                         import.next_version = Some(context.assets().capture_internal());
-                        import.payloads = None;
+                        import.source = None;
                     }
                 }
-                context.replace_validated(import.next.clone(), reason, PROJECT)?;
+                match &import.next {
+                    ImportNext::Validated(project) => {
+                        context.replace_validated(project.clone(), reason, PROJECT)?
+                    }
+                    ImportNext::State(state) => {
+                        let state = (**state).clone();
+                        context.replace(state, reason, PROJECT)?;
+                        import.next = ImportNext::Validated(context.snapshot().project().clone());
+                    }
+                }
                 context.clear_selection();
             }
         }

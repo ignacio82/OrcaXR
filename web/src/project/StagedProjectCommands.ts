@@ -11,6 +11,7 @@ import type { ProjectCommand } from './history/command';
 import type { CommandBus } from './history/commandBus';
 import { contentDigest, type AssetPayload, type AssetRepository, type AssetRepositorySelection } from './assets';
 import { AddObjectCommand, AddObjectWithAssetCommand, ReplaceProjectCommand } from './commands';
+import { ImportProjectCommand } from './import/ImportProjectCommand';
 import { AddVolumeCommand } from './objects/semanticVolumeCommands';
 import { ReplaceVolumeMeshCommand, type MeshTopologyReplacementGuard } from './objects/topologyCommands';
 import { MeshBooleanCommand, type MeshBooleanGuard, type MeshBooleanOp } from './objects/meshBooleanCommands';
@@ -226,6 +227,8 @@ function sorted(value: unknown): unknown {
 function ownPayloads(
   pairs: readonly (readonly [AssetPayload['descriptor'], AssetPayload])[],
   limits: StagedInputLimits,
+  /** False when the command copies the bytes itself, so they are not copied twice. */
+  copy = true,
 ): AssetPayload[] {
   const maxAssets = limits.maxAssets ?? 0,
     maxBytes = limits.maxAssetBytes ?? 0;
@@ -238,7 +241,7 @@ function ownPayloads(
       throw new StagedInputError('invalid');
     if (descriptor.digest.startsWith('fnv1a64:') && descriptor.digest !== contentDigest(bytes))
       throw new StagedInputError('invalid');
-    return { descriptor, bytes: bytes.slice() };
+    return { descriptor, bytes: copy ? bytes.slice() : bytes };
   });
   const distinct = new Set(owned.map((payload) => payload.descriptor.id));
   if (distinct.size > maxAssets || distinctBytes(owned) > maxBytes) throw new StagedInputError('limit');
@@ -576,6 +579,28 @@ export function captureReplaceProjectCommand(
     units,
   } = capture(['replaceProject', state, label ?? null] as const, limits);
   return captured(owned === null ? new ReplaceProjectCommand(next) : new ReplaceProjectCommand(next, owned), units);
+}
+/**
+ * `ImportProjectCommand`: a whole next project and every asset it declares, in
+ * the order the repository restores them, committed as one `Import <filename>`
+ * entry. The command copies the bytes, so they are validated here, not copied.
+ */
+export function captureImportProjectCommand(
+  state: ProjectState,
+  assets: readonly AssetPayload[],
+  label: string,
+  limits: StagedInputLimits,
+): CapturedProjectCommand {
+  const {
+    value: [, next, descriptors, owned],
+    units,
+  } = capture(['importProject', state, assets.map((asset) => asset.descriptor), label] as const, limits);
+  const payloads = ownPayloads(
+    descriptors.map((descriptor, index) => [descriptor, assets[index]] as const),
+    limits,
+    false,
+  );
+  return captured(new ImportProjectCommand(next, payloads, owned), units, payloads);
 }
 const FACET_CHANNELS: readonly string[] = ['color', 'support', 'seam', 'fuzzySkin', 'brim'];
 /** Selector nodes with exactly their fields and scalar paint values, so the

@@ -367,6 +367,33 @@ impl CapturedCommand {
         ))
     }
 }
+impl CapturedCommand {
+    /// `["importProject",state,descriptors,label]`: a whole next project and
+    /// every asset it declares, committed as one `Import <filename>` entry.
+    pub fn import_project(
+        state: ProjectState,
+        assets: Vec<StagedAsset>,
+        label: Text,
+        max_units: u64,
+    ) -> Result<Self, CaptureError> {
+        let units = measure(max_units, |out| {
+            out.write_all(b"[\"importProject\",")?;
+            state.write_json(out)?;
+            out.write_all(b",[")?;
+            for (index, asset) in assets.iter().enumerate() {
+                if index > 0 {
+                    out.write_all(b",")?;
+                }
+                asset.lease().descriptor().write_canonical(&mut &mut *out)?;
+            }
+            out.write_all(b"],")?;
+            label.write_json(out)?;
+            out.write_all(b"]")
+        })?;
+        let command = PreparedCommand::import_staged(label, state, &assets);
+        Ok(Self::with_assets(command, units, assets))
+    }
+}
 fn write_placement(placement: &PartPlacement, out: &mut dyn Write) -> io::Result<()> {
     out.write_all(b"{\"objectId\":")?;
     placement.object.write_json(out)?;

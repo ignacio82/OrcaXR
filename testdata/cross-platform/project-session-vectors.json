@@ -13,11 +13,11 @@
     },
     {
       "path": "testdata/cross-platform/project-command-vectors.json",
-      "sha256": "e0700860c2f0643c2006445a1af2331fffafd5942ba1aaae30a3e3b803119d8b"
+      "sha256": "432b3d4573943a525bc2604976744242d46ceb6d306a4214e4575ae29c014380"
     },
     {
       "path": "web/src/project/session.ts",
-      "sha256": "c749fe8da3bbb84e9fb0457029d8d6764460fc7364e48154ab57045cf19dae62"
+      "sha256": "2a18e6bc7429afd10e6e9d706f681f300b2f911b75b9e5816ecc40356220b8f9"
     },
     {
       "path": "web/src/project/AsyncEditorSession.ts",
@@ -37,7 +37,7 @@
     },
     {
       "path": "web/src/project/StagedProjectCommands.ts",
-      "sha256": "76a0868e892550855abf8246a99921c7dc9f86f380cfbe8885d3cf09704dbcb7"
+      "sha256": "9657cb5714e84442eaf1e7e87ca31eace913e4920d67bfa007ab190b94711015"
     },
     {
       "path": "web/src/project/commands.ts",
@@ -53,7 +53,7 @@
     },
     {
       "path": "web/src/project/assets.ts",
-      "sha256": "e8e10fac5d3821abbd3fd69e2949f3551d6a0db4c52ee43d678663aeabd2bba7"
+      "sha256": "a3fa56557a1447e70cf2121828915360b7d93a2a575433a9d15889561beacbdc"
     },
     {
       "path": "web/src/project/store.ts",

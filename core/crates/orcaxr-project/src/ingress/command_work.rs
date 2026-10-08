@@ -1013,6 +1013,23 @@ fn command(
             let label = nullable::<Text>(v.next().unwrap())?;
             Box::new(move |_| CapturedCommand::replace_project(state, label, max_units))
         }
+        layout::COMMAND_IMPORT_PROJECT => {
+            let mut v = fields(layout::COMMAND_IMPORT_PROJECT_LENGTH)?;
+            v.next();
+            let state = decode::<ProjectState>(v.next().unwrap())?;
+            let Value::Array(descriptors) = v.next().unwrap() else {
+                return Err(CommandInputError::InvalidShape);
+            };
+            let slots = descriptors
+                .into_iter()
+                .map(|descriptor| declarations.declare(descriptor))
+                .collect::<Result<Vec<_>, _>>()?;
+            let label = decode::<Text>(v.next().unwrap())?;
+            Box::new(move |assets| {
+                let assets = slots.iter().map(|&slot| assets[slot].clone()).collect();
+                CapturedCommand::import_project(state, assets, label, max_units)
+            })
+        }
         _ => return Err(CommandInputError::InvalidShape),
     };
     Ok(build)

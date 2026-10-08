@@ -11,7 +11,7 @@
     },
     {
       "path": "web/src/project/StagedProjectCommands.ts",
-      "sha256": "76a0868e892550855abf8246a99921c7dc9f86f380cfbe8885d3cf09704dbcb7"
+      "sha256": "9657cb5714e84442eaf1e7e87ca31eace913e4920d67bfa007ab190b94711015"
     },
     {
       "path": "web/src/project/PreparedProjectCommands.ts",
@@ -51,7 +51,7 @@
     },
     {
       "path": "web/src/project/assets.ts",
-      "sha256": "e8e10fac5d3821abbd3fd69e2949f3551d6a0db4c52ee43d678663aeabd2bba7"
+      "sha256": "a3fa56557a1447e70cf2121828915360b7d93a2a575433a9d15889561beacbdc"
     },
     {
       "path": "web/src/project/__tests__/fixtures.ts",

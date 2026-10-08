@@ -11,7 +11,7 @@
     "web/src/project/serialization/deterministicZip.ts": "795c5d7ff767ebb8e2097d9181adc7b66fea988d1fe3540f16618934f82b188e",
     "web/src/project/domain/canonical.ts": "af4d5f18228dcc903a54d9fa56f187bf7f928a0ad69becfc305248c181218922",
     "testdata/cross-platform/bbs-model-vectors.json": "bdf8083e9f076ab670b99ae581f63e936ba97c203a4d2e2a9c04e8963b866cfb",
-    "testdata/cross-platform/bbs-metadata-vectors.json": "e8def8e2aa89fda0a3f7f42673737a3b2cc2a7370475a667912f72257cdbecd5",
+    "testdata/cross-platform/bbs-metadata-vectors.json": "83c62340c29c223c24a8f1fd6170bdd8b8cc1381591c4cf179a682240a133a40",
     "testdata/cross-platform/bbs-settings-vectors.json": "037804c7b4d99a8775f541a2e004b79a02a2089719e74e13ec81f4790e6fe7f8",
     "testdata/cross-platform/package-input-vectors.json": "4aeed42afac079c1fdcd7a81f2d4e9c291d2f69f0b5fc8fae1fc1bc5bb5aa20d"
   },

@@ -149,8 +149,20 @@ export class ProjectImportCoordinator {
   }
 }
 
+/**
+ * Commits a confirmed import through the session's guarded route: the whole
+ * next project and its assets as one `label` history entry. It resolves once
+ * the session acknowledges the commit and rejects, changing nothing, when the
+ * project moved on since the confirmation's checks.
+ */
+export type ImportCommitPort = (bundle: {
+  readonly state: ProjectState;
+  readonly assets: readonly AssetPayload[];
+  readonly label: string;
+}) => Promise<void>;
+
 export class PreparedProjectImport {
-  private status: 'prepared' | 'committed' | 'cancelled' = 'prepared';
+  private status: 'prepared' | 'committing' | 'committed' | 'cancelled' = 'prepared';
   private staged?: StagedBundle;
   private cancellationReason?: string;
   private settlementPublished = false;
@@ -171,6 +183,8 @@ export class PreparedProjectImport {
 
   cancel(reason = 'cancelled by user'): void {
     if (this.status === 'committed') throw new ImportConfirmationError('A committed import cannot be cancelled');
+    if (this.status === 'committing')
+      throw new ImportConfirmationError('An import being committed cannot be cancelled');
     if (this.status === 'cancelled') return;
     this.status = 'cancelled';
     this.cancellationReason = reason;
@@ -179,7 +193,34 @@ export class PreparedProjectImport {
   }
 
   confirm(confirmation: ImportCommitConfirmation): ImportCommitResult {
+    const staged = this.checkConfirmation(confirmation);
+    this.commands.execute(
+      new ImportProjectCommand(staged.state, staged.assets, `Import ${this.preview.source.filename}`),
+      { coalesce: false },
+    );
+    return this.settleCommitted();
+  }
+
+  /**
+   * `confirm` through the session's guarded route. The same checks run first;
+   * the commit is then submitted and the preview stays confirmable or
+   * cancellable if the session refuses it.
+   */
+  async confirmAsync(confirmation: ImportCommitConfirmation, commit: ImportCommitPort): Promise<ImportCommitResult> {
+    const staged = this.checkConfirmation(confirmation);
+    this.status = 'committing';
+    try {
+      await commit({ state: staged.state, assets: staged.assets, label: `Import ${this.preview.source.filename}` });
+    } catch (error) {
+      this.status = 'prepared';
+      throw error;
+    }
+    return this.settleCommitted();
+  }
+
+  private checkConfirmation(confirmation: ImportCommitConfirmation): StagedBundle {
     if (this.status === 'committed') throw new ImportConfirmationError('This import was already committed');
+    if (this.status === 'committing') throw new ImportConfirmationError('This import is already being committed');
     if (this.status === 'cancelled' || this.cancellation?.aborted) {
       this.cancel(this.cancellation?.reason ?? this.cancellationReason);
       throw new ImportCancelledError(this.cancellation?.reason ?? this.cancellationReason);
@@ -208,11 +249,11 @@ export class PreparedProjectImport {
     }
     const staged = this.staged;
     if (!staged) throw new ImportConfirmationError('The staged import is no longer available');
+    return staged;
+  }
 
-    this.commands.execute(
-      new ImportProjectCommand(staged.state, staged.assets, `Import ${this.preview.source.filename}`),
-      { coalesce: false },
-    );
+  private settleCommitted(): ImportCommitResult {
+    const context = this.commands.context;
     this.status = 'committed';
     this.staged = undefined;
     this.publishSettlement();

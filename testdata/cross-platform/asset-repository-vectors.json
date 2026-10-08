@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "provenance": "Synthetic asset traces from TypeScript; no user data. JSON strings preserve UTF-16 escapes.",
   "references": {
-    "web/src/project/assets.ts": "e8e10fac5d3821abbd3fd69e2949f3551d6a0db4c52ee43d678663aeabd2bba7",
+    "web/src/project/assets.ts": "a3fa56557a1447e70cf2121828915360b7d93a2a575433a9d15889561beacbdc",
     "web/src/project/domain/canonical.ts": "af4d5f18228dcc903a54d9fa56f187bf7f928a0ad69becfc305248c181218922"
   },
   "assets": [

@@ -48,6 +48,8 @@ pub const COMMAND_EDIT_EMBOSS_TEXT: usize = 13;
 pub const COMMAND_EDIT_EMBOSS_TEXT_LENGTH: usize = 5;
 pub const COMMAND_REPLACE_PROJECT: usize = 14;
 pub const COMMAND_REPLACE_PROJECT_LENGTH: usize = 3;
+pub const COMMAND_IMPORT_PROJECT: usize = 15;
+pub const COMMAND_IMPORT_PROJECT_LENGTH: usize = 4;
 #[derive(Debug, Clone, Copy)]
 pub struct InputOptions {
     pub bytes: usize,

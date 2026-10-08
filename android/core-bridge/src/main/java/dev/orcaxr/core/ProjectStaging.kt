@@ -30,6 +30,7 @@ object ProjectStaging {
     const val COMMAND_ADD_EMBOSS_TEXT = 12
     const val COMMAND_EDIT_EMBOSS_TEXT = 13
     const val COMMAND_REPLACE_PROJECT = 14
+    const val COMMAND_IMPORT_PROJECT = 15
 }
 
 data class ProjectStagingInputOptions(

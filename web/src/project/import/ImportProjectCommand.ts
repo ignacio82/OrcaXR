@@ -1,4 +1,9 @@
-import type { AssetPayload, AssetRepositoryInternalSnapshot, AssetRepositorySnapshot } from '../assets';
+import {
+  assertProjectBundle,
+  type AssetPayload,
+  type AssetRepositoryInternalSnapshot,
+  type AssetRepositorySnapshot,
+} from '../assets';
 import { canonicalStringify, cloneProjectState } from '../domain/canonical';
 import type { ProjectState } from '../domain/model';
 import type { CommandContext, ProjectCommand } from '../history/command';
@@ -41,7 +46,9 @@ export class ImportProjectCommand implements ProjectCommand {
     this.previousAssets = context.assets.captureInternal();
     if (this.nextAssetVersion) context.assets.restoreInternal(this.nextAssetVersion);
     else {
-      // The first import always crosses the validating serialized boundary.
+      // The project and its payloads must agree before anything changes, and
+      // the first import always crosses the validating serialized boundary.
+      assertProjectBundle(this.nextState, this.nextAssets!.entries);
       context.assets.restore(this.nextAssets!);
       this.nextAssetVersion = context.assets.captureInternal();
       this.nextAssets = undefined;

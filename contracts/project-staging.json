@@ -23,6 +23,7 @@
     "editSvgPart": ["volumeId", "descriptor", "triangleCount", "part"],
     "addEmbossText": ["placement", "configuration", "descriptor", "triangleCount"],
     "editEmbossText": ["volumeId", "configuration", "descriptor", "triangleCount"],
-    "replaceProject": ["state", "label"]
+    "replaceProject": ["state", "label"],
+    "importProject": ["state", "descriptors", "label"]
   }
 }

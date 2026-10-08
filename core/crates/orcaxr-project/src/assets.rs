@@ -464,6 +464,27 @@ impl AssetRepository {
         Ok(())
     }
 
+    /// `restore` for payloads a staged command already validated: the records
+    /// are adopted by reference, so a large import is not copied again. Each
+    /// capture made its own records, so an identical import is still fresh.
+    pub fn restore_leases(&mut self, leases: &[AssetLease]) -> Result<(), AssetError> {
+        let mut entries = BTreeMap::new();
+        let mut insertion_order = Vec::with_capacity(leases.len());
+        for lease in leases {
+            if entries.contains_key(lease.id()) {
+                return Err(AssetError::DuplicateId);
+            }
+            insertion_order.push(lease.id().clone());
+            entries.insert(lease.id().clone(), lease.0.clone());
+        }
+        self.version = Arc::new(Version {
+            entries,
+            insertion_order,
+            fingerprint: OnceLock::new(),
+        });
+        Ok(())
+    }
+
     /// Stream canonical metadata and cached byte digests in UTF-16 ID order.
     /// No complete JSON string, serialized bundle or mesh copy is allocated.
     pub fn bundle_fingerprint(&self) -> &str {

@@ -48,6 +48,8 @@ function assetCommand(c, tag) {
       return [tag("editEmbossText"), text(c.volumeId), JSON.parse(c.configurationJson), descriptor(c.asset), c.triangleCount];
     case "replaceProject":
       return [tag("replaceProject"), JSON.parse(c.stateJson), text(c.label)];
+    case "importProject":
+      return [tag("importProject"), JSON.parse(c.stateJson), c.assets.map(descriptor), text(c.label)];
     default:
       return undefined;
   }
@@ -60,9 +62,11 @@ export function stagedPayloads(work) {
       ? c.parts.map((p) => p.asset)
       : c.kind === "addSvgPart"
         ? [c.asset, c.drawing]
-        : c.asset
-          ? [c.asset]
-          : [];
+        : c.kind === "importProject"
+          ? c.assets
+          : c.asset
+            ? [c.asset]
+            : [];
   const all = work.facetRefinement
     ? []
     : work.splitToObjects

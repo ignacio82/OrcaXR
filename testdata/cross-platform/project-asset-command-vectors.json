@@ -3,7 +3,7 @@
   "sources": [
     {
       "path": "tools/cross-platform/project-asset-command-vectors.mjs",
-      "sha256": "f0e162edce8d779e26145fef0882067dbf317f0816d171fecd43097313124938"
+      "sha256": "45147d6b036635c6f1c039baabd765edf3b2a3ad3b127de9bdcd69ae3cd53e7f"
     },
     {
       "path": "web/src/project/commands.ts",
@@ -75,7 +75,7 @@
     },
     {
       "path": "web/src/project/assets.ts",
-      "sha256": "e8e10fac5d3821abbd3fd69e2949f3551d6a0db4c52ee43d678663aeabd2bba7"
+      "sha256": "a3fa56557a1447e70cf2121828915360b7d93a2a575433a9d15889561beacbdc"
     },
     {
       "path": "web/src/project/meshCodec.ts",
@@ -155,6 +155,7 @@
     "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0,3,6,9,12,15,18,21,24,27,30,33,36,39,42,45],\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"},{\"triangles\":[2],\"value\":\"1089f201-ff94-437e-a01f-1aa18f170be0\"}],\"fuzzySkin\":[],\"refinement\":{\"color\":{\"splits\":[{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":1},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":4},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":7},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":10},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":13},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":16},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":19},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":22},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":25},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":28},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":31},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":34},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":37},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":40},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":43},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":46}],\"triangleCount\":48,\"version\":2},\"seam\":{\"splits\":[{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":0},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":1},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":2},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":3},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":4},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":5},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":6},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":7}],\"triangleCount\":48,\"version\":2},\"support\":{\"splits\":[{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":0},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":2},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":4},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":6},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":8},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":10},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":12},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":14},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":16},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":18},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":20},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":22},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":24},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":26},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":28},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":30},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":32},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":34},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":36},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":38},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":40},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":42},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":44},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":46}],\"triangleCount\":48,\"version\":2}},\"seam\":[{\"triangles\":[8,9,10,11],\"value\":\"avoid\"}],\"support\":[{\"triangles\":[1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47],\"value\":\"enforce\"}],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":48},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:refine-modifier\",\"name\":\"Modifier\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":48},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":888,\"digest\":\"fnv1a64:6c5f75258a69b604\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":576,\"byteOffset\":312,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":144},\"positions\":{\"byteLength\":312,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":26},\"triangleCount\":48}}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
     "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[{\"triangles\":[1,3,5],\"value\":false},{\"triangles\":[0,2,4],\"value\":true}],\"color\":[{\"triangles\":[0,3,6,9,12,15,18,21,24,27,30,33,36,39,42,45],\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"},{\"triangles\":[2],\"value\":\"1089f201-ff94-437e-a01f-1aa18f170be0\"}],\"fuzzySkin\":[],\"refinement\":{\"color\":{\"splits\":[{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":1},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":4},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":7},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":10},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":13},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":16},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":19},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":22},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":25},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":28},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":31},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":34},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":37},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":40},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":43},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":1},\"triangle\":46}],\"triangleCount\":48,\"version\":2},\"seam\":{\"splits\":[{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":0},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":1},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":2},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":3},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":4},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":5},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":6},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":7}],\"triangleCount\":48,\"version\":2},\"support\":{\"splits\":[{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":0},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":2},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":4},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":6},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":8},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":10},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":12},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":14},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":16},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":18},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":20},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":22},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":24},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":26},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":28},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":30},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":32},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":34},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":36},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":38},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":40},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":42},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":44},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":46}],\"triangleCount\":48,\"version\":2}},\"seam\":[{\"triangles\":[8,9,10,11],\"value\":\"avoid\"}],\"support\":[{\"triangles\":[1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47],\"value\":\"enforce\"}],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":48},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:refine-modifier\",\"name\":\"Modifier\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":48},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":888,\"digest\":\"fnv1a64:6c5f75258a69b604\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":576,\"byteOffset\":312,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":144},\"positions\":{\"byteLength\":312,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":26},\"triangleCount\":48}}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
     "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[{\"triangles\":[1,3,5],\"value\":false},{\"triangles\":[0,2,4],\"value\":true}],\"color\":[],\"fuzzySkin\":[],\"refinement\":{\"seam\":{\"splits\":[{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":0},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":1},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":2},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":3},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":4},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":5},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":6},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"prefer\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"avoid\"}}],\"kind\":\"split\",\"specialSide\":1,\"splitSides\":1},\"triangle\":7}],\"triangleCount\":48,\"version\":2},\"support\":{\"splits\":[{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":0},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":2},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":4},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":6},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":8},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":10},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":12},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":14},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":16},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":18},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":20},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":22},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":24},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":26},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":28},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":30},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":32},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":34},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":36},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":38},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":40},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":42},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":44},{\"node\":{\"children\":[{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"unpainted\"}},{\"kind\":\"leaf\",\"state\":{\"kind\":\"assigned\",\"value\":\"block\"}}],\"kind\":\"split\",\"specialSide\":0,\"splitSides\":3},\"triangle\":46}],\"triangleCount\":48,\"version\":2}},\"seam\":[{\"triangles\":[8,9,10,11],\"value\":\"avoid\"}],\"support\":[{\"triangles\":[1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47],\"value\":\"enforce\"}],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":48},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"import:volume:refine-modifier\",\"name\":\"Modifier\",\"role\":\"parameter-modifier\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":48},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":888,\"digest\":\"fnv1a64:6c5f75258a69b604\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":576,\"byteOffset\":312,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":144},\"positions\":{\"byteLength\":312,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":26},\"triangleCount\":48}}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+    "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Imported\\u0000\\ud800\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"import:asset:imported\",\"topologyRevision\":0,\"triangleCount\":4},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":96,\"digest\":\"fnv1a64:b06afb7a8bff5492\",\"id\":\"import:asset:imported\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
     "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{},\"id\":\"import:object:retained\",\"instances\":[{\"id\":\"import:instance:retained\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[20,20,0]}}],\"layerRanges\":[],\"name\":\"Added retained\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"import:volume:retained\",\"name\":\"Added part\",\"role\":\"model\",\"source\":{\"assetId\":\"import:asset:retained\",\"topologyRevision\":0,\"triangleCount\":4},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[1,2,3]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"},{\"byteLength\":96,\"digest\":\"fnv1a64:6b7f595b6c006e32\",\"id\":\"import:asset:retained\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
     "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Following\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]},{\"config\":{},\"id\":\"import:object:retained\",\"instances\":[{\"id\":\"import:instance:retained\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[20,20,0]}}],\"layerRanges\":[],\"name\":\"Added retained\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"import:volume:retained\",\"name\":\"Added part\",\"role\":\"model\",\"source\":{\"assetId\":\"import:asset:retained\",\"topologyRevision\":0,\"triangleCount\":4},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[1,2,3]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"},{\"byteLength\":96,\"digest\":\"fnv1a64:6b7f595b6c006e32\",\"id\":\"import:asset:retained\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
     "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}},{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{},\"id\":\"import:volume:retained-part\",\"name\":\"Added part\",\"role\":\"model\",\"source\":{\"assetId\":\"import:asset:retained\",\"topologyRevision\":0,\"triangleCount\":4},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[1,2,3]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"},{\"byteLength\":96,\"digest\":\"fnv1a64:6b7f595b6c006e32\",\"id\":\"import:asset:retained\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
@@ -236175,6 +236176,3259 @@
       ]
     },
     {
+      "name": "import-project",
+      "options": {},
+      "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Foundation fixture\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[{\"triangles\":[0],\"value\":\"de8102d0-aadb-4963-b472-d7613233db91\"}],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"topologyRevision\":0,\"triangleCount\":1},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+      "asset": {
+        "descriptorJson": "{\"byteLength\":36,\"digest\":\"fnv1a64:7ab76be23e8693f5\",\"id\":\"e56f9d99-0e2f-403b-8db9-3f52d79dd10d\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"positions\":{\"byteLength\":36,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":3},\"triangleCount\":1},\"provenance\":{\"source\":\"import\",\"uri\":\"fixture:tiny\"},\"sourceFilename\":\"tiny.stl\"}",
+        "bytes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          32,
+          65,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          32,
+          65,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "extraAssets": [],
+      "initial": {
+        "snapshot": {
+          "revision": 0,
+          "hash": "fnv1a64:4c8be3a3d4a004d2",
+          "content": 8
+        },
+        "selection": {
+          "refs": [],
+          "primary": null
+        },
+        "history": {
+          "undoCount": 0,
+          "redoCount": 0,
+          "undoLabel": null,
+          "redoLabel": null,
+          "dirtyCategories": []
+        },
+        "historyRevision": 0,
+        "assets": "fnv1a64:737122e47b045c13"
+      },
+      "steps": [
+        {
+          "operation": {
+            "kind": "selection",
+            "refs": [
+              {
+                "kind": "object",
+                "id": [
+                  54,
+                  48,
+                  99,
+                  52,
+                  50,
+                  55,
+                  48,
+                  98,
+                  45,
+                  99,
+                  48,
+                  52,
+                  57,
+                  45,
+                  52,
+                  52,
+                  50,
+                  97,
+                  45,
+                  56,
+                  51,
+                  49,
+                  51,
+                  45,
+                  55,
+                  53,
+                  54,
+                  52,
+                  102,
+                  52,
+                  99,
+                  97,
+                  100,
+                  55,
+                  99,
+                  101
+                ]
+              }
+            ]
+          },
+          "result": null,
+          "error": null,
+          "effects": [
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [],
+                "primary": null
+              },
+              "current": {
+                "refs": [
+                  {
+                    "kind": "object",
+                    "id": [
+                      54,
+                      48,
+                      99,
+                      52,
+                      50,
+                      55,
+                      48,
+                      98,
+                      45,
+                      99,
+                      48,
+                      52,
+                      57,
+                      45,
+                      52,
+                      52,
+                      50,
+                      97,
+                      45,
+                      56,
+                      51,
+                      49,
+                      51,
+                      45,
+                      55,
+                      53,
+                      54,
+                      52,
+                      102,
+                      52,
+                      99,
+                      97,
+                      100,
+                      55,
+                      99,
+                      101
+                    ]
+                  }
+                ],
+                "primary": {
+                  "kind": "object",
+                  "id": [
+                    54,
+                    48,
+                    99,
+                    52,
+                    50,
+                    55,
+                    48,
+                    98,
+                    45,
+                    99,
+                    48,
+                    52,
+                    57,
+                    45,
+                    52,
+                    52,
+                    50,
+                    97,
+                    45,
+                    56,
+                    51,
+                    49,
+                    51,
+                    45,
+                    55,
+                    53,
+                    54,
+                    52,
+                    102,
+                    52,
+                    99,
+                    97,
+                    100,
+                    55,
+                    99,
+                    101
+                  ]
+                }
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 0,
+            "hash": "fnv1a64:4c8be3a3d4a004d2",
+            "content": 8
+          },
+          "selection": {
+            "refs": [
+              {
+                "kind": "object",
+                "id": [
+                  54,
+                  48,
+                  99,
+                  52,
+                  50,
+                  55,
+                  48,
+                  98,
+                  45,
+                  99,
+                  48,
+                  52,
+                  57,
+                  45,
+                  52,
+                  52,
+                  50,
+                  97,
+                  45,
+                  56,
+                  51,
+                  49,
+                  51,
+                  45,
+                  55,
+                  53,
+                  54,
+                  52,
+                  102,
+                  52,
+                  99,
+                  97,
+                  100,
+                  55,
+                  99,
+                  101
+                ]
+              }
+            ],
+            "primary": {
+              "kind": "object",
+              "id": [
+                54,
+                48,
+                99,
+                52,
+                50,
+                55,
+                48,
+                98,
+                45,
+                99,
+                48,
+                52,
+                57,
+                45,
+                52,
+                52,
+                50,
+                97,
+                45,
+                56,
+                51,
+                49,
+                51,
+                45,
+                55,
+                53,
+                54,
+                52,
+                102,
+                52,
+                99,
+                97,
+                100,
+                55,
+                99,
+                101
+              ]
+            }
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 0,
+            "undoLabel": null,
+            "redoLabel": null,
+            "dirtyCategories": []
+          },
+          "historyRevision": 0,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "asset",
+            "command": {
+              "kind": "importProject",
+              "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Imported\\u0000\\ud800\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"import:asset:imported\",\"topologyRevision\":0,\"triangleCount\":4},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":96,\"digest\":\"fnv1a64:b06afb7a8bff5492\",\"id\":\"import:asset:imported\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+              "assets": [
+                {
+                  "descriptorJson": "{\"byteLength\":96,\"digest\":\"fnv1a64:b06afb7a8bff5492\",\"id\":\"import:asset:imported\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}",
+                  "bytes": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    64,
+                    65,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    64,
+                    65,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    64,
+                    65,
+                    0,
+                    0,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              ],
+              "label": [
+                73,
+                109,
+                112,
+                111,
+                114,
+                116,
+                32,
+                110,
+                101,
+                120,
+                116,
+                46,
+                51,
+                109,
+                102
+              ]
+            }
+          },
+          "result": null,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 0,
+                "hash": "fnv1a64:4c8be3a3d4a004d2",
+                "content": 8
+              },
+              "current": {
+                "revision": 1,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "reason": [
+                105,
+                109,
+                112,
+                111,
+                114,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [
+                  {
+                    "kind": "object",
+                    "id": [
+                      54,
+                      48,
+                      99,
+                      52,
+                      50,
+                      55,
+                      48,
+                      98,
+                      45,
+                      99,
+                      48,
+                      52,
+                      57,
+                      45,
+                      52,
+                      52,
+                      50,
+                      97,
+                      45,
+                      56,
+                      51,
+                      49,
+                      51,
+                      45,
+                      55,
+                      53,
+                      54,
+                      52,
+                      102,
+                      52,
+                      99,
+                      97,
+                      100,
+                      55,
+                      99,
+                      101
+                    ]
+                  }
+                ],
+                "primary": {
+                  "kind": "object",
+                  "id": [
+                    54,
+                    48,
+                    99,
+                    52,
+                    50,
+                    55,
+                    48,
+                    98,
+                    45,
+                    99,
+                    48,
+                    52,
+                    57,
+                    45,
+                    52,
+                    52,
+                    50,
+                    97,
+                    45,
+                    56,
+                    51,
+                    49,
+                    51,
+                    45,
+                    55,
+                    53,
+                    54,
+                    52,
+                    102,
+                    52,
+                    99,
+                    97,
+                    100,
+                    55,
+                    99,
+                    101
+                  ]
+                }
+              },
+              "current": {
+                "refs": [],
+                "primary": null
+              }
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 0,
+                "undoLabel": null,
+                "redoLabel": null,
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 1,
+            "hash": "fnv1a64:1956cddcb6f375ca",
+            "content": 52
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              110,
+              101,
+              120,
+              116,
+              46,
+              51,
+              109,
+              102
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 1,
+          "assets": "fnv1a64:0f34ec4b064c8d64"
+        },
+        {
+          "operation": {
+            "kind": "undo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 1,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "current": {
+                "revision": 2,
+                "hash": "fnv1a64:4c8be3a3d4a004d2",
+                "content": 8
+              },
+              "reason": [
+                114,
+                101,
+                118,
+                101,
+                114,
+                116,
+                58,
+                105,
+                109,
+                112,
+                111,
+                114,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [],
+                "primary": null
+              },
+              "current": {
+                "refs": [
+                  {
+                    "kind": "object",
+                    "id": [
+                      54,
+                      48,
+                      99,
+                      52,
+                      50,
+                      55,
+                      48,
+                      98,
+                      45,
+                      99,
+                      48,
+                      52,
+                      57,
+                      45,
+                      52,
+                      52,
+                      50,
+                      97,
+                      45,
+                      56,
+                      51,
+                      49,
+                      51,
+                      45,
+                      55,
+                      53,
+                      54,
+                      52,
+                      102,
+                      52,
+                      99,
+                      97,
+                      100,
+                      55,
+                      99,
+                      101
+                    ]
+                  }
+                ],
+                "primary": {
+                  "kind": "object",
+                  "id": [
+                    54,
+                    48,
+                    99,
+                    52,
+                    50,
+                    55,
+                    48,
+                    98,
+                    45,
+                    99,
+                    48,
+                    52,
+                    57,
+                    45,
+                    52,
+                    52,
+                    50,
+                    97,
+                    45,
+                    56,
+                    51,
+                    49,
+                    51,
+                    45,
+                    55,
+                    53,
+                    54,
+                    52,
+                    102,
+                    52,
+                    99,
+                    97,
+                    100,
+                    55,
+                    99,
+                    101
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 0,
+                "redoCount": 1,
+                "undoLabel": null,
+                "redoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "dirtyCategories": []
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 2,
+            "hash": "fnv1a64:4c8be3a3d4a004d2",
+            "content": 8
+          },
+          "selection": {
+            "refs": [
+              {
+                "kind": "object",
+                "id": [
+                  54,
+                  48,
+                  99,
+                  52,
+                  50,
+                  55,
+                  48,
+                  98,
+                  45,
+                  99,
+                  48,
+                  52,
+                  57,
+                  45,
+                  52,
+                  52,
+                  50,
+                  97,
+                  45,
+                  56,
+                  51,
+                  49,
+                  51,
+                  45,
+                  55,
+                  53,
+                  54,
+                  52,
+                  102,
+                  52,
+                  99,
+                  97,
+                  100,
+                  55,
+                  99,
+                  101
+                ]
+              }
+            ],
+            "primary": {
+              "kind": "object",
+              "id": [
+                54,
+                48,
+                99,
+                52,
+                50,
+                55,
+                48,
+                98,
+                45,
+                99,
+                48,
+                52,
+                57,
+                45,
+                52,
+                52,
+                50,
+                97,
+                45,
+                56,
+                51,
+                49,
+                51,
+                45,
+                55,
+                53,
+                54,
+                52,
+                102,
+                52,
+                99,
+                97,
+                100,
+                55,
+                99,
+                101
+              ]
+            }
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 1,
+            "undoLabel": null,
+            "redoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              110,
+              101,
+              120,
+              116,
+              46,
+              51,
+              109,
+              102
+            ],
+            "dirtyCategories": []
+          },
+          "historyRevision": 2,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "redo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 2,
+                "hash": "fnv1a64:4c8be3a3d4a004d2",
+                "content": 8
+              },
+              "current": {
+                "revision": 3,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "reason": [
+                105,
+                109,
+                112,
+                111,
+                114,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [
+                  {
+                    "kind": "object",
+                    "id": [
+                      54,
+                      48,
+                      99,
+                      52,
+                      50,
+                      55,
+                      48,
+                      98,
+                      45,
+                      99,
+                      48,
+                      52,
+                      57,
+                      45,
+                      52,
+                      52,
+                      50,
+                      97,
+                      45,
+                      56,
+                      51,
+                      49,
+                      51,
+                      45,
+                      55,
+                      53,
+                      54,
+                      52,
+                      102,
+                      52,
+                      99,
+                      97,
+                      100,
+                      55,
+                      99,
+                      101
+                    ]
+                  }
+                ],
+                "primary": {
+                  "kind": "object",
+                  "id": [
+                    54,
+                    48,
+                    99,
+                    52,
+                    50,
+                    55,
+                    48,
+                    98,
+                    45,
+                    99,
+                    48,
+                    52,
+                    57,
+                    45,
+                    52,
+                    52,
+                    50,
+                    97,
+                    45,
+                    56,
+                    51,
+                    49,
+                    51,
+                    45,
+                    55,
+                    53,
+                    54,
+                    52,
+                    102,
+                    52,
+                    99,
+                    97,
+                    100,
+                    55,
+                    99,
+                    101
+                  ]
+                }
+              },
+              "current": {
+                "refs": [],
+                "primary": null
+              }
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 1,
+                "undoLabel": null,
+                "redoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 3,
+            "hash": "fnv1a64:1956cddcb6f375ca",
+            "content": 52
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              110,
+              101,
+              120,
+              116,
+              46,
+              51,
+              109,
+              102
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 3,
+          "assets": "fnv1a64:0f34ec4b064c8d64"
+        },
+        {
+          "operation": {
+            "kind": "undo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 3,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "current": {
+                "revision": 4,
+                "hash": "fnv1a64:4c8be3a3d4a004d2",
+                "content": 8
+              },
+              "reason": [
+                114,
+                101,
+                118,
+                101,
+                114,
+                116,
+                58,
+                105,
+                109,
+                112,
+                111,
+                114,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [],
+                "primary": null
+              },
+              "current": {
+                "refs": [
+                  {
+                    "kind": "object",
+                    "id": [
+                      54,
+                      48,
+                      99,
+                      52,
+                      50,
+                      55,
+                      48,
+                      98,
+                      45,
+                      99,
+                      48,
+                      52,
+                      57,
+                      45,
+                      52,
+                      52,
+                      50,
+                      97,
+                      45,
+                      56,
+                      51,
+                      49,
+                      51,
+                      45,
+                      55,
+                      53,
+                      54,
+                      52,
+                      102,
+                      52,
+                      99,
+                      97,
+                      100,
+                      55,
+                      99,
+                      101
+                    ]
+                  }
+                ],
+                "primary": {
+                  "kind": "object",
+                  "id": [
+                    54,
+                    48,
+                    99,
+                    52,
+                    50,
+                    55,
+                    48,
+                    98,
+                    45,
+                    99,
+                    48,
+                    52,
+                    57,
+                    45,
+                    52,
+                    52,
+                    50,
+                    97,
+                    45,
+                    56,
+                    51,
+                    49,
+                    51,
+                    45,
+                    55,
+                    53,
+                    54,
+                    52,
+                    102,
+                    52,
+                    99,
+                    97,
+                    100,
+                    55,
+                    99,
+                    101
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 0,
+                "redoCount": 1,
+                "undoLabel": null,
+                "redoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "dirtyCategories": []
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 4,
+            "hash": "fnv1a64:4c8be3a3d4a004d2",
+            "content": 8
+          },
+          "selection": {
+            "refs": [
+              {
+                "kind": "object",
+                "id": [
+                  54,
+                  48,
+                  99,
+                  52,
+                  50,
+                  55,
+                  48,
+                  98,
+                  45,
+                  99,
+                  48,
+                  52,
+                  57,
+                  45,
+                  52,
+                  52,
+                  50,
+                  97,
+                  45,
+                  56,
+                  51,
+                  49,
+                  51,
+                  45,
+                  55,
+                  53,
+                  54,
+                  52,
+                  102,
+                  52,
+                  99,
+                  97,
+                  100,
+                  55,
+                  99,
+                  101
+                ]
+              }
+            ],
+            "primary": {
+              "kind": "object",
+              "id": [
+                54,
+                48,
+                99,
+                52,
+                50,
+                55,
+                48,
+                98,
+                45,
+                99,
+                48,
+                52,
+                57,
+                45,
+                52,
+                52,
+                50,
+                97,
+                45,
+                56,
+                51,
+                49,
+                51,
+                45,
+                55,
+                53,
+                54,
+                52,
+                102,
+                52,
+                99,
+                97,
+                100,
+                55,
+                99,
+                101
+              ]
+            }
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 1,
+            "undoLabel": null,
+            "redoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              110,
+              101,
+              120,
+              116,
+              46,
+              51,
+              109,
+              102
+            ],
+            "dirtyCategories": []
+          },
+          "historyRevision": 4,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "redo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 4,
+                "hash": "fnv1a64:4c8be3a3d4a004d2",
+                "content": 8
+              },
+              "current": {
+                "revision": 5,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "reason": [
+                105,
+                109,
+                112,
+                111,
+                114,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [
+                  {
+                    "kind": "object",
+                    "id": [
+                      54,
+                      48,
+                      99,
+                      52,
+                      50,
+                      55,
+                      48,
+                      98,
+                      45,
+                      99,
+                      48,
+                      52,
+                      57,
+                      45,
+                      52,
+                      52,
+                      50,
+                      97,
+                      45,
+                      56,
+                      51,
+                      49,
+                      51,
+                      45,
+                      55,
+                      53,
+                      54,
+                      52,
+                      102,
+                      52,
+                      99,
+                      97,
+                      100,
+                      55,
+                      99,
+                      101
+                    ]
+                  }
+                ],
+                "primary": {
+                  "kind": "object",
+                  "id": [
+                    54,
+                    48,
+                    99,
+                    52,
+                    50,
+                    55,
+                    48,
+                    98,
+                    45,
+                    99,
+                    48,
+                    52,
+                    57,
+                    45,
+                    52,
+                    52,
+                    50,
+                    97,
+                    45,
+                    56,
+                    51,
+                    49,
+                    51,
+                    45,
+                    55,
+                    53,
+                    54,
+                    52,
+                    102,
+                    52,
+                    99,
+                    97,
+                    100,
+                    55,
+                    99,
+                    101
+                  ]
+                }
+              },
+              "current": {
+                "refs": [],
+                "primary": null
+              }
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 1,
+                "undoLabel": null,
+                "redoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 5,
+            "hash": "fnv1a64:1956cddcb6f375ca",
+            "content": 52
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 0,
+            "undoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              110,
+              101,
+              120,
+              116,
+              46,
+              51,
+              109,
+              102
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 5,
+          "assets": "fnv1a64:0f34ec4b064c8d64"
+        },
+        {
+          "operation": {
+            "kind": "asset",
+            "command": {
+              "kind": "importProject",
+              "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Imported\\u0000\\ud800\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"import:asset:imported\",\"topologyRevision\":0,\"triangleCount\":4},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":96,\"digest\":\"fnv1a64:b06afb7a8bff5492\",\"id\":\"import:asset:imported\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+              "assets": [
+                {
+                  "descriptorJson": "{\"byteLength\":96,\"digest\":\"fnv1a64:b06afb7a8bff5492\",\"id\":\"import:asset:imported\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}",
+                  "bytes": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    64,
+                    65,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    64,
+                    65,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    64,
+                    65,
+                    0,
+                    0,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              ],
+              "label": [
+                73,
+                109,
+                112,
+                111,
+                114,
+                116,
+                32,
+                97,
+                103,
+                97,
+                105,
+                110,
+                46,
+                51,
+                109,
+                102
+              ]
+            }
+          },
+          "result": null,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 5,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "current": {
+                "revision": 6,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "reason": [
+                105,
+                109,
+                112,
+                111,
+                114,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 1,
+                "redoCount": 0,
+                "undoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 2,
+                "redoCount": 0,
+                "undoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  97,
+                  103,
+                  97,
+                  105,
+                  110,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 6,
+            "hash": "fnv1a64:1956cddcb6f375ca",
+            "content": 52
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 2,
+            "redoCount": 0,
+            "undoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              97,
+              103,
+              97,
+              105,
+              110,
+              46,
+              51,
+              109,
+              102
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 6,
+          "assets": "fnv1a64:0f34ec4b064c8d64"
+        },
+        {
+          "operation": {
+            "kind": "asset",
+            "command": {
+              "kind": "importProject",
+              "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Imported\\u0000\\ud800\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"import:asset:imported\",\"topologyRevision\":0,\"triangleCount\":4},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":96,\"digest\":\"fnv1a64:b06afb7a8bff5492\",\"id\":\"import:asset:imported\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+              "assets": [
+                {
+                  "descriptorJson": "{\"byteLength\":96,\"digest\":\"fnv1a64:b06afb7a8bff5492\",\"id\":\"import:asset:imported\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}",
+                  "bytes": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    64,
+                    65,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    64,
+                    65,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    64,
+                    65,
+                    0,
+                    0,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "descriptorJson": "{\"byteLength\":96,\"digest\":\"fnv1a64:b06afb7a8bff5492\",\"id\":\"import:asset:imported\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}",
+                  "bytes": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    64,
+                    65,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    64,
+                    65,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    64,
+                    65,
+                    0,
+                    0,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    2,
+                    0,
+                    0,
+                    0,
+                    3,
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              ],
+              "label": [
+                73,
+                109,
+                112,
+                111,
+                114,
+                116,
+                32,
+                100,
+                117,
+                112,
+                108,
+                105,
+                99,
+                97,
+                116,
+                101,
+                46,
+                51,
+                109,
+                102
+              ]
+            }
+          },
+          "result": null,
+          "error": [
+            65,
+            115,
+            115,
+            101,
+            116,
+            32,
+            115,
+            110,
+            97,
+            112,
+            115,
+            104,
+            111,
+            116,
+            32,
+            99,
+            111,
+            110,
+            116,
+            97,
+            105,
+            110,
+            115,
+            32,
+            100,
+            117,
+            112,
+            108,
+            105,
+            99,
+            97,
+            116,
+            101,
+            32,
+            73,
+            68,
+            32,
+            105,
+            109,
+            112,
+            111,
+            114,
+            116,
+            58,
+            97,
+            115,
+            115,
+            101,
+            116,
+            58,
+            105,
+            109,
+            112,
+            111,
+            114,
+            116,
+            101,
+            100
+          ],
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 6,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "current": {
+                "revision": 7,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "reason": [
+                99,
+                111,
+                109,
+                109,
+                97,
+                110,
+                100,
+                45,
+                97,
+                112,
+                112,
+                108,
+                121,
+                45,
+                114,
+                111,
+                108,
+                108,
+                98,
+                97,
+                99,
+                107
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 7,
+            "hash": "fnv1a64:1956cddcb6f375ca",
+            "content": 52
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 2,
+            "redoCount": 0,
+            "undoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              97,
+              103,
+              97,
+              105,
+              110,
+              46,
+              51,
+              109,
+              102
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 6,
+          "assets": "fnv1a64:0f34ec4b064c8d64"
+        },
+        {
+          "operation": {
+            "kind": "asset",
+            "command": {
+              "kind": "importProject",
+              "stateJson": "{\"activePlateId\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"config\":{\"layer_height\":0.24,\"sparse_infill_density\":15},\"createdAt\":\"2026-07-17T00:00:00.000Z\",\"customGcode\":[],\"extensionBlobs\":[],\"filaments\":{\"mixed\":[{\"components\":[{\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"weight\":1},{\"filamentId\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"weight\":1}],\"config\":{},\"displayColor\":\"#800080\",\"distribution\":{\"mode\":\"ratio\"},\"enabled\":true,\"id\":\"de8102d0-aadb-4963-b472-d7613233db91\",\"name\":\"Purple mix\"}],\"physical\":[{\"color\":\"#ff0000\",\"config\":{\"nozzle_temperature\":220},\"enabled\":true,\"id\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"material\":\"PLA\",\"name\":\"Head 1 PLA\",\"toolId\":0},{\"color\":\"#0000ff\",\"config\":{\"nozzle_temperature\":215},\"enabled\":true,\"id\":\"1089f201-ff94-437e-a01f-1aa18f170be0\",\"material\":\"PLA\",\"name\":\"Head 2 PLA\",\"toolId\":1}]},\"id\":\"324e21ba-312f-42c8-a131-6cd33a2da2a3\",\"name\":\"Imported\\u0000\\ud800\",\"plates\":[{\"config\":{\"layer_height\":0.2},\"id\":\"078bfd75-9aa9-410f-816e-690593e4a91f\",\"name\":\"Plate 1\",\"objects\":[{\"config\":{\"layer_height\":0.2,\"wall_loops\":2},\"filamentId\":\"0c792039-0d6d-4a46-93e8-2bbf4ca9af1e\",\"id\":\"60c4270b-c049-442a-8313-7564f4cad7ce\",\"instances\":[{\"id\":\"2af2e6b5-613d-43e1-be22-284c5eef4901\",\"printable\":true,\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}],\"layerRanges\":[{\"config\":{\"layer_height\":0.12},\"id\":\"6d61838f-b269-4f7e-b8a4-e7c2a7acb1d1\",\"maxZMm\":5,\"minZMm\":0}],\"name\":\"Tiny triangle\",\"volumes\":[{\"annotations\":{\"brim\":[],\"color\":[],\"fuzzySkin\":[],\"seam\":[],\"support\":[],\"topologyRevision\":0},\"config\":{\"wall_loops\":3},\"id\":\"8f0301bf-3cf5-4f43-8ec7-11cfb3df8106\",\"name\":\"Body\",\"role\":\"model\",\"source\":{\"assetId\":\"import:asset:imported\",\"topologyRevision\":0,\"triangleCount\":4},\"transform\":{\"rotation\":[0,0,0,1],\"scale\":[1,1,1],\"translationMm\":[0,0,0]}}]}],\"order\":0,\"printable\":true}],\"printer\":{\"profileId\":\"snapmaker-u1\",\"toolCount\":2},\"schemaVersion\":1,\"sourceAssets\":[{\"byteLength\":96,\"digest\":\"fnv1a64:b06afb7a8bff5492\",\"id\":\"import:asset:imported\",\"kind\":\"mesh\",\"mediaType\":\"application/vnd.orcaxr.indexed-mesh\",\"mesh\":{\"indices\":{\"byteLength\":48,\"byteOffset\":48,\"componentCount\":1,\"componentType\":\"uint32\",\"count\":12},\"positions\":{\"byteLength\":48,\"byteOffset\":0,\"componentCount\":3,\"componentType\":\"float32\",\"count\":4},\"triangleCount\":4}}],\"thumbnails\":[],\"updatedAt\":\"2026-07-17T00:00:00.000Z\"}",
+              "assets": [],
+              "label": [
+                73,
+                109,
+                112,
+                111,
+                114,
+                116,
+                32,
+                109,
+                105,
+                115,
+                115,
+                105,
+                110,
+                103,
+                46,
+                51,
+                109,
+                102
+              ]
+            }
+          },
+          "result": null,
+          "error": [
+            80,
+            114,
+            111,
+            106,
+            101,
+            99,
+            116,
+            32,
+            98,
+            117,
+            110,
+            100,
+            108,
+            101,
+            32,
+            105,
+            115,
+            32,
+            109,
+            105,
+            115,
+            115,
+            105,
+            110,
+            103,
+            32,
+            115,
+            111,
+            117,
+            114,
+            99,
+            101,
+            32,
+            97,
+            115,
+            115,
+            101,
+            116,
+            32,
+            105,
+            109,
+            112,
+            111,
+            114,
+            116,
+            58,
+            97,
+            115,
+            115,
+            101,
+            116,
+            58,
+            105,
+            109,
+            112,
+            111,
+            114,
+            116,
+            101,
+            100
+          ],
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 7,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "current": {
+                "revision": 8,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "reason": [
+                99,
+                111,
+                109,
+                109,
+                97,
+                110,
+                100,
+                45,
+                97,
+                112,
+                112,
+                108,
+                121,
+                45,
+                114,
+                111,
+                108,
+                108,
+                98,
+                97,
+                99,
+                107
+              ],
+              "dirtyCategories": []
+            }
+          ],
+          "snapshot": {
+            "revision": 8,
+            "hash": "fnv1a64:1956cddcb6f375ca",
+            "content": 52
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 2,
+            "redoCount": 0,
+            "undoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              97,
+              103,
+              97,
+              105,
+              110,
+              46,
+              51,
+              109,
+              102
+            ],
+            "redoLabel": null,
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 6,
+          "assets": "fnv1a64:0f34ec4b064c8d64"
+        },
+        {
+          "operation": {
+            "kind": "undo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 8,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "current": {
+                "revision": 9,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "reason": [
+                114,
+                101,
+                118,
+                101,
+                114,
+                116,
+                58,
+                105,
+                109,
+                112,
+                111,
+                114,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 2,
+                "redoCount": 0,
+                "undoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  97,
+                  103,
+                  97,
+                  105,
+                  110,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "redoLabel": null,
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 1,
+                "undoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "redoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  97,
+                  103,
+                  97,
+                  105,
+                  110,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 9,
+            "hash": "fnv1a64:1956cddcb6f375ca",
+            "content": 52
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 1,
+            "undoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              110,
+              101,
+              120,
+              116,
+              46,
+              51,
+              109,
+              102
+            ],
+            "redoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              97,
+              103,
+              97,
+              105,
+              110,
+              46,
+              51,
+              109,
+              102
+            ],
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 7,
+          "assets": "fnv1a64:0f34ec4b064c8d64"
+        },
+        {
+          "operation": {
+            "kind": "undo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 9,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "current": {
+                "revision": 10,
+                "hash": "fnv1a64:4c8be3a3d4a004d2",
+                "content": 8
+              },
+              "reason": [
+                114,
+                101,
+                118,
+                101,
+                114,
+                116,
+                58,
+                105,
+                109,
+                112,
+                111,
+                114,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [],
+                "primary": null
+              },
+              "current": {
+                "refs": [
+                  {
+                    "kind": "object",
+                    "id": [
+                      54,
+                      48,
+                      99,
+                      52,
+                      50,
+                      55,
+                      48,
+                      98,
+                      45,
+                      99,
+                      48,
+                      52,
+                      57,
+                      45,
+                      52,
+                      52,
+                      50,
+                      97,
+                      45,
+                      56,
+                      51,
+                      49,
+                      51,
+                      45,
+                      55,
+                      53,
+                      54,
+                      52,
+                      102,
+                      52,
+                      99,
+                      97,
+                      100,
+                      55,
+                      99,
+                      101
+                    ]
+                  }
+                ],
+                "primary": {
+                  "kind": "object",
+                  "id": [
+                    54,
+                    48,
+                    99,
+                    52,
+                    50,
+                    55,
+                    48,
+                    98,
+                    45,
+                    99,
+                    48,
+                    52,
+                    57,
+                    45,
+                    52,
+                    52,
+                    50,
+                    97,
+                    45,
+                    56,
+                    51,
+                    49,
+                    51,
+                    45,
+                    55,
+                    53,
+                    54,
+                    52,
+                    102,
+                    52,
+                    99,
+                    97,
+                    100,
+                    55,
+                    99,
+                    101
+                  ]
+                }
+              }
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 1,
+                "redoCount": 1,
+                "undoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "redoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  97,
+                  103,
+                  97,
+                  105,
+                  110,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              },
+              "current": {
+                "undoCount": 0,
+                "redoCount": 2,
+                "undoLabel": null,
+                "redoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "dirtyCategories": []
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 10,
+            "hash": "fnv1a64:4c8be3a3d4a004d2",
+            "content": 8
+          },
+          "selection": {
+            "refs": [
+              {
+                "kind": "object",
+                "id": [
+                  54,
+                  48,
+                  99,
+                  52,
+                  50,
+                  55,
+                  48,
+                  98,
+                  45,
+                  99,
+                  48,
+                  52,
+                  57,
+                  45,
+                  52,
+                  52,
+                  50,
+                  97,
+                  45,
+                  56,
+                  51,
+                  49,
+                  51,
+                  45,
+                  55,
+                  53,
+                  54,
+                  52,
+                  102,
+                  52,
+                  99,
+                  97,
+                  100,
+                  55,
+                  99,
+                  101
+                ]
+              }
+            ],
+            "primary": {
+              "kind": "object",
+              "id": [
+                54,
+                48,
+                99,
+                52,
+                50,
+                55,
+                48,
+                98,
+                45,
+                99,
+                48,
+                52,
+                57,
+                45,
+                52,
+                52,
+                50,
+                97,
+                45,
+                56,
+                51,
+                49,
+                51,
+                45,
+                55,
+                53,
+                54,
+                52,
+                102,
+                52,
+                99,
+                97,
+                100,
+                55,
+                99,
+                101
+              ]
+            }
+          },
+          "history": {
+            "undoCount": 0,
+            "redoCount": 2,
+            "undoLabel": null,
+            "redoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              110,
+              101,
+              120,
+              116,
+              46,
+              51,
+              109,
+              102
+            ],
+            "dirtyCategories": []
+          },
+          "historyRevision": 8,
+          "assets": "fnv1a64:737122e47b045c13"
+        },
+        {
+          "operation": {
+            "kind": "redo"
+          },
+          "result": true,
+          "error": null,
+          "effects": [
+            {
+              "kind": "project",
+              "previous": {
+                "revision": 10,
+                "hash": "fnv1a64:4c8be3a3d4a004d2",
+                "content": 8
+              },
+              "current": {
+                "revision": 11,
+                "hash": "fnv1a64:1956cddcb6f375ca",
+                "content": 52
+              },
+              "reason": [
+                105,
+                109,
+                112,
+                111,
+                114,
+                116,
+                45,
+                112,
+                114,
+                111,
+                106,
+                101,
+                99,
+                116
+              ],
+              "dirtyCategories": [
+                "projectData"
+              ]
+            },
+            {
+              "kind": "selection",
+              "previous": {
+                "refs": [
+                  {
+                    "kind": "object",
+                    "id": [
+                      54,
+                      48,
+                      99,
+                      52,
+                      50,
+                      55,
+                      48,
+                      98,
+                      45,
+                      99,
+                      48,
+                      52,
+                      57,
+                      45,
+                      52,
+                      52,
+                      50,
+                      97,
+                      45,
+                      56,
+                      51,
+                      49,
+                      51,
+                      45,
+                      55,
+                      53,
+                      54,
+                      52,
+                      102,
+                      52,
+                      99,
+                      97,
+                      100,
+                      55,
+                      99,
+                      101
+                    ]
+                  }
+                ],
+                "primary": {
+                  "kind": "object",
+                  "id": [
+                    54,
+                    48,
+                    99,
+                    52,
+                    50,
+                    55,
+                    48,
+                    98,
+                    45,
+                    99,
+                    48,
+                    52,
+                    57,
+                    45,
+                    52,
+                    52,
+                    50,
+                    97,
+                    45,
+                    56,
+                    51,
+                    49,
+                    51,
+                    45,
+                    55,
+                    53,
+                    54,
+                    52,
+                    102,
+                    52,
+                    99,
+                    97,
+                    100,
+                    55,
+                    99,
+                    101
+                  ]
+                }
+              },
+              "current": {
+                "refs": [],
+                "primary": null
+              }
+            },
+            {
+              "kind": "history",
+              "previous": {
+                "undoCount": 0,
+                "redoCount": 2,
+                "undoLabel": null,
+                "redoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "dirtyCategories": []
+              },
+              "current": {
+                "undoCount": 1,
+                "redoCount": 1,
+                "undoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  110,
+                  101,
+                  120,
+                  116,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "redoLabel": [
+                  73,
+                  109,
+                  112,
+                  111,
+                  114,
+                  116,
+                  32,
+                  97,
+                  103,
+                  97,
+                  105,
+                  110,
+                  46,
+                  51,
+                  109,
+                  102
+                ],
+                "dirtyCategories": [
+                  "projectData"
+                ]
+              }
+            }
+          ],
+          "snapshot": {
+            "revision": 11,
+            "hash": "fnv1a64:1956cddcb6f375ca",
+            "content": 52
+          },
+          "selection": {
+            "refs": [],
+            "primary": null
+          },
+          "history": {
+            "undoCount": 1,
+            "redoCount": 1,
+            "undoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              110,
+              101,
+              120,
+              116,
+              46,
+              51,
+              109,
+              102
+            ],
+            "redoLabel": [
+              73,
+              109,
+              112,
+              111,
+              114,
+              116,
+              32,
+              97,
+              103,
+              97,
+              105,
+              110,
+              46,
+              51,
+              109,
+              102
+            ],
+            "dirtyCategories": [
+              "projectData"
+            ]
+          },
+          "historyRevision": 9,
+          "assets": "fnv1a64:0f34ec4b064c8d64"
+        }
+      ]
+    },
+    {
       "name": "asset-retention-object-0",
       "options": {
         "maxEstimatedBytes": 669
@@ -236403,7 +239657,7 @@
               "current": {
                 "revision": 1,
                 "hash": "fnv1a64:be403b8428c82eb6",
-                "content": 52
+                "content": 53
               },
               "reason": [
                 97,
@@ -236543,7 +239797,7 @@
           "snapshot": {
             "revision": 1,
             "hash": "fnv1a64:be403b8428c82eb6",
-            "content": 52
+            "content": 53
           },
           "selection": {
             "refs": [
@@ -236652,12 +239906,12 @@
               "previous": {
                 "revision": 1,
                 "hash": "fnv1a64:be403b8428c82eb6",
-                "content": 52
+                "content": 53
               },
               "current": {
                 "revision": 2,
                 "hash": "fnv1a64:db06e285dc9a57aa",
-                "content": 53
+                "content": 54
               },
               "reason": [
                 114,
@@ -236747,7 +240001,7 @@
           "snapshot": {
             "revision": 2,
             "hash": "fnv1a64:db06e285dc9a57aa",
-            "content": 53
+            "content": 54
           },
           "selection": {
             "refs": [
@@ -236861,12 +240115,12 @@
               "previous": {
                 "revision": 2,
                 "hash": "fnv1a64:db06e285dc9a57aa",
-                "content": 53
+                "content": 54
               },
               "current": {
                 "revision": 3,
                 "hash": "fnv1a64:be403b8428c82eb6",
-                "content": 52
+                "content": 53
               },
               "reason": [
                 114,
@@ -236989,7 +240243,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:be403b8428c82eb6",
-            "content": 52
+            "content": 53
           },
           "selection": {
             "refs": [
@@ -237122,7 +240376,7 @@
               "previous": {
                 "revision": 3,
                 "hash": "fnv1a64:be403b8428c82eb6",
-                "content": 52
+                "content": 53
               },
               "current": {
                 "revision": 4,
@@ -237371,7 +240625,7 @@
               "current": {
                 "revision": 5,
                 "hash": "fnv1a64:be403b8428c82eb6",
-                "content": 52
+                "content": 53
               },
               "reason": [
                 97,
@@ -237556,7 +240810,7 @@
           "snapshot": {
             "revision": 5,
             "hash": "fnv1a64:be403b8428c82eb6",
-            "content": 52
+            "content": 53
           },
           "selection": {
             "refs": [
@@ -237689,12 +240943,12 @@
               "previous": {
                 "revision": 5,
                 "hash": "fnv1a64:be403b8428c82eb6",
-                "content": 52
+                "content": 53
               },
               "current": {
                 "revision": 6,
                 "hash": "fnv1a64:db06e285dc9a57aa",
-                "content": 53
+                "content": 54
               },
               "reason": [
                 114,
@@ -237810,7 +241064,7 @@
           "snapshot": {
             "revision": 6,
             "hash": "fnv1a64:db06e285dc9a57aa",
-            "content": 53
+            "content": 54
           },
           "selection": {
             "refs": [
@@ -238143,7 +241397,7 @@
               "current": {
                 "revision": 1,
                 "hash": "fnv1a64:be403b8428c82eb6",
-                "content": 52
+                "content": 53
               },
               "reason": [
                 97,
@@ -238283,7 +241537,7 @@
           "snapshot": {
             "revision": 1,
             "hash": "fnv1a64:be403b8428c82eb6",
-            "content": 52
+            "content": 53
           },
           "selection": {
             "refs": [
@@ -238392,12 +241646,12 @@
               "previous": {
                 "revision": 1,
                 "hash": "fnv1a64:be403b8428c82eb6",
-                "content": 52
+                "content": 53
               },
               "current": {
                 "revision": 2,
                 "hash": "fnv1a64:db06e285dc9a57aa",
-                "content": 53
+                "content": 54
               },
               "reason": [
                 114,
@@ -238487,7 +241741,7 @@
           "snapshot": {
             "revision": 2,
             "hash": "fnv1a64:db06e285dc9a57aa",
-            "content": 53
+            "content": 54
           },
           "selection": {
             "refs": [
@@ -238601,12 +241855,12 @@
               "previous": {
                 "revision": 2,
                 "hash": "fnv1a64:db06e285dc9a57aa",
-                "content": 53
+                "content": 54
               },
               "current": {
                 "revision": 3,
                 "hash": "fnv1a64:be403b8428c82eb6",
-                "content": 52
+                "content": 53
               },
               "reason": [
                 114,
@@ -238710,7 +241964,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:be403b8428c82eb6",
-            "content": 52
+            "content": 53
           },
           "selection": {
             "refs": [
@@ -238822,7 +242076,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:be403b8428c82eb6",
-            "content": 52
+            "content": 53
           },
           "selection": {
             "refs": [
@@ -238936,12 +242190,12 @@
               "previous": {
                 "revision": 3,
                 "hash": "fnv1a64:be403b8428c82eb6",
-                "content": 52
+                "content": 53
               },
               "current": {
                 "revision": 4,
                 "hash": "fnv1a64:db06e285dc9a57aa",
-                "content": 53
+                "content": 54
               },
               "reason": [
                 114,
@@ -239038,7 +242292,7 @@
           "snapshot": {
             "revision": 4,
             "hash": "fnv1a64:db06e285dc9a57aa",
-            "content": 53
+            "content": 54
           },
           "selection": {
             "refs": [
@@ -239150,7 +242404,7 @@
           "snapshot": {
             "revision": 4,
             "hash": "fnv1a64:db06e285dc9a57aa",
-            "content": 53
+            "content": 54
           },
           "selection": {
             "refs": [
@@ -239483,7 +242737,7 @@
               "current": {
                 "revision": 1,
                 "hash": "fnv1a64:0a5737f7dd641617",
-                "content": 54
+                "content": 55
               },
               "reason": [
                 97,
@@ -239618,7 +242872,7 @@
           "snapshot": {
             "revision": 1,
             "hash": "fnv1a64:0a5737f7dd641617",
-            "content": 54
+            "content": 55
           },
           "selection": {
             "refs": [
@@ -239733,12 +242987,12 @@
               "previous": {
                 "revision": 1,
                 "hash": "fnv1a64:0a5737f7dd641617",
-                "content": 54
+                "content": 55
               },
               "current": {
                 "revision": 2,
                 "hash": "fnv1a64:af8367e41f022423",
-                "content": 55
+                "content": 56
               },
               "reason": [
                 114,
@@ -239828,7 +243082,7 @@
           "snapshot": {
             "revision": 2,
             "hash": "fnv1a64:af8367e41f022423",
-            "content": 55
+            "content": 56
           },
           "selection": {
             "refs": [
@@ -239948,12 +243202,12 @@
               "previous": {
                 "revision": 2,
                 "hash": "fnv1a64:af8367e41f022423",
-                "content": 55
+                "content": 56
               },
               "current": {
                 "revision": 3,
                 "hash": "fnv1a64:0a5737f7dd641617",
-                "content": 54
+                "content": 55
               },
               "reason": [
                 114,
@@ -240076,7 +243330,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:0a5737f7dd641617",
-            "content": 54
+            "content": 55
           },
           "selection": {
             "refs": [
@@ -240215,7 +243469,7 @@
               "previous": {
                 "revision": 3,
                 "hash": "fnv1a64:0a5737f7dd641617",
-                "content": 54
+                "content": 55
               },
               "current": {
                 "revision": 4,
@@ -240459,7 +243713,7 @@
               "current": {
                 "revision": 5,
                 "hash": "fnv1a64:0a5737f7dd641617",
-                "content": 54
+                "content": 55
               },
               "reason": [
                 97,
@@ -240639,7 +243893,7 @@
           "snapshot": {
             "revision": 5,
             "hash": "fnv1a64:0a5737f7dd641617",
-            "content": 54
+            "content": 55
           },
           "selection": {
             "refs": [
@@ -240778,12 +244032,12 @@
               "previous": {
                 "revision": 5,
                 "hash": "fnv1a64:0a5737f7dd641617",
-                "content": 54
+                "content": 55
               },
               "current": {
                 "revision": 6,
                 "hash": "fnv1a64:af8367e41f022423",
-                "content": 55
+                "content": 56
               },
               "reason": [
                 114,
@@ -240899,7 +244153,7 @@
           "snapshot": {
             "revision": 6,
             "hash": "fnv1a64:af8367e41f022423",
-            "content": 55
+            "content": 56
           },
           "selection": {
             "refs": [
@@ -241238,7 +244492,7 @@
               "current": {
                 "revision": 1,
                 "hash": "fnv1a64:0a5737f7dd641617",
-                "content": 54
+                "content": 55
               },
               "reason": [
                 97,
@@ -241373,7 +244627,7 @@
           "snapshot": {
             "revision": 1,
             "hash": "fnv1a64:0a5737f7dd641617",
-            "content": 54
+            "content": 55
           },
           "selection": {
             "refs": [
@@ -241488,12 +244742,12 @@
               "previous": {
                 "revision": 1,
                 "hash": "fnv1a64:0a5737f7dd641617",
-                "content": 54
+                "content": 55
               },
               "current": {
                 "revision": 2,
                 "hash": "fnv1a64:af8367e41f022423",
-                "content": 55
+                "content": 56
               },
               "reason": [
                 114,
@@ -241583,7 +244837,7 @@
           "snapshot": {
             "revision": 2,
             "hash": "fnv1a64:af8367e41f022423",
-            "content": 55
+            "content": 56
           },
           "selection": {
             "refs": [
@@ -241703,12 +244957,12 @@
               "previous": {
                 "revision": 2,
                 "hash": "fnv1a64:af8367e41f022423",
-                "content": 55
+                "content": 56
               },
               "current": {
                 "revision": 3,
                 "hash": "fnv1a64:0a5737f7dd641617",
-                "content": 54
+                "content": 55
               },
               "reason": [
                 114,
@@ -241812,7 +245066,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:0a5737f7dd641617",
-            "content": 54
+            "content": 55
           },
           "selection": {
             "refs": [
@@ -241930,7 +245184,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:0a5737f7dd641617",
-            "content": 54
+            "content": 55
           },
           "selection": {
             "refs": [
@@ -242050,12 +245304,12 @@
               "previous": {
                 "revision": 3,
                 "hash": "fnv1a64:0a5737f7dd641617",
-                "content": 54
+                "content": 55
               },
               "current": {
                 "revision": 4,
                 "hash": "fnv1a64:af8367e41f022423",
-                "content": 55
+                "content": 56
               },
               "reason": [
                 114,
@@ -242152,7 +245406,7 @@
           "snapshot": {
             "revision": 4,
             "hash": "fnv1a64:af8367e41f022423",
-            "content": 55
+            "content": 56
           },
           "selection": {
             "refs": [
@@ -242270,7 +245524,7 @@
           "snapshot": {
             "revision": 4,
             "hash": "fnv1a64:af8367e41f022423",
-            "content": 55
+            "content": 56
           },
           "selection": {
             "refs": [
@@ -242676,7 +245930,7 @@
               "current": {
                 "revision": 1,
                 "hash": "fnv1a64:a3e5e1c76724c455",
-                "content": 56
+                "content": 57
               },
               "reason": [
                 114,
@@ -242748,7 +246002,7 @@
           "snapshot": {
             "revision": 1,
             "hash": "fnv1a64:a3e5e1c76724c455",
-            "content": 56
+            "content": 57
           },
           "selection": {
             "refs": [],
@@ -242802,12 +246056,12 @@
               "previous": {
                 "revision": 1,
                 "hash": "fnv1a64:a3e5e1c76724c455",
-                "content": 56
+                "content": 57
               },
               "current": {
                 "revision": 2,
                 "hash": "fnv1a64:ebafe92dd4943141",
-                "content": 57
+                "content": 58
               },
               "reason": [
                 114,
@@ -242900,7 +246154,7 @@
           "snapshot": {
             "revision": 2,
             "hash": "fnv1a64:ebafe92dd4943141",
-            "content": 57
+            "content": 58
           },
           "selection": {
             "refs": [],
@@ -242956,12 +246210,12 @@
               "previous": {
                 "revision": 2,
                 "hash": "fnv1a64:ebafe92dd4943141",
-                "content": 57
+                "content": 58
               },
               "current": {
                 "revision": 3,
                 "hash": "fnv1a64:a3e5e1c76724c455",
-                "content": 56
+                "content": 57
               },
               "reason": [
                 114,
@@ -243087,7 +246341,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:a3e5e1c76724c455",
-            "content": 56
+            "content": 57
           },
           "selection": {
             "refs": [],
@@ -243165,7 +246419,7 @@
               "previous": {
                 "revision": 3,
                 "hash": "fnv1a64:a3e5e1c76724c455",
-                "content": 56
+                "content": 57
               },
               "current": {
                 "revision": 4,
@@ -243352,7 +246606,7 @@
               "current": {
                 "revision": 5,
                 "hash": "fnv1a64:a3e5e1c76724c455",
-                "content": 56
+                "content": 57
               },
               "reason": [
                 114,
@@ -243472,7 +246726,7 @@
           "snapshot": {
             "revision": 5,
             "hash": "fnv1a64:a3e5e1c76724c455",
-            "content": 56
+            "content": 57
           },
           "selection": {
             "refs": [],
@@ -243550,12 +246804,12 @@
               "previous": {
                 "revision": 5,
                 "hash": "fnv1a64:a3e5e1c76724c455",
-                "content": 56
+                "content": 57
               },
               "current": {
                 "revision": 6,
                 "hash": "fnv1a64:ebafe92dd4943141",
-                "content": 57
+                "content": 58
               },
               "reason": [
                 114,
@@ -243674,7 +246928,7 @@
           "snapshot": {
             "revision": 6,
             "hash": "fnv1a64:ebafe92dd4943141",
-            "content": 57
+            "content": 58
           },
           "selection": {
             "refs": [],
@@ -244016,7 +247270,7 @@
               "current": {
                 "revision": 1,
                 "hash": "fnv1a64:a3e5e1c76724c455",
-                "content": 56
+                "content": 57
               },
               "reason": [
                 114,
@@ -244088,7 +247342,7 @@
           "snapshot": {
             "revision": 1,
             "hash": "fnv1a64:a3e5e1c76724c455",
-            "content": 56
+            "content": 57
           },
           "selection": {
             "refs": [],
@@ -244142,12 +247396,12 @@
               "previous": {
                 "revision": 1,
                 "hash": "fnv1a64:a3e5e1c76724c455",
-                "content": 56
+                "content": 57
               },
               "current": {
                 "revision": 2,
                 "hash": "fnv1a64:ebafe92dd4943141",
-                "content": 57
+                "content": 58
               },
               "reason": [
                 114,
@@ -244240,7 +247494,7 @@
           "snapshot": {
             "revision": 2,
             "hash": "fnv1a64:ebafe92dd4943141",
-            "content": 57
+            "content": 58
           },
           "selection": {
             "refs": [],
@@ -244296,12 +247550,12 @@
               "previous": {
                 "revision": 2,
                 "hash": "fnv1a64:ebafe92dd4943141",
-                "content": 57
+                "content": 58
               },
               "current": {
                 "revision": 3,
                 "hash": "fnv1a64:a3e5e1c76724c455",
-                "content": 56
+                "content": 57
               },
               "reason": [
                 114,
@@ -244405,7 +247659,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:a3e5e1c76724c455",
-            "content": 56
+            "content": 57
           },
           "selection": {
             "refs": [],
@@ -244459,7 +247713,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:a3e5e1c76724c455",
-            "content": 56
+            "content": 57
           },
           "selection": {
             "refs": [],
@@ -244515,12 +247769,12 @@
               "previous": {
                 "revision": 3,
                 "hash": "fnv1a64:a3e5e1c76724c455",
-                "content": 56
+                "content": 57
               },
               "current": {
                 "revision": 4,
                 "hash": "fnv1a64:ebafe92dd4943141",
-                "content": 57
+                "content": 58
               },
               "reason": [
                 114,
@@ -244617,7 +247871,7 @@
           "snapshot": {
             "revision": 4,
             "hash": "fnv1a64:ebafe92dd4943141",
-            "content": 57
+            "content": 58
           },
           "selection": {
             "refs": [],
@@ -244671,7 +247925,7 @@
           "snapshot": {
             "revision": 4,
             "hash": "fnv1a64:ebafe92dd4943141",
-            "content": 57
+            "content": 58
           },
           "selection": {
             "refs": [],
@@ -245278,7 +248532,7 @@
               "current": {
                 "revision": 1,
                 "hash": "fnv1a64:66b39ffb705417e1",
-                "content": 58
+                "content": 59
               },
               "reason": [
                 109,
@@ -245427,7 +248681,7 @@
           "snapshot": {
             "revision": 1,
             "hash": "fnv1a64:66b39ffb705417e1",
-            "content": 58
+            "content": 59
           },
           "selection": {
             "refs": [
@@ -245554,12 +248808,12 @@
               "previous": {
                 "revision": 1,
                 "hash": "fnv1a64:66b39ffb705417e1",
-                "content": 58
+                "content": 59
               },
               "current": {
                 "revision": 2,
                 "hash": "fnv1a64:7f6aaa51e9543a5d",
-                "content": 59
+                "content": 60
               },
               "reason": [
                 114,
@@ -245643,7 +248897,7 @@
           "snapshot": {
             "revision": 2,
             "hash": "fnv1a64:7f6aaa51e9543a5d",
-            "content": 59
+            "content": 60
           },
           "selection": {
             "refs": [
@@ -245781,12 +249035,12 @@
               "previous": {
                 "revision": 2,
                 "hash": "fnv1a64:7f6aaa51e9543a5d",
-                "content": 59
+                "content": 60
               },
               "current": {
                 "revision": 3,
                 "hash": "fnv1a64:66b39ffb705417e1",
-                "content": 58
+                "content": 59
               },
               "reason": [
                 114,
@@ -245903,7 +249157,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:66b39ffb705417e1",
-            "content": 58
+            "content": 59
           },
           "selection": {
             "refs": [
@@ -246054,7 +249308,7 @@
               "previous": {
                 "revision": 3,
                 "hash": "fnv1a64:66b39ffb705417e1",
-                "content": 58
+                "content": 59
               },
               "current": {
                 "revision": 4,
@@ -246300,7 +249554,7 @@
               "current": {
                 "revision": 5,
                 "hash": "fnv1a64:66b39ffb705417e1",
-                "content": 58
+                "content": 59
               },
               "reason": [
                 109,
@@ -246488,7 +249742,7 @@
           "snapshot": {
             "revision": 5,
             "hash": "fnv1a64:66b39ffb705417e1",
-            "content": 58
+            "content": 59
           },
           "selection": {
             "refs": [
@@ -246639,12 +249893,12 @@
               "previous": {
                 "revision": 5,
                 "hash": "fnv1a64:66b39ffb705417e1",
-                "content": 58
+                "content": 59
               },
               "current": {
                 "revision": 6,
                 "hash": "fnv1a64:7f6aaa51e9543a5d",
-                "content": 59
+                "content": 60
               },
               "reason": [
                 114,
@@ -246754,7 +250008,7 @@
           "snapshot": {
             "revision": 6,
             "hash": "fnv1a64:7f6aaa51e9543a5d",
-            "content": 59
+            "content": 60
           },
           "selection": {
             "refs": [
@@ -247443,7 +250697,7 @@
               "current": {
                 "revision": 1,
                 "hash": "fnv1a64:66b39ffb705417e1",
-                "content": 58
+                "content": 59
               },
               "reason": [
                 109,
@@ -247592,7 +250846,7 @@
           "snapshot": {
             "revision": 1,
             "hash": "fnv1a64:66b39ffb705417e1",
-            "content": 58
+            "content": 59
           },
           "selection": {
             "refs": [
@@ -247719,12 +250973,12 @@
               "previous": {
                 "revision": 1,
                 "hash": "fnv1a64:66b39ffb705417e1",
-                "content": 58
+                "content": 59
               },
               "current": {
                 "revision": 2,
                 "hash": "fnv1a64:7f6aaa51e9543a5d",
-                "content": 59
+                "content": 60
               },
               "reason": [
                 114,
@@ -247808,7 +251062,7 @@
           "snapshot": {
             "revision": 2,
             "hash": "fnv1a64:7f6aaa51e9543a5d",
-            "content": 59
+            "content": 60
           },
           "selection": {
             "refs": [
@@ -247946,12 +251200,12 @@
               "previous": {
                 "revision": 2,
                 "hash": "fnv1a64:7f6aaa51e9543a5d",
-                "content": 59
+                "content": 60
               },
               "current": {
                 "revision": 3,
                 "hash": "fnv1a64:66b39ffb705417e1",
-                "content": 58
+                "content": 59
               },
               "reason": [
                 114,
@@ -248055,7 +251309,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:66b39ffb705417e1",
-            "content": 58
+            "content": 59
           },
           "selection": {
             "refs": [
@@ -248191,7 +251445,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:66b39ffb705417e1",
-            "content": 58
+            "content": 59
           },
           "selection": {
             "refs": [
@@ -248329,12 +251583,12 @@
               "previous": {
                 "revision": 3,
                 "hash": "fnv1a64:66b39ffb705417e1",
-                "content": 58
+                "content": 59
               },
               "current": {
                 "revision": 4,
                 "hash": "fnv1a64:7f6aaa51e9543a5d",
-                "content": 59
+                "content": 60
               },
               "reason": [
                 114,
@@ -248431,7 +251685,7 @@
           "snapshot": {
             "revision": 4,
             "hash": "fnv1a64:7f6aaa51e9543a5d",
-            "content": 59
+            "content": 60
           },
           "selection": {
             "refs": [
@@ -248567,7 +251821,7 @@
           "snapshot": {
             "revision": 4,
             "hash": "fnv1a64:7f6aaa51e9543a5d",
-            "content": 59
+            "content": 60
           },
           "selection": {
             "refs": [
@@ -250367,7 +253621,7 @@
               "current": {
                 "revision": 2,
                 "hash": "fnv1a64:59097875b5eca8a0",
-                "content": 60
+                "content": 61
               },
               "reason": [
                 114,
@@ -250460,7 +253714,7 @@
           "snapshot": {
             "revision": 2,
             "hash": "fnv1a64:59097875b5eca8a0",
-            "content": 60
+            "content": 61
           },
           "selection": {
             "refs": [],
@@ -250516,7 +253770,7 @@
               "previous": {
                 "revision": 2,
                 "hash": "fnv1a64:59097875b5eca8a0",
-                "content": 60
+                "content": 61
               },
               "current": {
                 "revision": 3,
@@ -251119,7 +254373,7 @@
               "current": {
                 "revision": 6,
                 "hash": "fnv1a64:59097875b5eca8a0",
-                "content": 60
+                "content": 61
               },
               "reason": [
                 114,
@@ -251238,7 +254492,7 @@
           "snapshot": {
             "revision": 6,
             "hash": "fnv1a64:59097875b5eca8a0",
-            "content": 60
+            "content": 61
           },
           "selection": {
             "refs": [],
@@ -252956,7 +256210,7 @@
               "current": {
                 "revision": 2,
                 "hash": "fnv1a64:59097875b5eca8a0",
-                "content": 60
+                "content": 61
               },
               "reason": [
                 114,
@@ -253049,7 +256303,7 @@
           "snapshot": {
             "revision": 2,
             "hash": "fnv1a64:59097875b5eca8a0",
-            "content": 60
+            "content": 61
           },
           "selection": {
             "refs": [],
@@ -253105,7 +256359,7 @@
               "previous": {
                 "revision": 2,
                 "hash": "fnv1a64:59097875b5eca8a0",
-                "content": 60
+                "content": 61
               },
               "current": {
                 "revision": 3,
@@ -253329,7 +256583,7 @@
               "current": {
                 "revision": 4,
                 "hash": "fnv1a64:59097875b5eca8a0",
-                "content": 60
+                "content": 61
               },
               "reason": [
                 114,
@@ -253426,7 +256680,7 @@
           "snapshot": {
             "revision": 4,
             "hash": "fnv1a64:59097875b5eca8a0",
-            "content": 60
+            "content": 61
           },
           "selection": {
             "refs": [],
@@ -253480,7 +256734,7 @@
           "snapshot": {
             "revision": 4,
             "hash": "fnv1a64:59097875b5eca8a0",
-            "content": 60
+            "content": 61
           },
           "selection": {
             "refs": [],
@@ -253617,7 +256871,7 @@
               "current": {
                 "revision": 1,
                 "hash": "fnv1a64:8f0878bc38e3e72e",
-                "content": 61
+                "content": 62
               },
               "reason": [
                 114,
@@ -253679,7 +256933,7 @@
           "snapshot": {
             "revision": 1,
             "hash": "fnv1a64:8f0878bc38e3e72e",
-            "content": 61
+            "content": 62
           },
           "selection": {
             "refs": [],
@@ -253727,12 +256981,12 @@
               "previous": {
                 "revision": 1,
                 "hash": "fnv1a64:8f0878bc38e3e72e",
-                "content": 61
+                "content": 62
               },
               "current": {
                 "revision": 2,
                 "hash": "fnv1a64:476e6ffa4ebf4912",
-                "content": 62
+                "content": 63
               },
               "reason": [
                 114,
@@ -253819,7 +257073,7 @@
           "snapshot": {
             "revision": 2,
             "hash": "fnv1a64:476e6ffa4ebf4912",
-            "content": 62
+            "content": 63
           },
           "selection": {
             "refs": [],
@@ -253875,12 +257129,12 @@
               "previous": {
                 "revision": 2,
                 "hash": "fnv1a64:476e6ffa4ebf4912",
-                "content": 62
+                "content": 63
               },
               "current": {
                 "revision": 3,
                 "hash": "fnv1a64:8f0878bc38e3e72e",
-                "content": 61
+                "content": 62
               },
               "reason": [
                 114,
@@ -254000,7 +257254,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:8f0878bc38e3e72e",
-            "content": 61
+            "content": 62
           },
           "selection": {
             "refs": [],
@@ -254072,7 +257326,7 @@
               "previous": {
                 "revision": 3,
                 "hash": "fnv1a64:8f0878bc38e3e72e",
-                "content": 61
+                "content": 62
               },
               "current": {
                 "revision": 4,
@@ -254237,7 +257491,7 @@
               "current": {
                 "revision": 5,
                 "hash": "fnv1a64:8f0878bc38e3e72e",
-                "content": 61
+                "content": 62
               },
               "reason": [
                 114,
@@ -254341,7 +257595,7 @@
           "snapshot": {
             "revision": 5,
             "hash": "fnv1a64:8f0878bc38e3e72e",
-            "content": 61
+            "content": 62
           },
           "selection": {
             "refs": [],
@@ -254413,12 +257667,12 @@
               "previous": {
                 "revision": 5,
                 "hash": "fnv1a64:8f0878bc38e3e72e",
-                "content": 61
+                "content": 62
               },
               "current": {
                 "revision": 6,
                 "hash": "fnv1a64:476e6ffa4ebf4912",
-                "content": 62
+                "content": 63
               },
               "reason": [
                 114,
@@ -254531,7 +257785,7 @@
           "snapshot": {
             "revision": 6,
             "hash": "fnv1a64:476e6ffa4ebf4912",
-            "content": 62
+            "content": 63
           },
           "selection": {
             "refs": [],
@@ -254668,7 +257922,7 @@
               "current": {
                 "revision": 1,
                 "hash": "fnv1a64:8f0878bc38e3e72e",
-                "content": 61
+                "content": 62
               },
               "reason": [
                 114,
@@ -254730,7 +257984,7 @@
           "snapshot": {
             "revision": 1,
             "hash": "fnv1a64:8f0878bc38e3e72e",
-            "content": 61
+            "content": 62
           },
           "selection": {
             "refs": [],
@@ -254778,12 +258032,12 @@
               "previous": {
                 "revision": 1,
                 "hash": "fnv1a64:8f0878bc38e3e72e",
-                "content": 61
+                "content": 62
               },
               "current": {
                 "revision": 2,
                 "hash": "fnv1a64:476e6ffa4ebf4912",
-                "content": 62
+                "content": 63
               },
               "reason": [
                 114,
@@ -254870,7 +258124,7 @@
           "snapshot": {
             "revision": 2,
             "hash": "fnv1a64:476e6ffa4ebf4912",
-            "content": 62
+            "content": 63
           },
           "selection": {
             "refs": [],
@@ -254926,12 +258180,12 @@
               "previous": {
                 "revision": 2,
                 "hash": "fnv1a64:476e6ffa4ebf4912",
-                "content": 62
+                "content": 63
               },
               "current": {
                 "revision": 3,
                 "hash": "fnv1a64:8f0878bc38e3e72e",
-                "content": 61
+                "content": 62
               },
               "reason": [
                 114,
@@ -255035,7 +258289,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:8f0878bc38e3e72e",
-            "content": 61
+            "content": 62
           },
           "selection": {
             "refs": [],
@@ -255089,7 +258343,7 @@
           "snapshot": {
             "revision": 3,
             "hash": "fnv1a64:8f0878bc38e3e72e",
-            "content": 61
+            "content": 62
           },
           "selection": {
             "refs": [],
@@ -255145,12 +258399,12 @@
               "previous": {
                 "revision": 3,
                 "hash": "fnv1a64:8f0878bc38e3e72e",
-                "content": 61
+                "content": 62
               },
               "current": {
                 "revision": 4,
                 "hash": "fnv1a64:476e6ffa4ebf4912",
-                "content": 62
+                "content": 63
               },
               "reason": [
                 114,
@@ -255247,7 +258501,7 @@
           "snapshot": {
             "revision": 4,
             "hash": "fnv1a64:476e6ffa4ebf4912",
-            "content": 62
+            "content": 63
           },
           "selection": {
             "refs": [],
@@ -255301,7 +258555,7 @@
           "snapshot": {
             "revision": 4,
             "hash": "fnv1a64:476e6ffa4ebf4912",
-            "content": 62
+            "content": 63
           },
           "selection": {
             "refs": [],

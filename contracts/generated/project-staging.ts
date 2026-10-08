@@ -137,6 +137,11 @@ export const PROJECT_STAGING = {
     "replaceProject": [
       "state",
       "label"
+    ],
+    "importProject": [
+      "state",
+      "descriptors",
+      "label"
     ]
   }
 } as const;

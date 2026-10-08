@@ -4,7 +4,7 @@
     "tools/cross-platform/mesh-vectors.mjs": "6ef12a4c245cde7b2a4c5bc43dd4de31c6cdd9952ca6626ebd7fea6cd5392794",
     "web/src/project/meshCodec.ts": "8b60584a77dbd88455e58e832633935b98787f765dd680aefdd897cfc845b6cc",
     "web/src/project/objects/bounds.ts": "f0870fec37ca8d482dcf602f3af52793fbd9fa3d9733fdb11d170fe17e83c70c",
-    "web/src/project/assets.ts": "e8e10fac5d3821abbd3fd69e2949f3551d6a0db4c52ee43d678663aeabd2bba7",
+    "web/src/project/assets.ts": "a3fa56557a1447e70cf2121828915360b7d93a2a575433a9d15889561beacbdc",
     "web/src/project/domain/canonical.ts": "af4d5f18228dcc903a54d9fa56f187bf7f928a0ad69becfc305248c181218922",
     "web/src/project/domain/model.ts": "1ea97f8215d31b3c80fa713df24201acebab6d0480d7695976e4c5e83ff5d98e",
     "web/src/project/domain/selectors.ts": "b91b551fd5509bd7c858d0b654d73d8b21cd4ec719be84fae8b4bf034e925341",

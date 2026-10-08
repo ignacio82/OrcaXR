@@ -5592,9 +5592,9 @@ export class OrcaWorkspace extends xb.Script {
             this.setStatus(t('workspace.orcaWorkspace.importCancelled', 'Import cancelled.'));
             return 0;
           }
-          prepared.confirm(decision);
+          await this.canonicalProject.confirmImport(prepared, decision);
         } else {
-          prepared.confirm({ confirmed: true, acknowledgedNoticeIds: [] });
+          await this.canonicalProject.confirmImport(prepared, { confirmed: true, acknowledgedNoticeIds: [] });
         }
         committed = true;
       } finally {
@@ -5655,7 +5655,7 @@ export class OrcaWorkspace extends xb.Script {
           this.setStatus(t('workspace.orcaWorkspace.importCancelled2', 'Import cancelled.'));
           return 0;
         }
-        prepared.confirm(decision);
+        await this.canonicalProject.confirmImport(prepared, decision);
         committed = true;
       } finally {
         if (!committed) prepared.cancel('geometry import did not commit');
@@ -9780,7 +9780,7 @@ export class OrcaWorkspace extends xb.Script {
         if (this.persistence && !(await this.persistence.guardNavigation(recoveryProof ? 'recover' : 'open')))
           return false;
         if (signal?.aborted || this.disposed) return false;
-        prepared.confirm(decision);
+        await this.canonicalProject.confirmImport(prepared, decision);
         committed = true;
       } finally {
         if (!committed) prepared.cancel('project open did not commit');

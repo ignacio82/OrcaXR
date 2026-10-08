@@ -2915,12 +2915,29 @@ validated project, pruning again. History charges the canonical length of both
 states. The browser's bus also restores each entry's recorded selection on
 undo and redo, and the native bus matches it.
 
+### Staged imports
+
+`ImportProjectCommand` also arrives as staged work: an `importProject` record
+carries the whole next state, every asset descriptor it travels with, and its
+`Import <filename>` label (`CapturedCommand::import_project`). The payloads are
+the upload's staged leases, adopted into the repository by reference
+(`restore_leases`), and the state is admitted on the first apply against the
+assets it installs; redo restores that exact project and repository version.
+Before anything changes, both bindings check the bundle as the browser's
+`assertProjectBundle` does — a declared asset missing or with different
+metadata, then an undeclared one, then an ID supplied twice — refusing with
+the browser's message. The browser commits model, geometry and project
+imports this way (`confirmImport`), guarded by the state the preview was
+checked against. The asset-command corpus gains an import trace (25 traces,
+360 steps) and the staged corpus replays it through Rust, WASM and JNI (57
+traces, 952 groups).
+
 ### Staged payload uploads
 
 The staging contract gains record kinds for every payload-carrying command. They
 are `addObject`, `addObjectWithAsset`, `addVolume`, `replaceVolumeMesh`,
 `meshBoolean`, `splitVolumeToParts`, `addSvgPart`, `editSvgPart`,
-`addEmbossText`, `editEmbossText` and `replaceProject`, plus a `splitToObjects`
+`addEmbossText`, `editEmbossText`, `replaceProject` and `importProject`, plus a `splitToObjects`
 work. Records carry each payload's descriptor in place of its bytes. Guards are
 objects with exactly their fields.
 

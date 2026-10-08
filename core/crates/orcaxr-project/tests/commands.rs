@@ -169,6 +169,19 @@ fn prepare_asset(v: &Value) -> Result<PreparedCommand, PreparationError> {
                 recipe,
             );
         }
+        "importProject" => {
+            let assets: Vec<StagedAsset> = v["assets"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|a| StagedAsset::new(payload(a)).unwrap())
+                .collect();
+            return Ok(PreparedCommand::import_staged(
+                Text::new(utf16(&v["label"])),
+                ProjectState::from_value(parse(v["stateJson"].as_str().unwrap()).unwrap()).unwrap(),
+                &assets,
+            ));
+        }
         "replaceProject" => {
             return Ok(PreparedCommand::replace_project(
                 ProjectState::from_value(parse(v["stateJson"].as_str().unwrap()).unwrap()).unwrap(),
@@ -394,7 +407,7 @@ fn asset_commands_and_payloads_match_every_typescript_step() {
             "../../../../testdata/cross-platform/project-asset-command-vectors.json"
         ))
         .unwrap(),
-        348,
+        360,
     );
 }
 /// Applying and redoing a staged payload installs its validated record by

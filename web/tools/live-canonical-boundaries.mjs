@@ -73,7 +73,7 @@ export function selfTestLiveCanonicalBoundaries() {
         const prepared = await this.canonicalProject.prepareCanonical3mfImport(bytes);
         const preview = prepared.preview; const confirm = this.onProjectImportPreview;
         if (!confirm) return; if (!(await confirm(preview))) return;
-        prepared.confirm({ confirmed: true, acknowledgedNoticeIds: [] });
+        await this.canonicalProject.confirmImport(prepared, { confirmed: true, acknowledgedNoticeIds: [] });
       } }`,
       'acknowledgement decision or exact preview notice IDs',
     ],
@@ -127,6 +127,28 @@ export function selfTestLiveCanonicalBoundaries() {
         await slicer.startCurrentPlate().completion;
       } }`,
       'canonical controller as workspace',
+    ],
+    [
+      'synchronous project open commit',
+      inspectOpen,
+      `class OrcaWorkspace { async openProject(bytes) {
+        const prepared = await this.canonicalProject.prepareCanonical3mfImport(bytes);
+        const preview = prepared.preview; const showPreview = this.onProjectImportPreview;
+        if (!showPreview) return; const decision = await showPreview(preview);
+        if (!decision.confirmed) return; prepared.confirm(decision);
+      } }`,
+      'open must explicitly commit the prepared preview through the guarded session',
+    ],
+    [
+      'synchronous model import commit',
+      inspectImports,
+      `class OrcaWorkspace {
+        async importModelFile(name, bytes) {
+          const prepared = await this.canonicalProject.prepareModelImport(bytes);
+          prepared.confirm({ confirmed: true, acknowledgedNoticeIds: [] });
+        }
+      }`,
+      'importModelFile cannot commit an import on the synchronous bus',
     ],
     [
       'scene-attached import',
@@ -338,7 +360,7 @@ export function selfTestLiveCanonicalBoundaries() {
         const prepared = await this.canonicalProject.prepareCanonical3mfImport(bytes);
         const preview = prepared.preview; const showPreview = this.onProjectImportPreview;
         if (!showPreview) return; const decision = await showPreview(preview);
-        if (!decision.confirmed) return; prepared.confirm(decision);
+        if (!decision.confirmed) return; await this.canonicalProject.confirmImport(prepared, decision);
       } }`,
     ),
   );
@@ -606,9 +628,7 @@ function inspectOpen(file, source) {
   const prepare = all.calls.find((entry) => entry.path === 'this.canonicalProject.prepareCanonical3mfImport');
   if (!prepare) check.fail(body, 'open must prepare import through the canonical worker seam');
   const prepared = prepare ? assignedIdentifier(prepare.node) : undefined;
-  if (!prepared || !all.calls.some((entry) => entry.path === `${prepared}.confirm`)) {
-    check.fail(body, 'open must explicitly commit the prepared preview');
-  }
+  requireGuardedImportCommit(check, body, all, prepared, 'open');
   if (!all.properties.some((entry) => entry.path === 'this.onProjectImportPreview')) {
     check.fail(body, 'open must consult its import-preview surface');
   }
@@ -745,6 +765,17 @@ function inspectImports(file, source) {
       'this.loadModelFromGeometry': `${name} cannot commit decoded entries one at a time`,
       unzipSync: `${name} cannot expand an archive outside the guarded decoder`,
     });
+  }
+  for (const name of ['importModelFile', 'importProjectGeometry']) {
+    const method = check.method('OrcaWorkspace', name);
+    if (!method) continue;
+    const all = facts(method);
+    const prepare = all.calls.find(
+      (entry) =>
+        entry.path === 'this.canonicalProject.prepareModelImport' ||
+        entry.path === 'this.canonicalProject.prepareGeometryImport',
+    );
+    if (prepare) requireGuardedImportCommit(check, method, all, assignedIdentifier(prepare.node), name);
   }
   const modelImport = check.method('OrcaWorkspace', 'importModelFile');
   if (modelImport) {
@@ -1083,8 +1114,31 @@ function inIf(node, boundary) {
   return false;
 }
 
+/** A prepared import commits through the guarded session, awaited, and never
+ * on the synchronous bus. */
+function requireGuardedImportCommit(check, body, all, prepared, label) {
+  const commit = importCommit(all, prepared);
+  if (!commit) check.fail(body, `${label} must explicitly commit the prepared preview through the guarded session`);
+  else if (!awaitsCompletion(commit.node)) check.fail(commit.node, `${label} must await its import commit`);
+  for (const call of all.calls) {
+    if (prepared && call.path === `${prepared}.confirm`) {
+      check.fail(call.node, `${label} cannot commit an import on the synchronous bus`);
+    }
+  }
+}
+
+function importCommit(all, prepared) {
+  if (!prepared) return undefined;
+  return all.calls.find(
+    (entry) =>
+      entry.path === 'this.canonicalProject.confirmImport' &&
+      entry.node.arguments[0] &&
+      expressionPath(entry.node.arguments[0]) === prepared,
+  );
+}
+
 function acknowledgesPreview(all, prepared, decisionName) {
-  const argument = all.calls.find((entry) => entry.path === `${prepared}.confirm`)?.node.arguments[0];
+  const argument = importCommit(all, prepared)?.node.arguments[1];
   if (!argument) return false;
   if (decisionName && expressionPath(argument) === decisionName) return true;
   if (!ts.isObjectLiteralExpression(argument)) return false;

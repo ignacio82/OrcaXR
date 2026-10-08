@@ -48,6 +48,7 @@ assert.deepEqual(Object.keys(s.commandKinds), [
   "addEmbossText",
   "editEmbossText",
   "replaceProject",
+  "importProject",
 ]);
 assert.ok(
   Number.isSafeInteger(s.maxPreparations) &&
@@ -127,6 +128,7 @@ assert.deepEqual(s.commandKinds, {
   addEmbossText: ["placement", "configuration", "descriptor", "triangleCount"],
   editEmbossText: ["volumeId", "configuration", "descriptor", "triangleCount"],
   replaceProject: ["state", "label"],
+  importProject: ["state", "descriptors", "label"],
 });
 const snake = (n) => n.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase());
 const header =
