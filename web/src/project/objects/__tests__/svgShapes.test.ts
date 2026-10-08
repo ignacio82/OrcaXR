@@ -351,6 +351,41 @@ test('a child that sets its own fill overrides the group that said none', () => 
   assert.equal(shapes.contours.length, 1, 'the filled child still becomes solid');
 });
 
+test('an element or unit named after an Object member is just unknown', () => {
+  // Lookups went through plain objects, so `<constructor>` found
+  // Object.prototype.constructor and was reported with no reason, and a
+  // `constructor` unit multiplied a length by a function into NaN.
+  const element = readSvgShapes(svg('<constructor/><toString/><rect x="0" y="0" width="10" height="10"/>'));
+  assert.deepEqual(element.unsupported, []);
+  const unit = readSvgShapes(
+    svg('<rect x="0" y="0" width="10" height="10"/>', 'width="100constructor" height="50mm" viewBox="0 0 100 50"'),
+  );
+  assert.ok(unit.sizeMm.every(Number.isFinite), `${unit.sizeMm}`);
+  assert.deepEqual(
+    unit.unsupported.map((feature) => feature.reason),
+    ['unsupported-unit'],
+  );
+});
+
+test('the last declaration of a property wins, inline and in a rule', () => {
+  // `fill:#f00; fill:none` is not red in CSS; reading the first declaration
+  // extruded a line drawing as a solid.
+  const inline = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><path style="fill:#f00;fill:none;stroke:#000" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.throws(() => readSvgShapes(inline), SvgError);
+  const rule = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>.line{fill:#f00;fill:none;stroke:#000}</style><path class="line" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.throws(() => readSvgShapes(rule), SvgError);
+});
+
+test('classes cascade in stylesheet order, not in the order an element lists them', () => {
+  // Two classes of equal weight: the later rule wins. Applying them in the
+  // element's own class order picked `.b`'s `fill:none` here.
+  const drawing = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>.b{fill:none;stroke:#000} .a{fill:#f00}</style><path class="a b" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.equal(readSvgShapes(drawing).contours.length, 1);
+  // And an id still outranks any class, wherever it sits.
+  const id = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>#p{fill:none;stroke:#000} .a{fill:#f00}</style><path id="p" class="a" d="M0 0 L50 0 L50 50 Z"/></svg>`;
+  assert.throws(() => readSvgShapes(id), SvgError);
+});
+
 test('an ordinary grouped shape with no fill stated is still solid', () => {
   // SVG defaults `fill` to black, so a path that says nothing is filled. This
   // is the control: the fix must not make silence mean "none".

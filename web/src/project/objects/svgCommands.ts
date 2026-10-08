@@ -147,6 +147,7 @@ export class AddSvgPartCommand implements ProjectCommand {
     if (prepared.asset.descriptor.id !== placement.assetId) {
       throw new Error(`Prepared asset ${prepared.asset.descriptor.id} does not match placement ${placement.assetId}`);
     }
+    requireOwnDrawing(prepared);
     this.placement = { ...placement, transform: cloneJson(placement.transform) };
     this.prepared = prepared;
     this.name = name.trim() || 'SVG part';
@@ -210,12 +211,22 @@ export class EditSvgPartCommand implements ProjectCommand {
   readonly label = 'Edit SVG part';
   readonly dirtyCategories = ['projectData'] as const;
 
-  private previous?: { volume: ProjectVolume; descriptorIndex: number; removedAsset?: AssetPayload };
+  private previous?: {
+    volume: ProjectVolume;
+    descriptorIndex: number;
+    removedAsset?: AssetPayload;
+    /** Whether the re-cut declared its own drawing. */
+    addedDrawing: boolean;
+    /** The drawing it retired, with the place it was declared at. */
+    removedDrawing?: { readonly payload: AssetPayload; readonly index: number };
+  };
 
   constructor(
     private readonly volumeId: VolumeId,
     private readonly prepared: PreparedSvgPart,
-  ) {}
+  ) {
+    requireOwnDrawing(prepared);
+  }
 
   apply(context: CommandContext): void {
     const state = cloneProjectState(context.project.getSnapshot().state);
@@ -245,10 +256,35 @@ export class EditSvgPartCommand implements ProjectCommand {
       state.sourceAssets.splice(descriptorIndex, 1);
     }
 
+    // The re-cut's drawing replaces the part's old one: declared when new, and
+    // the old one retired once no SVG part names it. Without this the recipe
+    // named a drawing that was never stored and the old one lingered.
+    const newDrawingId = this.prepared.part.drawingAssetId;
+    const oldDrawingId = previousVolume.embossSvg!.drawingAssetId;
+    const addedDrawing = !state.sourceAssets.some((asset) => asset.id === newDrawingId);
+    if (addedDrawing) state.sourceAssets.push(cloneJson(this.prepared.drawing.descriptor));
+    let removedDrawing: { payload: AssetPayload; index: number } | undefined;
+    if (oldDrawingId !== newDrawingId && !referencesDrawing(state, oldDrawingId)) {
+      const index = state.sourceAssets.findIndex((asset) => asset.id === oldDrawingId);
+      const payload = context.assets.get(oldDrawingId);
+      if (index !== -1 && payload) {
+        state.sourceAssets.splice(index, 1);
+        removedDrawing = { payload, index };
+      }
+    }
+
     context.assets.put(this.prepared.asset.descriptor, this.prepared.asset.bytes);
+    if (addedDrawing) context.assets.put(this.prepared.drawing.descriptor, this.prepared.drawing.bytes);
     context.project.replaceState(state, { reason: this.type, dirtyCategories: this.dirtyCategories });
     if (removedAsset) context.assets.remove(oldAssetId);
-    this.previous = { volume: previousVolume, descriptorIndex, ...(removedAsset ? { removedAsset } : {}) };
+    if (removedDrawing) context.assets.remove(oldDrawingId);
+    this.previous = {
+      volume: previousVolume,
+      descriptorIndex,
+      ...(removedAsset ? { removedAsset } : {}),
+      addedDrawing,
+      ...(removedDrawing ? { removedDrawing } : {}),
+    };
   }
 
   revert(context: CommandContext): void {
@@ -262,6 +298,17 @@ export class EditSvgPartCommand implements ProjectCommand {
 
     const index = found.object.volumes.findIndex((candidate) => candidate.id === this.volumeId);
     found.object.volumes.splice(index, 1, cloneJson(this.previous.volume));
+    // Drawings first, undoing the apply's last steps first.
+    const newDrawingId = this.prepared.part.drawingAssetId;
+    const removedDrawing = this.previous.removedDrawing;
+    if (removedDrawing) {
+      state.sourceAssets.splice(removedDrawing.index, 0, cloneJson(removedDrawing.payload.descriptor));
+    }
+    const dropDrawing = this.previous.addedDrawing && !referencesDrawing(state, newDrawingId);
+    if (dropDrawing) {
+      const drawingIndex = state.sourceAssets.findIndex((asset) => asset.id === newDrawingId);
+      if (drawingIndex !== -1) state.sourceAssets.splice(drawingIndex, 1);
+    }
     if (this.previous.removedAsset) {
       context.assets.put(this.previous.removedAsset.descriptor, this.previous.removedAsset.bytes);
       state.sourceAssets.splice(this.previous.descriptorIndex, 0, cloneJson(this.previous.removedAsset.descriptor));
@@ -272,8 +319,10 @@ export class EditSvgPartCommand implements ProjectCommand {
       const assetIndex = state.sourceAssets.findIndex((asset) => asset.id === newAssetId);
       if (assetIndex !== -1) state.sourceAssets.splice(assetIndex, 1);
     }
+    if (removedDrawing) context.assets.put(removedDrawing.payload.descriptor, removedDrawing.payload.bytes);
     context.project.replaceState(state, { reason: `${this.type}:undo`, dirtyCategories: this.dirtyCategories });
     if (!stillReferenced) context.assets.remove(newAssetId);
+    if (dropDrawing) context.assets.remove(newDrawingId);
   }
 }
 
@@ -281,6 +330,27 @@ function requireObject(state: ProjectState, objectId: ObjectId) {
   const object = state.plates.flatMap((plate) => plate.objects).find((candidate) => candidate.id === objectId);
   if (!object) throw new Error(`Object ${objectId} is not in this project`);
   return object;
+}
+
+/**
+ * The stored drawing must be the one the recipe names. A host's staged record
+ * carries the two separately; apart, the part named a drawing that was never
+ * stored and the stored one was an orphan.
+ */
+function requireOwnDrawing(prepared: PreparedSvgPart): void {
+  if (prepared.drawing.descriptor.id !== prepared.part.drawingAssetId) {
+    throw new Error(
+      `Prepared drawing ${prepared.drawing.descriptor.id} does not match the part's drawing ${prepared.part.drawingAssetId}`,
+    );
+  }
+}
+
+/** Whether any SVG part's recipe names this drawing. */
+function referencesDrawing(state: ProjectState, assetId: AssetId): boolean {
+  return state.plates
+    .flatMap((plate) => plate.objects)
+    .flatMap((object) => object.volumes)
+    .some((volume) => volume.embossSvg?.drawingAssetId === assetId);
 }
 
 function referencesAsset(state: ProjectState, assetId: AssetId): boolean {

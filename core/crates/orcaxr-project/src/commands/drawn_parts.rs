@@ -19,7 +19,7 @@ pub struct PartPlacement {
 #[derive(Clone)]
 pub enum Recipe {
     Svg {
-        drawing: Option<StagedAsset>,
+        drawing: StagedAsset,
         part: Arc<EmbossSvgPart>,
     },
     Text(Arc<EmbossTextConfiguration>),
@@ -28,9 +28,39 @@ impl Recipe {
     fn is_svg(&self) -> bool {
         matches!(self, Self::Svg { .. })
     }
+    /// `requireOwnDrawing`: the stored drawing must be the one the recipe
+    /// names. A host's staged record carries the two separately; apart, the
+    /// part named a drawing that was never stored and the stored one was an
+    /// orphan.
+    fn require_own_drawing(&self) -> Result<(), PreparationError> {
+        let Self::Svg { drawing, part } = self else {
+            return Ok(());
+        };
+        if *drawing.id() == part.drawing_asset_id {
+            return Ok(());
+        }
+        let mut message = u("Prepared drawing ");
+        message.extend_from_slice(drawing.id().as_utf16());
+        message.extend(" does not match the part's drawing ".encode_utf16());
+        message.extend_from_slice(part.drawing_asset_id.as_utf16());
+        Err(PreparationError::Domain(Text::new(message)))
+    }
 }
 
 /// The browser's `referencesAsset` here: volume meshes only.
+/// `referencesDrawing`: whether any SVG part's recipe names this drawing.
+fn drawing_referenced(state: &ProjectState, id: &AssetId) -> bool {
+    state
+        .plates
+        .iter()
+        .flat_map(|p| p.objects.iter())
+        .flat_map(|o| o.volumes.iter())
+        .any(|v| {
+            v.emboss_svg
+                .as_ref()
+                .is_some_and(|svg| svg.drawing_asset_id == *id)
+        })
+}
 fn mesh_referenced(state: &ProjectState, id: &AssetId) -> bool {
     state
         .plates
@@ -121,6 +151,7 @@ impl AddDrawnPart {
             message.extend_from_slice(placement.asset.as_utf16());
             return Err(PreparationError::Domain(Text::new(message)));
         }
+        recipe.require_own_drawing()?;
         let (label, name) = match &recipe {
             Recipe::Svg { .. } => {
                 let given = name.map(|n| trim(n.units()).to_vec()).unwrap_or_default();
@@ -217,20 +248,12 @@ impl AddDrawnPart {
         edit_object(&mut state, p, o, |volumes| volumes.push(volume));
         let mut assets = state.source_assets.to_vec();
         assets.push(self.asset.descriptor().clone());
-        if let Recipe::Svg {
-            drawing: Some(drawing),
-            ..
-        } = &self.recipe
-        {
+        if let Recipe::Svg { drawing, .. } = &self.recipe {
             assets.push(drawing.descriptor().clone());
         }
         state.source_assets = assets.into();
         put(context, self.asset.lease())?;
-        if let Recipe::Svg {
-            drawing: Some(drawing),
-            ..
-        } = &self.recipe
-        {
+        if let Recipe::Svg { drawing, .. } = &self.recipe {
             put(context, drawing.lease())?;
         }
         context.replace(state, reason, PROJECT)?;
@@ -268,11 +291,8 @@ impl AddDrawnPart {
         };
         edit_object(&mut state, p, o, |volumes| volumes.remove(index));
         let drawing = match &self.recipe {
-            Recipe::Svg {
-                drawing: Some(drawing),
-                ..
-            } => Some(drawing.id().clone()),
-            _ => None,
+            Recipe::Svg { drawing, .. } => Some(drawing.id().clone()),
+            Recipe::Text(_) => None,
         };
         for id in std::iter::once(&self.placement.asset).chain(drawing.as_ref()) {
             if let Some(index) = state.source_assets.iter().position(|d| d.id == *id) {
@@ -296,6 +316,10 @@ struct PreviousCut {
     volume: Arc<ProjectVolume>,
     descriptor_index: Option<usize>,
     removed: Option<(Arc<SourceAssetDescriptor>, AssetLease)>,
+    /// Whether the re-cut declared its own drawing.
+    added_drawing: bool,
+    /// The drawing it retired, with the place it was declared at.
+    removed_drawing: Option<(Arc<SourceAssetDescriptor>, AssetLease, usize)>,
 }
 
 /// `EditSvgPartCommand` / `EditEmbossTextCommand`.
@@ -314,6 +338,7 @@ impl RecutPart {
         triangles: f64,
         recipe: Recipe,
     ) -> Result<(Self, Text), PreparationError> {
+        recipe.require_own_drawing()?;
         if !recipe.is_svg() && triangles == 0.0 {
             return Err(PreparationError::Domain(Text::from_utf8(
                 "This text produced no geometry to apply",
@@ -409,15 +434,54 @@ impl RecutPart {
             assets.remove(index);
             state.source_assets = assets.into();
         }
+        // The re-cut's drawing replaces the part's old one: declared when new,
+        // and the old one retired once no SVG part names it.
+        let mut added_drawing = false;
+        let mut removed_drawing = None;
+        let mut new_drawing = None;
+        if let Recipe::Svg { drawing, part } = &self.recipe {
+            let new_id = &part.drawing_asset_id;
+            let old_id = previous
+                .emboss_svg
+                .as_ref()
+                .expect("checked as an SVG part")
+                .drawing_asset_id
+                .clone();
+            if !state.source_assets.iter().any(|d| d.id == *new_id) {
+                let mut assets = state.source_assets.to_vec();
+                assets.push(drawing.descriptor().clone());
+                state.source_assets = assets.into();
+                added_drawing = true;
+                new_drawing = Some(drawing.clone());
+            }
+            if old_id != *new_id
+                && !drawing_referenced(&state, &old_id)
+                && let Some(index) = state.source_assets.iter().position(|d| d.id == old_id)
+                && let Some(lease) = context.assets().peek(&old_id)
+            {
+                let mut assets = state.source_assets.to_vec();
+                let descriptor = assets.remove(index);
+                state.source_assets = assets.into();
+                removed_drawing = Some((descriptor, lease, index));
+            }
+        }
         put(context, self.asset.lease())?;
+        if let Some(drawing) = &new_drawing {
+            put(context, drawing.lease())?;
+        }
         context.replace(state, reason, PROJECT)?;
         if removed.is_some() {
             context.assets_mut().remove(&old);
+        }
+        if let Some((descriptor, _, _)) = &removed_drawing {
+            context.assets_mut().remove(&descriptor.id);
         }
         self.previous = Some(Arc::new(PreviousCut {
             volume: previous,
             descriptor_index,
             removed,
+            added_drawing,
+            removed_drawing,
         }));
         Ok(())
     }
@@ -464,6 +528,25 @@ impl RecutPart {
         }
         let restored = previous.volume.clone();
         edit_object(&mut state, p, o, |volumes| volumes[v] = restored);
+        // Drawings first, undoing the apply's last steps first.
+        if let Some((descriptor, _, index)) = &previous.removed_drawing {
+            let mut assets = state.source_assets.to_vec();
+            assets.insert((*index).min(assets.len()), descriptor.clone());
+            state.source_assets = assets.into();
+        }
+        let mut drop_drawing = None;
+        if let Recipe::Svg { part, .. } = &self.recipe
+            && previous.added_drawing
+            && !drawing_referenced(&state, &part.drawing_asset_id)
+        {
+            let id = part.drawing_asset_id.clone();
+            if let Some(index) = state.source_assets.iter().position(|d| d.id == id) {
+                let mut assets = state.source_assets.to_vec();
+                assets.remove(index);
+                state.source_assets = assets.into();
+            }
+            drop_drawing = Some(id);
+        }
         if let (Some((descriptor, lease)), Some(index)) =
             (&previous.removed, previous.descriptor_index)
         {
@@ -479,10 +562,16 @@ impl RecutPart {
             assets.remove(index);
             state.source_assets = assets.into();
         }
+        if let Some((_, lease, _)) = &previous.removed_drawing {
+            put(context, lease)?;
+        }
         let reason = Text::from_utf8(&format!("{}:undo", self.reason()));
         context.replace(state, reason, PROJECT)?;
         if !referenced {
             context.assets_mut().remove(new);
+        }
+        if let Some(id) = drop_drawing {
+            context.assets_mut().remove(&id);
         }
         Ok(())
     }

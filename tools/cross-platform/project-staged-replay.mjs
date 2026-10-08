@@ -41,7 +41,7 @@ function assetCommand(c, tag) {
     case "addSvgPart":
       return [tag("addSvgPart"), placementJson(c.placement), descriptor(c.asset), descriptor(c.drawing), c.triangleCount, JSON.parse(c.partJson), text(c.name)];
     case "editSvgPart":
-      return [tag("editSvgPart"), text(c.volumeId), descriptor(c.asset), c.triangleCount, JSON.parse(c.partJson)];
+      return [tag("editSvgPart"), text(c.volumeId), descriptor(c.asset), descriptor(c.drawing), c.triangleCount, JSON.parse(c.partJson)];
     case "addEmbossText":
       return [tag("addEmbossText"), placementJson(c.placement), JSON.parse(c.configurationJson), descriptor(c.asset), c.triangleCount];
     case "editEmbossText":
@@ -60,7 +60,7 @@ export function stagedPayloads(work) {
   const commandPayloads = (c) =>
     c.kind === "splitVolumeToParts"
       ? c.parts.map((p) => p.asset)
-      : c.kind === "addSvgPart"
+      : c.kind === "addSvgPart" || c.kind === "editSvgPart"
         ? [c.asset, c.drawing]
         : c.kind === "importProject"
           ? c.assets

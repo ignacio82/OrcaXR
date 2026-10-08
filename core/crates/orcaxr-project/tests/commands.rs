@@ -131,7 +131,7 @@ fn prepare_asset(v: &Value) -> Result<PreparedCommand, PreparationError> {
             let triangles = v["triangleCount"].as_f64().unwrap();
             let recipe = if v.get("partJson").is_some() {
                 Recipe::Svg {
-                    drawing: Some(StagedAsset::new(payload(&v["drawing"])).unwrap()),
+                    drawing: StagedAsset::new(payload(&v["drawing"])).unwrap(),
                     part: Arc::new(
                         EmbossSvgPart::from_value(parse(v["partJson"].as_str().unwrap()).unwrap())
                             .unwrap(),
@@ -407,7 +407,7 @@ fn asset_commands_and_payloads_match_every_typescript_step() {
             "../../../../testdata/cross-platform/project-asset-command-vectors.json"
         ))
         .unwrap(),
-        360,
+        362,
     );
 }
 /// Applying and redoing a staged payload installs its validated record by

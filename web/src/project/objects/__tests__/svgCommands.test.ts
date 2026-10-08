@@ -142,6 +142,63 @@ test('re-cutting at a new width and depth replaces the mesh in one undo entry', 
   );
 });
 
+test('a re-cut from another drawing stores it and retires the one it replaced', () => {
+  // The recipe named a freshly minted drawing that was never stored, and the
+  // old drawing stayed declared with nothing naming it.
+  const { project, commands, ids, objectId } = session();
+  const identity = svgVolumeIdentity(ids);
+  const original = prepareSvgPart(DRAWING, { ...identity, fileName: 'logo.svg', depthMm: 1, widthMm: 40 });
+  commands.execute(
+    new AddSvgPartCommand(
+      { objectId, volumeId: identity.volumeId, assetId: identity.assetId, transform: identityTransform() },
+      original,
+      'logo',
+    ),
+  );
+  const declared = () => project.getSnapshot().state.sourceAssets.map((asset) => asset.id);
+  const before = project.getSnapshot();
+  const next = svgVolumeIdentity(ids);
+  const edited = prepareSvgPart(DRAWING, {
+    fileName: 'badge.svg',
+    volumeId: identity.volumeId,
+    assetId: next.assetId,
+    drawingAssetId: next.drawingAssetId,
+    depthMm: 2,
+  });
+  commands.execute(new EditSvgPartCommand(identity.volumeId, edited));
+  const after = volumesOf(project).find((volume) => volume.id === identity.volumeId)!;
+  assert.equal(after.embossSvg?.drawingAssetId, next.drawingAssetId);
+  assert.ok(declared().includes(next.drawingAssetId), 'the recipe names a stored drawing');
+  assert.ok(!declared().includes(identity.drawingAssetId), 'the replaced drawing is retired');
+  commands.undo();
+  assert.equal(project.getSnapshot().hash, before.hash, 'undo restores the old drawing exactly');
+  commands.redo();
+  assert.ok(declared().includes(next.drawingAssetId) && !declared().includes(identity.drawingAssetId));
+});
+
+test('a drawing stored under another ID than the recipe names is refused', () => {
+  // A staged record carries the drawing and the recipe separately; a
+  // mismatched pair stored an orphan and left the part naming nothing.
+  const { project, commands, ids, objectId } = session();
+  const identity = svgVolumeIdentity(ids);
+  const prepared = prepareSvgPart(DRAWING, { ...identity, fileName: 'logo.svg', depthMm: 1 });
+  const stray = {
+    ...prepared,
+    drawing: { ...prepared.drawing, descriptor: { ...prepared.drawing.descriptor, id: ids.next<'asset'>('asset') } },
+  };
+  const placement = {
+    objectId,
+    volumeId: identity.volumeId,
+    assetId: identity.assetId,
+    transform: identityTransform(),
+  };
+  assert.throws(() => new AddSvgPartCommand(placement, stray, 'logo'), /does not match the part's drawing/);
+  commands.execute(new AddSvgPartCommand(placement, prepared, 'logo'));
+  const before = project.getSnapshot().hash;
+  assert.throws(() => new EditSvgPartCommand(identity.volumeId, stray), /does not match the part's drawing/);
+  assert.equal(project.getSnapshot().hash, before);
+});
+
 test('a volume that is not an SVG part refuses the re-cut', () => {
   const { project, commands, ids } = session();
   const plain = volumesOf(project)[0];

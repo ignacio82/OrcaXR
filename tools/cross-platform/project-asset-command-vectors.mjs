@@ -416,6 +416,8 @@ const addText = (placement, configuration, prepared) => ({ kind: "addEmbossText"
   asset: wirePayload(prepared.asset), triangleCount: prepared.mesh.triangleCount });
 const editText = (volumeId, configuration, prepared) => ({ kind: "editEmbossText", volumeId: units(volumeId), configurationJson: canonicalStringify(configuration),
   asset: wirePayload(prepared.asset), triangleCount: prepared.mesh.triangleCount });
+/** The cut with another cut's drawing: the recipe names one drawing, the record stores another. */
+const strayDrawing = prepared => ({ ...prepared, drawing: cutSvg("stray-other").drawing });
 const placed = (objectId, suffix, assetId = `import:asset:${suffix}`) => ({ objectId, volumeId: `import:volume:${suffix}`, assetId, transform: { translationMm: [0, 0, 5], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } });
 
 scenario("svg-parts", {}, (s, f, extra) => {
@@ -425,6 +427,7 @@ scenario("svg-parts", {}, (s, f, extra) => {
   roundtrip(execute, run, addSvg(placed(ids.object, "logo"), logo, "  Logo  "));
   execute(addSvg(placed(ids.object, "logo"), logo, " \n "));
   execute(addSvg(placed(ids.object, "mismatch"), cutSvg("mismatch-cut"), "Mismatch"));
+  execute(addSvg(placed(ids.object, "stray"), strayDrawing(cutSvg("stray")), "Stray"));
   execute(addSvg(placed("import:object:missing", "orphan"), cutSvg("orphan"), "Orphan"));
   execute(addSvg(placed(ids.object, "logo"), cutSvg("logo"), "Again"));
   execute(addSvg(placed(ids.object, "reused", ids.asset), cutSvg("reused", { assetId: ids.asset }), "Reused"));
@@ -435,6 +438,7 @@ scenario("svg-parts", {}, (s, f, extra) => {
   run({ kind: "undo" }); run({ kind: "redo" });
   execute(editSvg(ids.volume, wider));
   execute(editSvg("import:volume:missing", wider));
+  execute(editSvg("import:volume:logo", strayDrawing(wider)));
   // A re-cut to a mesh another volume still uses keeps that mesh declared.
   execute(addSvg(placed(ids.object, "twin", "import:asset:twin-mesh"), cutSvg("twin", { assetId: "import:asset:twin-mesh", drawingAssetId: "import:asset:twin-drawing" }), "Twin"));
   execute(editSvg("import:volume:twin", cutSvg("logo", { assetId: "import:asset:logo-wide", widthMm: 40, depthMm: 3 })));

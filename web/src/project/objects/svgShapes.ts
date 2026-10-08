@@ -211,21 +211,29 @@ const UNSUPPORTED_ELEMENTS: Readonly<Record<string, { reason: SvgUnsupportedReas
  * writes classes rather than attributes hit it.
  */
 export interface SvgStylesheet {
-  readonly byElement: ReadonlyMap<string, StyleRule>;
-  readonly byClass: ReadonlyMap<string, StyleRule>;
-  readonly byId: ReadonlyMap<string, StyleRule>;
+  /** Every rule's selectors, in document order. */
+  readonly rules: readonly SheetRule[];
 }
 
-const EMPTY_STYLESHEET: SvgStylesheet = {
-  byElement: new Map(),
-  byClass: new Map(),
-  byId: new Map(),
-};
+/** One simple selector of one rule, with what CSS orders it by. */
+interface SheetRule {
+  readonly kind: 'element' | 'class' | 'id';
+  readonly key: string;
+  /** Element, class and id selectors weigh 0, 1 and 2. */
+  readonly specificity: number;
+  /** The rule's place in the document; a later rule of equal weight wins. */
+  readonly order: number;
+  readonly declarations: StyleRule;
+}
+
+const SPECIFICITY = Object.freeze({ element: 0, class: 1, id: 2 });
+
+const EMPTY_STYLESHEET: SvgStylesheet = { rules: [] };
 
 function readStylesheet(source: string, unsupported: SvgUnsupportedFeature[]): SvgStylesheet {
-  const byElement = new Map<string, StyleRule>();
-  const byClass = new Map<string, StyleRule>();
-  const byId = new Map<string, StyleRule>();
+  const rules: SheetRule[] = [];
+  const add = (kind: SheetRule['kind'], key: string, declarations: StyleRule) =>
+    rules.push({ kind, key, specificity: SPECIFICITY[kind], order: rules.length, declarations });
   for (const block of source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
     // Comments first: a rule inside `/* … */` is not a rule, and reading one
     // would apply a setting the document deliberately disabled.
@@ -235,9 +243,9 @@ function readStylesheet(source: string, unsupported: SvgUnsupportedFeature[]): S
       const stated = { ...declarations.normal, ...declarations.important };
       if (stated.fill === undefined && stated.stroke === undefined) continue;
       for (const selector of rule[1].split(',').map((entry) => entry.trim())) {
-        if (/^[a-zA-Z][\w-]*$/.test(selector)) merge(byElement, selector.toLowerCase(), declarations);
-        else if (/^\.[\w-]+$/.test(selector)) merge(byClass, selector.slice(1), declarations);
-        else if (/^#[\w-]+$/.test(selector)) merge(byId, selector.slice(1), declarations);
+        if (/^[a-zA-Z][\w-]*$/.test(selector)) add('element', selector.toLowerCase(), declarations);
+        else if (/^\.[\w-]+$/.test(selector)) add('class', selector.slice(1), declarations);
+        else if (/^#[\w-]+$/.test(selector)) add('id', selector.slice(1), declarations);
         else if (selector.length > 0) {
           unsupported.push({
             element: 'style',
@@ -248,7 +256,7 @@ function readStylesheet(source: string, unsupported: SvgUnsupportedFeature[]): S
       }
     }
   }
-  return { byElement, byClass, byId };
+  return { rules };
 }
 
 /**
@@ -310,15 +318,6 @@ function stripAtRules(css: string, unsupported: SvgUnsupportedFeature[]): string
   return out;
 }
 
-function merge(into: Map<string, StyleRule>, key: string, declarations: StyleRule): void {
-  // Later rules win, matching the cascade for equal specificity.
-  const existing = into.get(key);
-  into.set(key, {
-    normal: { ...existing?.normal, ...declarations.normal },
-    important: { ...existing?.important, ...declarations.important },
-  });
-}
-
 /** One rule's declarations, kept in their two precedence tiers. */
 interface StyleRule {
   readonly normal: InheritedPresentation;
@@ -340,12 +339,15 @@ function declarationsOf(body: string): StyleRule {
   const normal: Record<string, string> = {};
   const important: Record<string, string> = {};
   for (const property of ['fill', 'stroke'] as const) {
-    const raw = new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`, 'i').exec(body)?.[1]?.trim();
-    if (raw === undefined) continue;
-    const flagged = /!\s*important\s*$/i.test(raw);
-    const value = raw.replace(/!\s*important\s*$/i, '').trim();
-    if (value.length === 0) continue;
-    (flagged ? important : normal)[property] = value;
+    // The last declaration of a property wins within its tier, as in CSS:
+    // `fill:red; fill:none` is not red.
+    for (const match of body.matchAll(new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`, 'gi'))) {
+      const raw = match[1].trim();
+      const flagged = /!\s*important\s*$/i.test(raw);
+      const value = raw.replace(/!\s*important\s*$/i, '').trim();
+      if (value.length === 0) continue;
+      (flagged ? important : normal)[property] = value;
+    }
   }
   return { normal, important };
 }
@@ -356,20 +358,24 @@ function stylesheetPresentation(
   name: string,
   attributes: Readonly<Record<string, string>>,
 ): StyleRule {
-  const rules = [
-    stylesheet.byElement.get(name.toLowerCase()),
-    ...(attributes.class ?? '')
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((className) => stylesheet.byClass.get(className)),
-    ...(attributes.id ? [stylesheet.byId.get(attributes.id)] : []),
-  ];
+  const element = name.toLowerCase();
+  const classes = new Set((attributes.class ?? '').split(/\s+/).filter(Boolean));
+  // Applied lightest first, then in document order: a later rule of equal
+  // weight wins, whatever order the element lists its classes in.
+  const matching = stylesheet.rules
+    .filter((rule) =>
+      rule.kind === 'element'
+        ? rule.key === element
+        : rule.kind === 'class'
+          ? classes.has(rule.key)
+          : attributes.id !== undefined && rule.key === attributes.id,
+    )
+    .sort((left, right) => left.specificity - right.specificity || left.order - right.order);
   let normal: InheritedPresentation = {};
   let important: InheritedPresentation = {};
-  for (const rule of rules) {
-    if (!rule) continue;
-    normal = { ...normal, ...rule.normal };
-    important = { ...important, ...rule.important };
+  for (const { declarations } of matching) {
+    normal = { ...normal, ...declarations.normal };
+    important = { ...important, ...declarations.important };
   }
   return { normal, important };
 }
@@ -438,7 +444,9 @@ function collectElement(
     // Containers only contribute their transform.
   }
   for (const child of childElements(source, element)) {
-    const known = UNSUPPORTED_ELEMENTS[child.name];
+    // Own keys only: an element named after an Object.prototype member
+    // (`<constructor>`) is just an unknown element.
+    const known = Object.hasOwn(UNSUPPORTED_ELEMENTS, child.name) ? UNSUPPORTED_ELEMENTS[child.name] : undefined;
     if (known) {
       unsupported.push({ element: child.name, reason: known.reason, detail: known.detail });
       continue;
@@ -586,7 +594,7 @@ function parsePathData(data: string, unsupported: SvgUnsupportedFeature[]): (rea
     const relative = command === command.toLowerCase();
     const upper = command.toUpperCase();
     // A repeated coordinate set after a move is an implicit line.
-    const stride = COMMAND_STRIDE[upper];
+    const stride = Object.hasOwn(COMMAND_STRIDE, upper) ? COMMAND_STRIDE[upper] : undefined;
     if (stride === undefined) {
       unsupported.push({
         element: 'path',
@@ -927,7 +935,7 @@ function parseLength(
   if (!Number.isFinite(magnitude)) return undefined;
   const unit = match[2].toLowerCase();
   if (unit === '') return magnitude * UNIT_MM.px;
-  const factor = UNIT_MM[unit];
+  const factor = Object.hasOwn(UNIT_MM, unit) ? UNIT_MM[unit] : undefined;
   if (factor === undefined) {
     unsupported.push({
       element,

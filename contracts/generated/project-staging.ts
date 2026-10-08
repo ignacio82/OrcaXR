@@ -119,6 +119,7 @@ export const PROJECT_STAGING = {
     "editSvgPart": [
       "volumeId",
       "descriptor",
+      "drawing",
       "triangleCount",
       "part"
     ],

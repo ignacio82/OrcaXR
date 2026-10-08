@@ -139,7 +139,7 @@ function captureAssetCommand(c) {
     case "editSvgPart":
       return captureEditSvgPartCommand(
         text(c.volumeId),
-        { asset: payload(c.asset), mesh: { triangleCount: c.triangleCount }, part: JSON.parse(c.partJson) },
+        { asset: payload(c.asset), drawing: payload(c.drawing), mesh: { triangleCount: c.triangleCount }, part: JSON.parse(c.partJson) },
         input,
       );
     case "addEmbossText":

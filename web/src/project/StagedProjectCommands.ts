@@ -492,23 +492,37 @@ export function captureEditSvgPartCommand(
   volumeId: VolumeId,
   prepared: {
     readonly asset: AssetPayload;
+    readonly drawing: AssetPayload;
     readonly mesh: { readonly triangleCount: number };
     readonly part: EmbossSvgPart;
   },
   limits: StagedInputLimits,
 ): CapturedProjectCommand {
   const {
-    value: [, volume, descriptor, triangleCount, part],
+    value: [, volume, descriptor, drawingDescriptor, triangleCount, part],
     units,
   } = capture(
-    ['editSvgPart', volumeId, prepared.asset.descriptor, prepared.mesh.triangleCount, prepared.part] as const,
+    [
+      'editSvgPart',
+      volumeId,
+      prepared.asset.descriptor,
+      prepared.drawing.descriptor,
+      prepared.mesh.triangleCount,
+      prepared.part,
+    ] as const,
     limits,
   );
-  const [asset] = ownPayloads([[descriptor, prepared.asset]], limits);
+  const [asset, drawing] = ownPayloads(
+    [
+      [descriptor, prepared.asset],
+      [drawingDescriptor, prepared.drawing],
+    ],
+    limits,
+  );
   return captured(
     new EditSvgPartCommand(plainStable(volume) as VolumeId, {
       asset: asset!,
-      drawing: asset!,
+      drawing: drawing!,
       mesh: { triangleCount } as never,
       part,
       svgBytes: new Uint8Array(),
@@ -516,7 +530,7 @@ export function captureEditSvgPartCommand(
       sizeMm: [0, 0],
     }),
     units,
-    [asset!],
+    [asset!, drawing!],
   );
 }
 /** `AddEmbossTextCommand`. */

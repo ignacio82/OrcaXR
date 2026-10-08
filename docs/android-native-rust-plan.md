@@ -1056,8 +1056,8 @@ and replay coverage for the complete current command inventory.
   and history retention accounting. Test every command's failed and stale cases.
   Every browser command class now has a native port. Each replays browser-authored
   traces: prepared intents (67 traces / 1,659 steps), captured records (11 / 197),
-  clipboard (17 / 130), payload-carrying commands (25 / 360) and staged work
-  (57 / 952). The history below records how the families arrived.
+  clipboard (17 / 130), payload-carrying commands (25 / 362) and staged work
+  (57 / 954). The history below records how the families arrived.
   The native command owner first executed nineteen prepared intents: seven plate
   commands, three entity renames, instance printability, single/batch transforms,
   object/instance deletion, plate clearing, independent object duplication,
@@ -1600,6 +1600,20 @@ painting, and FullSpectrum operations that can support real native projects.
     code point, so a native host reads its own fonts), staged as a new text
     part or a re-cut (29 cuts of 11,200 triangles and 8 stages exact in every
     binding). V8's `Math.round` joins `js_math`, pinned on 2,020 inputs.
+  - [x] Settle the SVG reader's and re-cut's browser semantics before the
+    reader is ported. Browser fixes, each with a regression: elements and
+    units were looked up through plain objects, so `<constructor>` was
+    reported with no reason and a `constructor` unit turned a length into
+    NaN; the first declaration of a property won (`fill:#f00; fill:none`
+    extruded a line drawing); classes applied in the order an element listed
+    them, not in stylesheet order; and a re-cut from another drawing named a
+    drawing that was never stored while the old one stayed declared with
+    nothing naming it. A re-cut now stores its drawing, retires the one no
+    part names any more and undoes to the same hash. The staged `editSvgPart`
+    record carries the drawing (the native recipe's drawing is no longer
+    optional), and both commands refuse a drawing stored under another ID
+    than its recipe names, as they refuse a mismatched mesh (asset corpus 25
+    / 362; staged 57 / 954, exact in Rust, WASM and JNI).
   - [ ] Port the remaining preparation kernel (SVG), mesh renderer packets and
     device qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,

@@ -937,7 +937,7 @@ fn command(
             let name = decode::<Text>(v.next().unwrap())?;
             Box::new(move |assets| {
                 let recipe = Recipe::Svg {
-                    drawing: Some(assets[drawing].clone()),
+                    drawing: assets[drawing].clone(),
                     part,
                 };
                 CapturedCommand::add_drawn_part(
@@ -955,11 +955,12 @@ fn command(
             v.next();
             let volume = decode::<VolumeId>(v.next().unwrap())?;
             let slot = declarations.declare(v.next().unwrap())?;
+            let drawing = declarations.declare(v.next().unwrap())?;
             let triangles = number(v.next().unwrap())?;
             let part = Arc::new(decode::<EmbossSvgPart>(v.next().unwrap())?);
             Box::new(move |assets| {
                 let recipe = Recipe::Svg {
-                    drawing: None,
+                    drawing: assets[drawing].clone(),
                     part,
                 };
                 CapturedCommand::recut_part(

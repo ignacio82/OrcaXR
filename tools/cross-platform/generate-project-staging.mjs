@@ -124,7 +124,7 @@ assert.deepEqual(s.commandKinds, {
     "part",
     "name",
   ],
-  editSvgPart: ["volumeId", "descriptor", "triangleCount", "part"],
+  editSvgPart: ["volumeId", "descriptor", "drawing", "triangleCount", "part"],
   addEmbossText: ["placement", "configuration", "descriptor", "triangleCount"],
   editEmbossText: ["volumeId", "configuration", "descriptor", "triangleCount"],
   replaceProject: ["state", "label"],

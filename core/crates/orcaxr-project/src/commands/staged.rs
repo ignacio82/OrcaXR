@@ -300,7 +300,10 @@ impl CapturedCommand {
                 Recipe::Svg { drawing, part } => {
                     asset.lease().descriptor().write_canonical(&mut &mut *out)?;
                     out.write_all(b",")?;
-                    optional_descriptor(drawing.as_ref(), out)?;
+                    drawing
+                        .lease()
+                        .descriptor()
+                        .write_canonical(&mut &mut *out)?;
                     out.write_all(b",")?;
                     Value::Number(triangles).write_canonical(&mut &mut *out)?;
                     out.write_all(b",")?;
@@ -319,18 +322,14 @@ impl CapturedCommand {
             out.write_all(b"]")
         })?;
         let mut assets = vec![asset.clone()];
-        if let Recipe::Svg {
-            drawing: Some(drawing),
-            ..
-        } = &recipe
-        {
+        if let Recipe::Svg { drawing, .. } = &recipe {
             assets.push(drawing.clone());
         }
         let command = PreparedCommand::add_drawn_part(placement, asset, triangles, recipe, name)
             .map_err(CaptureError::Preparation)?;
         Ok(Self::with_assets(command, units, assets))
     }
-    /// `["editSvgPart",volumeId,descriptor,triangleCount,part]` or
+    /// `["editSvgPart",volumeId,descriptor,drawing,triangleCount,part]` or
     /// `["editEmbossText",volumeId,configuration,descriptor,triangleCount]`.
     pub fn recut_part(
         volume: VolumeId,
@@ -341,11 +340,16 @@ impl CapturedCommand {
     ) -> Result<Self, CaptureError> {
         let units = measure(max_units, |out| {
             match &recipe {
-                Recipe::Svg { part, .. } => {
+                Recipe::Svg { drawing, part } => {
                     out.write_all(b"[\"editSvgPart\",")?;
                     volume.write_json(out)?;
                     out.write_all(b",")?;
                     asset.lease().descriptor().write_canonical(&mut &mut *out)?;
+                    out.write_all(b",")?;
+                    drawing
+                        .lease()
+                        .descriptor()
+                        .write_canonical(&mut &mut *out)?;
                     out.write_all(b",")?;
                     Value::Number(triangles).write_canonical(&mut &mut *out)?;
                     out.write_all(b",")?;
@@ -364,9 +368,13 @@ impl CapturedCommand {
             }
             out.write_all(b"]")
         })?;
+        let mut assets = vec![asset.clone()];
+        if let Recipe::Svg { drawing, .. } = &recipe {
+            assets.push(drawing.clone());
+        }
         let command = PreparedCommand::recut_part(volume, asset.clone(), triangles, recipe)
             .map_err(CaptureError::Preparation)?;
-        Ok(Self::with_assets(command, units, vec![asset]))
+        Ok(Self::with_assets(command, units, assets))
     }
     /// `["replaceProject",state,label]`.
     pub fn replace_project(
@@ -424,12 +432,6 @@ fn write_placement(placement: &PartPlacement, out: &mut dyn Write) -> io::Result
     out.write_all(b",\"transform\":")?;
     placement.transform.write_json(out)?;
     out.write_all(b"}")
-}
-fn optional_descriptor(asset: Option<&StagedAsset>, out: &mut dyn Write) -> io::Result<()> {
-    match asset {
-        Some(asset) => asset.lease().descriptor().write_canonical(&mut &mut *out),
-        None => out.write_all(b"null"),
-    }
 }
 /// `[{"volumeId":..,"descriptor":..,"transform":..,"sourceTriangleIndices":[..]},..]`.
 fn write_parts(parts: &[SplitPart], out: &mut dyn Write) -> io::Result<()> {

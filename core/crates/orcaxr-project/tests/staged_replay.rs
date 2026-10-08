@@ -404,7 +404,7 @@ fn capture_asset_command(v: &Value) -> Result<CapturedCommand, wire::SessionErro
             staged_asset(&v["asset"])?,
             triangles(),
             Recipe::Svg {
-                drawing: Some(staged_asset(&v["drawing"])?),
+                drawing: staged_asset(&v["drawing"])?,
                 part: Arc::new(decoded(&v["partJson"])?),
             },
             Some(Text::new(utf16(&v["name"]))),
@@ -415,7 +415,7 @@ fn capture_asset_command(v: &Value) -> Result<CapturedCommand, wire::SessionErro
             staged_asset(&v["asset"])?,
             triangles(),
             Recipe::Svg {
-                drawing: None,
+                drawing: staged_asset(&v["drawing"])?,
                 part: Arc::new(decoded(&v["partJson"])?),
             },
             LIMIT,
@@ -696,5 +696,5 @@ fn staged_ownership_and_protocol_match_independent_typescript_authority() {
             }
         }
     }
-    assert_eq!((groups, requests), (952, 704));
+    assert_eq!((groups, requests), (954, 704));
 }
