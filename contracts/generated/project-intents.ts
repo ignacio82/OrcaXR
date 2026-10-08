@@ -3520,6 +3520,98 @@ const shapes = {
       "fill": "BedFill",
       "refused": "ArrangeRefusal"
     }
+  },
+  "WipeTowerRect": {
+    "kind": "object",
+    "fields": {
+      "xMin": "Finite",
+      "yMin": "Finite",
+      "xMax": "Finite",
+      "yMax": "Finite"
+    }
+  },
+  "OptionalWipeTowerRect": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "WipeTowerRect"
+    }
+  },
+  "OptionalPlanarPosition": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "PlanarPosition"
+    }
+  },
+  "WipeTowerBiasName": {
+    "kind": "enum",
+    "values": [
+      "backLeft",
+      "backRight",
+      "frontLeft",
+      "frontRight",
+      "largestClearance"
+    ]
+  },
+  "OptionalWipeTowerBias": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "WipeTowerBiasName"
+    }
+  },
+  "WipeTowerRequest": {
+    "kind": "object",
+    "fields": {
+      "plateId": "Id",
+      "bedRectMm": "OptionalWipeTowerRect",
+      "bedSizeMm": "OptionalPlanarPosition",
+      "towerW": "OptionalFinite",
+      "towerD": "OptionalFinite",
+      "safetyMm": "OptionalFinite",
+      "marginMm": "OptionalFinite",
+      "bias": "OptionalWipeTowerBias",
+      "volumeRoles": "OptionalVolumeRoleNames"
+    }
+  },
+  "WipeTowerPick": {
+    "kind": "object",
+    "fields": {
+      "xMm": "Finite",
+      "yMm": "Finite",
+      "clearanceMm": "OptionalFinite",
+      "label": "EditText",
+      "footprint": "WipeTowerRect"
+    }
+  },
+  "WipeTowerPlan": {
+    "kind": "object",
+    "fields": {
+      "pick": "WipeTowerPick",
+      "wipeTower": "WipeTowerInput"
+    }
+  },
+  "WipeTowerRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "unknownPlate",
+      "invalidBed"
+    ]
+  },
+  "WipeTowerRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "WipeTowerRefusalCode",
+      "message": "EditText"
+    }
+  },
+  "WipeTowerReply": {
+    "kind": "union",
+    "variants": {
+      "plan": "WipeTowerPlan",
+      "refused": "WipeTowerRefusal"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -3943,6 +4035,17 @@ export interface ProjectBedFillPlacementWire {readonly transform: ProjectTransfo
 export type ProjectBedFillPlacementsWire = readonly ProjectBedFillPlacementWire[];
 export interface ProjectBedFillWire {readonly placements: ProjectBedFillPlacementsWire;readonly withheldSlotCount: ProjectCounterWire;}
 export type ProjectBedFillReplyWire = {readonly fill:ProjectBedFillWire} | {readonly refused:ProjectArrangeRefusalWire};
+export interface ProjectWipeTowerRectWire {readonly xMin: ProjectFiniteWire;readonly yMin: ProjectFiniteWire;readonly xMax: ProjectFiniteWire;readonly yMax: ProjectFiniteWire;}
+export type ProjectOptionalWipeTowerRectWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectWipeTowerRectWire};
+export type ProjectOptionalPlanarPositionWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectPlanarPositionWire};
+export type ProjectWipeTowerBiasNameWire = "backLeft" | "backRight" | "frontLeft" | "frontRight" | "largestClearance";
+export type ProjectOptionalWipeTowerBiasWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectWipeTowerBiasNameWire};
+export interface ProjectWipeTowerRequestWire {readonly plateId: ProjectIdWire;readonly bedRectMm: ProjectOptionalWipeTowerRectWire;readonly bedSizeMm: ProjectOptionalPlanarPositionWire;readonly towerW: ProjectOptionalFiniteWire;readonly towerD: ProjectOptionalFiniteWire;readonly safetyMm: ProjectOptionalFiniteWire;readonly marginMm: ProjectOptionalFiniteWire;readonly bias: ProjectOptionalWipeTowerBiasWire;readonly volumeRoles: ProjectOptionalVolumeRoleNamesWire;}
+export interface ProjectWipeTowerPickWire {readonly xMm: ProjectFiniteWire;readonly yMm: ProjectFiniteWire;readonly clearanceMm: ProjectOptionalFiniteWire;readonly label: ProjectEditTextWire;readonly footprint: ProjectWipeTowerRectWire;}
+export interface ProjectWipeTowerPlanWire {readonly pick: ProjectWipeTowerPickWire;readonly wipeTower: ProjectWipeTowerInputWire;}
+export type ProjectWipeTowerRefusalCodeWire = "unknownPlate" | "invalidBed";
+export interface ProjectWipeTowerRefusalWire {readonly code: ProjectWipeTowerRefusalCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectWipeTowerReplyWire = {readonly plan:ProjectWipeTowerPlanWire} | {readonly refused:ProjectWipeTowerRefusalWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -4171,3 +4274,9 @@ export function encodeProjectBedFillRequest(value:ProjectBedFillRequestWire):str
 export function captureProjectBedFillReply(value:unknown):ProjectBedFillReplyWire { return captureIntent("BedFillReply",value,shapes,limits) as ProjectBedFillReplyWire; }
 export function decodeProjectBedFillReply(text:string):ProjectBedFillReplyWire { return captureProjectBedFillReply(parseIntentJson(text,limits)); }
 export function encodeProjectBedFillReply(value:ProjectBedFillReplyWire):string { return JSON.stringify(captureProjectBedFillReply(value)); }
+export function captureProjectWipeTowerRequest(value:unknown):ProjectWipeTowerRequestWire { return captureIntent("WipeTowerRequest",value,shapes,limits) as ProjectWipeTowerRequestWire; }
+export function decodeProjectWipeTowerRequest(text:string):ProjectWipeTowerRequestWire { return captureProjectWipeTowerRequest(parseIntentJson(text,limits)); }
+export function encodeProjectWipeTowerRequest(value:ProjectWipeTowerRequestWire):string { return JSON.stringify(captureProjectWipeTowerRequest(value)); }
+export function captureProjectWipeTowerReply(value:unknown):ProjectWipeTowerReplyWire { return captureIntent("WipeTowerReply",value,shapes,limits) as ProjectWipeTowerReplyWire; }
+export function decodeProjectWipeTowerReply(text:string):ProjectWipeTowerReplyWire { return captureProjectWipeTowerReply(parseIntentJson(text,limits)); }
+export function encodeProjectWipeTowerReply(value:ProjectWipeTowerReplyWire):string { return JSON.stringify(captureProjectWipeTowerReply(value)); }

@@ -16,6 +16,7 @@ import { replayPaintStrokes } from "./paint-stroke-replay.mjs";
 import { replayPicks } from "./pick-replay.mjs";
 import { replayPlacements } from "./placement-replay.mjs";
 import { replayArrangements } from "./arrange-replay.mjs";
+import { replayWipeTowers } from "./wipe-tower-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -576,6 +577,18 @@ try {
       .join("\n"),
   );
   assert.equal(arrangeChecks, 57);
+  // Wipe-tower auto-placement over a live session, then the Kotlin wrapper.
+  const towerFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/wipe-tower-vectors.json", root)),
+  );
+  assert.equal(replayWipeTowers(projectJniCore(jvm.call), towerFixture, layout).wipeTowers, 27);
+  const wipeTowerChecks = jvm.call(
+    "wipeTowerChecks",
+    towerFixture.stateJson,
+    ...towerFixture.assets.map((a) => Uint8Array.from(a.bytes)),
+    towerFixture.cases.map((c) => `${c.request}\t${c.reply}`).join("\n"),
+  );
+  assert.equal(wipeTowerChecks, 55);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

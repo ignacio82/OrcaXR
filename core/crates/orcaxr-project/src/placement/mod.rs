@@ -15,6 +15,7 @@ use orcaxr_contracts::project_intent_types as wire;
 use std::collections::BTreeMap;
 
 pub mod arrange;
+pub mod wipe_tower;
 
 pub type Vec3 = [f64; 3];
 pub type Quaternion = [f64; 4];

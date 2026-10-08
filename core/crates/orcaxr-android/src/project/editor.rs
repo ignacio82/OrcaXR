@@ -307,6 +307,19 @@ pub(super) fn paint_stroke_overlay(
     })?;
     string(env, json)
 }
+/// The plate's wipe tower, auto-placed.
+pub(super) fn session_wipe_tower(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_wipe_tower_request)?;
+    let json = with_session(handle, |s| {
+        let reply = s.plan_wipe_tower(&request).map_err(|_| "disposed")?;
+        encoded(&reply, wire::encode_wipe_tower_reply)
+    })?;
+    string(env, json)
+}
 /// One plate's arrangement.
 pub(super) fn session_arrangement(
     env: &mut JNIEnv<'_>,

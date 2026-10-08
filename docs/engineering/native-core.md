@@ -3432,6 +3432,33 @@ instances, a too-small bed and other role sets, and every refusal: 14
 arrangement and 14 fill requests (12 refusals). Rust, WASM in Node and Chrome
 and JNI answer all 28 byte for byte; 57 Kotlin checks cover the wrapper.
 
+### Wipe-tower auto-placement
+
+`placement::wipe_tower` ports `wipeTowerPlacement.ts` (through
+`wipeTowerExchange.ts`). It scores eight candidates — the printable
+rectangle's corners and edge midpoints, inset by 1 mm — by the Chebyshev
+clearance of the tower's whole printed footprint (the body grown by the brim,
+plus the rib wall's overhang bound when the wall is ribbed) to every printable
+part; the requested bias wins ties within 5 mm, or the largest clearance
+wins outright. The bed is the requested rectangle, else the plate's then the
+project's `printable_area` (a point list or a `,`/`;`-separated string), else a
+legacy size. The tower width, brim, wall type and rib sizes are read with the
+browser's JavaScript coercions (`Number(...)` of strings and arrays,
+`String(...).trim().toLowerCase()`, `??` and `|| 60`). A `WipeTowerRequest`
+answers the pick (body corner, clearance — absent when no part bounds it —
+label and footprint) and the plate's tower as one `setPlateWipeTower` intent
+sets it, keeping an existing tower's rotation and filament, or refuses an
+unknown plate or a missing printable area. Bindings: WASM `plan_wipe_tower`,
+the JNI export `sessionWipeTower` and Kotlin `ProjectSession.planWipeTower`.
+
+`wipe-tower-vectors.mjs` places towers on four plates whose configuration
+exercises every coercion path — a U1-style offset point list, a mixed-separator
+string, garbage, string, array and zero tower widths, a ribbed wall and a null
+brim — over the picking scene's parts, an empty plate and a plate with an
+existing tower, under every bias and request override: 27 requests (3
+refusals). Rust, WASM in Node and Chrome and JNI answer all 27 byte for byte;
+55 Kotlin checks cover the wrapper.
+
 ### Paint palette
 
 `facets::palette` ports `projectPaintPalette`: the filament library as the

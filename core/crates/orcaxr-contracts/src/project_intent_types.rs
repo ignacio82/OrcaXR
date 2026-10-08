@@ -7336,6 +7336,207 @@ fn read_bed_fill_reply(v: &Value) -> Result<BedFillReply, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WipeTowerRect {
+    pub x_min: Finite,
+    pub y_min: Finite,
+    pub x_max: Finite,
+    pub y_max: Finite,
+}
+fn read_wipe_tower_rect(v: &Value) -> Result<WipeTowerRect, InvalidIntent> {
+    let object = fields(v, &["xMin", "yMin", "xMax", "yMax"], false)?;
+    Ok(WipeTowerRect {
+        x_min: read_finite(&object["xMin"])?,
+        y_min: read_finite(&object["yMin"])?,
+        x_max: read_finite(&object["xMax"])?,
+        y_max: read_finite(&object["yMax"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalWipeTowerRect {
+    Absent(Empty),
+    Value(WipeTowerRect),
+}
+fn read_optional_wipe_tower_rect(v: &Value) -> Result<OptionalWipeTowerRect, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalWipeTowerRect::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalWipeTowerRect::Value(read_wipe_tower_rect(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalPlanarPosition {
+    Absent(Empty),
+    Value(PlanarPosition),
+}
+fn read_optional_planar_position(v: &Value) -> Result<OptionalPlanarPosition, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPlanarPosition::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPlanarPosition::Value(read_planar_position(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WipeTowerBiasName {
+    BackLeft,
+    BackRight,
+    FrontLeft,
+    FrontRight,
+    LargestClearance,
+}
+fn read_wipe_tower_bias_name(v: &Value) -> Result<WipeTowerBiasName, InvalidIntent> {
+    match v.as_str() {
+        Some("backLeft") => Ok(WipeTowerBiasName::BackLeft),
+        Some("backRight") => Ok(WipeTowerBiasName::BackRight),
+        Some("frontLeft") => Ok(WipeTowerBiasName::FrontLeft),
+        Some("frontRight") => Ok(WipeTowerBiasName::FrontRight),
+        Some("largestClearance") => Ok(WipeTowerBiasName::LargestClearance),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalWipeTowerBias {
+    Absent(Empty),
+    Value(WipeTowerBiasName),
+}
+fn read_optional_wipe_tower_bias(v: &Value) -> Result<OptionalWipeTowerBias, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalWipeTowerBias::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalWipeTowerBias::Value(read_wipe_tower_bias_name(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WipeTowerRequest {
+    pub plate_id: Id,
+    pub bed_rect_mm: OptionalWipeTowerRect,
+    pub bed_size_mm: OptionalPlanarPosition,
+    pub tower_w: OptionalFinite,
+    pub tower_d: OptionalFinite,
+    pub safety_mm: OptionalFinite,
+    pub margin_mm: OptionalFinite,
+    pub bias: OptionalWipeTowerBias,
+    pub volume_roles: OptionalVolumeRoleNames,
+}
+fn read_wipe_tower_request(v: &Value) -> Result<WipeTowerRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "plateId",
+            "bedRectMm",
+            "bedSizeMm",
+            "towerW",
+            "towerD",
+            "safetyMm",
+            "marginMm",
+            "bias",
+            "volumeRoles",
+        ],
+        false,
+    )?;
+    Ok(WipeTowerRequest {
+        plate_id: read_id(&object["plateId"])?,
+        bed_rect_mm: read_optional_wipe_tower_rect(&object["bedRectMm"])?,
+        bed_size_mm: read_optional_planar_position(&object["bedSizeMm"])?,
+        tower_w: read_optional_finite(&object["towerW"])?,
+        tower_d: read_optional_finite(&object["towerD"])?,
+        safety_mm: read_optional_finite(&object["safetyMm"])?,
+        margin_mm: read_optional_finite(&object["marginMm"])?,
+        bias: read_optional_wipe_tower_bias(&object["bias"])?,
+        volume_roles: read_optional_volume_role_names(&object["volumeRoles"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WipeTowerPick {
+    pub x_mm: Finite,
+    pub y_mm: Finite,
+    pub clearance_mm: OptionalFinite,
+    pub label: EditText,
+    pub footprint: WipeTowerRect,
+}
+fn read_wipe_tower_pick(v: &Value) -> Result<WipeTowerPick, InvalidIntent> {
+    let object = fields(
+        v,
+        &["xMm", "yMm", "clearanceMm", "label", "footprint"],
+        false,
+    )?;
+    Ok(WipeTowerPick {
+        x_mm: read_finite(&object["xMm"])?,
+        y_mm: read_finite(&object["yMm"])?,
+        clearance_mm: read_optional_finite(&object["clearanceMm"])?,
+        label: read_edit_text(&object["label"])?,
+        footprint: read_wipe_tower_rect(&object["footprint"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WipeTowerPlan {
+    pub pick: WipeTowerPick,
+    pub wipe_tower: WipeTowerInput,
+}
+fn read_wipe_tower_plan(v: &Value) -> Result<WipeTowerPlan, InvalidIntent> {
+    let object = fields(v, &["pick", "wipeTower"], false)?;
+    Ok(WipeTowerPlan {
+        pick: read_wipe_tower_pick(&object["pick"])?,
+        wipe_tower: read_wipe_tower_input(&object["wipeTower"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WipeTowerRefusalCode {
+    UnknownPlate,
+    InvalidBed,
+}
+fn read_wipe_tower_refusal_code(v: &Value) -> Result<WipeTowerRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("unknownPlate") => Ok(WipeTowerRefusalCode::UnknownPlate),
+        Some("invalidBed") => Ok(WipeTowerRefusalCode::InvalidBed),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WipeTowerRefusal {
+    pub code: WipeTowerRefusalCode,
+    pub message: EditText,
+}
+fn read_wipe_tower_refusal(v: &Value) -> Result<WipeTowerRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(WipeTowerRefusal {
+        code: read_wipe_tower_refusal_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WipeTowerReply {
+    Plan(WipeTowerPlan),
+    Refused(WipeTowerRefusal),
+}
+fn read_wipe_tower_reply(v: &Value) -> Result<WipeTowerReply, InvalidIntent> {
+    let object = fields(v, &["plan", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "plan" => Ok(WipeTowerReply::Plan(read_wipe_tower_plan(value)?)),
+        "refused" => Ok(WipeTowerReply::Refused(read_wipe_tower_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -7986,5 +8187,21 @@ pub fn decode_bed_fill_reply(text: &str) -> Result<BedFillReply, InvalidIntent> 
 pub fn encode_bed_fill_reply(value: &BedFillReply) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_bed_fill_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_wipe_tower_request(text: &str) -> Result<WipeTowerRequest, InvalidIntent> {
+    read_wipe_tower_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_wipe_tower_request(value: &WipeTowerRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_wipe_tower_request(&text)?;
+    Ok(text)
+}
+pub fn decode_wipe_tower_reply(text: &str) -> Result<WipeTowerReply, InvalidIntent> {
+    read_wipe_tower_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_wipe_tower_reply(value: &WipeTowerReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_wipe_tower_reply(&text)?;
     Ok(text)
 }

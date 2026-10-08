@@ -1549,9 +1549,16 @@ painting, and FullSpectrum operations that can support real native projects.
   - [x] Port plate arrangement and bed fill (`placement::arrange`): the shelf
     packer and free-slot fill with keep-out regions, locked instances and copy
     limits (28 requests exact in every binding); two fill error codes fixed.
+  - [x] Port wipe-tower auto-placement (`placement::wipe_tower`) with the
+    browser's configuration coercions (27 requests exact in every binding).
   - [ ] Port the remaining preparation kernels (split preparation,
-    simplification, brim ears, wipe-tower placement, measurement, emboss/SVG),
-    mesh renderer packets and device qualification.
+    simplification, brim ears, measurement, emboss/SVG), mesh renderer packets
+    and device qualification. Brim ears first need a browser fix: the workspace
+    detects, places and draws ears in the first volume's own space, while the
+    model and the engine read them as object-local, so an object whose first
+    volume is transformed (split parts are recentred) gets misplaced ears; the
+    fix moves detection, clicks and the ear discs to object space and needs
+    visual verification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.

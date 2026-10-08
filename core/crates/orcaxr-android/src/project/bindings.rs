@@ -611,6 +611,12 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sessionWipeTower, session_wipe_tower, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

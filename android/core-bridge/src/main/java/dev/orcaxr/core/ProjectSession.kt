@@ -191,6 +191,11 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun paintStroke(guard: ProjectGuard, request: ProjectIntents.PaintStrokeOpen): ProjectPaintStroke = read {
         own(NativeProject.paintStrokeOpen(it, guard.reference(), ProjectIntents.encodePaintStrokeOpen(request)), ::ProjectPaintStroke)
     }
+    /** The plate's wipe tower auto-placed: the winning candidate and the tower
+     * one `setPlateWipeTower` intent sets. */
+    fun planWipeTower(request: ProjectIntents.WipeTowerRequest): ProjectIntents.WipeTowerReply = read {
+        ProjectIntents.decodeWipeTowerReply(NativeProject.sessionWipeTower(it, ProjectIntents.encodeWipeTowerRequest(request)))
+    }
     /** One plate's arrangement: the moves as one `setInstanceTransforms`
      * intent's changes, with what did not fit and what stayed locked. */
     fun planArrangement(request: ProjectIntents.ArrangeRequest): ProjectIntents.ArrangeReply = read {

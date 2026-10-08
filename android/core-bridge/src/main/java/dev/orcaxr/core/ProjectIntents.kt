@@ -5284,6 +5284,159 @@ object ProjectIntents {
             is BedFillReply.Refused -> w.field("refused") { writeArrangeRefusal(w, v.value) }
         } }
     }
+    data class WipeTowerRect(val xMin: Double, val yMin: Double, val xMax: Double, val yMax: Double)
+    private fun readWipeTowerRect(v: Any): WipeTowerRect {
+        val obj = ProjectIntentJson.fields(v, setOf("xMin", "yMin", "xMax", "yMax"), false)
+        return WipeTowerRect(readFinite(obj.get("xMin")), readFinite(obj.get("yMin")), readFinite(obj.get("xMax")), readFinite(obj.get("yMax")))
+    }
+    private fun writeWipeTowerRect(w: ProjectIntentWriter, v: WipeTowerRect) {
+        w.obj {
+            w.field("xMin") { writeFinite(w, v.xMin) }
+            w.field("yMin") { writeFinite(w, v.yMin) }
+            w.field("xMax") { writeFinite(w, v.xMax) }
+            w.field("yMax") { writeFinite(w, v.yMax) }
+        }
+    }
+    sealed interface OptionalWipeTowerRect {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalWipeTowerRect
+        data class Value(val value: ProjectIntents.WipeTowerRect) : OptionalWipeTowerRect
+    }
+    private fun readOptionalWipeTowerRect(v: Any): OptionalWipeTowerRect {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalWipeTowerRect.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalWipeTowerRect.Value(readWipeTowerRect(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalWipeTowerRect(w: ProjectIntentWriter, v: OptionalWipeTowerRect) {
+        w.obj { when(v) {
+            is OptionalWipeTowerRect.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalWipeTowerRect.Value -> w.field("value") { writeWipeTowerRect(w, v.value) }
+        } }
+    }
+    sealed interface OptionalPlanarPosition {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalPlanarPosition
+        data class Value(val value: List<Double>) : OptionalPlanarPosition
+    }
+    private fun readOptionalPlanarPosition(v: Any): OptionalPlanarPosition {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalPlanarPosition.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalPlanarPosition.Value(readPlanarPosition(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalPlanarPosition(w: ProjectIntentWriter, v: OptionalPlanarPosition) {
+        w.obj { when(v) {
+            is OptionalPlanarPosition.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalPlanarPosition.Value -> w.field("value") { writePlanarPosition(w, v.value) }
+        } }
+    }
+    enum class WipeTowerBiasName {BackLeft,BackRight,FrontLeft,FrontRight,LargestClearance}
+    private fun readWipeTowerBiasName(v: Any): WipeTowerBiasName {
+        return when(v) {"backLeft" -> WipeTowerBiasName.BackLeft;"backRight" -> WipeTowerBiasName.BackRight;"frontLeft" -> WipeTowerBiasName.FrontLeft;"frontRight" -> WipeTowerBiasName.FrontRight;"largestClearance" -> WipeTowerBiasName.LargestClearance; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeWipeTowerBiasName(w: ProjectIntentWriter, v: WipeTowerBiasName) {
+        w.literal(when(v) {WipeTowerBiasName.BackLeft -> "backLeft";WipeTowerBiasName.BackRight -> "backRight";WipeTowerBiasName.FrontLeft -> "frontLeft";WipeTowerBiasName.FrontRight -> "frontRight";WipeTowerBiasName.LargestClearance -> "largestClearance";})
+    }
+    sealed interface OptionalWipeTowerBias {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalWipeTowerBias
+        data class Value(val value: ProjectIntents.WipeTowerBiasName) : OptionalWipeTowerBias
+    }
+    private fun readOptionalWipeTowerBias(v: Any): OptionalWipeTowerBias {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalWipeTowerBias.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalWipeTowerBias.Value(readWipeTowerBiasName(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalWipeTowerBias(w: ProjectIntentWriter, v: OptionalWipeTowerBias) {
+        w.obj { when(v) {
+            is OptionalWipeTowerBias.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalWipeTowerBias.Value -> w.field("value") { writeWipeTowerBiasName(w, v.value) }
+        } }
+    }
+    data class WipeTowerRequest(val plateId: List<Int>, val bedRectMm: OptionalWipeTowerRect, val bedSizeMm: OptionalPlanarPosition, val towerW: OptionalFinite, val towerD: OptionalFinite, val safetyMm: OptionalFinite, val marginMm: OptionalFinite, val bias: OptionalWipeTowerBias, val volumeRoles: OptionalVolumeRoleNames)
+    private fun readWipeTowerRequest(v: Any): WipeTowerRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("plateId", "bedRectMm", "bedSizeMm", "towerW", "towerD", "safetyMm", "marginMm", "bias", "volumeRoles"), false)
+        return WipeTowerRequest(readId(obj.get("plateId")), readOptionalWipeTowerRect(obj.get("bedRectMm")), readOptionalPlanarPosition(obj.get("bedSizeMm")), readOptionalFinite(obj.get("towerW")), readOptionalFinite(obj.get("towerD")), readOptionalFinite(obj.get("safetyMm")), readOptionalFinite(obj.get("marginMm")), readOptionalWipeTowerBias(obj.get("bias")), readOptionalVolumeRoleNames(obj.get("volumeRoles")))
+    }
+    private fun writeWipeTowerRequest(w: ProjectIntentWriter, v: WipeTowerRequest) {
+        w.obj {
+            w.field("plateId") { writeId(w, v.plateId) }
+            w.field("bedRectMm") { writeOptionalWipeTowerRect(w, v.bedRectMm) }
+            w.field("bedSizeMm") { writeOptionalPlanarPosition(w, v.bedSizeMm) }
+            w.field("towerW") { writeOptionalFinite(w, v.towerW) }
+            w.field("towerD") { writeOptionalFinite(w, v.towerD) }
+            w.field("safetyMm") { writeOptionalFinite(w, v.safetyMm) }
+            w.field("marginMm") { writeOptionalFinite(w, v.marginMm) }
+            w.field("bias") { writeOptionalWipeTowerBias(w, v.bias) }
+            w.field("volumeRoles") { writeOptionalVolumeRoleNames(w, v.volumeRoles) }
+        }
+    }
+    data class WipeTowerPick(val xMm: Double, val yMm: Double, val clearanceMm: OptionalFinite, val label: List<Int>, val footprint: WipeTowerRect)
+    private fun readWipeTowerPick(v: Any): WipeTowerPick {
+        val obj = ProjectIntentJson.fields(v, setOf("xMm", "yMm", "clearanceMm", "label", "footprint"), false)
+        return WipeTowerPick(readFinite(obj.get("xMm")), readFinite(obj.get("yMm")), readOptionalFinite(obj.get("clearanceMm")), readEditText(obj.get("label")), readWipeTowerRect(obj.get("footprint")))
+    }
+    private fun writeWipeTowerPick(w: ProjectIntentWriter, v: WipeTowerPick) {
+        w.obj {
+            w.field("xMm") { writeFinite(w, v.xMm) }
+            w.field("yMm") { writeFinite(w, v.yMm) }
+            w.field("clearanceMm") { writeOptionalFinite(w, v.clearanceMm) }
+            w.field("label") { writeEditText(w, v.label) }
+            w.field("footprint") { writeWipeTowerRect(w, v.footprint) }
+        }
+    }
+    data class WipeTowerPlan(val pick: WipeTowerPick, val wipeTower: WipeTowerInput)
+    private fun readWipeTowerPlan(v: Any): WipeTowerPlan {
+        val obj = ProjectIntentJson.fields(v, setOf("pick", "wipeTower"), false)
+        return WipeTowerPlan(readWipeTowerPick(obj.get("pick")), readWipeTowerInput(obj.get("wipeTower")))
+    }
+    private fun writeWipeTowerPlan(w: ProjectIntentWriter, v: WipeTowerPlan) {
+        w.obj {
+            w.field("pick") { writeWipeTowerPick(w, v.pick) }
+            w.field("wipeTower") { writeWipeTowerInput(w, v.wipeTower) }
+        }
+    }
+    enum class WipeTowerRefusalCode {UnknownPlate,InvalidBed}
+    private fun readWipeTowerRefusalCode(v: Any): WipeTowerRefusalCode {
+        return when(v) {"unknownPlate" -> WipeTowerRefusalCode.UnknownPlate;"invalidBed" -> WipeTowerRefusalCode.InvalidBed; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeWipeTowerRefusalCode(w: ProjectIntentWriter, v: WipeTowerRefusalCode) {
+        w.literal(when(v) {WipeTowerRefusalCode.UnknownPlate -> "unknownPlate";WipeTowerRefusalCode.InvalidBed -> "invalidBed";})
+    }
+    data class WipeTowerRefusal(val code: WipeTowerRefusalCode, val message: List<Int>)
+    private fun readWipeTowerRefusal(v: Any): WipeTowerRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return WipeTowerRefusal(readWipeTowerRefusalCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writeWipeTowerRefusal(w: ProjectIntentWriter, v: WipeTowerRefusal) {
+        w.obj {
+            w.field("code") { writeWipeTowerRefusalCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface WipeTowerReply {
+        data class Plan(val value: ProjectIntents.WipeTowerPlan) : WipeTowerReply
+        data class Refused(val value: ProjectIntents.WipeTowerRefusal) : WipeTowerReply
+    }
+    private fun readWipeTowerReply(v: Any): WipeTowerReply {
+        val obj = ProjectIntentJson.fields(v, setOf("plan", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "plan" -> WipeTowerReply.Plan(readWipeTowerPlan(obj.get(key)))
+            "refused" -> WipeTowerReply.Refused(readWipeTowerRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeWipeTowerReply(w: ProjectIntentWriter, v: WipeTowerReply) {
+        w.obj { when(v) {
+            is WipeTowerReply.Plan -> w.field("plan") { writeWipeTowerPlan(w, v.value) }
+            is WipeTowerReply.Refused -> w.field("refused") { writeWipeTowerRefusal(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -5436,4 +5589,8 @@ object ProjectIntents {
     fun encodeBedFillRequest(value: BedFillRequest): String = ProjectIntentWriter().also { writeBedFillRequest(it, value) }.finish()
     fun decodeBedFillReply(text: String): BedFillReply = readBedFillReply(ProjectIntentJson.parse(text))
     fun encodeBedFillReply(value: BedFillReply): String = ProjectIntentWriter().also { writeBedFillReply(it, value) }.finish()
+    fun decodeWipeTowerRequest(text: String): WipeTowerRequest = readWipeTowerRequest(ProjectIntentJson.parse(text))
+    fun encodeWipeTowerRequest(value: WipeTowerRequest): String = ProjectIntentWriter().also { writeWipeTowerRequest(it, value) }.finish()
+    fun decodeWipeTowerReply(text: String): WipeTowerReply = readWipeTowerReply(ProjectIntentJson.parse(text))
+    fun encodeWipeTowerReply(value: WipeTowerReply): String = ProjectIntentWriter().also { writeWipeTowerReply(it, value) }.finish()
 }

@@ -252,6 +252,21 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             request,
         ))
     }
+    /// The plate's wipe tower, auto-placed from the acknowledged state
+    /// (`WipeTowerRequest` → `WipeTowerReply`).
+    pub fn plan_wipe_tower(
+        &self,
+        request: &wire::WipeTowerRequest,
+    ) -> Result<wire::WipeTowerReply, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        Ok(crate::placement::wipe_tower::plan(
+            self.bus.snapshot().state(),
+            self.bus.assets(),
+            request,
+        ))
+    }
     /// One plate's arrangement, planned from the acknowledged state
     /// (`ArrangeRequest` → `ArrangeReply`).
     pub fn plan_arrangement(

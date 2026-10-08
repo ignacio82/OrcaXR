@@ -16,6 +16,7 @@ import { replayPaintStrokes } from "./paint-stroke-replay.mjs";
 import { replayPicks } from "./pick-replay.mjs";
 import { replayPlacements } from "./placement-replay.mjs";
 import { replayArrangements } from "./arrange-replay.mjs";
+import { replayWipeTowers } from "./wipe-tower-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -97,6 +98,8 @@ if (isMainThread) {
     assert.equal(result.placements, 67);
     // Arrangement and bed fill over a live session.
     assert.equal(result.arrangements, 28);
+    // Wipe-tower auto-placement over a live session.
+    assert.equal(result.wipeTowers, 27);
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -390,6 +393,15 @@ if (isMainThread) {
     ),
     layout,
   );
+  const towers = replayWipeTowers(
+    core,
+    JSON.parse(
+      await readFile(
+        new URL("testdata/cross-platform/wipe-tower-vectors.json", root),
+      ),
+    ),
+    layout,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -416,6 +428,7 @@ if (isMainThread) {
       ...picks,
       ...placed,
       ...arranged,
+      ...towers,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

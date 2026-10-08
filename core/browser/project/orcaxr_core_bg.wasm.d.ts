@@ -186,6 +186,7 @@ export const projectsession_pick_scene: (a: number, b: number, c: number) => [nu
 export const projectsession_plan_arrangement: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_plan_bed_fill: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_plan_placement: (a: number, b: number, c: number) => [number, number, number, number];
+export const projectsession_plan_wipe_tower: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_release_staged: (a: number, b: number) => [number, number, number];
 export const projectsession_render: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_reset_document: (a: number, b: number, c: number) => [number, number, number];

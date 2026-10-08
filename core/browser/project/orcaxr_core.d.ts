@@ -548,6 +548,11 @@ export class ProjectSession {
      * returns a `PlacementReply`.
      */
     plan_placement(request: string): string;
+    /**
+     * The plate's wipe tower, auto-placed: a `WipeTowerRequest`; returns a
+     * `WipeTowerReply`.
+     */
+    plan_wipe_tower(request: string): string;
     release_staged(id: number): boolean;
     /**
      * A `RenderRequest`: a page of the renderer deltas from the snapshot the
@@ -870,6 +875,7 @@ export interface InitOutput {
     readonly projectsession_plan_arrangement: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_plan_bed_fill: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_plan_placement: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectsession_plan_wipe_tower: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_release_staged: (a: number, b: number) => [number, number, number];
     readonly projectsession_render: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_reset_document: (a: number, b: number, c: number) => [number, number, number];
