@@ -696,6 +696,30 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_prepareEmboss, prepare_emboss, jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_embossReply, emboss_reply, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_embossMesh, emboss_mesh, jbyteArray,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_stageEmboss, stage_emboss, jlong,
+    handle: jlong,
+    emboss: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

@@ -64,6 +64,16 @@ fn acos_matches_v8_bit_for_bit() {
 }
 
 #[test]
+fn round_matches_v8_bit_for_bit() {
+    let rows = corpus()["round"].as_array().unwrap().clone();
+    assert!(rows.len() > 1_500);
+    for row in rows {
+        let x = f(&row[0]);
+        assert!(same(js_math::round(x), f(&row[1])), "round({x:e})");
+    }
+}
+
+#[test]
 fn hypot_matches_v8_bit_for_bit() {
     for row in corpus()["hypot"].as_array().unwrap() {
         let args: Vec<f64> = row[0].as_array().unwrap().iter().map(f).collect();

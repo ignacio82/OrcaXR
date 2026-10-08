@@ -3998,6 +3998,162 @@
         "stranded": "BrimEarStranded",
         "refused": "BrimEarRefusal"
       }
+    },
+    "EmbossHorizontalAlign": {
+      "kind": "enum",
+      "values": [
+        "left",
+        "center",
+        "right"
+      ]
+    },
+    "EmbossVerticalAlign": {
+      "kind": "enum",
+      "values": [
+        "top",
+        "center",
+        "bottom"
+      ]
+    },
+    "EmbossFontProperty": {
+      "kind": "object",
+      "fields": {
+        "charGapMm": "Finite",
+        "lineGapMm": "Finite",
+        "lineHeightMm": "Finite",
+        "boldnessMm": "Finite",
+        "skew": "Finite",
+        "perGlyph": "Flag",
+        "horizontal": "EmbossHorizontalAlign",
+        "vertical": "EmbossVerticalAlign",
+        "collection": "Finite"
+      }
+    },
+    "EmbossProjection": {
+      "kind": "object",
+      "fields": {
+        "depthMm": "Finite",
+        "useSurface": "Flag"
+      }
+    },
+    "EmbossConfiguration": {
+      "kind": "object",
+      "fields": {
+        "text": "EditText",
+        "styleName": "EditText",
+        "fontDescriptor": "EditText",
+        "fontDescriptorType": "EditText",
+        "font": "EmbossFontProperty",
+        "projection": "EmbossProjection",
+        "family": "OptionalText",
+        "faceName": "OptionalText",
+        "style": "OptionalText",
+        "weight": "OptionalText"
+      }
+    },
+    "GlyphContour": {
+      "kind": "array",
+      "items": "PlanarPosition",
+      "min": 0,
+      "max": 131072
+    },
+    "GlyphContours": {
+      "kind": "array",
+      "items": "GlyphContour",
+      "min": 0,
+      "max": 131072
+    },
+    "GlyphOutline": {
+      "kind": "object",
+      "fields": {
+        "codePoint": "Counter",
+        "advance": "Finite",
+        "contours": "GlyphContours"
+      }
+    },
+    "GlyphOutlines": {
+      "kind": "array",
+      "items": "GlyphOutline",
+      "min": 0,
+      "max": 131072
+    },
+    "GlyphFont": {
+      "kind": "object",
+      "fields": {
+        "unitsPerEm": "Finite",
+        "glyphs": "GlyphOutlines"
+      }
+    },
+    "EmbossRequest": {
+      "kind": "object",
+      "fields": {
+        "configuration": "EmbossConfiguration",
+        "font": "GlyphFont"
+      }
+    },
+    "EmbossCodePoints": {
+      "kind": "array",
+      "items": "Counter",
+      "min": 0,
+      "max": 131072
+    },
+    "EmbossPreview": {
+      "kind": "object",
+      "fields": {
+        "triangleCount": "Counter",
+        "vertexCount": "Counter",
+        "missingCodePoints": "EmbossCodePoints",
+        "openEdgeCount": "Counter",
+        "coincidentEdgeCount": "Counter",
+        "digest": "EditText",
+        "byteLength": "Counter"
+      }
+    },
+    "EmbossRefusalCode": {
+      "kind": "enum",
+      "values": [
+        "invalidConfiguration",
+        "unsupportedFont",
+        "noGlyphs",
+        "invalidMesh"
+      ]
+    },
+    "EmbossRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "EmbossRefusalCode",
+        "message": "EditText"
+      }
+    },
+    "EmbossReply": {
+      "kind": "union",
+      "variants": {
+        "prepared": "EmbossPreview",
+        "refused": "EmbossRefusal"
+      }
+    },
+    "EmbossAdd": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "volumeId": "Id",
+        "assetId": "Id",
+        "transform": "Transform"
+      }
+    },
+    "EmbossEdit": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id",
+        "assetId": "Id"
+      }
+    },
+    "EmbossStage": {
+      "kind": "union",
+      "variants": {
+        "add": "EmbossAdd",
+        "edit": "EmbossEdit"
+      }
     }
   },
   "roots": [
@@ -4094,7 +4250,10 @@
     "BrimEarDetectRequest",
     "BrimEarDetectReply",
     "BrimEarStrandedRequest",
-    "BrimEarStrandedReply"
+    "BrimEarStrandedReply",
+    "EmbossRequest",
+    "EmbossReply",
+    "EmbossStage"
   ],
   "sessionVersion": 1
 }

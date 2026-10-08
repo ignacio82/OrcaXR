@@ -21,6 +21,7 @@ import { replayVolumeSplits } from "./volume-split-replay.mjs";
 import { replaySimplify } from "./simplify-replay.mjs";
 import { replayMeasure } from "./measure-replay.mjs";
 import { replayBrimEars } from "./brim-ear-replay.mjs";
+import { replayEmboss } from "./emboss-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -144,6 +145,18 @@ if (isMainThread) {
     assert.deepEqual(
       [result.brimEarDetections, result.brimEarStrandedChecks],
       [40, 9],
+    );
+    // Text embossing: cuts, their meshes, and stages over a live session.
+    assert.deepEqual(
+      [
+        result.embossPrepared,
+        result.embossRefused,
+        result.embossMeshes,
+        result.embossStages,
+        result.embossApplied,
+        result.embossHistory,
+      ],
+      [21, 8, 21, 8, 3, 3],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -482,6 +495,16 @@ if (isMainThread) {
     ),
     layout,
   );
+  const embossed = await replayEmboss(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/emboss-vectors.json", root)),
+    ),
+    layout,
+    JSON.parse(await readFile(new URL("contracts/project-staging.json", root)))
+      .version,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -513,6 +536,7 @@ if (isMainThread) {
       ...simplified,
       ...measured,
       ...brimEars,
+      ...embossed,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

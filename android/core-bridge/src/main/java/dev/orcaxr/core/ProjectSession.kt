@@ -233,6 +233,12 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun strandedBrimEars(request: ProjectIntents.BrimEarStrandedRequest): ProjectIntents.BrimEarStrandedReply = read {
         ProjectIntents.decodeBrimEarStrandedReply(NativeProject.sessionBrimEarStranded(it, ProjectIntents.encodeBrimEarStrandedRequest(request)))
     }
+    /** A prepared emboss cut as one staged edit for `executeStaged`: a new
+     * text part under the host's IDs, or a re-cut of an existing one. A
+     * refused cut or an unstable ID refuses `invalid_request`. */
+    fun stageEmboss(emboss: ProjectEmboss, request: ProjectIntents.EmbossStage): ProjectStagedInput = read {
+        ProjectStagedInput.own(this, NativeProject.stageEmboss(it, emboss.reference(), ProjectIntents.encodeEmbossStage(request)))
+    }
     /** The plate's wipe tower auto-placed: the winning candidate and the tower
      * one `setPlateWipeTower` intent sets. */
     fun planWipeTower(request: ProjectIntents.WipeTowerRequest): ProjectIntents.WipeTowerReply = read {
@@ -293,6 +299,21 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
 }
 class ProjectGuard internal constructor(handle: Long) : ProjectHandle(handle)
 
+/** One emboss cut from a recipe and the host's glyph outlines (flattened
+ * to contours in font units): its summary and mesh bytes, the very payload
+ * [ProjectSession.stageEmboss] installs. */
+class ProjectEmboss private constructor(handle: Long) : ProjectHandle(handle) {
+    fun reply(): ProjectIntents.EmbossReply = read {
+        ProjectIntents.decodeEmbossReply(NativeProject.embossReply(it))
+    }
+    /** Bytes [start] until [start] + [count], at most [MAX_PAGE]. */
+    fun mesh(start: Long, count: Long): ByteArray = read { NativeProject.embossMesh(it, start, count) }
+    companion object {
+        const val MAX_PAGE = 16L * 1024 * 1024
+        fun prepare(request: ProjectIntents.EmbossRequest): ProjectEmboss =
+            ProjectEmboss(NativeProject.prepareEmboss(ProjectIntents.encodeEmbossRequest(request)))
+    }
+}
 /** One volume's features, captured by [ProjectSession.measureVolume]. */
 class ProjectMeasureVolume internal constructor(handle: Long) : ProjectHandle(handle) {
     fun reply(): ProjectIntents.MeasureVolumeReply = read {

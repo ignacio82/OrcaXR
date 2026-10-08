@@ -20,6 +20,7 @@ pub mod brim_ears;
 pub mod capabilities;
 pub mod clipboard;
 pub mod commands;
+pub mod emboss;
 pub mod export;
 pub mod facets;
 pub mod filaments;

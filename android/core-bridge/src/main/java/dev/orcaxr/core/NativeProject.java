@@ -149,6 +149,12 @@ final class NativeProject {
     // Brim ears: an object's first-layer corners and its stranded ears.
     static native String sessionBrimEarDetect(long handle, String request);
     static native String sessionBrimEarStranded(long handle, String request);
+    // Emboss: cut a recipe with the host's glyph outlines, read the summary
+    // or refusal and page the mesh, then stage it as a text part or re-cut.
+    static native long prepareEmboss(String request);
+    static native String embossReply(long handle);
+    static native byte[] embossMesh(long handle, long start, long count);
+    static native long stageEmboss(long handle, long emboss, String request);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

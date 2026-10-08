@@ -8318,6 +8318,319 @@ fn read_brim_ear_stranded_reply(v: &Value) -> Result<BrimEarStrandedReply, Inval
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EmbossHorizontalAlign {
+    Left,
+    Center,
+    Right,
+}
+fn read_emboss_horizontal_align(v: &Value) -> Result<EmbossHorizontalAlign, InvalidIntent> {
+    match v.as_str() {
+        Some("left") => Ok(EmbossHorizontalAlign::Left),
+        Some("center") => Ok(EmbossHorizontalAlign::Center),
+        Some("right") => Ok(EmbossHorizontalAlign::Right),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EmbossVerticalAlign {
+    Top,
+    Center,
+    Bottom,
+}
+fn read_emboss_vertical_align(v: &Value) -> Result<EmbossVerticalAlign, InvalidIntent> {
+    match v.as_str() {
+        Some("top") => Ok(EmbossVerticalAlign::Top),
+        Some("center") => Ok(EmbossVerticalAlign::Center),
+        Some("bottom") => Ok(EmbossVerticalAlign::Bottom),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbossFontProperty {
+    pub char_gap_mm: Finite,
+    pub line_gap_mm: Finite,
+    pub line_height_mm: Finite,
+    pub boldness_mm: Finite,
+    pub skew: Finite,
+    pub per_glyph: Flag,
+    pub horizontal: EmbossHorizontalAlign,
+    pub vertical: EmbossVerticalAlign,
+    pub collection: Finite,
+}
+fn read_emboss_font_property(v: &Value) -> Result<EmbossFontProperty, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "charGapMm",
+            "lineGapMm",
+            "lineHeightMm",
+            "boldnessMm",
+            "skew",
+            "perGlyph",
+            "horizontal",
+            "vertical",
+            "collection",
+        ],
+        false,
+    )?;
+    Ok(EmbossFontProperty {
+        char_gap_mm: read_finite(&object["charGapMm"])?,
+        line_gap_mm: read_finite(&object["lineGapMm"])?,
+        line_height_mm: read_finite(&object["lineHeightMm"])?,
+        boldness_mm: read_finite(&object["boldnessMm"])?,
+        skew: read_finite(&object["skew"])?,
+        per_glyph: read_flag(&object["perGlyph"])?,
+        horizontal: read_emboss_horizontal_align(&object["horizontal"])?,
+        vertical: read_emboss_vertical_align(&object["vertical"])?,
+        collection: read_finite(&object["collection"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbossProjection {
+    pub depth_mm: Finite,
+    pub use_surface: Flag,
+}
+fn read_emboss_projection(v: &Value) -> Result<EmbossProjection, InvalidIntent> {
+    let object = fields(v, &["depthMm", "useSurface"], false)?;
+    Ok(EmbossProjection {
+        depth_mm: read_finite(&object["depthMm"])?,
+        use_surface: read_flag(&object["useSurface"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbossConfiguration {
+    pub text: EditText,
+    pub style_name: EditText,
+    pub font_descriptor: EditText,
+    pub font_descriptor_type: EditText,
+    pub font: EmbossFontProperty,
+    pub projection: EmbossProjection,
+    pub family: OptionalText,
+    pub face_name: OptionalText,
+    pub style: OptionalText,
+    pub weight: OptionalText,
+}
+fn read_emboss_configuration(v: &Value) -> Result<EmbossConfiguration, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "text",
+            "styleName",
+            "fontDescriptor",
+            "fontDescriptorType",
+            "font",
+            "projection",
+            "family",
+            "faceName",
+            "style",
+            "weight",
+        ],
+        false,
+    )?;
+    Ok(EmbossConfiguration {
+        text: read_edit_text(&object["text"])?,
+        style_name: read_edit_text(&object["styleName"])?,
+        font_descriptor: read_edit_text(&object["fontDescriptor"])?,
+        font_descriptor_type: read_edit_text(&object["fontDescriptorType"])?,
+        font: read_emboss_font_property(&object["font"])?,
+        projection: read_emboss_projection(&object["projection"])?,
+        family: read_optional_text(&object["family"])?,
+        face_name: read_optional_text(&object["faceName"])?,
+        style: read_optional_text(&object["style"])?,
+        weight: read_optional_text(&object["weight"])?,
+    })
+}
+pub type GlyphContour = Vec<PlanarPosition>;
+fn read_glyph_contour(v: &Value) -> Result<GlyphContour, InvalidIntent> {
+    list(v, 0, 131072)?
+        .iter()
+        .map(read_planar_position)
+        .collect()
+}
+pub type GlyphContours = Vec<GlyphContour>;
+fn read_glyph_contours(v: &Value) -> Result<GlyphContours, InvalidIntent> {
+    list(v, 0, 131072)?.iter().map(read_glyph_contour).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphOutline {
+    pub code_point: Counter,
+    pub advance: Finite,
+    pub contours: GlyphContours,
+}
+fn read_glyph_outline(v: &Value) -> Result<GlyphOutline, InvalidIntent> {
+    let object = fields(v, &["codePoint", "advance", "contours"], false)?;
+    Ok(GlyphOutline {
+        code_point: read_counter(&object["codePoint"])?,
+        advance: read_finite(&object["advance"])?,
+        contours: read_glyph_contours(&object["contours"])?,
+    })
+}
+pub type GlyphOutlines = Vec<GlyphOutline>;
+fn read_glyph_outlines(v: &Value) -> Result<GlyphOutlines, InvalidIntent> {
+    list(v, 0, 131072)?.iter().map(read_glyph_outline).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphFont {
+    pub units_per_em: Finite,
+    pub glyphs: GlyphOutlines,
+}
+fn read_glyph_font(v: &Value) -> Result<GlyphFont, InvalidIntent> {
+    let object = fields(v, &["unitsPerEm", "glyphs"], false)?;
+    Ok(GlyphFont {
+        units_per_em: read_finite(&object["unitsPerEm"])?,
+        glyphs: read_glyph_outlines(&object["glyphs"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbossRequest {
+    pub configuration: EmbossConfiguration,
+    pub font: GlyphFont,
+}
+fn read_emboss_request(v: &Value) -> Result<EmbossRequest, InvalidIntent> {
+    let object = fields(v, &["configuration", "font"], false)?;
+    Ok(EmbossRequest {
+        configuration: read_emboss_configuration(&object["configuration"])?,
+        font: read_glyph_font(&object["font"])?,
+    })
+}
+pub type EmbossCodePoints = Vec<Counter>;
+fn read_emboss_code_points(v: &Value) -> Result<EmbossCodePoints, InvalidIntent> {
+    list(v, 0, 131072)?.iter().map(read_counter).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbossPreview {
+    pub triangle_count: Counter,
+    pub vertex_count: Counter,
+    pub missing_code_points: EmbossCodePoints,
+    pub open_edge_count: Counter,
+    pub coincident_edge_count: Counter,
+    pub digest: EditText,
+    pub byte_length: Counter,
+}
+fn read_emboss_preview(v: &Value) -> Result<EmbossPreview, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "triangleCount",
+            "vertexCount",
+            "missingCodePoints",
+            "openEdgeCount",
+            "coincidentEdgeCount",
+            "digest",
+            "byteLength",
+        ],
+        false,
+    )?;
+    Ok(EmbossPreview {
+        triangle_count: read_counter(&object["triangleCount"])?,
+        vertex_count: read_counter(&object["vertexCount"])?,
+        missing_code_points: read_emboss_code_points(&object["missingCodePoints"])?,
+        open_edge_count: read_counter(&object["openEdgeCount"])?,
+        coincident_edge_count: read_counter(&object["coincidentEdgeCount"])?,
+        digest: read_edit_text(&object["digest"])?,
+        byte_length: read_counter(&object["byteLength"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EmbossRefusalCode {
+    InvalidConfiguration,
+    UnsupportedFont,
+    NoGlyphs,
+    InvalidMesh,
+}
+fn read_emboss_refusal_code(v: &Value) -> Result<EmbossRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("invalidConfiguration") => Ok(EmbossRefusalCode::InvalidConfiguration),
+        Some("unsupportedFont") => Ok(EmbossRefusalCode::UnsupportedFont),
+        Some("noGlyphs") => Ok(EmbossRefusalCode::NoGlyphs),
+        Some("invalidMesh") => Ok(EmbossRefusalCode::InvalidMesh),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbossRefusal {
+    pub code: EmbossRefusalCode,
+    pub message: EditText,
+}
+fn read_emboss_refusal(v: &Value) -> Result<EmbossRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(EmbossRefusal {
+        code: read_emboss_refusal_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EmbossReply {
+    Prepared(EmbossPreview),
+    Refused(EmbossRefusal),
+}
+fn read_emboss_reply(v: &Value) -> Result<EmbossReply, InvalidIntent> {
+    let object = fields(v, &["prepared", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "prepared" => Ok(EmbossReply::Prepared(read_emboss_preview(value)?)),
+        "refused" => Ok(EmbossReply::Refused(read_emboss_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbossAdd {
+    pub object_id: Id,
+    pub volume_id: Id,
+    pub asset_id: Id,
+    pub transform: Transform,
+}
+fn read_emboss_add(v: &Value) -> Result<EmbossAdd, InvalidIntent> {
+    let object = fields(v, &["objectId", "volumeId", "assetId", "transform"], false)?;
+    Ok(EmbossAdd {
+        object_id: read_id(&object["objectId"])?,
+        volume_id: read_id(&object["volumeId"])?,
+        asset_id: read_id(&object["assetId"])?,
+        transform: read_transform(&object["transform"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbossEdit {
+    pub volume_id: Id,
+    pub asset_id: Id,
+}
+fn read_emboss_edit(v: &Value) -> Result<EmbossEdit, InvalidIntent> {
+    let object = fields(v, &["volumeId", "assetId"], false)?;
+    Ok(EmbossEdit {
+        volume_id: read_id(&object["volumeId"])?,
+        asset_id: read_id(&object["assetId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EmbossStage {
+    Add(EmbossAdd),
+    Edit(EmbossEdit),
+}
+fn read_emboss_stage(v: &Value) -> Result<EmbossStage, InvalidIntent> {
+    let object = fields(v, &["add", "edit"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "add" => Ok(EmbossStage::Add(read_emboss_add(value)?)),
+        "edit" => Ok(EmbossStage::Edit(read_emboss_edit(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -9126,5 +9439,29 @@ pub fn encode_brim_ear_stranded_reply(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_brim_ear_stranded_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_emboss_request(text: &str) -> Result<EmbossRequest, InvalidIntent> {
+    read_emboss_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_emboss_request(value: &EmbossRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_emboss_request(&text)?;
+    Ok(text)
+}
+pub fn decode_emboss_reply(text: &str) -> Result<EmbossReply, InvalidIntent> {
+    read_emboss_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_emboss_reply(value: &EmbossReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_emboss_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_emboss_stage(text: &str) -> Result<EmbossStage, InvalidIntent> {
+    read_emboss_stage(&super::project_intents::parse(text)?)
+}
+pub fn encode_emboss_stage(value: &EmbossStage) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_emboss_stage(&text)?;
     Ok(text)
 }

@@ -1,6 +1,6 @@
 // Bit-exact references for the ECMAScript `Math` functions the native core
 // reproduces (`orcaxr_project::js_math`): sin and cos (V8's vendored glibc),
-// exp and acos (fdlibm) and hypot (V8's scaled, compensated sum). Inputs cover every
+// exp and acos (fdlibm), hypot (V8's scaled, compensated sum) and round. Inputs cover every
 // range-reduction branch of the trig routines, their thresholds, signed zeros,
 // non-finite values and seeded random doubles across magnitudes. Values are
 // IEEE-754 bit patterns in hex, so no decimal parsing sits between V8 and Rust.
@@ -90,6 +90,16 @@ for (let i = 0; i < 500; i += 1) acos.add(bits((1 - Math.abs(logUniform(1e-16, 1
 for (let i = 0; i < 300; i += 1) acos.add(bits(logUniform(1e-20, 1e-6)));
 const acosRows = [...acos].sort().map((hex) => [hex, bits(Math.acos(fromBits(hex)))]);
 
+// round: ties both ways, the largest double below one half, signed zeros,
+// the integer-spacing edge at 2**52 and seeded values on and near halves.
+const round = new Set();
+for (const value of [0, -0, 0.5, -0.5, 1.5, -1.5, 2.5, -2.5, 0.49999999999999994, -0.49999999999999994, -0.4, 2 ** 52, 2 ** 52 + 1, -(2 ** 52) - 1, 2 ** 53, 1e300, -1e300, Infinity, -Infinity, NaN])
+  round.add(bits(value));
+for (let i = 0; i < 1000; i += 1) round.add(bits(uniform(-1e4, 1e4)));
+for (let i = 0; i < 500; i += 1) round.add(bits(Math.trunc(uniform(-1e6, 1e6)) + 0.5));
+for (let i = 0; i < 500; i += 1) round.add(bits(uniform(-4, 4) * 1e6));
+const roundRows = [...round].sort().map((hex) => [hex, bits(Math.round(fromBits(hex)))]);
+
 const hypotRows = [];
 const hypotCases = [[], [0], [-0, 0], [3, 4], [NaN, Infinity], [NaN, 1], [1e308, 1e308], [1e-320, 1e-320, 1e-320], [-2, 0, 1e-300]];
 for (let i = 0; i < 1500; i += 1) {
@@ -108,6 +118,7 @@ const output =
       trig: trigRows,
       exp: expRows,
       acos: acosRows,
+      round: roundRows,
       hypot: hypotRows,
     },
     null,
@@ -116,4 +127,4 @@ const output =
 const path = new URL("testdata/cross-platform/js-math-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);
 else assert.equal(readFileSync(path, "utf8"), output, "JS Math reference drift");
-console.log(`JS Math references: ${trigRows.length} sin/cos, ${expRows.length} exp, ${acosRows.length} acos, ${hypotRows.length} hypot (V8 ${process.versions.v8})`);
+console.log(`JS Math references: ${trigRows.length} sin/cos, ${expRows.length} exp, ${acosRows.length} acos, ${roundRows.length} round, ${hypotRows.length} hypot (V8 ${process.versions.v8})`);

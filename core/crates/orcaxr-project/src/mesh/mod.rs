@@ -2,9 +2,11 @@
 //! separate: a declared layout alone does not prove finite vertices/valid indices.
 mod bounds;
 mod encode;
+pub mod extrude;
 mod indexed;
 pub mod simplify;
 pub mod split;
+pub mod triangulate;
 use crate::assets::AssetLease;
 pub use bounds::{Bounds, BoundsLimits, instance_bounds};
 pub use encode::{Coordinates, EncodeOptions, encode};

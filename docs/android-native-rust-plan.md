@@ -1593,8 +1593,15 @@ painting, and FullSpectrum operations that can support real native projects.
     cut segment (a pyramid's square footprint read as a triangle). Placement
     and disc size are verified numerically in printer millimetres; an
     on-device look remains.
-  - [ ] Port the remaining preparation kernel (emboss/SVG), mesh renderer
-    packets and device qualification.
+  - [x] Port text embossing (`mesh::triangulate`, `mesh::extrude`,
+    `emboss`): the browser's ear clipper (earcut with both recovery passes)
+    over an arena, winding-classified extrusion with welded, watertight walls,
+    and the layout of host-supplied glyph outlines (contours in font units by
+    code point, so a native host reads its own fonts), staged as a new text
+    part or a re-cut (29 cuts of 11,200 triangles and 8 stages exact in every
+    binding). V8's `Math.round` joins `js_math`, pinned on 2,020 inputs.
+  - [ ] Port the remaining preparation kernel (SVG), mesh renderer packets and
+    device qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.

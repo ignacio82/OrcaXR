@@ -38,6 +38,28 @@ pub fn max(a: f64, b: f64) -> f64 {
     }
 }
 
+/// V8 `Math.round`: the ceiling, less one when that is more than half above
+/// (so ties go up, -0.4 rounds to -0 and 0.49999999999999994 to 0).
+pub fn round(x: f64) -> f64 {
+    let ceiling = x.ceil();
+    if ceiling - 0.5 > x {
+        ceiling - 1.0
+    } else {
+        ceiling
+    }
+}
+
+/// `Math.sign`: ±1, or the argument itself for ±0 and NaN.
+pub fn sign(x: f64) -> f64 {
+    if x > 0.0 {
+        1.0
+    } else if x < 0.0 {
+        -1.0
+    } else {
+        x
+    }
+}
+
 /// V8 `Math.hypot(...values)`: scale by the largest magnitude, then a
 /// Kahan-compensated sum of squares. Not chained binary hypot.
 pub fn hypot(values: &[f64]) -> f64 {

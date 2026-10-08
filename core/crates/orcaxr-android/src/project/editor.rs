@@ -451,6 +451,56 @@ pub(super) fn measure_features(env: &mut JNIEnv<'_>, request: JString<'_>) -> Re
     )?;
     string(env, json)
 }
+/// Cut a recipe with the host's glyph outlines.
+pub(super) fn prepare_emboss(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_emboss_request)?;
+    capture(|| {
+        Ok(Record::Emboss(Box::new(orcaxr_project::emboss::prepare(
+            &request,
+        ))))
+    })
+}
+/// The cut's summary, or its refusal.
+pub(super) fn emboss_reply(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_emboss(handle, |emboss| {
+        encoded(&emboss.reply(), wire::encode_emboss_reply)
+    })?;
+    string(env, json)
+}
+/// A page of the cut's indexed-mesh bytes.
+pub(super) fn emboss_mesh(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    start: jlong,
+    count: jlong,
+) -> Result<jbyteArray> {
+    let (start, count) = (index(start)?, index(count)?);
+    let bytes = with_emboss(handle, |emboss| {
+        emboss
+            .mesh(start as u64, count as u64)
+            .map(<[u8]>::to_vec)
+            .map_err(|_| "invalid_request")
+    })?;
+    env.byte_array_from_slice(&bytes)
+        .map(|array| array.into_raw())
+        .map_err(|_| "output_limit")
+}
+/// The cut's staged commit ID.
+pub(super) fn stage_emboss(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    emboss: jlong,
+    request: JString<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_emboss_stage)?;
+    with_emboss(emboss, |emboss| {
+        with_session(handle, |s| {
+            s.stage_emboss(emboss, &request)
+                .map(|id| id as jlong)
+                .map_err(session_error)
+        })
+    })
+}
 fn session_error(error: wire::SessionError) -> &'static str {
     match error {
         wire::SessionError::Disposed => "disposed",

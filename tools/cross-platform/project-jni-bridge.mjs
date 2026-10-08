@@ -39,6 +39,7 @@ export function startProjectJni(profile = "debug") {
   signatures.simplifyChecks = ["String", ...Array(7).fill("byte[]"), "String"];
   signatures.measureChecks = ["String", ...Array(6).fill("byte[]"), "String"];
   signatures.brimEarChecks = ["String", ...Array(8).fill("byte[]"), "String"];
+  signatures.embossChecks = ["String", "byte[]", "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -391,6 +392,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
         ProjectVolumeSimplify,
         call("volumeSimplify", this.handle, guard.handle, request),
       );
+    }
+    stage_emboss(emboss, request) {
+      return call("stageEmboss", this.handle, emboss.handle, request);
     }
     measure_volume(request) {
       return wrap(
@@ -794,6 +798,14 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return wrap(ProjectPaintOverlay, call("paintStrokePreview", this.handle));
     }
   }
+  class ProjectEmboss extends Handle {
+    reply() {
+      return call("embossReply", this.handle);
+    }
+    mesh(start, count) {
+      return call("embossMesh", this.handle, start, count);
+    }
+  }
   class ProjectMeasureVolume extends Handle {
     reply() {
       return call("measureVolumeReply", this.handle);
@@ -1011,5 +1023,6 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     coerce_override_value: (request) => call("libraryCoerce", request),
     format_override_value: (request) => call("libraryFormat", request),
     measure_features: (request) => call("measureFeatures", request),
+    prepare_emboss: (request) => wrap(ProjectEmboss, call("prepareEmboss", request)),
   };
 }

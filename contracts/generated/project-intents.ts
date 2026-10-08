@@ -3999,6 +3999,162 @@ const shapes = {
       "stranded": "BrimEarStranded",
       "refused": "BrimEarRefusal"
     }
+  },
+  "EmbossHorizontalAlign": {
+    "kind": "enum",
+    "values": [
+      "left",
+      "center",
+      "right"
+    ]
+  },
+  "EmbossVerticalAlign": {
+    "kind": "enum",
+    "values": [
+      "top",
+      "center",
+      "bottom"
+    ]
+  },
+  "EmbossFontProperty": {
+    "kind": "object",
+    "fields": {
+      "charGapMm": "Finite",
+      "lineGapMm": "Finite",
+      "lineHeightMm": "Finite",
+      "boldnessMm": "Finite",
+      "skew": "Finite",
+      "perGlyph": "Flag",
+      "horizontal": "EmbossHorizontalAlign",
+      "vertical": "EmbossVerticalAlign",
+      "collection": "Finite"
+    }
+  },
+  "EmbossProjection": {
+    "kind": "object",
+    "fields": {
+      "depthMm": "Finite",
+      "useSurface": "Flag"
+    }
+  },
+  "EmbossConfiguration": {
+    "kind": "object",
+    "fields": {
+      "text": "EditText",
+      "styleName": "EditText",
+      "fontDescriptor": "EditText",
+      "fontDescriptorType": "EditText",
+      "font": "EmbossFontProperty",
+      "projection": "EmbossProjection",
+      "family": "OptionalText",
+      "faceName": "OptionalText",
+      "style": "OptionalText",
+      "weight": "OptionalText"
+    }
+  },
+  "GlyphContour": {
+    "kind": "array",
+    "items": "PlanarPosition",
+    "min": 0,
+    "max": 131072
+  },
+  "GlyphContours": {
+    "kind": "array",
+    "items": "GlyphContour",
+    "min": 0,
+    "max": 131072
+  },
+  "GlyphOutline": {
+    "kind": "object",
+    "fields": {
+      "codePoint": "Counter",
+      "advance": "Finite",
+      "contours": "GlyphContours"
+    }
+  },
+  "GlyphOutlines": {
+    "kind": "array",
+    "items": "GlyphOutline",
+    "min": 0,
+    "max": 131072
+  },
+  "GlyphFont": {
+    "kind": "object",
+    "fields": {
+      "unitsPerEm": "Finite",
+      "glyphs": "GlyphOutlines"
+    }
+  },
+  "EmbossRequest": {
+    "kind": "object",
+    "fields": {
+      "configuration": "EmbossConfiguration",
+      "font": "GlyphFont"
+    }
+  },
+  "EmbossCodePoints": {
+    "kind": "array",
+    "items": "Counter",
+    "min": 0,
+    "max": 131072
+  },
+  "EmbossPreview": {
+    "kind": "object",
+    "fields": {
+      "triangleCount": "Counter",
+      "vertexCount": "Counter",
+      "missingCodePoints": "EmbossCodePoints",
+      "openEdgeCount": "Counter",
+      "coincidentEdgeCount": "Counter",
+      "digest": "EditText",
+      "byteLength": "Counter"
+    }
+  },
+  "EmbossRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "invalidConfiguration",
+      "unsupportedFont",
+      "noGlyphs",
+      "invalidMesh"
+    ]
+  },
+  "EmbossRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "EmbossRefusalCode",
+      "message": "EditText"
+    }
+  },
+  "EmbossReply": {
+    "kind": "union",
+    "variants": {
+      "prepared": "EmbossPreview",
+      "refused": "EmbossRefusal"
+    }
+  },
+  "EmbossAdd": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "volumeId": "Id",
+      "assetId": "Id",
+      "transform": "Transform"
+    }
+  },
+  "EmbossEdit": {
+    "kind": "object",
+    "fields": {
+      "volumeId": "Id",
+      "assetId": "Id"
+    }
+  },
+  "EmbossStage": {
+    "kind": "union",
+    "variants": {
+      "add": "EmbossAdd",
+      "edit": "EmbossEdit"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -4484,6 +4640,25 @@ export interface ProjectBrimEarStrandedRequestWire {readonly objectId: ProjectId
 export type ProjectBrimEarIndicesWire = readonly ProjectCounterWire[];
 export interface ProjectBrimEarStrandedWire {readonly indices: ProjectBrimEarIndicesWire;}
 export type ProjectBrimEarStrandedReplyWire = {readonly stranded:ProjectBrimEarStrandedWire} | {readonly refused:ProjectBrimEarRefusalWire};
+export type ProjectEmbossHorizontalAlignWire = "left" | "center" | "right";
+export type ProjectEmbossVerticalAlignWire = "top" | "center" | "bottom";
+export interface ProjectEmbossFontPropertyWire {readonly charGapMm: ProjectFiniteWire;readonly lineGapMm: ProjectFiniteWire;readonly lineHeightMm: ProjectFiniteWire;readonly boldnessMm: ProjectFiniteWire;readonly skew: ProjectFiniteWire;readonly perGlyph: ProjectFlagWire;readonly horizontal: ProjectEmbossHorizontalAlignWire;readonly vertical: ProjectEmbossVerticalAlignWire;readonly collection: ProjectFiniteWire;}
+export interface ProjectEmbossProjectionWire {readonly depthMm: ProjectFiniteWire;readonly useSurface: ProjectFlagWire;}
+export interface ProjectEmbossConfigurationWire {readonly text: ProjectEditTextWire;readonly styleName: ProjectEditTextWire;readonly fontDescriptor: ProjectEditTextWire;readonly fontDescriptorType: ProjectEditTextWire;readonly font: ProjectEmbossFontPropertyWire;readonly projection: ProjectEmbossProjectionWire;readonly family: ProjectOptionalTextWire;readonly faceName: ProjectOptionalTextWire;readonly style: ProjectOptionalTextWire;readonly weight: ProjectOptionalTextWire;}
+export type ProjectGlyphContourWire = readonly ProjectPlanarPositionWire[];
+export type ProjectGlyphContoursWire = readonly ProjectGlyphContourWire[];
+export interface ProjectGlyphOutlineWire {readonly codePoint: ProjectCounterWire;readonly advance: ProjectFiniteWire;readonly contours: ProjectGlyphContoursWire;}
+export type ProjectGlyphOutlinesWire = readonly ProjectGlyphOutlineWire[];
+export interface ProjectGlyphFontWire {readonly unitsPerEm: ProjectFiniteWire;readonly glyphs: ProjectGlyphOutlinesWire;}
+export interface ProjectEmbossRequestWire {readonly configuration: ProjectEmbossConfigurationWire;readonly font: ProjectGlyphFontWire;}
+export type ProjectEmbossCodePointsWire = readonly ProjectCounterWire[];
+export interface ProjectEmbossPreviewWire {readonly triangleCount: ProjectCounterWire;readonly vertexCount: ProjectCounterWire;readonly missingCodePoints: ProjectEmbossCodePointsWire;readonly openEdgeCount: ProjectCounterWire;readonly coincidentEdgeCount: ProjectCounterWire;readonly digest: ProjectEditTextWire;readonly byteLength: ProjectCounterWire;}
+export type ProjectEmbossRefusalCodeWire = "invalidConfiguration" | "unsupportedFont" | "noGlyphs" | "invalidMesh";
+export interface ProjectEmbossRefusalWire {readonly code: ProjectEmbossRefusalCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectEmbossReplyWire = {readonly prepared:ProjectEmbossPreviewWire} | {readonly refused:ProjectEmbossRefusalWire};
+export interface ProjectEmbossAddWire {readonly objectId: ProjectIdWire;readonly volumeId: ProjectIdWire;readonly assetId: ProjectIdWire;readonly transform: ProjectTransformWire;}
+export interface ProjectEmbossEditWire {readonly volumeId: ProjectIdWire;readonly assetId: ProjectIdWire;}
+export type ProjectEmbossStageWire = {readonly add:ProjectEmbossAddWire} | {readonly edit:ProjectEmbossEditWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -4766,3 +4941,12 @@ export function encodeProjectBrimEarStrandedRequest(value:ProjectBrimEarStranded
 export function captureProjectBrimEarStrandedReply(value:unknown):ProjectBrimEarStrandedReplyWire { return captureIntent("BrimEarStrandedReply",value,shapes,limits) as ProjectBrimEarStrandedReplyWire; }
 export function decodeProjectBrimEarStrandedReply(text:string):ProjectBrimEarStrandedReplyWire { return captureProjectBrimEarStrandedReply(parseIntentJson(text,limits)); }
 export function encodeProjectBrimEarStrandedReply(value:ProjectBrimEarStrandedReplyWire):string { return JSON.stringify(captureProjectBrimEarStrandedReply(value)); }
+export function captureProjectEmbossRequest(value:unknown):ProjectEmbossRequestWire { return captureIntent("EmbossRequest",value,shapes,limits) as ProjectEmbossRequestWire; }
+export function decodeProjectEmbossRequest(text:string):ProjectEmbossRequestWire { return captureProjectEmbossRequest(parseIntentJson(text,limits)); }
+export function encodeProjectEmbossRequest(value:ProjectEmbossRequestWire):string { return JSON.stringify(captureProjectEmbossRequest(value)); }
+export function captureProjectEmbossReply(value:unknown):ProjectEmbossReplyWire { return captureIntent("EmbossReply",value,shapes,limits) as ProjectEmbossReplyWire; }
+export function decodeProjectEmbossReply(text:string):ProjectEmbossReplyWire { return captureProjectEmbossReply(parseIntentJson(text,limits)); }
+export function encodeProjectEmbossReply(value:ProjectEmbossReplyWire):string { return JSON.stringify(captureProjectEmbossReply(value)); }
+export function captureProjectEmbossStage(value:unknown):ProjectEmbossStageWire { return captureIntent("EmbossStage",value,shapes,limits) as ProjectEmbossStageWire; }
+export function decodeProjectEmbossStage(text:string):ProjectEmbossStageWire { return captureProjectEmbossStage(parseIntentJson(text,limits)); }
+export function encodeProjectEmbossStage(value:ProjectEmbossStageWire):string { return JSON.stringify(captureProjectEmbossStage(value)); }

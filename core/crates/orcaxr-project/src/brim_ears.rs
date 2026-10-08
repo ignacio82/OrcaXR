@@ -73,20 +73,11 @@ pub fn object_model_mesh(
     Ok((positions, indices))
 }
 
-/// V8's `Math.round`: the ceiling, less one when that is more than half up.
-fn js_round(x: f64) -> f64 {
-    let ceiling = x.ceil();
-    if ceiling - 0.5 > x {
-        ceiling - 1.0
-    } else {
-        ceiling
-    }
-}
 /// `key`: rounded endpoints, compared as the strings the browser builds
 /// (`-0` and `0` spell alike, as do all NaNs).
 fn key(point: P2) -> (u64, u64) {
     let part = |value: f64| {
-        let rounded = js_round(value * 1e4);
+        let rounded = js_math::round(value * 1e4);
         if rounded == 0.0 {
             0u64
         } else if rounded.is_nan() {

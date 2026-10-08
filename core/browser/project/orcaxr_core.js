@@ -1534,6 +1534,66 @@ export class ProjectEffects {
 }
 if (Symbol.dispose) ProjectEffects.prototype[Symbol.dispose] = ProjectEffects.prototype.free;
 
+/**
+ * One emboss cut, prepared from a recipe and the host's glyph outlines.
+ */
+export class ProjectEmboss {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectEmboss.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectEmbossFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectEmbossFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectemboss_free(ptr, 0);
+    }
+    /**
+     * Bytes `start..start + count` of the cut's indexed-mesh payload.
+     * @param {number} start
+     * @param {number} count
+     * @returns {Uint8Array}
+     */
+    mesh(start, count) {
+        const ret = wasm.projectemboss_mesh(this.__wbg_ptr, start, count);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * The `EmbossReply`: the cut's summary, or the refusal.
+     * @returns {string}
+     */
+    reply() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectemboss_reply(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ProjectEmboss.prototype[Symbol.dispose] = ProjectEmboss.prototype.free;
+
 export class ProjectExport {
     static __wrap(ptr) {
         const obj = Object.create(ProjectExport.prototype);
@@ -2980,6 +3040,23 @@ export class ProjectSession {
         return ret[0];
     }
     /**
+     * Stage a prepared emboss cut (an `EmbossStage`) for `executeStaged`: a
+     * new text part under the host's IDs, or a re-cut of a text part.
+     * @param {ProjectEmboss} emboss
+     * @param {string} request
+     * @returns {number}
+     */
+    stage_emboss(emboss, request) {
+        _assertClass(emboss, ProjectEmboss);
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectsession_stage_emboss(this.__wbg_ptr, emboss.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0];
+    }
+    /**
      * Stage the stroke's whole gesture as one edit for `executeStaged`; 0
      * when it touched no facet. A stroke whose state changed refuses `stale`.
      * @param {ProjectPaintStroke} stroke
@@ -3741,6 +3818,21 @@ export function measure_features(request) {
 }
 
 /**
+ * Cut a recipe with the host's glyph outlines: an `EmbossRequest`.
+ * @param {string} request
+ * @returns {ProjectEmboss}
+ */
+export function prepare_emboss(request) {
+    const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.prepare_emboss(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ProjectEmboss.__wrap(ret[0]);
+}
+
+/**
  * The Full Spectrum rules: an `EditorRuleRequest` to `EditorRules`.
  * @param {string} rules
  * @returns {string}
@@ -3894,6 +3986,9 @@ const ProjectDocumentFinalization = (typeof FinalizationRegistry === 'undefined'
 const ProjectEffectsFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projecteffects_free(ptr, 1));
+const ProjectEmbossFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectemboss_free(ptr, 1));
 const ProjectExportFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectexport_free(ptr, 1));

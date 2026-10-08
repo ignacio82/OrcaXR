@@ -6073,6 +6073,224 @@ object ProjectIntents {
             is BrimEarStrandedReply.Refused -> w.field("refused") { writeBrimEarRefusal(w, v.value) }
         } }
     }
+    enum class EmbossHorizontalAlign {Left,Center,Right}
+    private fun readEmbossHorizontalAlign(v: Any): EmbossHorizontalAlign {
+        return when(v) {"left" -> EmbossHorizontalAlign.Left;"center" -> EmbossHorizontalAlign.Center;"right" -> EmbossHorizontalAlign.Right; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEmbossHorizontalAlign(w: ProjectIntentWriter, v: EmbossHorizontalAlign) {
+        w.literal(when(v) {EmbossHorizontalAlign.Left -> "left";EmbossHorizontalAlign.Center -> "center";EmbossHorizontalAlign.Right -> "right";})
+    }
+    enum class EmbossVerticalAlign {Top,Center,Bottom}
+    private fun readEmbossVerticalAlign(v: Any): EmbossVerticalAlign {
+        return when(v) {"top" -> EmbossVerticalAlign.Top;"center" -> EmbossVerticalAlign.Center;"bottom" -> EmbossVerticalAlign.Bottom; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEmbossVerticalAlign(w: ProjectIntentWriter, v: EmbossVerticalAlign) {
+        w.literal(when(v) {EmbossVerticalAlign.Top -> "top";EmbossVerticalAlign.Center -> "center";EmbossVerticalAlign.Bottom -> "bottom";})
+    }
+    data class EmbossFontProperty(val charGapMm: Double, val lineGapMm: Double, val lineHeightMm: Double, val boldnessMm: Double, val skew: Double, val perGlyph: Boolean, val horizontal: EmbossHorizontalAlign, val vertical: EmbossVerticalAlign, val collection: Double)
+    private fun readEmbossFontProperty(v: Any): EmbossFontProperty {
+        val obj = ProjectIntentJson.fields(v, setOf("charGapMm", "lineGapMm", "lineHeightMm", "boldnessMm", "skew", "perGlyph", "horizontal", "vertical", "collection"), false)
+        return EmbossFontProperty(readFinite(obj.get("charGapMm")), readFinite(obj.get("lineGapMm")), readFinite(obj.get("lineHeightMm")), readFinite(obj.get("boldnessMm")), readFinite(obj.get("skew")), readFlag(obj.get("perGlyph")), readEmbossHorizontalAlign(obj.get("horizontal")), readEmbossVerticalAlign(obj.get("vertical")), readFinite(obj.get("collection")))
+    }
+    private fun writeEmbossFontProperty(w: ProjectIntentWriter, v: EmbossFontProperty) {
+        w.obj {
+            w.field("charGapMm") { writeFinite(w, v.charGapMm) }
+            w.field("lineGapMm") { writeFinite(w, v.lineGapMm) }
+            w.field("lineHeightMm") { writeFinite(w, v.lineHeightMm) }
+            w.field("boldnessMm") { writeFinite(w, v.boldnessMm) }
+            w.field("skew") { writeFinite(w, v.skew) }
+            w.field("perGlyph") { writeFlag(w, v.perGlyph) }
+            w.field("horizontal") { writeEmbossHorizontalAlign(w, v.horizontal) }
+            w.field("vertical") { writeEmbossVerticalAlign(w, v.vertical) }
+            w.field("collection") { writeFinite(w, v.collection) }
+        }
+    }
+    data class EmbossProjection(val depthMm: Double, val useSurface: Boolean)
+    private fun readEmbossProjection(v: Any): EmbossProjection {
+        val obj = ProjectIntentJson.fields(v, setOf("depthMm", "useSurface"), false)
+        return EmbossProjection(readFinite(obj.get("depthMm")), readFlag(obj.get("useSurface")))
+    }
+    private fun writeEmbossProjection(w: ProjectIntentWriter, v: EmbossProjection) {
+        w.obj {
+            w.field("depthMm") { writeFinite(w, v.depthMm) }
+            w.field("useSurface") { writeFlag(w, v.useSurface) }
+        }
+    }
+    data class EmbossConfiguration(val text: List<Int>, val styleName: List<Int>, val fontDescriptor: List<Int>, val fontDescriptorType: List<Int>, val font: EmbossFontProperty, val projection: EmbossProjection, val family: OptionalText, val faceName: OptionalText, val style: OptionalText, val weight: OptionalText)
+    private fun readEmbossConfiguration(v: Any): EmbossConfiguration {
+        val obj = ProjectIntentJson.fields(v, setOf("text", "styleName", "fontDescriptor", "fontDescriptorType", "font", "projection", "family", "faceName", "style", "weight"), false)
+        return EmbossConfiguration(readEditText(obj.get("text")), readEditText(obj.get("styleName")), readEditText(obj.get("fontDescriptor")), readEditText(obj.get("fontDescriptorType")), readEmbossFontProperty(obj.get("font")), readEmbossProjection(obj.get("projection")), readOptionalText(obj.get("family")), readOptionalText(obj.get("faceName")), readOptionalText(obj.get("style")), readOptionalText(obj.get("weight")))
+    }
+    private fun writeEmbossConfiguration(w: ProjectIntentWriter, v: EmbossConfiguration) {
+        w.obj {
+            w.field("text") { writeEditText(w, v.text) }
+            w.field("styleName") { writeEditText(w, v.styleName) }
+            w.field("fontDescriptor") { writeEditText(w, v.fontDescriptor) }
+            w.field("fontDescriptorType") { writeEditText(w, v.fontDescriptorType) }
+            w.field("font") { writeEmbossFontProperty(w, v.font) }
+            w.field("projection") { writeEmbossProjection(w, v.projection) }
+            w.field("family") { writeOptionalText(w, v.family) }
+            w.field("faceName") { writeOptionalText(w, v.faceName) }
+            w.field("style") { writeOptionalText(w, v.style) }
+            w.field("weight") { writeOptionalText(w, v.weight) }
+        }
+    }
+    private fun readGlyphContour(v: Any): List<List<Double>> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readPlanarPosition(array.get(it)) }
+    }
+    private fun writeGlyphContour(w: ProjectIntentWriter, v: List<List<Double>>) {
+        w.array(v, 0, 131072) { writePlanarPosition(w, it) }
+    }
+    private fun readGlyphContours(v: Any): List<List<List<Double>>> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readGlyphContour(array.get(it)) }
+    }
+    private fun writeGlyphContours(w: ProjectIntentWriter, v: List<List<List<Double>>>) {
+        w.array(v, 0, 131072) { writeGlyphContour(w, it) }
+    }
+    data class GlyphOutline(val codePoint: Long, val advance: Double, val contours: List<List<List<Double>>>)
+    private fun readGlyphOutline(v: Any): GlyphOutline {
+        val obj = ProjectIntentJson.fields(v, setOf("codePoint", "advance", "contours"), false)
+        return GlyphOutline(readCounter(obj.get("codePoint")), readFinite(obj.get("advance")), readGlyphContours(obj.get("contours")))
+    }
+    private fun writeGlyphOutline(w: ProjectIntentWriter, v: GlyphOutline) {
+        w.obj {
+            w.field("codePoint") { writeCounter(w, v.codePoint) }
+            w.field("advance") { writeFinite(w, v.advance) }
+            w.field("contours") { writeGlyphContours(w, v.contours) }
+        }
+    }
+    private fun readGlyphOutlines(v: Any): List<GlyphOutline> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readGlyphOutline(array.get(it)) }
+    }
+    private fun writeGlyphOutlines(w: ProjectIntentWriter, v: List<GlyphOutline>) {
+        w.array(v, 0, 131072) { writeGlyphOutline(w, it) }
+    }
+    data class GlyphFont(val unitsPerEm: Double, val glyphs: List<GlyphOutline>)
+    private fun readGlyphFont(v: Any): GlyphFont {
+        val obj = ProjectIntentJson.fields(v, setOf("unitsPerEm", "glyphs"), false)
+        return GlyphFont(readFinite(obj.get("unitsPerEm")), readGlyphOutlines(obj.get("glyphs")))
+    }
+    private fun writeGlyphFont(w: ProjectIntentWriter, v: GlyphFont) {
+        w.obj {
+            w.field("unitsPerEm") { writeFinite(w, v.unitsPerEm) }
+            w.field("glyphs") { writeGlyphOutlines(w, v.glyphs) }
+        }
+    }
+    data class EmbossRequest(val configuration: EmbossConfiguration, val font: GlyphFont)
+    private fun readEmbossRequest(v: Any): EmbossRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("configuration", "font"), false)
+        return EmbossRequest(readEmbossConfiguration(obj.get("configuration")), readGlyphFont(obj.get("font")))
+    }
+    private fun writeEmbossRequest(w: ProjectIntentWriter, v: EmbossRequest) {
+        w.obj {
+            w.field("configuration") { writeEmbossConfiguration(w, v.configuration) }
+            w.field("font") { writeGlyphFont(w, v.font) }
+        }
+    }
+    private fun readEmbossCodePoints(v: Any): List<Long> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readCounter(array.get(it)) }
+    }
+    private fun writeEmbossCodePoints(w: ProjectIntentWriter, v: List<Long>) {
+        w.array(v, 0, 131072) { writeCounter(w, it) }
+    }
+    data class EmbossPreview(val triangleCount: Long, val vertexCount: Long, val missingCodePoints: List<Long>, val openEdgeCount: Long, val coincidentEdgeCount: Long, val digest: List<Int>, val byteLength: Long)
+    private fun readEmbossPreview(v: Any): EmbossPreview {
+        val obj = ProjectIntentJson.fields(v, setOf("triangleCount", "vertexCount", "missingCodePoints", "openEdgeCount", "coincidentEdgeCount", "digest", "byteLength"), false)
+        return EmbossPreview(readCounter(obj.get("triangleCount")), readCounter(obj.get("vertexCount")), readEmbossCodePoints(obj.get("missingCodePoints")), readCounter(obj.get("openEdgeCount")), readCounter(obj.get("coincidentEdgeCount")), readEditText(obj.get("digest")), readCounter(obj.get("byteLength")))
+    }
+    private fun writeEmbossPreview(w: ProjectIntentWriter, v: EmbossPreview) {
+        w.obj {
+            w.field("triangleCount") { writeCounter(w, v.triangleCount) }
+            w.field("vertexCount") { writeCounter(w, v.vertexCount) }
+            w.field("missingCodePoints") { writeEmbossCodePoints(w, v.missingCodePoints) }
+            w.field("openEdgeCount") { writeCounter(w, v.openEdgeCount) }
+            w.field("coincidentEdgeCount") { writeCounter(w, v.coincidentEdgeCount) }
+            w.field("digest") { writeEditText(w, v.digest) }
+            w.field("byteLength") { writeCounter(w, v.byteLength) }
+        }
+    }
+    enum class EmbossRefusalCode {InvalidConfiguration,UnsupportedFont,NoGlyphs,InvalidMesh}
+    private fun readEmbossRefusalCode(v: Any): EmbossRefusalCode {
+        return when(v) {"invalidConfiguration" -> EmbossRefusalCode.InvalidConfiguration;"unsupportedFont" -> EmbossRefusalCode.UnsupportedFont;"noGlyphs" -> EmbossRefusalCode.NoGlyphs;"invalidMesh" -> EmbossRefusalCode.InvalidMesh; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEmbossRefusalCode(w: ProjectIntentWriter, v: EmbossRefusalCode) {
+        w.literal(when(v) {EmbossRefusalCode.InvalidConfiguration -> "invalidConfiguration";EmbossRefusalCode.UnsupportedFont -> "unsupportedFont";EmbossRefusalCode.NoGlyphs -> "noGlyphs";EmbossRefusalCode.InvalidMesh -> "invalidMesh";})
+    }
+    data class EmbossRefusal(val code: EmbossRefusalCode, val message: List<Int>)
+    private fun readEmbossRefusal(v: Any): EmbossRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return EmbossRefusal(readEmbossRefusalCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writeEmbossRefusal(w: ProjectIntentWriter, v: EmbossRefusal) {
+        w.obj {
+            w.field("code") { writeEmbossRefusalCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface EmbossReply {
+        data class Prepared(val value: ProjectIntents.EmbossPreview) : EmbossReply
+        data class Refused(val value: ProjectIntents.EmbossRefusal) : EmbossReply
+    }
+    private fun readEmbossReply(v: Any): EmbossReply {
+        val obj = ProjectIntentJson.fields(v, setOf("prepared", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "prepared" -> EmbossReply.Prepared(readEmbossPreview(obj.get(key)))
+            "refused" -> EmbossReply.Refused(readEmbossRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeEmbossReply(w: ProjectIntentWriter, v: EmbossReply) {
+        w.obj { when(v) {
+            is EmbossReply.Prepared -> w.field("prepared") { writeEmbossPreview(w, v.value) }
+            is EmbossReply.Refused -> w.field("refused") { writeEmbossRefusal(w, v.value) }
+        } }
+    }
+    data class EmbossAdd(val objectId: List<Int>, val volumeId: List<Int>, val assetId: List<Int>, val transform: Transform)
+    private fun readEmbossAdd(v: Any): EmbossAdd {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "volumeId", "assetId", "transform"), false)
+        return EmbossAdd(readId(obj.get("objectId")), readId(obj.get("volumeId")), readId(obj.get("assetId")), readTransform(obj.get("transform")))
+    }
+    private fun writeEmbossAdd(w: ProjectIntentWriter, v: EmbossAdd) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("assetId") { writeId(w, v.assetId) }
+            w.field("transform") { writeTransform(w, v.transform) }
+        }
+    }
+    data class EmbossEdit(val volumeId: List<Int>, val assetId: List<Int>)
+    private fun readEmbossEdit(v: Any): EmbossEdit {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeId", "assetId"), false)
+        return EmbossEdit(readId(obj.get("volumeId")), readId(obj.get("assetId")))
+    }
+    private fun writeEmbossEdit(w: ProjectIntentWriter, v: EmbossEdit) {
+        w.obj {
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("assetId") { writeId(w, v.assetId) }
+        }
+    }
+    sealed interface EmbossStage {
+        data class Add(val value: ProjectIntents.EmbossAdd) : EmbossStage
+        data class Edit(val value: ProjectIntents.EmbossEdit) : EmbossStage
+    }
+    private fun readEmbossStage(v: Any): EmbossStage {
+        val obj = ProjectIntentJson.fields(v, setOf("add", "edit"), true)
+        return when(val key = obj.keys().next()) {
+            "add" -> EmbossStage.Add(readEmbossAdd(obj.get(key)))
+            "edit" -> EmbossStage.Edit(readEmbossEdit(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeEmbossStage(w: ProjectIntentWriter, v: EmbossStage) {
+        w.obj { when(v) {
+            is EmbossStage.Add -> w.field("add") { writeEmbossAdd(w, v.value) }
+            is EmbossStage.Edit -> w.field("edit") { writeEmbossEdit(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -6261,4 +6479,10 @@ object ProjectIntents {
     fun encodeBrimEarStrandedRequest(value: BrimEarStrandedRequest): String = ProjectIntentWriter().also { writeBrimEarStrandedRequest(it, value) }.finish()
     fun decodeBrimEarStrandedReply(text: String): BrimEarStrandedReply = readBrimEarStrandedReply(ProjectIntentJson.parse(text))
     fun encodeBrimEarStrandedReply(value: BrimEarStrandedReply): String = ProjectIntentWriter().also { writeBrimEarStrandedReply(it, value) }.finish()
+    fun decodeEmbossRequest(text: String): EmbossRequest = readEmbossRequest(ProjectIntentJson.parse(text))
+    fun encodeEmbossRequest(value: EmbossRequest): String = ProjectIntentWriter().also { writeEmbossRequest(it, value) }.finish()
+    fun decodeEmbossReply(text: String): EmbossReply = readEmbossReply(ProjectIntentJson.parse(text))
+    fun encodeEmbossReply(value: EmbossReply): String = ProjectIntentWriter().also { writeEmbossReply(it, value) }.finish()
+    fun decodeEmbossStage(text: String): EmbossStage = readEmbossStage(ProjectIntentJson.parse(text))
+    fun encodeEmbossStage(value: EmbossStage): String = ProjectIntentWriter().also { writeEmbossStage(it, value) }.finish()
 }

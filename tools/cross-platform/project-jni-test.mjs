@@ -21,6 +21,7 @@ import { replayVolumeSplits } from "./volume-split-replay.mjs";
 import { replaySimplify } from "./simplify-replay.mjs";
 import { replayMeasure } from "./measure-replay.mjs";
 import { replayBrimEars } from "./brim-ear-replay.mjs";
+import { replayEmboss } from "./emboss-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -719,6 +720,43 @@ try {
       .join("\n"),
   );
   assert.equal(brimEarChecks, 99);
+  // Text embossing: cuts and stages, then the Kotlin wrapper.
+  const embossFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/emboss-vectors.json", root)),
+  );
+  const embossed = await replayEmboss(
+    projectJniCore(jvm.call),
+    embossFixture,
+    layout,
+    stagingLayout.version,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
+  assert.deepEqual(
+    [
+      embossed.embossPrepared,
+      embossed.embossRefused,
+      embossed.embossMeshes,
+      embossed.embossStages,
+      embossed.embossApplied,
+      embossed.embossHistory,
+    ],
+    [21, 8, 21, 8, 3, 3],
+  );
+  const embossChecks = jvm.call(
+    "embossChecks",
+    embossFixture.stateJson,
+    Uint8Array.from(embossFixture.assets[0].bytes),
+    embossFixture.steps
+      .map((s) =>
+        "prepare" in s
+          ? `P\t${s.emboss}\t${s.prepare}\t${s.reply}\t${s.mesh ?? ""}\t${s.window ?? ""}`
+          : "stage" in s
+            ? `S\t${s.emboss}\t${s.stage}\t${s.outcome}\t${s.revision}\t${s.hash}\t${label(s)}`
+            : `H\t${s.history}\t${s.revision}\t${s.hash}\t${label(s)}`,
+      )
+      .join("\n"),
+  );
+  assert.equal(embossChecks, 111);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

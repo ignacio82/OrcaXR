@@ -131,6 +131,9 @@ assert.deepEqual(schema.roots, [
   "BrimEarDetectReply",
   "BrimEarStrandedRequest",
   "BrimEarStrandedReply",
+  "EmbossRequest",
+  "EmbossReply",
+  "EmbossStage",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

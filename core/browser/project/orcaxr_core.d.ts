@@ -309,6 +309,23 @@ export class ProjectEffects {
     selection(position: number, previous: boolean): CapturedSelection;
 }
 
+/**
+ * One emboss cut, prepared from a recipe and the host's glyph outlines.
+ */
+export class ProjectEmboss {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Bytes `start..start + count` of the cut's indexed-mesh payload.
+     */
+    mesh(start: number, count: number): Uint8Array;
+    /**
+     * The `EmbossReply`: the cut's summary, or the refusal.
+     */
+    reply(): string;
+}
+
 export class ProjectExport {
     private constructor();
     free(): void;
@@ -594,6 +611,11 @@ export class ProjectSession {
     snapshot(): CapturedProject;
     stage_commands(input: ProjectCommandUpload): number;
     /**
+     * Stage a prepared emboss cut (an `EmbossStage`) for `executeStaged`: a
+     * new text part under the host's IDs, or a re-cut of a text part.
+     */
+    stage_emboss(emboss: ProjectEmboss, request: string): number;
+    /**
      * Stage the stroke's whole gesture as one edit for `executeStaged`; 0
      * when it touched no facet. A stroke whose state changed refuses `stale`.
      */
@@ -768,6 +790,11 @@ export function format_override_value(request: string): string;
 export function measure_features(request: string): string;
 
 /**
+ * Cut a recipe with the host's glyph outlines: an `EmbossRequest`.
+ */
+export function prepare_emboss(request: string): ProjectEmboss;
+
+/**
  * The Full Spectrum rules: an `EditorRuleRequest` to `EditorRules`.
  */
 export function settings_rules(rules: string): string;
@@ -796,6 +823,7 @@ export interface InitOutput {
     readonly __wbg_projectcommandupload_free: (a: number, b: number) => void;
     readonly __wbg_projectdocument_free: (a: number, b: number) => void;
     readonly __wbg_projecteffects_free: (a: number, b: number) => void;
+    readonly __wbg_projectemboss_free: (a: number, b: number) => void;
     readonly __wbg_projectexport_free: (a: number, b: number) => void;
     readonly __wbg_projectguard_free: (a: number, b: number) => void;
     readonly __wbg_projectimportbase_free: (a: number, b: number) => void;
@@ -843,6 +871,7 @@ export interface InitOutput {
     readonly evaluate: (a: number, b: number) => [number, number];
     readonly format_override_value: (a: number, b: number) => [number, number, number, number];
     readonly measure_features: (a: number, b: number) => [number, number, number, number];
+    readonly prepare_emboss: (a: number, b: number) => [number, number, number];
     readonly presetlibrary_apply: (a: number, b: number, c: number) => [number, number, number, number];
     readonly presetlibrary_apply_update: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_bases: (a: number, b: number, c: number) => [number, number, number, number];
@@ -909,6 +938,8 @@ export interface InitOutput {
     readonly projecteffects_reason: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly projecteffects_reason_length: (a: number, b: number) => [number, number, number];
     readonly projecteffects_selection: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectemboss_mesh: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectemboss_reply: (a: number) => [number, number, number, number];
     readonly projectexport_preflight: (a: number, b: number, c: number) => [number, number, number];
     readonly projectimportbase_prepare_model: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number];
     readonly projectimportpreview_blocked: (a: number) => [number, number, number];
@@ -983,6 +1014,7 @@ export interface InitOutput {
     readonly projectsession_selection: (a: number) => number;
     readonly projectsession_snapshot: (a: number) => number;
     readonly projectsession_stage_commands: (a: number, b: number) => [number, number, number];
+    readonly projectsession_stage_emboss: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_stage_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_stage_volume_simplify: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_stage_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];

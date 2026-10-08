@@ -602,6 +602,19 @@ impl ProjectSession {
             .map_err(|_| error("disposed"))?;
         wire::encode_brim_ear_stranded_reply(&reply).map_err(|_| error("output_limit"))
     }
+    /// Stage a prepared emboss cut (an `EmbossStage`) for `executeStaged`: a
+    /// new text part under the host's IDs, or a re-cut of a text part.
+    pub fn stage_emboss(&mut self, emboss: &ProjectEmboss, request: &str) -> Result<f64, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request = wire::decode_emboss_stage(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .stage_emboss(&emboss.inner, &request)
+            .map(|id| id as f64)
+            .map_err(|value| error(session_error(value)))
+    }
     /// The plate's wipe tower, auto-placed: a `WipeTowerRequest`; returns a
     /// `WipeTowerReply`.
     pub fn plan_wipe_tower(&self, request: &str) -> Result<String, JsValue> {
@@ -896,6 +909,38 @@ pub fn measure_features(request: &str) -> Result<String, JsValue> {
     let request = wire::decode_measure_request(request).map_err(|_| error("invalid_request"))?;
     wire::encode_measure_reply(&orcaxr_project::measure::measure_wire(&request))
         .map_err(|_| error("output_limit"))
+}
+/// One emboss cut, prepared from a recipe and the host's glyph outlines.
+#[wasm_bindgen]
+pub struct ProjectEmboss {
+    inner: orcaxr_project::emboss::PreparedEmboss,
+}
+#[wasm_bindgen]
+impl ProjectEmboss {
+    /// The `EmbossReply`: the cut's summary, or the refusal.
+    pub fn reply(&self) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        wire::encode_emboss_reply(&self.inner.reply()).map_err(|_| error("output_limit"))
+    }
+    /// Bytes `start..start + count` of the cut's indexed-mesh payload.
+    pub fn mesh(&self, start: f64, count: f64) -> Result<Vec<u8>, JsValue> {
+        self.inner
+            .mesh(index(start)? as u64, index(count)? as u64)
+            .map(<[u8]>::to_vec)
+            .map_err(|_| error("invalid_request"))
+    }
+}
+/// Cut a recipe with the host's glyph outlines: an `EmbossRequest`.
+#[wasm_bindgen]
+pub fn prepare_emboss(request: &str) -> Result<ProjectEmboss, JsValue> {
+    use orcaxr_contracts::project_intent_types as wire;
+    if request.len() > wire::MAX_BYTES {
+        return Err(error("input_limit"));
+    }
+    let request = wire::decode_emboss_request(request).map_err(|_| error("invalid_request"))?;
+    Ok(ProjectEmboss {
+        inner: orcaxr_project::emboss::prepare(&request),
+    })
 }
 fn session_error(value: orcaxr_contracts::project_intent_types::SessionError) -> &'static str {
     use orcaxr_contracts::project_intent_types::SessionError;

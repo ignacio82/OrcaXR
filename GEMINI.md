@@ -308,15 +308,15 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   IDs are model-part-local; resolve normalized paths, cycles/depth/expansion
   limits and transforms before flattening. Never guess membership from geometry.
 - Paint stores stable physical/mixed filament IDs and sparse refined-facet version-2 state, not
-  palette colors or one canonical object per triangle. Topology-changing operations must
-  explicitly remap or reject dependent data. Rust validates all five sparse channels; BBS hex
-  decoding budgets explicit roots across channels, and writing borrows existing trees. Sparse
-  import assembly never expands unpainted roots. Normalize/remap assignments and splits together
-  so collapsed paint survives. Dense expansion requires an explicit host root budget; the
-  stateless canonicalizer's parser limits are not persisted project limits. Graph validation now
-  checks annotation/source topology consistency; revision plate requests have native session
-  guards; native paint strokes stage one guarded commit each; native volume splits and
-  simplifications prepare on a guard and stage under host IDs.
+  palette colors or one canonical object per triangle. Topology-changing operations must explicitly
+  remap or reject dependent data. Rust validates all five sparse channels; BBS hex decoding budgets
+  explicit roots across channels, and writing borrows existing trees. Sparse import assembly never
+  expands unpainted roots. Normalize/remap assignments and splits together so collapsed paint
+  survives. Dense expansion requires an explicit host root budget; the stateless canonicalizer's
+  parser limits are not persisted project limits. Graph validation now checks annotation/source
+  topology consistency; revision plate requests have native session guards; native paint strokes
+  stage one guarded commit each; native volume splits and simplifications prepare on a guard and
+  stage under host IDs; emboss takes host glyph contours, never font files.
 - Smart Paint is a validated, bounded proposal plus operator correction and one
   canonical transaction. Check per-provider/payload consent before sending data.
 - Wipe towers reserve their complete printed footprint against the printable rectangle's actual origin,

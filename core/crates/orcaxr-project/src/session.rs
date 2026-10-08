@@ -386,6 +386,25 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             request,
         ))
     }
+    /// Stage a prepared emboss cut ([`crate::emboss::prepare`]) as one edit
+    /// on the current state: a new text part of an object under the host's
+    /// IDs, or a re-cut of an existing text part (`EmbossStage`). A refused
+    /// cut or an unstable ID refuses as an invalid request; the commit checks
+    /// the object or volume when it runs.
+    pub fn stage_emboss(
+        &mut self,
+        emboss: &crate::emboss::PreparedEmboss,
+        request: &wire::EmbossStage,
+    ) -> Result<u64, wire::SessionError> {
+        let guard = self.capture_guard()?;
+        let work = emboss
+            .work(request, self.staging.max_units())
+            .map_err(|error| match error {
+                crate::emboss::Error::Limit => wire::SessionError::ResourceLimit,
+                crate::emboss::Error::Invalid => wire::SessionError::InvalidRequest,
+            })?;
+        self.stage(&guard, work)
+    }
     /// The transforms one placement edit submits, planned from the
     /// acknowledged state (`PlacementRequest` → `PlacementReply`).
     pub fn plan_placement(
