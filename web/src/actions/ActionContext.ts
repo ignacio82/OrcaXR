@@ -121,12 +121,12 @@ export class ActionContext {
   async revealObjectsTreeEntity(entity: ObjectTreeEntityRef): Promise<void> {
     await this.workspace.revealObjectsTreeEntity(entity);
   }
-  assignObjectsTreeFilament(
+  async assignObjectsTreeFilament(
     entities: readonly CanonicalFilamentAssignableEntityRef[],
     filamentId: FilamentId | null,
     guard: Readonly<{ sourceRevision: number; sourceHash: string }>,
-  ): void {
-    this.workspace.setFilamentAssignments(entities, filamentId, guard);
+  ): Promise<void> {
+    await this.workspace.setFilamentAssignments(entities, filamentId, guard);
   }
   async mutateLayerEvent(request: CanonicalLayerEventMutationRequest): Promise<void> {
     await this.workspace.mutateLayerEvent(request);
@@ -421,8 +421,8 @@ export class ActionContext {
   }
 
   // ---- Filaments ------------------------------------------------------
-  remapFilaments(sourceIds: readonly FilamentId[], destinationId: FilamentId): void {
-    this.workspace.remapFilaments(sourceIds, destinationId);
+  async remapFilaments(sourceIds: readonly FilamentId[], destinationId: FilamentId): Promise<void> {
+    await this.workspace.remapFilaments(sourceIds, destinationId);
   }
 
   // ---- Transforms -----------------------------------------------------
@@ -620,11 +620,11 @@ export class ActionContext {
   }
 
   // ---- Advanced Features ----------------------------------------------
-  autoPlaceWipeTower(options?: { readonly enabled?: boolean; readonly plateId?: PlateId }): void {
+  async autoPlaceWipeTower(options?: { readonly enabled?: boolean; readonly plateId?: PlateId }): Promise<void> {
     if (options?.enabled !== undefined) {
-      this.workspace.setWipeTowerAuto(options.enabled);
+      await this.workspace.setWipeTowerAuto(options.enabled);
     } else {
-      this.workspace.autoPlaceWipeTower(options?.plateId);
+      await this.workspace.autoPlaceWipeTower(options?.plateId);
     }
   }
   measureTool(): void {

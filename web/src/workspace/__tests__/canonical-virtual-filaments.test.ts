@@ -180,7 +180,7 @@ await test('rejects stale and incompatible requests without changing canonical s
   controller.dispose();
 });
 
-await test('edits, duplicates, toggles, tombstones referenced rows, removes unreferenced rows, and undoes each outcome', () => {
+await test('edits, duplicates, toggles, tombstones referenced rows, removes unreferenced rows, and undoes each outcome', async () => {
   const controller = createController();
   let snapshot = controller.getVirtualFilamentLibrarySnapshot();
   const ratioId = entityId<'mixed-filament'>('import:virtual-controller-test:lifecycle-ratio');
@@ -250,7 +250,7 @@ await test('edits, duplicates, toggles, tombstones referenced rows, removes unre
 
   const model = controller.importBufferGeometry(new THREE.BoxGeometry(10, 10, 10), { name: 'Mixed assignment' });
   const assignmentSnapshot = controller.getFilamentAssignmentSnapshot([{ kind: 'object', id: model.objectId }]);
-  controller.setFilamentAssignments([{ kind: 'object', id: model.objectId }], ratioId, {
+  await controller.setFilamentAssignments([{ kind: 'object', id: model.objectId }], ratioId, {
     sourceRevision: assignmentSnapshot.sourceRevision,
     sourceHash: assignmentSnapshot.sourceHash,
   });

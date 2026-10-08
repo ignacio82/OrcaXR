@@ -66,7 +66,7 @@ export const objectsActions: Action[] = [
         );
         return;
       }
-      ctx.assignObjectsTreeFilament(request.entities, request.filamentId, request);
+      return ctx.assignObjectsTreeFilament(request.entities, request.filamentId, request);
     },
   },
   {
@@ -82,7 +82,7 @@ export const objectsActions: Action[] = [
         ctx.reportCapabilityUnavailable('Merge with filament', 'Choose source and target filaments to merge.');
         return;
       }
-      ctx.remapFilaments(request.sourceIds, request.destinationId);
+      return ctx.remapFilaments(request.sourceIds, request.destinationId);
     },
   },
   {

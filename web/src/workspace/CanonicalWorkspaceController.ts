@@ -1,5 +1,9 @@
 import { AsyncTransformGesture, type TransformGestureHost } from './AsyncTransformGesture';
-import { LocalProjectSessionTransport, ProjectReceiptUnavailableError } from '../project/LocalProjectSessionTransport';
+import {
+  LocalProjectSessionTransport,
+  ProjectReceiptUnavailableError,
+  type TransportAcknowledgement,
+} from '../project/LocalProjectSessionTransport';
 import {
   PROJECT_INTENT_VERSION,
   type ProjectCommandWire,
@@ -1179,7 +1183,7 @@ export class CanonicalWorkspaceController {
           maxZMm: request.maxZMm,
           config: {},
         });
-        return this.executeEditIntent((text) => ({
+        await this.executeEditIntent((text) => ({
           addLayerRange: {
             objectId: text(request.objectId),
             layerRangeId: text(request.layerRangeId),
@@ -1187,13 +1191,14 @@ export class CanonicalWorkspaceController {
             maxZMm: request.maxZMm,
           },
         }));
+        return;
       case 'edit':
         requireOwned(request.layerRangeId);
         new EditLayerRangeBoundsCommand(request.objectId, request.layerRangeId, {
           minZMm: request.minZMm,
           maxZMm: request.maxZMm,
         });
-        return this.executeEditIntent((text) => ({
+        await this.executeEditIntent((text) => ({
           editLayerRangeBounds: {
             objectId: text(request.objectId),
             layerRangeId: text(request.layerRangeId),
@@ -1201,10 +1206,11 @@ export class CanonicalWorkspaceController {
             maxZMm: { value: request.maxZMm },
           },
         }));
+        return;
       case 'split':
         requireOwned(request.layerRangeId);
         new SplitLayerRangeCommand(request.objectId, request.layerRangeId, request.splitZMm, request.upperRangeId);
-        return this.executeEditIntent((text) => ({
+        await this.executeEditIntent((text) => ({
           splitLayerRange: {
             objectId: text(request.objectId),
             layerRangeId: text(request.layerRangeId),
@@ -1212,23 +1218,26 @@ export class CanonicalWorkspaceController {
             upperRangeId: text(request.upperRangeId),
           },
         }));
+        return;
       case 'merge':
         requireOwned(request.firstRangeId);
         requireOwned(request.secondRangeId);
         new MergeLayerRangesCommand(request.objectId, request.firstRangeId, request.secondRangeId);
-        return this.executeEditIntent((text) => ({
+        await this.executeEditIntent((text) => ({
           mergeLayerRanges: {
             objectId: text(request.objectId),
             firstRangeId: text(request.firstRangeId),
             secondRangeId: text(request.secondRangeId),
           },
         }));
+        return;
       case 'delete':
         requireOwned(request.layerRangeId);
         new DeleteLayerRangeCommand(request.objectId, request.layerRangeId);
-        return this.executeEditIntent((text) => ({
+        await this.executeEditIntent((text) => ({
           deleteLayerRange: { objectId: text(request.objectId), layerRangeId: text(request.layerRangeId) },
         }));
+        return;
     }
   }
 
@@ -1272,11 +1281,11 @@ export class CanonicalWorkspaceController {
    * scopes as exactly one history command. The caller must submit the guard
    * from the snapshot it displayed; stale UI decisions fail without mutation.
    */
-  setFilamentAssignments(
+  async setFilamentAssignments(
     entities: readonly CanonicalFilamentAssignableEntityRef[],
     filamentId: FilamentId | null,
     guard: CanonicalFilamentAssignmentGuard,
-  ): boolean {
+  ): Promise<boolean> {
     this.assertActive();
     const before = this.session.project.getSnapshot();
     if (before.revision !== guard.sourceRevision || before.hash !== guard.sourceHash) {
@@ -1291,8 +1300,31 @@ export class CanonicalWorkspaceController {
       if (!destination.enabled) throw new Error(`Destination filament ${filamentId} is disabled`);
     }
     const assignments = entities.map((entity) => filamentAssignmentChange(before.state, entity, filamentId));
-    this.session.execute(new SetFilamentAssignmentsCommand(assignments));
-    return this.session.project.getSnapshot().revision !== before.revision;
+    new SetFilamentAssignmentsCommand(assignments);
+    const receipt = await this.executeEditIntent((text) => ({
+      setFilamentAssignments: {
+        assignments: assignments.map((assignment) => ({
+          target:
+            assignment.target.kind === 'object'
+              ? { object: { objectId: text(assignment.target.objectId) } }
+              : assignment.target.kind === 'volume'
+                ? {
+                    volume: {
+                      objectId: text(assignment.target.objectId),
+                      volumeId: text(assignment.target.volumeId),
+                    },
+                  }
+                : {
+                    layerRange: {
+                      objectId: text(assignment.target.objectId),
+                      layerRangeId: text(assignment.target.layerRangeId),
+                    },
+                  },
+          filamentId: assignment.filamentId === null ? { absent: {} } : { value: text(assignment.filamentId) },
+        })),
+      },
+    }));
+    return receipt.guard.project.revision !== before.revision;
   }
 
   /** Revision-bound layer events for the active plate, in print order. */
@@ -2169,24 +2201,49 @@ export class CanonicalWorkspaceController {
   }
 
   /** Set or clear the wipe tower configuration on a plate as a single undoable command. */
-  setPlateWipeTower(plateId: PlateId, wipeTower: WipeTowerState | undefined, expectedRevision?: number): void {
+  async setPlateWipeTower(
+    plateId: PlateId,
+    wipeTower: WipeTowerState | undefined,
+    expectedRevision?: number,
+  ): Promise<void> {
     this.assertActive();
     this.assertPlateMutationRevision(expectedRevision);
     if (!findPlate(this.session.project.getSnapshot().state, plateId)) throw new Error(`Unknown plate ${plateId}`);
-    this.session.execute(new SetPlateWipeTowerCommand(plateId, wipeTower));
+    await this.submitPlateWipeTower(plateId, wipeTower);
   }
 
   /**
    * Automatically position the wipe tower on the specified plate (defaults to active plate)
    * using Chebyshev clearance scoring and commit the result as an undoable command.
    */
-  autoPlaceWipeTower(plateId?: PlateId, options?: WipeTowerPlanOptions): WipeTowerPick {
+  async autoPlaceWipeTower(plateId?: PlateId, options?: WipeTowerPlanOptions): Promise<WipeTowerPick> {
     this.assertActive();
     const targetPlateId = plateId ?? this.session.project.getSnapshot().state.activePlateId;
     const state = this.session.project.getSnapshot().state;
     const result = planWipeTowerPlacement(state, this.assets, targetPlateId, options);
-    this.session.execute(new SetPlateWipeTowerCommand(targetPlateId, result.state));
+    await this.submitPlateWipeTower(targetPlateId, result.state);
     return result.pick;
+  }
+
+  /** One plate's wipe tower, set or cleared, as a guarded asynchronous intent. */
+  private async submitPlateWipeTower(plateId: PlateId, wipeTower: WipeTowerState | undefined): Promise<void> {
+    new SetPlateWipeTowerCommand(plateId, wipeTower);
+    await this.executeEditIntent((text) => ({
+      setPlateWipeTower: {
+        plateId: text(plateId),
+        wipeTower: wipeTower
+          ? {
+              value: {
+                enabled: wipeTower.enabled,
+                positionMm: [wipeTower.positionMm[0], wipeTower.positionMm[1]],
+                rotationDeg: wipeTower.rotationDeg,
+                filamentId: wipeTower.filamentId === undefined ? { absent: {} } : { value: text(wipeTower.filamentId) },
+              },
+            }
+          : { absent: {} },
+        label: { absent: {} },
+      },
+    }));
   }
 
   /** Get the wipe tower configuration for a plate. */
@@ -2369,10 +2426,12 @@ export class CanonicalWorkspaceController {
   }
 
   /** One edit command, guarded by the session revision it was read at. */
-  private async executeEditIntent(command: (text: (value: string) => number[]) => ProjectCommandWire): Promise<void> {
+  private executeEditIntent(
+    command: (text: (value: string) => number[]) => ProjectCommandWire,
+  ): Promise<TransportAcknowledgement<void>> {
     const guard = this.asyncSession.captureGuard();
     const text = createIntentTextEncoder();
-    await this.sessionTransport.executeIntent({ version: PROJECT_INTENT_VERSION, command: command(text) }, { guard });
+    return this.sessionTransport.executeIntent({ version: PROJECT_INTENT_VERSION, command: command(text) }, { guard });
   }
 
   /**
@@ -4302,9 +4361,12 @@ export class CanonicalWorkspaceController {
   }
 
   /** Remap one or more source filaments to a destination filament across all scene objects, annotations, and wipes. */
-  remapFilaments(sourceIds: readonly FilamentId[], destinationId: FilamentId): void {
+  async remapFilaments(sourceIds: readonly FilamentId[], destinationId: FilamentId): Promise<void> {
     this.assertActive();
-    this.session.execute(new RemapFilamentsCommand(sourceIds, destinationId));
+    new RemapFilamentsCommand(sourceIds, destinationId);
+    await this.executeEditIntent((text) => ({
+      remapFilaments: { sourceIds: sourceIds.map(text), destinationId: text(destinationId) },
+    }));
   }
 
   /** Calculate a color recreation plan matching model colors to available filaments / FullSpectrum. */

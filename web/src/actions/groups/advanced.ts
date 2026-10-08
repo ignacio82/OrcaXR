@@ -119,7 +119,11 @@ export const advancedActions: Action[] = [
     disclosure: 'menu',
     menuSection: 'tools',
     hint: 'Scan local network for printers',
-    run: (ctx) => ctx.scanNetwork(),
+    // The outcome is reported as status; an action result is only ever a
+    // project-edit acknowledgement.
+    run: (ctx) => {
+      ctx.scanNetwork();
+    },
   },
   {
     id: 'printer_test_connection',

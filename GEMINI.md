@@ -174,7 +174,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   Clone, add-instance, fill-bed and paste await measured staged work, preserving their
   history boundaries and captured results across late or lost acknowledgements.
   Clipboard captures share asset records; paste restores missing bytes in rollback.
-  Settings/height-range/role/layer-event routes submit intents: construct commands
+  Settings/range/role/layer-event/filament/wipe-tower routes submit intents: build commands
   first (prepare errors become invalidRequest); local apply errors keep their message.
 - Prepared command intents use ASCII JSON with UTF-16 unit arrays for all text.
   The shared schema generates TypeScript, Rust and Kotlin types and converters.

@@ -9,8 +9,8 @@ const NOW = '2026-08-23T15:00:00.000Z';
 const MAPPING = { bedSizeMm: [256, 256] as const, worldUnitsPerMm: 0.00175 };
 
 let passed = 0;
-function test(name: string, run: () => void): void {
-  run();
+async function test(name: string, run: () => Promise<void>): Promise<void> {
+  await run();
   passed += 1;
   console.log(`  ✓ ${name}`);
 }
@@ -34,14 +34,14 @@ function createController(): {
   };
 }
 
-test('autoPlaceWipeTower positions wipe tower and reports summary', () => {
+await test('autoPlaceWipeTower positions wipe tower and reports summary', async () => {
   const { controller } = createController();
   const summaryBefore = controller.getSummary();
   const plateId = summaryBefore.activePlateId;
   assert.equal(summaryBefore.plates[0].wipeTower, undefined);
   assert.equal(controller.getPlateWipeTower(plateId), undefined);
 
-  const pick = controller.autoPlaceWipeTower(plateId, {
+  const pick = await controller.autoPlaceWipeTower(plateId, {
     bedSizeMm: [256, 256],
   });
 
@@ -68,11 +68,11 @@ test('autoPlaceWipeTower positions wipe tower and reports summary', () => {
   assert.deepEqual(controller.getPlateWipeTower(plateId)?.positionMm, [1, 195]);
 });
 
-test('setPlateWipeTower updates, clears, and undos wipe tower state', () => {
+await test('setPlateWipeTower updates, clears, and undos wipe tower state', async () => {
   const { controller } = createController();
   const plateId = controller.getSummary().activePlateId;
 
-  controller.setPlateWipeTower(plateId, {
+  await controller.setPlateWipeTower(plateId, {
     enabled: true,
     positionMm: [100, 200],
     rotationDeg: 45,
@@ -86,7 +86,7 @@ test('setPlateWipeTower updates, clears, and undos wipe tower state', () => {
   assert.equal(controller.getSummary().history.undoCount, 1);
 
   // Clear wipe tower
-  controller.setPlateWipeTower(plateId, undefined);
+  await controller.setPlateWipeTower(plateId, undefined);
   assert.equal(controller.getPlateWipeTower(plateId), undefined);
   assert.equal(controller.getSummary().history.undoCount, 2);
 

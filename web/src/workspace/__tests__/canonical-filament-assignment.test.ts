@@ -137,7 +137,7 @@ await test('batches object, part, and height-range assignment into one exact und
   const before = controller.getFilamentAssignmentSnapshot(entities);
   const historyBefore = controller.getSummary().history.undoCount;
 
-  assert.equal(controller.setFilamentAssignments(entities, fixture.ids.physical1, before), true);
+  assert.equal(await controller.setFilamentAssignments(entities, fixture.ids.physical1, before), true);
   const assigned = controller.getFilamentAssignmentSnapshot(entities);
   assert.ok(assigned.scopes.every((scope) => scope.localFilamentId === fixture.ids.physical1));
   assert.ok(assigned.scopes.every((scope) => scope.effectiveFilamentId === fixture.ids.physical1));
@@ -145,7 +145,7 @@ await test('batches object, part, and height-range assignment into one exact und
   assert.equal(controller.getSummary().history.undoLabel, 'Assign 3 scopes');
 
   const beforeNoop = controller.getSummary();
-  assert.equal(controller.setFilamentAssignments(entities, fixture.ids.physical1, assigned), false);
+  assert.equal(await controller.setFilamentAssignments(entities, fixture.ids.physical1, assigned), false);
   assert.deepEqual(controller.getSummary(), beforeNoop);
 
   assert.equal(controller.undo(), true);
@@ -162,7 +162,7 @@ await test('batches object, part, and height-range assignment into one exact und
 
   const beforeClear = controller.getFilamentAssignmentSnapshot(entities.slice(1));
   const clearHistory = controller.getSummary().history.undoCount;
-  assert.equal(controller.setFilamentAssignments(entities.slice(1), null, beforeClear), true);
+  assert.equal(await controller.setFilamentAssignments(entities.slice(1), null, beforeClear), true);
   const inherited = controller.getFilamentAssignmentSnapshot(entities);
   assert.equal(inherited.scopes[0].localFilamentId, fixture.ids.physical1);
   assert.equal(inherited.scopes[1].localFilamentId, undefined);
@@ -172,7 +172,7 @@ await test('batches object, part, and height-range assignment into one exact und
   assert.equal(controller.getSummary().history.undoCount, clearHistory + 1);
 
   const mixedGuard = controller.getFilamentAssignmentSnapshot([entities[1]]);
-  assert.equal(controller.setFilamentAssignments([entities[1]], fixture.ids.mixed, mixedGuard), true);
+  assert.equal(await controller.setFilamentAssignments([entities[1]], fixture.ids.mixed, mixedGuard), true);
   assert.equal(controller.getFilamentAssignmentSnapshot([entities[1]]).scopes[0].localFilamentId, fixture.ids.mixed);
 
   controller.dispose();
@@ -184,35 +184,33 @@ await test('fails stale, unknown, duplicate, empty, and missing-scope requests w
   const stale = controller.getFilamentAssignmentSnapshot([object]);
   await controller.renameObject(fixture.ids.object, 'Revision changed');
   const afterRename = controller.getSummary();
-  assert.throws(
-    () => controller.setFilamentAssignments([object], fixture.ids.physical1, stale),
+  await assert.rejects(
+    controller.setFilamentAssignments([object], fixture.ids.physical1, stale),
     StaleCanonicalFilamentAssignmentError,
   );
   assert.deepEqual(controller.getSummary(), afterRename);
   assert.equal(controller.getFilamentAssignmentSnapshot([object]).scopes[0].localFilamentId, fixture.ids.physical0);
 
   const current = controller.getFilamentAssignmentSnapshot([object]);
-  assert.throws(
-    () =>
-      controller.setFilamentAssignments(
-        [object],
-        entityId<'physical-filament'>('import:filament-controller-test:missing-head'),
-        current,
-      ),
+  await assert.rejects(
+    controller.setFilamentAssignments(
+      [object],
+      entityId<'physical-filament'>('import:filament-controller-test:missing-head'),
+      current,
+    ),
     /Unknown filament/,
   );
-  assert.throws(() => controller.setFilamentAssignments([], fixture.ids.physical1, current), /at least one/);
-  assert.throws(
-    () => controller.setFilamentAssignments([object, object], fixture.ids.physical1, current),
+  await assert.rejects(controller.setFilamentAssignments([], fixture.ids.physical1, current), /at least one/);
+  await assert.rejects(
+    controller.setFilamentAssignments([object, object], fixture.ids.physical1, current),
     /duplicate filament assignment targets/,
   );
-  assert.throws(
-    () =>
-      controller.setFilamentAssignments(
-        [object, { kind: 'volume', id: entityId<'volume'>('import:filament-controller-test:missing-volume') }],
-        fixture.ids.physical1,
-        current,
-      ),
+  await assert.rejects(
+    controller.setFilamentAssignments(
+      [object, { kind: 'volume', id: entityId<'volume'>('import:filament-controller-test:missing-volume') }],
+      fixture.ids.physical1,
+      current,
+    ),
     /Unknown volume/,
   );
   assert.deepEqual(controller.getSummary(), afterRename);

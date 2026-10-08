@@ -1209,7 +1209,7 @@ export class OrcaWorkspace extends xb.Script {
     entities: readonly CanonicalFilamentAssignableEntityRef[],
     filamentId: FilamentId | null,
     guard: Readonly<{ sourceRevision: number; sourceHash: string }>,
-  ): boolean {
+  ): Promise<boolean> {
     return this.canonicalProject.setFilamentAssignments(entities, filamentId, guard);
   }
 
@@ -9492,9 +9492,9 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  public remapFilaments(sourceIds: readonly FilamentId[], destinationId: FilamentId): void {
+  public async remapFilaments(sourceIds: readonly FilamentId[], destinationId: FilamentId): Promise<void> {
     try {
-      this.canonicalProject.remapFilaments(sourceIds, destinationId);
+      await this.canonicalProject.remapFilaments(sourceIds, destinationId);
       this.setStatus(t('workspace.orcaWorkspace.filamentsRemapped', 'Filaments remapped.'));
     } catch (error) {
       this.setStatus(t('workspace.orcaWorkspace.filamentRemapFailed', 'Filament remap failed.'));
@@ -10127,9 +10127,9 @@ export class OrcaWorkspace extends xb.Script {
     };
   }
 
-  public autoPlaceWipeTower(plateId: PlateId = this.activePlateId): WipeTowerPick | undefined {
+  public async autoPlaceWipeTower(plateId: PlateId = this.activePlateId): Promise<WipeTowerPick | undefined> {
     try {
-      const pick = this.canonicalProject.autoPlaceWipeTower(plateId, {
+      const pick = await this.canonicalProject.autoPlaceWipeTower(plateId, {
         // `bedMm` is the printable area's far corner, not its size, and passing
         // it as one is what placed the tower against an edge the bed does not
         // have. The printable rectangle carries the origin as well, so hand
@@ -10150,10 +10150,10 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Toggle wipe-tower auto-positioning (Section 1 pre-flight). */
-  public setWipeTowerAuto(on: boolean): void {
+  public async setWipeTowerAuto(on: boolean): Promise<void> {
     this.wipeTowerAuto = on;
     if (on) {
-      this.autoPlaceWipeTower(this.activePlateId);
+      await this.autoPlaceWipeTower(this.activePlateId);
     }
     this.setStatus(
       on

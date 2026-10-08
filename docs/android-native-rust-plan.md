@@ -911,7 +911,8 @@ and replay coverage for the complete current command inventory.
   submission; the synchronous workspace settings wrappers are gone. Height-range,
   part-role and layer-event edits (with the height-range and negative-part tools
   and the headset's layer-event author, now through its registry action) submit
-  their intents the same way, validating each command before submission. In
+  their intents the same way, validating each command before submission, as do
+  filament assignment, filament remapping and wipe-tower placement. In
   process, a command the session refuses reports the browser's own error; the
   wire still carries only `commandFailed`. Other workflows, remote projections
   and production worker/JNI execution are not migrated yet. Browser capture and
@@ -922,6 +923,8 @@ and replay coverage for the complete current command inventory.
     intents.
   - [x] Route height-range, part-role and layer-event edits through guarded
     intents, keeping the browser's own refusal messages in process.
+  - [x] Route filament assignment, filament remapping and wipe-tower placement
+    through guarded intents.
   - [ ] Migrate remaining editing/import/save/slice routes and isolate
     preparation work; preserve the registry boundary for every mutation.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,
