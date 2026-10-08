@@ -1272,7 +1272,9 @@ and replay coverage for the complete current command inventory.
   - [x] Expose the settings projection on project captures, with settings
     sessions that open a node's editor and turn its commit into the guarded
     project intent (275 replies per binding; intents execute natively).
-  - [ ] Add paint, capability and renderer projections and revisioned deltas.
+  - [x] Port the paint palette projection (`facets::palette`) and serve it on
+    captured projects (147 corpus libraries and 8 variants, 310 palettes).
+  - [ ] Add capability and renderer projections and revisioned deltas.
 - [ ] Make worker/service generation changes invalidate pending replies. Implement
   explicit session disposal and recovery after the core worker fails; recover
   only from acknowledged snapshots/journal entries, never an optimistic UI view.

@@ -412,7 +412,7 @@ try {
   );
   assert.deepEqual(
     [projections.projectionReplies, projections.projectionRefusals],
-    [275, 36],
+    [281, 36],
   );
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();

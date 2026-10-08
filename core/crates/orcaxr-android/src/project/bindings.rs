@@ -508,6 +508,12 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_projectPaintPalette, project_paint_palette, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

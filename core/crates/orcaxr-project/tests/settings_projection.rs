@@ -342,6 +342,21 @@ fn host_exchange_matches_the_browser_codecs() {
         let snapshot = store.snapshot();
         let w = &case["wire"];
         let text = |v: &Json| v.as_str().unwrap().to_owned();
+        for palette in w["palettes"].as_array().unwrap() {
+            let request =
+                wire::decode_paint_palette_request(&text(&palette["requestJson"])).unwrap();
+            let p = orcaxr_project::facets::palette::project_palette(
+                &snapshot.state().filaments,
+                request.include_unavailable,
+            );
+            let reply = orcaxr_project::facets::palette::wire_palette(&p);
+            assert_eq!(
+                wire::encode_paint_palette(&reply).unwrap(),
+                text(&palette["replyJson"]),
+                "{name}"
+            );
+            replies += 1;
+        }
         for page in w["pages"].as_array().unwrap() {
             let request =
                 wire::decode_settings_target_page_request(&text(&page["requestJson"])).unwrap();

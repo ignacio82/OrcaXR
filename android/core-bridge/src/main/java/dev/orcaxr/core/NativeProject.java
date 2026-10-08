@@ -99,6 +99,7 @@ final class NativeProject {
     static native String projectSettingsExplain(long handle, String request);
     static native long projectSettingsEditor(long handle, String request, PresetCollator collator, SearchFolding folder);
     static native String editorIntent(long handle);
+    static native String projectPaintPalette(long handle, String request);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

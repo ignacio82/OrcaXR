@@ -55,7 +55,7 @@ if (isMainThread) {
     );
     assert.deepEqual(
       [result.projectionReplies, result.projectionRefusals],
-      [275, 36],
+      [281, 36],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(

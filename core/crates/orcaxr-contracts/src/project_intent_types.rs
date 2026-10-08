@@ -5454,6 +5454,101 @@ fn read_settings_session_request(v: &Value) -> Result<SettingsSessionRequest, In
         technology: read_editor_technology(&object["technology"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaintPaletteRequest {
+    pub include_unavailable: Flag,
+}
+fn read_paint_palette_request(v: &Value) -> Result<PaintPaletteRequest, InvalidIntent> {
+    let object = fields(v, &["includeUnavailable"], false)?;
+    Ok(PaintPaletteRequest {
+        include_unavailable: read_flag(&object["includeUnavailable"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PaintPaletteKind {
+    Default,
+    Physical,
+    Mixed,
+}
+fn read_paint_palette_kind(v: &Value) -> Result<PaintPaletteKind, InvalidIntent> {
+    match v.as_str() {
+        Some("default") => Ok(PaintPaletteKind::Default),
+        Some("physical") => Ok(PaintPaletteKind::Physical),
+        Some("mixed") => Ok(PaintPaletteKind::Mixed),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaintPaletteEntry {
+    pub filament_id: OptionalText,
+    pub kind: PaintPaletteKind,
+    pub name: EditText,
+    pub display_color: EditText,
+    pub gradient: OptionalTextList,
+    pub badge: EditText,
+    pub recipe_summary: OptionalText,
+    pub keyboard_number: OptionalCounter,
+    pub engine_slot: OptionalCounter,
+    pub selectable: Flag,
+    pub unavailable_reason: OptionalText,
+}
+fn read_paint_palette_entry(v: &Value) -> Result<PaintPaletteEntry, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "filamentId",
+            "kind",
+            "name",
+            "displayColor",
+            "gradient",
+            "badge",
+            "recipeSummary",
+            "keyboardNumber",
+            "engineSlot",
+            "selectable",
+            "unavailableReason",
+        ],
+        false,
+    )?;
+    Ok(PaintPaletteEntry {
+        filament_id: read_optional_text(&object["filamentId"])?,
+        kind: read_paint_palette_kind(&object["kind"])?,
+        name: read_edit_text(&object["name"])?,
+        display_color: read_edit_text(&object["displayColor"])?,
+        gradient: read_optional_text_list(&object["gradient"])?,
+        badge: read_edit_text(&object["badge"])?,
+        recipe_summary: read_optional_text(&object["recipeSummary"])?,
+        keyboard_number: read_optional_counter(&object["keyboardNumber"])?,
+        engine_slot: read_optional_counter(&object["engineSlot"])?,
+        selectable: read_flag(&object["selectable"])?,
+        unavailable_reason: read_optional_text(&object["unavailableReason"])?,
+    })
+}
+pub type PaintPaletteEntries = Vec<PaintPaletteEntry>;
+fn read_paint_palette_entries(v: &Value) -> Result<PaintPaletteEntries, InvalidIntent> {
+    list(v, 0, 4096)?
+        .iter()
+        .map(read_paint_palette_entry)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaintPalette {
+    pub entries: PaintPaletteEntries,
+    pub physical_count: Counter,
+    pub enabled_mixed_count: Counter,
+}
+fn read_paint_palette(v: &Value) -> Result<PaintPalette, InvalidIntent> {
+    let object = fields(v, &["entries", "physicalCount", "enabledMixedCount"], false)?;
+    Ok(PaintPalette {
+        entries: read_paint_palette_entries(&object["entries"])?,
+        physical_count: read_counter(&object["physicalCount"])?,
+        enabled_mixed_count: read_counter(&object["enabledMixedCount"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -5904,5 +5999,21 @@ pub fn encode_settings_session_request(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_settings_session_request(&text)?;
+    Ok(text)
+}
+pub fn decode_paint_palette_request(text: &str) -> Result<PaintPaletteRequest, InvalidIntent> {
+    read_paint_palette_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_paint_palette_request(value: &PaintPaletteRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_paint_palette_request(&text)?;
+    Ok(text)
+}
+pub fn decode_paint_palette(text: &str) -> Result<PaintPalette, InvalidIntent> {
+    read_paint_palette(&super::project_intents::parse(text)?)
+}
+pub fn encode_paint_palette(value: &PaintPalette) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_paint_palette(&text)?;
     Ok(text)
 }

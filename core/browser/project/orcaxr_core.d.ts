@@ -26,6 +26,10 @@ export class CapturedProject {
     hash(): string;
     id(start: number, count: number): Uint16Array;
     id_length(): number;
+    /**
+     * A `PaintPaletteRequest`; returns the project's `PaintPalette`.
+     */
+    paint_palette(request: string): string;
     query(version: number): ProjectQueryNode;
     revision(): number;
     /**
@@ -624,6 +628,7 @@ export interface InitOutput {
     readonly capturedproject_hash: (a: number) => [number, number];
     readonly capturedproject_id: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_id_length: (a: number) => number;
+    readonly capturedproject_paint_palette: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_query: (a: number, b: number) => [number, number, number];
     readonly capturedproject_revision: (a: number) => number;
     readonly capturedproject_settings_editor: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];

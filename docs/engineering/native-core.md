@@ -3150,10 +3150,31 @@ JNI exports; Kotlin `ProjectSnapshot.settingsTargets`, `settingsSnapshot`,
 The projection corpus adds 30 sessions (every node of two states in two
 modes, with in-scope and refused edits) and the exchange's encodings. Rust,
 WASM in Node and Chrome and JNI open each state as a real project session
-and match 275 replies, including every commit and intent, with 36 refusals.
+and match 281 replies (paint palettes included), including every commit and
+intent, with 36 refusals.
 A Rust test closes the loop: each node's intent executes in a native
 session, and the node then stores exactly the committed overrides with its
 foreign keys intact.
+
+### Paint palette
+
+`facets::palette` ports `projectPaintPalette`: the filament library as the
+painting palette. The inheriting default entry comes first, then physical
+filaments by tool with `T` badges and materials, then mixed recipes with
+their mode badge, gradient stops, recipe summary (`60% T1 / 40% T2`,
+`T1 → T2`, manual patterns, rounded as V8 rounds) and engine slot. Disabled
+recipes and recipes whose components the project no longer has are
+unselectable rows with the browser's reasons; deleted Full Spectrum recipes
+are dropped. Colours normalize as the browser does, and keyboard numbers
+follow displayed order over selectable rows.
+
+`paint-palette-vectors.mjs` harvests every distinct filament library from
+the project corpora (147) and derives eight edge cases (names and colours,
+bad colours, tool order, disabled and deleted recipes, missing components,
+zero and odd weights, more than nine filaments). Rust matches all 310
+palettes. Captured projects serve the palette to hosts
+(`CapturedProject.paint_palette`, `ProjectSnapshot.paintPalette`), checked
+through the settings projection replay.
 
 ### Preset graph and profile catalog
 
@@ -3847,6 +3868,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settin
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-codec-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-editor-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-projection-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/paint-palette-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-catalog-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-library-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs

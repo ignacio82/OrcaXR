@@ -201,6 +201,28 @@ fn projection<T>(
     let json = with_project(handle, |p| read(p, &request))?;
     string(env, json)
 }
+pub(super) fn project_paint_palette(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    projection(
+        env,
+        handle,
+        request,
+        wire::decode_paint_palette_request,
+        |p, r| {
+            let palette = orcaxr_project::facets::palette::project_palette(
+                &p.state().filaments,
+                r.include_unavailable,
+            );
+            encoded(
+                &orcaxr_project::facets::palette::wire_palette(&palette),
+                wire::encode_paint_palette,
+            )
+        },
+    )
+}
 pub(super) fn project_settings_targets(
     env: &mut JNIEnv<'_>,
     handle: jlong,

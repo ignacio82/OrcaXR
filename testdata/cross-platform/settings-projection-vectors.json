@@ -3,7 +3,7 @@
   "sources": [
     {
       "path": "tools/cross-platform/settings-projection-vectors.mjs",
-      "sha256": "d3a00ffc2616192a2c68a507be76aae18c3efb06d2d6c61d9876805e95581fe1"
+      "sha256": "968595f3436e3ac7dc118c22770dc690db469eec13ccc1e97e9082eb7780bc72"
     },
     {
       "path": "web/src/project/scopedOverrides.ts",
@@ -30,8 +30,12 @@
       "sha256": "e29e73bc650063c5269532484942931267f20d8d5e18ab95db5619c9c5107303"
     },
     {
+      "path": "web/src/project/painting/paintPalette.ts",
+      "sha256": "88984bb338852e07502c2ff97da4c050349aaba985bf6957bc72dc9a500a523d"
+    },
+    {
       "path": "contracts/project-intents.json",
-      "sha256": "c86aa99ec60b91d8367d5c4bb51dbebc85a95429f77a046f1d132a0a9df140ec"
+      "sha256": "1b7a8ceec7258c3d286670042559877924db95a0adca9cf672416041cd7260c4"
     }
   ],
   "keys": [
@@ -124,6 +128,16 @@
         }
       ],
       "wire": {
+        "palettes": [
+          {
+            "requestJson": "{\"includeUnavailable\":false}",
+            "replyJson": "{\"entries\":[{\"filamentId\":{\"absent\":{}},\"kind\":\"default\",\"name\":[68,101,102,97,117,108,116,32,40,105,110,104,101,114,105,116,41],\"displayColor\":[35,102,102,48,48,48,48],\"gradient\":{\"absent\":{}},\"badge\":[48],\"recipeSummary\":{\"absent\":{}},\"keyboardNumber\":{\"absent\":{}},\"engineSlot\":{\"absent\":{}},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[48,99,55,57,50,48,51,57,45,48,100,54,100,45,52,97,52,54,45,57,51,101,56,45,50,98,98,102,52,99,97,57,97,102,49,101]},\"kind\":\"physical\",\"name\":[72,101,97,100,32,49,32,80,76,65],\"displayColor\":[35,102,102,48,48,48,48],\"gradient\":{\"absent\":{}},\"badge\":[84,48],\"recipeSummary\":{\"value\":[80,76,65]},\"keyboardNumber\":{\"value\":1},\"engineSlot\":{\"value\":1},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[49,48,56,57,102,50,48,49,45,102,102,57,52,45,52,51,55,101,45,97,48,49,102,45,49,97,97,49,56,102,49,55,48,98,101,48]},\"kind\":\"physical\",\"name\":[72,101,97,100,32,50,32,80,76,65],\"displayColor\":[35,48,48,48,48,102,102],\"gradient\":{\"absent\":{}},\"badge\":[84,49],\"recipeSummary\":{\"value\":[80,76,65]},\"keyboardNumber\":{\"value\":2},\"engineSlot\":{\"value\":2},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[100,101,56,49,48,50,100,48,45,97,97,100,98,45,52,57,54,51,45,98,52,55,50,45,100,55,54,49,51,50,51,51,100,98,57,49]},\"kind\":\"mixed\",\"name\":[80,117,114,112,108,101,32,109,105,120],\"displayColor\":[35,56,48,48,48,56,48],\"gradient\":{\"value\":[[35,102,102,48,48,48,48],[35,48,48,48,48,102,102]]},\"badge\":[82,97,116,105,111],\"recipeSummary\":{\"value\":[53,48,37,32,84,48,32,47,32,53,48,37,32,84,49]},\"keyboardNumber\":{\"value\":3},\"engineSlot\":{\"value\":3},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}}],\"physicalCount\":2,\"enabledMixedCount\":1}"
+          },
+          {
+            "requestJson": "{\"includeUnavailable\":true}",
+            "replyJson": "{\"entries\":[{\"filamentId\":{\"absent\":{}},\"kind\":\"default\",\"name\":[68,101,102,97,117,108,116,32,40,105,110,104,101,114,105,116,41],\"displayColor\":[35,102,102,48,48,48,48],\"gradient\":{\"absent\":{}},\"badge\":[48],\"recipeSummary\":{\"absent\":{}},\"keyboardNumber\":{\"absent\":{}},\"engineSlot\":{\"absent\":{}},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[48,99,55,57,50,48,51,57,45,48,100,54,100,45,52,97,52,54,45,57,51,101,56,45,50,98,98,102,52,99,97,57,97,102,49,101]},\"kind\":\"physical\",\"name\":[72,101,97,100,32,49,32,80,76,65],\"displayColor\":[35,102,102,48,48,48,48],\"gradient\":{\"absent\":{}},\"badge\":[84,48],\"recipeSummary\":{\"value\":[80,76,65]},\"keyboardNumber\":{\"value\":1},\"engineSlot\":{\"value\":1},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[49,48,56,57,102,50,48,49,45,102,102,57,52,45,52,51,55,101,45,97,48,49,102,45,49,97,97,49,56,102,49,55,48,98,101,48]},\"kind\":\"physical\",\"name\":[72,101,97,100,32,50,32,80,76,65],\"displayColor\":[35,48,48,48,48,102,102],\"gradient\":{\"absent\":{}},\"badge\":[84,49],\"recipeSummary\":{\"value\":[80,76,65]},\"keyboardNumber\":{\"value\":2},\"engineSlot\":{\"value\":2},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[100,101,56,49,48,50,100,48,45,97,97,100,98,45,52,57,54,51,45,98,52,55,50,45,100,55,54,49,51,50,51,51,100,98,57,49]},\"kind\":\"mixed\",\"name\":[80,117,114,112,108,101,32,109,105,120],\"displayColor\":[35,56,48,48,48,56,48],\"gradient\":{\"value\":[[35,102,102,48,48,48,48],[35,48,48,48,48,102,102]]},\"badge\":[82,97,116,105,111],\"recipeSummary\":{\"value\":[53,48,37,32,84,48,32,47,32,53,48,37,32,84,49]},\"keyboardNumber\":{\"value\":3},\"engineSlot\":{\"value\":3},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}}],\"physicalCount\":2,\"enabledMixedCount\":1}"
+          }
+        ],
         "pages": [
           {
             "requestJson": "{\"start\":0,\"count\":64}",
@@ -452,6 +466,16 @@
         }
       ],
       "wire": {
+        "palettes": [
+          {
+            "requestJson": "{\"includeUnavailable\":false}",
+            "replyJson": "{\"entries\":[{\"filamentId\":{\"absent\":{}},\"kind\":\"default\",\"name\":[68,101,102,97,117,108,116,32,40,105,110,104,101,114,105,116,41],\"displayColor\":[35,102,102,48,48,48,48],\"gradient\":{\"absent\":{}},\"badge\":[48],\"recipeSummary\":{\"absent\":{}},\"keyboardNumber\":{\"absent\":{}},\"engineSlot\":{\"absent\":{}},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[48,99,55,57,50,48,51,57,45,48,100,54,100,45,52,97,52,54,45,57,51,101,56,45,50,98,98,102,52,99,97,57,97,102,49,101]},\"kind\":\"physical\",\"name\":[72,101,97,100,32,49,32,80,76,65],\"displayColor\":[35,102,102,48,48,48,48],\"gradient\":{\"absent\":{}},\"badge\":[84,48],\"recipeSummary\":{\"value\":[80,76,65]},\"keyboardNumber\":{\"value\":1},\"engineSlot\":{\"value\":1},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[49,48,56,57,102,50,48,49,45,102,102,57,52,45,52,51,55,101,45,97,48,49,102,45,49,97,97,49,56,102,49,55,48,98,101,48]},\"kind\":\"physical\",\"name\":[72,101,97,100,32,50,32,80,76,65],\"displayColor\":[35,48,48,48,48,102,102],\"gradient\":{\"absent\":{}},\"badge\":[84,49],\"recipeSummary\":{\"value\":[80,76,65]},\"keyboardNumber\":{\"value\":2},\"engineSlot\":{\"value\":2},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[100,101,56,49,48,50,100,48,45,97,97,100,98,45,52,57,54,51,45,98,52,55,50,45,100,55,54,49,51,50,51,51,100,98,57,49]},\"kind\":\"mixed\",\"name\":[80,117,114,112,108,101,32,109,105,120],\"displayColor\":[35,56,48,48,48,56,48],\"gradient\":{\"value\":[[35,102,102,48,48,48,48],[35,48,48,48,48,102,102]]},\"badge\":[82,97,116,105,111],\"recipeSummary\":{\"value\":[53,48,37,32,84,48,32,47,32,53,48,37,32,84,49]},\"keyboardNumber\":{\"value\":3},\"engineSlot\":{\"value\":3},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}}],\"physicalCount\":2,\"enabledMixedCount\":1}"
+          },
+          {
+            "requestJson": "{\"includeUnavailable\":true}",
+            "replyJson": "{\"entries\":[{\"filamentId\":{\"absent\":{}},\"kind\":\"default\",\"name\":[68,101,102,97,117,108,116,32,40,105,110,104,101,114,105,116,41],\"displayColor\":[35,102,102,48,48,48,48],\"gradient\":{\"absent\":{}},\"badge\":[48],\"recipeSummary\":{\"absent\":{}},\"keyboardNumber\":{\"absent\":{}},\"engineSlot\":{\"absent\":{}},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[48,99,55,57,50,48,51,57,45,48,100,54,100,45,52,97,52,54,45,57,51,101,56,45,50,98,98,102,52,99,97,57,97,102,49,101]},\"kind\":\"physical\",\"name\":[72,101,97,100,32,49,32,80,76,65],\"displayColor\":[35,102,102,48,48,48,48],\"gradient\":{\"absent\":{}},\"badge\":[84,48],\"recipeSummary\":{\"value\":[80,76,65]},\"keyboardNumber\":{\"value\":1},\"engineSlot\":{\"value\":1},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[49,48,56,57,102,50,48,49,45,102,102,57,52,45,52,51,55,101,45,97,48,49,102,45,49,97,97,49,56,102,49,55,48,98,101,48]},\"kind\":\"physical\",\"name\":[72,101,97,100,32,50,32,80,76,65],\"displayColor\":[35,48,48,48,48,102,102],\"gradient\":{\"absent\":{}},\"badge\":[84,49],\"recipeSummary\":{\"value\":[80,76,65]},\"keyboardNumber\":{\"value\":2},\"engineSlot\":{\"value\":2},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[100,101,56,49,48,50,100,48,45,97,97,100,98,45,52,57,54,51,45,98,52,55,50,45,100,55,54,49,51,50,51,51,100,98,57,49]},\"kind\":\"mixed\",\"name\":[80,117,114,112,108,101,32,109,105,120],\"displayColor\":[35,56,48,48,48,56,48],\"gradient\":{\"value\":[[35,102,102,48,48,48,48],[35,48,48,48,48,102,102]]},\"badge\":[82,97,116,105,111],\"recipeSummary\":{\"value\":[53,48,37,32,84,48,32,47,32,53,48,37,32,84,49]},\"keyboardNumber\":{\"value\":3},\"engineSlot\":{\"value\":3},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}}],\"physicalCount\":2,\"enabledMixedCount\":1}"
+          }
+        ],
         "pages": [
           {
             "requestJson": "{\"start\":0,\"count\":64}",
@@ -860,6 +884,16 @@
         }
       ],
       "wire": {
+        "palettes": [
+          {
+            "requestJson": "{\"includeUnavailable\":false}",
+            "replyJson": "{\"entries\":[{\"filamentId\":{\"absent\":{}},\"kind\":\"default\",\"name\":[68,101,102,97,117,108,116,32,40,105,110,104,101,114,105,116,41],\"displayColor\":[35,102,102,48,48,48,48],\"gradient\":{\"absent\":{}},\"badge\":[48],\"recipeSummary\":{\"absent\":{}},\"keyboardNumber\":{\"absent\":{}},\"engineSlot\":{\"absent\":{}},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[48,99,55,57,50,48,51,57,45,48,100,54,100,45,52,97,52,54,45,57,51,101,56,45,50,98,98,102,52,99,97,57,97,102,49,101]},\"kind\":\"physical\",\"name\":[72,101,97,100,32,49,32,80,76,65],\"displayColor\":[35,102,102,48,48,48,48],\"gradient\":{\"absent\":{}},\"badge\":[84,48],\"recipeSummary\":{\"value\":[80,76,65]},\"keyboardNumber\":{\"value\":1},\"engineSlot\":{\"value\":1},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[49,48,56,57,102,50,48,49,45,102,102,57,52,45,52,51,55,101,45,97,48,49,102,45,49,97,97,49,56,102,49,55,48,98,101,48]},\"kind\":\"physical\",\"name\":[72,101,97,100,32,50,32,80,76,65],\"displayColor\":[35,48,48,48,48,102,102],\"gradient\":{\"absent\":{}},\"badge\":[84,49],\"recipeSummary\":{\"value\":[80,76,65]},\"keyboardNumber\":{\"value\":2},\"engineSlot\":{\"value\":2},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[100,101,56,49,48,50,100,48,45,97,97,100,98,45,52,57,54,51,45,98,52,55,50,45,100,55,54,49,51,50,51,51,100,98,57,49]},\"kind\":\"mixed\",\"name\":[80,117,114,112,108,101,32,109,105,120],\"displayColor\":[35,56,48,48,48,56,48],\"gradient\":{\"value\":[[35,102,102,48,48,48,48],[35,48,48,48,48,102,102]]},\"badge\":[82,97,116,105,111],\"recipeSummary\":{\"value\":[53,48,37,32,84,48,32,47,32,53,48,37,32,84,49]},\"keyboardNumber\":{\"value\":3},\"engineSlot\":{\"value\":3},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}}],\"physicalCount\":2,\"enabledMixedCount\":1}"
+          },
+          {
+            "requestJson": "{\"includeUnavailable\":true}",
+            "replyJson": "{\"entries\":[{\"filamentId\":{\"absent\":{}},\"kind\":\"default\",\"name\":[68,101,102,97,117,108,116,32,40,105,110,104,101,114,105,116,41],\"displayColor\":[35,102,102,48,48,48,48],\"gradient\":{\"absent\":{}},\"badge\":[48],\"recipeSummary\":{\"absent\":{}},\"keyboardNumber\":{\"absent\":{}},\"engineSlot\":{\"absent\":{}},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[48,99,55,57,50,48,51,57,45,48,100,54,100,45,52,97,52,54,45,57,51,101,56,45,50,98,98,102,52,99,97,57,97,102,49,101]},\"kind\":\"physical\",\"name\":[72,101,97,100,32,49,32,80,76,65],\"displayColor\":[35,102,102,48,48,48,48],\"gradient\":{\"absent\":{}},\"badge\":[84,48],\"recipeSummary\":{\"value\":[80,76,65]},\"keyboardNumber\":{\"value\":1},\"engineSlot\":{\"value\":1},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[49,48,56,57,102,50,48,49,45,102,102,57,52,45,52,51,55,101,45,97,48,49,102,45,49,97,97,49,56,102,49,55,48,98,101,48]},\"kind\":\"physical\",\"name\":[72,101,97,100,32,50,32,80,76,65],\"displayColor\":[35,48,48,48,48,102,102],\"gradient\":{\"absent\":{}},\"badge\":[84,49],\"recipeSummary\":{\"value\":[80,76,65]},\"keyboardNumber\":{\"value\":2},\"engineSlot\":{\"value\":2},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}},{\"filamentId\":{\"value\":[100,101,56,49,48,50,100,48,45,97,97,100,98,45,52,57,54,51,45,98,52,55,50,45,100,55,54,49,51,50,51,51,100,98,57,49]},\"kind\":\"mixed\",\"name\":[80,117,114,112,108,101,32,109,105,120],\"displayColor\":[35,56,48,48,48,56,48],\"gradient\":{\"value\":[[35,102,102,48,48,48,48],[35,48,48,48,48,102,102]]},\"badge\":[82,97,116,105,111],\"recipeSummary\":{\"value\":[53,48,37,32,84,48,32,47,32,53,48,37,32,84,49]},\"keyboardNumber\":{\"value\":3},\"engineSlot\":{\"value\":3},\"selectable\":true,\"unavailableReason\":{\"absent\":{}}}],\"physicalCount\":2,\"enabledMixedCount\":1}"
+          }
+        ],
         "pages": [
           {
             "requestJson": "{\"start\":0,\"count\":64}",

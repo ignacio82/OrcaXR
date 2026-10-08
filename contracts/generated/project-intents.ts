@@ -2632,6 +2632,50 @@ const shapes = {
       "mode": "EditorMode",
       "technology": "EditorTechnology"
     }
+  },
+  "PaintPaletteRequest": {
+    "kind": "object",
+    "fields": {
+      "includeUnavailable": "Flag"
+    }
+  },
+  "PaintPaletteKind": {
+    "kind": "enum",
+    "values": [
+      "default",
+      "physical",
+      "mixed"
+    ]
+  },
+  "PaintPaletteEntry": {
+    "kind": "object",
+    "fields": {
+      "filamentId": "OptionalText",
+      "kind": "PaintPaletteKind",
+      "name": "EditText",
+      "displayColor": "EditText",
+      "gradient": "OptionalTextList",
+      "badge": "EditText",
+      "recipeSummary": "OptionalText",
+      "keyboardNumber": "OptionalCounter",
+      "engineSlot": "OptionalCounter",
+      "selectable": "Flag",
+      "unavailableReason": "OptionalText"
+    }
+  },
+  "PaintPaletteEntries": {
+    "kind": "array",
+    "items": "PaintPaletteEntry",
+    "min": 0,
+    "max": 4096
+  },
+  "PaintPalette": {
+    "kind": "object",
+    "fields": {
+      "entries": "PaintPaletteEntries",
+      "physicalCount": "Counter",
+      "enabledMixedCount": "Counter"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -2951,6 +2995,11 @@ export type ProjectSettingsShadowedListWire = readonly ProjectSettingsShadowedWi
 export interface ProjectSettingsExplanationWire {readonly valueJson: ProjectOptionalJsonTextWire;readonly source: ProjectOptionalEditorScopeWire;readonly sourceId: ProjectOptionalTextWire;readonly shadowed: ProjectSettingsShadowedListWire;}
 export type ProjectSettingsExplainResultWire = {readonly explanation:ProjectSettingsExplanationWire} | {readonly unknown:ProjectEditTextWire};
 export interface ProjectSettingsSessionRequestWire {readonly target: ProjectSettingsTargetWire;readonly mode: ProjectEditorModeWire;readonly technology: ProjectEditorTechnologyWire;}
+export interface ProjectPaintPaletteRequestWire {readonly includeUnavailable: ProjectFlagWire;}
+export type ProjectPaintPaletteKindWire = "default" | "physical" | "mixed";
+export interface ProjectPaintPaletteEntryWire {readonly filamentId: ProjectOptionalTextWire;readonly kind: ProjectPaintPaletteKindWire;readonly name: ProjectEditTextWire;readonly displayColor: ProjectEditTextWire;readonly gradient: ProjectOptionalTextListWire;readonly badge: ProjectEditTextWire;readonly recipeSummary: ProjectOptionalTextWire;readonly keyboardNumber: ProjectOptionalCounterWire;readonly engineSlot: ProjectOptionalCounterWire;readonly selectable: ProjectFlagWire;readonly unavailableReason: ProjectOptionalTextWire;}
+export type ProjectPaintPaletteEntriesWire = readonly ProjectPaintPaletteEntryWire[];
+export interface ProjectPaintPaletteWire {readonly entries: ProjectPaintPaletteEntriesWire;readonly physicalCount: ProjectCounterWire;readonly enabledMixedCount: ProjectCounterWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -3107,3 +3156,9 @@ export function encodeProjectSettingsExplainResult(value:ProjectSettingsExplainR
 export function captureProjectSettingsSessionRequest(value:unknown):ProjectSettingsSessionRequestWire { return captureIntent("SettingsSessionRequest",value,shapes,limits) as ProjectSettingsSessionRequestWire; }
 export function decodeProjectSettingsSessionRequest(text:string):ProjectSettingsSessionRequestWire { return captureProjectSettingsSessionRequest(parseIntentJson(text,limits)); }
 export function encodeProjectSettingsSessionRequest(value:ProjectSettingsSessionRequestWire):string { return JSON.stringify(captureProjectSettingsSessionRequest(value)); }
+export function captureProjectPaintPaletteRequest(value:unknown):ProjectPaintPaletteRequestWire { return captureIntent("PaintPaletteRequest",value,shapes,limits) as ProjectPaintPaletteRequestWire; }
+export function decodeProjectPaintPaletteRequest(text:string):ProjectPaintPaletteRequestWire { return captureProjectPaintPaletteRequest(parseIntentJson(text,limits)); }
+export function encodeProjectPaintPaletteRequest(value:ProjectPaintPaletteRequestWire):string { return JSON.stringify(captureProjectPaintPaletteRequest(value)); }
+export function captureProjectPaintPalette(value:unknown):ProjectPaintPaletteWire { return captureIntent("PaintPalette",value,shapes,limits) as ProjectPaintPaletteWire; }
+export function decodeProjectPaintPalette(text:string):ProjectPaintPaletteWire { return captureProjectPaintPalette(parseIntentJson(text,limits)); }
+export function encodeProjectPaintPalette(value:ProjectPaintPaletteWire):string { return JSON.stringify(captureProjectPaintPalette(value)); }

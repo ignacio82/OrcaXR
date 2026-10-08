@@ -2631,6 +2631,50 @@
         "mode": "EditorMode",
         "technology": "EditorTechnology"
       }
+    },
+    "PaintPaletteRequest": {
+      "kind": "object",
+      "fields": {
+        "includeUnavailable": "Flag"
+      }
+    },
+    "PaintPaletteKind": {
+      "kind": "enum",
+      "values": [
+        "default",
+        "physical",
+        "mixed"
+      ]
+    },
+    "PaintPaletteEntry": {
+      "kind": "object",
+      "fields": {
+        "filamentId": "OptionalText",
+        "kind": "PaintPaletteKind",
+        "name": "EditText",
+        "displayColor": "EditText",
+        "gradient": "OptionalTextList",
+        "badge": "EditText",
+        "recipeSummary": "OptionalText",
+        "keyboardNumber": "OptionalCounter",
+        "engineSlot": "OptionalCounter",
+        "selectable": "Flag",
+        "unavailableReason": "OptionalText"
+      }
+    },
+    "PaintPaletteEntries": {
+      "kind": "array",
+      "items": "PaintPaletteEntry",
+      "min": 0,
+      "max": 4096
+    },
+    "PaintPalette": {
+      "kind": "object",
+      "fields": {
+        "entries": "PaintPaletteEntries",
+        "physicalCount": "Counter",
+        "enabledMixedCount": "Counter"
+      }
     }
   },
   "roots": [
@@ -2685,7 +2729,9 @@
     "SettingsSnapshotResult",
     "SettingsExplainRequest",
     "SettingsExplainResult",
-    "SettingsSessionRequest"
+    "SettingsSessionRequest",
+    "PaintPaletteRequest",
+    "PaintPalette"
   ],
   "sessionVersion": 1
 }

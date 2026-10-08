@@ -65,6 +65,10 @@ export function replayProjection(core, fixture, layout, generation, policies) {
       eq(capture.revision(), state.revision, `${state.name} revision`);
       eq(capture.hash(), state.hash, `${state.name} hash`);
       const w = state.wire;
+      for (const palette of w.palettes) {
+        eq(capture.paint_palette(palette.requestJson), palette.replyJson, `${state.name} palette`);
+        replies++;
+      }
       for (const page of w.pages) {
         eq(capture.settings_targets(page.requestJson), page.replyJson, `${state.name} page`);
         replies++;

@@ -317,6 +317,10 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
     fun query(): ProjectQueryNode = read { own(NativeProject.queryRoot(it, ProjectQuery.VERSION), ::ProjectQueryNode) }
     fun revision(): Long = read { NativeProject.projectRevision(it) }
     fun hash(): String = read { NativeProject.projectHash(it) }
+    /** The filament library as the painting palette, with stable IDs. */
+    fun paintPalette(request: ProjectIntents.PaintPaletteRequest): ProjectIntents.PaintPalette = read {
+        ProjectIntents.decodePaintPalette(NativeProject.projectPaintPalette(it, ProjectIntents.encodePaintPaletteRequest(request)))
+    }
     /** One page of the nodes a scoped settings edit can address. */
     fun settingsTargets(request: ProjectIntents.SettingsTargetPageRequest): ProjectIntents.SettingsTargetPage = read {
         ProjectIntents.decodeSettingsTargetPage(

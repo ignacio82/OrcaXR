@@ -18,6 +18,7 @@ import {
   scopedOverrideTargets,
 } from "../../web/src/project/scopedOverrides.ts";
 import { projectSettingsOverrideSnapshot } from "../../web/src/project/settingsOverrides.ts";
+import { projectPaintPalette } from "../../web/src/project/painting/paintPalette.ts";
 import { createEngineOptionCatalog } from "../../web/src/settings/generated/loader.ts";
 import { SettingsDraftEditor } from "../../web/src/settings/editor/SettingsDraftEditor.ts";
 import {
@@ -30,6 +31,8 @@ import {
   encodeProjectEditorEdit,
   encodeProjectEditorEditResult,
   encodeProjectIntent,
+  encodeProjectPaintPalette,
+  encodeProjectPaintPaletteRequest,
   encodeProjectSettingsExplainRequest,
   encodeProjectSettingsExplainResult,
   encodeProjectSettingsSessionRequest,
@@ -253,6 +256,32 @@ for (const [n, [name, state]] of Object.entries({
   const record = states[n];
   assert.equal(record.name, name);
   record.wire = {
+    // The filament library as the painting palette.
+    palettes: [false, true].map((includeUnavailable) => {
+      const p = projectPaintPalette(snapshot.state, { includeUnavailable });
+      const optional = (v, map = (x) => x) =>
+        v === undefined ? { absent: {} } : { value: map(v) };
+      return {
+        requestJson: encodeProjectPaintPaletteRequest({ includeUnavailable }),
+        replyJson: encodeProjectPaintPalette({
+          entries: p.entries.map((e) => ({
+            filamentId: optional(e.filamentId, units),
+            kind: e.kind,
+            name: units(e.name),
+            displayColor: units(e.displayColor),
+            gradient: optional(e.gradient, (g) => g.map(units)),
+            badge: units(e.badge),
+            recipeSummary: optional(e.recipeSummary, units),
+            keyboardNumber: optional(e.keyboardNumber),
+            engineSlot: optional(e.engineSlot),
+            selectable: e.selectable,
+            unavailableReason: optional(e.unavailableReason, units),
+          })),
+          physicalCount: p.physicalCount,
+          enabledMixedCount: p.enabledMixedCount,
+        }),
+      };
+    }),
     pages: [
       [0, 64],
       [1, 2],
@@ -476,6 +505,7 @@ const sources = [
   "web/src/project/__tests__/fixtures.ts",
   "web/src/settings/editor/configBridge.ts",
   "web/src/ui/dom/mountSettingsEditors.ts",
+  "web/src/project/painting/paintPalette.ts",
   "contracts/project-intents.json",
 ];
 const output =

@@ -350,7 +350,7 @@ try {
   );
   assert.deepEqual(
     [result.projectionReplies, result.projectionRefusals],
-    [275, 36],
+    [281, 36],
   );
   assert.deepEqual(
     result.owned,

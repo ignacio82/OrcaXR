@@ -3968,6 +3968,62 @@ object ProjectIntents {
             w.field("technology") { writeEditorTechnology(w, v.technology) }
         }
     }
+    data class PaintPaletteRequest(val includeUnavailable: Boolean)
+    private fun readPaintPaletteRequest(v: Any): PaintPaletteRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("includeUnavailable"), false)
+        return PaintPaletteRequest(readFlag(obj.get("includeUnavailable")))
+    }
+    private fun writePaintPaletteRequest(w: ProjectIntentWriter, v: PaintPaletteRequest) {
+        w.obj {
+            w.field("includeUnavailable") { writeFlag(w, v.includeUnavailable) }
+        }
+    }
+    enum class PaintPaletteKind {Default,Physical,Mixed}
+    private fun readPaintPaletteKind(v: Any): PaintPaletteKind {
+        return when(v) {"default" -> PaintPaletteKind.Default;"physical" -> PaintPaletteKind.Physical;"mixed" -> PaintPaletteKind.Mixed; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePaintPaletteKind(w: ProjectIntentWriter, v: PaintPaletteKind) {
+        w.literal(when(v) {PaintPaletteKind.Default -> "default";PaintPaletteKind.Physical -> "physical";PaintPaletteKind.Mixed -> "mixed";})
+    }
+    data class PaintPaletteEntry(val filamentId: OptionalText, val kind: PaintPaletteKind, val name: List<Int>, val displayColor: List<Int>, val gradient: OptionalTextList, val badge: List<Int>, val recipeSummary: OptionalText, val keyboardNumber: OptionalCounter, val engineSlot: OptionalCounter, val selectable: Boolean, val unavailableReason: OptionalText)
+    private fun readPaintPaletteEntry(v: Any): PaintPaletteEntry {
+        val obj = ProjectIntentJson.fields(v, setOf("filamentId", "kind", "name", "displayColor", "gradient", "badge", "recipeSummary", "keyboardNumber", "engineSlot", "selectable", "unavailableReason"), false)
+        return PaintPaletteEntry(readOptionalText(obj.get("filamentId")), readPaintPaletteKind(obj.get("kind")), readEditText(obj.get("name")), readEditText(obj.get("displayColor")), readOptionalTextList(obj.get("gradient")), readEditText(obj.get("badge")), readOptionalText(obj.get("recipeSummary")), readOptionalCounter(obj.get("keyboardNumber")), readOptionalCounter(obj.get("engineSlot")), readFlag(obj.get("selectable")), readOptionalText(obj.get("unavailableReason")))
+    }
+    private fun writePaintPaletteEntry(w: ProjectIntentWriter, v: PaintPaletteEntry) {
+        w.obj {
+            w.field("filamentId") { writeOptionalText(w, v.filamentId) }
+            w.field("kind") { writePaintPaletteKind(w, v.kind) }
+            w.field("name") { writeEditText(w, v.name) }
+            w.field("displayColor") { writeEditText(w, v.displayColor) }
+            w.field("gradient") { writeOptionalTextList(w, v.gradient) }
+            w.field("badge") { writeEditText(w, v.badge) }
+            w.field("recipeSummary") { writeOptionalText(w, v.recipeSummary) }
+            w.field("keyboardNumber") { writeOptionalCounter(w, v.keyboardNumber) }
+            w.field("engineSlot") { writeOptionalCounter(w, v.engineSlot) }
+            w.field("selectable") { writeFlag(w, v.selectable) }
+            w.field("unavailableReason") { writeOptionalText(w, v.unavailableReason) }
+        }
+    }
+    private fun readPaintPaletteEntries(v: Any): List<PaintPaletteEntry> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readPaintPaletteEntry(array.get(it)) }
+    }
+    private fun writePaintPaletteEntries(w: ProjectIntentWriter, v: List<PaintPaletteEntry>) {
+        w.array(v, 0, 4096) { writePaintPaletteEntry(w, it) }
+    }
+    data class PaintPalette(val entries: List<PaintPaletteEntry>, val physicalCount: Long, val enabledMixedCount: Long)
+    private fun readPaintPalette(v: Any): PaintPalette {
+        val obj = ProjectIntentJson.fields(v, setOf("entries", "physicalCount", "enabledMixedCount"), false)
+        return PaintPalette(readPaintPaletteEntries(obj.get("entries")), readCounter(obj.get("physicalCount")), readCounter(obj.get("enabledMixedCount")))
+    }
+    private fun writePaintPalette(w: ProjectIntentWriter, v: PaintPalette) {
+        w.obj {
+            w.field("entries") { writePaintPaletteEntries(w, v.entries) }
+            w.field("physicalCount") { writeCounter(w, v.physicalCount) }
+            w.field("enabledMixedCount") { writeCounter(w, v.enabledMixedCount) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -4072,4 +4128,8 @@ object ProjectIntents {
     fun encodeSettingsExplainResult(value: SettingsExplainResult): String = ProjectIntentWriter().also { writeSettingsExplainResult(it, value) }.finish()
     fun decodeSettingsSessionRequest(text: String): SettingsSessionRequest = readSettingsSessionRequest(ProjectIntentJson.parse(text))
     fun encodeSettingsSessionRequest(value: SettingsSessionRequest): String = ProjectIntentWriter().also { writeSettingsSessionRequest(it, value) }.finish()
+    fun decodePaintPaletteRequest(text: String): PaintPaletteRequest = readPaintPaletteRequest(ProjectIntentJson.parse(text))
+    fun encodePaintPaletteRequest(value: PaintPaletteRequest): String = ProjectIntentWriter().also { writePaintPaletteRequest(it, value) }.finish()
+    fun decodePaintPalette(text: String): PaintPalette = readPaintPalette(ProjectIntentJson.parse(text))
+    fun encodePaintPalette(value: PaintPalette): String = ProjectIntentWriter().also { writePaintPalette(it, value) }.finish()
 }

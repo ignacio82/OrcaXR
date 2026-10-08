@@ -783,6 +783,21 @@ impl CapturedProject {
     pub fn id(&self, start: f64, count: f64) -> Result<Vec<u16>, JsValue> {
         text_read(self.inner.state().id.as_utf16(), start, count)
     }
+    /// A `PaintPaletteRequest`; returns the project's `PaintPalette`.
+    pub fn paint_palette(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_paint_palette_request(request).map_err(|_| error("invalid_request"))?;
+        let palette = orcaxr_project::facets::palette::project_palette(
+            &self.inner.state().filaments,
+            request.include_unavailable,
+        );
+        wire::encode_paint_palette(&orcaxr_project::facets::palette::wire_palette(&palette))
+            .map_err(|_| error("output_limit"))
+    }
     /// A `SettingsTargetPageRequest`; returns a `SettingsTargetPage`.
     pub fn settings_targets(&self, request: &str) -> Result<String, JsValue> {
         crate::editor::projection(&self.inner, crate::editor::Projection::Targets, request)

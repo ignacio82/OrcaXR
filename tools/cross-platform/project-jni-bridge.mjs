@@ -590,6 +590,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     query(version) {
       return wrap(ProjectQueryNode, call("queryRoot", this.handle, version));
     }
+    paint_palette(request) {
+      return call("projectPaintPalette", this.handle, request);
+    }
     settings_targets(request) {
       return call("projectSettingsTargets", this.handle, request);
     }
