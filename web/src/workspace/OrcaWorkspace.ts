@@ -3284,13 +3284,9 @@ export class OrcaWorkspace extends xb.Script {
     if (!objectId) return Object.freeze([]);
     const ears = this.canonicalProject.getBrimEars(objectId);
     if (ears.length === 0) return Object.freeze([]);
-    const target = this.paintTargets().find((entry) => entry.objectId === objectId);
-    const positions = target?.display.geometry.getAttribute('position');
-    if (!positions) return Object.freeze([]);
-    const outline = brimEarOutline(
-      positions.array as Float32Array,
-      target?.display.geometry.getIndex()?.array as Uint32Array | undefined,
-    );
+    const mesh = this.canonicalProject.getObjectModelMesh(objectId);
+    if (!mesh) return Object.freeze([]);
+    const outline = brimEarOutline(mesh.positions, mesh.indices);
     if (!outline) return Object.freeze([]);
     return findDisconnectedBrimEars(
       ears.map((ear) => ({ x: ear.positionMm[0], y: ear.positionMm[1], radiusMm: ear.headFrontRadiusMm })),
@@ -3315,10 +3311,14 @@ export class OrcaWorkspace extends xb.Script {
   private refreshBrimEarPreview(): void {
     const objectId = this.brimEarTargetObject();
     const stranded = new Set(this.tool === 'brim_ears' ? this.strandedBrimEars(objectId) : []);
+    const root = this.canonicalProject.surface.root;
+    const instances = new Map<THREE.Object3D, ObjectId>();
     for (const target of this.paintTargets()) {
-      const existing = target.display.getObjectByName(BRIM_EAR_PREVIEW_NAME);
-      if (existing) {
-        target.display.remove(existing);
+      // Older previews hung on the part itself; clear both places.
+      for (const holder of [target.display, target.display.parent]) {
+        const existing = holder?.getObjectByName(BRIM_EAR_PREVIEW_NAME);
+        if (!holder || !existing || existing.parent !== holder) continue;
+        holder.remove(existing);
         existing.traverse((node) => {
           if (node instanceof THREE.Mesh) {
             node.geometry.dispose();
@@ -3326,13 +3326,23 @@ export class OrcaWorkspace extends xb.Script {
           }
         });
       }
-      if (this.tool !== 'brim_ears' || target.objectId !== objectId) continue;
-      const ears = this.canonicalProject.getBrimEars(target.objectId);
-      if (ears.length === 0) continue;
-
-      target.display.updateWorldMatrix(true, false);
-      const worldScale = new THREE.Vector3();
-      target.display.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), worldScale);
+      if (target.display.parent) instances.set(target.display.parent, target.objectId);
+    }
+    if (this.tool !== 'brim_ears' || !objectId) return;
+    const ears = this.canonicalProject.getBrimEars(objectId);
+    if (ears.length === 0) return;
+    // Ears are object-local, so each instance of the object shows its discs;
+    // a disc is the ear's printed size, so only the instance's own scale is
+    // undone, not the scene's millimetre mapping above it.
+    for (const [instance, owner] of instances) {
+      if (owner !== objectId) continue;
+      instance.updateWorldMatrix(true, false);
+      const instanceScale = new THREE.Vector3();
+      new THREE.Matrix4()
+        .copy(root.matrixWorld)
+        .invert()
+        .multiply(instance.matrixWorld)
+        .decompose(new THREE.Vector3(), new THREE.Quaternion(), instanceScale);
       const group = new THREE.Group();
       group.name = BRIM_EAR_PREVIEW_NAME;
       group.raycast = () => {};
@@ -3351,16 +3361,14 @@ export class OrcaWorkspace extends xb.Script {
         disc.rotation.x = Math.PI / 2;
         disc.position.set(ear.positionMm[0], ear.positionMm[1], ear.positionMm[2]);
         // Scale is applied before rotation, so it is in the cylinder's own
-        // frame: its Y is the height axis, which the rotation sends to world Z.
-        // Hence the y/z swap — compensating the wrong parent axis would leave
-        // the disc the one thing on screen that is not the size it claims.
+        // frame: its Y is the height axis, which the rotation sends to Z.
         const inverse = (value: number): number => (value === 0 ? 1 : 1 / value);
-        disc.scale.set(inverse(worldScale.x), inverse(worldScale.z), inverse(worldScale.y));
+        disc.scale.set(inverse(instanceScale.x), inverse(instanceScale.z), inverse(instanceScale.y));
         disc.raycast = () => {};
         disc.renderOrder = 2;
         group.add(disc);
       });
-      target.display.add(group);
+      instance.add(group);
     }
   }
 
@@ -3379,20 +3387,19 @@ export class OrcaWorkspace extends xb.Script {
       );
       return false;
     }
-    const target = this.paintTargets().find((record) => record.objectId === objectId);
-    const geometry = (target?.display as THREE.Mesh | undefined)?.geometry;
-    const position = geometry?.getAttribute('position');
-    if (!position) {
+    // Ears are object-local, so the corners come from every model part moved
+    // into object space, not from one part's own frame.
+    const mesh = this.canonicalProject.getObjectModelMesh(objectId);
+    if (!mesh || mesh.indices.length === 0) {
       this.setStatus(
         t('workspace.orcaWorkspace.thatPartHasNoGeometry', 'That part has no geometry to read corners from.'),
       );
       return false;
     }
-    const detected = detectBrimEars(
-      position.array as Float32Array,
-      geometry?.index ? (geometry.index.array as Uint32Array) : undefined,
-      { ...DEFAULT_BRIM_EAR_DETECTION, headFrontRadiusMm: this.brimEarRadiusMm },
-    );
+    const detected = detectBrimEars(mesh.positions, mesh.indices, {
+      ...DEFAULT_BRIM_EAR_DETECTION,
+      headFrontRadiusMm: this.brimEarRadiusMm,
+    });
     if (detected.ears.length === 0) {
       this.setStatus(`No ears placed. ${detected.reason ?? ''}`.trim());
       return false;
@@ -3475,16 +3482,23 @@ export class OrcaWorkspace extends xb.Script {
       );
       return false;
     }
+    // The nearest of the object's parts the ray meets; the ear is object-local,
+    // so the point is read in its instance's frame, not the part's own.
+    let nearest: { target: ReturnType<OrcaWorkspace['paintTargets']>[number]; hit: THREE.Intersection } | undefined;
     for (const target of this.paintTargets()) {
       if (target.objectId !== objectId) continue;
       const [hit] = raycaster.intersectObject(target.display, false);
-      if (!hit) continue;
-      const local = target.display.worldToLocal(hit.point.clone());
-      // An ear is a first-layer feature, so it takes the part's base height
+      if (hit && (!nearest || hit.distance < nearest.hit.distance)) nearest = { target, hit };
+    }
+    if (nearest) {
+      const instance = nearest.target.display.parent!;
+      instance.updateWorldMatrix(true, false);
+      const local = instance.worldToLocal(nearest.hit.point.clone());
+      // An ear is a first-layer feature, so it takes the object's base height
       // rather than wherever on the model the ray landed: the pinned engine
       // discards any ear whose transformed world Z is above the bed
       // (`Brim.cpp:867`), which silently dropped every ear placed up a wall.
-      const baseZ = partBaseZ(target.display) ?? local.z;
+      const baseZ = objectBaseZ(this.canonicalProject.getObjectModelMesh(objectId)) ?? local.z;
       const radiusMm = this.brimEarRadiusMm;
       // The click is handled once it lands on the part; the session commits
       // the ear and reports success or its refusal when it acknowledges.
@@ -10414,11 +10428,12 @@ export class OrcaWorkspace extends xb.Script {
  * engine wire strings a catalog profile carries.
  */
 /** The lowest local Z of a part's own geometry — where a brim ear belongs. */
-function partBaseZ(display: THREE.Object3D): number | undefined {
-  const geometry = (display as THREE.Mesh).geometry;
-  if (!geometry) return undefined;
-  geometry.computeBoundingBox();
-  return geometry.boundingBox?.min.z;
+/** The lowest Z of an object's model parts in object space. */
+function objectBaseZ(mesh: { readonly positions: readonly number[] } | undefined): number | undefined {
+  if (!mesh || mesh.positions.length < 3) return undefined;
+  let base = Number.POSITIVE_INFINITY;
+  for (let index = 2; index < mesh.positions.length; index += 3) base = Math.min(base, mesh.positions[index]);
+  return base;
 }
 
 /**

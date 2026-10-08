@@ -127,6 +127,10 @@ assert.deepEqual(schema.roots, [
   "MeasureFeatureReply",
   "MeasureRequest",
   "MeasureReply",
+  "BrimEarDetectRequest",
+  "BrimEarDetectReply",
+  "BrimEarStrandedRequest",
+  "BrimEarStrandedReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

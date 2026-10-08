@@ -176,6 +176,7 @@ export const projectsession_clipboard_upload: (a: number, b: number, c: number, 
 export const projectsession_command_upload: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const projectsession_commit_import: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const projectsession_configure_staging: (a: number, b: number, c: number, d: number) => [number, number];
+export const projectsession_detect_brim_ears: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_dispose: (a: number) => void;
 export const projectsession_facet_region: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_finish_open: (a: number, b: number, c: number) => [number, number, number];
@@ -206,6 +207,7 @@ export const projectsession_stage_paint_stroke: (a: number, b: number, c: number
 export const projectsession_stage_volume_simplify: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const projectsession_stage_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const projectsession_staging_usage: (a: number) => [number, number];
+export const projectsession_stranded_brim_ears: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_submit: (a: number, b: number, c: number) => number;
 export const projectsession_volume_simplify: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const projectsession_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];

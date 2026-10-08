@@ -228,4 +228,19 @@ test('indexed and non-indexed meshes give the same answer', () => {
   assert.deepEqual(corners(detectBrimEars(positions, indices)), corners(detectBrimEars(soup, undefined)));
 });
 
+test('a footprint whose last side is one cut segment keeps all its corners', () => {
+  // A square pyramid: each side is a single triangle, so the first-layer cut
+  // meets each side once. The loop's closing side used to cost it a corner.
+  const positions = [0, 0, 0, 20, 0, 0, 20, 20, 0, 0, 20, 0, 10, 10, 15];
+  const indices = [0, 2, 1, 0, 3, 2, 0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4];
+  const [loop] = sliceMeshOutline(positions, indices, 0.2);
+  assert.equal(loop.length, 4);
+  const ears = detectBrimEars(positions, indices).ears;
+  assert.equal(ears.length, 4);
+  for (const ear of ears) {
+    const [x, y] = ear.point.positionMm;
+    assert.ok(Math.min(Math.abs(x), Math.abs(x - 20)) < 0.2 && Math.min(Math.abs(y), Math.abs(y - 20)) < 0.2);
+  }
+});
+
 console.log(`\nBrim ear detection: ${passed} tests passed.`);

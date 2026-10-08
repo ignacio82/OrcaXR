@@ -146,6 +146,9 @@ final class NativeProject {
     static native String measureVolumeReply(long handle);
     static native String measureVolumeFeature(long handle, String request);
     static native String measureFeatures(String request);
+    // Brim ears: an object's first-layer corners and its stranded ears.
+    static native String sessionBrimEarDetect(long handle, String request);
+    static native String sessionBrimEarStranded(long handle, String request);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

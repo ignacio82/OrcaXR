@@ -2588,6 +2588,32 @@ export class ProjectSession {
             throw takeFromExternrefTable0(ret[0]);
         }
     }
+    /**
+     * The corners of one object's first layer an ear would hold down: a
+     * `BrimEarDetectRequest`; returns a `BrimEarDetectReply`.
+     * @param {string} request
+     * @returns {string}
+     */
+    detect_brim_ears(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.projectsession_detect_brim_ears(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
     dispose() {
         wasm.projectsession_dispose(this.__wbg_ptr);
     }
@@ -3013,6 +3039,32 @@ export class ProjectSession {
         var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
         return v1;
+    }
+    /**
+     * One object's placed ears that reach nothing: a
+     * `BrimEarStrandedRequest`; returns a `BrimEarStrandedReply`.
+     * @param {string} request
+     * @returns {string}
+     */
+    stranded_brim_ears(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.projectsession_stranded_brim_ears(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
     }
     /**
      * @param {string} request

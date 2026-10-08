@@ -20,6 +20,7 @@ import { replayWipeTowers } from "./wipe-tower-replay.mjs";
 import { replayVolumeSplits } from "./volume-split-replay.mjs";
 import { replaySimplify } from "./simplify-replay.mjs";
 import { replayMeasure } from "./measure-replay.mjs";
+import { replayBrimEars } from "./brim-ear-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -701,6 +702,23 @@ try {
       .join("\n"),
   );
   assert.equal(measureChecks, 3915);
+  // Brim-ear detection over a live session, then the Kotlin wrapper.
+  const brimEarFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/brim-ear-vectors.json", root)),
+  );
+  assert.deepEqual(replayBrimEars(projectJniCore(jvm.call), brimEarFixture, layout), {
+    brimEarDetections: 40,
+    brimEarStrandedChecks: 9,
+  });
+  const brimEarChecks = jvm.call(
+    "brimEarChecks",
+    brimEarFixture.stateJson,
+    ...brimEarFixture.assets.map((a) => Uint8Array.from(a.bytes)),
+    brimEarFixture.steps
+      .map((s) => ("detect" in s ? `D\t${s.detect}\t${s.reply}` : `S\t${s.stranded}\t${s.reply}`))
+      .join("\n"),
+  );
+  assert.equal(brimEarChecks, 99);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

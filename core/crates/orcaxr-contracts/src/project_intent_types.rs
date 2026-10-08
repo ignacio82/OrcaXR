@@ -8166,6 +8166,158 @@ fn read_measure_reply(v: &Value) -> Result<MeasureReply, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrimEarDetectRequest {
+    pub object_id: Id,
+    pub max_angle_deg: Finite,
+    pub detection_radius_mm: Finite,
+    pub head_front_radius_mm: Finite,
+    pub sample_height_mm: OptionalFinite,
+}
+fn read_brim_ear_detect_request(v: &Value) -> Result<BrimEarDetectRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "objectId",
+            "maxAngleDeg",
+            "detectionRadiusMm",
+            "headFrontRadiusMm",
+            "sampleHeightMm",
+        ],
+        false,
+    )?;
+    Ok(BrimEarDetectRequest {
+        object_id: read_id(&object["objectId"])?,
+        max_angle_deg: read_finite(&object["maxAngleDeg"])?,
+        detection_radius_mm: read_finite(&object["detectionRadiusMm"])?,
+        head_front_radius_mm: read_finite(&object["headFrontRadiusMm"])?,
+        sample_height_mm: read_optional_finite(&object["sampleHeightMm"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectedBrimEar {
+    pub position_mm: Vector,
+    pub head_front_radius_mm: Finite,
+    pub angle_deg: Finite,
+}
+fn read_detected_brim_ear(v: &Value) -> Result<DetectedBrimEar, InvalidIntent> {
+    let object = fields(v, &["positionMm", "headFrontRadiusMm", "angleDeg"], false)?;
+    Ok(DetectedBrimEar {
+        position_mm: read_vector(&object["positionMm"])?,
+        head_front_radius_mm: read_finite(&object["headFrontRadiusMm"])?,
+        angle_deg: read_finite(&object["angleDeg"])?,
+    })
+}
+pub type DetectedBrimEars = Vec<DetectedBrimEar>;
+fn read_detected_brim_ears(v: &Value) -> Result<DetectedBrimEars, InvalidIntent> {
+    list(v, 0, 131072)?
+        .iter()
+        .map(read_detected_brim_ear)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrimEarDetection {
+    pub ears: DetectedBrimEars,
+    pub reason: OptionalText,
+}
+fn read_brim_ear_detection(v: &Value) -> Result<BrimEarDetection, InvalidIntent> {
+    let object = fields(v, &["ears", "reason"], false)?;
+    Ok(BrimEarDetection {
+        ears: read_detected_brim_ears(&object["ears"])?,
+        reason: read_optional_text(&object["reason"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BrimEarRefusalCode {
+    UnknownObject,
+    MissingAsset,
+    InvalidMesh,
+}
+fn read_brim_ear_refusal_code(v: &Value) -> Result<BrimEarRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("unknownObject") => Ok(BrimEarRefusalCode::UnknownObject),
+        Some("missingAsset") => Ok(BrimEarRefusalCode::MissingAsset),
+        Some("invalidMesh") => Ok(BrimEarRefusalCode::InvalidMesh),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrimEarRefusal {
+    pub code: BrimEarRefusalCode,
+    pub message: EditText,
+}
+fn read_brim_ear_refusal(v: &Value) -> Result<BrimEarRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(BrimEarRefusal {
+        code: read_brim_ear_refusal_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BrimEarDetectReply {
+    Detected(BrimEarDetection),
+    Refused(BrimEarRefusal),
+}
+fn read_brim_ear_detect_reply(v: &Value) -> Result<BrimEarDetectReply, InvalidIntent> {
+    let object = fields(v, &["detected", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "detected" => Ok(BrimEarDetectReply::Detected(read_brim_ear_detection(
+            value,
+        )?)),
+        "refused" => Ok(BrimEarDetectReply::Refused(read_brim_ear_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrimEarStrandedRequest {
+    pub object_id: Id,
+}
+fn read_brim_ear_stranded_request(v: &Value) -> Result<BrimEarStrandedRequest, InvalidIntent> {
+    let object = fields(v, &["objectId"], false)?;
+    Ok(BrimEarStrandedRequest {
+        object_id: read_id(&object["objectId"])?,
+    })
+}
+pub type BrimEarIndices = Vec<Counter>;
+fn read_brim_ear_indices(v: &Value) -> Result<BrimEarIndices, InvalidIntent> {
+    list(v, 0, 131072)?.iter().map(read_counter).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrimEarStranded {
+    pub indices: BrimEarIndices,
+}
+fn read_brim_ear_stranded(v: &Value) -> Result<BrimEarStranded, InvalidIntent> {
+    let object = fields(v, &["indices"], false)?;
+    Ok(BrimEarStranded {
+        indices: read_brim_ear_indices(&object["indices"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BrimEarStrandedReply {
+    Stranded(BrimEarStranded),
+    Refused(BrimEarRefusal),
+}
+fn read_brim_ear_stranded_reply(v: &Value) -> Result<BrimEarStrandedReply, InvalidIntent> {
+    let object = fields(v, &["stranded", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "stranded" => Ok(BrimEarStrandedReply::Stranded(read_brim_ear_stranded(
+            value,
+        )?)),
+        "refused" => Ok(BrimEarStrandedReply::Refused(read_brim_ear_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -8934,5 +9086,45 @@ pub fn decode_measure_reply(text: &str) -> Result<MeasureReply, InvalidIntent> {
 pub fn encode_measure_reply(value: &MeasureReply) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_measure_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_brim_ear_detect_request(text: &str) -> Result<BrimEarDetectRequest, InvalidIntent> {
+    read_brim_ear_detect_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_brim_ear_detect_request(
+    value: &BrimEarDetectRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_brim_ear_detect_request(&text)?;
+    Ok(text)
+}
+pub fn decode_brim_ear_detect_reply(text: &str) -> Result<BrimEarDetectReply, InvalidIntent> {
+    read_brim_ear_detect_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_brim_ear_detect_reply(value: &BrimEarDetectReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_brim_ear_detect_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_brim_ear_stranded_request(
+    text: &str,
+) -> Result<BrimEarStrandedRequest, InvalidIntent> {
+    read_brim_ear_stranded_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_brim_ear_stranded_request(
+    value: &BrimEarStrandedRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_brim_ear_stranded_request(&text)?;
+    Ok(text)
+}
+pub fn decode_brim_ear_stranded_reply(text: &str) -> Result<BrimEarStrandedReply, InvalidIntent> {
+    read_brim_ear_stranded_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_brim_ear_stranded_reply(
+    value: &BrimEarStrandedReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_brim_ear_stranded_reply(&text)?;
     Ok(text)
 }

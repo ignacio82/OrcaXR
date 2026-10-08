@@ -5948,6 +5948,131 @@ object ProjectIntents {
             is MeasureReply.Refused -> w.field("refused") { writeMeasureRefusal(w, v.value) }
         } }
     }
+    data class BrimEarDetectRequest(val objectId: List<Int>, val maxAngleDeg: Double, val detectionRadiusMm: Double, val headFrontRadiusMm: Double, val sampleHeightMm: OptionalFinite)
+    private fun readBrimEarDetectRequest(v: Any): BrimEarDetectRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "maxAngleDeg", "detectionRadiusMm", "headFrontRadiusMm", "sampleHeightMm"), false)
+        return BrimEarDetectRequest(readId(obj.get("objectId")), readFinite(obj.get("maxAngleDeg")), readFinite(obj.get("detectionRadiusMm")), readFinite(obj.get("headFrontRadiusMm")), readOptionalFinite(obj.get("sampleHeightMm")))
+    }
+    private fun writeBrimEarDetectRequest(w: ProjectIntentWriter, v: BrimEarDetectRequest) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("maxAngleDeg") { writeFinite(w, v.maxAngleDeg) }
+            w.field("detectionRadiusMm") { writeFinite(w, v.detectionRadiusMm) }
+            w.field("headFrontRadiusMm") { writeFinite(w, v.headFrontRadiusMm) }
+            w.field("sampleHeightMm") { writeOptionalFinite(w, v.sampleHeightMm) }
+        }
+    }
+    data class DetectedBrimEar(val positionMm: List<Double>, val headFrontRadiusMm: Double, val angleDeg: Double)
+    private fun readDetectedBrimEar(v: Any): DetectedBrimEar {
+        val obj = ProjectIntentJson.fields(v, setOf("positionMm", "headFrontRadiusMm", "angleDeg"), false)
+        return DetectedBrimEar(readVector(obj.get("positionMm")), readFinite(obj.get("headFrontRadiusMm")), readFinite(obj.get("angleDeg")))
+    }
+    private fun writeDetectedBrimEar(w: ProjectIntentWriter, v: DetectedBrimEar) {
+        w.obj {
+            w.field("positionMm") { writeVector(w, v.positionMm) }
+            w.field("headFrontRadiusMm") { writeFinite(w, v.headFrontRadiusMm) }
+            w.field("angleDeg") { writeFinite(w, v.angleDeg) }
+        }
+    }
+    private fun readDetectedBrimEars(v: Any): List<DetectedBrimEar> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readDetectedBrimEar(array.get(it)) }
+    }
+    private fun writeDetectedBrimEars(w: ProjectIntentWriter, v: List<DetectedBrimEar>) {
+        w.array(v, 0, 131072) { writeDetectedBrimEar(w, it) }
+    }
+    data class BrimEarDetection(val ears: List<DetectedBrimEar>, val reason: OptionalText)
+    private fun readBrimEarDetection(v: Any): BrimEarDetection {
+        val obj = ProjectIntentJson.fields(v, setOf("ears", "reason"), false)
+        return BrimEarDetection(readDetectedBrimEars(obj.get("ears")), readOptionalText(obj.get("reason")))
+    }
+    private fun writeBrimEarDetection(w: ProjectIntentWriter, v: BrimEarDetection) {
+        w.obj {
+            w.field("ears") { writeDetectedBrimEars(w, v.ears) }
+            w.field("reason") { writeOptionalText(w, v.reason) }
+        }
+    }
+    enum class BrimEarRefusalCode {UnknownObject,MissingAsset,InvalidMesh}
+    private fun readBrimEarRefusalCode(v: Any): BrimEarRefusalCode {
+        return when(v) {"unknownObject" -> BrimEarRefusalCode.UnknownObject;"missingAsset" -> BrimEarRefusalCode.MissingAsset;"invalidMesh" -> BrimEarRefusalCode.InvalidMesh; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeBrimEarRefusalCode(w: ProjectIntentWriter, v: BrimEarRefusalCode) {
+        w.literal(when(v) {BrimEarRefusalCode.UnknownObject -> "unknownObject";BrimEarRefusalCode.MissingAsset -> "missingAsset";BrimEarRefusalCode.InvalidMesh -> "invalidMesh";})
+    }
+    data class BrimEarRefusal(val code: BrimEarRefusalCode, val message: List<Int>)
+    private fun readBrimEarRefusal(v: Any): BrimEarRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return BrimEarRefusal(readBrimEarRefusalCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writeBrimEarRefusal(w: ProjectIntentWriter, v: BrimEarRefusal) {
+        w.obj {
+            w.field("code") { writeBrimEarRefusalCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface BrimEarDetectReply {
+        data class Detected(val value: ProjectIntents.BrimEarDetection) : BrimEarDetectReply
+        data class Refused(val value: ProjectIntents.BrimEarRefusal) : BrimEarDetectReply
+    }
+    private fun readBrimEarDetectReply(v: Any): BrimEarDetectReply {
+        val obj = ProjectIntentJson.fields(v, setOf("detected", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "detected" -> BrimEarDetectReply.Detected(readBrimEarDetection(obj.get(key)))
+            "refused" -> BrimEarDetectReply.Refused(readBrimEarRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeBrimEarDetectReply(w: ProjectIntentWriter, v: BrimEarDetectReply) {
+        w.obj { when(v) {
+            is BrimEarDetectReply.Detected -> w.field("detected") { writeBrimEarDetection(w, v.value) }
+            is BrimEarDetectReply.Refused -> w.field("refused") { writeBrimEarRefusal(w, v.value) }
+        } }
+    }
+    data class BrimEarStrandedRequest(val objectId: List<Int>)
+    private fun readBrimEarStrandedRequest(v: Any): BrimEarStrandedRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId"), false)
+        return BrimEarStrandedRequest(readId(obj.get("objectId")))
+    }
+    private fun writeBrimEarStrandedRequest(w: ProjectIntentWriter, v: BrimEarStrandedRequest) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+        }
+    }
+    private fun readBrimEarIndices(v: Any): List<Long> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readCounter(array.get(it)) }
+    }
+    private fun writeBrimEarIndices(w: ProjectIntentWriter, v: List<Long>) {
+        w.array(v, 0, 131072) { writeCounter(w, it) }
+    }
+    data class BrimEarStranded(val indices: List<Long>)
+    private fun readBrimEarStranded(v: Any): BrimEarStranded {
+        val obj = ProjectIntentJson.fields(v, setOf("indices"), false)
+        return BrimEarStranded(readBrimEarIndices(obj.get("indices")))
+    }
+    private fun writeBrimEarStranded(w: ProjectIntentWriter, v: BrimEarStranded) {
+        w.obj {
+            w.field("indices") { writeBrimEarIndices(w, v.indices) }
+        }
+    }
+    sealed interface BrimEarStrandedReply {
+        data class Stranded(val value: ProjectIntents.BrimEarStranded) : BrimEarStrandedReply
+        data class Refused(val value: ProjectIntents.BrimEarRefusal) : BrimEarStrandedReply
+    }
+    private fun readBrimEarStrandedReply(v: Any): BrimEarStrandedReply {
+        val obj = ProjectIntentJson.fields(v, setOf("stranded", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "stranded" -> BrimEarStrandedReply.Stranded(readBrimEarStranded(obj.get(key)))
+            "refused" -> BrimEarStrandedReply.Refused(readBrimEarRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeBrimEarStrandedReply(w: ProjectIntentWriter, v: BrimEarStrandedReply) {
+        w.obj { when(v) {
+            is BrimEarStrandedReply.Stranded -> w.field("stranded") { writeBrimEarStranded(w, v.value) }
+            is BrimEarStrandedReply.Refused -> w.field("refused") { writeBrimEarRefusal(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -6128,4 +6253,12 @@ object ProjectIntents {
     fun encodeMeasureRequest(value: MeasureRequest): String = ProjectIntentWriter().also { writeMeasureRequest(it, value) }.finish()
     fun decodeMeasureReply(text: String): MeasureReply = readMeasureReply(ProjectIntentJson.parse(text))
     fun encodeMeasureReply(value: MeasureReply): String = ProjectIntentWriter().also { writeMeasureReply(it, value) }.finish()
+    fun decodeBrimEarDetectRequest(text: String): BrimEarDetectRequest = readBrimEarDetectRequest(ProjectIntentJson.parse(text))
+    fun encodeBrimEarDetectRequest(value: BrimEarDetectRequest): String = ProjectIntentWriter().also { writeBrimEarDetectRequest(it, value) }.finish()
+    fun decodeBrimEarDetectReply(text: String): BrimEarDetectReply = readBrimEarDetectReply(ProjectIntentJson.parse(text))
+    fun encodeBrimEarDetectReply(value: BrimEarDetectReply): String = ProjectIntentWriter().also { writeBrimEarDetectReply(it, value) }.finish()
+    fun decodeBrimEarStrandedRequest(text: String): BrimEarStrandedRequest = readBrimEarStrandedRequest(ProjectIntentJson.parse(text))
+    fun encodeBrimEarStrandedRequest(value: BrimEarStrandedRequest): String = ProjectIntentWriter().also { writeBrimEarStrandedRequest(it, value) }.finish()
+    fun decodeBrimEarStrandedReply(text: String): BrimEarStrandedReply = readBrimEarStrandedReply(ProjectIntentJson.parse(text))
+    fun encodeBrimEarStrandedReply(value: BrimEarStrandedReply): String = ProjectIntentWriter().also { writeBrimEarStrandedReply(it, value) }.finish()
 }

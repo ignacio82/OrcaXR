@@ -223,6 +223,16 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun measureVolume(request: ProjectIntents.MeasureVolumeRequest): ProjectMeasureVolume = read {
         own(NativeProject.sessionMeasureVolume(it, ProjectIntents.encodeMeasureVolumeRequest(request)), ::ProjectMeasureVolume)
     }
+    /** The corners of one object's first layer that would lift, in object
+     * space, as ears an `addBrimEars` intent places; or why there are none. */
+    fun detectBrimEars(request: ProjectIntents.BrimEarDetectRequest): ProjectIntents.BrimEarDetectReply = read {
+        ProjectIntents.decodeBrimEarDetectReply(NativeProject.sessionBrimEarDetect(it, ProjectIntents.encodeBrimEarDetectRequest(request)))
+    }
+    /** One object's placed ears whose discs reach neither its first layer
+     * nor an anchored ear: the ones to draw red. */
+    fun strandedBrimEars(request: ProjectIntents.BrimEarStrandedRequest): ProjectIntents.BrimEarStrandedReply = read {
+        ProjectIntents.decodeBrimEarStrandedReply(NativeProject.sessionBrimEarStranded(it, ProjectIntents.encodeBrimEarStrandedRequest(request)))
+    }
     /** The plate's wipe tower auto-placed: the winning candidate and the tower
      * one `setPlateWipeTower` intent sets. */
     fun planWipeTower(request: ProjectIntents.WipeTowerRequest): ProjectIntents.WipeTowerReply = read {

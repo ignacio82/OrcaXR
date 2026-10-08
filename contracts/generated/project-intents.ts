@@ -3921,6 +3921,84 @@ const shapes = {
       "measured": "MeasureResult",
       "refused": "MeasureRefusal"
     }
+  },
+  "BrimEarDetectRequest": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "maxAngleDeg": "Finite",
+      "detectionRadiusMm": "Finite",
+      "headFrontRadiusMm": "Finite",
+      "sampleHeightMm": "OptionalFinite"
+    }
+  },
+  "DetectedBrimEar": {
+    "kind": "object",
+    "fields": {
+      "positionMm": "Vector",
+      "headFrontRadiusMm": "Finite",
+      "angleDeg": "Finite"
+    }
+  },
+  "DetectedBrimEars": {
+    "kind": "array",
+    "items": "DetectedBrimEar",
+    "min": 0,
+    "max": 131072
+  },
+  "BrimEarDetection": {
+    "kind": "object",
+    "fields": {
+      "ears": "DetectedBrimEars",
+      "reason": "OptionalText"
+    }
+  },
+  "BrimEarRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "unknownObject",
+      "missingAsset",
+      "invalidMesh"
+    ]
+  },
+  "BrimEarRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "BrimEarRefusalCode",
+      "message": "EditText"
+    }
+  },
+  "BrimEarDetectReply": {
+    "kind": "union",
+    "variants": {
+      "detected": "BrimEarDetection",
+      "refused": "BrimEarRefusal"
+    }
+  },
+  "BrimEarStrandedRequest": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id"
+    }
+  },
+  "BrimEarIndices": {
+    "kind": "array",
+    "items": "Counter",
+    "min": 0,
+    "max": 131072
+  },
+  "BrimEarStranded": {
+    "kind": "object",
+    "fields": {
+      "indices": "BrimEarIndices"
+    }
+  },
+  "BrimEarStrandedReply": {
+    "kind": "union",
+    "variants": {
+      "stranded": "BrimEarStranded",
+      "refused": "BrimEarRefusal"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -4395,6 +4473,17 @@ export interface ProjectMeasureAngleWire {readonly angle: ProjectFiniteWire;read
 export type ProjectOptionalMeasureAngleWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectMeasureAngleWire};
 export interface ProjectMeasureResultWire {readonly angle: ProjectOptionalMeasureAngleWire;readonly distanceInfinite: ProjectOptionalMeasureDistanceWire;readonly distanceStrict: ProjectOptionalMeasureDistanceWire;readonly distanceXyz: ProjectOptionalVectorWire;readonly unsupported: ProjectFlagWire;}
 export type ProjectMeasureReplyWire = {readonly measured:ProjectMeasureResultWire} | {readonly refused:ProjectMeasureRefusalWire};
+export interface ProjectBrimEarDetectRequestWire {readonly objectId: ProjectIdWire;readonly maxAngleDeg: ProjectFiniteWire;readonly detectionRadiusMm: ProjectFiniteWire;readonly headFrontRadiusMm: ProjectFiniteWire;readonly sampleHeightMm: ProjectOptionalFiniteWire;}
+export interface ProjectDetectedBrimEarWire {readonly positionMm: ProjectVectorWire;readonly headFrontRadiusMm: ProjectFiniteWire;readonly angleDeg: ProjectFiniteWire;}
+export type ProjectDetectedBrimEarsWire = readonly ProjectDetectedBrimEarWire[];
+export interface ProjectBrimEarDetectionWire {readonly ears: ProjectDetectedBrimEarsWire;readonly reason: ProjectOptionalTextWire;}
+export type ProjectBrimEarRefusalCodeWire = "unknownObject" | "missingAsset" | "invalidMesh";
+export interface ProjectBrimEarRefusalWire {readonly code: ProjectBrimEarRefusalCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectBrimEarDetectReplyWire = {readonly detected:ProjectBrimEarDetectionWire} | {readonly refused:ProjectBrimEarRefusalWire};
+export interface ProjectBrimEarStrandedRequestWire {readonly objectId: ProjectIdWire;}
+export type ProjectBrimEarIndicesWire = readonly ProjectCounterWire[];
+export interface ProjectBrimEarStrandedWire {readonly indices: ProjectBrimEarIndicesWire;}
+export type ProjectBrimEarStrandedReplyWire = {readonly stranded:ProjectBrimEarStrandedWire} | {readonly refused:ProjectBrimEarRefusalWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -4665,3 +4754,15 @@ export function encodeProjectMeasureRequest(value:ProjectMeasureRequestWire):str
 export function captureProjectMeasureReply(value:unknown):ProjectMeasureReplyWire { return captureIntent("MeasureReply",value,shapes,limits) as ProjectMeasureReplyWire; }
 export function decodeProjectMeasureReply(text:string):ProjectMeasureReplyWire { return captureProjectMeasureReply(parseIntentJson(text,limits)); }
 export function encodeProjectMeasureReply(value:ProjectMeasureReplyWire):string { return JSON.stringify(captureProjectMeasureReply(value)); }
+export function captureProjectBrimEarDetectRequest(value:unknown):ProjectBrimEarDetectRequestWire { return captureIntent("BrimEarDetectRequest",value,shapes,limits) as ProjectBrimEarDetectRequestWire; }
+export function decodeProjectBrimEarDetectRequest(text:string):ProjectBrimEarDetectRequestWire { return captureProjectBrimEarDetectRequest(parseIntentJson(text,limits)); }
+export function encodeProjectBrimEarDetectRequest(value:ProjectBrimEarDetectRequestWire):string { return JSON.stringify(captureProjectBrimEarDetectRequest(value)); }
+export function captureProjectBrimEarDetectReply(value:unknown):ProjectBrimEarDetectReplyWire { return captureIntent("BrimEarDetectReply",value,shapes,limits) as ProjectBrimEarDetectReplyWire; }
+export function decodeProjectBrimEarDetectReply(text:string):ProjectBrimEarDetectReplyWire { return captureProjectBrimEarDetectReply(parseIntentJson(text,limits)); }
+export function encodeProjectBrimEarDetectReply(value:ProjectBrimEarDetectReplyWire):string { return JSON.stringify(captureProjectBrimEarDetectReply(value)); }
+export function captureProjectBrimEarStrandedRequest(value:unknown):ProjectBrimEarStrandedRequestWire { return captureIntent("BrimEarStrandedRequest",value,shapes,limits) as ProjectBrimEarStrandedRequestWire; }
+export function decodeProjectBrimEarStrandedRequest(text:string):ProjectBrimEarStrandedRequestWire { return captureProjectBrimEarStrandedRequest(parseIntentJson(text,limits)); }
+export function encodeProjectBrimEarStrandedRequest(value:ProjectBrimEarStrandedRequestWire):string { return JSON.stringify(captureProjectBrimEarStrandedRequest(value)); }
+export function captureProjectBrimEarStrandedReply(value:unknown):ProjectBrimEarStrandedReplyWire { return captureIntent("BrimEarStrandedReply",value,shapes,limits) as ProjectBrimEarStrandedReplyWire; }
+export function decodeProjectBrimEarStrandedReply(text:string):ProjectBrimEarStrandedReplyWire { return captureProjectBrimEarStrandedReply(parseIntentJson(text,limits)); }
+export function encodeProjectBrimEarStrandedReply(value:ProjectBrimEarStrandedReplyWire):string { return JSON.stringify(captureProjectBrimEarStrandedReply(value)); }

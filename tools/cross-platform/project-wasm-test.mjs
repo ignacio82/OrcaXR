@@ -20,6 +20,7 @@ import { replayWipeTowers } from "./wipe-tower-replay.mjs";
 import { replayVolumeSplits } from "./volume-split-replay.mjs";
 import { replaySimplify } from "./simplify-replay.mjs";
 import { replayMeasure } from "./measure-replay.mjs";
+import { replayBrimEars } from "./brim-ear-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -138,6 +139,11 @@ if (isMainThread) {
         result.measurePairRefusals,
       ],
       [6, 1, 1260, 10, 679, 1],
+    );
+    // Brim-ear detection and stranded checks over a live session.
+    assert.deepEqual(
+      [result.brimEarDetections, result.brimEarStrandedChecks],
+      [40, 9],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -469,6 +475,13 @@ if (isMainThread) {
     ),
     layout,
   );
+  const brimEars = replayBrimEars(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/brim-ear-vectors.json", root)),
+    ),
+    layout,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -499,6 +512,7 @@ if (isMainThread) {
       ...splits,
       ...simplified,
       ...measured,
+      ...brimEars,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

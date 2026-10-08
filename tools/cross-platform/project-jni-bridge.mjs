@@ -38,6 +38,7 @@ export function startProjectJni(profile = "debug") {
   signatures.volumeSplitChecks = ["String", ...Array(6).fill("byte[]"), "String"];
   signatures.simplifyChecks = ["String", ...Array(7).fill("byte[]"), "String"];
   signatures.measureChecks = ["String", ...Array(6).fill("byte[]"), "String"];
+  signatures.brimEarChecks = ["String", ...Array(8).fill("byte[]"), "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -342,6 +343,12 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     facet_region(request) {
       return call("sessionFacetRegion", this.handle, request);
+    }
+    detect_brim_ears(request) {
+      return call("sessionBrimEarDetect", this.handle, request);
+    }
+    stranded_brim_ears(request) {
+      return call("sessionBrimEarStranded", this.handle, request);
     }
     plan_wipe_tower(request) {
       return call("sessionWipeTower", this.handle, request);

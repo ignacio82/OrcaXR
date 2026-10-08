@@ -572,6 +572,36 @@ impl ProjectSession {
             .map(|inner| ProjectMeasureVolume { inner })
             .map_err(|value| error(session_error(value)))
     }
+    /// The corners of one object's first layer an ear would hold down: a
+    /// `BrimEarDetectRequest`; returns a `BrimEarDetectReply`.
+    pub fn detect_brim_ears(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_brim_ear_detect_request(request).map_err(|_| error("invalid_request"))?;
+        let reply = self
+            .inner
+            .detect_brim_ears(&request)
+            .map_err(|_| error("disposed"))?;
+        wire::encode_brim_ear_detect_reply(&reply).map_err(|_| error("output_limit"))
+    }
+    /// One object's placed ears that reach nothing: a
+    /// `BrimEarStrandedRequest`; returns a `BrimEarStrandedReply`.
+    pub fn stranded_brim_ears(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request = wire::decode_brim_ear_stranded_request(request)
+            .map_err(|_| error("invalid_request"))?;
+        let reply = self
+            .inner
+            .stranded_brim_ears(&request)
+            .map_err(|_| error("disposed"))?;
+        wire::encode_brim_ear_stranded_reply(&reply).map_err(|_| error("output_limit"))
+    }
     /// The plate's wipe tower, auto-placed: a `WipeTowerRequest`; returns a
     /// `WipeTowerReply`.
     pub fn plan_wipe_tower(&self, request: &str) -> Result<String, JsValue> {

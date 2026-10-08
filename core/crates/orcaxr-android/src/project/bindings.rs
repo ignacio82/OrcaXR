@@ -684,6 +684,18 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sessionBrimEarDetect, session_brim_ear_detect, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_sessionBrimEarStranded, session_brim_ear_stranded, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

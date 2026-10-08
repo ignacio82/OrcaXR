@@ -522,6 +522,11 @@ export class ProjectSession {
      */
     commit_import(preview: ProjectImportPreview, acknowledged: string[]): ProjectEffects;
     configure_staging(version: number, options: Float64Array): void;
+    /**
+     * The corners of one object's first layer an ear would hold down: a
+     * `BrimEarDetectRequest`; returns a `BrimEarDetectReply`.
+     */
+    detect_brim_ears(request: string): string;
     dispose(): void;
     /**
      * A `FacetRegionRequest` over the session's acknowledged state; returns a
@@ -605,6 +610,11 @@ export class ProjectSession {
      */
     stage_volume_split(split: ProjectVolumeSplit, request: string): number;
     staging_usage(): Float64Array;
+    /**
+     * One object's placed ears that reach nothing: a
+     * `BrimEarStrandedRequest`; returns a `BrimEarStrandedReply`.
+     */
+    stranded_brim_ears(request: string): string;
     submit(request: string): ProjectReply | undefined;
     /**
      * Decimate one volume's mesh on the state `guard` captured: a
@@ -946,6 +956,7 @@ export interface InitOutput {
     readonly projectsession_command_upload: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly projectsession_commit_import: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_configure_staging: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly projectsession_detect_brim_ears: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_dispose: (a: number) => void;
     readonly projectsession_facet_region: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_finish_open: (a: number, b: number, c: number) => [number, number, number];
@@ -976,6 +987,7 @@ export interface InitOutput {
     readonly projectsession_stage_volume_simplify: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_stage_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_staging_usage: (a: number) => [number, number];
+    readonly projectsession_stranded_brim_ears: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_submit: (a: number, b: number, c: number) => number;
     readonly projectsession_volume_simplify: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];

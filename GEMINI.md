@@ -125,14 +125,13 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Generate parity manifests/reports through `tools/parity/`; never hand-edit them. Mapping a leaf or
   rendering a control is not evidence of live parity. Preserve incomplete human review, security,
   firmware, calibration and Galaxy XR gates until their evidence exists.
-- Generate settings and scope tables from pinned definitions. Engine precedence
-  is object, then part, then height range; the last wins. Reject authoring at
-  unsupported scopes while preserving imported values for lossless round trips.
-  Rust scope eligibility, layered resolution and project config selectors use
-  the same pinned extractor. Resolved views borrow immutable values. Ignored
-  local keys must not hide inherited values, and ignored-setting diagnostics use
-  canonical UTF-16 key order so save/reopen preserves them. Browser settings
-  commits await guarded intents, the same commands a native session executes.
+- Generate settings and scope tables from pinned definitions. Engine precedence is object, then part,
+  then height range; the last wins. Reject authoring at unsupported scopes while preserving imported
+  values for lossless round trips. Rust scope eligibility, layered resolution and project config
+  selectors use the same pinned extractor. Resolved views borrow immutable values. Ignored local keys
+  must not hide inherited values, and ignored-setting diagnostics use canonical UTF-16 key order so
+  save/reopen preserves them. Browser settings commits await guarded intents, the same commands a native
+  session executes.
 - The web profile corpus is a pinned overlay: registered vendor leaves are exact
   mirrors; local target adaptations are SHA-256 locked. Add complete compatible
   nozzle families. Never hand-edit a mirrored leaf or generated catalog.
@@ -323,7 +322,8 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Wipe towers reserve their complete printed footprint against the printable rectangle's actual origin,
   including brim/ribs. A bed's far corner is not its size; planning, ghosts and preflight share the same
   footprint authority. The workspace three.js world is scaled, Y-up and bed-centred: geometry tools read
-  printer mm via `root.matrixWorld⁻¹ × display.matrixWorld`.
+  printer mm via `root.matrixWorld⁻¹ × display.matrixWorld`; brim ears are object-local (all model
+  parts, instance transform only).
 
 ## Surface and startup ownership
 

@@ -3920,6 +3920,84 @@
         "measured": "MeasureResult",
         "refused": "MeasureRefusal"
       }
+    },
+    "BrimEarDetectRequest": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "maxAngleDeg": "Finite",
+        "detectionRadiusMm": "Finite",
+        "headFrontRadiusMm": "Finite",
+        "sampleHeightMm": "OptionalFinite"
+      }
+    },
+    "DetectedBrimEar": {
+      "kind": "object",
+      "fields": {
+        "positionMm": "Vector",
+        "headFrontRadiusMm": "Finite",
+        "angleDeg": "Finite"
+      }
+    },
+    "DetectedBrimEars": {
+      "kind": "array",
+      "items": "DetectedBrimEar",
+      "min": 0,
+      "max": 131072
+    },
+    "BrimEarDetection": {
+      "kind": "object",
+      "fields": {
+        "ears": "DetectedBrimEars",
+        "reason": "OptionalText"
+      }
+    },
+    "BrimEarRefusalCode": {
+      "kind": "enum",
+      "values": [
+        "unknownObject",
+        "missingAsset",
+        "invalidMesh"
+      ]
+    },
+    "BrimEarRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "BrimEarRefusalCode",
+        "message": "EditText"
+      }
+    },
+    "BrimEarDetectReply": {
+      "kind": "union",
+      "variants": {
+        "detected": "BrimEarDetection",
+        "refused": "BrimEarRefusal"
+      }
+    },
+    "BrimEarStrandedRequest": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id"
+      }
+    },
+    "BrimEarIndices": {
+      "kind": "array",
+      "items": "Counter",
+      "min": 0,
+      "max": 131072
+    },
+    "BrimEarStranded": {
+      "kind": "object",
+      "fields": {
+        "indices": "BrimEarIndices"
+      }
+    },
+    "BrimEarStrandedReply": {
+      "kind": "union",
+      "variants": {
+        "stranded": "BrimEarStranded",
+        "refused": "BrimEarRefusal"
+      }
     }
   },
   "roots": [
@@ -4012,7 +4090,11 @@
     "MeasureFeatureRequest",
     "MeasureFeatureReply",
     "MeasureRequest",
-    "MeasureReply"
+    "MeasureReply",
+    "BrimEarDetectRequest",
+    "BrimEarDetectReply",
+    "BrimEarStrandedRequest",
+    "BrimEarStrandedReply"
   ],
   "sessionVersion": 1
 }

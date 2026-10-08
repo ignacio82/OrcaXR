@@ -459,6 +459,32 @@ fn session_error(error: wire::SessionError) -> &'static str {
         _ => "invalid_request",
     }
 }
+/// One object's first-layer corners.
+pub(super) fn session_brim_ear_detect(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_brim_ear_detect_request)?;
+    let json = with_session(handle, |s| {
+        let reply = s.detect_brim_ears(&request).map_err(|_| "disposed")?;
+        encoded(&reply, wire::encode_brim_ear_detect_reply)
+    })?;
+    string(env, json)
+}
+/// One object's stranded ears.
+pub(super) fn session_brim_ear_stranded(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_brim_ear_stranded_request)?;
+    let json = with_session(handle, |s| {
+        let reply = s.stranded_brim_ears(&request).map_err(|_| "disposed")?;
+        encoded(&reply, wire::encode_brim_ear_stranded_reply)
+    })?;
+    string(env, json)
+}
 /// The plate's wipe tower, auto-placed.
 pub(super) fn session_wipe_tower(
     env: &mut JNIEnv<'_>,

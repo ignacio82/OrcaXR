@@ -246,6 +246,7 @@ import { MagnetOp, MagnetShape, type MagnetSpec } from '../features/MagnetOp';
 import type { PreparedVolumeSplitPart } from '../project/objects/splitCommands';
 import { prepareVolumeSplit, type PreparedVolumeSplit } from '../project/objects/volumeSplitExchange';
 import { prepareVolumeSimplify } from '../project/objects/simplifyExchange';
+import { BrimEarRefusal, objectModelMesh, type ObjectModelMesh } from '../project/objects/brimEarExchange';
 import {
   captureObjectVolumeSeparationGuard,
   SeparateObjectVolumesCommand,
@@ -3902,6 +3903,21 @@ export class CanonicalWorkspaceController {
     this.assertActive();
     const found = findInstance(this.session.project.getSnapshot().state, instanceId);
     return found ? cloneJson(found.instance.transform) : undefined;
+  }
+
+  /**
+   * One object's model volumes in object-local millimetres (each moved by its
+   * own transform), the frame its brim ears live in; undefined when the
+   * object or a mesh cannot be read.
+   */
+  getObjectModelMesh(objectId: ObjectId): ObjectModelMesh | undefined {
+    this.assertActive();
+    try {
+      return objectModelMesh(this.session.project.getSnapshot().state, this.assets, objectId);
+    } catch (error) {
+      if (error instanceof BrimEarRefusal) return undefined;
+      throw error;
+    }
   }
 
   /** The asset holding one volume's mesh: an ID that names immutable bytes. */

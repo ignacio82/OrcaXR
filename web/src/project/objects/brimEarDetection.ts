@@ -121,11 +121,14 @@ function chainSegments(
     used.add(current);
     for (let guard = 0; guard < segments.length + 1; guard += 1) {
       loop.push(current[1]);
+      // Closed: the start is now repeated at the end, and only that repeat is
+      // dropped below. Testing before pushing the closing point lost a real
+      // corner of every loop whose last side was one segment.
+      if (key(current[1]) === key(loop[0])) break;
       const next = (byStart.get(key(current[1])) ?? []).find((candidate) => !used.has(candidate));
       if (!next) break;
       used.add(next);
       current = next;
-      if (key(current[1]) === key(loop[0])) break;
     }
     // Two points cannot enclose anything; a stray chain is dropped rather than
     // reported as an outline.

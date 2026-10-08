@@ -1579,13 +1579,22 @@ painting, and FullSpectrum operations that can support real native projects.
     part in scene order, not the nearest; it recorded an object's first
     instance, not the one hit; and extractors were cached by mesh counts, so
     a same-count replacement was measured stale (now keyed by asset).
-  - [ ] Port the remaining preparation kernels (brim ears, emboss/SVG), mesh
-    renderer packets and device qualification. Brim ears first need a browser fix: the workspace
-    detects, places and draws ears in the first volume's own space, while the
-    model and the engine read them as object-local, so an object whose first
-    volume is transformed (split parts are recentred) gets misplaced ears; the
-    fix moves detection, clicks and the ear discs to object space and needs
-    visual verification.
+  - [x] Port brim-ear detection (`brim_ears`): an object's model volumes
+    composed into object space as three.js composes them, the first layer
+    cut, chained and its outward corners thinned, and the placed ears whose
+    discs reach nothing found (40 detections and 9 stranded checks exact in
+    every binding). Browser fixes, each with a regression: the workspace
+    detected, placed and drew ears in one part's own frame while ears are
+    object-local (split parts are recentred), so ears landed in the wrong
+    place, other parts' corners were ignored and a manual ear took the first
+    part hit; preview discs hung on every part and undid the scene's
+    millimetre scale, drawing an 8 mm ear 4,571 mm wide; and the outline
+    chainer dropped a real corner of every loop whose closing side was one
+    cut segment (a pyramid's square footprint read as a triangle). Placement
+    and disc size are verified numerically in printer millimetres; an
+    on-device look remains.
+  - [ ] Port the remaining preparation kernel (emboss/SVG), mesh renderer
+    packets and device qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.

@@ -355,6 +355,37 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             request,
         ))
     }
+    /// The corners of one object's first layer an ear would hold down,
+    /// detected in object space from the acknowledged state
+    /// (`BrimEarDetectRequest` → `BrimEarDetectReply`).
+    pub fn detect_brim_ears(
+        &self,
+        request: &wire::BrimEarDetectRequest,
+    ) -> Result<wire::BrimEarDetectReply, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        Ok(crate::brim_ears::detect_wire(
+            self.bus.snapshot().state(),
+            self.bus.assets(),
+            request,
+        ))
+    }
+    /// One object's placed ears whose discs reach neither its first layer nor
+    /// an anchored ear (`BrimEarStrandedRequest` → `BrimEarStrandedReply`).
+    pub fn stranded_brim_ears(
+        &self,
+        request: &wire::BrimEarStrandedRequest,
+    ) -> Result<wire::BrimEarStrandedReply, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        Ok(crate::brim_ears::stranded_wire(
+            self.bus.snapshot().state(),
+            self.bus.assets(),
+            request,
+        ))
+    }
     /// The transforms one placement edit submits, planned from the
     /// acknowledged state (`PlacementRequest` → `PlacementReply`).
     pub fn plan_placement(
