@@ -252,6 +252,36 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             request,
         ))
     }
+    /// One plate's arrangement, planned from the acknowledged state
+    /// (`ArrangeRequest` → `ArrangeReply`).
+    pub fn plan_arrangement(
+        &self,
+        request: &wire::ArrangeRequest,
+    ) -> Result<wire::ArrangeReply, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        Ok(crate::placement::arrange::arrange(
+            self.bus.snapshot().state(),
+            self.bus.assets(),
+            request,
+        ))
+    }
+    /// Copies of one instance laid into a plate's free space
+    /// (`BedFillRequest` → `BedFillReply`).
+    pub fn plan_bed_fill(
+        &self,
+        request: &wire::BedFillRequest,
+    ) -> Result<wire::BedFillReply, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        Ok(crate::placement::arrange::fill(
+            self.bus.snapshot().state(),
+            self.bus.assets(),
+            request,
+        ))
+    }
     /// One plate's volumes captured for picking from the acknowledged state;
     /// the scene owns its meshes, so picks run off the session.
     pub fn pick_scene(

@@ -483,6 +483,35 @@ impl ProjectSession {
             .map(|inner| ProjectPaintStroke { inner })
             .map_err(|refusal| error(refusal.code()))
     }
+    /// One plate's arrangement: an `ArrangeRequest`; returns an `ArrangeReply`.
+    pub fn plan_arrangement(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_arrange_request(request).map_err(|_| error("invalid_request"))?;
+        let reply = self
+            .inner
+            .plan_arrangement(&request)
+            .map_err(|_| error("disposed"))?;
+        wire::encode_arrange_reply(&reply).map_err(|_| error("output_limit"))
+    }
+    /// Copies of one instance in a plate's free space: a `BedFillRequest`;
+    /// returns a `BedFillReply`.
+    pub fn plan_bed_fill(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_bed_fill_request(request).map_err(|_| error("invalid_request"))?;
+        let reply = self
+            .inner
+            .plan_bed_fill(&request)
+            .map_err(|_| error("disposed"))?;
+        wire::encode_bed_fill_reply(&reply).map_err(|_| error("output_limit"))
+    }
     /// The transforms one placement edit submits: a `PlacementRequest`;
     /// returns a `PlacementReply`.
     pub fn plan_placement(&self, request: &str) -> Result<String, JsValue> {

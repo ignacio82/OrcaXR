@@ -5086,6 +5086,204 @@ object ProjectIntents {
             is PlacementReply.Refused -> w.field("refused") { writePlacementRefusal(w, v.value) }
         } }
     }
+    data class ArrangeRegion(val minX: Double, val minY: Double, val maxX: Double, val maxY: Double)
+    private fun readArrangeRegion(v: Any): ArrangeRegion {
+        val obj = ProjectIntentJson.fields(v, setOf("minX", "minY", "maxX", "maxY"), false)
+        return ArrangeRegion(readFinite(obj.get("minX")), readFinite(obj.get("minY")), readFinite(obj.get("maxX")), readFinite(obj.get("maxY")))
+    }
+    private fun writeArrangeRegion(w: ProjectIntentWriter, v: ArrangeRegion) {
+        w.obj {
+            w.field("minX") { writeFinite(w, v.minX) }
+            w.field("minY") { writeFinite(w, v.minY) }
+            w.field("maxX") { writeFinite(w, v.maxX) }
+            w.field("maxY") { writeFinite(w, v.maxY) }
+        }
+    }
+    private fun readArrangeRegions(v: Any): List<ArrangeRegion> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readArrangeRegion(array.get(it)) }
+    }
+    private fun writeArrangeRegions(w: ProjectIntentWriter, v: List<ArrangeRegion>) {
+        w.array(v, 0, 4096) { writeArrangeRegion(w, it) }
+    }
+    private fun readVolumeRoleNames(v: Any): List<VolumeRoleName> {
+        val array = ProjectIntentJson.list(v, 0, 5)
+        return List(array.length()) { readVolumeRoleName(array.get(it)) }
+    }
+    private fun writeVolumeRoleNames(w: ProjectIntentWriter, v: List<VolumeRoleName>) {
+        w.array(v, 0, 5) { writeVolumeRoleName(w, it) }
+    }
+    sealed interface OptionalVolumeRoleNames {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalVolumeRoleNames
+        data class Value(val value: List<ProjectIntents.VolumeRoleName>) : OptionalVolumeRoleNames
+    }
+    private fun readOptionalVolumeRoleNames(v: Any): OptionalVolumeRoleNames {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalVolumeRoleNames.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalVolumeRoleNames.Value(readVolumeRoleNames(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalVolumeRoleNames(w: ProjectIntentWriter, v: OptionalVolumeRoleNames) {
+        w.obj { when(v) {
+            is OptionalVolumeRoleNames.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalVolumeRoleNames.Value -> w.field("value") { writeVolumeRoleNames(w, v.value) }
+        } }
+    }
+    data class ArrangeConstraintsInput(val bedSizeMm: List<Double>, val spacingMm: OptionalFinite, val bedMarginMm: OptionalFinite, val exclusions: List<ArrangeRegion>, val lockedInstanceIds: List<List<Int>>, val volumeRoles: OptionalVolumeRoleNames)
+    private fun readArrangeConstraintsInput(v: Any): ArrangeConstraintsInput {
+        val obj = ProjectIntentJson.fields(v, setOf("bedSizeMm", "spacingMm", "bedMarginMm", "exclusions", "lockedInstanceIds", "volumeRoles"), false)
+        return ArrangeConstraintsInput(readPlanarPosition(obj.get("bedSizeMm")), readOptionalFinite(obj.get("spacingMm")), readOptionalFinite(obj.get("bedMarginMm")), readArrangeRegions(obj.get("exclusions")), readIds(obj.get("lockedInstanceIds")), readOptionalVolumeRoleNames(obj.get("volumeRoles")))
+    }
+    private fun writeArrangeConstraintsInput(w: ProjectIntentWriter, v: ArrangeConstraintsInput) {
+        w.obj {
+            w.field("bedSizeMm") { writePlanarPosition(w, v.bedSizeMm) }
+            w.field("spacingMm") { writeOptionalFinite(w, v.spacingMm) }
+            w.field("bedMarginMm") { writeOptionalFinite(w, v.bedMarginMm) }
+            w.field("exclusions") { writeArrangeRegions(w, v.exclusions) }
+            w.field("lockedInstanceIds") { writeIds(w, v.lockedInstanceIds) }
+            w.field("volumeRoles") { writeOptionalVolumeRoleNames(w, v.volumeRoles) }
+        }
+    }
+    data class ArrangeRequest(val plateId: List<Int>, val constraints: ArrangeConstraintsInput)
+    private fun readArrangeRequest(v: Any): ArrangeRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("plateId", "constraints"), false)
+        return ArrangeRequest(readId(obj.get("plateId")), readArrangeConstraintsInput(obj.get("constraints")))
+    }
+    private fun writeArrangeRequest(w: ProjectIntentWriter, v: ArrangeRequest) {
+        w.obj {
+            w.field("plateId") { writeId(w, v.plateId) }
+            w.field("constraints") { writeArrangeConstraintsInput(w, v.constraints) }
+        }
+    }
+    data class ArrangePlacement(val instanceId: List<Int>, val transform: Transform, val footprint: ArrangeRegion)
+    private fun readArrangePlacement(v: Any): ArrangePlacement {
+        val obj = ProjectIntentJson.fields(v, setOf("instanceId", "transform", "footprint"), false)
+        return ArrangePlacement(readId(obj.get("instanceId")), readTransform(obj.get("transform")), readArrangeRegion(obj.get("footprint")))
+    }
+    private fun writeArrangePlacement(w: ProjectIntentWriter, v: ArrangePlacement) {
+        w.obj {
+            w.field("instanceId") { writeId(w, v.instanceId) }
+            w.field("transform") { writeTransform(w, v.transform) }
+            w.field("footprint") { writeArrangeRegion(w, v.footprint) }
+        }
+    }
+    private fun readArrangePlacements(v: Any): List<ArrangePlacement> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readArrangePlacement(array.get(it)) }
+    }
+    private fun writeArrangePlacements(w: ProjectIntentWriter, v: List<ArrangePlacement>) {
+        w.array(v, 0, 131072) { writeArrangePlacement(w, it) }
+    }
+    data class Arrangement(val placements: List<ArrangePlacement>, val unplacedInstanceIds: List<List<Int>>, val lockedInstanceIds: List<List<Int>>)
+    private fun readArrangement(v: Any): Arrangement {
+        val obj = ProjectIntentJson.fields(v, setOf("placements", "unplacedInstanceIds", "lockedInstanceIds"), false)
+        return Arrangement(readArrangePlacements(obj.get("placements")), readIds(obj.get("unplacedInstanceIds")), readIds(obj.get("lockedInstanceIds")))
+    }
+    private fun writeArrangement(w: ProjectIntentWriter, v: Arrangement) {
+        w.obj {
+            w.field("placements") { writeArrangePlacements(w, v.placements) }
+            w.field("unplacedInstanceIds") { writeIds(w, v.unplacedInstanceIds) }
+            w.field("lockedInstanceIds") { writeIds(w, v.lockedInstanceIds) }
+        }
+    }
+    enum class ArrangeRefusalCode {InvalidBed,InvalidSpacing,InvalidLimit,UnknownPlate,UnknownInstance,InvalidExclusion,MissingAsset,AssetMetadata,NoGeometry,NonFiniteVertex,InvalidRotation}
+    private fun readArrangeRefusalCode(v: Any): ArrangeRefusalCode {
+        return when(v) {"invalidBed" -> ArrangeRefusalCode.InvalidBed;"invalidSpacing" -> ArrangeRefusalCode.InvalidSpacing;"invalidLimit" -> ArrangeRefusalCode.InvalidLimit;"unknownPlate" -> ArrangeRefusalCode.UnknownPlate;"unknownInstance" -> ArrangeRefusalCode.UnknownInstance;"invalidExclusion" -> ArrangeRefusalCode.InvalidExclusion;"missingAsset" -> ArrangeRefusalCode.MissingAsset;"assetMetadata" -> ArrangeRefusalCode.AssetMetadata;"noGeometry" -> ArrangeRefusalCode.NoGeometry;"nonFiniteVertex" -> ArrangeRefusalCode.NonFiniteVertex;"invalidRotation" -> ArrangeRefusalCode.InvalidRotation; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeArrangeRefusalCode(w: ProjectIntentWriter, v: ArrangeRefusalCode) {
+        w.literal(when(v) {ArrangeRefusalCode.InvalidBed -> "invalidBed";ArrangeRefusalCode.InvalidSpacing -> "invalidSpacing";ArrangeRefusalCode.InvalidLimit -> "invalidLimit";ArrangeRefusalCode.UnknownPlate -> "unknownPlate";ArrangeRefusalCode.UnknownInstance -> "unknownInstance";ArrangeRefusalCode.InvalidExclusion -> "invalidExclusion";ArrangeRefusalCode.MissingAsset -> "missingAsset";ArrangeRefusalCode.AssetMetadata -> "assetMetadata";ArrangeRefusalCode.NoGeometry -> "noGeometry";ArrangeRefusalCode.NonFiniteVertex -> "nonFiniteVertex";ArrangeRefusalCode.InvalidRotation -> "invalidRotation";})
+    }
+    data class ArrangeRefusal(val code: ArrangeRefusalCode, val message: List<Int>)
+    private fun readArrangeRefusal(v: Any): ArrangeRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return ArrangeRefusal(readArrangeRefusalCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writeArrangeRefusal(w: ProjectIntentWriter, v: ArrangeRefusal) {
+        w.obj {
+            w.field("code") { writeArrangeRefusalCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface ArrangeReply {
+        data class Arrangement(val value: ProjectIntents.Arrangement) : ArrangeReply
+        data class Refused(val value: ProjectIntents.ArrangeRefusal) : ArrangeReply
+    }
+    private fun readArrangeReply(v: Any): ArrangeReply {
+        val obj = ProjectIntentJson.fields(v, setOf("arrangement", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "arrangement" -> ArrangeReply.Arrangement(readArrangement(obj.get(key)))
+            "refused" -> ArrangeReply.Refused(readArrangeRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeArrangeReply(w: ProjectIntentWriter, v: ArrangeReply) {
+        w.obj { when(v) {
+            is ArrangeReply.Arrangement -> w.field("arrangement") { writeArrangement(w, v.value) }
+            is ArrangeReply.Refused -> w.field("refused") { writeArrangeRefusal(w, v.value) }
+        } }
+    }
+    data class BedFillRequest(val plateId: List<Int>, val instanceId: List<Int>, val maxNewInstances: OptionalFinite, val constraints: ArrangeConstraintsInput)
+    private fun readBedFillRequest(v: Any): BedFillRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("plateId", "instanceId", "maxNewInstances", "constraints"), false)
+        return BedFillRequest(readId(obj.get("plateId")), readId(obj.get("instanceId")), readOptionalFinite(obj.get("maxNewInstances")), readArrangeConstraintsInput(obj.get("constraints")))
+    }
+    private fun writeBedFillRequest(w: ProjectIntentWriter, v: BedFillRequest) {
+        w.obj {
+            w.field("plateId") { writeId(w, v.plateId) }
+            w.field("instanceId") { writeId(w, v.instanceId) }
+            w.field("maxNewInstances") { writeOptionalFinite(w, v.maxNewInstances) }
+            w.field("constraints") { writeArrangeConstraintsInput(w, v.constraints) }
+        }
+    }
+    data class BedFillPlacement(val transform: Transform, val footprint: ArrangeRegion)
+    private fun readBedFillPlacement(v: Any): BedFillPlacement {
+        val obj = ProjectIntentJson.fields(v, setOf("transform", "footprint"), false)
+        return BedFillPlacement(readTransform(obj.get("transform")), readArrangeRegion(obj.get("footprint")))
+    }
+    private fun writeBedFillPlacement(w: ProjectIntentWriter, v: BedFillPlacement) {
+        w.obj {
+            w.field("transform") { writeTransform(w, v.transform) }
+            w.field("footprint") { writeArrangeRegion(w, v.footprint) }
+        }
+    }
+    private fun readBedFillPlacements(v: Any): List<BedFillPlacement> {
+        val array = ProjectIntentJson.list(v, 0, 131072)
+        return List(array.length()) { readBedFillPlacement(array.get(it)) }
+    }
+    private fun writeBedFillPlacements(w: ProjectIntentWriter, v: List<BedFillPlacement>) {
+        w.array(v, 0, 131072) { writeBedFillPlacement(w, it) }
+    }
+    data class BedFill(val placements: List<BedFillPlacement>, val withheldSlotCount: Long)
+    private fun readBedFill(v: Any): BedFill {
+        val obj = ProjectIntentJson.fields(v, setOf("placements", "withheldSlotCount"), false)
+        return BedFill(readBedFillPlacements(obj.get("placements")), readCounter(obj.get("withheldSlotCount")))
+    }
+    private fun writeBedFill(w: ProjectIntentWriter, v: BedFill) {
+        w.obj {
+            w.field("placements") { writeBedFillPlacements(w, v.placements) }
+            w.field("withheldSlotCount") { writeCounter(w, v.withheldSlotCount) }
+        }
+    }
+    sealed interface BedFillReply {
+        data class Fill(val value: ProjectIntents.BedFill) : BedFillReply
+        data class Refused(val value: ProjectIntents.ArrangeRefusal) : BedFillReply
+    }
+    private fun readBedFillReply(v: Any): BedFillReply {
+        val obj = ProjectIntentJson.fields(v, setOf("fill", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "fill" -> BedFillReply.Fill(readBedFill(obj.get(key)))
+            "refused" -> BedFillReply.Refused(readArrangeRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeBedFillReply(w: ProjectIntentWriter, v: BedFillReply) {
+        w.obj { when(v) {
+            is BedFillReply.Fill -> w.field("fill") { writeBedFill(w, v.value) }
+            is BedFillReply.Refused -> w.field("refused") { writeArrangeRefusal(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -5230,4 +5428,12 @@ object ProjectIntents {
     fun encodePlacementRequest(value: PlacementRequest): String = ProjectIntentWriter().also { writePlacementRequest(it, value) }.finish()
     fun decodePlacementReply(text: String): PlacementReply = readPlacementReply(ProjectIntentJson.parse(text))
     fun encodePlacementReply(value: PlacementReply): String = ProjectIntentWriter().also { writePlacementReply(it, value) }.finish()
+    fun decodeArrangeRequest(text: String): ArrangeRequest = readArrangeRequest(ProjectIntentJson.parse(text))
+    fun encodeArrangeRequest(value: ArrangeRequest): String = ProjectIntentWriter().also { writeArrangeRequest(it, value) }.finish()
+    fun decodeArrangeReply(text: String): ArrangeReply = readArrangeReply(ProjectIntentJson.parse(text))
+    fun encodeArrangeReply(value: ArrangeReply): String = ProjectIntentWriter().also { writeArrangeReply(it, value) }.finish()
+    fun decodeBedFillRequest(text: String): BedFillRequest = readBedFillRequest(ProjectIntentJson.parse(text))
+    fun encodeBedFillRequest(value: BedFillRequest): String = ProjectIntentWriter().also { writeBedFillRequest(it, value) }.finish()
+    fun decodeBedFillReply(text: String): BedFillReply = readBedFillReply(ProjectIntentJson.parse(text))
+    fun encodeBedFillReply(value: BedFillReply): String = ProjectIntentWriter().also { writeBedFillReply(it, value) }.finish()
 }

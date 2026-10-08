@@ -535,6 +535,15 @@ export class ProjectSession {
      */
     pick_scene(request: string): ProjectPickScene;
     /**
+     * One plate's arrangement: an `ArrangeRequest`; returns an `ArrangeReply`.
+     */
+    plan_arrangement(request: string): string;
+    /**
+     * Copies of one instance in a plate's free space: a `BedFillRequest`;
+     * returns a `BedFillReply`.
+     */
+    plan_bed_fill(request: string): string;
+    /**
      * The transforms one placement edit submits: a `PlacementRequest`;
      * returns a `PlacementReply`.
      */
@@ -858,6 +867,8 @@ export interface InitOutput {
     readonly projectsession_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_pending_count: (a: number) => number;
     readonly projectsession_pick_scene: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectsession_plan_arrangement: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectsession_plan_bed_fill: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_plan_placement: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_release_staged: (a: number, b: number) => [number, number, number];
     readonly projectsession_render: (a: number, b: number, c: number) => [number, number, number, number];

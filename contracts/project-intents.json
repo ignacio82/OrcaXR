@@ -3385,6 +3385,140 @@
         "plan": "PlacementPlan",
         "refused": "PlacementRefusal"
       }
+    },
+    "ArrangeRegion": {
+      "kind": "object",
+      "fields": {
+        "minX": "Finite",
+        "minY": "Finite",
+        "maxX": "Finite",
+        "maxY": "Finite"
+      }
+    },
+    "ArrangeRegions": {
+      "kind": "array",
+      "items": "ArrangeRegion",
+      "min": 0,
+      "max": 4096
+    },
+    "VolumeRoleNames": {
+      "kind": "array",
+      "items": "VolumeRoleName",
+      "min": 0,
+      "max": 5
+    },
+    "OptionalVolumeRoleNames": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "VolumeRoleNames"
+      }
+    },
+    "ArrangeConstraintsInput": {
+      "kind": "object",
+      "fields": {
+        "bedSizeMm": "PlanarPosition",
+        "spacingMm": "OptionalFinite",
+        "bedMarginMm": "OptionalFinite",
+        "exclusions": "ArrangeRegions",
+        "lockedInstanceIds": "Ids",
+        "volumeRoles": "OptionalVolumeRoleNames"
+      }
+    },
+    "ArrangeRequest": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id",
+        "constraints": "ArrangeConstraintsInput"
+      }
+    },
+    "ArrangePlacement": {
+      "kind": "object",
+      "fields": {
+        "instanceId": "Id",
+        "transform": "Transform",
+        "footprint": "ArrangeRegion"
+      }
+    },
+    "ArrangePlacements": {
+      "kind": "array",
+      "items": "ArrangePlacement",
+      "min": 0,
+      "max": 131072
+    },
+    "Arrangement": {
+      "kind": "object",
+      "fields": {
+        "placements": "ArrangePlacements",
+        "unplacedInstanceIds": "Ids",
+        "lockedInstanceIds": "Ids"
+      }
+    },
+    "ArrangeRefusalCode": {
+      "kind": "enum",
+      "values": [
+        "invalidBed",
+        "invalidSpacing",
+        "invalidLimit",
+        "unknownPlate",
+        "unknownInstance",
+        "invalidExclusion",
+        "missingAsset",
+        "assetMetadata",
+        "noGeometry",
+        "nonFiniteVertex",
+        "invalidRotation"
+      ]
+    },
+    "ArrangeRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "ArrangeRefusalCode",
+        "message": "EditText"
+      }
+    },
+    "ArrangeReply": {
+      "kind": "union",
+      "variants": {
+        "arrangement": "Arrangement",
+        "refused": "ArrangeRefusal"
+      }
+    },
+    "BedFillRequest": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id",
+        "instanceId": "Id",
+        "maxNewInstances": "OptionalFinite",
+        "constraints": "ArrangeConstraintsInput"
+      }
+    },
+    "BedFillPlacement": {
+      "kind": "object",
+      "fields": {
+        "transform": "Transform",
+        "footprint": "ArrangeRegion"
+      }
+    },
+    "BedFillPlacements": {
+      "kind": "array",
+      "items": "BedFillPlacement",
+      "min": 0,
+      "max": 131072
+    },
+    "BedFill": {
+      "kind": "object",
+      "fields": {
+        "placements": "BedFillPlacements",
+        "withheldSlotCount": "Counter"
+      }
+    },
+    "BedFillReply": {
+      "kind": "union",
+      "variants": {
+        "fill": "BedFill",
+        "refused": "ArrangeRefusal"
+      }
     }
   },
   "roots": [
@@ -3459,7 +3593,11 @@
     "PickRay",
     "PickReply",
     "PlacementRequest",
-    "PlacementReply"
+    "PlacementReply",
+    "ArrangeRequest",
+    "ArrangeReply",
+    "BedFillRequest",
+    "BedFillReply"
   ],
   "sessionVersion": 1
 }

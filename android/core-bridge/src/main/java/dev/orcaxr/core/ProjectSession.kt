@@ -191,6 +191,15 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun paintStroke(guard: ProjectGuard, request: ProjectIntents.PaintStrokeOpen): ProjectPaintStroke = read {
         own(NativeProject.paintStrokeOpen(it, guard.reference(), ProjectIntents.encodePaintStrokeOpen(request)), ::ProjectPaintStroke)
     }
+    /** One plate's arrangement: the moves as one `setInstanceTransforms`
+     * intent's changes, with what did not fit and what stayed locked. */
+    fun planArrangement(request: ProjectIntents.ArrangeRequest): ProjectIntents.ArrangeReply = read {
+        ProjectIntents.decodeArrangeReply(NativeProject.sessionArrangement(it, ProjectIntents.encodeArrangeRequest(request)))
+    }
+    /** Transforms for copies of one instance in a plate's free space. */
+    fun planBedFill(request: ProjectIntents.BedFillRequest): ProjectIntents.BedFillReply = read {
+        ProjectIntents.decodeBedFillReply(NativeProject.sessionBedFill(it, ProjectIntents.encodeBedFillRequest(request)))
+    }
     /** The transforms one placement edit submits, as one `setInstanceTransforms`
      * intent's changes, or the operation's refusal. */
     fun planPlacement(request: ProjectIntents.PlacementRequest): ProjectIntents.PlacementReply = read {

@@ -3386,6 +3386,140 @@ const shapes = {
       "plan": "PlacementPlan",
       "refused": "PlacementRefusal"
     }
+  },
+  "ArrangeRegion": {
+    "kind": "object",
+    "fields": {
+      "minX": "Finite",
+      "minY": "Finite",
+      "maxX": "Finite",
+      "maxY": "Finite"
+    }
+  },
+  "ArrangeRegions": {
+    "kind": "array",
+    "items": "ArrangeRegion",
+    "min": 0,
+    "max": 4096
+  },
+  "VolumeRoleNames": {
+    "kind": "array",
+    "items": "VolumeRoleName",
+    "min": 0,
+    "max": 5
+  },
+  "OptionalVolumeRoleNames": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "VolumeRoleNames"
+    }
+  },
+  "ArrangeConstraintsInput": {
+    "kind": "object",
+    "fields": {
+      "bedSizeMm": "PlanarPosition",
+      "spacingMm": "OptionalFinite",
+      "bedMarginMm": "OptionalFinite",
+      "exclusions": "ArrangeRegions",
+      "lockedInstanceIds": "Ids",
+      "volumeRoles": "OptionalVolumeRoleNames"
+    }
+  },
+  "ArrangeRequest": {
+    "kind": "object",
+    "fields": {
+      "plateId": "Id",
+      "constraints": "ArrangeConstraintsInput"
+    }
+  },
+  "ArrangePlacement": {
+    "kind": "object",
+    "fields": {
+      "instanceId": "Id",
+      "transform": "Transform",
+      "footprint": "ArrangeRegion"
+    }
+  },
+  "ArrangePlacements": {
+    "kind": "array",
+    "items": "ArrangePlacement",
+    "min": 0,
+    "max": 131072
+  },
+  "Arrangement": {
+    "kind": "object",
+    "fields": {
+      "placements": "ArrangePlacements",
+      "unplacedInstanceIds": "Ids",
+      "lockedInstanceIds": "Ids"
+    }
+  },
+  "ArrangeRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "invalidBed",
+      "invalidSpacing",
+      "invalidLimit",
+      "unknownPlate",
+      "unknownInstance",
+      "invalidExclusion",
+      "missingAsset",
+      "assetMetadata",
+      "noGeometry",
+      "nonFiniteVertex",
+      "invalidRotation"
+    ]
+  },
+  "ArrangeRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "ArrangeRefusalCode",
+      "message": "EditText"
+    }
+  },
+  "ArrangeReply": {
+    "kind": "union",
+    "variants": {
+      "arrangement": "Arrangement",
+      "refused": "ArrangeRefusal"
+    }
+  },
+  "BedFillRequest": {
+    "kind": "object",
+    "fields": {
+      "plateId": "Id",
+      "instanceId": "Id",
+      "maxNewInstances": "OptionalFinite",
+      "constraints": "ArrangeConstraintsInput"
+    }
+  },
+  "BedFillPlacement": {
+    "kind": "object",
+    "fields": {
+      "transform": "Transform",
+      "footprint": "ArrangeRegion"
+    }
+  },
+  "BedFillPlacements": {
+    "kind": "array",
+    "items": "BedFillPlacement",
+    "min": 0,
+    "max": 131072
+  },
+  "BedFill": {
+    "kind": "object",
+    "fields": {
+      "placements": "BedFillPlacements",
+      "withheldSlotCount": "Counter"
+    }
+  },
+  "BedFillReply": {
+    "kind": "union",
+    "variants": {
+      "fill": "BedFill",
+      "refused": "ArrangeRefusal"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -3792,6 +3926,23 @@ export interface ProjectPlacementPlanWire {readonly changes: ProjectInstanceTran
 export type ProjectPlacementRefusalCodeWire = "emptySelection" | "duplicateInstance" | "unknownInstance" | "unknownVolume" | "invalidFacet" | "invalidNormal" | "invalidBed" | "degenerateSelection" | "missingAsset" | "assetMetadata" | "noGeometry" | "nonFiniteVertex" | "invalidRotation";
 export interface ProjectPlacementRefusalWire {readonly code: ProjectPlacementRefusalCodeWire;readonly message: ProjectEditTextWire;}
 export type ProjectPlacementReplyWire = {readonly plan:ProjectPlacementPlanWire} | {readonly refused:ProjectPlacementRefusalWire};
+export interface ProjectArrangeRegionWire {readonly minX: ProjectFiniteWire;readonly minY: ProjectFiniteWire;readonly maxX: ProjectFiniteWire;readonly maxY: ProjectFiniteWire;}
+export type ProjectArrangeRegionsWire = readonly ProjectArrangeRegionWire[];
+export type ProjectVolumeRoleNamesWire = readonly ProjectVolumeRoleNameWire[];
+export type ProjectOptionalVolumeRoleNamesWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectVolumeRoleNamesWire};
+export interface ProjectArrangeConstraintsInputWire {readonly bedSizeMm: ProjectPlanarPositionWire;readonly spacingMm: ProjectOptionalFiniteWire;readonly bedMarginMm: ProjectOptionalFiniteWire;readonly exclusions: ProjectArrangeRegionsWire;readonly lockedInstanceIds: ProjectIdsWire;readonly volumeRoles: ProjectOptionalVolumeRoleNamesWire;}
+export interface ProjectArrangeRequestWire {readonly plateId: ProjectIdWire;readonly constraints: ProjectArrangeConstraintsInputWire;}
+export interface ProjectArrangePlacementWire {readonly instanceId: ProjectIdWire;readonly transform: ProjectTransformWire;readonly footprint: ProjectArrangeRegionWire;}
+export type ProjectArrangePlacementsWire = readonly ProjectArrangePlacementWire[];
+export interface ProjectArrangementWire {readonly placements: ProjectArrangePlacementsWire;readonly unplacedInstanceIds: ProjectIdsWire;readonly lockedInstanceIds: ProjectIdsWire;}
+export type ProjectArrangeRefusalCodeWire = "invalidBed" | "invalidSpacing" | "invalidLimit" | "unknownPlate" | "unknownInstance" | "invalidExclusion" | "missingAsset" | "assetMetadata" | "noGeometry" | "nonFiniteVertex" | "invalidRotation";
+export interface ProjectArrangeRefusalWire {readonly code: ProjectArrangeRefusalCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectArrangeReplyWire = {readonly arrangement:ProjectArrangementWire} | {readonly refused:ProjectArrangeRefusalWire};
+export interface ProjectBedFillRequestWire {readonly plateId: ProjectIdWire;readonly instanceId: ProjectIdWire;readonly maxNewInstances: ProjectOptionalFiniteWire;readonly constraints: ProjectArrangeConstraintsInputWire;}
+export interface ProjectBedFillPlacementWire {readonly transform: ProjectTransformWire;readonly footprint: ProjectArrangeRegionWire;}
+export type ProjectBedFillPlacementsWire = readonly ProjectBedFillPlacementWire[];
+export interface ProjectBedFillWire {readonly placements: ProjectBedFillPlacementsWire;readonly withheldSlotCount: ProjectCounterWire;}
+export type ProjectBedFillReplyWire = {readonly fill:ProjectBedFillWire} | {readonly refused:ProjectArrangeRefusalWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -4008,3 +4159,15 @@ export function encodeProjectPlacementRequest(value:ProjectPlacementRequestWire)
 export function captureProjectPlacementReply(value:unknown):ProjectPlacementReplyWire { return captureIntent("PlacementReply",value,shapes,limits) as ProjectPlacementReplyWire; }
 export function decodeProjectPlacementReply(text:string):ProjectPlacementReplyWire { return captureProjectPlacementReply(parseIntentJson(text,limits)); }
 export function encodeProjectPlacementReply(value:ProjectPlacementReplyWire):string { return JSON.stringify(captureProjectPlacementReply(value)); }
+export function captureProjectArrangeRequest(value:unknown):ProjectArrangeRequestWire { return captureIntent("ArrangeRequest",value,shapes,limits) as ProjectArrangeRequestWire; }
+export function decodeProjectArrangeRequest(text:string):ProjectArrangeRequestWire { return captureProjectArrangeRequest(parseIntentJson(text,limits)); }
+export function encodeProjectArrangeRequest(value:ProjectArrangeRequestWire):string { return JSON.stringify(captureProjectArrangeRequest(value)); }
+export function captureProjectArrangeReply(value:unknown):ProjectArrangeReplyWire { return captureIntent("ArrangeReply",value,shapes,limits) as ProjectArrangeReplyWire; }
+export function decodeProjectArrangeReply(text:string):ProjectArrangeReplyWire { return captureProjectArrangeReply(parseIntentJson(text,limits)); }
+export function encodeProjectArrangeReply(value:ProjectArrangeReplyWire):string { return JSON.stringify(captureProjectArrangeReply(value)); }
+export function captureProjectBedFillRequest(value:unknown):ProjectBedFillRequestWire { return captureIntent("BedFillRequest",value,shapes,limits) as ProjectBedFillRequestWire; }
+export function decodeProjectBedFillRequest(text:string):ProjectBedFillRequestWire { return captureProjectBedFillRequest(parseIntentJson(text,limits)); }
+export function encodeProjectBedFillRequest(value:ProjectBedFillRequestWire):string { return JSON.stringify(captureProjectBedFillRequest(value)); }
+export function captureProjectBedFillReply(value:unknown):ProjectBedFillReplyWire { return captureIntent("BedFillReply",value,shapes,limits) as ProjectBedFillReplyWire; }
+export function decodeProjectBedFillReply(text:string):ProjectBedFillReplyWire { return captureProjectBedFillReply(parseIntentJson(text,limits)); }
+export function encodeProjectBedFillReply(value:ProjectBedFillReplyWire):string { return JSON.stringify(captureProjectBedFillReply(value)); }

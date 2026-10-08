@@ -599,6 +599,18 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sessionArrangement, session_arrangement, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_sessionBedFill, session_bed_fill, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

@@ -15,6 +15,7 @@ import { replayFacetRegions } from "./facet-region-replay.mjs";
 import { replayPaintStrokes } from "./paint-stroke-replay.mjs";
 import { replayPicks } from "./pick-replay.mjs";
 import { replayPlacements } from "./placement-replay.mjs";
+import { replayArrangements } from "./arrange-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -561,6 +562,20 @@ try {
     placementFixture.cases.map((c) => `${c.request}\t${c.reply}`).join("\n"),
   );
   assert.equal(placementChecks, 135);
+  // Arrangement and bed fill over a live session, then the Kotlin wrapper.
+  const arrangeFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/arrange-vectors.json", root)),
+  );
+  assert.equal(replayArrangements(projectJniCore(jvm.call), arrangeFixture, layout).arrangements, 28);
+  const arrangeChecks = jvm.call(
+    "arrangeChecks",
+    arrangeFixture.stateJson,
+    ...arrangeFixture.assets.map((a) => Uint8Array.from(a.bytes)),
+    arrangeFixture.cases
+      .map((c) => ("arrange" in c ? `A\t${c.arrange}\t${c.reply}` : `F\t${c.fill}\t${c.reply}`))
+      .join("\n"),
+  );
+  assert.equal(arrangeChecks, 57);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

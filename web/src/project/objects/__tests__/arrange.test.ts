@@ -242,7 +242,22 @@ test('respects the copy limit and reports withheld slots', () => {
   assert.ok(capped.withheldSlotCount > 0, 'the remaining free slots are reported, not silently dropped');
   assert.throws(
     () => planBedFill(state, assets, plateId, { instanceId: instanceIds[0], maxNewInstances: 0 }, { bedSizeMm: BED }),
-    (error: unknown) => error instanceof ArrangeConstraintError,
+    (error: unknown) => error instanceof ArrangeConstraintError && error.code === 'invalid-limit',
+  );
+});
+
+test('bed fill names an unknown instance as such, not as an unknown plate', () => {
+  const { state, assets, plateId } = createProject([{ size: 20, at: [4, 4] }]);
+  assert.throws(
+    () =>
+      planBedFill(
+        state,
+        assets,
+        plateId,
+        { instanceId: entityId<'instance'>('import:test:missing') },
+        { bedSizeMm: BED },
+      ),
+    (error: unknown) => error instanceof ArrangeConstraintError && error.code === 'unknown-instance',
   );
 });
 

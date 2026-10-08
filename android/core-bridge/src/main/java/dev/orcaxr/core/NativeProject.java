@@ -123,6 +123,9 @@ final class NativeProject {
     static native String pickScenePick(long handle, String ray);
     // Placement: the transforms a mirror/reset/centre/fit/lay-flat/drop edit submits.
     static native String sessionPlacement(long handle, String request);
+    // Arrangement and bed fill: one plate's layout, and copies in its free space.
+    static native String sessionArrangement(long handle, String request);
+    static native String sessionBedFill(long handle, String request);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

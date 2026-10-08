@@ -1546,9 +1546,12 @@ painting, and FullSpectrum operations that can support real native projects.
     scale-to-fit, lay flat by normal or picked facet and drop to bed, as one
     `setInstanceTransforms` plan or the browser's refusal (67 requests exact in
     every binding); two browser placement defects fixed with regressions.
-  - [ ] Port the remaining preparation kernels (arrange and fill bed, split
-    preparation, simplification, brim ears, wipe-tower placement, measurement,
-    emboss/SVG), mesh renderer packets and device qualification.
+  - [x] Port plate arrangement and bed fill (`placement::arrange`): the shelf
+    packer and free-slot fill with keep-out regions, locked instances and copy
+    limits (28 requests exact in every binding); two fill error codes fixed.
+  - [ ] Port the remaining preparation kernels (split preparation,
+    simplification, brim ears, wipe-tower placement, measurement, emboss/SVG),
+    mesh renderer packets and device qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory.

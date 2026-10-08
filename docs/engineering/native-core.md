@@ -3405,6 +3405,33 @@ unknown instances and volumes, facets past a mesh, unusable normals, no
 printable area). Rust, WASM in Node and Chrome and JNI answer all 67 byte for
 byte; 135 Kotlin checks cover the wrapper.
 
+### Plate arrangement and bed fill
+
+`placement::arrange` ports the browser's `arrange.ts` (through
+`arrangeExchange.ts`): "Arrange" is a deterministic shelf packer over each
+instance's canonical footprint (by default the model and support volumes;
+any role set on request). It sorts by depth, then width, then UTF-16 ID; it
+slides past reserved space; it keeps locked and non-printable instances and
+every keep-out region clear; and it centres the packed block when nothing else
+reserves space. An `ArrangeRequest` answers an `ArrangeReply`: the moved
+instances (one `setInstanceTransforms` intent) with their footprints, those
+that did not fit and those kept in place. "Fill bed with instances" lays copies
+of one instance into the free space row by row without moving anything, up to
+a copy limit; a `BedFillRequest` answers the new copies' transforms and
+footprints and the free slots the limit withheld. Neither rotates anything.
+Refusals carry the browser's codes and messages; the browser's fill reported
+an unknown instance as an unknown plate and a bad copy limit as bad spacing,
+fixed with regression tests. Bindings: WASM `plan_arrangement` /
+`plan_bed_fill`, the JNI exports `sessionArrangement` / `sessionBedFill` and
+Kotlin `ProjectSession.planArrangement` / `planBedFill`.
+
+`arrange-vectors.mjs` arranges and fills a two-plate scene — the picking
+scene's instances plus boxes of several scaled footprints and a non-printable
+box — with default, tight and roomy spacing, a keep-out region, locked
+instances, a too-small bed and other role sets, and every refusal: 14
+arrangement and 14 fill requests (12 refusals). Rust, WASM in Node and Chrome
+and JNI answer all 28 byte for byte; 57 Kotlin checks cover the wrapper.
+
 ### Paint palette
 
 `facets::palette` ports `projectPaintPalette`: the filament library as the

@@ -109,6 +109,10 @@ assert.deepEqual(schema.roots, [
   "PickReply",
   "PlacementRequest",
   "PlacementReply",
+  "ArrangeRequest",
+  "ArrangeReply",
+  "BedFillRequest",
+  "BedFillReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

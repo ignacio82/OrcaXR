@@ -14,6 +14,8 @@ use crate::model::{Encode, ProjectState, Transform, VolumeRole, find_instance};
 use orcaxr_contracts::project_intent_types as wire;
 use std::collections::BTreeMap;
 
+pub mod arrange;
+
 pub type Vec3 = [f64; 3];
 pub type Quaternion = [f64; 4];
 
@@ -216,13 +218,14 @@ fn unique(ids: &[Vec<u16>]) -> Vec<Vec<u16>> {
     out
 }
 
-/// `computeCanonicalInstanceBounds` over model volumes, with one instance's
-/// transform optionally replaced (lay-on-face's probe).
-fn bounds(
+/// `computeCanonicalInstanceBounds` over volumes of the given roles, with one
+/// instance's transform optionally replaced (lay-on-face's probe).
+fn bounds_with(
     state: &ProjectState,
     assets: &AssetSnapshot,
     ids: &[Vec<u16>],
     probe: Option<(&InstanceId, &Transform)>,
+    roles: &[VolumeRole],
 ) -> Result<Bounds, Refusal> {
     if ids.is_empty() {
         return Err(refuse(
@@ -254,7 +257,7 @@ fn bounds(
             _ => &instance.transform,
         };
         for volume in object.volumes.iter() {
-            if volume.role != VolumeRole::Model {
+            if !roles.contains(&volume.role) {
                 continue;
             }
             let asset = volume.source.asset_id.as_utf16().to_vec();
@@ -312,6 +315,16 @@ fn bounds(
             "Selected instances contain no bounded mesh geometry",
         )
     })
+}
+
+/// Model-volume bounds, as every placement edit measures them.
+fn bounds(
+    state: &ProjectState,
+    assets: &AssetSnapshot,
+    ids: &[Vec<u16>],
+    probe: Option<(&InstanceId, &Transform)>,
+) -> Result<Bounds, Refusal> {
+    bounds_with(state, assets, ids, probe, &[VolumeRole::Model])
 }
 
 /// `centerInstancesOnPlate`.

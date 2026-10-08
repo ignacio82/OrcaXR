@@ -307,6 +307,32 @@ pub(super) fn paint_stroke_overlay(
     })?;
     string(env, json)
 }
+/// One plate's arrangement.
+pub(super) fn session_arrangement(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_arrange_request)?;
+    let json = with_session(handle, |s| {
+        let reply = s.plan_arrangement(&request).map_err(|_| "disposed")?;
+        encoded(&reply, wire::encode_arrange_reply)
+    })?;
+    string(env, json)
+}
+/// Copies of one instance in a plate's free space.
+pub(super) fn session_bed_fill(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_bed_fill_request)?;
+    let json = with_session(handle, |s| {
+        let reply = s.plan_bed_fill(&request).map_err(|_| "disposed")?;
+        encoded(&reply, wire::encode_bed_fill_reply)
+    })?;
+    string(env, json)
+}
 /// The transforms one placement edit submits.
 pub(super) fn session_placement(
     env: &mut JNIEnv<'_>,

@@ -7080,6 +7080,262 @@ fn read_placement_reply(v: &Value) -> Result<PlacementReply, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArrangeRegion {
+    pub min_x: Finite,
+    pub min_y: Finite,
+    pub max_x: Finite,
+    pub max_y: Finite,
+}
+fn read_arrange_region(v: &Value) -> Result<ArrangeRegion, InvalidIntent> {
+    let object = fields(v, &["minX", "minY", "maxX", "maxY"], false)?;
+    Ok(ArrangeRegion {
+        min_x: read_finite(&object["minX"])?,
+        min_y: read_finite(&object["minY"])?,
+        max_x: read_finite(&object["maxX"])?,
+        max_y: read_finite(&object["maxY"])?,
+    })
+}
+pub type ArrangeRegions = Vec<ArrangeRegion>;
+fn read_arrange_regions(v: &Value) -> Result<ArrangeRegions, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_arrange_region).collect()
+}
+pub type VolumeRoleNames = Vec<VolumeRoleName>;
+fn read_volume_role_names(v: &Value) -> Result<VolumeRoleNames, InvalidIntent> {
+    list(v, 0, 5)?.iter().map(read_volume_role_name).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalVolumeRoleNames {
+    Absent(Empty),
+    Value(VolumeRoleNames),
+}
+fn read_optional_volume_role_names(v: &Value) -> Result<OptionalVolumeRoleNames, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalVolumeRoleNames::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalVolumeRoleNames::Value(read_volume_role_names(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArrangeConstraintsInput {
+    pub bed_size_mm: PlanarPosition,
+    pub spacing_mm: OptionalFinite,
+    pub bed_margin_mm: OptionalFinite,
+    pub exclusions: ArrangeRegions,
+    pub locked_instance_ids: Ids,
+    pub volume_roles: OptionalVolumeRoleNames,
+}
+fn read_arrange_constraints_input(v: &Value) -> Result<ArrangeConstraintsInput, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "bedSizeMm",
+            "spacingMm",
+            "bedMarginMm",
+            "exclusions",
+            "lockedInstanceIds",
+            "volumeRoles",
+        ],
+        false,
+    )?;
+    Ok(ArrangeConstraintsInput {
+        bed_size_mm: read_planar_position(&object["bedSizeMm"])?,
+        spacing_mm: read_optional_finite(&object["spacingMm"])?,
+        bed_margin_mm: read_optional_finite(&object["bedMarginMm"])?,
+        exclusions: read_arrange_regions(&object["exclusions"])?,
+        locked_instance_ids: read_ids(&object["lockedInstanceIds"])?,
+        volume_roles: read_optional_volume_role_names(&object["volumeRoles"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArrangeRequest {
+    pub plate_id: Id,
+    pub constraints: ArrangeConstraintsInput,
+}
+fn read_arrange_request(v: &Value) -> Result<ArrangeRequest, InvalidIntent> {
+    let object = fields(v, &["plateId", "constraints"], false)?;
+    Ok(ArrangeRequest {
+        plate_id: read_id(&object["plateId"])?,
+        constraints: read_arrange_constraints_input(&object["constraints"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArrangePlacement {
+    pub instance_id: Id,
+    pub transform: Transform,
+    pub footprint: ArrangeRegion,
+}
+fn read_arrange_placement(v: &Value) -> Result<ArrangePlacement, InvalidIntent> {
+    let object = fields(v, &["instanceId", "transform", "footprint"], false)?;
+    Ok(ArrangePlacement {
+        instance_id: read_id(&object["instanceId"])?,
+        transform: read_transform(&object["transform"])?,
+        footprint: read_arrange_region(&object["footprint"])?,
+    })
+}
+pub type ArrangePlacements = Vec<ArrangePlacement>;
+fn read_arrange_placements(v: &Value) -> Result<ArrangePlacements, InvalidIntent> {
+    list(v, 0, 131072)?
+        .iter()
+        .map(read_arrange_placement)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Arrangement {
+    pub placements: ArrangePlacements,
+    pub unplaced_instance_ids: Ids,
+    pub locked_instance_ids: Ids,
+}
+fn read_arrangement(v: &Value) -> Result<Arrangement, InvalidIntent> {
+    let object = fields(
+        v,
+        &["placements", "unplacedInstanceIds", "lockedInstanceIds"],
+        false,
+    )?;
+    Ok(Arrangement {
+        placements: read_arrange_placements(&object["placements"])?,
+        unplaced_instance_ids: read_ids(&object["unplacedInstanceIds"])?,
+        locked_instance_ids: read_ids(&object["lockedInstanceIds"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ArrangeRefusalCode {
+    InvalidBed,
+    InvalidSpacing,
+    InvalidLimit,
+    UnknownPlate,
+    UnknownInstance,
+    InvalidExclusion,
+    MissingAsset,
+    AssetMetadata,
+    NoGeometry,
+    NonFiniteVertex,
+    InvalidRotation,
+}
+fn read_arrange_refusal_code(v: &Value) -> Result<ArrangeRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("invalidBed") => Ok(ArrangeRefusalCode::InvalidBed),
+        Some("invalidSpacing") => Ok(ArrangeRefusalCode::InvalidSpacing),
+        Some("invalidLimit") => Ok(ArrangeRefusalCode::InvalidLimit),
+        Some("unknownPlate") => Ok(ArrangeRefusalCode::UnknownPlate),
+        Some("unknownInstance") => Ok(ArrangeRefusalCode::UnknownInstance),
+        Some("invalidExclusion") => Ok(ArrangeRefusalCode::InvalidExclusion),
+        Some("missingAsset") => Ok(ArrangeRefusalCode::MissingAsset),
+        Some("assetMetadata") => Ok(ArrangeRefusalCode::AssetMetadata),
+        Some("noGeometry") => Ok(ArrangeRefusalCode::NoGeometry),
+        Some("nonFiniteVertex") => Ok(ArrangeRefusalCode::NonFiniteVertex),
+        Some("invalidRotation") => Ok(ArrangeRefusalCode::InvalidRotation),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArrangeRefusal {
+    pub code: ArrangeRefusalCode,
+    pub message: EditText,
+}
+fn read_arrange_refusal(v: &Value) -> Result<ArrangeRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(ArrangeRefusal {
+        code: read_arrange_refusal_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ArrangeReply {
+    Arrangement(Arrangement),
+    Refused(ArrangeRefusal),
+}
+fn read_arrange_reply(v: &Value) -> Result<ArrangeReply, InvalidIntent> {
+    let object = fields(v, &["arrangement", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "arrangement" => Ok(ArrangeReply::Arrangement(read_arrangement(value)?)),
+        "refused" => Ok(ArrangeReply::Refused(read_arrange_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BedFillRequest {
+    pub plate_id: Id,
+    pub instance_id: Id,
+    pub max_new_instances: OptionalFinite,
+    pub constraints: ArrangeConstraintsInput,
+}
+fn read_bed_fill_request(v: &Value) -> Result<BedFillRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &["plateId", "instanceId", "maxNewInstances", "constraints"],
+        false,
+    )?;
+    Ok(BedFillRequest {
+        plate_id: read_id(&object["plateId"])?,
+        instance_id: read_id(&object["instanceId"])?,
+        max_new_instances: read_optional_finite(&object["maxNewInstances"])?,
+        constraints: read_arrange_constraints_input(&object["constraints"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BedFillPlacement {
+    pub transform: Transform,
+    pub footprint: ArrangeRegion,
+}
+fn read_bed_fill_placement(v: &Value) -> Result<BedFillPlacement, InvalidIntent> {
+    let object = fields(v, &["transform", "footprint"], false)?;
+    Ok(BedFillPlacement {
+        transform: read_transform(&object["transform"])?,
+        footprint: read_arrange_region(&object["footprint"])?,
+    })
+}
+pub type BedFillPlacements = Vec<BedFillPlacement>;
+fn read_bed_fill_placements(v: &Value) -> Result<BedFillPlacements, InvalidIntent> {
+    list(v, 0, 131072)?
+        .iter()
+        .map(read_bed_fill_placement)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BedFill {
+    pub placements: BedFillPlacements,
+    pub withheld_slot_count: Counter,
+}
+fn read_bed_fill(v: &Value) -> Result<BedFill, InvalidIntent> {
+    let object = fields(v, &["placements", "withheldSlotCount"], false)?;
+    Ok(BedFill {
+        placements: read_bed_fill_placements(&object["placements"])?,
+        withheld_slot_count: read_counter(&object["withheldSlotCount"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BedFillReply {
+    Fill(BedFill),
+    Refused(ArrangeRefusal),
+}
+fn read_bed_fill_reply(v: &Value) -> Result<BedFillReply, InvalidIntent> {
+    let object = fields(v, &["fill", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "fill" => Ok(BedFillReply::Fill(read_bed_fill(value)?)),
+        "refused" => Ok(BedFillReply::Refused(read_arrange_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -7698,5 +7954,37 @@ pub fn decode_placement_reply(text: &str) -> Result<PlacementReply, InvalidInten
 pub fn encode_placement_reply(value: &PlacementReply) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_placement_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_arrange_request(text: &str) -> Result<ArrangeRequest, InvalidIntent> {
+    read_arrange_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_arrange_request(value: &ArrangeRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_arrange_request(&text)?;
+    Ok(text)
+}
+pub fn decode_arrange_reply(text: &str) -> Result<ArrangeReply, InvalidIntent> {
+    read_arrange_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_arrange_reply(value: &ArrangeReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_arrange_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_bed_fill_request(text: &str) -> Result<BedFillRequest, InvalidIntent> {
+    read_bed_fill_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_bed_fill_request(value: &BedFillRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_bed_fill_request(&text)?;
+    Ok(text)
+}
+pub fn decode_bed_fill_reply(text: &str) -> Result<BedFillReply, InvalidIntent> {
+    read_bed_fill_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_bed_fill_reply(value: &BedFillReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_bed_fill_reply(&text)?;
     Ok(text)
 }

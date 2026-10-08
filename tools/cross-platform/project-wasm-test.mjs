@@ -15,6 +15,7 @@ import { replayFacetRegions } from "./facet-region-replay.mjs";
 import { replayPaintStrokes } from "./paint-stroke-replay.mjs";
 import { replayPicks } from "./pick-replay.mjs";
 import { replayPlacements } from "./placement-replay.mjs";
+import { replayArrangements } from "./arrange-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -94,6 +95,8 @@ if (isMainThread) {
     assert.deepEqual([result.picks, result.pickRefusals], [486, 1]);
     // Placement planning over a live session.
     assert.equal(result.placements, 67);
+    // Arrangement and bed fill over a live session.
+    assert.equal(result.arrangements, 28);
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -380,6 +383,13 @@ if (isMainThread) {
     ),
     layout,
   );
+  const arranged = replayArrangements(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/arrange-vectors.json", root)),
+    ),
+    layout,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -405,6 +415,7 @@ if (isMainThread) {
       ...strokes,
       ...picks,
       ...placed,
+      ...arranged,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

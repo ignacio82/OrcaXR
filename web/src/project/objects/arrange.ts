@@ -48,7 +48,8 @@ export interface ArrangeResult {
 export class ArrangeConstraintError extends Error {
   constructor(
     message: string,
-    readonly code: 'invalid-bed' | 'invalid-spacing' | 'unknown-plate' | 'invalid-exclusion',
+    readonly code:
+      'invalid-bed' | 'invalid-spacing' | 'invalid-limit' | 'unknown-plate' | 'unknown-instance' | 'invalid-exclusion',
   ) {
     super(message);
     this.name = 'ArrangeConstraintError';
@@ -353,12 +354,12 @@ export function planBedFill(
   }
   const limit = request.maxNewInstances ?? DEFAULT_BED_FILL_LIMIT;
   if (!Number.isInteger(limit) || limit < 1) {
-    throw new ArrangeConstraintError('The bed-fill limit must be a positive integer', 'invalid-spacing');
+    throw new ArrangeConstraintError('The bed-fill limit must be a positive integer', 'invalid-limit');
   }
 
   const roles = constraints.volumeRoles ?? PRINTABLE_ROLES;
   const source = findInstanceTransform(state, request.instanceId);
-  if (!source) throw new ArrangeConstraintError(`Unknown instance ${request.instanceId}`, 'unknown-plate');
+  if (!source) throw new ArrangeConstraintError(`Unknown instance ${request.instanceId}`, 'unknown-instance');
   const sourceBounds = computeCanonicalInstanceBounds(state, assets, [request.instanceId], { volumeRoles: roles });
   const width = sourceBounds.max[0] - sourceBounds.min[0];
   const depth = sourceBounds.max[1] - sourceBounds.min[1];
