@@ -118,6 +118,9 @@ final class NativeProject {
     static native long paintStrokePreview(long handle);
     static native String paintOverlaySummary(long handle);
     static native byte[] paintOverlayPacket(long handle, long start, long count);
+    // Picking: one plate captured for picking, then printer-space rays.
+    static native long sessionPickScene(long handle, String request);
+    static native String pickScenePick(long handle, String ray);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

@@ -3340,6 +3340,42 @@ unknown volume and an oversized packet: 44 summaries, whole packets and paging
 windows, packets compared by SHA-256 (refined previews reach 547 facets). Rust,
 WASM in Node and Chrome, JNI and 151 Kotlin checks reproduce all of them.
 
+### Ray picking
+
+`picking` answers which facet a ray meets, in printer space (millimetres,
+bed-corner origin, Z up), as the workspace's raycast does: the browser's
+`ProjectPickScene` (`picking.ts`) mirrors three.js — each volume's matrix is
+its instance transform then its own, composed after the quaternion is
+normalized, multiplied and inverted as `Matrix4` does, the ray transformed
+as `Ray.applyMatrix4`, each facet met by `Ray.intersectTriangle` with back
+faces culled (the display meshes' materials are front-sided) — and its web
+test checks 243 rays against three.js raycasts on the real
+`ThreeProjectSurface`: same volume, instance and facet, points and distances
+within 1e-6 mm. `ProjectSession::pick_scene` captures one plate's volumes from
+a `PickSceneRequest` (every volume, or model volumes only, as painting picks)
+in plate order with decoded meshes shared by asset, so a host picks every
+pointer move off the session and captures again when the project changes.
+A `PickRay` answers the nearest hit — object, instance, volume, facet, the
+point in printer and volume space, the ray origin in volume space (a camera
+ray's eye, as a brush needs it) and the distance — or a miss; ties go to the
+earlier volume, then the lower facet. Each mesh builds a bounding volume
+hierarchy on first use (median splits, padded boxes); it keeps every
+candidate within a 1e-9 relative slack of the nearest and decides between them
+by the reference's own world distance, so it answers exactly as the
+reference's exhaustive walk; a unit test checks 4,000 rays on a 18,432-facet
+height field, ties at shared vertices included. An unknown plate, an
+unreadable mesh and a disposed session refuse. Bindings: WASM
+`ProjectSession.pick_scene` / `ProjectPickScene.pick`, the JNI exports
+`sessionPickScene` and `pickScenePick`, and Kotlin `ProjectSession.pickScene`
+/ `ProjectPickScene`.
+
+`pick-vectors.mjs` records 243 rays — aimed at a sphere, its modifier cube on a
+plain and a rotated non-uniformly scaled instance, and an open terrain on a
+mirrored instance; from below the bed; past everything; with a zero direction
+— in both scenes, and the unknown plate. Rust, WASM in Node and Chrome and JNI
+answer all 486 picks byte for byte and the refusal; 976 Kotlin checks cover
+the wrapper.
+
 ### Paint palette
 
 `facets::palette` ports `projectPaintPalette`: the filament library as the

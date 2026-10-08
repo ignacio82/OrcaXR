@@ -13,6 +13,7 @@ import { replayCapabilities } from "./capability-replay.mjs";
 import { replayRender } from "./render-replay.mjs";
 import { replayFacetRegions } from "./facet-region-replay.mjs";
 import { replayPaintStrokes } from "./paint-stroke-replay.mjs";
+import { replayPicks } from "./pick-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -88,6 +89,8 @@ if (isMainThread) {
       ],
       [11, 18, 5, 11, 11, 44],
     );
+    // Ray picking over a live session, in both scenes.
+    assert.deepEqual([result.picks, result.pickRefusals], [486, 1]);
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -358,6 +361,13 @@ if (isMainThread) {
       .version,
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
   );
+  const picks = replayPicks(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/pick-vectors.json", root)),
+    ),
+    layout,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -381,6 +391,7 @@ if (isMainThread) {
       ...renders,
       ...regions,
       ...strokes,
+      ...picks,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

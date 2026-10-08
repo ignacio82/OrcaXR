@@ -191,6 +191,11 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun paintStroke(guard: ProjectGuard, request: ProjectIntents.PaintStrokeOpen): ProjectPaintStroke = read {
         own(NativeProject.paintStrokeOpen(it, guard.reference(), ProjectIntents.encodePaintStrokeOpen(request)), ::ProjectPaintStroke)
     }
+    /** One plate captured for picking; the scene owns its meshes, so picks run
+     * off this session's call gate. Capture again when the project changes. */
+    fun pickScene(request: ProjectIntents.PickSceneRequest): ProjectPickScene = read {
+        own(NativeProject.sessionPickScene(it, ProjectIntents.encodePickSceneRequest(request)), ::ProjectPickScene)
+    }
     /** The canonical paint overlay of one volume's channel; the capture owns
      * its facets, so packets can be read off this session's call gate. */
     fun paintOverlay(request: ProjectIntents.PaintOverlayRequest): ProjectPaintOverlay = read {
@@ -239,6 +244,14 @@ class ProjectPaintStroke internal constructor(handle: Long) : ProjectHandle(hand
     }
     /** The live preview as the canonical overlay would draw it. */
     fun preview(): ProjectPaintOverlay = read { own(NativeProject.paintStrokePreview(it), ::ProjectPaintOverlay) }
+}
+
+/** One plate captured for picking: the nearest front-facing facet a
+ * printer-space ray meets, as the workspace's raycast meets it. */
+class ProjectPickScene internal constructor(handle: Long) : ProjectHandle(handle) {
+    fun pick(ray: ProjectIntents.PickRay): ProjectIntents.PickReply = read {
+        ProjectIntents.decodePickReply(NativeProject.pickScenePick(it, ProjectIntents.encodePickRay(ray)))
+    }
 }
 
 /** One paint overlay's facets: a summary of their states, then packets of

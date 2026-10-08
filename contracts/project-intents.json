@@ -3234,6 +3234,40 @@
         "facets": "Counter",
         "states": "FacetRegionStates"
       }
+    },
+    "PickSceneRequest": {
+      "kind": "object",
+      "fields": {
+        "plateId": "Id",
+        "modelsOnly": "Flag"
+      }
+    },
+    "PickRay": {
+      "kind": "object",
+      "fields": {
+        "origin": "Vector",
+        "direction": "Vector"
+      }
+    },
+    "PickHit": {
+      "kind": "object",
+      "fields": {
+        "objectId": "Id",
+        "instanceId": "Id",
+        "volumeId": "Id",
+        "triangle": "Counter",
+        "point": "Vector",
+        "localPoint": "Vector",
+        "localOrigin": "Vector",
+        "distance": "Finite"
+      }
+    },
+    "PickReply": {
+      "kind": "union",
+      "variants": {
+        "hit": "PickHit",
+        "miss": "Empty"
+      }
     }
   },
   "roots": [
@@ -3303,7 +3337,10 @@
     "PaintStrokeOverlayRequest",
     "PaintStrokeOverlay",
     "PaintOverlayRequest",
-    "PaintOverlaySummary"
+    "PaintOverlaySummary",
+    "PickSceneRequest",
+    "PickRay",
+    "PickReply"
   ],
   "sessionVersion": 1
 }

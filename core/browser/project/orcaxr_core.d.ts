@@ -405,6 +405,19 @@ export class ProjectPaintStroke {
 }
 
 /**
+ * One plate captured for picking; build it again when the project changes.
+ */
+export class ProjectPickScene {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * A `PickRay` in printer space; returns a `PickReply`.
+     */
+    pick(ray: string): string;
+}
+
+/**
  * One live preflight result, read item by item as contract JSON.
  */
 export class ProjectPreflight {
@@ -516,6 +529,11 @@ export class ProjectSession {
      */
     paint_stroke(guard: ProjectGuard, request: string): ProjectPaintStroke;
     pending_count(): number;
+    /**
+     * One plate's volumes captured for picking: a `PickSceneRequest`. The
+     * scene owns its meshes, so picks run off the session.
+     */
+    pick_scene(request: string): ProjectPickScene;
     release_staged(id: number): boolean;
     /**
      * A `RenderRequest`: a page of the renderer deltas from the snapshot the
@@ -676,6 +694,7 @@ export interface InitOutput {
     readonly __wbg_projectopen_free: (a: number, b: number) => void;
     readonly __wbg_projectpaintoverlay_free: (a: number, b: number) => void;
     readonly __wbg_projectpaintstroke_free: (a: number, b: number) => void;
+    readonly __wbg_projectpickscene_free: (a: number, b: number) => void;
     readonly __wbg_projectpreflight_free: (a: number, b: number) => void;
     readonly __wbg_projectquerylist_free: (a: number, b: number) => void;
     readonly __wbg_projectquerynode_free: (a: number, b: number) => void;
@@ -788,6 +807,7 @@ export interface InitOutput {
     readonly projectpaintstroke_overlay: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectpaintstroke_preview: (a: number) => [number, number, number];
     readonly projectpaintstroke_sample: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectpickscene_pick: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectpreflight_issue: (a: number, b: number) => [number, number, number, number];
     readonly projectpreflight_omission: (a: number, b: number) => [number, number, number, number];
     readonly projectpreflight_printable_instance: (a: number, b: number) => [number, number, number, number];
@@ -832,6 +852,7 @@ export interface InitOutput {
     readonly projectsession_paint_overlay: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_pending_count: (a: number) => number;
+    readonly projectsession_pick_scene: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_release_staged: (a: number, b: number) => [number, number, number];
     readonly projectsession_render: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_reset_document: (a: number, b: number, c: number) => [number, number, number];

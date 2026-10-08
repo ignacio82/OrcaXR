@@ -108,6 +108,7 @@ enum Record {
     Editor(Box<editor::Editor>),
     PaintStroke(Box<orcaxr_project::facets::paint_stroke::PaintStroke>),
     PaintOverlay(Box<orcaxr_project::facets::overlay::Overlay>),
+    PickScene(Box<orcaxr_project::picking::PickScene>),
 }
 fn registry() -> &'static Registry<Record> {
     static REGISTRY: OnceLock<Registry<Record>> = OnceLock::new();
@@ -174,6 +175,11 @@ access!(with_archive_import, ArchiveImport, Box<archive::Import>);
 access!(with_archive_output, ArchiveOutput, Box<archive::Output>);
 access!(with_model_upload, ModelUpload, Box<model::Upload>);
 access!(with_import_preview, ImportPreview, Box<model::Preview>);
+access!(
+    with_pick_scene,
+    PickScene,
+    Box<orcaxr_project::picking::PickScene>
+);
 access!(
     with_paint_overlay,
     PaintOverlay,

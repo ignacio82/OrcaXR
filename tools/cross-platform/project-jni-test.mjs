@@ -13,6 +13,7 @@ import { replayCapabilities } from "./capability-replay.mjs";
 import { replayRender } from "./render-replay.mjs";
 import { replayFacetRegions } from "./facet-region-replay.mjs";
 import { replayPaintStrokes } from "./paint-stroke-replay.mjs";
+import { replayPicks } from "./pick-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -531,6 +532,22 @@ try {
       .join("\n"),
   );
   assert.equal(paintStrokeChecks, 151);
+  // Ray picking over a live session, then the Kotlin wrapper.
+  const pickFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/pick-vectors.json", root)),
+  );
+  const picked = replayPicks(projectJniCore(jvm.call), pickFixture, layout);
+  assert.deepEqual([picked.picks, picked.pickRefusals], [486, 1]);
+  const pickChecks = jvm.call(
+    "pickChecks",
+    pickFixture.stateJson,
+    ...pickFixture.assets.map((a) => Uint8Array.from(a.bytes)),
+    [
+      ...pickFixture.scenes.flatMap((s) => [`S\t${s.request}`, ...s.picks.map((p) => `R\t${p.ray}\t${p.reply}`)]),
+      ...pickFixture.refusals.map((r) => `X\t${r.request}\t${r.refusal}`),
+    ].join("\n"),
+  );
+  assert.equal(pickChecks, 976);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

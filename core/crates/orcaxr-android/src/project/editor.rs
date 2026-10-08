@@ -307,6 +307,32 @@ pub(super) fn paint_stroke_overlay(
     })?;
     string(env, json)
 }
+/// One plate captured for picking; the scene owns its meshes.
+pub(super) fn session_pick_scene(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_pick_scene_request)?;
+    capture(|| {
+        with_session(handle, |s| {
+            s.pick_scene(&request)
+                .map(|scene| Record::PickScene(Box::new(scene)))
+                .map_err(|refusal| refusal.code())
+        })
+    })
+}
+pub(super) fn pick_scene_pick(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    ray: JString<'_>,
+) -> Result<jstring> {
+    let ray = decoded(env, &ray, wire::decode_pick_ray)?;
+    let json = with_pick_scene(handle, |scene| {
+        encoded(&scene.pick(&ray), wire::encode_pick_reply)
+    })?;
+    string(env, json)
+}
 /// The canonical paint overlay of one volume's channel.
 pub(super) fn session_paint_overlay(
     env: &mut JNIEnv<'_>,

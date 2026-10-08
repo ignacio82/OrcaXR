@@ -31,6 +31,7 @@ export function startProjectJni(profile = "debug") {
   signatures.renderChecks = ["String", "byte[]", "String"];
   signatures.facetRegionChecks = ["String", "byte[]", "byte[]", "String"];
   signatures.paintStrokeChecks = ["String", "byte[]", "byte[]", "String"];
+  signatures.pickChecks = ["String", "byte[]", "byte[]", "byte[]", "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -335,6 +336,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     facet_region(request) {
       return call("sessionFacetRegion", this.handle, request);
+    }
+    pick_scene(request) {
+      return wrap(ProjectPickScene, call("sessionPickScene", this.handle, request));
     }
     paint_overlay(request) {
       return wrap(
@@ -739,6 +743,11 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     preview() {
       return wrap(ProjectPaintOverlay, call("paintStrokePreview", this.handle));
+    }
+  }
+  class ProjectPickScene extends Handle {
+    pick(ray) {
+      return call("pickScenePick", this.handle, ray);
     }
   }
   class ProjectPaintOverlay extends Handle {

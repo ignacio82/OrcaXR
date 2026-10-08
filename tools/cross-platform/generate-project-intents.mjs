@@ -104,6 +104,9 @@ assert.deepEqual(schema.roots, [
   "PaintStrokeOverlay",
   "PaintOverlayRequest",
   "PaintOverlaySummary",
+  "PickSceneRequest",
+  "PickRay",
+  "PickReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

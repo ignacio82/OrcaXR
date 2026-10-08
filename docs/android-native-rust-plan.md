@@ -1538,7 +1538,11 @@ painting, and FullSpectrum operations that can support real native projects.
   - [x] Serve paint overlay packets: canonical overlays and live stroke
     previews as 40-byte float32 facet packets with a state summary, drawn as
     the workspace draws them (44 captures exact in every binding).
-  - [ ] Finish picking, preparation kernels, mesh renderer packets and device
+  - [x] Port ray picking (`picking`): printer-space rays meet the facet the
+    workspace's three.js raycast meets (243 rays checked against three),
+    through per-plate pick scenes with exact bounding volume hierarchies;
+    486 picks agree in every binding.
+  - [ ] Finish preparation kernels, mesh renderer packets and device
     qualification.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,

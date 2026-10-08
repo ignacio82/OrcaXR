@@ -581,6 +581,18 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sessionPickScene, session_pick_scene, jlong,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_pickScenePick, pick_scene_pick, jstring,
+    handle: jlong,
+    ray: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

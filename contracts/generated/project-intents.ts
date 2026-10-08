@@ -3235,6 +3235,40 @@ const shapes = {
       "facets": "Counter",
       "states": "FacetRegionStates"
     }
+  },
+  "PickSceneRequest": {
+    "kind": "object",
+    "fields": {
+      "plateId": "Id",
+      "modelsOnly": "Flag"
+    }
+  },
+  "PickRay": {
+    "kind": "object",
+    "fields": {
+      "origin": "Vector",
+      "direction": "Vector"
+    }
+  },
+  "PickHit": {
+    "kind": "object",
+    "fields": {
+      "objectId": "Id",
+      "instanceId": "Id",
+      "volumeId": "Id",
+      "triangle": "Counter",
+      "point": "Vector",
+      "localPoint": "Vector",
+      "localOrigin": "Vector",
+      "distance": "Finite"
+    }
+  },
+  "PickReply": {
+    "kind": "union",
+    "variants": {
+      "hit": "PickHit",
+      "miss": "Empty"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -3623,6 +3657,10 @@ export interface ProjectPaintStrokeOverlayWire {readonly guard: ProjectFacetGuar
 export interface ProjectPaintOverlayRequestWire {readonly volumeId: ProjectIdWire;readonly channel: ProjectFacetChannelNameWire;}
 export type ProjectFacetRegionStatesWire = readonly ProjectFacetRegionStateWire[];
 export interface ProjectPaintOverlaySummaryWire {readonly guard: ProjectFacetGuardWire;readonly facets: ProjectCounterWire;readonly states: ProjectFacetRegionStatesWire;}
+export interface ProjectPickSceneRequestWire {readonly plateId: ProjectIdWire;readonly modelsOnly: ProjectFlagWire;}
+export interface ProjectPickRayWire {readonly origin: ProjectVectorWire;readonly direction: ProjectVectorWire;}
+export interface ProjectPickHitWire {readonly objectId: ProjectIdWire;readonly instanceId: ProjectIdWire;readonly volumeId: ProjectIdWire;readonly triangle: ProjectCounterWire;readonly point: ProjectVectorWire;readonly localPoint: ProjectVectorWire;readonly localOrigin: ProjectVectorWire;readonly distance: ProjectFiniteWire;}
+export type ProjectPickReplyWire = {readonly hit:ProjectPickHitWire} | {readonly miss:ProjectEmptyWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -3824,3 +3862,12 @@ export function encodeProjectPaintOverlayRequest(value:ProjectPaintOverlayReques
 export function captureProjectPaintOverlaySummary(value:unknown):ProjectPaintOverlaySummaryWire { return captureIntent("PaintOverlaySummary",value,shapes,limits) as ProjectPaintOverlaySummaryWire; }
 export function decodeProjectPaintOverlaySummary(text:string):ProjectPaintOverlaySummaryWire { return captureProjectPaintOverlaySummary(parseIntentJson(text,limits)); }
 export function encodeProjectPaintOverlaySummary(value:ProjectPaintOverlaySummaryWire):string { return JSON.stringify(captureProjectPaintOverlaySummary(value)); }
+export function captureProjectPickSceneRequest(value:unknown):ProjectPickSceneRequestWire { return captureIntent("PickSceneRequest",value,shapes,limits) as ProjectPickSceneRequestWire; }
+export function decodeProjectPickSceneRequest(text:string):ProjectPickSceneRequestWire { return captureProjectPickSceneRequest(parseIntentJson(text,limits)); }
+export function encodeProjectPickSceneRequest(value:ProjectPickSceneRequestWire):string { return JSON.stringify(captureProjectPickSceneRequest(value)); }
+export function captureProjectPickRay(value:unknown):ProjectPickRayWire { return captureIntent("PickRay",value,shapes,limits) as ProjectPickRayWire; }
+export function decodeProjectPickRay(text:string):ProjectPickRayWire { return captureProjectPickRay(parseIntentJson(text,limits)); }
+export function encodeProjectPickRay(value:ProjectPickRayWire):string { return JSON.stringify(captureProjectPickRay(value)); }
+export function captureProjectPickReply(value:unknown):ProjectPickReplyWire { return captureIntent("PickReply",value,shapes,limits) as ProjectPickReplyWire; }
+export function decodeProjectPickReply(text:string):ProjectPickReplyWire { return captureProjectPickReply(parseIntentJson(text,limits)); }
+export function encodeProjectPickReply(value:ProjectPickReplyWire):string { return JSON.stringify(captureProjectPickReply(value)); }

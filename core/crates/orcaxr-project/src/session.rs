@@ -237,6 +237,17 @@ impl<P: TimestampPolicy> ProjectSession<P> {
         stroke.session_guard = Some(guard.clone());
         Ok(stroke)
     }
+    /// One plate's volumes captured for picking from the acknowledged state;
+    /// the scene owns its meshes, so picks run off the session.
+    pub fn pick_scene(
+        &self,
+        request: &wire::PickSceneRequest,
+    ) -> Result<crate::picking::PickScene, crate::picking::Refusal> {
+        if self.disposed {
+            return Err(crate::picking::Refusal::Disposed);
+        }
+        crate::picking::PickScene::capture(&self.bus.snapshot(), self.bus.assets(), request)
+    }
     /// The canonical paint overlay of one volume's channel, drawn from the
     /// acknowledged state; the capture owns its facets and packets.
     pub fn paint_overlay(

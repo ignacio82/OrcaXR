@@ -483,6 +483,20 @@ impl ProjectSession {
             .map(|inner| ProjectPaintStroke { inner })
             .map_err(|refusal| error(refusal.code()))
     }
+    /// One plate's volumes captured for picking: a `PickSceneRequest`. The
+    /// scene owns its meshes, so picks run off the session.
+    pub fn pick_scene(&self, request: &str) -> Result<ProjectPickScene, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_pick_scene_request(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .pick_scene(&request)
+            .map(|inner| ProjectPickScene { inner })
+            .map_err(|refusal| error(refusal.code()))
+    }
     /// The canonical paint overlay of one volume's channel: a
     /// `PaintOverlayRequest`. The capture owns its facets and packets.
     pub fn paint_overlay(&self, request: &str) -> Result<ProjectPaintOverlay, JsValue> {
@@ -633,6 +647,24 @@ impl ProjectPaintStroke {
             .overlay(&request)
             .map_err(|refusal| error(refusal.code()))?;
         wire::encode_paint_stroke_overlay(&page).map_err(|_| error("output_limit"))
+    }
+}
+
+/// One plate captured for picking; build it again when the project changes.
+#[wasm_bindgen]
+pub struct ProjectPickScene {
+    inner: orcaxr_project::picking::PickScene,
+}
+#[wasm_bindgen]
+impl ProjectPickScene {
+    /// A `PickRay` in printer space; returns a `PickReply`.
+    pub fn pick(&self, ray: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if ray.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let ray = wire::decode_pick_ray(ray).map_err(|_| error("invalid_request"))?;
+        wire::encode_pick_reply(&self.inner.pick(&ray)).map_err(|_| error("output_limit"))
     }
 }
 

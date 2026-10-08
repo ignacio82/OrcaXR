@@ -3615,26 +3615,30 @@ export class OrcaWorkspace extends xb.Script {
     return targets;
   }
 
-  /** Begin a paint gesture at this canvas ray, if it hits a paintable part. */
+  /**
+   * Begin a paint gesture at this canvas ray on the nearest paintable part it
+   * meets — the visible one, not the first in scene order.
+   */
   private beginPaintStroke(raycaster: THREE.Raycaster, pointerId: number): boolean {
-    const targets = this.paintTargets();
-    for (const target of targets) {
+    let nearest: { target: ReturnType<OrcaWorkspace['paintTargets']>[number]; hit: THREE.Intersection } | undefined;
+    for (const target of this.paintTargets()) {
       const [hit] = raycaster.intersectObject(target.display, false);
       if (!hit || hit.faceIndex === undefined || hit.faceIndex === null) continue;
-      const value = this.activePaintValue();
-      this.paintStroke = {
-        volumeId: target.volumeId,
-        display: target.display,
-        triangles: new Set<number>(),
-        channel: this.paintChannel,
-        mode: this.paintMode,
-        ...(value !== undefined ? { value } : {}),
-        pointerId,
-      };
-      this.samplePaintStroke(hit);
-      return true;
+      if (!nearest || hit.distance < nearest.hit.distance) nearest = { target, hit };
     }
-    return false;
+    if (!nearest) return false;
+    const value = this.activePaintValue();
+    this.paintStroke = {
+      volumeId: nearest.target.volumeId,
+      display: nearest.target.display,
+      triangles: new Set<number>(),
+      channel: this.paintChannel,
+      mode: this.paintMode,
+      ...(value !== undefined ? { value } : {}),
+      pointerId,
+    };
+    this.samplePaintStroke(nearest.hit);
+    return true;
   }
 
   /** Accumulate one pointer sample without touching canonical state. */

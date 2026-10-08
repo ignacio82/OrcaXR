@@ -6751,6 +6751,85 @@ fn read_paint_overlay_summary(v: &Value) -> Result<PaintOverlaySummary, InvalidI
         states: read_facet_region_states(&object["states"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PickSceneRequest {
+    pub plate_id: Id,
+    pub models_only: Flag,
+}
+fn read_pick_scene_request(v: &Value) -> Result<PickSceneRequest, InvalidIntent> {
+    let object = fields(v, &["plateId", "modelsOnly"], false)?;
+    Ok(PickSceneRequest {
+        plate_id: read_id(&object["plateId"])?,
+        models_only: read_flag(&object["modelsOnly"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PickRay {
+    pub origin: Vector,
+    pub direction: Vector,
+}
+fn read_pick_ray(v: &Value) -> Result<PickRay, InvalidIntent> {
+    let object = fields(v, &["origin", "direction"], false)?;
+    Ok(PickRay {
+        origin: read_vector(&object["origin"])?,
+        direction: read_vector(&object["direction"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PickHit {
+    pub object_id: Id,
+    pub instance_id: Id,
+    pub volume_id: Id,
+    pub triangle: Counter,
+    pub point: Vector,
+    pub local_point: Vector,
+    pub local_origin: Vector,
+    pub distance: Finite,
+}
+fn read_pick_hit(v: &Value) -> Result<PickHit, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "objectId",
+            "instanceId",
+            "volumeId",
+            "triangle",
+            "point",
+            "localPoint",
+            "localOrigin",
+            "distance",
+        ],
+        false,
+    )?;
+    Ok(PickHit {
+        object_id: read_id(&object["objectId"])?,
+        instance_id: read_id(&object["instanceId"])?,
+        volume_id: read_id(&object["volumeId"])?,
+        triangle: read_counter(&object["triangle"])?,
+        point: read_vector(&object["point"])?,
+        local_point: read_vector(&object["localPoint"])?,
+        local_origin: read_vector(&object["localOrigin"])?,
+        distance: read_finite(&object["distance"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PickReply {
+    Hit(PickHit),
+    Miss(Empty),
+}
+fn read_pick_reply(v: &Value) -> Result<PickReply, InvalidIntent> {
+    let object = fields(v, &["hit", "miss"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "hit" => Ok(PickReply::Hit(read_pick_hit(value)?)),
+        "miss" => Ok(PickReply::Miss(read_empty(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -7329,5 +7408,29 @@ pub fn decode_paint_overlay_summary(text: &str) -> Result<PaintOverlaySummary, I
 pub fn encode_paint_overlay_summary(value: &PaintOverlaySummary) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_paint_overlay_summary(&text)?;
+    Ok(text)
+}
+pub fn decode_pick_scene_request(text: &str) -> Result<PickSceneRequest, InvalidIntent> {
+    read_pick_scene_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_pick_scene_request(value: &PickSceneRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_pick_scene_request(&text)?;
+    Ok(text)
+}
+pub fn decode_pick_ray(text: &str) -> Result<PickRay, InvalidIntent> {
+    read_pick_ray(&super::project_intents::parse(text)?)
+}
+pub fn encode_pick_ray(value: &PickRay) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_pick_ray(&text)?;
+    Ok(text)
+}
+pub fn decode_pick_reply(text: &str) -> Result<PickReply, InvalidIntent> {
+    read_pick_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_pick_reply(value: &PickReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_pick_reply(&text)?;
     Ok(text)
 }

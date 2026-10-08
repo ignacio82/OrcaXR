@@ -4851,6 +4851,63 @@ object ProjectIntents {
             w.field("states") { writeFacetRegionStates(w, v.states) }
         }
     }
+    data class PickSceneRequest(val plateId: List<Int>, val modelsOnly: Boolean)
+    private fun readPickSceneRequest(v: Any): PickSceneRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("plateId", "modelsOnly"), false)
+        return PickSceneRequest(readId(obj.get("plateId")), readFlag(obj.get("modelsOnly")))
+    }
+    private fun writePickSceneRequest(w: ProjectIntentWriter, v: PickSceneRequest) {
+        w.obj {
+            w.field("plateId") { writeId(w, v.plateId) }
+            w.field("modelsOnly") { writeFlag(w, v.modelsOnly) }
+        }
+    }
+    data class PickRay(val origin: List<Double>, val direction: List<Double>)
+    private fun readPickRay(v: Any): PickRay {
+        val obj = ProjectIntentJson.fields(v, setOf("origin", "direction"), false)
+        return PickRay(readVector(obj.get("origin")), readVector(obj.get("direction")))
+    }
+    private fun writePickRay(w: ProjectIntentWriter, v: PickRay) {
+        w.obj {
+            w.field("origin") { writeVector(w, v.origin) }
+            w.field("direction") { writeVector(w, v.direction) }
+        }
+    }
+    data class PickHit(val objectId: List<Int>, val instanceId: List<Int>, val volumeId: List<Int>, val triangle: Long, val point: List<Double>, val localPoint: List<Double>, val localOrigin: List<Double>, val distance: Double)
+    private fun readPickHit(v: Any): PickHit {
+        val obj = ProjectIntentJson.fields(v, setOf("objectId", "instanceId", "volumeId", "triangle", "point", "localPoint", "localOrigin", "distance"), false)
+        return PickHit(readId(obj.get("objectId")), readId(obj.get("instanceId")), readId(obj.get("volumeId")), readCounter(obj.get("triangle")), readVector(obj.get("point")), readVector(obj.get("localPoint")), readVector(obj.get("localOrigin")), readFinite(obj.get("distance")))
+    }
+    private fun writePickHit(w: ProjectIntentWriter, v: PickHit) {
+        w.obj {
+            w.field("objectId") { writeId(w, v.objectId) }
+            w.field("instanceId") { writeId(w, v.instanceId) }
+            w.field("volumeId") { writeId(w, v.volumeId) }
+            w.field("triangle") { writeCounter(w, v.triangle) }
+            w.field("point") { writeVector(w, v.point) }
+            w.field("localPoint") { writeVector(w, v.localPoint) }
+            w.field("localOrigin") { writeVector(w, v.localOrigin) }
+            w.field("distance") { writeFinite(w, v.distance) }
+        }
+    }
+    sealed interface PickReply {
+        data class Hit(val value: ProjectIntents.PickHit) : PickReply
+        data class Miss(val value: ProjectIntents.Empty) : PickReply
+    }
+    private fun readPickReply(v: Any): PickReply {
+        val obj = ProjectIntentJson.fields(v, setOf("hit", "miss"), true)
+        return when(val key = obj.keys().next()) {
+            "hit" -> PickReply.Hit(readPickHit(obj.get(key)))
+            "miss" -> PickReply.Miss(readEmpty(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePickReply(w: ProjectIntentWriter, v: PickReply) {
+        w.obj { when(v) {
+            is PickReply.Hit -> w.field("hit") { writePickHit(w, v.value) }
+            is PickReply.Miss -> w.field("miss") { writeEmpty(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -4985,4 +5042,10 @@ object ProjectIntents {
     fun encodePaintOverlayRequest(value: PaintOverlayRequest): String = ProjectIntentWriter().also { writePaintOverlayRequest(it, value) }.finish()
     fun decodePaintOverlaySummary(text: String): PaintOverlaySummary = readPaintOverlaySummary(ProjectIntentJson.parse(text))
     fun encodePaintOverlaySummary(value: PaintOverlaySummary): String = ProjectIntentWriter().also { writePaintOverlaySummary(it, value) }.finish()
+    fun decodePickSceneRequest(text: String): PickSceneRequest = readPickSceneRequest(ProjectIntentJson.parse(text))
+    fun encodePickSceneRequest(value: PickSceneRequest): String = ProjectIntentWriter().also { writePickSceneRequest(it, value) }.finish()
+    fun decodePickRay(text: String): PickRay = readPickRay(ProjectIntentJson.parse(text))
+    fun encodePickRay(value: PickRay): String = ProjectIntentWriter().also { writePickRay(it, value) }.finish()
+    fun decodePickReply(text: String): PickReply = readPickReply(ProjectIntentJson.parse(text))
+    fun encodePickReply(value: PickReply): String = ProjectIntentWriter().also { writePickReply(it, value) }.finish()
 }

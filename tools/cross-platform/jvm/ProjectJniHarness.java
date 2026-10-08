@@ -32,6 +32,9 @@ public final class ProjectJniHarness {
     public static long paintStrokeChecks(String source, byte[] sphere, byte[] terrain, String script) {
         return ProjectPaintStrokeChecks.run(source, sphere, terrain, script);
     }
+    public static long pickChecks(String source, byte[] sphere, byte[] cube, byte[] terrain, String script) {
+        return ProjectPickChecks.run(source, java.util.List.of(sphere, cube, terrain), script);
+    }
     public static long actorPreflightChecks(String source, byte[] mesh, String request, String expected) {
         return ProjectPreflightChecks.run(source, mesh, request, expected);
     }
@@ -187,6 +190,7 @@ public final class ProjectJniHarness {
             if (name.equals("renderChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class);
             if (name.equals("facetRegionChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, String.class);
             if (name.equals("paintStrokeChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, String.class);
+            if (name.equals("pickChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class, String.class);
             if (name.equals("actorPreflightChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorClipboardChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class);
             if (name.equals("actorClipboardReplay")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class, long.class, String.class, long[].class);
