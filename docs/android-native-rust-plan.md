@@ -1335,9 +1335,15 @@ and replay coverage for the complete current command inventory.
     answers (259 pages and 57 refusals per binding; 23,154 differential
     pages agree in CI and 144,585 locally; the browser surface shares the
     colour rule).
-- [ ] Make worker/service generation changes invalidate pending replies. Implement
+- [x] Make worker/service generation changes invalidate pending replies. Implement
   explicit session disposal and recovery after the core worker fails; recover
   only from acknowledged snapshots/journal entries, never an optimistic UI view.
+  A supervisor gives each worker incarnation a fresh generation and drops
+  replies from superseded ones; a failure rejects work in flight as of unknown
+  outcome, and recovery reopens from the last checkpoint whose identity matched
+  an acknowledgement. A real worker hosting the Rust core recovers all 19 trace
+  states from hangs and exits (57 unknown outcomes reported). The browser's
+  session still runs in process until Rust sessions are enabled.
 - [x] Replay imports and command traces against TypeScript and Rust in isolated
   sessions. Compare state, semantic hashes, assets, dirty/history state,
   capabilities, errors, and exports after every step.

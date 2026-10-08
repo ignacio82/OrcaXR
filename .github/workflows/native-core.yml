@@ -236,6 +236,7 @@ jobs:
           python3 tools/cross-platform/verify-artifacts.py --wasm --project-wasm
           node tools/cross-platform/project-wasm-test.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/differential-replay.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/session-worker-recovery.mjs
           node tools/cross-platform/project-wasm-browser.mjs
           node tools/cross-platform/wasm-smoke.mjs
       - uses: actions/upload-artifact@v6

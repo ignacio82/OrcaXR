@@ -158,22 +158,19 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   distinct completed outcome. Plate UI success follows acknowledgement; canonical subscriptions
   own selection and projection updates. Objects reveal checks the activation
   receipt and current selection before applying late camera/selection work.
-  Object/part rename, instance printability, single/batch transforms and derived
-  placement tools now use that transport too. A drag owns one dispatched edit
-  and one latest pending pose, advances only from its own receipt, and cancels
-  immediately on selection changes, tool changes or disposal. Cancellation never
-  undoes committed steps. Multi-instance printability preserves separate undo
-  entries and reports a completed count on interruption. Named actions await
-  these results. Numeric transforms, DOM/XR drags and DOM lay-on-face now invoke
-  declared registry routes too; gestures receive the actual command receipt and
-  recheck availability for each dispatched pose. Object/instance deletion,
-  plate clearing, cut and instance conversion now await registered actions too.
-  Independent object copies and plate moves have guarded async controller APIs. Cut
-  publishes its synchronous copy before queued deletion; a failed/uncertain
-  deletion retains that clipboard and late replies never republish clipboard UI.
-  Clone/add-instance/fill-bed/paste await measured staged work, keeping history and captures.
-  Clipboard captures share asset records; paste restores missing bytes in rollback.
-  Settings/range/role/layer-event/filament/wipe-tower/helper/split/brim/sync/mesh/paint/profile routes submit; build commands
+  Object/part rename, instance printability, single/batch transforms and derived placement
+  tools use that transport too. A drag owns one dispatched edit and one latest pending pose,
+  advances only from its own receipt, and cancels immediately on selection/tool changes or
+  disposal; cancellation never undoes committed steps. Multi-instance printability keeps
+  separate undo entries and reports a completed count on interruption. Named actions await
+  these results. Numeric transforms, DOM/XR drags and DOM lay-on-face invoke declared registry
+  routes; gestures get the actual receipt and recheck availability per dispatched pose.
+  Object/instance deletion, plate clearing, cut and instance conversion await registered
+  actions; object copies and plate moves have guarded async APIs. Cut publishes its copy before
+  queued deletion; a failed/uncertain deletion keeps that clipboard; late replies never republish it.
+  Clone/add-instance/fill-bed/paste await measured staged work, keeping history and captures;
+  clipboard captures share asset records; paste restores missing bytes in rollback.
+  Settings/range/role/layer-event/filament/wipe-tower/helper/split/brim/sync/mesh/model-add/paint/profile routes submit; build commands
   first (prepare errors become invalidRequest), local apply errors keep their message, and
   batched auto-pair reconciles guard on a scratch-store prediction of the edited state.
 - Prepared command intents use ASCII JSON with UTF-16 unit arrays for all text.
@@ -187,6 +184,9 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - A pending `EditorSession.open` owns its source revision/asset guard and operation identity.
   Newer opens, reset and disposal invalidate it; a failed newer open cannot revive an older
   read. Cooperative cancellation never replaces the final owner/identity check before commit.
+  Worker-hosted sessions (`ProjectSessionSupervisor`): a generation per incarnation, in-flight
+  work fails as unknown outcome, recovery only from acknowledged checkpoints; wasm-bindgen
+  `open`/`effects` consume their objects (never `free` them after).
 - `ActionRegistry` is the sole invocation/availability gateway for DOM, XR,
   menus, shortcuts, command palette and contextual Objects actions. A capability
   marked implemented needs a real handler and evidence. DOM-only dialogs declare

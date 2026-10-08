@@ -29,7 +29,7 @@
     },
     {
       "path": "web/src/project/ProjectSessionClient.ts",
-      "sha256": "03c95a741858f22a46fc3cd77906494fa33ca5aba76519805103112be9f34eff"
+      "sha256": "c09cd6b647dfb9ca378acb01e8c8282c566bf1b99b48780607c4e036f415fc61"
     },
     {
       "path": "web/src/project/PreparedProjectCommands.ts",

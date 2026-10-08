@@ -102,6 +102,12 @@ export class ProjectSessionClient {
     void this.ready.catch(() => undefined);
   }
 
+  /** Whether a transport failure or unverifiable reply failed this client
+   * closed; nothing more is sent, and the owner must reconcile authority. */
+  get failedClosed(): boolean {
+    return this.failed;
+  }
+
   submit(operation: ProjectSessionOperation): ProjectSessionTicket {
     try {
       this.assertActive();

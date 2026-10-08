@@ -3316,6 +3316,45 @@ and rebuilds the target, and 41 Kotlin checks cover the wrapper. Intent
 encoding in Rust now writes numbers as JavaScript does (`1`, not `1.0`), so
 every binding's wire text is byte-identical to the browser's.
 
+### Worker-hosted sessions
+
+`ProjectSessionWorker.ts` supervises a project session hosted off the UI
+thread; `RustProjectSessionHost.ts` is the worker side over the shared Rust
+core. The worker owns the authority and the browser holds only what it
+acknowledged. Each worker incarnation opens under its own never-reused
+session generation, and its channel drops replies tagged with another
+incarnation, so a reply from a replaced worker is never taken for the
+current one's; the session client already fails closed on a reply under
+another generation.
+
+When a worker errors, exits, delivers an undeliverable message or is
+stopped, every operation still awaiting a reply is rejected as of unknown
+outcome — never retried — and the supervisor counts them synchronously for
+the recovery report. A client that failed closed (an unverifiable reply)
+also marks its incarnation failed. `checkpoint()` captures the worker's
+document and assets in declaration order and adopts them only when their
+revision, semantic hash and asset fingerprint equal the acknowledgement of
+a query answered just before; anything else keeps the previous checkpoint.
+`recover()` stops the failed worker, opens a new incarnation with a new
+generation from that acknowledged checkpoint — never from a UI view — and
+refuses unless the recovered session reports the same content identity.
+`dispose()` closes and stops the worker at once, even a hung one. The
+worker host runs each exchange to its reply in order, consuming the
+commit's effects before the acknowledgement leaves.
+
+`session-worker-recovery.mjs` runs the Rust core in a real Node worker for
+each of the 19 distinct trace states: an acknowledged edit, an adopted
+checkpoint, a later acknowledged edit, then a hang (stopped by its owner)
+or an exit with three edits in flight. All 57 are rejected as of unknown
+outcome; a failed worker takes no work or checkpoint; each recovery opens a
+new generation holding the checkpointed document, not the later edit, and
+edits normally; recovery without a failure refuses and disposal stops the
+worker. Web tests cover the same rules over an in-process worker, plus a
+superseded incarnation's reply, a reply under a foreign generation, a
+checkpoint whose identity was never acknowledged and a worker that cannot
+open. The browser's own session still runs in process; this is the
+lifetime a worker-hosted core will use when Rust sessions are enabled.
+
 ### Preset graph and profile catalog
 
 `settings::presets` ports `PresetGraph`, the pinned v2.3.4 preset semantics:
