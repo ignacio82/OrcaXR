@@ -1300,7 +1300,7 @@ await test('applies intersect boolean mesh result and supports undo/redo', () =>
   controller.dispose();
 });
 
-await test('splits multi-body mesh into parts within the same object and supports undo/redo', () => {
+await test('splits multi-body mesh into parts within the same object and supports undo/redo', async () => {
   const controller = createController();
   const positions = [0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 2, 10, 0, 0, 12, 0, 0, 10, 2, 0, 10, 0, 2];
   const tetrahedron = (offset: number): number[] => [
@@ -1325,7 +1325,7 @@ await test('splits multi-body mesh into parts within the same object and support
   controller.importBufferGeometry(geometry, { name: 'Compound Object' });
   assert.equal(controller.getSummary().objectCount, 1);
 
-  const splitResult = controller.splitSelectedToParts();
+  const splitResult = await controller.splitSelectedToParts();
   assert.equal(splitResult.partCount, 2);
   assert.equal(splitResult.objectName, 'Compound Object');
 
@@ -1343,13 +1343,13 @@ await test('splits multi-body mesh into parts within the same object and support
   controller.dispose();
 });
 
-await test('adds modifier volume to selected object and supports undo/redo', () => {
+await test('adds modifier volume to selected object and supports undo/redo', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(20, 20, 20);
   controller.importBufferGeometry(geometry, { name: 'Main Object' });
   assert.equal(controller.getSummary().objectCount, 1);
 
-  const res = controller.addHelperVolume('parameter-modifier', 10);
+  const res = await controller.addHelperVolume('parameter-modifier', 10);
   assert.equal(res.role, 'parameter-modifier');
 
   const obj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
@@ -1368,13 +1368,13 @@ await test('adds modifier volume to selected object and supports undo/redo', () 
   controller.dispose();
 });
 
-await test('adds support enforcer volume to selected object and supports undo/redo', () => {
+await test('adds support enforcer volume to selected object and supports undo/redo', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(20, 20, 20);
   controller.importBufferGeometry(geometry, { name: 'Main Object' });
   assert.equal(controller.getSummary().objectCount, 1);
 
-  const res = controller.addHelperVolume('support-enforcer', 10);
+  const res = await controller.addHelperVolume('support-enforcer', 10);
   assert.equal(res.role, 'support-enforcer');
 
   const obj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
@@ -1393,13 +1393,13 @@ await test('adds support enforcer volume to selected object and supports undo/re
   controller.dispose();
 });
 
-await test('adds support blocker volume to selected object and supports undo/redo', () => {
+await test('adds support blocker volume to selected object and supports undo/redo', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(20, 20, 20);
   controller.importBufferGeometry(geometry, { name: 'Main Object' });
   assert.equal(controller.getSummary().objectCount, 1);
 
-  const res = controller.addHelperVolume('support-blocker', 10);
+  const res = await controller.addHelperVolume('support-blocker', 10);
   assert.equal(res.role, 'support-blocker');
 
   const obj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
@@ -1469,13 +1469,13 @@ await test('adds negative volume to selected object and supports undo/redo', asy
   controller.dispose();
 });
 
-await test('applies adaptive layer height to selected object and supports undo/redo', () => {
+await test('applies adaptive layer height to selected object and supports undo/redo', async () => {
   const controller = createController();
   const geometry = new THREE.ConeGeometry(20, 40, 16);
   controller.importBufferGeometry(geometry, { name: 'Main Object' });
   assert.equal(controller.getSummary().objectCount, 1);
 
-  controller.applyAdaptiveLayerHeight(0.5);
+  await controller.applyAdaptiveLayerHeight(0.5);
 
   const obj = controller['session'].project.getSnapshot().state.plates[0].objects[0];
   assert.ok(obj.layerHeightProfile && obj.layerHeightProfile.length > 0);
@@ -1491,13 +1491,13 @@ await test('applies adaptive layer height to selected object and supports undo/r
   controller.dispose();
 });
 
-await test('adds magnet hole negative volume to selected object and supports undo/redo', () => {
+await test('adds magnet hole negative volume to selected object and supports undo/redo', async () => {
   const controller = createController();
   const geometry = new THREE.BoxGeometry(20, 20, 20);
   controller.importBufferGeometry(geometry, { name: 'Main Object' });
   assert.equal(controller.getSummary().objectCount, 1);
 
-  const res = controller.addMagnetHole({ diameterMm: 6, discHeightMm: 3 });
+  const res = await controller.addMagnetHole({ diameterMm: 6, discHeightMm: 3 });
   assert.ok(res.volumeId);
 
   const obj = controller['session'].project.getSnapshot().state.plates[0].objects[0];

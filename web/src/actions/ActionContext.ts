@@ -382,14 +382,14 @@ export class ActionContext {
   async splitToParts(): Promise<void> {
     await this.workspace.splitSelectedToParts();
   }
-  addModifier(): void {
-    this.workspace.addModifier();
+  async addModifier(): Promise<void> {
+    await this.workspace.addModifier();
   }
-  addSupportEnforcer(): void {
-    this.workspace.addSupportEnforcer();
+  async addSupportEnforcer(): Promise<void> {
+    await this.workspace.addSupportEnforcer();
   }
-  addSupportBlocker(): void {
-    this.workspace.addSupportBlocker();
+  async addSupportBlocker(): Promise<void> {
+    await this.workspace.addSupportBlocker();
   }
   async setNegativePart(): Promise<void> {
     await this.workspace.setNegativePart();
@@ -397,11 +397,11 @@ export class ActionContext {
   async addHeightRange(): Promise<void> {
     await this.workspace.addHeightRange();
   }
-  variableLayerHeight(): void {
-    this.workspace.variableLayerHeight();
+  async variableLayerHeight(): Promise<void> {
+    await this.workspace.variableLayerHeight();
   }
-  addMagnetHole(spec?: Parameters<OrcaWorkspace['addMagnetHole']>[0]): void {
-    this.workspace.addMagnetHole(spec);
+  async addMagnetHole(spec?: Parameters<OrcaWorkspace['addMagnetHole']>[0]): Promise<void> {
+    await this.workspace.addMagnetHole(spec);
   }
   cutPlane(): void {
     this.workspace.cutSelectedByPlane();

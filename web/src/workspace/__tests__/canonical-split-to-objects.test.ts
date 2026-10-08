@@ -95,7 +95,7 @@ function canonicalSnapshot(workspace: CanonicalWorkspaceController): string {
   });
 }
 
-await test('splits connected bodies through one guarded transaction with exact undo and redo', () => {
+await test('splits connected bodies through one guarded transaction with exact undo and redo', async () => {
   const workspace = controller();
   const geometry = indexedTetrahedra(2);
   const source = workspace.importBufferGeometry(geometry, {
@@ -111,7 +111,7 @@ await test('splits connected bodies through one guarded transaction with exact u
   assert.equal(confirmation.triangleCount, 8);
   assert.deepEqual(confirmation.affectedInstanceIds, [source.instanceId]);
 
-  const result = workspace.splitSelectedToObjects(confirmation.guard);
+  const result = await workspace.splitSelectedToObjects(confirmation.guard);
   const split = workspace.createCanonicalSliceSource().capture();
   assert.equal(result.strategy, 'connected-components');
   assert.equal(result.objectIds.length, 2);
@@ -184,7 +184,7 @@ await test('promotes existing model volumes while preserving volume identity, an
   assert.equal(confirmation.strategy, 'existing-volumes');
   assert.equal(confirmation.volumeCount, 2);
 
-  const result = workspace.splitSelectedToObjects(confirmation.guard);
+  const result = await workspace.splitSelectedToObjects(confirmation.guard);
   const split = workspace.createCanonicalSliceSource().capture();
   assert.equal(result.strategy, 'existing-volumes');
   assert.deepEqual(result.volumeIds, [first.id, second.id]);
@@ -281,7 +281,7 @@ await test('rejects stale, unselected, oversized, connected, and lossy requests 
     translationMm: [1, 0, 0],
   });
   const afterTransform = canonicalSnapshot(staleWorkspace);
-  assert.throws(() => staleWorkspace.splitSelectedToObjects(stale.guard), StaleCanonicalSplitToObjectsError);
+  await assert.rejects(staleWorkspace.splitSelectedToObjects(stale.guard), StaleCanonicalSplitToObjectsError);
   assert.equal(canonicalSnapshot(staleWorkspace), afterTransform);
   staleWorkspace.clearSelection();
   assert.throws(() => staleWorkspace.getSplitToObjectsConfirmation(), /primary selected model instance/);
@@ -300,7 +300,7 @@ await test('rejects stale, unselected, oversized, connected, and lossy requests 
   connectedWorkspace.importBufferGeometry(connectedGeometry, { name: 'One body' });
   const connectedGuard = connectedWorkspace.getSplitToObjectsConfirmation().guard;
   const connectedBefore = canonicalSnapshot(connectedWorkspace);
-  assert.throws(() => connectedWorkspace.splitSelectedToObjects(connectedGuard), /one shared-edge component/i);
+  await assert.rejects(connectedWorkspace.splitSelectedToObjects(connectedGuard), /one shared-edge component/i);
   assert.equal(canonicalSnapshot(connectedWorkspace), connectedBefore);
   connectedGeometry.dispose();
   connectedWorkspace.dispose();
@@ -310,7 +310,7 @@ await test('rejects stale, unselected, oversized, connected, and lossy requests 
   lossyWorkspace.importBufferGeometry(lossyGeometry, { name: 'Tiny component' });
   const lossyGuard = lossyWorkspace.getSplitToObjectsConfirmation().guard;
   const lossyBefore = canonicalSnapshot(lossyWorkspace);
-  assert.throws(() => lossyWorkspace.splitSelectedToObjects(lossyGuard), /fewer than three facets/i);
+  await assert.rejects(lossyWorkspace.splitSelectedToObjects(lossyGuard), /fewer than three facets/i);
   assert.equal(canonicalSnapshot(lossyWorkspace), lossyBefore);
   lossyGeometry.dispose();
   lossyWorkspace.dispose();

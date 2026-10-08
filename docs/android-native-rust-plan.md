@@ -916,7 +916,10 @@ and replay coverage for the complete current command inventory.
   filament library (add, edit, duplicate, enable, delete and automatic-pair
   reconciliation). An edit or delete that reconciles automatic pairs stays one
   transaction: the reconciliation is computed on a scratch store from the edited
-  state and guarded by the revision and fingerprint it will meet. In
+  state and guarded by the revision and fingerprint it will meet. Helper volumes,
+  magnet holes and split-to-parts/objects carry their new mesh bytes as measured
+  staged work (within the clipboard's asset budget); adaptive layer heights and
+  volume separation submit intents. In
   process, a command the session refuses reports the browser's own error; the
   wire still carries only `commandFailed`. Other workflows, remote projections
   and production worker/JNI execution are not migrated yet. Browser capture and
@@ -929,6 +932,8 @@ and replay coverage for the complete current command inventory.
     intents, keeping the browser's own refusal messages in process.
   - [x] Route filament assignment, filament remapping, wipe-tower placement and
     the virtual filament library through guarded intents.
+  - [x] Route helper volumes, magnet holes, splits and adaptive layer heights
+    through guarded intents and measured staged work.
   - [ ] Migrate remaining editing/import/save/slice routes and isolate
     preparation work; preserve the registry boundary for every mutation.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,

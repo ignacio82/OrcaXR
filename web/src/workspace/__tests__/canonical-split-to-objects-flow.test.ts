@@ -53,7 +53,7 @@ await test('requires explicit review and commits the exact captured guard once',
   const output = await runCanonicalSplitToObjectsFlow(
     {
       getSplitToObjectsConfirmation: () => confirmation,
-      splitSelectedToObjects: (guard) => {
+      splitSelectedToObjects: async (guard) => {
         guards.push(guard);
         return result;
       },
@@ -78,7 +78,7 @@ await test('cancellation, missing confirmation, and commit errors never report s
     const output = await runCanonicalSplitToObjectsFlow(
       {
         getSplitToObjectsConfirmation: () => confirmation,
-        splitSelectedToObjects: () => {
+        splitSelectedToObjects: async () => {
           commits += 1;
           if (variant === 'failure') throw new Error('stale fixture');
           return result;

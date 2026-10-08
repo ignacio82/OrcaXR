@@ -8884,7 +8884,7 @@ export class OrcaWorkspace extends xb.Script {
 
   public async splitSelectedToParts(): Promise<boolean> {
     try {
-      this.canonicalProject.splitSelectedToParts();
+      await this.canonicalProject.splitSelectedToParts();
       this.setStatus(t('workspace.orcaWorkspace.splitToPartsSuccess', 'Split object into parts in one undoable edit.'));
       this.syncTransformProxy();
       return true;
@@ -8895,9 +8895,9 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  public addModifier(): boolean {
+  public async addModifier(): Promise<boolean> {
     try {
-      this.canonicalProject.addHelperVolume('parameter-modifier');
+      await this.canonicalProject.addHelperVolume('parameter-modifier');
       this.setStatus(t('workspace.orcaWorkspace.addedModifierVolume', 'Added modifier volume.'));
       this.syncTransformProxy();
       return true;
@@ -8908,9 +8908,9 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  public addSupportEnforcer(): boolean {
+  public async addSupportEnforcer(): Promise<boolean> {
     try {
-      this.canonicalProject.addHelperVolume('support-enforcer');
+      await this.canonicalProject.addHelperVolume('support-enforcer');
       this.setStatus(t('workspace.orcaWorkspace.addedSupportEnforcerVolume', 'Added support enforcer volume.'));
       this.syncTransformProxy();
       return true;
@@ -8923,9 +8923,9 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  public addSupportBlocker(): boolean {
+  public async addSupportBlocker(): Promise<boolean> {
     try {
-      this.canonicalProject.addHelperVolume('support-blocker');
+      await this.canonicalProject.addHelperVolume('support-blocker');
       this.setStatus(t('workspace.orcaWorkspace.addedSupportBlockerVolume', 'Added support blocker volume.'));
       this.syncTransformProxy();
       return true;
@@ -8968,9 +8968,9 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  public variableLayerHeight(): boolean {
+  public async variableLayerHeight(): Promise<boolean> {
     try {
-      this.canonicalProject.applyAdaptiveLayerHeight();
+      await this.canonicalProject.applyAdaptiveLayerHeight();
       this.setStatus(
         t(
           'workspace.orcaWorkspace.appliedAdaptiveLayerHeight',
@@ -8988,9 +8988,9 @@ export class OrcaWorkspace extends xb.Script {
     }
   }
 
-  public addMagnetHole(spec?: Partial<MagnetSpec>): boolean {
+  public async addMagnetHole(spec?: Partial<MagnetSpec>): Promise<boolean> {
     try {
-      this.canonicalProject.addMagnetHole(spec);
+      await this.canonicalProject.addMagnetHole(spec);
       this.setStatus(t('workspace.orcaWorkspace.addedMagnetHole', 'Added magnet hole cavity to selected model.'));
       this.syncTransformProxy();
       return true;

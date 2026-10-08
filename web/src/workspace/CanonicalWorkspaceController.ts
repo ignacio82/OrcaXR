@@ -11,9 +11,12 @@ import {
 } from '../../../contracts/generated/project-intents';
 import { createIntentTextEncoder } from '../project/PreparedProjectCommands';
 import {
+  captureAddVolumeCommand,
   captureInstanceCommand,
   captureClipboardPasteCommand,
+  captureSplitVolumeToPartsCommand,
   singleStagedWork,
+  splitToObjectsStagedWork,
   transactionStagedWork,
 } from '../project/StagedProjectCommands';
 import * as THREE from 'three';
@@ -216,22 +219,16 @@ import {
 import { AdaptiveLayerHeightProfileCommand } from '../project/objects/layerHeightCommands';
 import { projectObjectsTree } from '../project/objects/projection';
 import {
-  AddVolumeCommand,
   ConvertVolumeRoleCommand,
   inspectVolumeRoleConversion,
   ORCA_VOLUME_ROLE_ORDER,
   type VolumeRoleConversionDecision,
 } from '../project/objects/semanticVolumeCommands';
 import { MagnetOp, MagnetShape, type MagnetSpec } from '../features/MagnetOp';
-import {
-  captureVolumeSplitGuard,
-  SplitVolumeToPartsCommand,
-  type PreparedVolumeSplitPart,
-} from '../project/objects/splitCommands';
+import { captureVolumeSplitGuard, type PreparedVolumeSplitPart } from '../project/objects/splitCommands';
 import { prepareVolumeSplitParts } from '../project/objects/splitPreparation';
 import {
   captureObjectVolumeSeparationGuard,
-  commitPreparedVolumeSplitToObjects,
   SeparateObjectVolumesCommand,
   type SeparatedObjectIdentity,
 } from '../project/objects/splitToObjectsCommands';
@@ -291,9 +288,17 @@ const INSTANCE_STAGING_LIMITS = Object.freeze({
   maxResources: 4,
   maxCommands: 4096,
   maxUnits: INSTANCE_INPUT_LIMITS.maxUnits,
-  maxAssetBytes: 0,
+  // New mesh bytes a staged edit carries (helper volumes, split parts) belong
+  // to the staged resource until it commits; the clipboard's own asset budget.
+  maxAssetBytes: 512 * 1024 * 1024,
 });
 const CLIPBOARD_ASSET_LIMITS = Object.freeze({ maxAssets: 4096, maxBytes: 512 * 1024 * 1024 });
+/** Staged edits that carry new mesh bytes: helper volumes and split parts. */
+const MESH_INPUT_LIMITS = Object.freeze({
+  ...INSTANCE_INPUT_LIMITS,
+  maxAssets: CLIPBOARD_ASSET_LIMITS.maxAssets,
+  maxAssetBytes: CLIPBOARD_ASSET_LIMITS.maxBytes,
+});
 const MAX_UI_NAME_LENGTH = 160;
 const MAX_PLATE_NAME_LENGTH = 120;
 const MAX_FILENAME_LENGTH = 255;
@@ -3128,8 +3133,9 @@ export class CanonicalWorkspaceController {
    * immutable component assets without mutation, then atomically install and
    * promote them through the pinned command transaction.
    */
-  splitSelectedToObjects(guard: CanonicalSplitToObjectsGuard): CanonicalSplitToObjectsResult {
+  async splitSelectedToObjects(guard: CanonicalSplitToObjectsGuard): Promise<CanonicalSplitToObjectsResult> {
     this.assertActive();
+    const sessionGuard = this.asyncSession.captureGuard();
     const project = this.session.project.getSnapshot();
     const selection = this.session.selection.getSnapshot();
     if (
@@ -3157,12 +3163,24 @@ export class CanonicalWorkspaceController {
         sourceObject.volumes.map((volume) => volume.id),
         sourceObject.instances.length,
       );
-      this.session.execute(
-        new SeparateObjectVolumesCommand(
-          captureObjectVolumeSeparationGuard(project.state, sourceObject.id),
-          identities,
-        ),
-        { coalesce: false },
+      new SeparateObjectVolumesCommand(captureObjectVolumeSeparationGuard(project.state, sourceObject.id), identities);
+      const text = createIntentTextEncoder();
+      await this.sessionTransport.executeIntent(
+        {
+          version: PROJECT_INTENT_VERSION,
+          command: {
+            separateObjectVolumes: {
+              guard: { sourceRevision: project.revision, sourceHash: text(project.hash) },
+              objectId: text(sourceObject.id),
+              identities: identities.map((identity) => ({
+                sourceVolumeId: text(identity.sourceVolumeId),
+                objectId: text(identity.objectId),
+                instanceIds: identity.instanceIds.map(text),
+              })),
+            },
+          },
+        },
+        { guard: sessionGuard },
       );
       return splitToObjectsResult(sourceObject.id, 'existing-volumes', identities, []);
     }
@@ -3225,7 +3243,10 @@ export class CanonicalWorkspaceController {
       parts.map((part) => part.volumeId),
       sourceObject.instances.length,
     );
-    commitPreparedVolumeSplitToObjects(this.session.commands, volumeGuard, parts, identities);
+    await this.sessionTransport.executeStaged(
+      splitToObjectsStagedWork(volumeGuard, parts, identities, MESH_INPUT_LIMITS),
+      { guard: sessionGuard },
+    );
     return splitToObjectsResult(sourceObject.id, 'connected-components', identities, parts);
   }
 
@@ -3233,8 +3254,9 @@ export class CanonicalWorkspaceController {
    * Split the selected instance's source volume into individual parts (volumes)
    * within the same object.
    */
-  splitSelectedToParts(): { partCount: number; objectName: string } {
+  async splitSelectedToParts(): Promise<{ partCount: number; objectName: string }> {
     this.assertActive();
+    const sessionGuard = this.asyncSession.captureGuard();
     const project = this.session.project.getSnapshot();
     const selection = this.session.selection.getSnapshot();
     const primary = selection.primary;
@@ -3300,7 +3322,10 @@ export class CanonicalWorkspaceController {
       return reusable ? { ...part, asset: reusable } : part;
     });
 
-    this.session.execute(new SplitVolumeToPartsCommand(volumeGuard, parts), { coalesce: false });
+    await this.sessionTransport.executeStaged(
+      singleStagedWork(captureSplitVolumeToPartsCommand(volumeGuard, parts, MESH_INPUT_LIMITS)),
+      { guard: sessionGuard },
+    );
     return {
       partCount: parts.length,
       objectName: sourceObject.name,
@@ -3311,8 +3336,12 @@ export class CanonicalWorkspaceController {
    * Add a primitive helper volume (parameter-modifier, support-enforcer, support-blocker, negative-volume)
    * to the selected object.
    */
-  addHelperVolume(role: VolumeRole, sizeMm = 10): { volumeId: VolumeId; objectId: ObjectId; role: VolumeRole } {
+  async addHelperVolume(
+    role: VolumeRole,
+    sizeMm = 10,
+  ): Promise<{ volumeId: VolumeId; objectId: ObjectId; role: VolumeRole }> {
     this.assertActive();
+    const sessionGuard = this.asyncSession.captureGuard();
     const project = this.session.project.getSnapshot();
     const selection = this.session.selection.getSnapshot();
     const primary = selection.primary;
@@ -3365,15 +3394,19 @@ export class CanonicalWorkspaceController {
       annotations: emptyFacetAnnotations(0),
     };
 
-    this.session.execute(new AddVolumeCommand(targetObject.id, volume, asset), { coalesce: false });
+    await this.sessionTransport.executeStaged(
+      singleStagedWork(captureAddVolumeCommand(targetObject.id, volume, asset, MESH_INPUT_LIMITS)),
+      { guard: sessionGuard },
+    );
     return { volumeId, objectId: targetObject.id, role };
   }
 
   /**
    * Add a magnet cavity (negative volume) to the selected object.
    */
-  addMagnetHole(specInput?: Partial<MagnetSpec>): { volumeId: VolumeId; objectId: ObjectId } {
+  async addMagnetHole(specInput?: Partial<MagnetSpec>): Promise<{ volumeId: VolumeId; objectId: ObjectId }> {
     this.assertActive();
+    const sessionGuard = this.asyncSession.captureGuard();
     const project = this.session.project.getSnapshot();
     const selection = this.session.selection.getSnapshot();
     const primary = selection.primary;
@@ -3434,7 +3467,10 @@ export class CanonicalWorkspaceController {
       annotations: emptyFacetAnnotations(0),
     };
 
-    this.session.execute(new AddVolumeCommand(targetObject.id, volume, asset), { coalesce: false });
+    await this.sessionTransport.executeStaged(
+      singleStagedWork(captureAddVolumeCommand(targetObject.id, volume, asset, MESH_INPUT_LIMITS)),
+      { guard: sessionGuard },
+    );
     return { volumeId, objectId: targetObject.id };
   }
 
@@ -3517,13 +3553,13 @@ export class CanonicalWorkspaceController {
         }
       }
     }
-    this.addHelperVolume('negative-volume');
+    await this.addHelperVolume('negative-volume');
   }
 
   /**
    * Calculate and apply adaptive variable layer heights to the selected object.
    */
-  applyAdaptiveLayerHeight(qualityFactor = 0.5): void {
+  async applyAdaptiveLayerHeight(qualityFactor = 0.5): Promise<void> {
     this.assertActive();
     const project = this.session.project.getSnapshot();
     const selection = this.session.selection.getSnapshot();
@@ -3548,20 +3584,18 @@ export class CanonicalWorkspaceController {
 
     // The command reads the object's own geometry from the session, the same
     // path an MCP or native host takes through the adaptive intent.
-    this.session.execute(
-      new AdaptiveLayerHeightProfileCommand(
-        targetObject.id,
-        {
-          layerHeightMm: 0.2,
-          minLayerHeightMm: 0.08,
-          maxLayerHeightMm: 0.28,
-          firstObjectLayerHeightMm: 0.2,
-          firstObjectLayerHeightFixed: false,
-        },
-        qualityFactor,
-      ),
-      { coalesce: false },
-    );
+    const limits = {
+      layerHeightMm: 0.2,
+      minLayerHeightMm: 0.08,
+      maxLayerHeightMm: 0.28,
+      firstObjectLayerHeightMm: 0.2,
+      firstObjectLayerHeightFixed: false,
+    };
+    const objectId = targetObject.id;
+    new AdaptiveLayerHeightProfileCommand(objectId, limits, qualityFactor);
+    await this.executeEditIntent((text) => ({
+      adaptiveLayerHeightProfile: { objectId: text(objectId), limits, qualityFactor },
+    }));
   }
 
   private allocateSeparatedObjectIdentities(

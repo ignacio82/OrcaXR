@@ -6,7 +6,7 @@ import type {
 
 export interface CanonicalSplitToObjectsWorkspacePort {
   getSplitToObjectsConfirmation(): CanonicalSplitToObjectsConfirmation;
-  splitSelectedToObjects(guard: CanonicalSplitToObjectsGuard): CanonicalSplitToObjectsResult;
+  splitSelectedToObjects(guard: CanonicalSplitToObjectsGuard): Promise<CanonicalSplitToObjectsResult>;
 }
 
 export type CanonicalSplitToObjectsConfirmationPort = (
@@ -47,7 +47,7 @@ export async function runCanonicalSplitToObjectsFlow(
   }
 
   try {
-    const result = project.splitSelectedToObjects(confirmation.guard);
+    const result = await project.splitSelectedToObjects(confirmation.guard);
     const instanceCount = confirmation.affectedInstanceIds.length;
     reportStatus(
       `Split ${confirmation.objectName} into ${result.objectIds.length} objects across all ${instanceCount} instance${instanceCount === 1 ? '' : 's'} in one undoable edit.`,
