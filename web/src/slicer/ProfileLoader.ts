@@ -89,7 +89,8 @@ function str(v: unknown, key?: string): string {
   return `${v}`;
 }
 
-function flatten(node: PresetNode): Record<string, string> {
+/** A preset's effective configuration as engine wire strings, safe keys only. */
+export function flattenPreset(node: PresetNode): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(node.effective)) {
     if (META_KEYS.has(key)) continue;
@@ -291,7 +292,7 @@ function compileProfiles(graph: PresetGraph): {
       continue;
     }
 
-    const machineConfig = flatten(machine);
+    const machineConfig = flattenPreset(machine);
     for (const process of processes) {
       const filaments: PresetNode[] = [];
       for (const filament of graph.selectable('filament')) {
@@ -328,9 +329,9 @@ function compileProfiles(graph: PresetGraph): {
         continue;
       }
 
-      const processConfig = flatten(process);
+      const processConfig = flattenPreset(process);
       for (const filament of filaments) {
-        const filamentConfig = flatten(filament);
+        const filamentConfig = flattenPreset(filament);
         const processShort = process.name.split('@')[0].trim();
         const filamentShort = filament.name.split('@')[0].trim();
         profiles.push(

@@ -353,6 +353,33 @@ fn quote(units: &[u16], out: &mut Vec<u16>) {
     out.push(u16::from(b'"'));
 }
 
+/// `encodeURIComponent`: UTF-8 percent-encoding of everything except ASCII
+/// letters, digits and `-_.!~*'()`. A lone surrogate is a `URIError`.
+pub fn encode_uri_component(units: &[u16]) -> Result<String, MalformedUri> {
+    let mut out = String::with_capacity(units.len());
+    for decoded in char::decode_utf16(units.iter().copied()) {
+        let c = decoded.map_err(|_| MalformedUri)?;
+        if c.is_ascii_alphanumeric() || "-_.!~*'()".contains(c) {
+            out.push(c);
+        } else {
+            let mut bytes = [0u8; 4];
+            for byte in c.encode_utf8(&mut bytes).bytes() {
+                out.push_str(&format!("%{byte:02X}"));
+            }
+        }
+    }
+    Ok(out)
+}
+/// The `URIError` `encodeURIComponent` throws for a lone surrogate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MalformedUri;
+impl std::fmt::Display for MalformedUri {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("URI malformed")
+    }
+}
+impl std::error::Error for MalformedUri {}
+
 /// `Number(value)` (ToNumber) for JSON values; `None` is `undefined`.
 pub fn value_to_number(value: Option<&Value>) -> f64 {
     match value {
@@ -433,6 +460,16 @@ mod tests {
         ] {
             assert_eq!(to_fixed(value, digits), text, "{value}.toFixed({digits})");
         }
+        let encode = |text: &str| encode_uri_component(&text.encode_utf16().collect::<Vec<_>>());
+        assert_eq!(
+            encode("Snapmaker U1 (0.4 nozzle)").unwrap(),
+            "Snapmaker%20U1%20(0.4%20nozzle)"
+        );
+        assert_eq!(
+            encode("a+b@c/é😀~").unwrap(),
+            "a%2Bb%40c%2F%C3%A9%F0%9F%98%80~"
+        );
+        assert_eq!(encode_uri_component(&[0x61, 0xd800]), Err(MalformedUri));
     }
     #[test]
     fn json_stringify_matches_ecmascript() {

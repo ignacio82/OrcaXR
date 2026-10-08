@@ -3024,6 +3024,47 @@ configuration decodes (every key, mixed JSON, invalid values) and the commit
 refusals. Rust replays all of them as canonical JSON. Defaults, presets and
 the profile catalog are not yet native.
 
+### Preset graph and profile catalog
+
+`settings::presets` ports `PresetGraph`, the pinned v2.3.4 preset semantics:
+
+- catalog and group validation with the browser's issue codes, paths and
+  messages;
+- preset IDs through `encodeURIComponent`, where a lone surrogate is the
+  browser's `URI malformed`;
+- vendor-local, then unique cross-vendor parent resolution, and inheritance
+  depth and cycle detection;
+- shallow effective overlays, sources, visibility and defaults;
+- printer and print compatibility, where explicit lists, the
+  direct-parent rule and exclusions decide, and a condition expression alone
+  stays `unresolved`, since no engine evaluator runs, as in the browser;
+- `resolveSelection`: process and filament replacement scoring by alias,
+  layer height, preferred name and filament type, inherited extra slots,
+  substitutions and deduplicated diagnostics.
+
+`settings::catalog` ports `ProfileLoader`'s compile. It flattens each preset
+to engine wire strings through the `profileKeys.ts` meta and safe key lists,
+and builds every visible compatible machine/process/filament profile. Each
+profile shares its three flattenings instead of storing a merged copy. The
+module also covers catalog diagnostics with the browser's `|`-joined
+deduplication, and selection reconciliation.
+
+The browser orders presets with `localeCompare(…, 'en')`. That order is
+visible in pickers and breaks replacement ties, so it is kept, not replaced
+by code-unit order. `PresetGraph::build` takes a host `Collation` and ranks
+every node once. `AsciiRootCollation` reproduces ICU's root collation exactly
+for ASCII and controls: ignorable controls, whitespace, punctuation and
+symbols, then digits, then case-folded letters with lower case first on a
+tie. It refuses other text, so a host with non-ASCII presets passes its
+platform collator rather than relying on a guess.
+
+`preset-catalog-vectors.mjs` replays the bundled corpus: 353 nodes, 1,482
+profiles, every preset's flattening, 2,699 compatibility assessments and 58
+reconciliations. Nine synthetic catalogs cover every refusal and rule (429
+assessments, 12 reconciliations), and 4,007 collation pairs pin the ASCII
+order. Host catalog endpoints, user presets and condition evaluation are not
+yet native.
+
 ### Canonical slice preflight
 
 `runCanonicalSlicePreflight` is `orcaxr_project::slicing::preflight`. It has two
@@ -3547,6 +3588,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/facet-
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-model-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-resolution-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-codec-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-catalog-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-validation-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slice-preflight-vectors.mjs

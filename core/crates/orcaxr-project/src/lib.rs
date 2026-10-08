@@ -1,6 +1,20 @@
 //! Shared canonical project domain. This crate owns no platform UI, renderer,
 //! transport, network client or slicing engine. IDs and immutable assets underpin
 //! the project graph/session migration; this is not an editor yet.
+/// A closed set of browser string codes as a Rust enum with `as_str` and `ALL`.
+macro_rules! names {
+    ($(#[$meta:meta])* $name:ident { $($variant:ident => $text:literal),+ $(,)? }) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub enum $name { $($variant),+ }
+        impl $name {
+            pub const ALL: &'static [Self] = &[$(Self::$variant),+];
+            pub fn as_str(self) -> &'static str {
+                match self { $(Self::$variant => $text),+ }
+            }
+        }
+    };
+}
 pub mod assets;
 pub mod clipboard;
 pub mod commands;
