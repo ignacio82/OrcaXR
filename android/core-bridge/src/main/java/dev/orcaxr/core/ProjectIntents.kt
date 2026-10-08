@@ -6532,6 +6532,211 @@ object ProjectIntents {
             is MeshPacketReply.Refused -> w.field("refused") { writeMeshPacketRefusal(w, v.value) }
         } }
     }
+    enum class AssemblyAlignmentKind {Parallel,CenterCoincidence,ParallelDistance,ReverseRotation,AroundFaceCenter}
+    private fun readAssemblyAlignmentKind(v: Any): AssemblyAlignmentKind {
+        return when(v) {"parallel" -> AssemblyAlignmentKind.Parallel;"centerCoincidence" -> AssemblyAlignmentKind.CenterCoincidence;"parallelDistance" -> AssemblyAlignmentKind.ParallelDistance;"reverseRotation" -> AssemblyAlignmentKind.ReverseRotation;"aroundFaceCenter" -> AssemblyAlignmentKind.AroundFaceCenter; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeAssemblyAlignmentKind(w: ProjectIntentWriter, v: AssemblyAlignmentKind) {
+        w.literal(when(v) {AssemblyAlignmentKind.Parallel -> "parallel";AssemblyAlignmentKind.CenterCoincidence -> "centerCoincidence";AssemblyAlignmentKind.ParallelDistance -> "parallelDistance";AssemblyAlignmentKind.ReverseRotation -> "reverseRotation";AssemblyAlignmentKind.AroundFaceCenter -> "aroundFaceCenter";})
+    }
+    data class AssemblyPair(val first: SurfaceFeature, val second: SurfaceFeature)
+    private fun readAssemblyPair(v: Any): AssemblyPair {
+        val obj = ProjectIntentJson.fields(v, setOf("first", "second"), false)
+        return AssemblyPair(readSurfaceFeature(obj.get("first")), readSurfaceFeature(obj.get("second")))
+    }
+    private fun writeAssemblyPair(w: ProjectIntentWriter, v: AssemblyPair) {
+        w.obj {
+            w.field("first") { writeSurfaceFeature(w, v.first) }
+            w.field("second") { writeSurfaceFeature(w, v.second) }
+        }
+    }
+    data class AssemblyAvailability(val canSetToParallel: Boolean, val canSetToCenterCoincidence: Boolean, val canReverseFeature1: Boolean, val canReverseFeature2: Boolean, val canRotateAroundFaceCenter: Boolean, val hasParallelDistance: Boolean, val parallelDistanceMm: Double, val angleRadians: Double)
+    private fun readAssemblyAvailability(v: Any): AssemblyAvailability {
+        val obj = ProjectIntentJson.fields(v, setOf("canSetToParallel", "canSetToCenterCoincidence", "canReverseFeature1", "canReverseFeature2", "canRotateAroundFaceCenter", "hasParallelDistance", "parallelDistanceMm", "angleRadians"), false)
+        return AssemblyAvailability(readFlag(obj.get("canSetToParallel")), readFlag(obj.get("canSetToCenterCoincidence")), readFlag(obj.get("canReverseFeature1")), readFlag(obj.get("canReverseFeature2")), readFlag(obj.get("canRotateAroundFaceCenter")), readFlag(obj.get("hasParallelDistance")), readFinite(obj.get("parallelDistanceMm")), readFinite(obj.get("angleRadians")))
+    }
+    private fun writeAssemblyAvailability(w: ProjectIntentWriter, v: AssemblyAvailability) {
+        w.obj {
+            w.field("canSetToParallel") { writeFlag(w, v.canSetToParallel) }
+            w.field("canSetToCenterCoincidence") { writeFlag(w, v.canSetToCenterCoincidence) }
+            w.field("canReverseFeature1") { writeFlag(w, v.canReverseFeature1) }
+            w.field("canReverseFeature2") { writeFlag(w, v.canReverseFeature2) }
+            w.field("canRotateAroundFaceCenter") { writeFlag(w, v.canRotateAroundFaceCenter) }
+            w.field("hasParallelDistance") { writeFlag(w, v.hasParallelDistance) }
+            w.field("parallelDistanceMm") { writeFinite(w, v.parallelDistanceMm) }
+            w.field("angleRadians") { writeFinite(w, v.angleRadians) }
+        }
+    }
+    enum class AssemblyRefusalCode {UnsupportedFeaturePair,UnavailableAction,InvalidParameter,DegenerateAxis,NonFinite}
+    private fun readAssemblyRefusalCode(v: Any): AssemblyRefusalCode {
+        return when(v) {"unsupportedFeaturePair" -> AssemblyRefusalCode.UnsupportedFeaturePair;"unavailableAction" -> AssemblyRefusalCode.UnavailableAction;"invalidParameter" -> AssemblyRefusalCode.InvalidParameter;"degenerateAxis" -> AssemblyRefusalCode.DegenerateAxis;"nonFinite" -> AssemblyRefusalCode.NonFinite; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeAssemblyRefusalCode(w: ProjectIntentWriter, v: AssemblyRefusalCode) {
+        w.literal(when(v) {AssemblyRefusalCode.UnsupportedFeaturePair -> "unsupportedFeaturePair";AssemblyRefusalCode.UnavailableAction -> "unavailableAction";AssemblyRefusalCode.InvalidParameter -> "invalidParameter";AssemblyRefusalCode.DegenerateAxis -> "degenerateAxis";AssemblyRefusalCode.NonFinite -> "nonFinite";})
+    }
+    data class AssemblyRefusal(val code: AssemblyRefusalCode, val message: List<Int>)
+    private fun readAssemblyRefusal(v: Any): AssemblyRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return AssemblyRefusal(readAssemblyRefusalCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writeAssemblyRefusal(w: ProjectIntentWriter, v: AssemblyRefusal) {
+        w.obj {
+            w.field("code") { writeAssemblyRefusalCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface AssemblyAvailabilityReply {
+        data class Available(val value: ProjectIntents.AssemblyAvailability) : AssemblyAvailabilityReply
+        data class Refused(val value: ProjectIntents.AssemblyRefusal) : AssemblyAvailabilityReply
+    }
+    private fun readAssemblyAvailabilityReply(v: Any): AssemblyAvailabilityReply {
+        val obj = ProjectIntentJson.fields(v, setOf("available", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "available" -> AssemblyAvailabilityReply.Available(readAssemblyAvailability(obj.get(key)))
+            "refused" -> AssemblyAvailabilityReply.Refused(readAssemblyRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeAssemblyAvailabilityReply(w: ProjectIntentWriter, v: AssemblyAvailabilityReply) {
+        w.obj { when(v) {
+            is AssemblyAvailabilityReply.Available -> w.field("available") { writeAssemblyAvailability(w, v.value) }
+            is AssemblyAvailabilityReply.Refused -> w.field("refused") { writeAssemblyRefusal(w, v.value) }
+        } }
+    }
+    enum class AssemblyFeature {First,Second}
+    private fun readAssemblyFeature(v: Any): AssemblyFeature {
+        return when(v) {"first" -> AssemblyFeature.First;"second" -> AssemblyFeature.Second; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeAssemblyFeature(w: ProjectIntentWriter, v: AssemblyFeature) {
+        w.literal(when(v) {AssemblyFeature.First -> "first";AssemblyFeature.Second -> "second";})
+    }
+    sealed interface OptionalAssemblyFeature {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalAssemblyFeature
+        data class Value(val value: ProjectIntents.AssemblyFeature) : OptionalAssemblyFeature
+    }
+    private fun readOptionalAssemblyFeature(v: Any): OptionalAssemblyFeature {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalAssemblyFeature.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalAssemblyFeature.Value(readAssemblyFeature(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalAssemblyFeature(w: ProjectIntentWriter, v: OptionalAssemblyFeature) {
+        w.obj { when(v) {
+            is OptionalAssemblyFeature.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalAssemblyFeature.Value -> w.field("value") { writeAssemblyFeature(w, v.value) }
+        } }
+    }
+    data class AssemblyAlignmentRequest(val kind: AssemblyAlignmentKind, val first: SurfaceFeature, val second: SurfaceFeature, val movingTransform: Transform, val parameter: OptionalFinite, val reverseFeature: OptionalAssemblyFeature)
+    private fun readAssemblyAlignmentRequest(v: Any): AssemblyAlignmentRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("kind", "first", "second", "movingTransform", "parameter", "reverseFeature"), false)
+        return AssemblyAlignmentRequest(readAssemblyAlignmentKind(obj.get("kind")), readSurfaceFeature(obj.get("first")), readSurfaceFeature(obj.get("second")), readTransform(obj.get("movingTransform")), readOptionalFinite(obj.get("parameter")), readOptionalAssemblyFeature(obj.get("reverseFeature")))
+    }
+    private fun writeAssemblyAlignmentRequest(w: ProjectIntentWriter, v: AssemblyAlignmentRequest) {
+        w.obj {
+            w.field("kind") { writeAssemblyAlignmentKind(w, v.kind) }
+            w.field("first") { writeSurfaceFeature(w, v.first) }
+            w.field("second") { writeSurfaceFeature(w, v.second) }
+            w.field("movingTransform") { writeTransform(w, v.movingTransform) }
+            w.field("parameter") { writeOptionalFinite(w, v.parameter) }
+            w.field("reverseFeature") { writeOptionalAssemblyFeature(w, v.reverseFeature) }
+        }
+    }
+    data class AssemblyAlignmentPlan(val transform: Transform, val noop: Boolean)
+    private fun readAssemblyAlignmentPlan(v: Any): AssemblyAlignmentPlan {
+        val obj = ProjectIntentJson.fields(v, setOf("transform", "noop"), false)
+        return AssemblyAlignmentPlan(readTransform(obj.get("transform")), readFlag(obj.get("noop")))
+    }
+    private fun writeAssemblyAlignmentPlan(w: ProjectIntentWriter, v: AssemblyAlignmentPlan) {
+        w.obj {
+            w.field("transform") { writeTransform(w, v.transform) }
+            w.field("noop") { writeFlag(w, v.noop) }
+        }
+    }
+    sealed interface AssemblyAlignmentReply {
+        data class Planned(val value: ProjectIntents.AssemblyAlignmentPlan) : AssemblyAlignmentReply
+        data class Refused(val value: ProjectIntents.AssemblyRefusal) : AssemblyAlignmentReply
+    }
+    private fun readAssemblyAlignmentReply(v: Any): AssemblyAlignmentReply {
+        val obj = ProjectIntentJson.fields(v, setOf("planned", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "planned" -> AssemblyAlignmentReply.Planned(readAssemblyAlignmentPlan(obj.get(key)))
+            "refused" -> AssemblyAlignmentReply.Refused(readAssemblyRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeAssemblyAlignmentReply(w: ProjectIntentWriter, v: AssemblyAlignmentReply) {
+        w.obj { when(v) {
+            is AssemblyAlignmentReply.Planned -> w.field("planned") { writeAssemblyAlignmentPlan(w, v.value) }
+            is AssemblyAlignmentReply.Refused -> w.field("refused") { writeAssemblyRefusal(w, v.value) }
+        } }
+    }
+    data class ExplosionPart(val id: List<Int>, val centerMm: List<Double>)
+    private fun readExplosionPart(v: Any): ExplosionPart {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "centerMm"), false)
+        return ExplosionPart(readId(obj.get("id")), readVector(obj.get("centerMm")))
+    }
+    private fun writeExplosionPart(w: ProjectIntentWriter, v: ExplosionPart) {
+        w.obj {
+            w.field("id") { writeId(w, v.id) }
+            w.field("centerMm") { writeVector(w, v.centerMm) }
+        }
+    }
+    private fun readExplosionParts(v: Any): List<ExplosionPart> {
+        val array = ProjectIntentJson.list(v, 0, 65536)
+        return List(array.length()) { readExplosionPart(array.get(it)) }
+    }
+    private fun writeExplosionParts(w: ProjectIntentWriter, v: List<ExplosionPart>) {
+        w.array(v, 0, 65536) { writeExplosionPart(w, it) }
+    }
+    data class ExplosionRequest(val parts: List<ExplosionPart>, val factor: Double)
+    private fun readExplosionRequest(v: Any): ExplosionRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("parts", "factor"), false)
+        return ExplosionRequest(readExplosionParts(obj.get("parts")), readFinite(obj.get("factor")))
+    }
+    private fun writeExplosionRequest(w: ProjectIntentWriter, v: ExplosionRequest) {
+        w.obj {
+            w.field("parts") { writeExplosionParts(w, v.parts) }
+            w.field("factor") { writeFinite(w, v.factor) }
+        }
+    }
+    data class ExplosionOffset(val id: List<Int>, val offsetMm: List<Double>)
+    private fun readExplosionOffset(v: Any): ExplosionOffset {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "offsetMm"), false)
+        return ExplosionOffset(readId(obj.get("id")), readVector(obj.get("offsetMm")))
+    }
+    private fun writeExplosionOffset(w: ProjectIntentWriter, v: ExplosionOffset) {
+        w.obj {
+            w.field("id") { writeId(w, v.id) }
+            w.field("offsetMm") { writeVector(w, v.offsetMm) }
+        }
+    }
+    private fun readExplosionOffsets(v: Any): List<ExplosionOffset> {
+        val array = ProjectIntentJson.list(v, 0, 65536)
+        return List(array.length()) { readExplosionOffset(array.get(it)) }
+    }
+    private fun writeExplosionOffsets(w: ProjectIntentWriter, v: List<ExplosionOffset>) {
+        w.array(v, 0, 65536) { writeExplosionOffset(w, it) }
+    }
+    sealed interface ExplosionReply {
+        data class Exploded(val value: List<ProjectIntents.ExplosionOffset>) : ExplosionReply
+        data class Refused(val value: ProjectIntents.AssemblyRefusal) : ExplosionReply
+    }
+    private fun readExplosionReply(v: Any): ExplosionReply {
+        val obj = ProjectIntentJson.fields(v, setOf("exploded", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "exploded" -> ExplosionReply.Exploded(readExplosionOffsets(obj.get(key)))
+            "refused" -> ExplosionReply.Refused(readAssemblyRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExplosionReply(w: ProjectIntentWriter, v: ExplosionReply) {
+        w.obj { when(v) {
+            is ExplosionReply.Exploded -> w.field("exploded") { writeExplosionOffsets(w, v.value) }
+            is ExplosionReply.Refused -> w.field("refused") { writeAssemblyRefusal(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -6736,4 +6941,16 @@ object ProjectIntents {
     fun encodeMeshPacketRequest(value: MeshPacketRequest): String = ProjectIntentWriter().also { writeMeshPacketRequest(it, value) }.finish()
     fun decodeMeshPacketReply(text: String): MeshPacketReply = readMeshPacketReply(ProjectIntentJson.parse(text))
     fun encodeMeshPacketReply(value: MeshPacketReply): String = ProjectIntentWriter().also { writeMeshPacketReply(it, value) }.finish()
+    fun decodeAssemblyPair(text: String): AssemblyPair = readAssemblyPair(ProjectIntentJson.parse(text))
+    fun encodeAssemblyPair(value: AssemblyPair): String = ProjectIntentWriter().also { writeAssemblyPair(it, value) }.finish()
+    fun decodeAssemblyAvailabilityReply(text: String): AssemblyAvailabilityReply = readAssemblyAvailabilityReply(ProjectIntentJson.parse(text))
+    fun encodeAssemblyAvailabilityReply(value: AssemblyAvailabilityReply): String = ProjectIntentWriter().also { writeAssemblyAvailabilityReply(it, value) }.finish()
+    fun decodeAssemblyAlignmentRequest(text: String): AssemblyAlignmentRequest = readAssemblyAlignmentRequest(ProjectIntentJson.parse(text))
+    fun encodeAssemblyAlignmentRequest(value: AssemblyAlignmentRequest): String = ProjectIntentWriter().also { writeAssemblyAlignmentRequest(it, value) }.finish()
+    fun decodeAssemblyAlignmentReply(text: String): AssemblyAlignmentReply = readAssemblyAlignmentReply(ProjectIntentJson.parse(text))
+    fun encodeAssemblyAlignmentReply(value: AssemblyAlignmentReply): String = ProjectIntentWriter().also { writeAssemblyAlignmentReply(it, value) }.finish()
+    fun decodeExplosionRequest(text: String): ExplosionRequest = readExplosionRequest(ProjectIntentJson.parse(text))
+    fun encodeExplosionRequest(value: ExplosionRequest): String = ProjectIntentWriter().also { writeExplosionRequest(it, value) }.finish()
+    fun decodeExplosionReply(text: String): ExplosionReply = readExplosionReply(ProjectIntentJson.parse(text))
+    fun encodeExplosionReply(value: ExplosionReply): String = ProjectIntentWriter().also { writeExplosionReply(it, value) }.finish()
 }

@@ -1647,6 +1647,16 @@ painting, and FullSpectrum operations that can support real native projects.
     refusals) are exact in every binding, normals bit for bit against
     three.js's own attribute, and a browser property test checks the packer
     against the geometry directly. Kotlin reads the chunk table.
+  - [x] Port assembly alignment and explosion (`assembly`): the pinned
+    `GLGizmoAssembly` alignments of two picked plane features (parallel,
+    centre coincidence, parallel distance, reversal and rotation about a
+    face centre) as the second pick's instance transform, which a host
+    commits through the guarded transform intent a drag uses; which
+    alignments a pair allows (`Measure::get_assembly_action`); and the
+    view-only exploded layout. Requests are session-free, and a placement
+    too large to be finite is refused rather than sent. 587 requests (246
+    planned alignments, every refusal the browser raises) are exact in
+    every binding.
   - [ ] Wire mesh packets into the flat and spatial renderers and qualify
     them on devices.
 - [ ] Preserve topology-change remap/rejection rules for every paint channel,

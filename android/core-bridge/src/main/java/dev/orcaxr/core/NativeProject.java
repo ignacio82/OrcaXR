@@ -151,6 +151,11 @@ final class NativeProject {
     static native String measureVolumeReply(long handle);
     static native String measureVolumeFeature(long handle, String request);
     static native String measureFeatures(String request);
+    // Assembly: the alignments two picked features allow, the transform one
+    // produces, and view-only exploded offsets.
+    static native String assemblyAvailability(String request);
+    static native String assemblyAlignment(String request);
+    static native String assemblyExplosion(String request);
     // Brim ears: an object's first-layer corners and its stranded ears.
     static native String sessionBrimEarDetect(long handle, String request);
     static native String sessionBrimEarStranded(long handle, String request);

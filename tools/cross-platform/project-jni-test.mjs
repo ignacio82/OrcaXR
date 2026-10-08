@@ -24,6 +24,7 @@ import { replayBrimEars } from "./brim-ear-replay.mjs";
 import { replayEmboss } from "./emboss-replay.mjs";
 import { replaySvgParts } from "./svg-part-replay.mjs";
 import { replayMeshPackets } from "./mesh-packet-replay.mjs";
+import { replayAssembly } from "./assembly-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -826,6 +827,34 @@ try {
       .join("\n"),
   );
   assert.equal(packetChecks, 219);
+  // Assembly alignment: availability, alignments and explosions, then the
+  // Kotlin wrapper.
+  const assemblyFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/assembly-vectors.json", root)),
+  );
+  const assembled = replayAssembly(projectJniCore(jvm.call), assemblyFixture);
+  assert.deepEqual(
+    [
+      assembled.assemblyAvailability,
+      assembled.assemblyAlignments,
+      assembled.assemblyPlanned,
+      assembled.assemblyExplosions,
+    ],
+    [55, 525, 246, 7],
+  );
+  const assemblyChecks = jvm.call(
+    "assemblyChecks",
+    assemblyFixture.steps
+      .map((s) =>
+        "availability" in s
+          ? `A\t${s.availability}\t${s.reply}`
+          : "alignment" in s
+            ? `L\t${s.alignment}\t${s.reply}`
+            : `E\t${s.explosion}\t${s.reply}`,
+      )
+      .join("\n"),
+  );
+  assert.equal(assemblyChecks, 1174);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

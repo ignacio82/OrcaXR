@@ -42,6 +42,7 @@ export function startProjectJni(profile = "debug") {
   signatures.embossChecks = ["String", "byte[]", "String"];
   signatures.svgPartChecks = ["String", "byte[]", "String"];
   signatures.meshPacketChecks = ["String", "byte[]", "String", "String"];
+  signatures.assemblyChecks = ["String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -1053,5 +1054,8 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     prepare_emboss: (request) => wrap(ProjectEmboss, call("prepareEmboss", request)),
     prepare_svg_part: (request, drawing) =>
       wrap(ProjectSvgPart, call("prepareSvgPart", request, drawing)),
+    assembly_availability: (request) => call("assemblyAvailability", request),
+    assembly_alignment: (request) => call("assemblyAlignment", request),
+    assembly_explosion: (request) => call("assemblyExplosion", request),
   };
 }

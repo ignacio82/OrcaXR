@@ -62,6 +62,9 @@ public final class ProjectJniHarness {
     public static long svgPartChecks(String source, byte[] asset, String script) {
         return ProjectSvgPartChecks.run(source, java.util.List.of(asset), script);
     }
+    public static long assemblyChecks(String script) {
+        return ProjectAssemblyChecks.run(script);
+    }
     /** [assets] concatenated, split at the comma-separated [lengths]. */
     public static long meshPacketChecks(String source, byte[] assets, String lengths, String script) {
         java.util.List<byte[]> split = new java.util.ArrayList<>();
@@ -238,6 +241,7 @@ public final class ProjectJniHarness {
             if (name.equals("brimEarChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, byte[].class, String.class);
             if (name.equals("embossChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class);
             if (name.equals("svgPartChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class);
+            if (name.equals("assemblyChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("meshPacketChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorPreflightChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorClipboardChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class);

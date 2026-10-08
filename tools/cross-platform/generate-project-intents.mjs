@@ -139,6 +139,12 @@ assert.deepEqual(schema.roots, [
   "SvgPartStage",
   "MeshPacketRequest",
   "MeshPacketReply",
+  "AssemblyPair",
+  "AssemblyAvailabilityReply",
+  "AssemblyAlignmentRequest",
+  "AssemblyAlignmentReply",
+  "ExplosionRequest",
+  "ExplosionReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

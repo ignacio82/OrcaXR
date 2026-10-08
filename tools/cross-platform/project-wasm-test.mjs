@@ -24,6 +24,7 @@ import { replayBrimEars } from "./brim-ear-replay.mjs";
 import { replayEmboss } from "./emboss-replay.mjs";
 import { replaySvgParts } from "./svg-part-replay.mjs";
 import { replayMeshPackets } from "./mesh-packet-replay.mjs";
+import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -181,6 +182,16 @@ if (isMainThread) {
         result.meshPacketChunks,
       ],
       [53, 3, 8307],
+    );
+    // Assembly alignment: availability, alignments and explosions.
+    assert.deepEqual(
+      [
+        result.assemblyAvailability,
+        result.assemblyAlignments,
+        result.assemblyPlanned,
+        result.assemblyExplosions,
+      ],
+      [55, 525, 246, 7],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -548,6 +559,12 @@ if (isMainThread) {
     layout,
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
   );
+  const assembled = replayAssembly(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/assembly-vectors.json", root)),
+    ),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -582,6 +599,7 @@ if (isMainThread) {
       ...embossed,
       ...svgParts,
       ...packets,
+      ...assembled,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

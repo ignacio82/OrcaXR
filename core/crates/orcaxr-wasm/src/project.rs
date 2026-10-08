@@ -959,6 +959,43 @@ pub fn measure_features(request: &str) -> Result<String, JsValue> {
     wire::encode_measure_reply(&orcaxr_project::measure::measure_wire(&request))
         .map_err(|_| error("output_limit"))
 }
+/// Which pinned assembly alignments two picked features allow: an
+/// `AssemblyPair`; returns an `AssemblyAvailabilityReply`.
+#[wasm_bindgen]
+pub fn assembly_availability(request: &str) -> Result<String, JsValue> {
+    use orcaxr_contracts::project_intent_types as wire;
+    if request.len() > wire::MAX_BYTES {
+        return Err(error("input_limit"));
+    }
+    let request = wire::decode_assembly_pair(request).map_err(|_| error("invalid_request"))?;
+    wire::encode_assembly_availability_reply(&orcaxr_project::assembly::availability_wire(&request))
+        .map_err(|_| error("output_limit"))
+}
+/// The instance transform one pinned alignment produces: an
+/// `AssemblyAlignmentRequest`; returns an `AssemblyAlignmentReply`.
+#[wasm_bindgen]
+pub fn assembly_alignment(request: &str) -> Result<String, JsValue> {
+    use orcaxr_contracts::project_intent_types as wire;
+    if request.len() > wire::MAX_BYTES {
+        return Err(error("input_limit"));
+    }
+    let request =
+        wire::decode_assembly_alignment_request(request).map_err(|_| error("invalid_request"))?;
+    wire::encode_assembly_alignment_reply(&orcaxr_project::assembly::alignment_wire(&request))
+        .map_err(|_| error("output_limit"))
+}
+/// View-only exploded offsets: an `ExplosionRequest`; returns an
+/// `ExplosionReply`.
+#[wasm_bindgen]
+pub fn assembly_explosion(request: &str) -> Result<String, JsValue> {
+    use orcaxr_contracts::project_intent_types as wire;
+    if request.len() > wire::MAX_BYTES {
+        return Err(error("input_limit"));
+    }
+    let request = wire::decode_explosion_request(request).map_err(|_| error("invalid_request"))?;
+    wire::encode_explosion_reply(&orcaxr_project::assembly::explosion_wire(&request))
+        .map_err(|_| error("output_limit"))
+}
 /// One emboss cut, prepared from a recipe and the host's glyph outlines.
 #[wasm_bindgen]
 pub struct ProjectEmboss {

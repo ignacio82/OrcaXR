@@ -491,6 +491,33 @@ pub(super) fn measure_features(env: &mut JNIEnv<'_>, request: JString<'_>) -> Re
     )?;
     string(env, json)
 }
+/// The alignments two picked features allow.
+pub(super) fn assembly_availability(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_assembly_pair)?;
+    let json = encoded(
+        &orcaxr_project::assembly::availability_wire(&request),
+        wire::encode_assembly_availability_reply,
+    )?;
+    string(env, json)
+}
+/// The instance transform one alignment produces.
+pub(super) fn assembly_alignment(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_assembly_alignment_request)?;
+    let json = encoded(
+        &orcaxr_project::assembly::alignment_wire(&request),
+        wire::encode_assembly_alignment_reply,
+    )?;
+    string(env, json)
+}
+/// View-only exploded offsets.
+pub(super) fn assembly_explosion(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_explosion_request)?;
+    let json = encoded(
+        &orcaxr_project::assembly::explosion_wire(&request),
+        wire::encode_explosion_reply,
+    )?;
+    string(env, json)
+}
 /// Cut a recipe with the host's glyph outlines.
 pub(super) fn prepare_emboss(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jlong> {
     let request = decoded(env, &request, wire::decode_emboss_request)?;

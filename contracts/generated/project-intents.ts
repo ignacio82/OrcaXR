@@ -4319,6 +4319,139 @@ const shapes = {
       "prepared": "MeshPacket",
       "refused": "MeshPacketRefusal"
     }
+  },
+  "AssemblyAlignmentKind": {
+    "kind": "enum",
+    "values": [
+      "parallel",
+      "centerCoincidence",
+      "parallelDistance",
+      "reverseRotation",
+      "aroundFaceCenter"
+    ]
+  },
+  "AssemblyPair": {
+    "kind": "object",
+    "fields": {
+      "first": "SurfaceFeature",
+      "second": "SurfaceFeature"
+    }
+  },
+  "AssemblyAvailability": {
+    "kind": "object",
+    "fields": {
+      "canSetToParallel": "Flag",
+      "canSetToCenterCoincidence": "Flag",
+      "canReverseFeature1": "Flag",
+      "canReverseFeature2": "Flag",
+      "canRotateAroundFaceCenter": "Flag",
+      "hasParallelDistance": "Flag",
+      "parallelDistanceMm": "Finite",
+      "angleRadians": "Finite"
+    }
+  },
+  "AssemblyRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "unsupportedFeaturePair",
+      "unavailableAction",
+      "invalidParameter",
+      "degenerateAxis",
+      "nonFinite"
+    ]
+  },
+  "AssemblyRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "AssemblyRefusalCode",
+      "message": "EditText"
+    }
+  },
+  "AssemblyAvailabilityReply": {
+    "kind": "union",
+    "variants": {
+      "available": "AssemblyAvailability",
+      "refused": "AssemblyRefusal"
+    }
+  },
+  "AssemblyFeature": {
+    "kind": "enum",
+    "values": [
+      "first",
+      "second"
+    ]
+  },
+  "OptionalAssemblyFeature": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "AssemblyFeature"
+    }
+  },
+  "AssemblyAlignmentRequest": {
+    "kind": "object",
+    "fields": {
+      "kind": "AssemblyAlignmentKind",
+      "first": "SurfaceFeature",
+      "second": "SurfaceFeature",
+      "movingTransform": "Transform",
+      "parameter": "OptionalFinite",
+      "reverseFeature": "OptionalAssemblyFeature"
+    }
+  },
+  "AssemblyAlignmentPlan": {
+    "kind": "object",
+    "fields": {
+      "transform": "Transform",
+      "noop": "Flag"
+    }
+  },
+  "AssemblyAlignmentReply": {
+    "kind": "union",
+    "variants": {
+      "planned": "AssemblyAlignmentPlan",
+      "refused": "AssemblyRefusal"
+    }
+  },
+  "ExplosionPart": {
+    "kind": "object",
+    "fields": {
+      "id": "Id",
+      "centerMm": "Vector"
+    }
+  },
+  "ExplosionParts": {
+    "kind": "array",
+    "items": "ExplosionPart",
+    "min": 0,
+    "max": 65536
+  },
+  "ExplosionRequest": {
+    "kind": "object",
+    "fields": {
+      "parts": "ExplosionParts",
+      "factor": "Finite"
+    }
+  },
+  "ExplosionOffset": {
+    "kind": "object",
+    "fields": {
+      "id": "Id",
+      "offsetMm": "Vector"
+    }
+  },
+  "ExplosionOffsets": {
+    "kind": "array",
+    "items": "ExplosionOffset",
+    "min": 0,
+    "max": 65536
+  },
+  "ExplosionReply": {
+    "kind": "union",
+    "variants": {
+      "exploded": "ExplosionOffsets",
+      "refused": "AssemblyRefusal"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -4842,6 +4975,23 @@ export interface ProjectMeshPacketWire {readonly assetId: ProjectIdWire;readonly
 export type ProjectMeshPacketRefusalCodeWire = "unknownAsset" | "invalidMesh" | "tooLarge";
 export interface ProjectMeshPacketRefusalWire {readonly code: ProjectMeshPacketRefusalCodeWire;readonly message: ProjectEditTextWire;}
 export type ProjectMeshPacketReplyWire = {readonly prepared:ProjectMeshPacketWire} | {readonly refused:ProjectMeshPacketRefusalWire};
+export type ProjectAssemblyAlignmentKindWire = "parallel" | "centerCoincidence" | "parallelDistance" | "reverseRotation" | "aroundFaceCenter";
+export interface ProjectAssemblyPairWire {readonly first: ProjectSurfaceFeatureWire;readonly second: ProjectSurfaceFeatureWire;}
+export interface ProjectAssemblyAvailabilityWire {readonly canSetToParallel: ProjectFlagWire;readonly canSetToCenterCoincidence: ProjectFlagWire;readonly canReverseFeature1: ProjectFlagWire;readonly canReverseFeature2: ProjectFlagWire;readonly canRotateAroundFaceCenter: ProjectFlagWire;readonly hasParallelDistance: ProjectFlagWire;readonly parallelDistanceMm: ProjectFiniteWire;readonly angleRadians: ProjectFiniteWire;}
+export type ProjectAssemblyRefusalCodeWire = "unsupportedFeaturePair" | "unavailableAction" | "invalidParameter" | "degenerateAxis" | "nonFinite";
+export interface ProjectAssemblyRefusalWire {readonly code: ProjectAssemblyRefusalCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectAssemblyAvailabilityReplyWire = {readonly available:ProjectAssemblyAvailabilityWire} | {readonly refused:ProjectAssemblyRefusalWire};
+export type ProjectAssemblyFeatureWire = "first" | "second";
+export type ProjectOptionalAssemblyFeatureWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectAssemblyFeatureWire};
+export interface ProjectAssemblyAlignmentRequestWire {readonly kind: ProjectAssemblyAlignmentKindWire;readonly first: ProjectSurfaceFeatureWire;readonly second: ProjectSurfaceFeatureWire;readonly movingTransform: ProjectTransformWire;readonly parameter: ProjectOptionalFiniteWire;readonly reverseFeature: ProjectOptionalAssemblyFeatureWire;}
+export interface ProjectAssemblyAlignmentPlanWire {readonly transform: ProjectTransformWire;readonly noop: ProjectFlagWire;}
+export type ProjectAssemblyAlignmentReplyWire = {readonly planned:ProjectAssemblyAlignmentPlanWire} | {readonly refused:ProjectAssemblyRefusalWire};
+export interface ProjectExplosionPartWire {readonly id: ProjectIdWire;readonly centerMm: ProjectVectorWire;}
+export type ProjectExplosionPartsWire = readonly ProjectExplosionPartWire[];
+export interface ProjectExplosionRequestWire {readonly parts: ProjectExplosionPartsWire;readonly factor: ProjectFiniteWire;}
+export interface ProjectExplosionOffsetWire {readonly id: ProjectIdWire;readonly offsetMm: ProjectVectorWire;}
+export type ProjectExplosionOffsetsWire = readonly ProjectExplosionOffsetWire[];
+export type ProjectExplosionReplyWire = {readonly exploded:ProjectExplosionOffsetsWire} | {readonly refused:ProjectAssemblyRefusalWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -5148,3 +5298,21 @@ export function encodeProjectMeshPacketRequest(value:ProjectMeshPacketRequestWir
 export function captureProjectMeshPacketReply(value:unknown):ProjectMeshPacketReplyWire { return captureIntent("MeshPacketReply",value,shapes,limits) as ProjectMeshPacketReplyWire; }
 export function decodeProjectMeshPacketReply(text:string):ProjectMeshPacketReplyWire { return captureProjectMeshPacketReply(parseIntentJson(text,limits)); }
 export function encodeProjectMeshPacketReply(value:ProjectMeshPacketReplyWire):string { return JSON.stringify(captureProjectMeshPacketReply(value)); }
+export function captureProjectAssemblyPair(value:unknown):ProjectAssemblyPairWire { return captureIntent("AssemblyPair",value,shapes,limits) as ProjectAssemblyPairWire; }
+export function decodeProjectAssemblyPair(text:string):ProjectAssemblyPairWire { return captureProjectAssemblyPair(parseIntentJson(text,limits)); }
+export function encodeProjectAssemblyPair(value:ProjectAssemblyPairWire):string { return JSON.stringify(captureProjectAssemblyPair(value)); }
+export function captureProjectAssemblyAvailabilityReply(value:unknown):ProjectAssemblyAvailabilityReplyWire { return captureIntent("AssemblyAvailabilityReply",value,shapes,limits) as ProjectAssemblyAvailabilityReplyWire; }
+export function decodeProjectAssemblyAvailabilityReply(text:string):ProjectAssemblyAvailabilityReplyWire { return captureProjectAssemblyAvailabilityReply(parseIntentJson(text,limits)); }
+export function encodeProjectAssemblyAvailabilityReply(value:ProjectAssemblyAvailabilityReplyWire):string { return JSON.stringify(captureProjectAssemblyAvailabilityReply(value)); }
+export function captureProjectAssemblyAlignmentRequest(value:unknown):ProjectAssemblyAlignmentRequestWire { return captureIntent("AssemblyAlignmentRequest",value,shapes,limits) as ProjectAssemblyAlignmentRequestWire; }
+export function decodeProjectAssemblyAlignmentRequest(text:string):ProjectAssemblyAlignmentRequestWire { return captureProjectAssemblyAlignmentRequest(parseIntentJson(text,limits)); }
+export function encodeProjectAssemblyAlignmentRequest(value:ProjectAssemblyAlignmentRequestWire):string { return JSON.stringify(captureProjectAssemblyAlignmentRequest(value)); }
+export function captureProjectAssemblyAlignmentReply(value:unknown):ProjectAssemblyAlignmentReplyWire { return captureIntent("AssemblyAlignmentReply",value,shapes,limits) as ProjectAssemblyAlignmentReplyWire; }
+export function decodeProjectAssemblyAlignmentReply(text:string):ProjectAssemblyAlignmentReplyWire { return captureProjectAssemblyAlignmentReply(parseIntentJson(text,limits)); }
+export function encodeProjectAssemblyAlignmentReply(value:ProjectAssemblyAlignmentReplyWire):string { return JSON.stringify(captureProjectAssemblyAlignmentReply(value)); }
+export function captureProjectExplosionRequest(value:unknown):ProjectExplosionRequestWire { return captureIntent("ExplosionRequest",value,shapes,limits) as ProjectExplosionRequestWire; }
+export function decodeProjectExplosionRequest(text:string):ProjectExplosionRequestWire { return captureProjectExplosionRequest(parseIntentJson(text,limits)); }
+export function encodeProjectExplosionRequest(value:ProjectExplosionRequestWire):string { return JSON.stringify(captureProjectExplosionRequest(value)); }
+export function captureProjectExplosionReply(value:unknown):ProjectExplosionReplyWire { return captureIntent("ExplosionReply",value,shapes,limits) as ProjectExplosionReplyWire; }
+export function decodeProjectExplosionReply(text:string):ProjectExplosionReplyWire { return captureProjectExplosionReply(parseIntentJson(text,limits)); }
+export function encodeProjectExplosionReply(value:ProjectExplosionReplyWire):string { return JSON.stringify(captureProjectExplosionReply(value)); }

@@ -816,6 +816,24 @@ export class SettingsEditor {
 }
 
 /**
+ * The instance transform one pinned alignment produces: an
+ * `AssemblyAlignmentRequest`; returns an `AssemblyAlignmentReply`.
+ */
+export function assembly_alignment(request: string): string;
+
+/**
+ * Which pinned assembly alignments two picked features allow: an
+ * `AssemblyPair`; returns an `AssemblyAvailabilityReply`.
+ */
+export function assembly_availability(request: string): string;
+
+/**
+ * View-only exploded offsets: an `ExplosionRequest`; returns an
+ * `ExplosionReply`.
+ */
+export function assembly_explosion(request: string): string;
+
+/**
  * `coerceOverrideValue`: a `LibraryCoerceRequest` to a `LibraryCoercedValue`.
  */
 export function coerce_override_value(request: string): string;
@@ -897,6 +915,9 @@ export interface InitOutput {
     readonly __wbg_projectvolumesimplify_free: (a: number, b: number) => void;
     readonly __wbg_projectvolumesplit_free: (a: number, b: number) => void;
     readonly __wbg_settingseditor_free: (a: number, b: number) => void;
+    readonly assembly_alignment: (a: number, b: number) => [number, number, number, number];
+    readonly assembly_availability: (a: number, b: number) => [number, number, number, number];
+    readonly assembly_explosion: (a: number, b: number) => [number, number, number, number];
     readonly capturedhistory_dirty_categories: (a: number) => [number, number];
     readonly capturedhistory_has_label: (a: number, b: number) => number;
     readonly capturedhistory_label_length: (a: number, b: number) => number;
@@ -1117,8 +1138,8 @@ export interface InitOutput {
     readonly __wbindgen_exn_store: (a: number) => void;
     readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
-    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __externref_table_dealloc: (a: number) => void;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

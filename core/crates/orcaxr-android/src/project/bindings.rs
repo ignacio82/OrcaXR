@@ -702,6 +702,21 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_assemblyAvailability, assembly_availability, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_assemblyAlignment, assembly_alignment, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_assemblyExplosion, assembly_explosion, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionBrimEarDetect, session_brim_ear_detect, jstring,
     handle: jlong,
     request: JString<'local>,

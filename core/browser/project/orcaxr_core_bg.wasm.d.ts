@@ -39,6 +39,9 @@ export const __wbg_projectupload_free: (a: number, b: number) => void;
 export const __wbg_projectvolumesimplify_free: (a: number, b: number) => void;
 export const __wbg_projectvolumesplit_free: (a: number, b: number) => void;
 export const __wbg_settingseditor_free: (a: number, b: number) => void;
+export const assembly_alignment: (a: number, b: number) => [number, number, number, number];
+export const assembly_availability: (a: number, b: number) => [number, number, number, number];
+export const assembly_explosion: (a: number, b: number) => [number, number, number, number];
 export const capturedhistory_dirty_categories: (a: number) => [number, number];
 export const capturedhistory_has_label: (a: number, b: number) => number;
 export const capturedhistory_label_length: (a: number, b: number) => number;
@@ -259,6 +262,6 @@ export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) =>
 export const __wbindgen_exn_store: (a: number) => void;
 export const __externref_table_alloc: () => number;
 export const __wbindgen_externrefs: WebAssembly.Table;
-export const __wbindgen_free: (a: number, b: number, c: number) => void;
 export const __externref_table_dealloc: (a: number) => void;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
 export const __wbindgen_start: () => void;

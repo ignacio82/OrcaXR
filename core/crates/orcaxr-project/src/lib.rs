@@ -15,6 +15,7 @@ macro_rules! names {
         }
     };
 }
+pub mod assembly;
 pub mod assets;
 pub mod brim_ears;
 pub mod capabilities;

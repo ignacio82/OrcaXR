@@ -4318,6 +4318,139 @@
         "prepared": "MeshPacket",
         "refused": "MeshPacketRefusal"
       }
+    },
+    "AssemblyAlignmentKind": {
+      "kind": "enum",
+      "values": [
+        "parallel",
+        "centerCoincidence",
+        "parallelDistance",
+        "reverseRotation",
+        "aroundFaceCenter"
+      ]
+    },
+    "AssemblyPair": {
+      "kind": "object",
+      "fields": {
+        "first": "SurfaceFeature",
+        "second": "SurfaceFeature"
+      }
+    },
+    "AssemblyAvailability": {
+      "kind": "object",
+      "fields": {
+        "canSetToParallel": "Flag",
+        "canSetToCenterCoincidence": "Flag",
+        "canReverseFeature1": "Flag",
+        "canReverseFeature2": "Flag",
+        "canRotateAroundFaceCenter": "Flag",
+        "hasParallelDistance": "Flag",
+        "parallelDistanceMm": "Finite",
+        "angleRadians": "Finite"
+      }
+    },
+    "AssemblyRefusalCode": {
+      "kind": "enum",
+      "values": [
+        "unsupportedFeaturePair",
+        "unavailableAction",
+        "invalidParameter",
+        "degenerateAxis",
+        "nonFinite"
+      ]
+    },
+    "AssemblyRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "AssemblyRefusalCode",
+        "message": "EditText"
+      }
+    },
+    "AssemblyAvailabilityReply": {
+      "kind": "union",
+      "variants": {
+        "available": "AssemblyAvailability",
+        "refused": "AssemblyRefusal"
+      }
+    },
+    "AssemblyFeature": {
+      "kind": "enum",
+      "values": [
+        "first",
+        "second"
+      ]
+    },
+    "OptionalAssemblyFeature": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "AssemblyFeature"
+      }
+    },
+    "AssemblyAlignmentRequest": {
+      "kind": "object",
+      "fields": {
+        "kind": "AssemblyAlignmentKind",
+        "first": "SurfaceFeature",
+        "second": "SurfaceFeature",
+        "movingTransform": "Transform",
+        "parameter": "OptionalFinite",
+        "reverseFeature": "OptionalAssemblyFeature"
+      }
+    },
+    "AssemblyAlignmentPlan": {
+      "kind": "object",
+      "fields": {
+        "transform": "Transform",
+        "noop": "Flag"
+      }
+    },
+    "AssemblyAlignmentReply": {
+      "kind": "union",
+      "variants": {
+        "planned": "AssemblyAlignmentPlan",
+        "refused": "AssemblyRefusal"
+      }
+    },
+    "ExplosionPart": {
+      "kind": "object",
+      "fields": {
+        "id": "Id",
+        "centerMm": "Vector"
+      }
+    },
+    "ExplosionParts": {
+      "kind": "array",
+      "items": "ExplosionPart",
+      "min": 0,
+      "max": 65536
+    },
+    "ExplosionRequest": {
+      "kind": "object",
+      "fields": {
+        "parts": "ExplosionParts",
+        "factor": "Finite"
+      }
+    },
+    "ExplosionOffset": {
+      "kind": "object",
+      "fields": {
+        "id": "Id",
+        "offsetMm": "Vector"
+      }
+    },
+    "ExplosionOffsets": {
+      "kind": "array",
+      "items": "ExplosionOffset",
+      "min": 0,
+      "max": 65536
+    },
+    "ExplosionReply": {
+      "kind": "union",
+      "variants": {
+        "exploded": "ExplosionOffsets",
+        "refused": "AssemblyRefusal"
+      }
     }
   },
   "roots": [
@@ -4422,7 +4555,13 @@
     "SvgPartReply",
     "SvgPartStage",
     "MeshPacketRequest",
-    "MeshPacketReply"
+    "MeshPacketReply",
+    "AssemblyPair",
+    "AssemblyAvailabilityReply",
+    "AssemblyAlignmentRequest",
+    "AssemblyAlignmentReply",
+    "ExplosionRequest",
+    "ExplosionReply"
   ],
   "sessionVersion": 1
 }

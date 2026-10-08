@@ -16,8 +16,7 @@ Update triggers (save it here, not as a throwaway comment):
 - **Build quirks** — NDK flags, CMake workarounds, dependency version pins
   that matter, things that broke once and will break again.
 - **Dependency gotchas** — versions of libs with known bugs, incompatibilities
-  between Jetpack XR artifacts, upstream OrcaSlicer commits that must/must-not
-  be picked up.
+  between Jetpack XR artifacts, upstream OrcaSlicer commits that must/must-not be picked up.
 - **Architectural decisions** reached in conversation — module splits,
   threading model, JNI boundaries. Record the decision *and the reason*.
 - **User preferences** expressed during work — how they want commits
@@ -317,6 +316,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   topology consistency; revision plate requests have native session guards; native paint strokes
   stage one guarded commit each; splits/simplifications prepare on a guard and stage under host IDs.
   Emboss takes glyph contours, SVG the file's bytes (as `File.text()`); a part stores the drawing it names.
+  Assembly plans are session-free: two picked features in, one instance transform out, committed as a drag.
 - Smart Paint is a validated, bounded proposal plus operator correction and one
   canonical transaction. Check per-provider/payload consent before sending data.
 - Wipe towers reserve their complete printed footprint against the printable rectangle's actual origin,

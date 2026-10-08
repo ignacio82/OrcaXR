@@ -8988,6 +8988,286 @@ fn read_mesh_packet_reply(v: &Value) -> Result<MeshPacketReply, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AssemblyAlignmentKind {
+    Parallel,
+    CenterCoincidence,
+    ParallelDistance,
+    ReverseRotation,
+    AroundFaceCenter,
+}
+fn read_assembly_alignment_kind(v: &Value) -> Result<AssemblyAlignmentKind, InvalidIntent> {
+    match v.as_str() {
+        Some("parallel") => Ok(AssemblyAlignmentKind::Parallel),
+        Some("centerCoincidence") => Ok(AssemblyAlignmentKind::CenterCoincidence),
+        Some("parallelDistance") => Ok(AssemblyAlignmentKind::ParallelDistance),
+        Some("reverseRotation") => Ok(AssemblyAlignmentKind::ReverseRotation),
+        Some("aroundFaceCenter") => Ok(AssemblyAlignmentKind::AroundFaceCenter),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssemblyPair {
+    pub first: SurfaceFeature,
+    pub second: SurfaceFeature,
+}
+fn read_assembly_pair(v: &Value) -> Result<AssemblyPair, InvalidIntent> {
+    let object = fields(v, &["first", "second"], false)?;
+    Ok(AssemblyPair {
+        first: read_surface_feature(&object["first"])?,
+        second: read_surface_feature(&object["second"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssemblyAvailability {
+    pub can_set_to_parallel: Flag,
+    pub can_set_to_center_coincidence: Flag,
+    pub can_reverse_feature1: Flag,
+    pub can_reverse_feature2: Flag,
+    pub can_rotate_around_face_center: Flag,
+    pub has_parallel_distance: Flag,
+    pub parallel_distance_mm: Finite,
+    pub angle_radians: Finite,
+}
+fn read_assembly_availability(v: &Value) -> Result<AssemblyAvailability, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "canSetToParallel",
+            "canSetToCenterCoincidence",
+            "canReverseFeature1",
+            "canReverseFeature2",
+            "canRotateAroundFaceCenter",
+            "hasParallelDistance",
+            "parallelDistanceMm",
+            "angleRadians",
+        ],
+        false,
+    )?;
+    Ok(AssemblyAvailability {
+        can_set_to_parallel: read_flag(&object["canSetToParallel"])?,
+        can_set_to_center_coincidence: read_flag(&object["canSetToCenterCoincidence"])?,
+        can_reverse_feature1: read_flag(&object["canReverseFeature1"])?,
+        can_reverse_feature2: read_flag(&object["canReverseFeature2"])?,
+        can_rotate_around_face_center: read_flag(&object["canRotateAroundFaceCenter"])?,
+        has_parallel_distance: read_flag(&object["hasParallelDistance"])?,
+        parallel_distance_mm: read_finite(&object["parallelDistanceMm"])?,
+        angle_radians: read_finite(&object["angleRadians"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AssemblyRefusalCode {
+    UnsupportedFeaturePair,
+    UnavailableAction,
+    InvalidParameter,
+    DegenerateAxis,
+    NonFinite,
+}
+fn read_assembly_refusal_code(v: &Value) -> Result<AssemblyRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("unsupportedFeaturePair") => Ok(AssemblyRefusalCode::UnsupportedFeaturePair),
+        Some("unavailableAction") => Ok(AssemblyRefusalCode::UnavailableAction),
+        Some("invalidParameter") => Ok(AssemblyRefusalCode::InvalidParameter),
+        Some("degenerateAxis") => Ok(AssemblyRefusalCode::DegenerateAxis),
+        Some("nonFinite") => Ok(AssemblyRefusalCode::NonFinite),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssemblyRefusal {
+    pub code: AssemblyRefusalCode,
+    pub message: EditText,
+}
+fn read_assembly_refusal(v: &Value) -> Result<AssemblyRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(AssemblyRefusal {
+        code: read_assembly_refusal_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AssemblyAvailabilityReply {
+    Available(AssemblyAvailability),
+    Refused(AssemblyRefusal),
+}
+fn read_assembly_availability_reply(v: &Value) -> Result<AssemblyAvailabilityReply, InvalidIntent> {
+    let object = fields(v, &["available", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "available" => Ok(AssemblyAvailabilityReply::Available(
+            read_assembly_availability(value)?,
+        )),
+        "refused" => Ok(AssemblyAvailabilityReply::Refused(read_assembly_refusal(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AssemblyFeature {
+    First,
+    Second,
+}
+fn read_assembly_feature(v: &Value) -> Result<AssemblyFeature, InvalidIntent> {
+    match v.as_str() {
+        Some("first") => Ok(AssemblyFeature::First),
+        Some("second") => Ok(AssemblyFeature::Second),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalAssemblyFeature {
+    Absent(Empty),
+    Value(AssemblyFeature),
+}
+fn read_optional_assembly_feature(v: &Value) -> Result<OptionalAssemblyFeature, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalAssemblyFeature::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalAssemblyFeature::Value(read_assembly_feature(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssemblyAlignmentRequest {
+    pub kind: AssemblyAlignmentKind,
+    pub first: SurfaceFeature,
+    pub second: SurfaceFeature,
+    pub moving_transform: Transform,
+    pub parameter: OptionalFinite,
+    pub reverse_feature: OptionalAssemblyFeature,
+}
+fn read_assembly_alignment_request(v: &Value) -> Result<AssemblyAlignmentRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "kind",
+            "first",
+            "second",
+            "movingTransform",
+            "parameter",
+            "reverseFeature",
+        ],
+        false,
+    )?;
+    Ok(AssemblyAlignmentRequest {
+        kind: read_assembly_alignment_kind(&object["kind"])?,
+        first: read_surface_feature(&object["first"])?,
+        second: read_surface_feature(&object["second"])?,
+        moving_transform: read_transform(&object["movingTransform"])?,
+        parameter: read_optional_finite(&object["parameter"])?,
+        reverse_feature: read_optional_assembly_feature(&object["reverseFeature"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssemblyAlignmentPlan {
+    pub transform: Transform,
+    pub noop: Flag,
+}
+fn read_assembly_alignment_plan(v: &Value) -> Result<AssemblyAlignmentPlan, InvalidIntent> {
+    let object = fields(v, &["transform", "noop"], false)?;
+    Ok(AssemblyAlignmentPlan {
+        transform: read_transform(&object["transform"])?,
+        noop: read_flag(&object["noop"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AssemblyAlignmentReply {
+    Planned(AssemblyAlignmentPlan),
+    Refused(AssemblyRefusal),
+}
+fn read_assembly_alignment_reply(v: &Value) -> Result<AssemblyAlignmentReply, InvalidIntent> {
+    let object = fields(v, &["planned", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "planned" => Ok(AssemblyAlignmentReply::Planned(
+            read_assembly_alignment_plan(value)?,
+        )),
+        "refused" => Ok(AssemblyAlignmentReply::Refused(read_assembly_refusal(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExplosionPart {
+    pub id: Id,
+    pub center_mm: Vector,
+}
+fn read_explosion_part(v: &Value) -> Result<ExplosionPart, InvalidIntent> {
+    let object = fields(v, &["id", "centerMm"], false)?;
+    Ok(ExplosionPart {
+        id: read_id(&object["id"])?,
+        center_mm: read_vector(&object["centerMm"])?,
+    })
+}
+pub type ExplosionParts = Vec<ExplosionPart>;
+fn read_explosion_parts(v: &Value) -> Result<ExplosionParts, InvalidIntent> {
+    list(v, 0, 65536)?.iter().map(read_explosion_part).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExplosionRequest {
+    pub parts: ExplosionParts,
+    pub factor: Finite,
+}
+fn read_explosion_request(v: &Value) -> Result<ExplosionRequest, InvalidIntent> {
+    let object = fields(v, &["parts", "factor"], false)?;
+    Ok(ExplosionRequest {
+        parts: read_explosion_parts(&object["parts"])?,
+        factor: read_finite(&object["factor"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExplosionOffset {
+    pub id: Id,
+    pub offset_mm: Vector,
+}
+fn read_explosion_offset(v: &Value) -> Result<ExplosionOffset, InvalidIntent> {
+    let object = fields(v, &["id", "offsetMm"], false)?;
+    Ok(ExplosionOffset {
+        id: read_id(&object["id"])?,
+        offset_mm: read_vector(&object["offsetMm"])?,
+    })
+}
+pub type ExplosionOffsets = Vec<ExplosionOffset>;
+fn read_explosion_offsets(v: &Value) -> Result<ExplosionOffsets, InvalidIntent> {
+    list(v, 0, 65536)?
+        .iter()
+        .map(read_explosion_offset)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExplosionReply {
+    Exploded(ExplosionOffsets),
+    Refused(AssemblyRefusal),
+}
+fn read_explosion_reply(v: &Value) -> Result<ExplosionReply, InvalidIntent> {
+    let object = fields(v, &["exploded", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "exploded" => Ok(ExplosionReply::Exploded(read_explosion_offsets(value)?)),
+        "refused" => Ok(ExplosionReply::Refused(read_assembly_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -9860,5 +10140,65 @@ pub fn decode_mesh_packet_reply(text: &str) -> Result<MeshPacketReply, InvalidIn
 pub fn encode_mesh_packet_reply(value: &MeshPacketReply) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_mesh_packet_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_assembly_pair(text: &str) -> Result<AssemblyPair, InvalidIntent> {
+    read_assembly_pair(&super::project_intents::parse(text)?)
+}
+pub fn encode_assembly_pair(value: &AssemblyPair) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_assembly_pair(&text)?;
+    Ok(text)
+}
+pub fn decode_assembly_availability_reply(
+    text: &str,
+) -> Result<AssemblyAvailabilityReply, InvalidIntent> {
+    read_assembly_availability_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_assembly_availability_reply(
+    value: &AssemblyAvailabilityReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_assembly_availability_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_assembly_alignment_request(
+    text: &str,
+) -> Result<AssemblyAlignmentRequest, InvalidIntent> {
+    read_assembly_alignment_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_assembly_alignment_request(
+    value: &AssemblyAlignmentRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_assembly_alignment_request(&text)?;
+    Ok(text)
+}
+pub fn decode_assembly_alignment_reply(
+    text: &str,
+) -> Result<AssemblyAlignmentReply, InvalidIntent> {
+    read_assembly_alignment_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_assembly_alignment_reply(
+    value: &AssemblyAlignmentReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_assembly_alignment_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_explosion_request(text: &str) -> Result<ExplosionRequest, InvalidIntent> {
+    read_explosion_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_explosion_request(value: &ExplosionRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_explosion_request(&text)?;
+    Ok(text)
+}
+pub fn decode_explosion_reply(text: &str) -> Result<ExplosionReply, InvalidIntent> {
+    read_explosion_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_explosion_reply(value: &ExplosionReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_explosion_reply(&text)?;
     Ok(text)
 }
