@@ -398,6 +398,85 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_editorNew, editor_new, jlong,
+    create: JString<'local>,
+    collator: JObject<'local>,
+    folder: JObject<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorQuery, editor_query, jlong,
+    handle: jlong,
+    query: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorField, editor_field, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorState, editor_state, jstring,
+    handle: jlong,
+    field: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorCompare, editor_compare, jstring,
+    handle: jlong,
+    field: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorEdit, editor_edit, jstring,
+    handle: jlong,
+    edit: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorCommit, editor_commit, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorRevision, editor_revision, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorOverrides, editor_overrides, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorRows, editor_rows, jlong,
+    handle: jlong,
+    rows: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorUnavailable, editor_unavailable, jlong,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_editorRow, editor_row, jstring,
+    handle: jlong,
+    position: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_settingsStep, settings_step, jstring,
+    step: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_settingsRules, settings_rules, jstring,
+    rules: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

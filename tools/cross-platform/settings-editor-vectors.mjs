@@ -16,9 +16,27 @@ import {
 import { SettingsDraftEditor } from "../../web/src/settings/editor/SettingsDraftEditor.ts";
 import { serializeSettingValue } from "../../web/src/settings/editor/codec.ts";
 import {
+  STEP_REFUSAL_REASON,
   stepFor,
   stepSettingValue,
 } from "../../web/src/settings/editor/stepper.ts";
+import {
+  encodeProjectEditorCommitResult,
+  encodeProjectEditorComparison,
+  encodeProjectEditorCreate,
+  encodeProjectEditorEdit,
+  encodeProjectEditorEditResult,
+  encodeProjectEditorField,
+  encodeProjectEditorFieldRef,
+  encodeProjectEditorFieldState,
+  encodeProjectEditorQuery,
+  encodeProjectEditorRow,
+  encodeProjectEditorRowsRequest,
+  encodeProjectEditorRuleRequest,
+  encodeProjectEditorRules,
+  encodeProjectEditorStep,
+  encodeProjectEditorStepRequest,
+} from "../../contracts/generated/project-intents.ts";
 import { ScopedSettingsStepper } from "../../web/src/settings/editor/scopedStepper.ts";
 import {
   expandFullSpectrumSettingsTransaction,
@@ -234,6 +252,7 @@ const attempt = (run) => {
   }
 };
 function editorScenario(name, options, steps) {
+  editorDefinitions.push([options, steps]);
   let editor;
   // Member order follows canonical JSON, as a native host receives it.
   const created = attempt(() => {
@@ -310,6 +329,7 @@ function editorScenario(name, options, steps) {
     steps: out,
   };
 }
+const editorDefinitions = [];
 const unsupported = definitions.find(
   (d) => assessFieldSupport(catalog, d, "process").status !== "implemented",
 );
@@ -583,6 +603,360 @@ const specialEditors = ["mixed_filament_definitions", "layer_height", ""].map(
   ],
 );
 
+// The host exchange, encoded by the generated TypeScript codecs: what a
+// binding returns for each request. Large lists are sampled; every position's
+// field ID is checked against `ids`.
+const units = (value) =>
+  Array.from({ length: value.length }, (_, i) => value.charCodeAt(i));
+const camel = (value) => value.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+const optionalText = (value) =>
+  value === undefined || value === null
+    ? { absent: {} }
+    : { value: units(value) };
+const optional = (value, map = (v) => v) =>
+  value === undefined || value === null
+    ? { absent: {} }
+    : { value: map(value) };
+const valueJson = (value) => optional(value, (v) => units(json(v)));
+const wireField = (f) => ({
+  id: units(f.id),
+  key: units(f.key),
+  owner: units(f.owner),
+  label: units(f.label),
+  fullLabel: optionalText(f.fullLabel),
+  category: units(f.category),
+  tooltip: optionalText(f.tooltip),
+  unit: optionalText(f.unit),
+  mode: f.mode,
+  technology: f.technology,
+  applicability: camel(f.applicability),
+  support:
+    f.support.status === "implemented"
+      ? { implemented: {} }
+      : { unavailable: units(f.support.reason) },
+  locations: f.guiLocations.map((l) => ({
+    tabId: units(l.tab.id),
+    tab: units(l.tab.label),
+    tabOrder: l.tab.order,
+    groupId: units(l.group.id),
+    group: units(l.group.label),
+    groupOrder: l.group.order,
+    placementId: units(l.placement.id),
+    order: l.placement.order,
+    surface: l.placement.surface,
+  })),
+  primary: optional(
+    f.primaryGuiLocation
+      ? f.guiLocations.indexOf(f.primaryGuiLocation)
+      : undefined,
+  ),
+  enumChoices: f.enumChoices.map((c) => ({
+    serialized: units(c.serialized),
+    label: units(c.label),
+  })),
+  matches: f.searchMatches.map((m) => ({
+    field: m.field,
+    start: m.start,
+    length: m.length,
+    text: units(m.text),
+  })),
+});
+const wireIssues = (issues) =>
+  issues.map(({ code, path, message }) => ({
+    code: units(code),
+    path: units(path),
+    message: units(message),
+  }));
+const wireQuery = (q) => ({
+  mode: q.mode,
+  technology: q.technology,
+  surface: optional(q.guiSurface),
+  scope: optional(q.scope && camel(q.scope)),
+  search: units(q.search ?? ""),
+  includeNonApplicable: q.includeNonApplicable === true,
+  includeUnknownApplicability: q.includeUnknownApplicability === true,
+  includeUnavailable: q.includeUnavailable !== false,
+});
+const sample = (length) =>
+  [...new Set([0, 1, Math.floor(length / 2), length - 1])].filter(
+    (i) => i >= 0 && i < length,
+  );
+const wireQueries = queryCases.map((c) => {
+  const query = JSON.parse(c.queryJson);
+  const fields = projectSettingsFields(catalog, query);
+  return {
+    requestJson: encodeProjectEditorQuery(wireQuery(query)),
+    count: fields.length,
+    samples: sample(fields.length).map((i) => [
+      i,
+      encodeProjectEditorField(wireField(fields[i])),
+    ]),
+  };
+});
+const wireCreate = (options) =>
+  encodeProjectEditorCreate({
+    mode: options.mode ?? "advanced",
+    technology: options.technology ?? "fff",
+    surface: optional(options.guiSurface),
+    scope: optional(options.scope && camel(options.scope)),
+    inheritedJson: units(json(options.inherited ?? {})),
+    overridesJson: units(json(options.overrides ?? {})),
+  });
+function wireEditor(options, steps) {
+  let editor;
+  try {
+    editor = new SettingsDraftEditor(catalog, JSON.parse(json(options)));
+  } catch {
+    return { createJson: wireCreate(options), refused: true, steps: [] };
+  }
+  const out = steps.map((s) => {
+    const ref = encodeProjectEditorFieldRef({ fieldId: units(s.field ?? "") });
+    const outcome = (run) => {
+      try {
+        run();
+        return { applied: {} };
+      } catch (error) {
+        return {
+          refused: {
+            message: units(error.message),
+            issues: wireIssues(error.issues ?? []),
+          },
+        };
+      }
+    };
+    let record;
+    if (s.op === "state" || s.op === "compare") {
+      try {
+        if (s.op === "state") {
+          const v = editor.getFieldState(s.field);
+          record = {
+            requestJson: ref,
+            replyJson: encodeProjectEditorFieldState({
+              field: wireField(v.field),
+              valueJson: valueJson(v.value),
+              serialized: optionalText(v.serializedValue),
+              origin: v.origin,
+              hasLocalOverride: v.hasLocalOverride,
+              changed: v.changed,
+              draftChanged: v.draftChanged,
+              draftRaw: optionalText(v.draftRaw),
+              draftValueJson: valueJson(v.draftValue),
+              draftSerialized: optionalText(v.draftSerialized),
+              issues: wireIssues(v.issues),
+            }),
+          };
+        } else {
+          const c = editor.compare(s.field);
+          record = {
+            requestJson: ref,
+            replyJson: encodeProjectEditorComparison({
+              fieldId: units(c.fieldId),
+              key: units(c.key),
+              defaultJson: valueJson(c.defaultValue),
+              inheritedJson: valueJson(c.inheritedValue),
+              overrideJson: valueJson(c.overrideValue),
+              effectiveJson: valueJson(c.effectiveValue),
+              draftJson: valueJson(c.draftValue),
+              effectiveEqualsDefault: c.effectiveEqualsDefault,
+              draftEqualsEffective: c.draftEqualsEffective,
+            }),
+          };
+        }
+      } catch {
+        record = { requestJson: ref, refused: true };
+      }
+    } else if (s.op === "commit") {
+      let result;
+      try {
+        const c = editor.commit();
+        result = {
+          committed: {
+            baseRevision: c.baseRevision,
+            revision: c.revision,
+            changes: c.changes.map((ch) => ({
+              fieldId: units(ch.fieldId),
+              key: units(ch.key),
+              owner: units(ch.owner),
+              action: ch.action,
+              previousJson: valueJson(ch.previousValue),
+              valueJson: valueJson(ch.value),
+              serialized: optionalText(ch.serialized),
+            })),
+            nextOverridesJson: units(json(c.nextOverrides)),
+          },
+        };
+      } catch (error) {
+        result = {
+          refused: {
+            message: units(error.message),
+            issues: wireIssues(error.issues ?? []),
+          },
+        };
+      }
+      record = { replyJson: encodeProjectEditorCommitResult(result) };
+    } else {
+      const fieldId = units(s.field);
+      const edit =
+        s.op === "set"
+          ? { set: { fieldId, raw: units(s.raw) } }
+          : s.op === "clear"
+            ? { clear: { fieldId } }
+            : s.op === "inherit"
+              ? { inherit: { fieldId } }
+              : { reset: { fieldId } };
+      const run =
+        s.op === "set"
+          ? () => editor.setDraft(s.field, s.raw)
+          : s.op === "clear"
+            ? () => editor.clearDraft(s.field)
+            : s.op === "inherit"
+              ? () => editor.resetToInherited(s.field)
+              : () => editor.resetToDefault(s.field);
+      record = {
+        requestJson: encodeProjectEditorEdit(edit),
+        replyJson: encodeProjectEditorEditResult(outcome(run)),
+      };
+    }
+    return {
+      ...record,
+      revision: editor.getRevision(),
+      overridesJson: json(editor.getOverrides()),
+    };
+  });
+  return { createJson: wireCreate(options), steps: out };
+}
+const wireSteps = [];
+steps.forEach((origins, index) => {
+  if (index % 7 !== 0) return;
+  for (const [current] of origins)
+    for (const up of [true, false]) {
+      let reply;
+      try {
+        const o = stepSettingValue(definitions[index], current, up ? 1 : -1);
+        reply =
+          o.value === null
+            ? {
+                refused: {
+                  code: camel(o.refusal),
+                  reason: units(STEP_REFUSAL_REASON[o.refusal]),
+                },
+              }
+            : { value: units(o.value) };
+      } catch (error) {
+        reply = { codec: units(error.message) };
+      }
+      wireSteps.push({
+        requestJson: encodeProjectEditorStepRequest({
+          fieldId: units(definitions[index].id),
+          current: units(current),
+          up,
+        }),
+        replyJson: encodeProjectEditorStep(reply),
+      });
+    }
+});
+const wireRows = [];
+for (const c of rowCases) {
+  const snapshot = JSON.parse(c.snapshotJson);
+  const surface = c.scope === "plate" ? "plate" : "process";
+  const options = {
+    mode: c.mode,
+    technology: "fff",
+    guiSurface: surface,
+    ...(c.scope === "project" ? {} : { scope: c.scope }),
+    inherited: snapshot.inherited,
+    overrides: snapshot.overrides,
+  };
+  const editor = new SettingsDraftEditor(catalog, JSON.parse(json(options)));
+  const fieldsById = new Map(
+    editor
+      .query({
+        mode: c.mode,
+        technology: "fff",
+        guiSurface: surface,
+        ...(c.scope === "project" ? {} : { scope: c.scope }),
+        includeUnavailable: true,
+        includeUnknownApplicability: true,
+      })
+      .map((f) => [f.id, f]),
+  );
+  wireRows.push({
+    createJson: wireCreate(options),
+    requestJson: encodeProjectEditorRowsRequest({ scope: camel(c.scope) }),
+    count: c.rows.length,
+    unavailable: c.unavailable,
+    samples: sample(c.rows.length).map((i) => {
+      const r = c.rows[i];
+      return [
+        i,
+        encodeProjectEditorRow({
+          field: wireField(fieldsById.get(definitions[r.field].id)),
+          group: units(r.group),
+          value: units(r.value),
+          overridden: r.overridden,
+          steppable: r.steppable,
+          reason: optionalText(r.reason),
+          kind: camel(r.kind),
+          minimum: optional(r.minimum),
+          maximum: optional(r.maximum),
+          integer: r.integer,
+          typeable: r.typeable,
+        }),
+      ];
+    }),
+  });
+}
+const wireRules = [];
+for (const values of fsValues)
+  for (const changedKeys of [[], ["dithering_local_z_mode"], ["other"]])
+    for (const key of [
+      "dithering_local_z_infill",
+      "dithering_local_z_mode",
+      "mixed_filament_definitions",
+    ]) {
+      let expansion;
+      try {
+        const e = expandFullSpectrumSettingsTransaction({
+          changedKeys,
+          effectiveValues: JSON.parse(json(values)),
+        });
+        expansion = {
+          expanded: {
+            effectiveJson: units(json(e.effectiveValues)),
+            implicit: e.implicitKeys.map((k) => ({
+              key: units(k),
+              value: e.implicitValues[k],
+            })),
+          },
+        };
+      } catch (error) {
+        expansion = { refused: units(error.message) };
+      }
+      const dependency = getFullSpectrumDependencyState(key, values);
+      const cross = validateFullSpectrumCrossFields(values);
+      wireRules.push({
+        requestJson: encodeProjectEditorRuleRequest({
+          changedKeys: changedKeys.map(units),
+          key: units(key),
+          effectiveJson: units(json(values)),
+        }),
+        replyJson: encodeProjectEditorRules({
+          expansion,
+          dependency: dependency
+            ? { enabled: dependency.enabled }
+            : { unmanaged: {} },
+          crossField: optionalText(cross[0]?.message),
+          structuredEditor: optionalText(
+            getFullSpectrumSpecialEditorRequirement(key)?.unavailableReason,
+          ),
+        }),
+      });
+    }
+
+const wireEditors = editorDefinitions.map(([options, steps]) =>
+  wireEditor(options, steps),
+);
+
 const sources = [
   "tools/cross-platform/settings-editor-vectors.mjs",
   "web/src/settings/editor/fields.ts",
@@ -591,6 +965,7 @@ const sources = [
   "web/src/settings/editor/scopedStepper.ts",
   "web/src/settings/editor/fullSpectrumSemantics.ts",
   "web/src/settings/editor/codec.ts",
+  "contracts/project-intents.json",
   schemaPath,
 ];
 const output =
@@ -610,6 +985,15 @@ const output =
       rowCases,
       fullSpectrum,
       specialEditors,
+      wire: {
+        ids: definitions.map((d) => d.id),
+        queryEditorJson: wireCreate({}),
+        queries: wireQueries,
+        editors: wireEditors,
+        steps: wireSteps,
+        rows: wireRows,
+        rules: wireRules,
+      },
     },
     null,
     1,

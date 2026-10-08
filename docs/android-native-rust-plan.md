@@ -1199,7 +1199,7 @@ and replay coverage for the complete current command inventory.
     stroke command applies. Traces cover every channel, staleness, non-model
     volumes, root counts, both validation stages and noops (asset corpus 24 /
     348; staged 56 / 934 through Rust, WASM and JNI).
-- [ ] Port settings resolution, physical/mixed filament identities, profile
+- [x] Port settings resolution, physical/mixed filament identities, profile
   selection semantics, and canonical slice preflight. Consume the generated
   pinned schema/catalog rather than reconstructing defaults in Kotlin.
   Rust scope eligibility, strict layer validation/resolution, explanations,
@@ -1211,8 +1211,8 @@ and replay coverage for the complete current command inventory.
   host exchange, and the user preset library and its host exchange.
   Condition expressions stay unresolved, as in the browser, which ships no
   evaluator. The settings editor (field support, projection and search,
-  drafts, stepping and Full Spectrum rules) is native as well; its host
-  exchange is not yet.
+  drafts, stepping and Full Spectrum rules) and its host exchange are native
+  as well.
   - [x] Port generated scope eligibility, layered resolution, import sanitization
     and configuration selectors with independent reference cases.
   - [x] Port canonical slice preflight (`slicing::preflight`) with FullSpectrum
@@ -1249,7 +1249,9 @@ and replay coverage for the complete current command inventory.
     under host collation and folding, the draft editor, stepping, stepper
     rows and Full Spectrum rules (816 fields, 61 queries, 5,856 stepping
     origins, 10 row views).
-  - [ ] Expose the settings editor to hosts.
+  - [x] Expose the settings editor to hosts (WASM, JNI, Kotlin) with host
+    collation and search folding (14,938 replies and 78 refusals per
+    binding; 24 Kotlin checks).
 - [ ] Provide bounded object-tree, inspector, capability, selection, and renderer
   projections. Subscribe to revisioned deltas; do not send the complete project
   or all geometry to every panel after each edit.

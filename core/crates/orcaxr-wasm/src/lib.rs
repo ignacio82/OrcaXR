@@ -4,6 +4,8 @@ mod archive;
 #[cfg(feature = "project")]
 mod catalog;
 #[cfg(feature = "project")]
+mod editor;
+#[cfg(feature = "project")]
 mod library;
 #[cfg(feature = "project")]
 mod model;

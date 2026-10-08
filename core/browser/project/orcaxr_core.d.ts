@@ -485,6 +485,57 @@ export class ProjectUpload {
 }
 
 /**
+ * A settings draft over inherited values and one node's overrides.
+ */
+export class SettingsEditor {
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Commit every draft; returns an `EditorCommitResult`.
+     */
+    commit(): string;
+    /**
+     * An `EditorFieldRef`; returns its `EditorComparison`.
+     */
+    compare(field: string): string;
+    /**
+     * An `EditorEdit`; returns its `EditorEditResult`.
+     */
+    edit(edit: string): string;
+    /**
+     * The latest query's field at `position`, as an `EditorField`.
+     */
+    field(position: number): string;
+    /**
+     * An `EditorCreate`. Without a collator or folder the exact ASCII
+     * policies apply and refuse other text.
+     */
+    constructor(create: string, collator?: any | null, folder?: any | null);
+    /**
+     * This node's overrides as canonical JSON.
+     */
+    overrides(): string;
+    /**
+     * An `EditorQuery`; returns the number of fields.
+     */
+    query(query: string): number;
+    revision(): number;
+    row(position: number): string;
+    /**
+     * An `EditorRowsRequest`; returns the number of rows.
+     */
+    rows(rows: string): number;
+    /**
+     * An `EditorFieldRef`; returns its `EditorFieldState`.
+     */
+    state(field: string): string;
+    /**
+     * Fields the latest rows left out because no surface supports them.
+     */
+    unavailable(): number;
+}
+
+/**
  * `coerceOverrideValue`: a `LibraryCoerceRequest` to a `LibraryCoercedValue`.
  */
 export function coerce_override_value(request: string): string;
@@ -497,6 +548,16 @@ export function evaluate(request: string): string;
  * `formatOverrideValue`: a `LibraryFormatRequest` to a `LibraryFormattedValue`.
  */
 export function format_override_value(request: string): string;
+
+/**
+ * The Full Spectrum rules: an `EditorRuleRequest` to `EditorRules`.
+ */
+export function settings_rules(rules: string): string;
+
+/**
+ * `stepSettingValue`: an `EditorStepRequest` to an `EditorStep`.
+ */
+export function settings_step(step: string): string;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -530,6 +591,7 @@ export interface InitOutput {
     readonly __wbg_projectselectioninput_free: (a: number, b: number) => void;
     readonly __wbg_projectsession_free: (a: number, b: number) => void;
     readonly __wbg_projectupload_free: (a: number, b: number) => void;
+    readonly __wbg_settingseditor_free: (a: number, b: number) => void;
     readonly capturedhistory_dirty_categories: (a: number) => [number, number];
     readonly capturedhistory_has_label: (a: number, b: number) => number;
     readonly capturedhistory_label_length: (a: number, b: number) => number;
@@ -684,6 +746,20 @@ export interface InitOutput {
     readonly projectupload_open: (a: number, b: number, c: number) => [number, number, number];
     readonly projectupload_prepare: (a: number) => [number, number, number];
     readonly projectupload_seal_document: (a: number) => [number, number];
+    readonly settings_rules: (a: number, b: number) => [number, number, number, number];
+    readonly settings_step: (a: number, b: number) => [number, number, number, number];
+    readonly settingseditor_commit: (a: number) => [number, number, number, number];
+    readonly settingseditor_compare: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly settingseditor_edit: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly settingseditor_field: (a: number, b: number) => [number, number, number, number];
+    readonly settingseditor_new: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly settingseditor_overrides: (a: number) => [number, number];
+    readonly settingseditor_query: (a: number, b: number, c: number) => [number, number, number];
+    readonly settingseditor_revision: (a: number) => number;
+    readonly settingseditor_row: (a: number, b: number) => [number, number, number, number];
+    readonly settingseditor_rows: (a: number, b: number, c: number) => [number, number, number];
+    readonly settingseditor_state: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly settingseditor_unavailable: (a: number) => number;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

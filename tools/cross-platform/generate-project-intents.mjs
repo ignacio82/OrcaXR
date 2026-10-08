@@ -67,6 +67,21 @@ assert.deepEqual(schema.roots, [
   "LibraryCoercedValue",
   "LibraryFormatRequest",
   "LibraryFormattedValue",
+  "EditorCreate",
+  "EditorQuery",
+  "EditorField",
+  "EditorFieldState",
+  "EditorComparison",
+  "EditorEdit",
+  "EditorEditResult",
+  "EditorCommitResult",
+  "EditorStepRequest",
+  "EditorStep",
+  "EditorRow",
+  "EditorRowsRequest",
+  "EditorRuleRequest",
+  "EditorRules",
+  "EditorFieldRef",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

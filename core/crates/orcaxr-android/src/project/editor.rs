@@ -1,0 +1,274 @@
+//! The settings editor host exchange. An editor keeps the host's collator and
+//! search folder; requests and replies are generated contract JSON, and fields
+//! and rows are read one at a time after a query.
+use super::*;
+use jni::{JavaVM, objects::GlobalRef};
+use orcaxr_contracts::{project_intent_types as wire, project_intents::InvalidIntent};
+use orcaxr_project::settings::{
+    editor::{
+        AsciiFolding, SearchFolding,
+        exchange::{self, HostEditor, Refusal},
+    },
+    presets::{AsciiRootCollation, Collation},
+};
+use std::cmp::Ordering;
+
+/// An editor with the host policies it was created with.
+pub(super) struct Editor {
+    inner: HostEditor,
+    collator: Option<GlobalRef>,
+    folder: Option<(JavaVM, GlobalRef)>,
+}
+/// The stored collator on this JNI thread, or the exact ASCII root order.
+struct Order<'a, 'env> {
+    env: &'a mut JNIEnv<'env>,
+    collator: Option<&'a GlobalRef>,
+}
+impl Collation for Order<'_, '_> {
+    type Error = &'static str;
+    fn compare(&mut self, left: &[u16], right: &[u16]) -> Result<Ordering> {
+        match self.collator {
+            Some(collator) => JavaCollation {
+                env: self.env,
+                collator: collator.as_obj(),
+            }
+            .compare(left, right),
+            None => AsciiRootCollation
+                .compare(left, right)
+                .map_err(|_| "non_ascii_collation"),
+        }
+    }
+}
+/// `dev.orcaxr.core.SearchFolding.fold(char[])`, called on this thread
+/// through its own attachment, or the exact ASCII folding.
+struct Fold<'a>(Option<&'a (JavaVM, GlobalRef)>);
+impl SearchFolding for Fold<'_> {
+    type Error = &'static str;
+    fn fold(&mut self, text: &[u16]) -> Result<Vec<u16>> {
+        let Some((vm, folder)) = self.0 else {
+            return AsciiFolding.fold(text).map_err(|_| "non_ascii_search");
+        };
+        let mut env = vm.attach_current_thread().map_err(|_| "folding_failed")?;
+        let input = char_array(&mut env, text)?;
+        let result = env
+            .call_method(folder.as_obj(), "fold", "([C)[C", &[(&input).into()])
+            .and_then(|v| v.l());
+        let _ = env.delete_local_ref(input);
+        // A callback may throw private text: clear it, report a stable code.
+        let folded = result.map_err(|_| {
+            let _ = env.exception_clear();
+            "folding_failed"
+        })?;
+        if folded.is_null() {
+            return Err("folding_failed");
+        }
+        let array = jni::objects::JCharArray::from(folded);
+        let length = env.get_array_length(&array).map_err(|_| "folding_failed")?;
+        let mut units = vec![0u16; length as usize];
+        env.get_char_array_region(&array, 0, &mut units)
+            .map_err(|_| "folding_failed")?;
+        let _ = env.delete_local_ref(array);
+        Ok(units)
+    }
+}
+fn refused(e: Refusal<&'static str>) -> &'static str {
+    match e {
+        Refusal::Host(code) => code,
+        other => other.code(),
+    }
+}
+fn encoded<T>(
+    value: &T,
+    encode: fn(&T) -> std::result::Result<String, InvalidIntent>,
+) -> Result<String> {
+    encode(value).map_err(|_| "output_limit")
+}
+fn decoded<T>(
+    env: &mut JNIEnv<'_>,
+    text: &JString<'_>,
+    decode: fn(&str) -> std::result::Result<T, InvalidIntent>,
+) -> Result<T> {
+    let text = intent_text(env, text)?;
+    decode(&text).map_err(|_| "invalid_request")
+}
+fn with_editor<R>(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    call: impl FnOnce(&mut HostEditor, &mut Order<'_, '_>, &mut Fold<'_>) -> Result<R>,
+) -> Result<R> {
+    registry().slot(handle)?.with(|record| match record {
+        Some(Record::Editor(editor)) => {
+            let Editor {
+                inner,
+                collator,
+                folder,
+            } = &mut **editor;
+            let mut order = Order {
+                env,
+                collator: collator.as_ref(),
+            };
+            call(inner, &mut order, &mut Fold(folder.as_ref()))
+        }
+        _ => Err("invalid_handle_kind"),
+    })
+}
+
+/// A null collator or folder uses the exact ASCII policy.
+pub(super) fn editor_new(
+    env: &mut JNIEnv<'_>,
+    create: JString<'_>,
+    collator: JObject<'_>,
+    folder: JObject<'_>,
+) -> Result<jlong> {
+    let create = decoded(env, &create, wire::decode_editor_create)?;
+    let mut global =
+        |object: &JObject<'_>, class: &str, code: &'static str| -> Result<Option<GlobalRef>> {
+            if object.is_null() {
+                return Ok(None);
+            }
+            if !env.is_instance_of(object, class).map_err(|_| code)? {
+                return Err(code);
+            }
+            env.new_global_ref(object).map(Some).map_err(|_| code)
+        };
+    let collator = global(
+        &collator,
+        "dev/orcaxr/core/PresetCollator",
+        "collation_failed",
+    )?;
+    let folder = global(&folder, "dev/orcaxr/core/SearchFolding", "folding_failed")?;
+    let folder = match folder {
+        Some(folder) => Some((env.get_java_vm().map_err(|_| "folding_failed")?, folder)),
+        None => None,
+    };
+    let inner = HostEditor::create::<&'static str>(&create).map_err(refused)?;
+    let reserved = registry().reserve(false)?;
+    reserved.insert(Record::Editor(Box::new(Editor {
+        inner,
+        collator,
+        folder,
+    })))
+}
+pub(super) fn editor_query(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    query: JString<'_>,
+) -> Result<jlong> {
+    let query = decoded(env, &query, wire::decode_editor_query)?;
+    with_editor(env, handle, |e, order, fold| {
+        e.query(&query, order, fold)
+            .map(|n| n as jlong)
+            .map_err(refused)
+    })
+}
+pub(super) fn editor_field(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    position: jlong,
+) -> Result<jstring> {
+    let position = index(position)?;
+    let json = with_editor(env, handle, |e, _, _| {
+        encoded(
+            &e.field(position).ok_or("invalid_range")?,
+            wire::encode_editor_field,
+        )
+    })?;
+    string(env, json)
+}
+pub(super) fn editor_state(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    field: JString<'_>,
+) -> Result<jstring> {
+    let field = decoded(env, &field, wire::decode_editor_field_ref)?;
+    let json = with_editor(env, handle, |e, _, _| {
+        encoded(
+            &e.state(&field).map_err(refused)?,
+            wire::encode_editor_field_state,
+        )
+    })?;
+    string(env, json)
+}
+pub(super) fn editor_compare(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    field: JString<'_>,
+) -> Result<jstring> {
+    let field = decoded(env, &field, wire::decode_editor_field_ref)?;
+    let json = with_editor(env, handle, |e, _, _| {
+        encoded(
+            &e.compare(&field).map_err(refused)?,
+            wire::encode_editor_comparison,
+        )
+    })?;
+    string(env, json)
+}
+pub(super) fn editor_edit(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    edit: JString<'_>,
+) -> Result<jstring> {
+    let edit = decoded(env, &edit, wire::decode_editor_edit)?;
+    let json = with_editor(env, handle, |e, _, _| {
+        encoded(
+            &e.edit::<&'static str>(&edit),
+            wire::encode_editor_edit_result,
+        )
+    })?;
+    string(env, json)
+}
+pub(super) fn editor_commit(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_editor(env, handle, |e, order, _| {
+        encoded(
+            &e.commit(order).map_err(refused)?,
+            wire::encode_editor_commit_result,
+        )
+    })?;
+    string(env, json)
+}
+pub(super) fn editor_revision(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jlong> {
+    with_editor(env, handle, |e, _, _| Ok(e.revision() as jlong))
+}
+pub(super) fn editor_overrides(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_editor(env, handle, |e, _, _| {
+        Ok(String::from_utf16_lossy(&e.overrides_json()))
+    })?;
+    string(env, json)
+}
+pub(super) fn editor_rows(env: &mut JNIEnv<'_>, handle: jlong, rows: JString<'_>) -> Result<jlong> {
+    let rows = decoded(env, &rows, wire::decode_editor_rows_request)?;
+    with_editor(env, handle, |e, order, fold| {
+        e.rows(&rows, order, fold)
+            .map(|n| n as jlong)
+            .map_err(refused)
+    })
+}
+pub(super) fn editor_unavailable(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jlong> {
+    with_editor(env, handle, |e, _, _| Ok(e.unavailable() as jlong))
+}
+pub(super) fn editor_row(env: &mut JNIEnv<'_>, handle: jlong, position: jlong) -> Result<jstring> {
+    let position = index(position)?;
+    let json = with_editor(env, handle, |e, _, _| {
+        encoded(
+            &e.row(position).ok_or("invalid_range")?,
+            wire::encode_editor_row,
+        )
+    })?;
+    string(env, json)
+}
+pub(super) fn settings_step(env: &mut JNIEnv<'_>, step: JString<'_>) -> Result<jstring> {
+    let step = decoded(env, &step, wire::decode_editor_step_request)?;
+    let json = encoded(
+        &exchange::step::<&'static str>(&step).map_err(refused)?,
+        wire::encode_editor_step,
+    )?;
+    string(env, json)
+}
+pub(super) fn settings_rules(env: &mut JNIEnv<'_>, rules: JString<'_>) -> Result<jstring> {
+    let rules = decoded(env, &rules, wire::decode_editor_rule_request)?;
+    let json = encoded(
+        &exchange::rules::<&'static str>(&rules).map_err(refused)?,
+        wire::encode_editor_rules,
+    )?;
+    string(env, json)
+}

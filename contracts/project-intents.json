@@ -2059,6 +2059,434 @@
       "fields": {
         "text": "EditText"
       }
+    },
+    "EditorMode": {
+      "kind": "enum",
+      "values": [
+        "simple",
+        "advanced",
+        "develop"
+      ]
+    },
+    "EditorTechnology": {
+      "kind": "enum",
+      "values": [
+        "fff",
+        "sla",
+        "any"
+      ]
+    },
+    "EditorDefinitionTechnology": {
+      "kind": "enum",
+      "values": [
+        "unknown",
+        "any",
+        "fff",
+        "sla"
+      ]
+    },
+    "EditorSurface": {
+      "kind": "enum",
+      "values": [
+        "process",
+        "filament",
+        "printer",
+        "object",
+        "plate"
+      ]
+    },
+    "OptionalEditorSurface": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "EditorSurface"
+      }
+    },
+    "EditorScope": {
+      "kind": "enum",
+      "values": [
+        "project",
+        "plate",
+        "object",
+        "part",
+        "layerRange"
+      ]
+    },
+    "OptionalEditorScope": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "EditorScope"
+      }
+    },
+    "EditorCreate": {
+      "kind": "object",
+      "fields": {
+        "mode": "EditorMode",
+        "technology": "EditorTechnology",
+        "surface": "OptionalEditorSurface",
+        "scope": "OptionalEditorScope",
+        "inheritedJson": "JsonText",
+        "overridesJson": "JsonText"
+      }
+    },
+    "EditorQuery": {
+      "kind": "object",
+      "fields": {
+        "mode": "EditorMode",
+        "technology": "EditorTechnology",
+        "surface": "OptionalEditorSurface",
+        "scope": "OptionalEditorScope",
+        "search": "EditText",
+        "includeNonApplicable": "Flag",
+        "includeUnknownApplicability": "Flag",
+        "includeUnavailable": "Flag"
+      }
+    },
+    "EditorLocation": {
+      "kind": "object",
+      "fields": {
+        "tabId": "EditText",
+        "tab": "EditText",
+        "tabOrder": "Counter",
+        "groupId": "EditText",
+        "group": "EditText",
+        "groupOrder": "Counter",
+        "placementId": "EditText",
+        "order": "Counter",
+        "surface": "EditorSurface"
+      }
+    },
+    "EditorLocations": {
+      "kind": "array",
+      "items": "EditorLocation",
+      "min": 0,
+      "max": 64
+    },
+    "EditorChoice": {
+      "kind": "object",
+      "fields": {
+        "serialized": "EditText",
+        "label": "EditText"
+      }
+    },
+    "EditorChoices": {
+      "kind": "array",
+      "items": "EditorChoice",
+      "min": 0,
+      "max": 4096
+    },
+    "EditorMatchField": {
+      "kind": "enum",
+      "values": [
+        "key",
+        "label",
+        "fullLabel",
+        "category",
+        "page",
+        "group",
+        "surface",
+        "tooltip",
+        "owner",
+        "alias",
+        "enum"
+      ]
+    },
+    "EditorMatch": {
+      "kind": "object",
+      "fields": {
+        "field": "EditorMatchField",
+        "start": "Counter",
+        "length": "Counter",
+        "text": "EditText"
+      }
+    },
+    "EditorMatches": {
+      "kind": "array",
+      "items": "EditorMatch",
+      "min": 0,
+      "max": 4096
+    },
+    "EditorApplicability": {
+      "kind": "enum",
+      "values": [
+        "applicable",
+        "notApplicable",
+        "unknown"
+      ]
+    },
+    "EditorSupport": {
+      "kind": "union",
+      "variants": {
+        "implemented": "Empty",
+        "unavailable": "EditText"
+      }
+    },
+    "EditorField": {
+      "kind": "object",
+      "fields": {
+        "id": "EditText",
+        "key": "EditText",
+        "owner": "EditText",
+        "label": "EditText",
+        "fullLabel": "OptionalText",
+        "category": "EditText",
+        "tooltip": "OptionalText",
+        "unit": "OptionalText",
+        "mode": "EditorMode",
+        "technology": "EditorDefinitionTechnology",
+        "applicability": "EditorApplicability",
+        "support": "EditorSupport",
+        "locations": "EditorLocations",
+        "primary": "OptionalCounter",
+        "enumChoices": "EditorChoices",
+        "matches": "EditorMatches"
+      }
+    },
+    "EditorIssue": {
+      "kind": "object",
+      "fields": {
+        "code": "EditText",
+        "path": "EditText",
+        "message": "EditText"
+      }
+    },
+    "EditorIssues": {
+      "kind": "array",
+      "items": "EditorIssue",
+      "min": 0,
+      "max": 4096
+    },
+    "EditorOrigin": {
+      "kind": "enum",
+      "values": [
+        "changed",
+        "inherited",
+        "default",
+        "unset"
+      ]
+    },
+    "EditorFieldState": {
+      "kind": "object",
+      "fields": {
+        "field": "EditorField",
+        "valueJson": "OptionalJsonText",
+        "serialized": "OptionalText",
+        "origin": "EditorOrigin",
+        "hasLocalOverride": "Flag",
+        "changed": "Flag",
+        "draftChanged": "Flag",
+        "draftRaw": "OptionalText",
+        "draftValueJson": "OptionalJsonText",
+        "draftSerialized": "OptionalText",
+        "issues": "EditorIssues"
+      }
+    },
+    "EditorComparison": {
+      "kind": "object",
+      "fields": {
+        "fieldId": "EditText",
+        "key": "EditText",
+        "defaultJson": "OptionalJsonText",
+        "inheritedJson": "OptionalJsonText",
+        "overrideJson": "OptionalJsonText",
+        "effectiveJson": "OptionalJsonText",
+        "draftJson": "OptionalJsonText",
+        "effectiveEqualsDefault": "Flag",
+        "draftEqualsEffective": "Flag"
+      }
+    },
+    "EditorRefusal": {
+      "kind": "object",
+      "fields": {
+        "message": "EditText",
+        "issues": "EditorIssues"
+      }
+    },
+    "EditorFieldEdit": {
+      "kind": "object",
+      "fields": {
+        "fieldId": "EditText",
+        "raw": "EditText"
+      }
+    },
+    "EditorFieldRef": {
+      "kind": "object",
+      "fields": {
+        "fieldId": "EditText"
+      }
+    },
+    "EditorEdit": {
+      "kind": "union",
+      "variants": {
+        "set": "EditorFieldEdit",
+        "clear": "EditorFieldRef",
+        "inherit": "EditorFieldRef",
+        "reset": "EditorFieldRef"
+      }
+    },
+    "EditorEditResult": {
+      "kind": "union",
+      "variants": {
+        "applied": "Empty",
+        "refused": "EditorRefusal"
+      }
+    },
+    "EditorChangeAction": {
+      "kind": "enum",
+      "values": [
+        "set",
+        "remove"
+      ]
+    },
+    "EditorChange": {
+      "kind": "object",
+      "fields": {
+        "fieldId": "EditText",
+        "key": "EditText",
+        "owner": "EditText",
+        "action": "EditorChangeAction",
+        "previousJson": "OptionalJsonText",
+        "valueJson": "OptionalJsonText",
+        "serialized": "OptionalText"
+      }
+    },
+    "EditorChanges": {
+      "kind": "array",
+      "items": "EditorChange",
+      "min": 0,
+      "max": 4096
+    },
+    "EditorCommit": {
+      "kind": "object",
+      "fields": {
+        "baseRevision": "Counter",
+        "revision": "Counter",
+        "changes": "EditorChanges",
+        "nextOverridesJson": "JsonText"
+      }
+    },
+    "EditorCommitResult": {
+      "kind": "union",
+      "variants": {
+        "committed": "EditorCommit",
+        "refused": "EditorRefusal"
+      }
+    },
+    "EditorStepRequest": {
+      "kind": "object",
+      "fields": {
+        "fieldId": "EditText",
+        "current": "EditText",
+        "up": "Flag"
+      }
+    },
+    "EditorStepRefusalCode": {
+      "kind": "enum",
+      "values": [
+        "notNumeric",
+        "unbounded",
+        "unreadable",
+        "readOnly"
+      ]
+    },
+    "EditorStepRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "EditorStepRefusalCode",
+        "reason": "EditText"
+      }
+    },
+    "EditorStep": {
+      "kind": "union",
+      "variants": {
+        "value": "EditText",
+        "refused": "EditorStepRefusal",
+        "codec": "EditText"
+      }
+    },
+    "EditorRowKind": {
+      "kind": "enum",
+      "values": [
+        "numeric",
+        "bool",
+        "enum",
+        "text",
+        "readOnly"
+      ]
+    },
+    "EditorRow": {
+      "kind": "object",
+      "fields": {
+        "field": "EditorField",
+        "group": "EditText",
+        "value": "EditText",
+        "overridden": "Flag",
+        "steppable": "Flag",
+        "reason": "OptionalText",
+        "kind": "EditorRowKind",
+        "minimum": "OptionalFinite",
+        "maximum": "OptionalFinite",
+        "integer": "Flag",
+        "typeable": "Flag"
+      }
+    },
+    "EditorRowsRequest": {
+      "kind": "object",
+      "fields": {
+        "scope": "EditorScope"
+      }
+    },
+    "EditorRuleRequest": {
+      "kind": "object",
+      "fields": {
+        "changedKeys": "TextList",
+        "key": "EditText",
+        "effectiveJson": "JsonText"
+      }
+    },
+    "EditorImplicitValue": {
+      "kind": "object",
+      "fields": {
+        "key": "EditText",
+        "value": "Flag"
+      }
+    },
+    "EditorImplicitValues": {
+      "kind": "array",
+      "items": "EditorImplicitValue",
+      "min": 0,
+      "max": 8
+    },
+    "EditorExpansion": {
+      "kind": "object",
+      "fields": {
+        "effectiveJson": "JsonText",
+        "implicit": "EditorImplicitValues"
+      }
+    },
+    "EditorExpansionResult": {
+      "kind": "union",
+      "variants": {
+        "expanded": "EditorExpansion",
+        "refused": "EditText"
+      }
+    },
+    "EditorDependency": {
+      "kind": "union",
+      "variants": {
+        "unmanaged": "Empty",
+        "enabled": "Flag"
+      }
+    },
+    "EditorRules": {
+      "kind": "object",
+      "fields": {
+        "expansion": "EditorExpansionResult",
+        "dependency": "EditorDependency",
+        "crossField": "OptionalText",
+        "structuredEditor": "OptionalText"
+      }
     }
   },
   "roots": [
@@ -2091,7 +2519,22 @@
     "LibraryCoerceRequest",
     "LibraryCoercedValue",
     "LibraryFormatRequest",
-    "LibraryFormattedValue"
+    "LibraryFormattedValue",
+    "EditorCreate",
+    "EditorQuery",
+    "EditorField",
+    "EditorFieldState",
+    "EditorComparison",
+    "EditorEdit",
+    "EditorEditResult",
+    "EditorCommitResult",
+    "EditorStepRequest",
+    "EditorStep",
+    "EditorRow",
+    "EditorRowsRequest",
+    "EditorRuleRequest",
+    "EditorRules",
+    "EditorFieldRef"
   ],
   "sessionVersion": 1
 }

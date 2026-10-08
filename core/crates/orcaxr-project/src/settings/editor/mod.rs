@@ -9,6 +9,7 @@
 //! folded by `normalize('NFKD')` and `toLocaleLowerCase('en-US')`. Both are
 //! host policies: a [`Collation`] and a [`SearchFolding`].
 mod draft;
+pub mod exchange;
 mod fields;
 mod full_spectrum;
 mod generated;

@@ -26,6 +26,7 @@ export function startProjectJni(profile = "debug") {
   signatures.actorPreflightChecks = ["String", "byte[]", "String", "String"];
   signatures.catalogChecks = ["byte[]", "String"];
   signatures.libraryChecks = ["byte[]", "String"];
+  signatures.editorChecks = ["String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -100,7 +101,7 @@ export function startProjectJni(profile = "debug") {
     if (type === "String" || type === "LocalTimestampResolver")
       return sized(Buffer.from(v, "utf8"));
     // A collator mode the harness maps to a Java object, or none.
-    if (type === "PresetCollator")
+    if (type === "PresetCollator" || type === "SearchFolding")
       return sized(Buffer.from(v ?? "none", "utf8"));
     if (type === "byte[]" && v == null) return i32(-1);
     if (type === "byte[]") return sized(Buffer.from(v));
@@ -802,6 +803,44 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return call("libraryApplyUpdate", this.handle, spent(next));
     }
   }
+  class SettingsEditor extends Handle {
+    constructor(create, collator, folder) {
+      super(call("editorNew", create, collator, folder));
+    }
+    query(query) {
+      return call("editorQuery", this.handle, query);
+    }
+    field(i) {
+      return call("editorField", this.handle, i);
+    }
+    state(field) {
+      return call("editorState", this.handle, field);
+    }
+    compare(field) {
+      return call("editorCompare", this.handle, field);
+    }
+    edit(edit) {
+      return call("editorEdit", this.handle, edit);
+    }
+    commit() {
+      return call("editorCommit", this.handle);
+    }
+    revision() {
+      return call("editorRevision", this.handle);
+    }
+    overrides() {
+      return call("editorOverrides", this.handle);
+    }
+    rows(rows) {
+      return call("editorRows", this.handle, rows);
+    }
+    unavailable() {
+      return call("editorUnavailable", this.handle);
+    }
+    row(i) {
+      return call("editorRow", this.handle, i);
+    }
+  }
   return {
     ProjectUpload,
     ProjectSelectionInput,
@@ -809,6 +848,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     ProjectModelUpload,
     ProfileCatalogUpload,
     PresetLibrary,
+    SettingsEditor,
+    settings_step: (request) => call("settingsStep", request),
+    settings_rules: (request) => call("settingsRules", request),
     coerce_override_value: (request) => call("libraryCoerce", request),
     format_override_value: (request) => call("libraryFormat", request),
   };

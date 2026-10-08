@@ -4249,6 +4249,922 @@ fn read_library_formatted_value(v: &Value) -> Result<LibraryFormattedValue, Inva
         text: read_edit_text(&object["text"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorMode {
+    Simple,
+    Advanced,
+    Develop,
+}
+fn read_editor_mode(v: &Value) -> Result<EditorMode, InvalidIntent> {
+    match v.as_str() {
+        Some("simple") => Ok(EditorMode::Simple),
+        Some("advanced") => Ok(EditorMode::Advanced),
+        Some("develop") => Ok(EditorMode::Develop),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorTechnology {
+    Fff,
+    Sla,
+    Any,
+}
+fn read_editor_technology(v: &Value) -> Result<EditorTechnology, InvalidIntent> {
+    match v.as_str() {
+        Some("fff") => Ok(EditorTechnology::Fff),
+        Some("sla") => Ok(EditorTechnology::Sla),
+        Some("any") => Ok(EditorTechnology::Any),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorDefinitionTechnology {
+    Unknown,
+    Any,
+    Fff,
+    Sla,
+}
+fn read_editor_definition_technology(
+    v: &Value,
+) -> Result<EditorDefinitionTechnology, InvalidIntent> {
+    match v.as_str() {
+        Some("unknown") => Ok(EditorDefinitionTechnology::Unknown),
+        Some("any") => Ok(EditorDefinitionTechnology::Any),
+        Some("fff") => Ok(EditorDefinitionTechnology::Fff),
+        Some("sla") => Ok(EditorDefinitionTechnology::Sla),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorSurface {
+    Process,
+    Filament,
+    Printer,
+    Object,
+    Plate,
+}
+fn read_editor_surface(v: &Value) -> Result<EditorSurface, InvalidIntent> {
+    match v.as_str() {
+        Some("process") => Ok(EditorSurface::Process),
+        Some("filament") => Ok(EditorSurface::Filament),
+        Some("printer") => Ok(EditorSurface::Printer),
+        Some("object") => Ok(EditorSurface::Object),
+        Some("plate") => Ok(EditorSurface::Plate),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalEditorSurface {
+    Absent(Empty),
+    Value(EditorSurface),
+}
+fn read_optional_editor_surface(v: &Value) -> Result<OptionalEditorSurface, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalEditorSurface::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalEditorSurface::Value(read_editor_surface(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorScope {
+    Project,
+    Plate,
+    Object,
+    Part,
+    LayerRange,
+}
+fn read_editor_scope(v: &Value) -> Result<EditorScope, InvalidIntent> {
+    match v.as_str() {
+        Some("project") => Ok(EditorScope::Project),
+        Some("plate") => Ok(EditorScope::Plate),
+        Some("object") => Ok(EditorScope::Object),
+        Some("part") => Ok(EditorScope::Part),
+        Some("layerRange") => Ok(EditorScope::LayerRange),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalEditorScope {
+    Absent(Empty),
+    Value(EditorScope),
+}
+fn read_optional_editor_scope(v: &Value) -> Result<OptionalEditorScope, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalEditorScope::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalEditorScope::Value(read_editor_scope(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorCreate {
+    pub mode: EditorMode,
+    pub technology: EditorTechnology,
+    pub surface: OptionalEditorSurface,
+    pub scope: OptionalEditorScope,
+    pub inherited_json: JsonText,
+    pub overrides_json: JsonText,
+}
+fn read_editor_create(v: &Value) -> Result<EditorCreate, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "mode",
+            "technology",
+            "surface",
+            "scope",
+            "inheritedJson",
+            "overridesJson",
+        ],
+        false,
+    )?;
+    Ok(EditorCreate {
+        mode: read_editor_mode(&object["mode"])?,
+        technology: read_editor_technology(&object["technology"])?,
+        surface: read_optional_editor_surface(&object["surface"])?,
+        scope: read_optional_editor_scope(&object["scope"])?,
+        inherited_json: read_json_text(&object["inheritedJson"])?,
+        overrides_json: read_json_text(&object["overridesJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorQuery {
+    pub mode: EditorMode,
+    pub technology: EditorTechnology,
+    pub surface: OptionalEditorSurface,
+    pub scope: OptionalEditorScope,
+    pub search: EditText,
+    pub include_non_applicable: Flag,
+    pub include_unknown_applicability: Flag,
+    pub include_unavailable: Flag,
+}
+fn read_editor_query(v: &Value) -> Result<EditorQuery, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "mode",
+            "technology",
+            "surface",
+            "scope",
+            "search",
+            "includeNonApplicable",
+            "includeUnknownApplicability",
+            "includeUnavailable",
+        ],
+        false,
+    )?;
+    Ok(EditorQuery {
+        mode: read_editor_mode(&object["mode"])?,
+        technology: read_editor_technology(&object["technology"])?,
+        surface: read_optional_editor_surface(&object["surface"])?,
+        scope: read_optional_editor_scope(&object["scope"])?,
+        search: read_edit_text(&object["search"])?,
+        include_non_applicable: read_flag(&object["includeNonApplicable"])?,
+        include_unknown_applicability: read_flag(&object["includeUnknownApplicability"])?,
+        include_unavailable: read_flag(&object["includeUnavailable"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorLocation {
+    pub tab_id: EditText,
+    pub tab: EditText,
+    pub tab_order: Counter,
+    pub group_id: EditText,
+    pub group: EditText,
+    pub group_order: Counter,
+    pub placement_id: EditText,
+    pub order: Counter,
+    pub surface: EditorSurface,
+}
+fn read_editor_location(v: &Value) -> Result<EditorLocation, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "tabId",
+            "tab",
+            "tabOrder",
+            "groupId",
+            "group",
+            "groupOrder",
+            "placementId",
+            "order",
+            "surface",
+        ],
+        false,
+    )?;
+    Ok(EditorLocation {
+        tab_id: read_edit_text(&object["tabId"])?,
+        tab: read_edit_text(&object["tab"])?,
+        tab_order: read_counter(&object["tabOrder"])?,
+        group_id: read_edit_text(&object["groupId"])?,
+        group: read_edit_text(&object["group"])?,
+        group_order: read_counter(&object["groupOrder"])?,
+        placement_id: read_edit_text(&object["placementId"])?,
+        order: read_counter(&object["order"])?,
+        surface: read_editor_surface(&object["surface"])?,
+    })
+}
+pub type EditorLocations = Vec<EditorLocation>;
+fn read_editor_locations(v: &Value) -> Result<EditorLocations, InvalidIntent> {
+    list(v, 0, 64)?.iter().map(read_editor_location).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorChoice {
+    pub serialized: EditText,
+    pub label: EditText,
+}
+fn read_editor_choice(v: &Value) -> Result<EditorChoice, InvalidIntent> {
+    let object = fields(v, &["serialized", "label"], false)?;
+    Ok(EditorChoice {
+        serialized: read_edit_text(&object["serialized"])?,
+        label: read_edit_text(&object["label"])?,
+    })
+}
+pub type EditorChoices = Vec<EditorChoice>;
+fn read_editor_choices(v: &Value) -> Result<EditorChoices, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_editor_choice).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorMatchField {
+    Key,
+    Label,
+    FullLabel,
+    Category,
+    Page,
+    Group,
+    Surface,
+    Tooltip,
+    Owner,
+    Alias,
+    Enum,
+}
+fn read_editor_match_field(v: &Value) -> Result<EditorMatchField, InvalidIntent> {
+    match v.as_str() {
+        Some("key") => Ok(EditorMatchField::Key),
+        Some("label") => Ok(EditorMatchField::Label),
+        Some("fullLabel") => Ok(EditorMatchField::FullLabel),
+        Some("category") => Ok(EditorMatchField::Category),
+        Some("page") => Ok(EditorMatchField::Page),
+        Some("group") => Ok(EditorMatchField::Group),
+        Some("surface") => Ok(EditorMatchField::Surface),
+        Some("tooltip") => Ok(EditorMatchField::Tooltip),
+        Some("owner") => Ok(EditorMatchField::Owner),
+        Some("alias") => Ok(EditorMatchField::Alias),
+        Some("enum") => Ok(EditorMatchField::Enum),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorMatch {
+    pub field: EditorMatchField,
+    pub start: Counter,
+    pub length: Counter,
+    pub text: EditText,
+}
+fn read_editor_match(v: &Value) -> Result<EditorMatch, InvalidIntent> {
+    let object = fields(v, &["field", "start", "length", "text"], false)?;
+    Ok(EditorMatch {
+        field: read_editor_match_field(&object["field"])?,
+        start: read_counter(&object["start"])?,
+        length: read_counter(&object["length"])?,
+        text: read_edit_text(&object["text"])?,
+    })
+}
+pub type EditorMatches = Vec<EditorMatch>;
+fn read_editor_matches(v: &Value) -> Result<EditorMatches, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_editor_match).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorApplicability {
+    Applicable,
+    NotApplicable,
+    Unknown,
+}
+fn read_editor_applicability(v: &Value) -> Result<EditorApplicability, InvalidIntent> {
+    match v.as_str() {
+        Some("applicable") => Ok(EditorApplicability::Applicable),
+        Some("notApplicable") => Ok(EditorApplicability::NotApplicable),
+        Some("unknown") => Ok(EditorApplicability::Unknown),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorSupport {
+    Implemented(Empty),
+    Unavailable(EditText),
+}
+fn read_editor_support(v: &Value) -> Result<EditorSupport, InvalidIntent> {
+    let object = fields(v, &["implemented", "unavailable"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "implemented" => Ok(EditorSupport::Implemented(read_empty(value)?)),
+        "unavailable" => Ok(EditorSupport::Unavailable(read_edit_text(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorField {
+    pub id: EditText,
+    pub key: EditText,
+    pub owner: EditText,
+    pub label: EditText,
+    pub full_label: OptionalText,
+    pub category: EditText,
+    pub tooltip: OptionalText,
+    pub unit: OptionalText,
+    pub mode: EditorMode,
+    pub technology: EditorDefinitionTechnology,
+    pub applicability: EditorApplicability,
+    pub support: EditorSupport,
+    pub locations: EditorLocations,
+    pub primary: OptionalCounter,
+    pub enum_choices: EditorChoices,
+    pub matches: EditorMatches,
+}
+fn read_editor_field(v: &Value) -> Result<EditorField, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "id",
+            "key",
+            "owner",
+            "label",
+            "fullLabel",
+            "category",
+            "tooltip",
+            "unit",
+            "mode",
+            "technology",
+            "applicability",
+            "support",
+            "locations",
+            "primary",
+            "enumChoices",
+            "matches",
+        ],
+        false,
+    )?;
+    Ok(EditorField {
+        id: read_edit_text(&object["id"])?,
+        key: read_edit_text(&object["key"])?,
+        owner: read_edit_text(&object["owner"])?,
+        label: read_edit_text(&object["label"])?,
+        full_label: read_optional_text(&object["fullLabel"])?,
+        category: read_edit_text(&object["category"])?,
+        tooltip: read_optional_text(&object["tooltip"])?,
+        unit: read_optional_text(&object["unit"])?,
+        mode: read_editor_mode(&object["mode"])?,
+        technology: read_editor_definition_technology(&object["technology"])?,
+        applicability: read_editor_applicability(&object["applicability"])?,
+        support: read_editor_support(&object["support"])?,
+        locations: read_editor_locations(&object["locations"])?,
+        primary: read_optional_counter(&object["primary"])?,
+        enum_choices: read_editor_choices(&object["enumChoices"])?,
+        matches: read_editor_matches(&object["matches"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorIssue {
+    pub code: EditText,
+    pub path: EditText,
+    pub message: EditText,
+}
+fn read_editor_issue(v: &Value) -> Result<EditorIssue, InvalidIntent> {
+    let object = fields(v, &["code", "path", "message"], false)?;
+    Ok(EditorIssue {
+        code: read_edit_text(&object["code"])?,
+        path: read_edit_text(&object["path"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+pub type EditorIssues = Vec<EditorIssue>;
+fn read_editor_issues(v: &Value) -> Result<EditorIssues, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_editor_issue).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorOrigin {
+    Changed,
+    Inherited,
+    Default,
+    Unset,
+}
+fn read_editor_origin(v: &Value) -> Result<EditorOrigin, InvalidIntent> {
+    match v.as_str() {
+        Some("changed") => Ok(EditorOrigin::Changed),
+        Some("inherited") => Ok(EditorOrigin::Inherited),
+        Some("default") => Ok(EditorOrigin::Default),
+        Some("unset") => Ok(EditorOrigin::Unset),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorFieldState {
+    pub field: EditorField,
+    pub value_json: OptionalJsonText,
+    pub serialized: OptionalText,
+    pub origin: EditorOrigin,
+    pub has_local_override: Flag,
+    pub changed: Flag,
+    pub draft_changed: Flag,
+    pub draft_raw: OptionalText,
+    pub draft_value_json: OptionalJsonText,
+    pub draft_serialized: OptionalText,
+    pub issues: EditorIssues,
+}
+fn read_editor_field_state(v: &Value) -> Result<EditorFieldState, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "field",
+            "valueJson",
+            "serialized",
+            "origin",
+            "hasLocalOverride",
+            "changed",
+            "draftChanged",
+            "draftRaw",
+            "draftValueJson",
+            "draftSerialized",
+            "issues",
+        ],
+        false,
+    )?;
+    Ok(EditorFieldState {
+        field: read_editor_field(&object["field"])?,
+        value_json: read_optional_json_text(&object["valueJson"])?,
+        serialized: read_optional_text(&object["serialized"])?,
+        origin: read_editor_origin(&object["origin"])?,
+        has_local_override: read_flag(&object["hasLocalOverride"])?,
+        changed: read_flag(&object["changed"])?,
+        draft_changed: read_flag(&object["draftChanged"])?,
+        draft_raw: read_optional_text(&object["draftRaw"])?,
+        draft_value_json: read_optional_json_text(&object["draftValueJson"])?,
+        draft_serialized: read_optional_text(&object["draftSerialized"])?,
+        issues: read_editor_issues(&object["issues"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorComparison {
+    pub field_id: EditText,
+    pub key: EditText,
+    pub default_json: OptionalJsonText,
+    pub inherited_json: OptionalJsonText,
+    pub override_json: OptionalJsonText,
+    pub effective_json: OptionalJsonText,
+    pub draft_json: OptionalJsonText,
+    pub effective_equals_default: Flag,
+    pub draft_equals_effective: Flag,
+}
+fn read_editor_comparison(v: &Value) -> Result<EditorComparison, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "fieldId",
+            "key",
+            "defaultJson",
+            "inheritedJson",
+            "overrideJson",
+            "effectiveJson",
+            "draftJson",
+            "effectiveEqualsDefault",
+            "draftEqualsEffective",
+        ],
+        false,
+    )?;
+    Ok(EditorComparison {
+        field_id: read_edit_text(&object["fieldId"])?,
+        key: read_edit_text(&object["key"])?,
+        default_json: read_optional_json_text(&object["defaultJson"])?,
+        inherited_json: read_optional_json_text(&object["inheritedJson"])?,
+        override_json: read_optional_json_text(&object["overrideJson"])?,
+        effective_json: read_optional_json_text(&object["effectiveJson"])?,
+        draft_json: read_optional_json_text(&object["draftJson"])?,
+        effective_equals_default: read_flag(&object["effectiveEqualsDefault"])?,
+        draft_equals_effective: read_flag(&object["draftEqualsEffective"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorRefusal {
+    pub message: EditText,
+    pub issues: EditorIssues,
+}
+fn read_editor_refusal(v: &Value) -> Result<EditorRefusal, InvalidIntent> {
+    let object = fields(v, &["message", "issues"], false)?;
+    Ok(EditorRefusal {
+        message: read_edit_text(&object["message"])?,
+        issues: read_editor_issues(&object["issues"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorFieldEdit {
+    pub field_id: EditText,
+    pub raw: EditText,
+}
+fn read_editor_field_edit(v: &Value) -> Result<EditorFieldEdit, InvalidIntent> {
+    let object = fields(v, &["fieldId", "raw"], false)?;
+    Ok(EditorFieldEdit {
+        field_id: read_edit_text(&object["fieldId"])?,
+        raw: read_edit_text(&object["raw"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorFieldRef {
+    pub field_id: EditText,
+}
+fn read_editor_field_ref(v: &Value) -> Result<EditorFieldRef, InvalidIntent> {
+    let object = fields(v, &["fieldId"], false)?;
+    Ok(EditorFieldRef {
+        field_id: read_edit_text(&object["fieldId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorEdit {
+    Set(EditorFieldEdit),
+    Clear(EditorFieldRef),
+    Inherit(EditorFieldRef),
+    Reset(EditorFieldRef),
+}
+fn read_editor_edit(v: &Value) -> Result<EditorEdit, InvalidIntent> {
+    let object = fields(v, &["set", "clear", "inherit", "reset"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "set" => Ok(EditorEdit::Set(read_editor_field_edit(value)?)),
+        "clear" => Ok(EditorEdit::Clear(read_editor_field_ref(value)?)),
+        "inherit" => Ok(EditorEdit::Inherit(read_editor_field_ref(value)?)),
+        "reset" => Ok(EditorEdit::Reset(read_editor_field_ref(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorEditResult {
+    Applied(Empty),
+    Refused(EditorRefusal),
+}
+fn read_editor_edit_result(v: &Value) -> Result<EditorEditResult, InvalidIntent> {
+    let object = fields(v, &["applied", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "applied" => Ok(EditorEditResult::Applied(read_empty(value)?)),
+        "refused" => Ok(EditorEditResult::Refused(read_editor_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorChangeAction {
+    Set,
+    Remove,
+}
+fn read_editor_change_action(v: &Value) -> Result<EditorChangeAction, InvalidIntent> {
+    match v.as_str() {
+        Some("set") => Ok(EditorChangeAction::Set),
+        Some("remove") => Ok(EditorChangeAction::Remove),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorChange {
+    pub field_id: EditText,
+    pub key: EditText,
+    pub owner: EditText,
+    pub action: EditorChangeAction,
+    pub previous_json: OptionalJsonText,
+    pub value_json: OptionalJsonText,
+    pub serialized: OptionalText,
+}
+fn read_editor_change(v: &Value) -> Result<EditorChange, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "fieldId",
+            "key",
+            "owner",
+            "action",
+            "previousJson",
+            "valueJson",
+            "serialized",
+        ],
+        false,
+    )?;
+    Ok(EditorChange {
+        field_id: read_edit_text(&object["fieldId"])?,
+        key: read_edit_text(&object["key"])?,
+        owner: read_edit_text(&object["owner"])?,
+        action: read_editor_change_action(&object["action"])?,
+        previous_json: read_optional_json_text(&object["previousJson"])?,
+        value_json: read_optional_json_text(&object["valueJson"])?,
+        serialized: read_optional_text(&object["serialized"])?,
+    })
+}
+pub type EditorChanges = Vec<EditorChange>;
+fn read_editor_changes(v: &Value) -> Result<EditorChanges, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_editor_change).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorCommit {
+    pub base_revision: Counter,
+    pub revision: Counter,
+    pub changes: EditorChanges,
+    pub next_overrides_json: JsonText,
+}
+fn read_editor_commit(v: &Value) -> Result<EditorCommit, InvalidIntent> {
+    let object = fields(
+        v,
+        &["baseRevision", "revision", "changes", "nextOverridesJson"],
+        false,
+    )?;
+    Ok(EditorCommit {
+        base_revision: read_counter(&object["baseRevision"])?,
+        revision: read_counter(&object["revision"])?,
+        changes: read_editor_changes(&object["changes"])?,
+        next_overrides_json: read_json_text(&object["nextOverridesJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorCommitResult {
+    Committed(EditorCommit),
+    Refused(EditorRefusal),
+}
+fn read_editor_commit_result(v: &Value) -> Result<EditorCommitResult, InvalidIntent> {
+    let object = fields(v, &["committed", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "committed" => Ok(EditorCommitResult::Committed(read_editor_commit(value)?)),
+        "refused" => Ok(EditorCommitResult::Refused(read_editor_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorStepRequest {
+    pub field_id: EditText,
+    pub current: EditText,
+    pub up: Flag,
+}
+fn read_editor_step_request(v: &Value) -> Result<EditorStepRequest, InvalidIntent> {
+    let object = fields(v, &["fieldId", "current", "up"], false)?;
+    Ok(EditorStepRequest {
+        field_id: read_edit_text(&object["fieldId"])?,
+        current: read_edit_text(&object["current"])?,
+        up: read_flag(&object["up"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorStepRefusalCode {
+    NotNumeric,
+    Unbounded,
+    Unreadable,
+    ReadOnly,
+}
+fn read_editor_step_refusal_code(v: &Value) -> Result<EditorStepRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("notNumeric") => Ok(EditorStepRefusalCode::NotNumeric),
+        Some("unbounded") => Ok(EditorStepRefusalCode::Unbounded),
+        Some("unreadable") => Ok(EditorStepRefusalCode::Unreadable),
+        Some("readOnly") => Ok(EditorStepRefusalCode::ReadOnly),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorStepRefusal {
+    pub code: EditorStepRefusalCode,
+    pub reason: EditText,
+}
+fn read_editor_step_refusal(v: &Value) -> Result<EditorStepRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "reason"], false)?;
+    Ok(EditorStepRefusal {
+        code: read_editor_step_refusal_code(&object["code"])?,
+        reason: read_edit_text(&object["reason"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorStep {
+    Value(EditText),
+    Refused(EditorStepRefusal),
+    Codec(EditText),
+}
+fn read_editor_step(v: &Value) -> Result<EditorStep, InvalidIntent> {
+    let object = fields(v, &["value", "refused", "codec"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "value" => Ok(EditorStep::Value(read_edit_text(value)?)),
+        "refused" => Ok(EditorStep::Refused(read_editor_step_refusal(value)?)),
+        "codec" => Ok(EditorStep::Codec(read_edit_text(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorRowKind {
+    Numeric,
+    Bool,
+    Enum,
+    Text,
+    ReadOnly,
+}
+fn read_editor_row_kind(v: &Value) -> Result<EditorRowKind, InvalidIntent> {
+    match v.as_str() {
+        Some("numeric") => Ok(EditorRowKind::Numeric),
+        Some("bool") => Ok(EditorRowKind::Bool),
+        Some("enum") => Ok(EditorRowKind::Enum),
+        Some("text") => Ok(EditorRowKind::Text),
+        Some("readOnly") => Ok(EditorRowKind::ReadOnly),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorRow {
+    pub field: EditorField,
+    pub group: EditText,
+    pub value: EditText,
+    pub overridden: Flag,
+    pub steppable: Flag,
+    pub reason: OptionalText,
+    pub kind: EditorRowKind,
+    pub minimum: OptionalFinite,
+    pub maximum: OptionalFinite,
+    pub integer: Flag,
+    pub typeable: Flag,
+}
+fn read_editor_row(v: &Value) -> Result<EditorRow, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "field",
+            "group",
+            "value",
+            "overridden",
+            "steppable",
+            "reason",
+            "kind",
+            "minimum",
+            "maximum",
+            "integer",
+            "typeable",
+        ],
+        false,
+    )?;
+    Ok(EditorRow {
+        field: read_editor_field(&object["field"])?,
+        group: read_edit_text(&object["group"])?,
+        value: read_edit_text(&object["value"])?,
+        overridden: read_flag(&object["overridden"])?,
+        steppable: read_flag(&object["steppable"])?,
+        reason: read_optional_text(&object["reason"])?,
+        kind: read_editor_row_kind(&object["kind"])?,
+        minimum: read_optional_finite(&object["minimum"])?,
+        maximum: read_optional_finite(&object["maximum"])?,
+        integer: read_flag(&object["integer"])?,
+        typeable: read_flag(&object["typeable"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorRowsRequest {
+    pub scope: EditorScope,
+}
+fn read_editor_rows_request(v: &Value) -> Result<EditorRowsRequest, InvalidIntent> {
+    let object = fields(v, &["scope"], false)?;
+    Ok(EditorRowsRequest {
+        scope: read_editor_scope(&object["scope"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorRuleRequest {
+    pub changed_keys: TextList,
+    pub key: EditText,
+    pub effective_json: JsonText,
+}
+fn read_editor_rule_request(v: &Value) -> Result<EditorRuleRequest, InvalidIntent> {
+    let object = fields(v, &["changedKeys", "key", "effectiveJson"], false)?;
+    Ok(EditorRuleRequest {
+        changed_keys: read_text_list(&object["changedKeys"])?,
+        key: read_edit_text(&object["key"])?,
+        effective_json: read_json_text(&object["effectiveJson"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorImplicitValue {
+    pub key: EditText,
+    pub value: Flag,
+}
+fn read_editor_implicit_value(v: &Value) -> Result<EditorImplicitValue, InvalidIntent> {
+    let object = fields(v, &["key", "value"], false)?;
+    Ok(EditorImplicitValue {
+        key: read_edit_text(&object["key"])?,
+        value: read_flag(&object["value"])?,
+    })
+}
+pub type EditorImplicitValues = Vec<EditorImplicitValue>;
+fn read_editor_implicit_values(v: &Value) -> Result<EditorImplicitValues, InvalidIntent> {
+    list(v, 0, 8)?
+        .iter()
+        .map(read_editor_implicit_value)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorExpansion {
+    pub effective_json: JsonText,
+    pub implicit: EditorImplicitValues,
+}
+fn read_editor_expansion(v: &Value) -> Result<EditorExpansion, InvalidIntent> {
+    let object = fields(v, &["effectiveJson", "implicit"], false)?;
+    Ok(EditorExpansion {
+        effective_json: read_json_text(&object["effectiveJson"])?,
+        implicit: read_editor_implicit_values(&object["implicit"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorExpansionResult {
+    Expanded(EditorExpansion),
+    Refused(EditText),
+}
+fn read_editor_expansion_result(v: &Value) -> Result<EditorExpansionResult, InvalidIntent> {
+    let object = fields(v, &["expanded", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "expanded" => Ok(EditorExpansionResult::Expanded(read_editor_expansion(
+            value,
+        )?)),
+        "refused" => Ok(EditorExpansionResult::Refused(read_edit_text(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorDependency {
+    Unmanaged(Empty),
+    Enabled(Flag),
+}
+fn read_editor_dependency(v: &Value) -> Result<EditorDependency, InvalidIntent> {
+    let object = fields(v, &["unmanaged", "enabled"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "unmanaged" => Ok(EditorDependency::Unmanaged(read_empty(value)?)),
+        "enabled" => Ok(EditorDependency::Enabled(read_flag(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorRules {
+    pub expansion: EditorExpansionResult,
+    pub dependency: EditorDependency,
+    pub cross_field: OptionalText,
+    pub structured_editor: OptionalText,
+}
+fn read_editor_rules(v: &Value) -> Result<EditorRules, InvalidIntent> {
+    let object = fields(
+        v,
+        &["expansion", "dependency", "crossField", "structuredEditor"],
+        false,
+    )?;
+    Ok(EditorRules {
+        expansion: read_editor_expansion_result(&object["expansion"])?,
+        dependency: read_editor_dependency(&object["dependency"])?,
+        cross_field: read_optional_text(&object["crossField"])?,
+        structured_editor: read_optional_text(&object["structuredEditor"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -4503,5 +5419,125 @@ pub fn encode_library_formatted_value(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_library_formatted_value(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_create(text: &str) -> Result<EditorCreate, InvalidIntent> {
+    read_editor_create(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_create(value: &EditorCreate) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_create(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_query(text: &str) -> Result<EditorQuery, InvalidIntent> {
+    read_editor_query(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_query(value: &EditorQuery) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_query(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_field(text: &str) -> Result<EditorField, InvalidIntent> {
+    read_editor_field(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_field(value: &EditorField) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_field(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_field_state(text: &str) -> Result<EditorFieldState, InvalidIntent> {
+    read_editor_field_state(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_field_state(value: &EditorFieldState) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_field_state(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_comparison(text: &str) -> Result<EditorComparison, InvalidIntent> {
+    read_editor_comparison(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_comparison(value: &EditorComparison) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_comparison(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_edit(text: &str) -> Result<EditorEdit, InvalidIntent> {
+    read_editor_edit(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_edit(value: &EditorEdit) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_edit(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_edit_result(text: &str) -> Result<EditorEditResult, InvalidIntent> {
+    read_editor_edit_result(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_edit_result(value: &EditorEditResult) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_edit_result(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_commit_result(text: &str) -> Result<EditorCommitResult, InvalidIntent> {
+    read_editor_commit_result(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_commit_result(value: &EditorCommitResult) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_commit_result(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_step_request(text: &str) -> Result<EditorStepRequest, InvalidIntent> {
+    read_editor_step_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_step_request(value: &EditorStepRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_step_request(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_step(text: &str) -> Result<EditorStep, InvalidIntent> {
+    read_editor_step(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_step(value: &EditorStep) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_step(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_row(text: &str) -> Result<EditorRow, InvalidIntent> {
+    read_editor_row(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_row(value: &EditorRow) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_row(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_rows_request(text: &str) -> Result<EditorRowsRequest, InvalidIntent> {
+    read_editor_rows_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_rows_request(value: &EditorRowsRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_rows_request(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_rule_request(text: &str) -> Result<EditorRuleRequest, InvalidIntent> {
+    read_editor_rule_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_rule_request(value: &EditorRuleRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_rule_request(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_rules(text: &str) -> Result<EditorRules, InvalidIntent> {
+    read_editor_rules(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_rules(value: &EditorRules) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_rules(&text)?;
+    Ok(text)
+}
+pub fn decode_editor_field_ref(text: &str) -> Result<EditorFieldRef, InvalidIntent> {
+    read_editor_field_ref(&super::project_intents::parse(text)?)
+}
+pub fn encode_editor_field_ref(value: &EditorFieldRef) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_editor_field_ref(&text)?;
     Ok(text)
 }

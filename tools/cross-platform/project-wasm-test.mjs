@@ -7,6 +7,7 @@ import { replayProject } from "./project-wasm-replay.mjs";
 import { replayPreflights } from "./project-preflight-replay.mjs";
 import { replayCatalogs } from "./catalog-replay.mjs";
 import { replayLibrary } from "./library-replay.mjs";
+import { replayEditor } from "./editor-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -46,6 +47,10 @@ if (isMainThread) {
     assert.deepEqual(
       [result.libraryReplies, result.libraryRefusals],
       [425, 184],
+    );
+    assert.deepEqual(
+      [result.editorReplies, result.editorRefusals],
+      [14938, 78],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -254,6 +259,20 @@ if (isMainThread) {
   const libraries = replayLibrary(core, libraryFixture, catalogBytes, [
     collator,
   ]);
+  // The settings editor through the browser's own collation and folding.
+  const editorFixture = JSON.parse(
+    await readFile(
+      new URL("testdata/cross-platform/settings-editor-vectors.json", root),
+    ),
+  );
+  const editors = replayEditor(core, editorFixture, [collator, {
+    fold: (units) => {
+      const s = String.fromCharCode(...units)
+        .normalize("NFKD")
+        .toLocaleLowerCase("en-US");
+      return Uint16Array.from({ length: s.length }, (_, i) => s.charCodeAt(i));
+    },
+  }]);
   parentPort.postMessage(
     {
       ...metrics,
@@ -263,6 +282,7 @@ if (isMainThread) {
       ...preflights,
       ...catalogs,
       ...libraries,
+      ...editors,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

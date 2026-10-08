@@ -3064,6 +3064,38 @@ every scope in two modes through the production controller. Full Spectrum
 expansions, dependencies, cross-field issues and the structured editor are
 pinned too. Rust matches all of them.
 
+### Settings editor host exchange
+
+`settings::editor::exchange` serves the editor to hosts through generated
+contract values. A `HostEditor` is created from an `EditorCreate` (mode,
+technology, surface, scope, and inherited and override values as JSON); the
+browser's constructor refusals become `invalid_editor`. It answers:
+
+- `query`, then `field(i)`: the field list with locations, enum choices,
+  support and search matches;
+- `state` and `compare` for one field;
+- `edit` (set, clear, inherit or reset a draft) and `commit`, whose browser
+  errors are refusals carrying the message and issues;
+- `rows`, then `row(i)`, and the count of unsupported fields;
+- the free `step` and Full Spectrum `rules` (expansion, dependency,
+  cross-field issue and structured editor for one key).
+
+Bindings keep the host's collator and search folder. WASM takes any object
+with `fold(Uint16Array)`, which the browser builds from `normalize('NFKD')`
+and `toLocaleLowerCase('en-US')`. JNI takes a `SearchFolding`, called
+through its own thread attachment; `SearchFolding.PLATFORM` uses the
+platform `Normalizer` and US lowercasing. A throwing callback becomes
+`folding_failed` or `collation_failed` without exposing its text. Without a
+folder the exact ASCII folding applies, which can list but not search this
+schema, because some tooltips are not ASCII. The Kotlin wrapper is
+`SettingsEditor`.
+
+The settings editor corpus now carries contract encodings: every query's
+field IDs with sampled fields, all five editors step by step, every
+seventh definition's steps, all Full Spectrum rule combinations and every
+row view. Rust, WASM in Node and Chrome and JNI match 14,938 replies, with
+78 refusals each. The Kotlin wrapper passes 24 checks.
+
 ### Preset graph and profile catalog
 
 `settings::presets` ports `PresetGraph`, the pinned v2.3.4 preset semantics:

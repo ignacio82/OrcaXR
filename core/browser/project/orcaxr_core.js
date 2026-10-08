@@ -2495,6 +2495,242 @@ export class ProjectUpload {
 if (Symbol.dispose) ProjectUpload.prototype[Symbol.dispose] = ProjectUpload.prototype.free;
 
 /**
+ * A settings draft over inherited values and one node's overrides.
+ */
+export class SettingsEditor {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        SettingsEditorFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_settingseditor_free(ptr, 0);
+    }
+    /**
+     * Commit every draft; returns an `EditorCommitResult`.
+     * @returns {string}
+     */
+    commit() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.settingseditor_commit(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * An `EditorFieldRef`; returns its `EditorComparison`.
+     * @param {string} field
+     * @returns {string}
+     */
+    compare(field) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(field, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.settingseditor_compare(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * An `EditorEdit`; returns its `EditorEditResult`.
+     * @param {string} edit
+     * @returns {string}
+     */
+    edit(edit) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(edit, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.settingseditor_edit(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * The latest query's field at `position`, as an `EditorField`.
+     * @param {number} position
+     * @returns {string}
+     */
+    field(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.settingseditor_field(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * An `EditorCreate`. Without a collator or folder the exact ASCII
+     * policies apply and refuse other text.
+     * @param {string} create
+     * @param {any | null} [collator]
+     * @param {any | null} [folder]
+     */
+    constructor(create, collator, folder) {
+        const ptr0 = passStringToWasm0(create, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.settingseditor_new(ptr0, len0, isLikeNone(collator) ? 0 : addToExternrefTable0(collator), isLikeNone(folder) ? 0 : addToExternrefTable0(folder));
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0];
+        SettingsEditorFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * This node's overrides as canonical JSON.
+     * @returns {string}
+     */
+    overrides() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.settingseditor_overrides(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * An `EditorQuery`; returns the number of fields.
+     * @param {string} query
+     * @returns {number}
+     */
+    query(query) {
+        const ptr0 = passStringToWasm0(query, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.settingseditor_query(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    revision() {
+        const ret = wasm.settingseditor_revision(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {number} position
+     * @returns {string}
+     */
+    row(position) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.settingseditor_row(this.__wbg_ptr, position);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * An `EditorRowsRequest`; returns the number of rows.
+     * @param {string} rows
+     * @returns {number}
+     */
+    rows(rows) {
+        const ptr0 = passStringToWasm0(rows, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.settingseditor_rows(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+    /**
+     * An `EditorFieldRef`; returns its `EditorFieldState`.
+     * @param {string} field
+     * @returns {string}
+     */
+    state(field) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(field, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.settingseditor_state(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * Fields the latest rows left out because no surface supports them.
+     * @returns {number}
+     */
+    unavailable() {
+        const ret = wasm.settingseditor_unavailable(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+}
+if (Symbol.dispose) SettingsEditor.prototype[Symbol.dispose] = SettingsEditor.prototype.free;
+
+/**
  * `coerceOverrideValue`: a `LibraryCoerceRequest` to a `LibraryCoercedValue`.
  * @param {string} request
  * @returns {string}
@@ -2580,6 +2816,58 @@ export function format_override_value(request) {
         wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
     }
 }
+
+/**
+ * The Full Spectrum rules: an `EditorRuleRequest` to `EditorRules`.
+ * @param {string} rules
+ * @returns {string}
+ */
+export function settings_rules(rules) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(rules, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.settings_rules(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * `stepSettingValue`: an `EditorStepRequest` to an `EditorStep`.
+ * @param {string} step
+ * @returns {string}
+ */
+export function settings_step(step) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(step, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.settings_step(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
@@ -2601,6 +2889,13 @@ function __wbg_get_imports() {
         __wbg_concat_31b84501191b3bea: function() { return handleError(function (arg0, arg1) {
             const ret = arg0.concat(arg1);
             return ret;
+        }, arguments); },
+        __wbg_fold_dfceac45bd85ab6b: function() { return handleError(function (arg0, arg1, arg2, arg3) {
+            const ret = arg1.fold(getArrayU16FromWasm0(arg2, arg3));
+            const ptr1 = passArray16ToWasm0(ret, wasm.__wbindgen_malloc);
+            const len1 = WASM_VECTOR_LEN;
+            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
         }, arguments); },
         __wbg_fromCharCode_d356c26e26e2d234: function() { return handleError(function (arg0, arg1) {
             const ret = String.fromCharCode(...(getArrayU16FromWasm0(arg0, arg1)));
@@ -2715,6 +3010,9 @@ const ProjectSessionFinalization = (typeof FinalizationRegistry === 'undefined')
 const ProjectUploadFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectupload_free(ptr, 1));
+const SettingsEditorFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_settingseditor_free(ptr, 1));
 
 function addToExternrefTable0(obj) {
     const idx = wasm.__externref_table_alloc();

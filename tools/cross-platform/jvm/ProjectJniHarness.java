@@ -17,6 +17,9 @@ public final class ProjectJniHarness {
     public static long libraryChecks(byte[] catalog, String expected) {
         return ProjectLibraryChecks.run(catalog, expected);
     }
+    public static long editorChecks(String expected) {
+        return ProjectEditorChecks.run(expected);
+    }
     public static long actorPreflightChecks(String source, byte[] mesh, String request, String expected) {
         return ProjectPreflightChecks.run(source, mesh, request, expected);
     }
@@ -115,6 +118,13 @@ public final class ProjectJniHarness {
                 default -> (PresetCollator) java.util.Arrays::compare;
             };
         }
+        if (type == SearchFolding.class) {
+            return switch (string()) {
+                case "none" -> null;
+                case "throw" -> (SearchFolding) text -> { throw new IllegalStateException("PRIVATE folding detail"); };
+                default -> SearchFolding.PLATFORM;
+            };
+        }
         if (type == LocalTimestampResolver.class) {
             String zone = string();
             if (zone.equals("throw")) return (LocalTimestampResolver) value -> { throw new IllegalStateException("PRIVATE timestamp detail"); };
@@ -154,6 +164,7 @@ public final class ProjectJniHarness {
             if (name.equals("actorExportChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class, String.class, String.class, String.class);
             if (name.equals("catalogChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class);
             if (name.equals("libraryChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class);
+            if (name.equals("editorChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("actorPreflightChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorClipboardChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class);
             if (name.equals("actorClipboardReplay")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class, long.class, String.class, long[].class);

@@ -23,7 +23,10 @@ pub(super) fn json_code(e: JsonInputError) -> &'static str {
     }
 }
 
-fn char_array<'local>(env: &mut JNIEnv<'local>, units: &[u16]) -> Result<JObject<'local>> {
+pub(super) fn char_array<'local>(
+    env: &mut JNIEnv<'local>,
+    units: &[u16],
+) -> Result<JObject<'local>> {
     let array = env
         .new_char_array(units.len() as i32)
         .map_err(|_| "allocation_failed")?;

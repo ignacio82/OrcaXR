@@ -45,6 +45,8 @@ const [
   catalogBytes,
   libraryReplay,
   libraryFixtureText,
+  editorReplay,
+  editorFixtureText,
   wasm,
 ] = await Promise.all([
   read("core/dist/project-wasm/orcaxr_core.js"),
@@ -80,6 +82,8 @@ const [
   readFile(new URL("web/public/profiles/catalog.json", root)),
   read("tools/cross-platform/library-replay.mjs"),
   read("testdata/cross-platform/preset-library-vectors.json"),
+  read("tools/cross-platform/editor-replay.mjs"),
+  read("testdata/cross-platform/settings-editor-vectors.json"),
   readFile(new URL("core/dist/project-wasm/orcaxr_core_bg.wasm", root)),
 ]);
 // Real archives and models referenced by the corpora, delivered as bytes.
@@ -160,6 +164,8 @@ try {
       catalogBytes,
       libraryReplay,
       libraryFixture,
+      editorReplay,
+      editorFixture,
       wasm,
     }) => {
       const coreUrl = URL.createObjectURL(
@@ -168,7 +174,7 @@ try {
       const workerUrl = URL.createObjectURL(
         new Blob(
           [
-            `import * as core from '${coreUrl}';\n${replay}\n${boundaries}\n${queryReplay}\n${stagedReplay}\n${stagedBoundaries}\n${clipboardBoundaries}\n${documentReplay}\n${archiveReplay}\n${modelReplay}\n${preflightReplay}\n${catalogReplay}\n${libraryReplay}\nconst b64=(t)=>Uint8Array.from(atob(t),(c)=>c.charCodeAt(0));const sha256=async(b)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",b)),(x)=>x.toString(16).padStart(2,"0")).join("");self.onmessage=async({data})=>{try{await core.default({module_or_path:data.wasm});const result=await replayProject(core,data.fixture,data.layout);result.archives=await replayArchives(core,data.layout,data.archiveLayout,archiveCases(JSON.parse(data.canonicalArchives),JSON.parse(data.foreignArchives),(p)=>b64(data.archiveFiles[p]),b64),sha256);result.models=await replayModelImports(core,data.layout,data.modelLayout,JSON.parse(data.modelTransactions),JSON.parse(data.modelStaging),JSON.parse(data.modelDecoding),sha256,(p)=>b64(data.archiveFiles[p]),b64);Object.assign(result,replayProjectDocuments(core,data.documentFixture,data.layout),await replayStagedProject(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectStagedBoundaries(core,data.stagedFixture.traces[0],data.layout,data.stagingLayout),projectClipboardBoundaries(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectBoundaries(core,data.base,data.layout,data.timestamps),replayProjectQueries(core,data.queryFixture,data.queryLayout),replayPreflights(core,data.preflightFixture,data.layout,data.fixture.generation),replayCatalogs(core,data.catalogFixture,b64(data.catalogBytes),{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))}),replayLibrary(core,data.libraryFixture,b64(data.catalogBytes),[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))}]));self.postMessage({ok:true,result},[result.owned.buffer,result.ownedQueryText.buffer]);}catch(e){self.postMessage({ok:false,error:String(e)});}};`,
+            `import * as core from '${coreUrl}';\n${replay}\n${boundaries}\n${queryReplay}\n${stagedReplay}\n${stagedBoundaries}\n${clipboardBoundaries}\n${documentReplay}\n${archiveReplay}\n${modelReplay}\n${preflightReplay}\n${catalogReplay}\n${libraryReplay}\n${editorReplay}\nconst b64=(t)=>Uint8Array.from(atob(t),(c)=>c.charCodeAt(0));const sha256=async(b)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",b)),(x)=>x.toString(16).padStart(2,"0")).join("");self.onmessage=async({data})=>{try{await core.default({module_or_path:data.wasm});const result=await replayProject(core,data.fixture,data.layout);result.archives=await replayArchives(core,data.layout,data.archiveLayout,archiveCases(JSON.parse(data.canonicalArchives),JSON.parse(data.foreignArchives),(p)=>b64(data.archiveFiles[p]),b64),sha256);result.models=await replayModelImports(core,data.layout,data.modelLayout,JSON.parse(data.modelTransactions),JSON.parse(data.modelStaging),JSON.parse(data.modelDecoding),sha256,(p)=>b64(data.archiveFiles[p]),b64);Object.assign(result,replayProjectDocuments(core,data.documentFixture,data.layout),await replayStagedProject(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectStagedBoundaries(core,data.stagedFixture.traces[0],data.layout,data.stagingLayout),projectClipboardBoundaries(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectBoundaries(core,data.base,data.layout,data.timestamps),replayProjectQueries(core,data.queryFixture,data.queryLayout),replayPreflights(core,data.preflightFixture,data.layout,data.fixture.generation),replayCatalogs(core,data.catalogFixture,b64(data.catalogBytes),{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))}),replayLibrary(core,data.libraryFixture,b64(data.catalogBytes),[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))}]),replayEditor(core,data.editorFixture,[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}]));self.postMessage({ok:true,result},[result.owned.buffer,result.ownedQueryText.buffer]);}catch(e){self.postMessage({ok:false,error:String(e)});}};`,
           ],
           { type: "text/javascript" },
         ),
@@ -209,6 +215,7 @@ try {
               catalogFixture,
               catalogBytes,
               libraryFixture,
+              editorFixture,
             },
             [bytes.buffer],
           );
@@ -253,6 +260,8 @@ try {
           catalogRefusals: result.catalogRefusals,
           libraryReplies: result.libraryReplies,
           libraryRefusals: result.libraryRefusals,
+          editorReplies: result.editorReplies,
+          editorRefusals: result.editorRefusals,
           owned: Array.from(result.owned),
           isolated: crossOriginIsolated,
         };
@@ -297,6 +306,8 @@ try {
       catalogBytes: catalogBytes.toString("base64"),
       libraryReplay,
       libraryFixture: JSON.parse(libraryFixtureText),
+      editorReplay,
+      editorFixture: JSON.parse(editorFixtureText),
       fixture: JSON.parse(fixtureText),
       layout: JSON.parse(layoutText),
       base: JSON.parse(JSON.parse(modelText).factories[0].stateJson),
@@ -321,6 +332,10 @@ try {
   assert.deepEqual(
     [result.libraryReplies, result.libraryRefusals],
     [425, 184],
+  );
+  assert.deepEqual(
+    [result.editorReplies, result.editorRefusals],
+    [14938, 78],
   );
   assert.deepEqual(
     result.owned,

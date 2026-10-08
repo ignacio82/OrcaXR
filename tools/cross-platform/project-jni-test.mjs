@@ -7,6 +7,7 @@ import { replayProject } from "./project-wasm-replay.mjs";
 import { replayPreflights } from "./project-preflight-replay.mjs";
 import { replayCatalogs } from "./catalog-replay.mjs";
 import { replayLibrary } from "./library-replay.mjs";
+import { replayEditor } from "./editor-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -357,6 +358,45 @@ try {
     ].join("\n"),
   );
   assert.equal(libraryChecks, 25);
+  // The settings editor through the raw exports (platform folding), then the
+  // Kotlin wrapper.
+  const editorFixture = JSON.parse(
+    await readFile(
+      new URL("testdata/cross-platform/settings-editor-vectors.json", root),
+    ),
+  );
+  const editors = replayEditor(projectJniCore(jvm.call), editorFixture, [
+    undefined,
+    "platform",
+  ]);
+  assert.deepEqual(
+    [editors.editorReplies, editors.editorRefusals],
+    [14938, 78],
+  );
+  const queryAt = editorFixture.queryCases.findIndex((q) => {
+    const query = JSON.parse(q.queryJson);
+    return query.search === "layer" && query.mode === "develop";
+  });
+  const project = editorFixture.wire.editors[0];
+  const editorChecks = jvm.call(
+    "editorChecks",
+    [
+      project.createJson,
+      project.steps[0].requestJson,
+      project.steps[0].replyJson,
+      editorFixture.wire.queries[queryAt].requestJson,
+      String(editorFixture.wire.queries[queryAt].count),
+      editorFixture.wire.queries[queryAt].samples[0][1],
+      editorFixture.wire.steps[0].requestJson,
+      editorFixture.wire.steps[0].replyJson,
+      editorFixture.wire.rules[4].requestJson,
+      editorFixture.wire.rules[4].replyJson,
+      editorFixture.wire.rows[2].createJson,
+      editorFixture.wire.rows[2].requestJson,
+      String(editorFixture.wire.rows[2].count),
+    ].join("\n"),
+  );
+  assert.equal(editorChecks, 24);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);
@@ -380,6 +420,8 @@ try {
     catalogChecks,
     ...libraries,
     libraryChecks,
+    ...editors,
+    editorChecks,
     ownedQueryTextUnits: ownedQueryText.length,
     ownedBytes: owned.byteLength,
     hostJniSha256: createHash("sha256")

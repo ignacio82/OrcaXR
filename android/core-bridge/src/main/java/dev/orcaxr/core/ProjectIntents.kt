@@ -3137,6 +3137,606 @@ object ProjectIntents {
             w.field("text") { writeEditText(w, v.text) }
         }
     }
+    enum class EditorMode {Simple,Advanced,Develop}
+    private fun readEditorMode(v: Any): EditorMode {
+        return when(v) {"simple" -> EditorMode.Simple;"advanced" -> EditorMode.Advanced;"develop" -> EditorMode.Develop; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEditorMode(w: ProjectIntentWriter, v: EditorMode) {
+        w.literal(when(v) {EditorMode.Simple -> "simple";EditorMode.Advanced -> "advanced";EditorMode.Develop -> "develop";})
+    }
+    enum class EditorTechnology {Fff,Sla,Any}
+    private fun readEditorTechnology(v: Any): EditorTechnology {
+        return when(v) {"fff" -> EditorTechnology.Fff;"sla" -> EditorTechnology.Sla;"any" -> EditorTechnology.Any; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEditorTechnology(w: ProjectIntentWriter, v: EditorTechnology) {
+        w.literal(when(v) {EditorTechnology.Fff -> "fff";EditorTechnology.Sla -> "sla";EditorTechnology.Any -> "any";})
+    }
+    enum class EditorDefinitionTechnology {Unknown,Any,Fff,Sla}
+    private fun readEditorDefinitionTechnology(v: Any): EditorDefinitionTechnology {
+        return when(v) {"unknown" -> EditorDefinitionTechnology.Unknown;"any" -> EditorDefinitionTechnology.Any;"fff" -> EditorDefinitionTechnology.Fff;"sla" -> EditorDefinitionTechnology.Sla; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEditorDefinitionTechnology(w: ProjectIntentWriter, v: EditorDefinitionTechnology) {
+        w.literal(when(v) {EditorDefinitionTechnology.Unknown -> "unknown";EditorDefinitionTechnology.Any -> "any";EditorDefinitionTechnology.Fff -> "fff";EditorDefinitionTechnology.Sla -> "sla";})
+    }
+    enum class EditorSurface {Process,Filament,Printer,Object,Plate}
+    private fun readEditorSurface(v: Any): EditorSurface {
+        return when(v) {"process" -> EditorSurface.Process;"filament" -> EditorSurface.Filament;"printer" -> EditorSurface.Printer;"object" -> EditorSurface.Object;"plate" -> EditorSurface.Plate; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEditorSurface(w: ProjectIntentWriter, v: EditorSurface) {
+        w.literal(when(v) {EditorSurface.Process -> "process";EditorSurface.Filament -> "filament";EditorSurface.Printer -> "printer";EditorSurface.Object -> "object";EditorSurface.Plate -> "plate";})
+    }
+    sealed interface OptionalEditorSurface {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalEditorSurface
+        data class Value(val value: ProjectIntents.EditorSurface) : OptionalEditorSurface
+    }
+    private fun readOptionalEditorSurface(v: Any): OptionalEditorSurface {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalEditorSurface.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalEditorSurface.Value(readEditorSurface(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalEditorSurface(w: ProjectIntentWriter, v: OptionalEditorSurface) {
+        w.obj { when(v) {
+            is OptionalEditorSurface.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalEditorSurface.Value -> w.field("value") { writeEditorSurface(w, v.value) }
+        } }
+    }
+    enum class EditorScope {Project,Plate,Object,Part,LayerRange}
+    private fun readEditorScope(v: Any): EditorScope {
+        return when(v) {"project" -> EditorScope.Project;"plate" -> EditorScope.Plate;"object" -> EditorScope.Object;"part" -> EditorScope.Part;"layerRange" -> EditorScope.LayerRange; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEditorScope(w: ProjectIntentWriter, v: EditorScope) {
+        w.literal(when(v) {EditorScope.Project -> "project";EditorScope.Plate -> "plate";EditorScope.Object -> "object";EditorScope.Part -> "part";EditorScope.LayerRange -> "layerRange";})
+    }
+    sealed interface OptionalEditorScope {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalEditorScope
+        data class Value(val value: ProjectIntents.EditorScope) : OptionalEditorScope
+    }
+    private fun readOptionalEditorScope(v: Any): OptionalEditorScope {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalEditorScope.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalEditorScope.Value(readEditorScope(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalEditorScope(w: ProjectIntentWriter, v: OptionalEditorScope) {
+        w.obj { when(v) {
+            is OptionalEditorScope.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalEditorScope.Value -> w.field("value") { writeEditorScope(w, v.value) }
+        } }
+    }
+    data class EditorCreate(val mode: EditorMode, val technology: EditorTechnology, val surface: OptionalEditorSurface, val scope: OptionalEditorScope, val inheritedJson: List<Int>, val overridesJson: List<Int>)
+    private fun readEditorCreate(v: Any): EditorCreate {
+        val obj = ProjectIntentJson.fields(v, setOf("mode", "technology", "surface", "scope", "inheritedJson", "overridesJson"), false)
+        return EditorCreate(readEditorMode(obj.get("mode")), readEditorTechnology(obj.get("technology")), readOptionalEditorSurface(obj.get("surface")), readOptionalEditorScope(obj.get("scope")), readJsonText(obj.get("inheritedJson")), readJsonText(obj.get("overridesJson")))
+    }
+    private fun writeEditorCreate(w: ProjectIntentWriter, v: EditorCreate) {
+        w.obj {
+            w.field("mode") { writeEditorMode(w, v.mode) }
+            w.field("technology") { writeEditorTechnology(w, v.technology) }
+            w.field("surface") { writeOptionalEditorSurface(w, v.surface) }
+            w.field("scope") { writeOptionalEditorScope(w, v.scope) }
+            w.field("inheritedJson") { writeJsonText(w, v.inheritedJson) }
+            w.field("overridesJson") { writeJsonText(w, v.overridesJson) }
+        }
+    }
+    data class EditorQuery(val mode: EditorMode, val technology: EditorTechnology, val surface: OptionalEditorSurface, val scope: OptionalEditorScope, val search: List<Int>, val includeNonApplicable: Boolean, val includeUnknownApplicability: Boolean, val includeUnavailable: Boolean)
+    private fun readEditorQuery(v: Any): EditorQuery {
+        val obj = ProjectIntentJson.fields(v, setOf("mode", "technology", "surface", "scope", "search", "includeNonApplicable", "includeUnknownApplicability", "includeUnavailable"), false)
+        return EditorQuery(readEditorMode(obj.get("mode")), readEditorTechnology(obj.get("technology")), readOptionalEditorSurface(obj.get("surface")), readOptionalEditorScope(obj.get("scope")), readEditText(obj.get("search")), readFlag(obj.get("includeNonApplicable")), readFlag(obj.get("includeUnknownApplicability")), readFlag(obj.get("includeUnavailable")))
+    }
+    private fun writeEditorQuery(w: ProjectIntentWriter, v: EditorQuery) {
+        w.obj {
+            w.field("mode") { writeEditorMode(w, v.mode) }
+            w.field("technology") { writeEditorTechnology(w, v.technology) }
+            w.field("surface") { writeOptionalEditorSurface(w, v.surface) }
+            w.field("scope") { writeOptionalEditorScope(w, v.scope) }
+            w.field("search") { writeEditText(w, v.search) }
+            w.field("includeNonApplicable") { writeFlag(w, v.includeNonApplicable) }
+            w.field("includeUnknownApplicability") { writeFlag(w, v.includeUnknownApplicability) }
+            w.field("includeUnavailable") { writeFlag(w, v.includeUnavailable) }
+        }
+    }
+    data class EditorLocation(val tabId: List<Int>, val tab: List<Int>, val tabOrder: Long, val groupId: List<Int>, val group: List<Int>, val groupOrder: Long, val placementId: List<Int>, val order: Long, val surface: EditorSurface)
+    private fun readEditorLocation(v: Any): EditorLocation {
+        val obj = ProjectIntentJson.fields(v, setOf("tabId", "tab", "tabOrder", "groupId", "group", "groupOrder", "placementId", "order", "surface"), false)
+        return EditorLocation(readEditText(obj.get("tabId")), readEditText(obj.get("tab")), readCounter(obj.get("tabOrder")), readEditText(obj.get("groupId")), readEditText(obj.get("group")), readCounter(obj.get("groupOrder")), readEditText(obj.get("placementId")), readCounter(obj.get("order")), readEditorSurface(obj.get("surface")))
+    }
+    private fun writeEditorLocation(w: ProjectIntentWriter, v: EditorLocation) {
+        w.obj {
+            w.field("tabId") { writeEditText(w, v.tabId) }
+            w.field("tab") { writeEditText(w, v.tab) }
+            w.field("tabOrder") { writeCounter(w, v.tabOrder) }
+            w.field("groupId") { writeEditText(w, v.groupId) }
+            w.field("group") { writeEditText(w, v.group) }
+            w.field("groupOrder") { writeCounter(w, v.groupOrder) }
+            w.field("placementId") { writeEditText(w, v.placementId) }
+            w.field("order") { writeCounter(w, v.order) }
+            w.field("surface") { writeEditorSurface(w, v.surface) }
+        }
+    }
+    private fun readEditorLocations(v: Any): List<EditorLocation> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readEditorLocation(array.get(it)) }
+    }
+    private fun writeEditorLocations(w: ProjectIntentWriter, v: List<EditorLocation>) {
+        w.array(v, 0, 64) { writeEditorLocation(w, it) }
+    }
+    data class EditorChoice(val serialized: List<Int>, val label: List<Int>)
+    private fun readEditorChoice(v: Any): EditorChoice {
+        val obj = ProjectIntentJson.fields(v, setOf("serialized", "label"), false)
+        return EditorChoice(readEditText(obj.get("serialized")), readEditText(obj.get("label")))
+    }
+    private fun writeEditorChoice(w: ProjectIntentWriter, v: EditorChoice) {
+        w.obj {
+            w.field("serialized") { writeEditText(w, v.serialized) }
+            w.field("label") { writeEditText(w, v.label) }
+        }
+    }
+    private fun readEditorChoices(v: Any): List<EditorChoice> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readEditorChoice(array.get(it)) }
+    }
+    private fun writeEditorChoices(w: ProjectIntentWriter, v: List<EditorChoice>) {
+        w.array(v, 0, 4096) { writeEditorChoice(w, it) }
+    }
+    enum class EditorMatchField {Key,Label,FullLabel,Category,Page,Group,Surface,Tooltip,Owner,Alias,Enum}
+    private fun readEditorMatchField(v: Any): EditorMatchField {
+        return when(v) {"key" -> EditorMatchField.Key;"label" -> EditorMatchField.Label;"fullLabel" -> EditorMatchField.FullLabel;"category" -> EditorMatchField.Category;"page" -> EditorMatchField.Page;"group" -> EditorMatchField.Group;"surface" -> EditorMatchField.Surface;"tooltip" -> EditorMatchField.Tooltip;"owner" -> EditorMatchField.Owner;"alias" -> EditorMatchField.Alias;"enum" -> EditorMatchField.Enum; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEditorMatchField(w: ProjectIntentWriter, v: EditorMatchField) {
+        w.literal(when(v) {EditorMatchField.Key -> "key";EditorMatchField.Label -> "label";EditorMatchField.FullLabel -> "fullLabel";EditorMatchField.Category -> "category";EditorMatchField.Page -> "page";EditorMatchField.Group -> "group";EditorMatchField.Surface -> "surface";EditorMatchField.Tooltip -> "tooltip";EditorMatchField.Owner -> "owner";EditorMatchField.Alias -> "alias";EditorMatchField.Enum -> "enum";})
+    }
+    data class EditorMatch(val field: EditorMatchField, val start: Long, val length: Long, val text: List<Int>)
+    private fun readEditorMatch(v: Any): EditorMatch {
+        val obj = ProjectIntentJson.fields(v, setOf("field", "start", "length", "text"), false)
+        return EditorMatch(readEditorMatchField(obj.get("field")), readCounter(obj.get("start")), readCounter(obj.get("length")), readEditText(obj.get("text")))
+    }
+    private fun writeEditorMatch(w: ProjectIntentWriter, v: EditorMatch) {
+        w.obj {
+            w.field("field") { writeEditorMatchField(w, v.field) }
+            w.field("start") { writeCounter(w, v.start) }
+            w.field("length") { writeCounter(w, v.length) }
+            w.field("text") { writeEditText(w, v.text) }
+        }
+    }
+    private fun readEditorMatches(v: Any): List<EditorMatch> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readEditorMatch(array.get(it)) }
+    }
+    private fun writeEditorMatches(w: ProjectIntentWriter, v: List<EditorMatch>) {
+        w.array(v, 0, 4096) { writeEditorMatch(w, it) }
+    }
+    enum class EditorApplicability {Applicable,NotApplicable,Unknown}
+    private fun readEditorApplicability(v: Any): EditorApplicability {
+        return when(v) {"applicable" -> EditorApplicability.Applicable;"notApplicable" -> EditorApplicability.NotApplicable;"unknown" -> EditorApplicability.Unknown; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEditorApplicability(w: ProjectIntentWriter, v: EditorApplicability) {
+        w.literal(when(v) {EditorApplicability.Applicable -> "applicable";EditorApplicability.NotApplicable -> "notApplicable";EditorApplicability.Unknown -> "unknown";})
+    }
+    sealed interface EditorSupport {
+        data class Implemented(val value: ProjectIntents.Empty) : EditorSupport
+        data class Unavailable(val value: List<Int>) : EditorSupport
+    }
+    private fun readEditorSupport(v: Any): EditorSupport {
+        val obj = ProjectIntentJson.fields(v, setOf("implemented", "unavailable"), true)
+        return when(val key = obj.keys().next()) {
+            "implemented" -> EditorSupport.Implemented(readEmpty(obj.get(key)))
+            "unavailable" -> EditorSupport.Unavailable(readEditText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeEditorSupport(w: ProjectIntentWriter, v: EditorSupport) {
+        w.obj { when(v) {
+            is EditorSupport.Implemented -> w.field("implemented") { writeEmpty(w, v.value) }
+            is EditorSupport.Unavailable -> w.field("unavailable") { writeEditText(w, v.value) }
+        } }
+    }
+    data class EditorField(val id: List<Int>, val key: List<Int>, val owner: List<Int>, val label: List<Int>, val fullLabel: OptionalText, val category: List<Int>, val tooltip: OptionalText, val unit: OptionalText, val mode: EditorMode, val technology: EditorDefinitionTechnology, val applicability: EditorApplicability, val support: EditorSupport, val locations: List<EditorLocation>, val primary: OptionalCounter, val enumChoices: List<EditorChoice>, val matches: List<EditorMatch>)
+    private fun readEditorField(v: Any): EditorField {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "key", "owner", "label", "fullLabel", "category", "tooltip", "unit", "mode", "technology", "applicability", "support", "locations", "primary", "enumChoices", "matches"), false)
+        return EditorField(readEditText(obj.get("id")), readEditText(obj.get("key")), readEditText(obj.get("owner")), readEditText(obj.get("label")), readOptionalText(obj.get("fullLabel")), readEditText(obj.get("category")), readOptionalText(obj.get("tooltip")), readOptionalText(obj.get("unit")), readEditorMode(obj.get("mode")), readEditorDefinitionTechnology(obj.get("technology")), readEditorApplicability(obj.get("applicability")), readEditorSupport(obj.get("support")), readEditorLocations(obj.get("locations")), readOptionalCounter(obj.get("primary")), readEditorChoices(obj.get("enumChoices")), readEditorMatches(obj.get("matches")))
+    }
+    private fun writeEditorField(w: ProjectIntentWriter, v: EditorField) {
+        w.obj {
+            w.field("id") { writeEditText(w, v.id) }
+            w.field("key") { writeEditText(w, v.key) }
+            w.field("owner") { writeEditText(w, v.owner) }
+            w.field("label") { writeEditText(w, v.label) }
+            w.field("fullLabel") { writeOptionalText(w, v.fullLabel) }
+            w.field("category") { writeEditText(w, v.category) }
+            w.field("tooltip") { writeOptionalText(w, v.tooltip) }
+            w.field("unit") { writeOptionalText(w, v.unit) }
+            w.field("mode") { writeEditorMode(w, v.mode) }
+            w.field("technology") { writeEditorDefinitionTechnology(w, v.technology) }
+            w.field("applicability") { writeEditorApplicability(w, v.applicability) }
+            w.field("support") { writeEditorSupport(w, v.support) }
+            w.field("locations") { writeEditorLocations(w, v.locations) }
+            w.field("primary") { writeOptionalCounter(w, v.primary) }
+            w.field("enumChoices") { writeEditorChoices(w, v.enumChoices) }
+            w.field("matches") { writeEditorMatches(w, v.matches) }
+        }
+    }
+    data class EditorIssue(val code: List<Int>, val path: List<Int>, val message: List<Int>)
+    private fun readEditorIssue(v: Any): EditorIssue {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "path", "message"), false)
+        return EditorIssue(readEditText(obj.get("code")), readEditText(obj.get("path")), readEditText(obj.get("message")))
+    }
+    private fun writeEditorIssue(w: ProjectIntentWriter, v: EditorIssue) {
+        w.obj {
+            w.field("code") { writeEditText(w, v.code) }
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    private fun readEditorIssues(v: Any): List<EditorIssue> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readEditorIssue(array.get(it)) }
+    }
+    private fun writeEditorIssues(w: ProjectIntentWriter, v: List<EditorIssue>) {
+        w.array(v, 0, 4096) { writeEditorIssue(w, it) }
+    }
+    enum class EditorOrigin {Changed,Inherited,Default,Unset}
+    private fun readEditorOrigin(v: Any): EditorOrigin {
+        return when(v) {"changed" -> EditorOrigin.Changed;"inherited" -> EditorOrigin.Inherited;"default" -> EditorOrigin.Default;"unset" -> EditorOrigin.Unset; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEditorOrigin(w: ProjectIntentWriter, v: EditorOrigin) {
+        w.literal(when(v) {EditorOrigin.Changed -> "changed";EditorOrigin.Inherited -> "inherited";EditorOrigin.Default -> "default";EditorOrigin.Unset -> "unset";})
+    }
+    data class EditorFieldState(val field: EditorField, val valueJson: OptionalJsonText, val serialized: OptionalText, val origin: EditorOrigin, val hasLocalOverride: Boolean, val changed: Boolean, val draftChanged: Boolean, val draftRaw: OptionalText, val draftValueJson: OptionalJsonText, val draftSerialized: OptionalText, val issues: List<EditorIssue>)
+    private fun readEditorFieldState(v: Any): EditorFieldState {
+        val obj = ProjectIntentJson.fields(v, setOf("field", "valueJson", "serialized", "origin", "hasLocalOverride", "changed", "draftChanged", "draftRaw", "draftValueJson", "draftSerialized", "issues"), false)
+        return EditorFieldState(readEditorField(obj.get("field")), readOptionalJsonText(obj.get("valueJson")), readOptionalText(obj.get("serialized")), readEditorOrigin(obj.get("origin")), readFlag(obj.get("hasLocalOverride")), readFlag(obj.get("changed")), readFlag(obj.get("draftChanged")), readOptionalText(obj.get("draftRaw")), readOptionalJsonText(obj.get("draftValueJson")), readOptionalText(obj.get("draftSerialized")), readEditorIssues(obj.get("issues")))
+    }
+    private fun writeEditorFieldState(w: ProjectIntentWriter, v: EditorFieldState) {
+        w.obj {
+            w.field("field") { writeEditorField(w, v.field) }
+            w.field("valueJson") { writeOptionalJsonText(w, v.valueJson) }
+            w.field("serialized") { writeOptionalText(w, v.serialized) }
+            w.field("origin") { writeEditorOrigin(w, v.origin) }
+            w.field("hasLocalOverride") { writeFlag(w, v.hasLocalOverride) }
+            w.field("changed") { writeFlag(w, v.changed) }
+            w.field("draftChanged") { writeFlag(w, v.draftChanged) }
+            w.field("draftRaw") { writeOptionalText(w, v.draftRaw) }
+            w.field("draftValueJson") { writeOptionalJsonText(w, v.draftValueJson) }
+            w.field("draftSerialized") { writeOptionalText(w, v.draftSerialized) }
+            w.field("issues") { writeEditorIssues(w, v.issues) }
+        }
+    }
+    data class EditorComparison(val fieldId: List<Int>, val key: List<Int>, val defaultJson: OptionalJsonText, val inheritedJson: OptionalJsonText, val overrideJson: OptionalJsonText, val effectiveJson: OptionalJsonText, val draftJson: OptionalJsonText, val effectiveEqualsDefault: Boolean, val draftEqualsEffective: Boolean)
+    private fun readEditorComparison(v: Any): EditorComparison {
+        val obj = ProjectIntentJson.fields(v, setOf("fieldId", "key", "defaultJson", "inheritedJson", "overrideJson", "effectiveJson", "draftJson", "effectiveEqualsDefault", "draftEqualsEffective"), false)
+        return EditorComparison(readEditText(obj.get("fieldId")), readEditText(obj.get("key")), readOptionalJsonText(obj.get("defaultJson")), readOptionalJsonText(obj.get("inheritedJson")), readOptionalJsonText(obj.get("overrideJson")), readOptionalJsonText(obj.get("effectiveJson")), readOptionalJsonText(obj.get("draftJson")), readFlag(obj.get("effectiveEqualsDefault")), readFlag(obj.get("draftEqualsEffective")))
+    }
+    private fun writeEditorComparison(w: ProjectIntentWriter, v: EditorComparison) {
+        w.obj {
+            w.field("fieldId") { writeEditText(w, v.fieldId) }
+            w.field("key") { writeEditText(w, v.key) }
+            w.field("defaultJson") { writeOptionalJsonText(w, v.defaultJson) }
+            w.field("inheritedJson") { writeOptionalJsonText(w, v.inheritedJson) }
+            w.field("overrideJson") { writeOptionalJsonText(w, v.overrideJson) }
+            w.field("effectiveJson") { writeOptionalJsonText(w, v.effectiveJson) }
+            w.field("draftJson") { writeOptionalJsonText(w, v.draftJson) }
+            w.field("effectiveEqualsDefault") { writeFlag(w, v.effectiveEqualsDefault) }
+            w.field("draftEqualsEffective") { writeFlag(w, v.draftEqualsEffective) }
+        }
+    }
+    data class EditorRefusal(val message: List<Int>, val issues: List<EditorIssue>)
+    private fun readEditorRefusal(v: Any): EditorRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("message", "issues"), false)
+        return EditorRefusal(readEditText(obj.get("message")), readEditorIssues(obj.get("issues")))
+    }
+    private fun writeEditorRefusal(w: ProjectIntentWriter, v: EditorRefusal) {
+        w.obj {
+            w.field("message") { writeEditText(w, v.message) }
+            w.field("issues") { writeEditorIssues(w, v.issues) }
+        }
+    }
+    data class EditorFieldEdit(val fieldId: List<Int>, val raw: List<Int>)
+    private fun readEditorFieldEdit(v: Any): EditorFieldEdit {
+        val obj = ProjectIntentJson.fields(v, setOf("fieldId", "raw"), false)
+        return EditorFieldEdit(readEditText(obj.get("fieldId")), readEditText(obj.get("raw")))
+    }
+    private fun writeEditorFieldEdit(w: ProjectIntentWriter, v: EditorFieldEdit) {
+        w.obj {
+            w.field("fieldId") { writeEditText(w, v.fieldId) }
+            w.field("raw") { writeEditText(w, v.raw) }
+        }
+    }
+    data class EditorFieldRef(val fieldId: List<Int>)
+    private fun readEditorFieldRef(v: Any): EditorFieldRef {
+        val obj = ProjectIntentJson.fields(v, setOf("fieldId"), false)
+        return EditorFieldRef(readEditText(obj.get("fieldId")))
+    }
+    private fun writeEditorFieldRef(w: ProjectIntentWriter, v: EditorFieldRef) {
+        w.obj {
+            w.field("fieldId") { writeEditText(w, v.fieldId) }
+        }
+    }
+    sealed interface EditorEdit {
+        data class Set(val value: ProjectIntents.EditorFieldEdit) : EditorEdit
+        data class Clear(val value: ProjectIntents.EditorFieldRef) : EditorEdit
+        data class Inherit(val value: ProjectIntents.EditorFieldRef) : EditorEdit
+        data class Reset(val value: ProjectIntents.EditorFieldRef) : EditorEdit
+    }
+    private fun readEditorEdit(v: Any): EditorEdit {
+        val obj = ProjectIntentJson.fields(v, setOf("set", "clear", "inherit", "reset"), true)
+        return when(val key = obj.keys().next()) {
+            "set" -> EditorEdit.Set(readEditorFieldEdit(obj.get(key)))
+            "clear" -> EditorEdit.Clear(readEditorFieldRef(obj.get(key)))
+            "inherit" -> EditorEdit.Inherit(readEditorFieldRef(obj.get(key)))
+            "reset" -> EditorEdit.Reset(readEditorFieldRef(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeEditorEdit(w: ProjectIntentWriter, v: EditorEdit) {
+        w.obj { when(v) {
+            is EditorEdit.Set -> w.field("set") { writeEditorFieldEdit(w, v.value) }
+            is EditorEdit.Clear -> w.field("clear") { writeEditorFieldRef(w, v.value) }
+            is EditorEdit.Inherit -> w.field("inherit") { writeEditorFieldRef(w, v.value) }
+            is EditorEdit.Reset -> w.field("reset") { writeEditorFieldRef(w, v.value) }
+        } }
+    }
+    sealed interface EditorEditResult {
+        data class Applied(val value: ProjectIntents.Empty) : EditorEditResult
+        data class Refused(val value: ProjectIntents.EditorRefusal) : EditorEditResult
+    }
+    private fun readEditorEditResult(v: Any): EditorEditResult {
+        val obj = ProjectIntentJson.fields(v, setOf("applied", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "applied" -> EditorEditResult.Applied(readEmpty(obj.get(key)))
+            "refused" -> EditorEditResult.Refused(readEditorRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeEditorEditResult(w: ProjectIntentWriter, v: EditorEditResult) {
+        w.obj { when(v) {
+            is EditorEditResult.Applied -> w.field("applied") { writeEmpty(w, v.value) }
+            is EditorEditResult.Refused -> w.field("refused") { writeEditorRefusal(w, v.value) }
+        } }
+    }
+    enum class EditorChangeAction {Set,Remove}
+    private fun readEditorChangeAction(v: Any): EditorChangeAction {
+        return when(v) {"set" -> EditorChangeAction.Set;"remove" -> EditorChangeAction.Remove; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEditorChangeAction(w: ProjectIntentWriter, v: EditorChangeAction) {
+        w.literal(when(v) {EditorChangeAction.Set -> "set";EditorChangeAction.Remove -> "remove";})
+    }
+    data class EditorChange(val fieldId: List<Int>, val key: List<Int>, val owner: List<Int>, val action: EditorChangeAction, val previousJson: OptionalJsonText, val valueJson: OptionalJsonText, val serialized: OptionalText)
+    private fun readEditorChange(v: Any): EditorChange {
+        val obj = ProjectIntentJson.fields(v, setOf("fieldId", "key", "owner", "action", "previousJson", "valueJson", "serialized"), false)
+        return EditorChange(readEditText(obj.get("fieldId")), readEditText(obj.get("key")), readEditText(obj.get("owner")), readEditorChangeAction(obj.get("action")), readOptionalJsonText(obj.get("previousJson")), readOptionalJsonText(obj.get("valueJson")), readOptionalText(obj.get("serialized")))
+    }
+    private fun writeEditorChange(w: ProjectIntentWriter, v: EditorChange) {
+        w.obj {
+            w.field("fieldId") { writeEditText(w, v.fieldId) }
+            w.field("key") { writeEditText(w, v.key) }
+            w.field("owner") { writeEditText(w, v.owner) }
+            w.field("action") { writeEditorChangeAction(w, v.action) }
+            w.field("previousJson") { writeOptionalJsonText(w, v.previousJson) }
+            w.field("valueJson") { writeOptionalJsonText(w, v.valueJson) }
+            w.field("serialized") { writeOptionalText(w, v.serialized) }
+        }
+    }
+    private fun readEditorChanges(v: Any): List<EditorChange> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readEditorChange(array.get(it)) }
+    }
+    private fun writeEditorChanges(w: ProjectIntentWriter, v: List<EditorChange>) {
+        w.array(v, 0, 4096) { writeEditorChange(w, it) }
+    }
+    data class EditorCommit(val baseRevision: Long, val revision: Long, val changes: List<EditorChange>, val nextOverridesJson: List<Int>)
+    private fun readEditorCommit(v: Any): EditorCommit {
+        val obj = ProjectIntentJson.fields(v, setOf("baseRevision", "revision", "changes", "nextOverridesJson"), false)
+        return EditorCommit(readCounter(obj.get("baseRevision")), readCounter(obj.get("revision")), readEditorChanges(obj.get("changes")), readJsonText(obj.get("nextOverridesJson")))
+    }
+    private fun writeEditorCommit(w: ProjectIntentWriter, v: EditorCommit) {
+        w.obj {
+            w.field("baseRevision") { writeCounter(w, v.baseRevision) }
+            w.field("revision") { writeCounter(w, v.revision) }
+            w.field("changes") { writeEditorChanges(w, v.changes) }
+            w.field("nextOverridesJson") { writeJsonText(w, v.nextOverridesJson) }
+        }
+    }
+    sealed interface EditorCommitResult {
+        data class Committed(val value: ProjectIntents.EditorCommit) : EditorCommitResult
+        data class Refused(val value: ProjectIntents.EditorRefusal) : EditorCommitResult
+    }
+    private fun readEditorCommitResult(v: Any): EditorCommitResult {
+        val obj = ProjectIntentJson.fields(v, setOf("committed", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "committed" -> EditorCommitResult.Committed(readEditorCommit(obj.get(key)))
+            "refused" -> EditorCommitResult.Refused(readEditorRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeEditorCommitResult(w: ProjectIntentWriter, v: EditorCommitResult) {
+        w.obj { when(v) {
+            is EditorCommitResult.Committed -> w.field("committed") { writeEditorCommit(w, v.value) }
+            is EditorCommitResult.Refused -> w.field("refused") { writeEditorRefusal(w, v.value) }
+        } }
+    }
+    data class EditorStepRequest(val fieldId: List<Int>, val current: List<Int>, val up: Boolean)
+    private fun readEditorStepRequest(v: Any): EditorStepRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("fieldId", "current", "up"), false)
+        return EditorStepRequest(readEditText(obj.get("fieldId")), readEditText(obj.get("current")), readFlag(obj.get("up")))
+    }
+    private fun writeEditorStepRequest(w: ProjectIntentWriter, v: EditorStepRequest) {
+        w.obj {
+            w.field("fieldId") { writeEditText(w, v.fieldId) }
+            w.field("current") { writeEditText(w, v.current) }
+            w.field("up") { writeFlag(w, v.up) }
+        }
+    }
+    enum class EditorStepRefusalCode {NotNumeric,Unbounded,Unreadable,ReadOnly}
+    private fun readEditorStepRefusalCode(v: Any): EditorStepRefusalCode {
+        return when(v) {"notNumeric" -> EditorStepRefusalCode.NotNumeric;"unbounded" -> EditorStepRefusalCode.Unbounded;"unreadable" -> EditorStepRefusalCode.Unreadable;"readOnly" -> EditorStepRefusalCode.ReadOnly; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEditorStepRefusalCode(w: ProjectIntentWriter, v: EditorStepRefusalCode) {
+        w.literal(when(v) {EditorStepRefusalCode.NotNumeric -> "notNumeric";EditorStepRefusalCode.Unbounded -> "unbounded";EditorStepRefusalCode.Unreadable -> "unreadable";EditorStepRefusalCode.ReadOnly -> "readOnly";})
+    }
+    data class EditorStepRefusal(val code: EditorStepRefusalCode, val reason: List<Int>)
+    private fun readEditorStepRefusal(v: Any): EditorStepRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "reason"), false)
+        return EditorStepRefusal(readEditorStepRefusalCode(obj.get("code")), readEditText(obj.get("reason")))
+    }
+    private fun writeEditorStepRefusal(w: ProjectIntentWriter, v: EditorStepRefusal) {
+        w.obj {
+            w.field("code") { writeEditorStepRefusalCode(w, v.code) }
+            w.field("reason") { writeEditText(w, v.reason) }
+        }
+    }
+    sealed interface EditorStep {
+        data class Value(val value: List<Int>) : EditorStep
+        data class Refused(val value: ProjectIntents.EditorStepRefusal) : EditorStep
+        data class Codec(val value: List<Int>) : EditorStep
+    }
+    private fun readEditorStep(v: Any): EditorStep {
+        val obj = ProjectIntentJson.fields(v, setOf("value", "refused", "codec"), true)
+        return when(val key = obj.keys().next()) {
+            "value" -> EditorStep.Value(readEditText(obj.get(key)))
+            "refused" -> EditorStep.Refused(readEditorStepRefusal(obj.get(key)))
+            "codec" -> EditorStep.Codec(readEditText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeEditorStep(w: ProjectIntentWriter, v: EditorStep) {
+        w.obj { when(v) {
+            is EditorStep.Value -> w.field("value") { writeEditText(w, v.value) }
+            is EditorStep.Refused -> w.field("refused") { writeEditorStepRefusal(w, v.value) }
+            is EditorStep.Codec -> w.field("codec") { writeEditText(w, v.value) }
+        } }
+    }
+    enum class EditorRowKind {Numeric,Bool,Enum,Text,ReadOnly}
+    private fun readEditorRowKind(v: Any): EditorRowKind {
+        return when(v) {"numeric" -> EditorRowKind.Numeric;"bool" -> EditorRowKind.Bool;"enum" -> EditorRowKind.Enum;"text" -> EditorRowKind.Text;"readOnly" -> EditorRowKind.ReadOnly; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeEditorRowKind(w: ProjectIntentWriter, v: EditorRowKind) {
+        w.literal(when(v) {EditorRowKind.Numeric -> "numeric";EditorRowKind.Bool -> "bool";EditorRowKind.Enum -> "enum";EditorRowKind.Text -> "text";EditorRowKind.ReadOnly -> "readOnly";})
+    }
+    data class EditorRow(val field: EditorField, val group: List<Int>, val value: List<Int>, val overridden: Boolean, val steppable: Boolean, val reason: OptionalText, val kind: EditorRowKind, val minimum: OptionalFinite, val maximum: OptionalFinite, val integer: Boolean, val typeable: Boolean)
+    private fun readEditorRow(v: Any): EditorRow {
+        val obj = ProjectIntentJson.fields(v, setOf("field", "group", "value", "overridden", "steppable", "reason", "kind", "minimum", "maximum", "integer", "typeable"), false)
+        return EditorRow(readEditorField(obj.get("field")), readEditText(obj.get("group")), readEditText(obj.get("value")), readFlag(obj.get("overridden")), readFlag(obj.get("steppable")), readOptionalText(obj.get("reason")), readEditorRowKind(obj.get("kind")), readOptionalFinite(obj.get("minimum")), readOptionalFinite(obj.get("maximum")), readFlag(obj.get("integer")), readFlag(obj.get("typeable")))
+    }
+    private fun writeEditorRow(w: ProjectIntentWriter, v: EditorRow) {
+        w.obj {
+            w.field("field") { writeEditorField(w, v.field) }
+            w.field("group") { writeEditText(w, v.group) }
+            w.field("value") { writeEditText(w, v.value) }
+            w.field("overridden") { writeFlag(w, v.overridden) }
+            w.field("steppable") { writeFlag(w, v.steppable) }
+            w.field("reason") { writeOptionalText(w, v.reason) }
+            w.field("kind") { writeEditorRowKind(w, v.kind) }
+            w.field("minimum") { writeOptionalFinite(w, v.minimum) }
+            w.field("maximum") { writeOptionalFinite(w, v.maximum) }
+            w.field("integer") { writeFlag(w, v.integer) }
+            w.field("typeable") { writeFlag(w, v.typeable) }
+        }
+    }
+    data class EditorRowsRequest(val scope: EditorScope)
+    private fun readEditorRowsRequest(v: Any): EditorRowsRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("scope"), false)
+        return EditorRowsRequest(readEditorScope(obj.get("scope")))
+    }
+    private fun writeEditorRowsRequest(w: ProjectIntentWriter, v: EditorRowsRequest) {
+        w.obj {
+            w.field("scope") { writeEditorScope(w, v.scope) }
+        }
+    }
+    data class EditorRuleRequest(val changedKeys: List<List<Int>>, val key: List<Int>, val effectiveJson: List<Int>)
+    private fun readEditorRuleRequest(v: Any): EditorRuleRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("changedKeys", "key", "effectiveJson"), false)
+        return EditorRuleRequest(readTextList(obj.get("changedKeys")), readEditText(obj.get("key")), readJsonText(obj.get("effectiveJson")))
+    }
+    private fun writeEditorRuleRequest(w: ProjectIntentWriter, v: EditorRuleRequest) {
+        w.obj {
+            w.field("changedKeys") { writeTextList(w, v.changedKeys) }
+            w.field("key") { writeEditText(w, v.key) }
+            w.field("effectiveJson") { writeJsonText(w, v.effectiveJson) }
+        }
+    }
+    data class EditorImplicitValue(val key: List<Int>, val value: Boolean)
+    private fun readEditorImplicitValue(v: Any): EditorImplicitValue {
+        val obj = ProjectIntentJson.fields(v, setOf("key", "value"), false)
+        return EditorImplicitValue(readEditText(obj.get("key")), readFlag(obj.get("value")))
+    }
+    private fun writeEditorImplicitValue(w: ProjectIntentWriter, v: EditorImplicitValue) {
+        w.obj {
+            w.field("key") { writeEditText(w, v.key) }
+            w.field("value") { writeFlag(w, v.value) }
+        }
+    }
+    private fun readEditorImplicitValues(v: Any): List<EditorImplicitValue> {
+        val array = ProjectIntentJson.list(v, 0, 8)
+        return List(array.length()) { readEditorImplicitValue(array.get(it)) }
+    }
+    private fun writeEditorImplicitValues(w: ProjectIntentWriter, v: List<EditorImplicitValue>) {
+        w.array(v, 0, 8) { writeEditorImplicitValue(w, it) }
+    }
+    data class EditorExpansion(val effectiveJson: List<Int>, val implicit: List<EditorImplicitValue>)
+    private fun readEditorExpansion(v: Any): EditorExpansion {
+        val obj = ProjectIntentJson.fields(v, setOf("effectiveJson", "implicit"), false)
+        return EditorExpansion(readJsonText(obj.get("effectiveJson")), readEditorImplicitValues(obj.get("implicit")))
+    }
+    private fun writeEditorExpansion(w: ProjectIntentWriter, v: EditorExpansion) {
+        w.obj {
+            w.field("effectiveJson") { writeJsonText(w, v.effectiveJson) }
+            w.field("implicit") { writeEditorImplicitValues(w, v.implicit) }
+        }
+    }
+    sealed interface EditorExpansionResult {
+        data class Expanded(val value: ProjectIntents.EditorExpansion) : EditorExpansionResult
+        data class Refused(val value: List<Int>) : EditorExpansionResult
+    }
+    private fun readEditorExpansionResult(v: Any): EditorExpansionResult {
+        val obj = ProjectIntentJson.fields(v, setOf("expanded", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "expanded" -> EditorExpansionResult.Expanded(readEditorExpansion(obj.get(key)))
+            "refused" -> EditorExpansionResult.Refused(readEditText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeEditorExpansionResult(w: ProjectIntentWriter, v: EditorExpansionResult) {
+        w.obj { when(v) {
+            is EditorExpansionResult.Expanded -> w.field("expanded") { writeEditorExpansion(w, v.value) }
+            is EditorExpansionResult.Refused -> w.field("refused") { writeEditText(w, v.value) }
+        } }
+    }
+    sealed interface EditorDependency {
+        data class Unmanaged(val value: ProjectIntents.Empty) : EditorDependency
+        data class Enabled(val value: Boolean) : EditorDependency
+    }
+    private fun readEditorDependency(v: Any): EditorDependency {
+        val obj = ProjectIntentJson.fields(v, setOf("unmanaged", "enabled"), true)
+        return when(val key = obj.keys().next()) {
+            "unmanaged" -> EditorDependency.Unmanaged(readEmpty(obj.get(key)))
+            "enabled" -> EditorDependency.Enabled(readFlag(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeEditorDependency(w: ProjectIntentWriter, v: EditorDependency) {
+        w.obj { when(v) {
+            is EditorDependency.Unmanaged -> w.field("unmanaged") { writeEmpty(w, v.value) }
+            is EditorDependency.Enabled -> w.field("enabled") { writeFlag(w, v.value) }
+        } }
+    }
+    data class EditorRules(val expansion: EditorExpansionResult, val dependency: EditorDependency, val crossField: OptionalText, val structuredEditor: OptionalText)
+    private fun readEditorRules(v: Any): EditorRules {
+        val obj = ProjectIntentJson.fields(v, setOf("expansion", "dependency", "crossField", "structuredEditor"), false)
+        return EditorRules(readEditorExpansionResult(obj.get("expansion")), readEditorDependency(obj.get("dependency")), readOptionalText(obj.get("crossField")), readOptionalText(obj.get("structuredEditor")))
+    }
+    private fun writeEditorRules(w: ProjectIntentWriter, v: EditorRules) {
+        w.obj {
+            w.field("expansion") { writeEditorExpansionResult(w, v.expansion) }
+            w.field("dependency") { writeEditorDependency(w, v.dependency) }
+            w.field("crossField") { writeOptionalText(w, v.crossField) }
+            w.field("structuredEditor") { writeOptionalText(w, v.structuredEditor) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -3197,4 +3797,34 @@ object ProjectIntents {
     fun encodeLibraryFormatRequest(value: LibraryFormatRequest): String = ProjectIntentWriter().also { writeLibraryFormatRequest(it, value) }.finish()
     fun decodeLibraryFormattedValue(text: String): LibraryFormattedValue = readLibraryFormattedValue(ProjectIntentJson.parse(text))
     fun encodeLibraryFormattedValue(value: LibraryFormattedValue): String = ProjectIntentWriter().also { writeLibraryFormattedValue(it, value) }.finish()
+    fun decodeEditorCreate(text: String): EditorCreate = readEditorCreate(ProjectIntentJson.parse(text))
+    fun encodeEditorCreate(value: EditorCreate): String = ProjectIntentWriter().also { writeEditorCreate(it, value) }.finish()
+    fun decodeEditorQuery(text: String): EditorQuery = readEditorQuery(ProjectIntentJson.parse(text))
+    fun encodeEditorQuery(value: EditorQuery): String = ProjectIntentWriter().also { writeEditorQuery(it, value) }.finish()
+    fun decodeEditorField(text: String): EditorField = readEditorField(ProjectIntentJson.parse(text))
+    fun encodeEditorField(value: EditorField): String = ProjectIntentWriter().also { writeEditorField(it, value) }.finish()
+    fun decodeEditorFieldState(text: String): EditorFieldState = readEditorFieldState(ProjectIntentJson.parse(text))
+    fun encodeEditorFieldState(value: EditorFieldState): String = ProjectIntentWriter().also { writeEditorFieldState(it, value) }.finish()
+    fun decodeEditorComparison(text: String): EditorComparison = readEditorComparison(ProjectIntentJson.parse(text))
+    fun encodeEditorComparison(value: EditorComparison): String = ProjectIntentWriter().also { writeEditorComparison(it, value) }.finish()
+    fun decodeEditorEdit(text: String): EditorEdit = readEditorEdit(ProjectIntentJson.parse(text))
+    fun encodeEditorEdit(value: EditorEdit): String = ProjectIntentWriter().also { writeEditorEdit(it, value) }.finish()
+    fun decodeEditorEditResult(text: String): EditorEditResult = readEditorEditResult(ProjectIntentJson.parse(text))
+    fun encodeEditorEditResult(value: EditorEditResult): String = ProjectIntentWriter().also { writeEditorEditResult(it, value) }.finish()
+    fun decodeEditorCommitResult(text: String): EditorCommitResult = readEditorCommitResult(ProjectIntentJson.parse(text))
+    fun encodeEditorCommitResult(value: EditorCommitResult): String = ProjectIntentWriter().also { writeEditorCommitResult(it, value) }.finish()
+    fun decodeEditorStepRequest(text: String): EditorStepRequest = readEditorStepRequest(ProjectIntentJson.parse(text))
+    fun encodeEditorStepRequest(value: EditorStepRequest): String = ProjectIntentWriter().also { writeEditorStepRequest(it, value) }.finish()
+    fun decodeEditorStep(text: String): EditorStep = readEditorStep(ProjectIntentJson.parse(text))
+    fun encodeEditorStep(value: EditorStep): String = ProjectIntentWriter().also { writeEditorStep(it, value) }.finish()
+    fun decodeEditorRow(text: String): EditorRow = readEditorRow(ProjectIntentJson.parse(text))
+    fun encodeEditorRow(value: EditorRow): String = ProjectIntentWriter().also { writeEditorRow(it, value) }.finish()
+    fun decodeEditorRowsRequest(text: String): EditorRowsRequest = readEditorRowsRequest(ProjectIntentJson.parse(text))
+    fun encodeEditorRowsRequest(value: EditorRowsRequest): String = ProjectIntentWriter().also { writeEditorRowsRequest(it, value) }.finish()
+    fun decodeEditorRuleRequest(text: String): EditorRuleRequest = readEditorRuleRequest(ProjectIntentJson.parse(text))
+    fun encodeEditorRuleRequest(value: EditorRuleRequest): String = ProjectIntentWriter().also { writeEditorRuleRequest(it, value) }.finish()
+    fun decodeEditorRules(text: String): EditorRules = readEditorRules(ProjectIntentJson.parse(text))
+    fun encodeEditorRules(value: EditorRules): String = ProjectIntentWriter().also { writeEditorRules(it, value) }.finish()
+    fun decodeEditorFieldRef(text: String): EditorFieldRef = readEditorFieldRef(ProjectIntentJson.parse(text))
+    fun encodeEditorFieldRef(value: EditorFieldRef): String = ProjectIntentWriter().also { writeEditorFieldRef(it, value) }.finish()
 }

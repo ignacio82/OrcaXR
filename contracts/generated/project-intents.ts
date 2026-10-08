@@ -2060,6 +2060,434 @@ const shapes = {
     "fields": {
       "text": "EditText"
     }
+  },
+  "EditorMode": {
+    "kind": "enum",
+    "values": [
+      "simple",
+      "advanced",
+      "develop"
+    ]
+  },
+  "EditorTechnology": {
+    "kind": "enum",
+    "values": [
+      "fff",
+      "sla",
+      "any"
+    ]
+  },
+  "EditorDefinitionTechnology": {
+    "kind": "enum",
+    "values": [
+      "unknown",
+      "any",
+      "fff",
+      "sla"
+    ]
+  },
+  "EditorSurface": {
+    "kind": "enum",
+    "values": [
+      "process",
+      "filament",
+      "printer",
+      "object",
+      "plate"
+    ]
+  },
+  "OptionalEditorSurface": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "EditorSurface"
+    }
+  },
+  "EditorScope": {
+    "kind": "enum",
+    "values": [
+      "project",
+      "plate",
+      "object",
+      "part",
+      "layerRange"
+    ]
+  },
+  "OptionalEditorScope": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "EditorScope"
+    }
+  },
+  "EditorCreate": {
+    "kind": "object",
+    "fields": {
+      "mode": "EditorMode",
+      "technology": "EditorTechnology",
+      "surface": "OptionalEditorSurface",
+      "scope": "OptionalEditorScope",
+      "inheritedJson": "JsonText",
+      "overridesJson": "JsonText"
+    }
+  },
+  "EditorQuery": {
+    "kind": "object",
+    "fields": {
+      "mode": "EditorMode",
+      "technology": "EditorTechnology",
+      "surface": "OptionalEditorSurface",
+      "scope": "OptionalEditorScope",
+      "search": "EditText",
+      "includeNonApplicable": "Flag",
+      "includeUnknownApplicability": "Flag",
+      "includeUnavailable": "Flag"
+    }
+  },
+  "EditorLocation": {
+    "kind": "object",
+    "fields": {
+      "tabId": "EditText",
+      "tab": "EditText",
+      "tabOrder": "Counter",
+      "groupId": "EditText",
+      "group": "EditText",
+      "groupOrder": "Counter",
+      "placementId": "EditText",
+      "order": "Counter",
+      "surface": "EditorSurface"
+    }
+  },
+  "EditorLocations": {
+    "kind": "array",
+    "items": "EditorLocation",
+    "min": 0,
+    "max": 64
+  },
+  "EditorChoice": {
+    "kind": "object",
+    "fields": {
+      "serialized": "EditText",
+      "label": "EditText"
+    }
+  },
+  "EditorChoices": {
+    "kind": "array",
+    "items": "EditorChoice",
+    "min": 0,
+    "max": 4096
+  },
+  "EditorMatchField": {
+    "kind": "enum",
+    "values": [
+      "key",
+      "label",
+      "fullLabel",
+      "category",
+      "page",
+      "group",
+      "surface",
+      "tooltip",
+      "owner",
+      "alias",
+      "enum"
+    ]
+  },
+  "EditorMatch": {
+    "kind": "object",
+    "fields": {
+      "field": "EditorMatchField",
+      "start": "Counter",
+      "length": "Counter",
+      "text": "EditText"
+    }
+  },
+  "EditorMatches": {
+    "kind": "array",
+    "items": "EditorMatch",
+    "min": 0,
+    "max": 4096
+  },
+  "EditorApplicability": {
+    "kind": "enum",
+    "values": [
+      "applicable",
+      "notApplicable",
+      "unknown"
+    ]
+  },
+  "EditorSupport": {
+    "kind": "union",
+    "variants": {
+      "implemented": "Empty",
+      "unavailable": "EditText"
+    }
+  },
+  "EditorField": {
+    "kind": "object",
+    "fields": {
+      "id": "EditText",
+      "key": "EditText",
+      "owner": "EditText",
+      "label": "EditText",
+      "fullLabel": "OptionalText",
+      "category": "EditText",
+      "tooltip": "OptionalText",
+      "unit": "OptionalText",
+      "mode": "EditorMode",
+      "technology": "EditorDefinitionTechnology",
+      "applicability": "EditorApplicability",
+      "support": "EditorSupport",
+      "locations": "EditorLocations",
+      "primary": "OptionalCounter",
+      "enumChoices": "EditorChoices",
+      "matches": "EditorMatches"
+    }
+  },
+  "EditorIssue": {
+    "kind": "object",
+    "fields": {
+      "code": "EditText",
+      "path": "EditText",
+      "message": "EditText"
+    }
+  },
+  "EditorIssues": {
+    "kind": "array",
+    "items": "EditorIssue",
+    "min": 0,
+    "max": 4096
+  },
+  "EditorOrigin": {
+    "kind": "enum",
+    "values": [
+      "changed",
+      "inherited",
+      "default",
+      "unset"
+    ]
+  },
+  "EditorFieldState": {
+    "kind": "object",
+    "fields": {
+      "field": "EditorField",
+      "valueJson": "OptionalJsonText",
+      "serialized": "OptionalText",
+      "origin": "EditorOrigin",
+      "hasLocalOverride": "Flag",
+      "changed": "Flag",
+      "draftChanged": "Flag",
+      "draftRaw": "OptionalText",
+      "draftValueJson": "OptionalJsonText",
+      "draftSerialized": "OptionalText",
+      "issues": "EditorIssues"
+    }
+  },
+  "EditorComparison": {
+    "kind": "object",
+    "fields": {
+      "fieldId": "EditText",
+      "key": "EditText",
+      "defaultJson": "OptionalJsonText",
+      "inheritedJson": "OptionalJsonText",
+      "overrideJson": "OptionalJsonText",
+      "effectiveJson": "OptionalJsonText",
+      "draftJson": "OptionalJsonText",
+      "effectiveEqualsDefault": "Flag",
+      "draftEqualsEffective": "Flag"
+    }
+  },
+  "EditorRefusal": {
+    "kind": "object",
+    "fields": {
+      "message": "EditText",
+      "issues": "EditorIssues"
+    }
+  },
+  "EditorFieldEdit": {
+    "kind": "object",
+    "fields": {
+      "fieldId": "EditText",
+      "raw": "EditText"
+    }
+  },
+  "EditorFieldRef": {
+    "kind": "object",
+    "fields": {
+      "fieldId": "EditText"
+    }
+  },
+  "EditorEdit": {
+    "kind": "union",
+    "variants": {
+      "set": "EditorFieldEdit",
+      "clear": "EditorFieldRef",
+      "inherit": "EditorFieldRef",
+      "reset": "EditorFieldRef"
+    }
+  },
+  "EditorEditResult": {
+    "kind": "union",
+    "variants": {
+      "applied": "Empty",
+      "refused": "EditorRefusal"
+    }
+  },
+  "EditorChangeAction": {
+    "kind": "enum",
+    "values": [
+      "set",
+      "remove"
+    ]
+  },
+  "EditorChange": {
+    "kind": "object",
+    "fields": {
+      "fieldId": "EditText",
+      "key": "EditText",
+      "owner": "EditText",
+      "action": "EditorChangeAction",
+      "previousJson": "OptionalJsonText",
+      "valueJson": "OptionalJsonText",
+      "serialized": "OptionalText"
+    }
+  },
+  "EditorChanges": {
+    "kind": "array",
+    "items": "EditorChange",
+    "min": 0,
+    "max": 4096
+  },
+  "EditorCommit": {
+    "kind": "object",
+    "fields": {
+      "baseRevision": "Counter",
+      "revision": "Counter",
+      "changes": "EditorChanges",
+      "nextOverridesJson": "JsonText"
+    }
+  },
+  "EditorCommitResult": {
+    "kind": "union",
+    "variants": {
+      "committed": "EditorCommit",
+      "refused": "EditorRefusal"
+    }
+  },
+  "EditorStepRequest": {
+    "kind": "object",
+    "fields": {
+      "fieldId": "EditText",
+      "current": "EditText",
+      "up": "Flag"
+    }
+  },
+  "EditorStepRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "notNumeric",
+      "unbounded",
+      "unreadable",
+      "readOnly"
+    ]
+  },
+  "EditorStepRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "EditorStepRefusalCode",
+      "reason": "EditText"
+    }
+  },
+  "EditorStep": {
+    "kind": "union",
+    "variants": {
+      "value": "EditText",
+      "refused": "EditorStepRefusal",
+      "codec": "EditText"
+    }
+  },
+  "EditorRowKind": {
+    "kind": "enum",
+    "values": [
+      "numeric",
+      "bool",
+      "enum",
+      "text",
+      "readOnly"
+    ]
+  },
+  "EditorRow": {
+    "kind": "object",
+    "fields": {
+      "field": "EditorField",
+      "group": "EditText",
+      "value": "EditText",
+      "overridden": "Flag",
+      "steppable": "Flag",
+      "reason": "OptionalText",
+      "kind": "EditorRowKind",
+      "minimum": "OptionalFinite",
+      "maximum": "OptionalFinite",
+      "integer": "Flag",
+      "typeable": "Flag"
+    }
+  },
+  "EditorRowsRequest": {
+    "kind": "object",
+    "fields": {
+      "scope": "EditorScope"
+    }
+  },
+  "EditorRuleRequest": {
+    "kind": "object",
+    "fields": {
+      "changedKeys": "TextList",
+      "key": "EditText",
+      "effectiveJson": "JsonText"
+    }
+  },
+  "EditorImplicitValue": {
+    "kind": "object",
+    "fields": {
+      "key": "EditText",
+      "value": "Flag"
+    }
+  },
+  "EditorImplicitValues": {
+    "kind": "array",
+    "items": "EditorImplicitValue",
+    "min": 0,
+    "max": 8
+  },
+  "EditorExpansion": {
+    "kind": "object",
+    "fields": {
+      "effectiveJson": "JsonText",
+      "implicit": "EditorImplicitValues"
+    }
+  },
+  "EditorExpansionResult": {
+    "kind": "union",
+    "variants": {
+      "expanded": "EditorExpansion",
+      "refused": "EditText"
+    }
+  },
+  "EditorDependency": {
+    "kind": "union",
+    "variants": {
+      "unmanaged": "Empty",
+      "enabled": "Flag"
+    }
+  },
+  "EditorRules": {
+    "kind": "object",
+    "fields": {
+      "expansion": "EditorExpansionResult",
+      "dependency": "EditorDependency",
+      "crossField": "OptionalText",
+      "structuredEditor": "OptionalText"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -2313,6 +2741,54 @@ export interface ProjectLibraryCoerceRequestWire {readonly inheritedJson: Projec
 export interface ProjectLibraryCoercedValueWire {readonly json: ProjectJsonTextWire;}
 export interface ProjectLibraryFormatRequestWire {readonly valueJson: ProjectOptionalJsonTextWire;}
 export interface ProjectLibraryFormattedValueWire {readonly text: ProjectEditTextWire;}
+export type ProjectEditorModeWire = "simple" | "advanced" | "develop";
+export type ProjectEditorTechnologyWire = "fff" | "sla" | "any";
+export type ProjectEditorDefinitionTechnologyWire = "unknown" | "any" | "fff" | "sla";
+export type ProjectEditorSurfaceWire = "process" | "filament" | "printer" | "object" | "plate";
+export type ProjectOptionalEditorSurfaceWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectEditorSurfaceWire};
+export type ProjectEditorScopeWire = "project" | "plate" | "object" | "part" | "layerRange";
+export type ProjectOptionalEditorScopeWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectEditorScopeWire};
+export interface ProjectEditorCreateWire {readonly mode: ProjectEditorModeWire;readonly technology: ProjectEditorTechnologyWire;readonly surface: ProjectOptionalEditorSurfaceWire;readonly scope: ProjectOptionalEditorScopeWire;readonly inheritedJson: ProjectJsonTextWire;readonly overridesJson: ProjectJsonTextWire;}
+export interface ProjectEditorQueryWire {readonly mode: ProjectEditorModeWire;readonly technology: ProjectEditorTechnologyWire;readonly surface: ProjectOptionalEditorSurfaceWire;readonly scope: ProjectOptionalEditorScopeWire;readonly search: ProjectEditTextWire;readonly includeNonApplicable: ProjectFlagWire;readonly includeUnknownApplicability: ProjectFlagWire;readonly includeUnavailable: ProjectFlagWire;}
+export interface ProjectEditorLocationWire {readonly tabId: ProjectEditTextWire;readonly tab: ProjectEditTextWire;readonly tabOrder: ProjectCounterWire;readonly groupId: ProjectEditTextWire;readonly group: ProjectEditTextWire;readonly groupOrder: ProjectCounterWire;readonly placementId: ProjectEditTextWire;readonly order: ProjectCounterWire;readonly surface: ProjectEditorSurfaceWire;}
+export type ProjectEditorLocationsWire = readonly ProjectEditorLocationWire[];
+export interface ProjectEditorChoiceWire {readonly serialized: ProjectEditTextWire;readonly label: ProjectEditTextWire;}
+export type ProjectEditorChoicesWire = readonly ProjectEditorChoiceWire[];
+export type ProjectEditorMatchFieldWire = "key" | "label" | "fullLabel" | "category" | "page" | "group" | "surface" | "tooltip" | "owner" | "alias" | "enum";
+export interface ProjectEditorMatchWire {readonly field: ProjectEditorMatchFieldWire;readonly start: ProjectCounterWire;readonly length: ProjectCounterWire;readonly text: ProjectEditTextWire;}
+export type ProjectEditorMatchesWire = readonly ProjectEditorMatchWire[];
+export type ProjectEditorApplicabilityWire = "applicable" | "notApplicable" | "unknown";
+export type ProjectEditorSupportWire = {readonly implemented:ProjectEmptyWire} | {readonly unavailable:ProjectEditTextWire};
+export interface ProjectEditorFieldWire {readonly id: ProjectEditTextWire;readonly key: ProjectEditTextWire;readonly owner: ProjectEditTextWire;readonly label: ProjectEditTextWire;readonly fullLabel: ProjectOptionalTextWire;readonly category: ProjectEditTextWire;readonly tooltip: ProjectOptionalTextWire;readonly unit: ProjectOptionalTextWire;readonly mode: ProjectEditorModeWire;readonly technology: ProjectEditorDefinitionTechnologyWire;readonly applicability: ProjectEditorApplicabilityWire;readonly support: ProjectEditorSupportWire;readonly locations: ProjectEditorLocationsWire;readonly primary: ProjectOptionalCounterWire;readonly enumChoices: ProjectEditorChoicesWire;readonly matches: ProjectEditorMatchesWire;}
+export interface ProjectEditorIssueWire {readonly code: ProjectEditTextWire;readonly path: ProjectEditTextWire;readonly message: ProjectEditTextWire;}
+export type ProjectEditorIssuesWire = readonly ProjectEditorIssueWire[];
+export type ProjectEditorOriginWire = "changed" | "inherited" | "default" | "unset";
+export interface ProjectEditorFieldStateWire {readonly field: ProjectEditorFieldWire;readonly valueJson: ProjectOptionalJsonTextWire;readonly serialized: ProjectOptionalTextWire;readonly origin: ProjectEditorOriginWire;readonly hasLocalOverride: ProjectFlagWire;readonly changed: ProjectFlagWire;readonly draftChanged: ProjectFlagWire;readonly draftRaw: ProjectOptionalTextWire;readonly draftValueJson: ProjectOptionalJsonTextWire;readonly draftSerialized: ProjectOptionalTextWire;readonly issues: ProjectEditorIssuesWire;}
+export interface ProjectEditorComparisonWire {readonly fieldId: ProjectEditTextWire;readonly key: ProjectEditTextWire;readonly defaultJson: ProjectOptionalJsonTextWire;readonly inheritedJson: ProjectOptionalJsonTextWire;readonly overrideJson: ProjectOptionalJsonTextWire;readonly effectiveJson: ProjectOptionalJsonTextWire;readonly draftJson: ProjectOptionalJsonTextWire;readonly effectiveEqualsDefault: ProjectFlagWire;readonly draftEqualsEffective: ProjectFlagWire;}
+export interface ProjectEditorRefusalWire {readonly message: ProjectEditTextWire;readonly issues: ProjectEditorIssuesWire;}
+export interface ProjectEditorFieldEditWire {readonly fieldId: ProjectEditTextWire;readonly raw: ProjectEditTextWire;}
+export interface ProjectEditorFieldRefWire {readonly fieldId: ProjectEditTextWire;}
+export type ProjectEditorEditWire = {readonly set:ProjectEditorFieldEditWire} | {readonly clear:ProjectEditorFieldRefWire} | {readonly inherit:ProjectEditorFieldRefWire} | {readonly reset:ProjectEditorFieldRefWire};
+export type ProjectEditorEditResultWire = {readonly applied:ProjectEmptyWire} | {readonly refused:ProjectEditorRefusalWire};
+export type ProjectEditorChangeActionWire = "set" | "remove";
+export interface ProjectEditorChangeWire {readonly fieldId: ProjectEditTextWire;readonly key: ProjectEditTextWire;readonly owner: ProjectEditTextWire;readonly action: ProjectEditorChangeActionWire;readonly previousJson: ProjectOptionalJsonTextWire;readonly valueJson: ProjectOptionalJsonTextWire;readonly serialized: ProjectOptionalTextWire;}
+export type ProjectEditorChangesWire = readonly ProjectEditorChangeWire[];
+export interface ProjectEditorCommitWire {readonly baseRevision: ProjectCounterWire;readonly revision: ProjectCounterWire;readonly changes: ProjectEditorChangesWire;readonly nextOverridesJson: ProjectJsonTextWire;}
+export type ProjectEditorCommitResultWire = {readonly committed:ProjectEditorCommitWire} | {readonly refused:ProjectEditorRefusalWire};
+export interface ProjectEditorStepRequestWire {readonly fieldId: ProjectEditTextWire;readonly current: ProjectEditTextWire;readonly up: ProjectFlagWire;}
+export type ProjectEditorStepRefusalCodeWire = "notNumeric" | "unbounded" | "unreadable" | "readOnly";
+export interface ProjectEditorStepRefusalWire {readonly code: ProjectEditorStepRefusalCodeWire;readonly reason: ProjectEditTextWire;}
+export type ProjectEditorStepWire = {readonly value:ProjectEditTextWire} | {readonly refused:ProjectEditorStepRefusalWire} | {readonly codec:ProjectEditTextWire};
+export type ProjectEditorRowKindWire = "numeric" | "bool" | "enum" | "text" | "readOnly";
+export interface ProjectEditorRowWire {readonly field: ProjectEditorFieldWire;readonly group: ProjectEditTextWire;readonly value: ProjectEditTextWire;readonly overridden: ProjectFlagWire;readonly steppable: ProjectFlagWire;readonly reason: ProjectOptionalTextWire;readonly kind: ProjectEditorRowKindWire;readonly minimum: ProjectOptionalFiniteWire;readonly maximum: ProjectOptionalFiniteWire;readonly integer: ProjectFlagWire;readonly typeable: ProjectFlagWire;}
+export interface ProjectEditorRowsRequestWire {readonly scope: ProjectEditorScopeWire;}
+export interface ProjectEditorRuleRequestWire {readonly changedKeys: ProjectTextListWire;readonly key: ProjectEditTextWire;readonly effectiveJson: ProjectJsonTextWire;}
+export interface ProjectEditorImplicitValueWire {readonly key: ProjectEditTextWire;readonly value: ProjectFlagWire;}
+export type ProjectEditorImplicitValuesWire = readonly ProjectEditorImplicitValueWire[];
+export interface ProjectEditorExpansionWire {readonly effectiveJson: ProjectJsonTextWire;readonly implicit: ProjectEditorImplicitValuesWire;}
+export type ProjectEditorExpansionResultWire = {readonly expanded:ProjectEditorExpansionWire} | {readonly refused:ProjectEditTextWire};
+export type ProjectEditorDependencyWire = {readonly unmanaged:ProjectEmptyWire} | {readonly enabled:ProjectFlagWire};
+export interface ProjectEditorRulesWire {readonly expansion: ProjectEditorExpansionResultWire;readonly dependency: ProjectEditorDependencyWire;readonly crossField: ProjectOptionalTextWire;readonly structuredEditor: ProjectOptionalTextWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -2403,3 +2879,48 @@ export function encodeProjectLibraryFormatRequest(value:ProjectLibraryFormatRequ
 export function captureProjectLibraryFormattedValue(value:unknown):ProjectLibraryFormattedValueWire { return captureIntent("LibraryFormattedValue",value,shapes,limits) as ProjectLibraryFormattedValueWire; }
 export function decodeProjectLibraryFormattedValue(text:string):ProjectLibraryFormattedValueWire { return captureProjectLibraryFormattedValue(parseIntentJson(text,limits)); }
 export function encodeProjectLibraryFormattedValue(value:ProjectLibraryFormattedValueWire):string { return JSON.stringify(captureProjectLibraryFormattedValue(value)); }
+export function captureProjectEditorCreate(value:unknown):ProjectEditorCreateWire { return captureIntent("EditorCreate",value,shapes,limits) as ProjectEditorCreateWire; }
+export function decodeProjectEditorCreate(text:string):ProjectEditorCreateWire { return captureProjectEditorCreate(parseIntentJson(text,limits)); }
+export function encodeProjectEditorCreate(value:ProjectEditorCreateWire):string { return JSON.stringify(captureProjectEditorCreate(value)); }
+export function captureProjectEditorQuery(value:unknown):ProjectEditorQueryWire { return captureIntent("EditorQuery",value,shapes,limits) as ProjectEditorQueryWire; }
+export function decodeProjectEditorQuery(text:string):ProjectEditorQueryWire { return captureProjectEditorQuery(parseIntentJson(text,limits)); }
+export function encodeProjectEditorQuery(value:ProjectEditorQueryWire):string { return JSON.stringify(captureProjectEditorQuery(value)); }
+export function captureProjectEditorField(value:unknown):ProjectEditorFieldWire { return captureIntent("EditorField",value,shapes,limits) as ProjectEditorFieldWire; }
+export function decodeProjectEditorField(text:string):ProjectEditorFieldWire { return captureProjectEditorField(parseIntentJson(text,limits)); }
+export function encodeProjectEditorField(value:ProjectEditorFieldWire):string { return JSON.stringify(captureProjectEditorField(value)); }
+export function captureProjectEditorFieldState(value:unknown):ProjectEditorFieldStateWire { return captureIntent("EditorFieldState",value,shapes,limits) as ProjectEditorFieldStateWire; }
+export function decodeProjectEditorFieldState(text:string):ProjectEditorFieldStateWire { return captureProjectEditorFieldState(parseIntentJson(text,limits)); }
+export function encodeProjectEditorFieldState(value:ProjectEditorFieldStateWire):string { return JSON.stringify(captureProjectEditorFieldState(value)); }
+export function captureProjectEditorComparison(value:unknown):ProjectEditorComparisonWire { return captureIntent("EditorComparison",value,shapes,limits) as ProjectEditorComparisonWire; }
+export function decodeProjectEditorComparison(text:string):ProjectEditorComparisonWire { return captureProjectEditorComparison(parseIntentJson(text,limits)); }
+export function encodeProjectEditorComparison(value:ProjectEditorComparisonWire):string { return JSON.stringify(captureProjectEditorComparison(value)); }
+export function captureProjectEditorEdit(value:unknown):ProjectEditorEditWire { return captureIntent("EditorEdit",value,shapes,limits) as ProjectEditorEditWire; }
+export function decodeProjectEditorEdit(text:string):ProjectEditorEditWire { return captureProjectEditorEdit(parseIntentJson(text,limits)); }
+export function encodeProjectEditorEdit(value:ProjectEditorEditWire):string { return JSON.stringify(captureProjectEditorEdit(value)); }
+export function captureProjectEditorEditResult(value:unknown):ProjectEditorEditResultWire { return captureIntent("EditorEditResult",value,shapes,limits) as ProjectEditorEditResultWire; }
+export function decodeProjectEditorEditResult(text:string):ProjectEditorEditResultWire { return captureProjectEditorEditResult(parseIntentJson(text,limits)); }
+export function encodeProjectEditorEditResult(value:ProjectEditorEditResultWire):string { return JSON.stringify(captureProjectEditorEditResult(value)); }
+export function captureProjectEditorCommitResult(value:unknown):ProjectEditorCommitResultWire { return captureIntent("EditorCommitResult",value,shapes,limits) as ProjectEditorCommitResultWire; }
+export function decodeProjectEditorCommitResult(text:string):ProjectEditorCommitResultWire { return captureProjectEditorCommitResult(parseIntentJson(text,limits)); }
+export function encodeProjectEditorCommitResult(value:ProjectEditorCommitResultWire):string { return JSON.stringify(captureProjectEditorCommitResult(value)); }
+export function captureProjectEditorStepRequest(value:unknown):ProjectEditorStepRequestWire { return captureIntent("EditorStepRequest",value,shapes,limits) as ProjectEditorStepRequestWire; }
+export function decodeProjectEditorStepRequest(text:string):ProjectEditorStepRequestWire { return captureProjectEditorStepRequest(parseIntentJson(text,limits)); }
+export function encodeProjectEditorStepRequest(value:ProjectEditorStepRequestWire):string { return JSON.stringify(captureProjectEditorStepRequest(value)); }
+export function captureProjectEditorStep(value:unknown):ProjectEditorStepWire { return captureIntent("EditorStep",value,shapes,limits) as ProjectEditorStepWire; }
+export function decodeProjectEditorStep(text:string):ProjectEditorStepWire { return captureProjectEditorStep(parseIntentJson(text,limits)); }
+export function encodeProjectEditorStep(value:ProjectEditorStepWire):string { return JSON.stringify(captureProjectEditorStep(value)); }
+export function captureProjectEditorRow(value:unknown):ProjectEditorRowWire { return captureIntent("EditorRow",value,shapes,limits) as ProjectEditorRowWire; }
+export function decodeProjectEditorRow(text:string):ProjectEditorRowWire { return captureProjectEditorRow(parseIntentJson(text,limits)); }
+export function encodeProjectEditorRow(value:ProjectEditorRowWire):string { return JSON.stringify(captureProjectEditorRow(value)); }
+export function captureProjectEditorRowsRequest(value:unknown):ProjectEditorRowsRequestWire { return captureIntent("EditorRowsRequest",value,shapes,limits) as ProjectEditorRowsRequestWire; }
+export function decodeProjectEditorRowsRequest(text:string):ProjectEditorRowsRequestWire { return captureProjectEditorRowsRequest(parseIntentJson(text,limits)); }
+export function encodeProjectEditorRowsRequest(value:ProjectEditorRowsRequestWire):string { return JSON.stringify(captureProjectEditorRowsRequest(value)); }
+export function captureProjectEditorRuleRequest(value:unknown):ProjectEditorRuleRequestWire { return captureIntent("EditorRuleRequest",value,shapes,limits) as ProjectEditorRuleRequestWire; }
+export function decodeProjectEditorRuleRequest(text:string):ProjectEditorRuleRequestWire { return captureProjectEditorRuleRequest(parseIntentJson(text,limits)); }
+export function encodeProjectEditorRuleRequest(value:ProjectEditorRuleRequestWire):string { return JSON.stringify(captureProjectEditorRuleRequest(value)); }
+export function captureProjectEditorRules(value:unknown):ProjectEditorRulesWire { return captureIntent("EditorRules",value,shapes,limits) as ProjectEditorRulesWire; }
+export function decodeProjectEditorRules(text:string):ProjectEditorRulesWire { return captureProjectEditorRules(parseIntentJson(text,limits)); }
+export function encodeProjectEditorRules(value:ProjectEditorRulesWire):string { return JSON.stringify(captureProjectEditorRules(value)); }
+export function captureProjectEditorFieldRef(value:unknown):ProjectEditorFieldRefWire { return captureIntent("EditorFieldRef",value,shapes,limits) as ProjectEditorFieldRefWire; }
+export function decodeProjectEditorFieldRef(text:string):ProjectEditorFieldRefWire { return captureProjectEditorFieldRef(parseIntentJson(text,limits)); }
+export function encodeProjectEditorFieldRef(value:ProjectEditorFieldRefWire):string { return JSON.stringify(captureProjectEditorFieldRef(value)); }

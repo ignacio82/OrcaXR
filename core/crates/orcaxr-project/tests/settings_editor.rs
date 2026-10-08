@@ -491,3 +491,186 @@ fn full_spectrum_rules_match_the_browser() {
         assert_eq!(json!(required.then_some(STRUCTURED_EDITOR_REASON)), case[1]);
     }
 }
+
+/// The host exchange answers every request with the browser's encodings, as
+/// the bindings do.
+#[test]
+fn host_exchange_matches_the_browser_codecs() {
+    use orcaxr_contracts::project_intent_types as wire;
+    use orcaxr_project::settings::editor::exchange::*;
+    let f = corpus();
+    let w = &f["wire"];
+    let mut folding = folding(&f);
+    let text = |units: &[u16]| utf16(units);
+    // Numbers are semantic on this contract (Rust writes 4 as 4.0).
+    fn numbers(value: Json) -> Json {
+        match value {
+            Json::Number(n) => json!(n.as_f64().unwrap()),
+            Json::Array(items) => Json::Array(items.into_iter().map(numbers).collect()),
+            Json::Object(fields) => {
+                Json::Object(fields.into_iter().map(|(k, v)| (k, numbers(v))).collect())
+            }
+            other => other,
+        }
+    }
+    let same = |actual: &str, expected: &str, label: &str| {
+        let a: Json = serde_json::from_str(actual).unwrap();
+        let e: Json = serde_json::from_str(expected).unwrap();
+        assert_eq!(numbers(a), numbers(e), "{label}");
+    };
+    let create = |json: &Json| wire::decode_editor_create(json.as_str().unwrap()).unwrap();
+    let mut replies = 0;
+
+    let mut queries = HostEditor::create::<NonAsciiText>(&create(&w["queryEditorJson"])).unwrap();
+    for (n, q) in w["queries"].as_array().unwrap().iter().enumerate() {
+        let request = wire::decode_editor_query(q["requestJson"].as_str().unwrap()).unwrap();
+        let count = queries
+            .query(&request, &mut AsciiRootCollation, &mut folding)
+            .unwrap();
+        assert_eq!(count as u64, q["count"].as_u64().unwrap(), "query {n}");
+        let expected = f["queryCases"][n]["fields"].as_array().unwrap();
+        for (i, e) in expected.iter().enumerate() {
+            let index = if e.is_array() { &e[0] } else { e };
+            let field = queries.field(i).unwrap();
+            assert_eq!(
+                text(&field.id),
+                w["ids"][index.as_u64().unwrap() as usize].as_str().unwrap()
+            );
+            replies += 1;
+        }
+        for sample in q["samples"].as_array().unwrap() {
+            let field = queries.field(sample[0].as_u64().unwrap() as usize).unwrap();
+            same(
+                &wire::encode_editor_field(&field).unwrap(),
+                sample[1].as_str().unwrap(),
+                "field",
+            );
+        }
+        assert!(queries.field(count).is_none());
+    }
+
+    for (n, scenario) in w["editors"].as_array().unwrap().iter().enumerate() {
+        let created = HostEditor::create::<NonAsciiText>(&create(&scenario["createJson"]));
+        if scenario["refused"].as_bool() == Some(true) {
+            assert!(
+                matches!(created, Err(Refusal::InvalidEditor(_))),
+                "editor {n}"
+            );
+            continue;
+        }
+        let mut editor = created.unwrap();
+        for (i, step) in scenario["steps"].as_array().unwrap().iter().enumerate() {
+            let label = format!("editor {n} step {i}");
+            let op: Json =
+                serde_json::from_str(f["editors"][n]["steps"][i]["stepJson"].as_str().unwrap())
+                    .unwrap();
+            let request = || step["requestJson"].as_str().unwrap();
+            match op["op"].as_str().unwrap() {
+                "state" | "compare" => {
+                    let field = wire::decode_editor_field_ref(request()).unwrap();
+                    let reply = if op["op"] == "state" {
+                        editor
+                            .state::<NonAsciiText>(&field)
+                            .map(|s| wire::encode_editor_field_state(&s).unwrap())
+                    } else {
+                        editor
+                            .compare::<NonAsciiText>(&field)
+                            .map(|c| wire::encode_editor_comparison(&c).unwrap())
+                    };
+                    match step["refused"].as_bool() {
+                        Some(true) => {
+                            assert!(matches!(reply, Err(Refusal::UnknownField)), "{label}")
+                        }
+                        _ => assert_eq!(
+                            reply.unwrap(),
+                            step["replyJson"].as_str().unwrap(),
+                            "{label}"
+                        ),
+                    }
+                }
+                "commit" => {
+                    let reply = editor.commit(&mut AsciiRootCollation).unwrap();
+                    assert_eq!(
+                        wire::encode_editor_commit_result(&reply).unwrap(),
+                        step["replyJson"].as_str().unwrap(),
+                        "{label}"
+                    );
+                }
+                _ => {
+                    let edit = wire::decode_editor_edit(request()).unwrap();
+                    let reply = editor.edit::<NonAsciiText>(&edit);
+                    assert_eq!(
+                        wire::encode_editor_edit_result(&reply).unwrap(),
+                        step["replyJson"].as_str().unwrap(),
+                        "{label}"
+                    );
+                }
+            }
+            assert_eq!(
+                editor.revision(),
+                step["revision"].as_u64().unwrap(),
+                "{label}"
+            );
+            assert_eq!(
+                text(&editor.overrides_json()),
+                step["overridesJson"].as_str().unwrap(),
+                "{label}"
+            );
+            replies += 1;
+        }
+    }
+
+    for s in w["steps"].as_array().unwrap() {
+        let request = wire::decode_editor_step_request(s["requestJson"].as_str().unwrap()).unwrap();
+        let reply = step::<NonAsciiText>(&request).unwrap();
+        assert_eq!(
+            wire::encode_editor_step(&reply).unwrap(),
+            s["replyJson"].as_str().unwrap()
+        );
+        replies += 1;
+    }
+    for r in w["rules"].as_array().unwrap() {
+        let request = wire::decode_editor_rule_request(r["requestJson"].as_str().unwrap()).unwrap();
+        let reply = rules::<NonAsciiText>(&request).unwrap();
+        assert_eq!(
+            wire::encode_editor_rules(&reply).unwrap(),
+            r["replyJson"].as_str().unwrap()
+        );
+        replies += 1;
+    }
+
+    for (n, view) in w["rows"].as_array().unwrap().iter().enumerate() {
+        let mut editor = HostEditor::create::<NonAsciiText>(&create(&view["createJson"])).unwrap();
+        let request =
+            wire::decode_editor_rows_request(view["requestJson"].as_str().unwrap()).unwrap();
+        let count = editor
+            .rows(&request, &mut AsciiRootCollation, &mut folding)
+            .unwrap();
+        assert_eq!(count as u64, view["count"].as_u64().unwrap(), "rows {n}");
+        assert_eq!(
+            editor.unavailable() as u64,
+            view["unavailable"].as_u64().unwrap()
+        );
+        let expected = f["rowCases"][n]["rows"].as_array().unwrap();
+        for (i, e) in expected.iter().enumerate() {
+            let row = editor.row(i).unwrap();
+            assert_eq!(
+                text(&row.field.id),
+                w["ids"][e["field"].as_u64().unwrap() as usize]
+                    .as_str()
+                    .unwrap()
+            );
+            replies += 1;
+        }
+        for sample in view["samples"].as_array().unwrap() {
+            let row = editor.row(sample[0].as_u64().unwrap() as usize).unwrap();
+            same(
+                &wire::encode_editor_row(&row).unwrap(),
+                sample[1].as_str().unwrap(),
+                "row",
+            );
+        }
+        assert!(editor.row(count).is_none());
+    }
+    println!("editor exchange: {replies} replies");
+}

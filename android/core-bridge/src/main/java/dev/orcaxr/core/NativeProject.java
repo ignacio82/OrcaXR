@@ -80,6 +80,20 @@ final class NativeProject {
     static native String libraryApplyUpdate(long handle, long upload);
     static native String libraryCoerce(String request);
     static native String libraryFormat(String request);
+    static native long editorNew(String create, PresetCollator collator, SearchFolding folder);
+    static native long editorQuery(long handle, String query);
+    static native String editorField(long handle, long position);
+    static native String editorState(long handle, String field);
+    static native String editorCompare(long handle, String field);
+    static native String editorEdit(long handle, String edit);
+    static native String editorCommit(long handle);
+    static native long editorRevision(long handle);
+    static native String editorOverrides(long handle);
+    static native long editorRows(long handle, String rows);
+    static native long editorUnavailable(long handle);
+    static native String editorRow(long handle, long position);
+    static native String settingsStep(String step);
+    static native String settingsRules(String rules);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

@@ -15,6 +15,7 @@ macro_rules! export {
 mod archive;
 mod bindings;
 mod catalog;
+mod editor;
 mod json_sink;
 mod library;
 mod model;
@@ -23,6 +24,7 @@ mod registry;
 mod timestamps;
 use archive::*;
 use catalog::*;
+use editor::*;
 use jni::{
     JNIEnv,
     objects::{JByteArray, JCharArray, JClass, JDoubleArray, JLongArray, JObject, JString},
@@ -103,6 +105,7 @@ enum Record {
     CatalogUpload(Box<orcaxr_project::settings::catalog_exchange::CatalogUpload>),
     Catalog(Box<orcaxr_project::settings::catalog_exchange::HostCatalog>),
     Library(Box<library::Library>),
+    Editor(Box<editor::Editor>),
 }
 fn registry() -> &'static Registry<Record> {
     static REGISTRY: OnceLock<Registry<Record>> = OnceLock::new();

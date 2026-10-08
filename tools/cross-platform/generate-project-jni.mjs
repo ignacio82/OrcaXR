@@ -22,6 +22,7 @@ const input = {
   LocalTimestampResolver: "JObject<'local>",
   ProjectJsonSink: "JObject<'local>",
   PresetCollator: "JObject<'local>",
+  SearchFolding: "JObject<'local>",
 };
 const output = {
   int: "jint",
