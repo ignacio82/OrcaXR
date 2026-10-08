@@ -40,7 +40,7 @@ class ProjectSessionTest {
         val input = "[${ProjectStaging.VERSION},[${ProjectStaging.WORK_SINGLE},[${ProjectStaging.COMMAND_INTENT},${JSONObject.quote(intent)}]]]"
         assertEquals(7L, ProjectOwnerChecks.stagingChecks(base(), input))
     }
-    @Test fun actorPreparationCrossesRealJni() { assertEquals(16L, ProjectActorPreparationChecks.run(base())) }
+    @Test fun actorPreparationCrossesRealJni() { assertEquals(17L, ProjectActorPreparationChecks.run(base())) }
     @Test fun actorExportMatchesBrowserBytesAndOwnsSaveHandoff() {
         val data = fixture("project-export-vectors.json")
         val assets = data.getJSONArray("assets")

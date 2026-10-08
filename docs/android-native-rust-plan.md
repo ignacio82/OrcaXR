@@ -839,15 +839,18 @@ that native code automatically reduces total memory.
 - [x] Implement streaming source/index ownership and checkpointed windows with
   the existing maximum of 240,000 rich records per window. Keep huge layers
   traversable and release previous sources on replacement.
-- [ ] Port preview filtering/color projection and bounded inspection/search
+- [x] Port preview filtering/color projection and bounded inspection/search
   behavior. Keep engine-authoritative statistics distinct from parser observations.
   - [x] Implement twelve-mode projection, bounded inspection and playback with
     independent source/window expectations and WASM/JNI session bindings.
   - [x] Implement bounded readable-text windows and line search in Rust with
-    WASM/JNI bindings; 1,536 windows and 18,710 searches match the production
+    WASM/JNI bindings; 1,562 windows and 19,035 searches match the production
     browser through the library, session transport and Chrome WASM. Per-line
     folding also fixed a browser defect that moved results onto wrong lines.
-  - [ ] Replay the search corpus through Android JNI on an emulator or device.
+  - [x] Replay the search corpus through Android JNI on an emulator or device.
+    All 41 real-JNI instrumentation tests, the search corpus among them, pass
+    on an owned API 34 x86_64 emulator. The run found the Kotlin wrapper
+    refusing a line that keeps one carriage return (`\r\r\n`), now fixed.
 - [ ] Replace the browser worker implementation behind its existing session
   interface; account for source conversion and WASM transfer overhead in benchmarks.
   Keep a startup-selectable reference adapter during qualification.

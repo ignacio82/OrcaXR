@@ -434,9 +434,9 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   Rendering consumes projected colors/filtering and reports unsupported metadata honestly.
 - Android decodes G-code bytes with `decode_utf8` (TextDecoder's rules); views require an explicit
   captured model and exact requested window. Validate output relations before rendering and keep
-  the capture identity; matching dimensions alone cannot associate two packets.
-- Canonicalization and G-code transport types come from shared request schemas.
-  Rust decoding must require objects: ordinary Serde struct decoding also accepts
+  the capture identity; matching dimensions alone cannot associate two packets. `core-bridge` androidTest
+  runs only on an emulator (`android-smoke.py`, disk-backed AVD home): rerun it whenever its corpora change.
+- Canonicalization and G-code transport types come from shared request schemas. Rust decoding must require objects: ordinary Serde struct decoding also accepts
   positional arrays. Reject duplicate envelope/option keys; only the inner JSON
   being canonicalized keeps JavaScript's last-key-wins behavior.
 - A pinned G2/G3 arc remains one semantic source record; no partial arc is published

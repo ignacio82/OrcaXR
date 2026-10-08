@@ -105,7 +105,7 @@ class GcodeViewTest {
                 }
             }
         }
-        assertEquals(4554, tested)
+        assertEquals(4604, tested)
     }
     @Test fun viewOwnershipAndMalformedPacketsFailClosed() {
         val source = "M83\nG1 X1 E1\n; PAUSE_PRINTING\n"

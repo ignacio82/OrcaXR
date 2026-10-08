@@ -229,6 +229,20 @@ Filament library or material asset. Cargo audit, all three npm development audit
 and the configured redacted 1,582-file UTF-8 source scan pass. CI now runs the renderer suite
 with the foundation checks; a clean hosted-runner result is still unverified.
 
+### Emulator evidence on 2026-10-08
+
+All 41 `core-bridge` real-JNI instrumentation tests (61.3 s) and three shell
+cold starts pass on a freshly owned API 34 x86_64 emulator (4 KB pages)
+through `tools/cross-platform/android-smoke.py`. They include the browser's
+G-code document corpus (1,562 readable-text windows, 19,035 searches), the
+view corpus (4,604 views) and the project actor checks. The first run found
+the Kotlin text-window check refusing a line that keeps one carriage return
+(the browser drops only one before `\n`, so `\r\r\n` leaves one), and two
+instrumented pins left behind when their host replays grew; all three are
+fixed. Instrumented tests run only on an emulator or device, so a corpus
+change needs this run too. The emulator's 7.4 GB userdata partition does not
+fit a tmpfs `/tmp`; give `ANDROID_AVD_HOME` a disk-backed directory.
+
 The first emulator attempts exposed two corrected consumer mistakes: arc path
 kinds were treated as a contiguous 0–2 range, and clipping used Filament's internal
 world frame. Shared-vertex picking also needed the ray-aligned edge test described

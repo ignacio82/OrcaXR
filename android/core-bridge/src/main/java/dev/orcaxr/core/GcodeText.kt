@@ -7,7 +7,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 /** One readable source line. [text] keeps every UTF-16 unit, including lone
- * surrogates, and excludes the newline and one trailing carriage return. */
+ * surrogates, and excludes the newline and one trailing carriage return (a
+ * second one before it remains). */
 data class GcodeTextLine(val number: Int, val text: String)
 
 /** Lines from one sealed source; [lineCount] is the whole program's count. */
@@ -57,7 +58,9 @@ internal object GcodeText {
             val content = text(line.getJSONArray("text"), active)
             units += content.length
             require(units <= GcodeLayout.MAX_TEXT_WINDOW_UNITS) { "Invalid G-code text window" }
-            require('\n' !in content && !content.endsWith('\r')) { "Invalid G-code text window" }
+            // Only one carriage return before the newline is dropped, so a line
+            // ending "\r\r\n" keeps one; no line holds a newline.
+            require('\n' !in content) { "Invalid G-code text window" }
             result += GcodeTextLine(number, content)
         }
         return GcodeTextWindow(lineCount, result)
