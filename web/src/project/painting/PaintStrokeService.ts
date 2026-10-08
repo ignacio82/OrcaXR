@@ -27,8 +27,10 @@ import {
   type FacetSelectionMesh,
   type FacetSelectionTransform,
   type FacetStrokeCommitResult,
+  type FacetStrokeRequest,
   type TriangleRange,
 } from '../annotations';
+import type { FacetRefinementCommitRequest } from '../annotations/FacetAnnotationStrokeCommand';
 import { cloneJson, deepFreeze } from '../domain/canonical';
 import { expandFacetRefinementRoots, type FacetRefinedRootSet } from '../domain/facetRefinement';
 import type { FilamentId, VolumeId } from '../domain/ids';
@@ -153,9 +155,32 @@ export class PaintTargetError extends Error {
   }
 }
 
+/**
+ * Where a committed stroke goes. A workspace supplies its guarded asynchronous
+ * session route; without one, strokes execute directly on the local bus.
+ */
+export interface PaintCommitPort {
+  stroke(request: FacetStrokeRequest<FacetAnnotationChannel>): Promise<FacetStrokeCommitResult>;
+  refinement(request: FacetRefinementCommitRequest<FacetAnnotationChannel>): Promise<FacetStrokeCommitResult>;
+  /**
+   * Strokes as one labelled transaction, each guarded by the state the one
+   * before it leaves; reports which of them changed anything.
+   */
+  strokes(
+    label: string,
+    requests: readonly PaintStrokeIntent[],
+  ): Promise<{ readonly result: FacetStrokeCommitResult; readonly applied: readonly boolean[] }>;
+}
+
+/** One stroke before it is guarded: the guard is the state it will meet. */
+export type PaintStrokeIntent = Omit<FacetStrokeRequest<FacetAnnotationChannel>, 'guard'> & {
+  readonly volumeId: VolumeId;
+};
+
 export interface PaintStrokeServiceOptions {
   readonly commands: CommandBus;
   readonly assets: AssetRepository;
+  readonly submit?: PaintCommitPort;
 }
 
 /**
@@ -299,6 +324,120 @@ export class PaintStrokeService {
       ...(request.cancellation ? { cancellation: request.cancellation } : {}),
       label: request.label ?? `${request.mode === 'erase' ? 'Erase' : 'Paint'} refined ${channelLabel(channel)} facets`,
     });
+  }
+
+  /** {@link commitTriangles} through the commit port: one acknowledged stroke. */
+  async submitTriangles<Channel extends PaintChannel>(
+    request: Parameters<PaintStrokeService['commitTriangles']>[0] & { readonly channel?: Channel },
+  ): Promise<FacetStrokeCommitResult> {
+    if (!this.options.submit) return this.commitTriangles(request);
+    if (request.cancellation?.aborted) {
+      return { status: 'cancelled', ...(request.cancellation.reason ? { reason: request.cancellation.reason } : {}) };
+    }
+    const stroke = this.trianglesRequest(request);
+    if (stroke === 'noop') return { status: 'noop' };
+    const { volumeId, ...rest } = stroke;
+    return this.options.submit.stroke({
+      ...rest,
+      guard: request.guard ?? captureFacetAnnotationGuard(this.options.commands, volumeId),
+    });
+  }
+
+  /** {@link commitRefinement} through the commit port. */
+  async submitRefinement<Channel extends PaintChannel>(
+    request: Parameters<PaintStrokeService['commitRefinement']>[0] & { readonly channel?: Channel },
+  ): Promise<FacetStrokeCommitResult> {
+    if (!this.options.submit) return this.commitRefinement(request);
+    if (request.cancellation?.aborted) {
+      return { status: 'cancelled', ...(request.cancellation.reason ? { reason: request.cancellation.reason } : {}) };
+    }
+    assertGuardTargetsVolume(request.guard, request.volumeId);
+    this.resolveVolume(request.volumeId);
+    const channel = (request.channel ?? 'color') as PaintChannel;
+    return this.options.submit.refinement({
+      guard: request.guard ?? captureFacetAnnotationGuard(this.options.commands, request.volumeId),
+      channel,
+      encoding: request.encoding as never,
+      label: request.label ?? `${request.mode === 'erase' ? 'Erase' : 'Paint'} refined ${channelLabel(channel)} facets`,
+    });
+  }
+
+  /** {@link clearVolume} through the commit port. */
+  async submitClear(volumeId: VolumeId, channel: PaintChannel = 'color'): Promise<FacetStrokeCommitResult> {
+    if (!this.options.submit) return this.clearVolume(volumeId, channel);
+    this.resolveVolume(volumeId);
+    return this.options.submit.stroke({
+      guard: captureFacetAnnotationGuard(this.options.commands, volumeId),
+      channel,
+      operation: { mode: 'reset' },
+      label: `Erase all ${channelLabel(channel)} facets`,
+    });
+  }
+
+  /**
+   * Several triangle strokes as one labelled undoable transaction, each
+   * guarded by the state the one before it leaves. Without a commit port they
+   * run as one transaction on the local bus.
+   */
+  async submitTriangleSet<Channel extends PaintChannel>(
+    label: string,
+    requests: readonly (Parameters<PaintStrokeService['commitTriangles']>[0] & { readonly channel?: Channel })[],
+    cancellation?: CancellationToken,
+  ): Promise<{ readonly result: FacetStrokeCommitResult; readonly applied: readonly boolean[] }> {
+    if (cancellation?.aborted) {
+      return {
+        result: { status: 'cancelled', ...(cancellation.reason ? { reason: cancellation.reason } : {}) },
+        applied: requests.map(() => false),
+      };
+    }
+    if (!this.options.submit) {
+      const applied: boolean[] = [];
+      let last: FacetStrokeCommitResult = { status: 'noop' };
+      this.options.commands.transaction(label, () => {
+        for (const request of requests) {
+          const outcome = this.commitTriangles({ ...request, label });
+          applied.push(outcome.status === 'applied');
+          if (outcome.status === 'applied') last = outcome;
+        }
+      });
+      return { result: last, applied };
+    }
+    const strokes: PaintStrokeIntent[] = [];
+    const positions: number[] = [];
+    requests.forEach((request, index) => {
+      const stroke = this.trianglesRequest({ ...request, label });
+      if (stroke === 'noop') return;
+      strokes.push(stroke);
+      positions.push(index);
+    });
+    if (strokes.length === 0) return { result: { status: 'noop' }, applied: requests.map(() => false) };
+    const submitted = await this.options.submit.strokes(label, strokes);
+    const applied = requests.map(() => false);
+    submitted.applied.forEach((changed, index) => (applied[positions[index]] = changed));
+    return { result: submitted.result, applied };
+  }
+
+  /** The guardless stroke one set of triangles makes, or `'noop'`. */
+  private trianglesRequest<Channel extends PaintChannel>(
+    request: Parameters<PaintStrokeService['commitTriangles']>[0] & { readonly channel?: Channel },
+  ): PaintStrokeIntent | 'noop' {
+    assertGuardTargetsVolume(request.guard, request.volumeId);
+    const { volume, state } = this.resolveVolume(request.volumeId);
+    this.assertValue(state, {
+      mode: request.mode,
+      ...(request.channel ? { channel: request.channel } : {}),
+      ...(request.value !== undefined ? { value: request.value } : {}),
+    });
+    const ranges = triangleRangesFromIndices([...request.triangleIndices], volume.source.triangleCount);
+    if (ranges.length === 0) return 'noop';
+    const channel = (request.channel ?? 'color') as PaintChannel;
+    const erasing = request.mode === 'erase' || request.value === undefined;
+    return {
+      volumeId: request.volumeId,
+      channel,
+      operation: erasing ? { mode: 'erase', ranges } : { mode: 'paint', ranges, value: request.value as never },
+      label: request.label ?? `${erasing ? 'Erase' : 'Paint'} ${channelLabel(channel)} facets`,
+    } as PaintStrokeIntent;
   }
 
   /** Clear every facet of one channel on one volume ("Erase all"). */

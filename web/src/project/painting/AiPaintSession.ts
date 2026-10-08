@@ -294,7 +294,7 @@ export class AiPaintSession {
    * topology or annotation change since the preview fails closed rather than
    * painting a mask that no longer describes this mesh.
    */
-  apply(cancellation?: CancellationToken): AiPaintApplyOutcome {
+  async apply(cancellation?: CancellationToken): Promise<AiPaintApplyOutcome> {
     const preview = this.requirePreview();
     if (cancellation?.aborted) {
       return { status: 'cancelled', ...(cancellation.reason ? { reason: cancellation.reason } : {}) };
@@ -315,41 +315,31 @@ export class AiPaintSession {
     }
 
     // One command per region would put several entries on the undo stack for a
-    // single user action, so the whole mask commits as one transaction. A throw
-    // inside it rolls the project back atomically.
+    // single user action, so the whole mask commits as one transaction, which
+    // a refusal rolls back atomically.
     const label = `Smart Paint ${channelLabel(preview.channel)} facets`;
-    let facetCount = 0;
-    let applied: { revision: number; hash: string } | undefined;
-    try {
-      this.options.commands.transaction(label, () => {
-        for (const region of assigned) {
-          const outcome = this.options.strokes.commitTriangles({
-            volumeId: preview.volumeId,
-            triangleIndices: region.triangleIndices,
-            channel: preview.channel,
-            value: region.value as never,
-            mode: 'paint',
-            label,
-            ...(cancellation ? { cancellation } : {}),
-          });
-          if (outcome.status === 'cancelled') throw new AiPaintCancelledError(outcome.reason);
-          if (outcome.status !== 'applied') continue;
-          facetCount += region.triangleIndices.length;
-          applied = { revision: outcome.revision, hash: outcome.hash };
-        }
-      });
-    } catch (error) {
-      if (error instanceof AiPaintCancelledError) {
-        facetCount = 0;
-        return { status: 'cancelled', ...(error.reason ? { reason: error.reason } : {}) };
-      }
-      throw error;
+    const { result, applied } = await this.options.strokes.submitTriangleSet(
+      label,
+      assigned.map((region) => ({
+        volumeId: preview.volumeId,
+        triangleIndices: region.triangleIndices,
+        channel: preview.channel,
+        value: region.value as never,
+        mode: 'paint' as const,
+      })),
+      cancellation,
+    );
+    if (result.status === 'cancelled') {
+      return { status: 'cancelled', ...(result.reason ? { reason: result.reason } : {}) };
     }
-
-    if (!applied || facetCount === 0) return { status: 'noop' };
+    const facetCount = assigned.reduce(
+      (count, region, index) => count + (applied[index] ? region.triangleIndices.length : 0),
+      0,
+    );
+    if (result.status !== 'applied' || facetCount === 0) return { status: 'noop' };
     this.preview = undefined;
     this.projection = undefined;
-    return { status: 'applied', revision: applied.revision, hash: applied.hash, facetCount };
+    return { status: 'applied', revision: result.revision, hash: result.hash, facetCount };
   }
 
   private assertConsent(request: AiPaintRequest): void {
@@ -390,13 +380,6 @@ export class AiPaintSession {
   private requireProjection(): AiPaintProjection {
     if (!this.projection) throw new Error('There is no Smart Paint projection to act on');
     return this.projection;
-  }
-}
-
-class AiPaintCancelledError extends Error {
-  constructor(readonly reason?: string) {
-    super(reason ?? 'cancelled');
-    this.name = 'AiPaintCancelledError';
   }
 }
 

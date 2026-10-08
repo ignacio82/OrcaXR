@@ -922,7 +922,10 @@ and replay coverage for the complete current command inventory.
   volume separation submit intents, as do brim ears and adopting a printer's
   loaded filaments (with its new filament IDs drawn before submission). Mesh
   simplification, repair, Boolean results and embossed-text and SVG parts
-  (added or re-cut) carry their new meshes as staged work too. In
+  (added or re-cut) carry their new meshes as staged work too. Facet painting
+  commits each stroke as a facetStroke intent (refined strokes as staged work),
+  and a Smart Paint mask commits its regions as one labelled transaction, each
+  guarded by the scratch-store state the region before it leaves. In
   process, a command the session refuses reports the browser's own error; the
   wire still carries only `commandFailed`. Other workflows, remote projections
   and production worker/JNI execution are not migrated yet. Browser capture and
@@ -940,6 +943,8 @@ and replay coverage for the complete current command inventory.
   - [x] Route brim ears and printer filament adoption through guarded intents.
   - [x] Route mesh simplification, repair, Booleans and emboss/SVG parts through
     measured staged work.
+  - [x] Route facet painting, erase-all and Smart Paint through guarded intents
+    and staged refinements.
   - [ ] Migrate remaining editing/import/save/slice routes and isolate
     preparation work; preserve the registry boundary for every mutation.
 - [ ] Port domain schemas, validation, IDs, canonical formatting/hashing,

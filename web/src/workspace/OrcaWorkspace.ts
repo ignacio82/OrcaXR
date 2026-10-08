@@ -2041,7 +2041,8 @@ export class OrcaWorkspace extends xb.Script {
       if (!this.paintStroke || event.pointerId !== this.paintStroke.pointerId) return false;
       canvas.releasePointerCapture?.(event.pointerId);
       if (cancelled) this.cancelPaintStroke();
-      else this.endPaintStroke();
+      // The stroke reports its own outcome when the session acknowledges it.
+      else void this.endPaintStroke();
       if (this.orbitControls) this.orbitControls.enabled = true;
       return true;
     };
@@ -2325,7 +2326,7 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Erase every colour facet on the selected volumes ("Erase all"). */
-  public eraseAllPaint(): number {
+  public async eraseAllPaint(): Promise<number> {
     const volumes = this.paintableSelectedVolumes();
     if (volumes.length === 0) {
       this.setStatus(`Select a model to erase its ${channelLabel(this.paintChannel)} painting.`);
@@ -2333,7 +2334,7 @@ export class OrcaWorkspace extends xb.Script {
     }
     let cleared = 0;
     for (const volumeId of volumes) {
-      const result = this.paintService.clearVolume(volumeId, this.paintChannel);
+      const result = await this.paintService.submitClear(volumeId, this.paintChannel);
       if (result.status === 'applied') cleared += 1;
     }
     this.refreshPaintOverlays();
@@ -2491,10 +2492,18 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Commit the corrected mask as exactly one undoable command. */
-  public applySmartPaint(): void {
+  public async applySmartPaint(): Promise<void> {
     const session = this.smartPaintSessionInstance;
     if (!session?.current) return;
-    const outcome = session.apply();
+    let outcome: Awaited<ReturnType<typeof session.apply>>;
+    try {
+      outcome = await session.apply();
+    } catch (error) {
+      this.smartPaintError = error instanceof Error ? error.message : String(error);
+      this.setStatus(`Smart Paint failed: ${this.smartPaintError}`);
+      this.onSmartPaintStateChanged?.();
+      return;
+    }
     switch (outcome.status) {
       case 'applied':
         this.setStatus(`Smart Paint applied to ${outcome.facetCount} facet(s). Undo restores the previous painting.`);
@@ -3676,21 +3685,21 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Commit the accumulated gesture as exactly one undoable stroke. */
-  private endPaintStroke(): void {
+  private async endPaintStroke(): Promise<void> {
     const stroke = this.paintStroke;
     this.paintStroke = null;
     this.clearPaintPreview();
     if (!stroke || stroke.triangles.size === 0) return;
     try {
       const result = stroke.refinement
-        ? this.paintService.commitRefinement({
+        ? await this.paintService.submitRefinement({
             volumeId: stroke.volumeId,
             channel: stroke.channel,
             encoding: stroke.refinement as never,
             mode: stroke.mode,
             ...(stroke.guard ? { guard: stroke.guard } : {}),
           })
-        : this.paintService.commitTriangles({
+        : await this.paintService.submitTriangles({
             volumeId: stroke.volumeId,
             triangleIndices: [...stroke.triangles].sort((left, right) => left - right),
             channel: stroke.channel,

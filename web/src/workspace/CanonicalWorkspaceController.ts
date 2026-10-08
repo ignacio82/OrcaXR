@@ -21,6 +21,7 @@ import {
   captureReplaceVolumeMeshCommand,
   captureClipboardPasteCommand,
   captureSplitVolumeToPartsCommand,
+  facetRefinementStagedWork,
   singleStagedWork,
   splitToObjectsStagedWork,
   transactionStagedWork,
@@ -147,15 +148,31 @@ import {
   type RecreateModelColorsPlan,
   type RecreateModelColorsOptions,
 } from '../project/filaments/recreateModelColors';
-import type { CommandHistorySnapshot } from '../project/history/commandBus';
+import { CommandBus, type CommandHistorySnapshot } from '../project/history/commandBus';
 import { PreparedProjectImport, ProjectImportCoordinator } from '../project/import/ProjectImportCoordinator';
 import { ModelImportParser, type ModelImportPlacement } from '../project/import/ModelImportParser';
 import type { BrimEarPoint, JsonValue, TriangleAssignments, Vec3 } from '../project/domain/model';
 import type { FacetRefinementEncoding } from '../project/domain/model';
-import type { FacetAnnotationChannel, FacetSelectionMesh } from '../project/annotations';
+import {
+  captureFacetAnnotationGuard,
+  commitFacetAnnotationStroke,
+  type FacetAnnotationChannel,
+  type FacetSelectionMesh,
+  type FacetStrokeCommitResult,
+  type FacetStrokeRequest,
+  type TriangleRange,
+} from '../project/annotations';
+import {
+  prepareFacetAnnotationStroke,
+  type FacetRefinementCommitRequest,
+} from '../project/annotations/FacetAnnotationStrokeCommand';
 import { GeometryMergeParser } from '../project/import/GeometryMergeParser';
 import { AiPaintSession, type AiPaintPort } from '../project/painting/AiPaintSession';
-import { PaintStrokeService } from '../project/painting/PaintStrokeService';
+import {
+  PaintStrokeService,
+  type PaintCommitPort,
+  type PaintStrokeIntent,
+} from '../project/painting/PaintStrokeService';
 import { projectPaintPalette, type PaintPalette, type PaintPaletteOptions } from '../project/painting/paintPalette';
 import {
   ImportCancellationController,
@@ -2457,6 +2474,88 @@ export class CanonicalWorkspaceController {
     return scopedOverrideSnapshot(this.session.project.getSnapshot(), target);
   }
 
+  /** Paint commits through the guarded asynchronous session route. */
+  private readonly paintCommits: PaintCommitPort = {
+    stroke: (request) => this.submitFacetStroke(request),
+    refinement: (request) => this.submitFacetRefinement(request),
+    strokes: (label, requests) => this.submitFacetStrokes(label, requests),
+  };
+
+  /** One facet stroke as a guarded intent; its refusals and no-op are decided first. */
+  private async submitFacetStroke(
+    request: FacetStrokeRequest<FacetAnnotationChannel>,
+  ): Promise<FacetStrokeCommitResult> {
+    this.assertActive();
+    if (request.cancellation?.aborted) {
+      return { status: 'cancelled', ...(request.cancellation.reason ? { reason: request.cancellation.reason } : {}) };
+    }
+    if (prepareFacetAnnotationStroke(this.session.commands.context, request) === 'noop') return { status: 'noop' };
+    const receipt = await this.executeEditIntent((text) => ({ facetStroke: facetStrokeWire(request, text) }));
+    return { status: 'applied', revision: receipt.guard.project.revision, hash: receipt.guard.project.semanticHash };
+  }
+
+  /** One refined stroke as measured staged work. */
+  private async submitFacetRefinement(
+    request: FacetRefinementCommitRequest<FacetAnnotationChannel>,
+  ): Promise<FacetStrokeCommitResult> {
+    this.assertActive();
+    const guard = this.asyncSession.captureGuard();
+    const before = this.session.project.getSnapshot();
+    const receipt = await this.sessionTransport.executeStaged(
+      facetRefinementStagedWork(request, INSTANCE_INPUT_LIMITS),
+      {
+        guard,
+      },
+    );
+    return receipt.guard.project.revision === before.revision
+      ? { status: 'noop' }
+      : { status: 'applied', revision: receipt.guard.project.revision, hash: receipt.guard.project.semanticHash };
+  }
+
+  /**
+   * Strokes as one labelled transaction. Each is applied first to a scratch
+   * store from the current state, so it carries the revision and fingerprint it
+   * will meet inside the batch and a no-op is left out, exactly as the strokes
+   * would have run one after another.
+   */
+  private async submitFacetStrokes(
+    label: string,
+    requests: readonly PaintStrokeIntent[],
+  ): Promise<{ readonly result: FacetStrokeCommitResult; readonly applied: readonly boolean[] }> {
+    this.assertActive();
+    const guard = this.asyncSession.captureGuard();
+    const before = this.session.project.getSnapshot();
+    const scratch = new CommandBus({
+      project: new ProjectStore(before.state),
+      selection: new SelectionStore(),
+      assets: this.assets,
+    });
+    const text = createIntentTextEncoder();
+    const commands: ProjectCommandWire[] = [];
+    const applied: boolean[] = [];
+    for (const { volumeId, ...request } of requests) {
+      const stroke = { ...request, guard: captureFacetAnnotationGuard(scratch, volumeId) };
+      const outcome = commitFacetAnnotationStroke(scratch, stroke);
+      applied.push(outcome.status === 'applied');
+      if (outcome.status !== 'applied') continue;
+      commands.push({
+        facetStroke: facetStrokeWire(
+          { ...stroke, guard: { ...stroke.guard, revision: before.revision + stroke.guard.revision } },
+          text,
+        ),
+      });
+    }
+    if (commands.length === 0) return { result: { status: 'noop' }, applied };
+    const receipt = await this.sessionTransport.transactionIntents(
+      { version: PROJECT_INTENT_VERSION, label: text(label), commands },
+      { guard },
+    );
+    return {
+      result: { status: 'applied', revision: receipt.guard.project.revision, hash: receipt.guard.project.semanticHash },
+      applied,
+    };
+  }
+
   /** One captured command as measured staged work, guarded by the session it was read from. */
   private async executeStagedEdit(command: CapturedProjectCommand, guard: AsyncSessionGuard): Promise<void> {
     await this.sessionTransport.executeStaged(singleStagedWork(command), { guard });
@@ -2478,7 +2577,7 @@ export class CanonicalWorkspaceController {
    */
   createPaintStrokeService(): PaintStrokeService {
     this.assertActive();
-    return new PaintStrokeService({ commands: this.session.commands, assets: this.assets });
+    return new PaintStrokeService({ commands: this.session.commands, assets: this.assets, submit: this.paintCommits });
   }
 
   /**
@@ -5507,5 +5606,37 @@ function brimEarWire(point: BrimEarPoint) {
   return {
     positionMm: [point.positionMm[0], point.positionMm[1], point.positionMm[2]],
     headFrontRadiusMm: point.headFrontRadiusMm,
+  };
+}
+
+/** One facet stroke in the shared intent contract's encoding. */
+function facetStrokeWire(
+  request: FacetStrokeRequest<FacetAnnotationChannel>,
+  text: (value: string) => number[],
+): Extract<ProjectCommandWire, { facetStroke: unknown }>['facetStroke'] {
+  const ranges = (input: readonly TriangleRange[]) =>
+    input.map((range) => ({ start: range.start, endExclusive: range.endExclusive }));
+  const operation = request.operation;
+  const value = (paint: unknown) => {
+    if (typeof paint === 'boolean') return { flag: paint };
+    if (typeof paint === 'string') return { text: text(paint) };
+    throw new Error('A painted facet value is a filament ID, a state name or a flag');
+  };
+  return {
+    guard: {
+      revision: request.guard.revision,
+      hash: text(request.guard.hash),
+      volumeId: text(request.guard.volumeId),
+      topologyRevision: request.guard.topologyRevision,
+      triangleCount: request.guard.triangleCount,
+    },
+    channel: request.channel,
+    operation:
+      operation.mode === 'reset'
+        ? { reset: {} }
+        : operation.mode === 'erase'
+          ? { erase: { ranges: ranges(operation.ranges) } }
+          : { paint: { ranges: ranges(operation.ranges), value: value(operation.value) } },
+    label: request.label === undefined ? { absent: {} } : { value: text(request.label) },
   };
 }

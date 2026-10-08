@@ -497,8 +497,8 @@ export class ActionContext {
     if (Object.keys(settings).length > 0) this.workspace.setPaintSettings(settings);
   }
 
-  eraseAllPaint(): void {
-    this.workspace.eraseAllPaint();
+  async eraseAllPaint(): Promise<void> {
+    await this.workspace.eraseAllPaint();
   }
 
   /** Upstream `1`–`9`: select the palette row with that displayed number. */
@@ -718,8 +718,8 @@ export class ActionContext {
     void this.workspace.requestSmartPaint();
   }
 
-  applySmartPaint(): void {
-    this.workspace.applySmartPaint();
+  async applySmartPaint(): Promise<void> {
+    await this.workspace.applySmartPaint();
   }
 
   cancelSmartPaint(): void {

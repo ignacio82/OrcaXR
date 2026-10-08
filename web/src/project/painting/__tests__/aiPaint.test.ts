@@ -252,7 +252,7 @@ await test('a request previews without touching canonical state, and apply commi
   session.assignRegion('ai-region-2', TOOL_ONE);
   assert.equal(session.current?.assignable, true);
 
-  const applied = session.apply();
+  const applied = await session.apply();
   assert.equal(applied.status, 'applied');
   assert.equal(applied.status === 'applied' ? applied.facetCount : 0, 4);
   assert.equal(
@@ -280,7 +280,7 @@ await test('an unassigned or excluded region is not painted', async () => {
   });
   await session.request({ volumeId: harness.volumeId, channel: 'color', prompt: 'top', consent: consent() });
 
-  assert.equal(session.apply().status, 'noop', 'a mask with no destination paints nothing');
+  assert.equal((await session.apply()).status, 'noop', 'a mask with no destination paints nothing');
   assert.equal(facets(harness).length, 0);
 
   session.assignRegion('ai-region-1', TOOL_ONE);
@@ -289,7 +289,7 @@ await test('an unassigned or excluded region is not painted', async () => {
   // One facet left in the top region plus the untouched two-facet bottom region.
   assert.equal(corrected.coverage, 3 / 12, 'derived totals follow the correction');
 
-  assert.equal(session.apply().status, 'applied');
+  assert.equal((await session.apply()).status, 'applied');
   assert.deepEqual(facets(harness), [{ triangles: [2], value: TOOL_ONE }]);
 
   // Clearing a destination removes the region from a later commit entirely.
@@ -302,7 +302,7 @@ await test('an unassigned or excluded region is not painted', async () => {
   await second.request({ volumeId: harness.volumeId, channel: 'color', prompt: 'top', consent: consent() });
   second.assignRegion('ai-region-2', TOOL_TWO);
   second.assignRegion('ai-region-2', undefined);
-  assert.equal(second.apply().status, 'noop');
+  assert.equal((await second.apply()).status, 'noop');
 });
 
 await test('consent is required before anything is sent, per provider and per payload', async () => {
@@ -424,7 +424,7 @@ await test('a project change between preview and apply fails closed', async () =
 
   harness.commands.execute(new RenameProjectCommand('Edited while the mask was open'));
   const after = snapshot(harness);
-  assert.equal(session.apply().status, 'stale');
+  assert.equal((await session.apply()).status, 'stale');
   assert.equal(snapshot(harness), after, 'a stale mask paints nothing');
 });
 
@@ -443,7 +443,7 @@ await test('the same mask authors any facet channel, not just colour', async () 
     consent: consent(),
   });
   session.assignRegion('ai-region-1', 'block');
-  assert.equal(session.apply().status, 'applied');
+  assert.equal((await session.apply()).status, 'applied');
 
   const volume = harness.project.getSnapshot().state.plates[0].objects[0].volumes[0];
   assert.deepEqual(volume.annotations.support, [{ triangles: [2, 3], value: 'block' }]);
@@ -470,7 +470,7 @@ await test('an unknown volume and a rejected value fail before any mutation', as
 
   await session.request({ volumeId: harness.volumeId, channel: 'color', prompt: 'top', consent: consent() });
   session.assignRegion('ai-region-1', entityId<'physical-filament'>('import:test:ai-ghost'));
-  assert.throws(() => session.apply(), /unknown|filament/i);
+  await assert.rejects(session.apply(), /unknown|filament/i);
   assert.equal(snapshot(harness), before, 'a rejected destination leaves the project untouched');
 
   assert.throws(() => session.assignRegion('ai-region-9', TOOL_ONE), /not in the current preview/);
