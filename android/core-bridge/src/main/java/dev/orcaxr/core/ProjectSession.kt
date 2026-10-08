@@ -167,6 +167,11 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun selection(): ProjectSelection = read { own(NativeProject.selection(it), ::ProjectSelection) }
     fun history(): ProjectHistory = read { own(NativeProject.history(it), ::ProjectHistory) }
     fun historyRevision(): Long = read { NativeProject.historyRevision(it) }
+    /** Which actions a surface offers and whether the workspace enables them:
+     * the session decides its own facts, the request carries the host's. */
+    fun capabilities(request: ProjectIntents.CapabilityRequest): ProjectIntents.CapabilityPage = read {
+        ProjectIntents.decodeCapabilityPage(NativeProject.sessionCapabilities(it, ProjectIntents.encodeCapabilityRequest(request)))
+    }
     fun assetFingerprint(): String = read { NativeProject.assetFingerprint(it) }
     fun asset(position: Long): ProjectAsset = read { own(NativeProject.asset(it, position), ::ProjectAsset) }
     fun captureGuard(): ProjectGuard = read { own(NativeProject.captureGuard(it), ::ProjectGuard) }

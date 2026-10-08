@@ -9,6 +9,7 @@ import { replayCatalogs } from "./catalog-replay.mjs";
 import { replayLibrary } from "./library-replay.mjs";
 import { replayEditor } from "./editor-replay.mjs";
 import { replayProjection } from "./projection-replay.mjs";
+import { replayCapabilities } from "./capability-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -414,6 +415,31 @@ try {
     [projections.projectionReplies, projections.projectionRefusals],
     [281, 36],
   );
+  // Capability pages over live sessions, then the Kotlin wrapper.
+  const capabilityFixture = JSON.parse(
+    await readFile(
+      new URL("testdata/cross-platform/capability-exchange-vectors.json", root),
+    ),
+  );
+  const capabilities = replayCapabilities(
+    projectJniCore(jvm.call),
+    capabilityFixture,
+    layout,
+  );
+  assert.deepEqual(
+    [capabilities.capabilityPages, capabilities.capabilityRefusals],
+    [366, 183],
+  );
+  const capabilityState = capabilityFixture.states[0];
+  const capabilityChecks = jvm.call(
+    "capabilityChecks",
+    capabilityState.stateJson,
+    Uint8Array.from(capabilityState.asset.bytes),
+    capabilityState.phases[0].queries
+      .flatMap((q) => [q.requestJson, q.replyJson])
+      .join("\n"),
+  );
+  assert.equal(capabilityChecks, 15);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);
@@ -440,6 +466,8 @@ try {
     ...editors,
     editorChecks,
     ...projections,
+    ...capabilities,
+    capabilityChecks,
     ownedQueryTextUnits: ownedQueryText.length,
     ownedBytes: owned.byteLength,
     hostJniSha256: createHash("sha256")

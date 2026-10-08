@@ -5,6 +5,14 @@ export function initializationBlockReason(
   action: { readonly id: string; readonly group: string },
   snapshot: InitializationSnapshot | undefined,
 ): string | undefined {
+  return initializationBlock(action, snapshot)?.reason;
+}
+
+/** The startup feature an action waits for, and whether it failed rather than still loading. */
+export function initializationBlock(
+  action: { readonly id: string; readonly group: string },
+  snapshot: InitializationSnapshot | undefined,
+): { readonly reason: string; readonly failed: boolean } | undefined {
   if (
     !snapshot ||
     action.group === 'help' ||
@@ -30,6 +38,9 @@ export function initializationBlockReason(
   );
   if (!unavailable) return;
   return unavailable.phase === 'failed'
-    ? `${unavailable.label} is unavailable. ${unavailable.reason} Use startup recovery to try again.`
-    : `${unavailable.label} is still loading.`;
+    ? {
+        reason: `${unavailable.label} is unavailable. ${unavailable.reason} Use startup recovery to try again.`,
+        failed: true,
+      }
+    : { reason: `${unavailable.label} is still loading.`, failed: false };
 }

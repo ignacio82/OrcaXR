@@ -3197,8 +3197,10 @@ state; it is disabled by an unavailable or blocked status, by a startup
 feature it depends on (`initializationBlockReason`: the first core feature
 not ready, with profiles and the settings schema added for slicing,
 calibration, filament, settings and preset actions), by the first unmet
-prerequisite, or by its enablement rule. Reasons are structured, and render
-as the browser's text in UTF-16, including host-supplied startup labels.
+prerequisite, or by its enablement rule. Reasons carry the browser's
+`AvailabilityCode` (and the unmet prerequisite), which the browser registry
+reports alongside its text so a shell can explain a reason in its own words,
+and render as that text in UTF-16, including host-supplied startup labels.
 
 `generate-action-catalog.mjs` generates the catalog from the production
 registry: every action in catalog order with its resolved capability, the
@@ -3215,11 +3217,39 @@ as false when absent, so only their positive test is admitted.
 action on every surface over the initial state, representative workflows,
 every startup phase of every application feature, and seeded combinations of
 every field a rule reads, plus the surface and context listings. The Rust
-replay matches each availability and reason, the listings, the catalog
-order and that the native default state is `INITIAL_UI_STATE`: 110
-states, 372,900 availabilities and 58 distinct reasons. The two paths no
+replay matches each availability, code, prerequisite and reason, the
+listings, the catalog order and that the native default state is
+`INITIAL_UI_STATE`: 110 states, 372,900 availabilities and 59 distinct
+reasons. The two paths no
 catalog action takes today, a hiding visibility rule and a disabling status
 without a reason, are pinned against the registry's own text.
+
+### Capability exchange
+
+`capabilities` in the project crate serves the catalog to hosts over a live
+session. The session decides the facts it owns — instances on the active
+plate, plates, selection, the primary instance, undo/redo and dirtiness —
+through `canonicalUiFacts`, the function the browser's shell itself now
+reads them through; the request carries the facts the host owns (mode,
+slicing, G-code, printer, preflight, projection health, startup), so a host
+cannot enable an action the project does not allow. A `CapabilityRequest`
+asks for a page of at most 64 of a surface's actions, of a context menu, or
+named actions (an unknown name is hidden); the `CapabilityPage` carries the
+session revision and history revision it was read at, the facts, the total
+and each action's availability with its code, prerequisite and text.
+
+Bindings: WASM `ProjectSession.capabilities`, the JNI export
+`sessionCapabilities` and Kotlin `ProjectSession.capabilities`.
+
+`capability-exchange-vectors.mjs` records the facts at every step of the 76
+session traces (1,981 steps) and, over real TypeScript sessions opened from
+the 21 distinct trace states, capability pages as opened, after a selection
+and after an acknowledged edit through the session wire protocol. Rust
+checks the facts while replaying every trace natively and answers all 366
+pages byte for byte; WASM in Node and Chrome and JNI open each state as a
+real session, take the same selection and edit (matching its replies) and
+match the pages, with 183 refusals; 15 Kotlin checks cover the wrapper,
+including a selection the session, not the host, reports.
 
 ### Preset graph and profile catalog
 
@@ -3916,6 +3946,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settin
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/settings-projection-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/paint-palette-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/action-capability-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/capability-exchange-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-catalog-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/preset-library-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/validation-value-vectors.mjs

@@ -91,6 +91,8 @@ assert.deepEqual(schema.roots, [
   "SettingsSessionRequest",
   "PaintPaletteRequest",
   "PaintPalette",
+  "CapabilityRequest",
+  "CapabilityPage",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

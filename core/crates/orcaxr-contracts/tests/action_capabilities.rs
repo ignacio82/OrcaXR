@@ -54,6 +54,17 @@ fn ui_state(state: &Value) -> UiState {
             .unwrap(),
     }
 }
+/// A reason as the browser reports it: code, prerequisite and text.
+fn reason_value(reason: &Reason<'_>) -> Value {
+    let mut value = serde_json::json!({
+        "code": reason.code(),
+        "text": String::from_utf16(&reason.text()).unwrap(),
+    });
+    if let Some(p) = reason.prerequisite() {
+        value["prerequisite"] = p.id().into();
+    }
+    value
+}
 fn indices(list: &Value) -> Vec<usize> {
     list.as_array()
         .unwrap()
@@ -106,18 +117,16 @@ fn the_catalog_and_its_surfaces_match_the_registry() {
     let initial = UiState::default();
     let unknown = capabilities::availability("not_an_action", Surface::DomMenu, &initial);
     assert_eq!(unknown, Availability::Hidden(Reason::UnknownAction));
-    assert_eq!(Reason::UnknownAction.text(), units("Unknown action."));
+    assert_eq!(
+        reason_value(&Reason::UnknownAction),
+        corpus["unknownAction"]
+    );
 }
 
 #[test]
 fn every_action_on_every_surface_matches_the_registry() {
     let corpus = corpus();
-    let reasons: Vec<Vec<u16>> = corpus["reasons"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|r| units(r.as_str().unwrap()))
-        .collect();
+    let reasons = corpus["reasons"].as_array().unwrap();
     let mut compared = 0;
     for case in corpus["cases"].as_array().unwrap() {
         let name = case["name"].as_str().unwrap();
@@ -151,7 +160,7 @@ fn every_action_on_every_surface_matches_the_registry() {
                         };
                         assert_eq!(expected.chars().next(), Some(kind), "{label}");
                         let index: usize = expected[1..].parse().unwrap();
-                        assert_eq!(reason.text(), reasons[index], "{label}");
+                        assert_eq!(reason_value(&reason), reasons[index], "{label}");
                     }
                 }
                 compared += 1;

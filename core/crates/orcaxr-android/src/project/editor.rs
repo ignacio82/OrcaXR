@@ -223,6 +223,19 @@ pub(super) fn project_paint_palette(
         },
     )
 }
+pub(super) fn session_capabilities(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_capability_request)?;
+    let json = with_session(handle, |s| {
+        let page = orcaxr_project::capabilities::session_page(s, &request)
+            .map_err(|refusal| refusal.code())?;
+        encoded(&page, wire::encode_capability_page)
+    })?;
+    string(env, json)
+}
 pub(super) fn project_settings_targets(
     env: &mut JNIEnv<'_>,
     handle: jlong,

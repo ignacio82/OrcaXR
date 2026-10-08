@@ -16,6 +16,7 @@ macro_rules! names {
     };
 }
 pub mod assets;
+pub mod capabilities;
 pub mod clipboard;
 pub mod commands;
 pub mod export;

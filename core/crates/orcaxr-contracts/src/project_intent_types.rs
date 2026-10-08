@@ -5549,6 +5549,493 @@ fn read_paint_palette(v: &Value) -> Result<PaintPalette, InvalidIntent> {
         enabled_mixed_count: read_counter(&object["enabledMixedCount"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ActionSurface {
+    DomScene,
+    XrScene,
+    DomPrimary,
+    DomToolbar,
+    DomMenu,
+    DomInspector,
+    DomContext,
+    CommandPalette,
+    Keyboard,
+    XrPrimary,
+    XrToolbar,
+    XrMenu,
+    XrInspector,
+    XrContext,
+    Automation,
+}
+fn read_action_surface(v: &Value) -> Result<ActionSurface, InvalidIntent> {
+    match v.as_str() {
+        Some("domScene") => Ok(ActionSurface::DomScene),
+        Some("xrScene") => Ok(ActionSurface::XrScene),
+        Some("domPrimary") => Ok(ActionSurface::DomPrimary),
+        Some("domToolbar") => Ok(ActionSurface::DomToolbar),
+        Some("domMenu") => Ok(ActionSurface::DomMenu),
+        Some("domInspector") => Ok(ActionSurface::DomInspector),
+        Some("domContext") => Ok(ActionSurface::DomContext),
+        Some("commandPalette") => Ok(ActionSurface::CommandPalette),
+        Some("keyboard") => Ok(ActionSurface::Keyboard),
+        Some("xrPrimary") => Ok(ActionSurface::XrPrimary),
+        Some("xrToolbar") => Ok(ActionSurface::XrToolbar),
+        Some("xrMenu") => Ok(ActionSurface::XrMenu),
+        Some("xrInspector") => Ok(ActionSurface::XrInspector),
+        Some("xrContext") => Ok(ActionSurface::XrContext),
+        Some("automation") => Ok(ActionSurface::Automation),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ActionContextTarget {
+    Object,
+    Plate,
+}
+fn read_action_context_target(v: &Value) -> Result<ActionContextTarget, InvalidIntent> {
+    match v.as_str() {
+        Some("object") => Ok(ActionContextTarget::Object),
+        Some("plate") => Ok(ActionContextTarget::Plate),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceMode {
+    Prepare,
+    Preview,
+}
+fn read_workspace_mode(v: &Value) -> Result<WorkspaceMode, InvalidIntent> {
+    match v.as_str() {
+        Some("prepare") => Ok(WorkspaceMode::Prepare),
+        Some("preview") => Ok(WorkspaceMode::Preview),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterJobUiState {
+    Standby,
+    Printing,
+    Paused,
+    Complete,
+    Cancelled,
+    Error,
+    Unknown,
+    Disconnected,
+}
+fn read_printer_job_ui_state(v: &Value) -> Result<PrinterJobUiState, InvalidIntent> {
+    match v.as_str() {
+        Some("standby") => Ok(PrinterJobUiState::Standby),
+        Some("printing") => Ok(PrinterJobUiState::Printing),
+        Some("paused") => Ok(PrinterJobUiState::Paused),
+        Some("complete") => Ok(PrinterJobUiState::Complete),
+        Some("cancelled") => Ok(PrinterJobUiState::Cancelled),
+        Some("error") => Ok(PrinterJobUiState::Error),
+        Some("unknown") => Ok(PrinterJobUiState::Unknown),
+        Some("disconnected") => Ok(PrinterJobUiState::Disconnected),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StartupFeaturePhase {
+    Idle,
+    Loading,
+    Ready,
+    Failed,
+}
+fn read_startup_feature_phase(v: &Value) -> Result<StartupFeaturePhase, InvalidIntent> {
+    match v.as_str() {
+        Some("idle") => Ok(StartupFeaturePhase::Idle),
+        Some("loading") => Ok(StartupFeaturePhase::Loading),
+        Some("ready") => Ok(StartupFeaturePhase::Ready),
+        Some("failed") => Ok(StartupFeaturePhase::Failed),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StartupBootPhase {
+    Loading,
+    Ready,
+    Degraded,
+    Failed,
+}
+fn read_startup_boot_phase(v: &Value) -> Result<StartupBootPhase, InvalidIntent> {
+    match v.as_str() {
+        Some("loading") => Ok(StartupBootPhase::Loading),
+        Some("ready") => Ok(StartupBootPhase::Ready),
+        Some("degraded") => Ok(StartupBootPhase::Degraded),
+        Some("failed") => Ok(StartupBootPhase::Failed),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupFeature {
+    pub id: EditText,
+    pub label: EditText,
+    pub phase: StartupFeaturePhase,
+    pub reason: EditText,
+}
+fn read_startup_feature(v: &Value) -> Result<StartupFeature, InvalidIntent> {
+    let object = fields(v, &["id", "label", "phase", "reason"], false)?;
+    Ok(StartupFeature {
+        id: read_edit_text(&object["id"])?,
+        label: read_edit_text(&object["label"])?,
+        phase: read_startup_feature_phase(&object["phase"])?,
+        reason: read_edit_text(&object["reason"])?,
+    })
+}
+pub type StartupFeatures = Vec<StartupFeature>;
+fn read_startup_features(v: &Value) -> Result<StartupFeatures, InvalidIntent> {
+    list(v, 0, 64)?.iter().map(read_startup_feature).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupSnapshot {
+    pub phase: StartupBootPhase,
+    pub features: StartupFeatures,
+}
+fn read_startup_snapshot(v: &Value) -> Result<StartupSnapshot, InvalidIntent> {
+    let object = fields(v, &["phase", "features"], false)?;
+    Ok(StartupSnapshot {
+        phase: read_startup_boot_phase(&object["phase"])?,
+        features: read_startup_features(&object["features"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalStartupSnapshot {
+    Absent(Empty),
+    Value(StartupSnapshot),
+}
+fn read_optional_startup_snapshot(v: &Value) -> Result<OptionalStartupSnapshot, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalStartupSnapshot::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalStartupSnapshot::Value(read_startup_snapshot(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityHostState {
+    pub initialization: OptionalStartupSnapshot,
+    pub mode: WorkspaceMode,
+    pub simplify_previewing: Flag,
+    pub calibration_session_open: Flag,
+    pub projection_healthy: Flag,
+    pub has_clipboard: Flag,
+    pub is_slicing: Flag,
+    pub gcode_ready: Flag,
+    pub preflight_blocked: Flag,
+    pub printer_job_state: PrinterJobUiState,
+}
+fn read_capability_host_state(v: &Value) -> Result<CapabilityHostState, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "initialization",
+            "mode",
+            "simplifyPreviewing",
+            "calibrationSessionOpen",
+            "projectionHealthy",
+            "hasClipboard",
+            "isSlicing",
+            "gcodeReady",
+            "preflightBlocked",
+            "printerJobState",
+        ],
+        false,
+    )?;
+    Ok(CapabilityHostState {
+        initialization: read_optional_startup_snapshot(&object["initialization"])?,
+        mode: read_workspace_mode(&object["mode"])?,
+        simplify_previewing: read_flag(&object["simplifyPreviewing"])?,
+        calibration_session_open: read_flag(&object["calibrationSessionOpen"])?,
+        projection_healthy: read_flag(&object["projectionHealthy"])?,
+        has_clipboard: read_flag(&object["hasClipboard"])?,
+        is_slicing: read_flag(&object["isSlicing"])?,
+        gcode_ready: read_flag(&object["gcodeReady"])?,
+        preflight_blocked: read_flag(&object["preflightBlocked"])?,
+        printer_job_state: read_printer_job_ui_state(&object["printerJobState"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityContextPage {
+    pub target: ActionContextTarget,
+    pub start: Counter,
+    pub count: Counter,
+}
+fn read_capability_context_page(v: &Value) -> Result<CapabilityContextPage, InvalidIntent> {
+    let object = fields(v, &["target", "start", "count"], false)?;
+    Ok(CapabilityContextPage {
+        target: read_action_context_target(&object["target"])?,
+        start: read_counter(&object["start"])?,
+        count: read_counter(&object["count"])?,
+    })
+}
+pub type ActionIds = Vec<EditText>;
+fn read_action_ids(v: &Value) -> Result<ActionIds, InvalidIntent> {
+    list(v, 0, 64)?.iter().map(read_edit_text).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityActions {
+    pub ids: ActionIds,
+}
+fn read_capability_actions(v: &Value) -> Result<CapabilityActions, InvalidIntent> {
+    let object = fields(v, &["ids"], false)?;
+    Ok(CapabilityActions {
+        ids: read_action_ids(&object["ids"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CapabilityQuery {
+    Page(SettingsTargetPageRequest),
+    Context(CapabilityContextPage),
+    Actions(CapabilityActions),
+}
+fn read_capability_query(v: &Value) -> Result<CapabilityQuery, InvalidIntent> {
+    let object = fields(v, &["page", "context", "actions"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "page" => Ok(CapabilityQuery::Page(read_settings_target_page_request(
+            value,
+        )?)),
+        "context" => Ok(CapabilityQuery::Context(read_capability_context_page(
+            value,
+        )?)),
+        "actions" => Ok(CapabilityQuery::Actions(read_capability_actions(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityRequest {
+    pub surface: ActionSurface,
+    pub host: CapabilityHostState,
+    pub query: CapabilityQuery,
+}
+fn read_capability_request(v: &Value) -> Result<CapabilityRequest, InvalidIntent> {
+    let object = fields(v, &["surface", "host", "query"], false)?;
+    Ok(CapabilityRequest {
+        surface: read_action_surface(&object["surface"])?,
+        host: read_capability_host_state(&object["host"])?,
+        query: read_capability_query(&object["query"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CapabilityReasonCode {
+    UnknownAction,
+    NotOffered,
+    XrUnsupported,
+    NotApplicable,
+    Capability,
+    Unavailable,
+    StartupFailed,
+    StartupLoading,
+    Prerequisite,
+    NotAvailable,
+}
+fn read_capability_reason_code(v: &Value) -> Result<CapabilityReasonCode, InvalidIntent> {
+    match v.as_str() {
+        Some("unknownAction") => Ok(CapabilityReasonCode::UnknownAction),
+        Some("notOffered") => Ok(CapabilityReasonCode::NotOffered),
+        Some("xrUnsupported") => Ok(CapabilityReasonCode::XrUnsupported),
+        Some("notApplicable") => Ok(CapabilityReasonCode::NotApplicable),
+        Some("capability") => Ok(CapabilityReasonCode::Capability),
+        Some("unavailable") => Ok(CapabilityReasonCode::Unavailable),
+        Some("startupFailed") => Ok(CapabilityReasonCode::StartupFailed),
+        Some("startupLoading") => Ok(CapabilityReasonCode::StartupLoading),
+        Some("prerequisite") => Ok(CapabilityReasonCode::Prerequisite),
+        Some("notAvailable") => Ok(CapabilityReasonCode::NotAvailable),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ActionPrerequisite {
+    HasModel,
+    HasSelection,
+    HasInstanceSelection,
+    HasClipboard,
+    HasGcode,
+    PreviewAvailable,
+    HasTwoModels,
+    HasMultiplePlates,
+    NotSlicing,
+    PreflightClear,
+    ProjectionHealthy,
+    PrinterPrinting,
+    PrinterPaused,
+    PrinterJobActive,
+    PrinterConnected,
+}
+fn read_action_prerequisite(v: &Value) -> Result<ActionPrerequisite, InvalidIntent> {
+    match v.as_str() {
+        Some("hasModel") => Ok(ActionPrerequisite::HasModel),
+        Some("hasSelection") => Ok(ActionPrerequisite::HasSelection),
+        Some("hasInstanceSelection") => Ok(ActionPrerequisite::HasInstanceSelection),
+        Some("hasClipboard") => Ok(ActionPrerequisite::HasClipboard),
+        Some("hasGcode") => Ok(ActionPrerequisite::HasGcode),
+        Some("previewAvailable") => Ok(ActionPrerequisite::PreviewAvailable),
+        Some("hasTwoModels") => Ok(ActionPrerequisite::HasTwoModels),
+        Some("hasMultiplePlates") => Ok(ActionPrerequisite::HasMultiplePlates),
+        Some("notSlicing") => Ok(ActionPrerequisite::NotSlicing),
+        Some("preflightClear") => Ok(ActionPrerequisite::PreflightClear),
+        Some("projectionHealthy") => Ok(ActionPrerequisite::ProjectionHealthy),
+        Some("printerPrinting") => Ok(ActionPrerequisite::PrinterPrinting),
+        Some("printerPaused") => Ok(ActionPrerequisite::PrinterPaused),
+        Some("printerJobActive") => Ok(ActionPrerequisite::PrinterJobActive),
+        Some("printerConnected") => Ok(ActionPrerequisite::PrinterConnected),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalActionPrerequisite {
+    Absent(Empty),
+    Value(ActionPrerequisite),
+}
+fn read_optional_action_prerequisite(
+    v: &Value,
+) -> Result<OptionalActionPrerequisite, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalActionPrerequisite::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalActionPrerequisite::Value(read_action_prerequisite(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityReason {
+    pub code: CapabilityReasonCode,
+    pub prerequisite: OptionalActionPrerequisite,
+    pub text: EditText,
+}
+fn read_capability_reason(v: &Value) -> Result<CapabilityReason, InvalidIntent> {
+    let object = fields(v, &["code", "prerequisite", "text"], false)?;
+    Ok(CapabilityReason {
+        code: read_capability_reason_code(&object["code"])?,
+        prerequisite: read_optional_action_prerequisite(&object["prerequisite"])?,
+        text: read_edit_text(&object["text"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ActionAvailability {
+    Enabled(Empty),
+    Disabled(CapabilityReason),
+    Hidden(CapabilityReason),
+}
+fn read_action_availability(v: &Value) -> Result<ActionAvailability, InvalidIntent> {
+    let object = fields(v, &["enabled", "disabled", "hidden"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "enabled" => Ok(ActionAvailability::Enabled(read_empty(value)?)),
+        "disabled" => Ok(ActionAvailability::Disabled(read_capability_reason(value)?)),
+        "hidden" => Ok(ActionAvailability::Hidden(read_capability_reason(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionCapability {
+    pub id: EditText,
+    pub label: EditText,
+    pub availability: ActionAvailability,
+}
+fn read_action_capability(v: &Value) -> Result<ActionCapability, InvalidIntent> {
+    let object = fields(v, &["id", "label", "availability"], false)?;
+    Ok(ActionCapability {
+        id: read_edit_text(&object["id"])?,
+        label: read_edit_text(&object["label"])?,
+        availability: read_action_availability(&object["availability"])?,
+    })
+}
+pub type ActionCapabilityList = Vec<ActionCapability>;
+fn read_action_capability_list(v: &Value) -> Result<ActionCapabilityList, InvalidIntent> {
+    list(v, 0, 64)?.iter().map(read_action_capability).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFacts {
+    pub model_count: Counter,
+    pub plate_count: Counter,
+    pub has_selection: Flag,
+    pub has_instance_selection: Flag,
+    pub can_undo: Flag,
+    pub can_redo: Flag,
+    pub dirty: Flag,
+}
+fn read_workspace_facts(v: &Value) -> Result<WorkspaceFacts, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "modelCount",
+            "plateCount",
+            "hasSelection",
+            "hasInstanceSelection",
+            "canUndo",
+            "canRedo",
+            "dirty",
+        ],
+        false,
+    )?;
+    Ok(WorkspaceFacts {
+        model_count: read_counter(&object["modelCount"])?,
+        plate_count: read_counter(&object["plateCount"])?,
+        has_selection: read_flag(&object["hasSelection"])?,
+        has_instance_selection: read_flag(&object["hasInstanceSelection"])?,
+        can_undo: read_flag(&object["canUndo"])?,
+        can_redo: read_flag(&object["canRedo"])?,
+        dirty: read_flag(&object["dirty"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityPage {
+    pub source_revision: Counter,
+    pub history_revision: Counter,
+    pub facts: WorkspaceFacts,
+    pub total: Counter,
+    pub actions: ActionCapabilityList,
+}
+fn read_capability_page(v: &Value) -> Result<CapabilityPage, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "sourceRevision",
+            "historyRevision",
+            "facts",
+            "total",
+            "actions",
+        ],
+        false,
+    )?;
+    Ok(CapabilityPage {
+        source_revision: read_counter(&object["sourceRevision"])?,
+        history_revision: read_counter(&object["historyRevision"])?,
+        facts: read_workspace_facts(&object["facts"])?,
+        total: read_counter(&object["total"])?,
+        actions: read_action_capability_list(&object["actions"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -6015,5 +6502,21 @@ pub fn decode_paint_palette(text: &str) -> Result<PaintPalette, InvalidIntent> {
 pub fn encode_paint_palette(value: &PaintPalette) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_paint_palette(&text)?;
+    Ok(text)
+}
+pub fn decode_capability_request(text: &str) -> Result<CapabilityRequest, InvalidIntent> {
+    read_capability_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_capability_request(value: &CapabilityRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_capability_request(&text)?;
+    Ok(text)
+}
+pub fn decode_capability_page(text: &str) -> Result<CapabilityPage, InvalidIntent> {
+    read_capability_page(&super::project_intents::parse(text)?)
+}
+pub fn encode_capability_page(value: &CapabilityPage) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_capability_page(&text)?;
     Ok(text)
 }

@@ -2676,6 +2676,245 @@ const shapes = {
       "physicalCount": "Counter",
       "enabledMixedCount": "Counter"
     }
+  },
+  "ActionSurface": {
+    "kind": "enum",
+    "values": [
+      "domScene",
+      "xrScene",
+      "domPrimary",
+      "domToolbar",
+      "domMenu",
+      "domInspector",
+      "domContext",
+      "commandPalette",
+      "keyboard",
+      "xrPrimary",
+      "xrToolbar",
+      "xrMenu",
+      "xrInspector",
+      "xrContext",
+      "automation"
+    ]
+  },
+  "ActionContextTarget": {
+    "kind": "enum",
+    "values": [
+      "object",
+      "plate"
+    ]
+  },
+  "WorkspaceMode": {
+    "kind": "enum",
+    "values": [
+      "prepare",
+      "preview"
+    ]
+  },
+  "PrinterJobUiState": {
+    "kind": "enum",
+    "values": [
+      "standby",
+      "printing",
+      "paused",
+      "complete",
+      "cancelled",
+      "error",
+      "unknown",
+      "disconnected"
+    ]
+  },
+  "StartupFeaturePhase": {
+    "kind": "enum",
+    "values": [
+      "idle",
+      "loading",
+      "ready",
+      "failed"
+    ]
+  },
+  "StartupBootPhase": {
+    "kind": "enum",
+    "values": [
+      "loading",
+      "ready",
+      "degraded",
+      "failed"
+    ]
+  },
+  "StartupFeature": {
+    "kind": "object",
+    "fields": {
+      "id": "EditText",
+      "label": "EditText",
+      "phase": "StartupFeaturePhase",
+      "reason": "EditText"
+    }
+  },
+  "StartupFeatures": {
+    "kind": "array",
+    "items": "StartupFeature",
+    "min": 0,
+    "max": 64
+  },
+  "StartupSnapshot": {
+    "kind": "object",
+    "fields": {
+      "phase": "StartupBootPhase",
+      "features": "StartupFeatures"
+    }
+  },
+  "OptionalStartupSnapshot": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "StartupSnapshot"
+    }
+  },
+  "CapabilityHostState": {
+    "kind": "object",
+    "fields": {
+      "initialization": "OptionalStartupSnapshot",
+      "mode": "WorkspaceMode",
+      "simplifyPreviewing": "Flag",
+      "calibrationSessionOpen": "Flag",
+      "projectionHealthy": "Flag",
+      "hasClipboard": "Flag",
+      "isSlicing": "Flag",
+      "gcodeReady": "Flag",
+      "preflightBlocked": "Flag",
+      "printerJobState": "PrinterJobUiState"
+    }
+  },
+  "CapabilityContextPage": {
+    "kind": "object",
+    "fields": {
+      "target": "ActionContextTarget",
+      "start": "Counter",
+      "count": "Counter"
+    }
+  },
+  "ActionIds": {
+    "kind": "array",
+    "items": "EditText",
+    "min": 0,
+    "max": 64
+  },
+  "CapabilityActions": {
+    "kind": "object",
+    "fields": {
+      "ids": "ActionIds"
+    }
+  },
+  "CapabilityQuery": {
+    "kind": "union",
+    "variants": {
+      "page": "SettingsTargetPageRequest",
+      "context": "CapabilityContextPage",
+      "actions": "CapabilityActions"
+    }
+  },
+  "CapabilityRequest": {
+    "kind": "object",
+    "fields": {
+      "surface": "ActionSurface",
+      "host": "CapabilityHostState",
+      "query": "CapabilityQuery"
+    }
+  },
+  "CapabilityReasonCode": {
+    "kind": "enum",
+    "values": [
+      "unknownAction",
+      "notOffered",
+      "xrUnsupported",
+      "notApplicable",
+      "capability",
+      "unavailable",
+      "startupFailed",
+      "startupLoading",
+      "prerequisite",
+      "notAvailable"
+    ]
+  },
+  "ActionPrerequisite": {
+    "kind": "enum",
+    "values": [
+      "hasModel",
+      "hasSelection",
+      "hasInstanceSelection",
+      "hasClipboard",
+      "hasGcode",
+      "previewAvailable",
+      "hasTwoModels",
+      "hasMultiplePlates",
+      "notSlicing",
+      "preflightClear",
+      "projectionHealthy",
+      "printerPrinting",
+      "printerPaused",
+      "printerJobActive",
+      "printerConnected"
+    ]
+  },
+  "OptionalActionPrerequisite": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "ActionPrerequisite"
+    }
+  },
+  "CapabilityReason": {
+    "kind": "object",
+    "fields": {
+      "code": "CapabilityReasonCode",
+      "prerequisite": "OptionalActionPrerequisite",
+      "text": "EditText"
+    }
+  },
+  "ActionAvailability": {
+    "kind": "union",
+    "variants": {
+      "enabled": "Empty",
+      "disabled": "CapabilityReason",
+      "hidden": "CapabilityReason"
+    }
+  },
+  "ActionCapability": {
+    "kind": "object",
+    "fields": {
+      "id": "EditText",
+      "label": "EditText",
+      "availability": "ActionAvailability"
+    }
+  },
+  "ActionCapabilityList": {
+    "kind": "array",
+    "items": "ActionCapability",
+    "min": 0,
+    "max": 64
+  },
+  "WorkspaceFacts": {
+    "kind": "object",
+    "fields": {
+      "modelCount": "Counter",
+      "plateCount": "Counter",
+      "hasSelection": "Flag",
+      "hasInstanceSelection": "Flag",
+      "canUndo": "Flag",
+      "canRedo": "Flag",
+      "dirty": "Flag"
+    }
+  },
+  "CapabilityPage": {
+    "kind": "object",
+    "fields": {
+      "sourceRevision": "Counter",
+      "historyRevision": "Counter",
+      "facts": "WorkspaceFacts",
+      "total": "Counter",
+      "actions": "ActionCapabilityList"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -3000,6 +3239,31 @@ export type ProjectPaintPaletteKindWire = "default" | "physical" | "mixed";
 export interface ProjectPaintPaletteEntryWire {readonly filamentId: ProjectOptionalTextWire;readonly kind: ProjectPaintPaletteKindWire;readonly name: ProjectEditTextWire;readonly displayColor: ProjectEditTextWire;readonly gradient: ProjectOptionalTextListWire;readonly badge: ProjectEditTextWire;readonly recipeSummary: ProjectOptionalTextWire;readonly keyboardNumber: ProjectOptionalCounterWire;readonly engineSlot: ProjectOptionalCounterWire;readonly selectable: ProjectFlagWire;readonly unavailableReason: ProjectOptionalTextWire;}
 export type ProjectPaintPaletteEntriesWire = readonly ProjectPaintPaletteEntryWire[];
 export interface ProjectPaintPaletteWire {readonly entries: ProjectPaintPaletteEntriesWire;readonly physicalCount: ProjectCounterWire;readonly enabledMixedCount: ProjectCounterWire;}
+export type ProjectActionSurfaceWire = "domScene" | "xrScene" | "domPrimary" | "domToolbar" | "domMenu" | "domInspector" | "domContext" | "commandPalette" | "keyboard" | "xrPrimary" | "xrToolbar" | "xrMenu" | "xrInspector" | "xrContext" | "automation";
+export type ProjectActionContextTargetWire = "object" | "plate";
+export type ProjectWorkspaceModeWire = "prepare" | "preview";
+export type ProjectPrinterJobUiStateWire = "standby" | "printing" | "paused" | "complete" | "cancelled" | "error" | "unknown" | "disconnected";
+export type ProjectStartupFeaturePhaseWire = "idle" | "loading" | "ready" | "failed";
+export type ProjectStartupBootPhaseWire = "loading" | "ready" | "degraded" | "failed";
+export interface ProjectStartupFeatureWire {readonly id: ProjectEditTextWire;readonly label: ProjectEditTextWire;readonly phase: ProjectStartupFeaturePhaseWire;readonly reason: ProjectEditTextWire;}
+export type ProjectStartupFeaturesWire = readonly ProjectStartupFeatureWire[];
+export interface ProjectStartupSnapshotWire {readonly phase: ProjectStartupBootPhaseWire;readonly features: ProjectStartupFeaturesWire;}
+export type ProjectOptionalStartupSnapshotWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectStartupSnapshotWire};
+export interface ProjectCapabilityHostStateWire {readonly initialization: ProjectOptionalStartupSnapshotWire;readonly mode: ProjectWorkspaceModeWire;readonly simplifyPreviewing: ProjectFlagWire;readonly calibrationSessionOpen: ProjectFlagWire;readonly projectionHealthy: ProjectFlagWire;readonly hasClipboard: ProjectFlagWire;readonly isSlicing: ProjectFlagWire;readonly gcodeReady: ProjectFlagWire;readonly preflightBlocked: ProjectFlagWire;readonly printerJobState: ProjectPrinterJobUiStateWire;}
+export interface ProjectCapabilityContextPageWire {readonly target: ProjectActionContextTargetWire;readonly start: ProjectCounterWire;readonly count: ProjectCounterWire;}
+export type ProjectActionIdsWire = readonly ProjectEditTextWire[];
+export interface ProjectCapabilityActionsWire {readonly ids: ProjectActionIdsWire;}
+export type ProjectCapabilityQueryWire = {readonly page:ProjectSettingsTargetPageRequestWire} | {readonly context:ProjectCapabilityContextPageWire} | {readonly actions:ProjectCapabilityActionsWire};
+export interface ProjectCapabilityRequestWire {readonly surface: ProjectActionSurfaceWire;readonly host: ProjectCapabilityHostStateWire;readonly query: ProjectCapabilityQueryWire;}
+export type ProjectCapabilityReasonCodeWire = "unknownAction" | "notOffered" | "xrUnsupported" | "notApplicable" | "capability" | "unavailable" | "startupFailed" | "startupLoading" | "prerequisite" | "notAvailable";
+export type ProjectActionPrerequisiteWire = "hasModel" | "hasSelection" | "hasInstanceSelection" | "hasClipboard" | "hasGcode" | "previewAvailable" | "hasTwoModels" | "hasMultiplePlates" | "notSlicing" | "preflightClear" | "projectionHealthy" | "printerPrinting" | "printerPaused" | "printerJobActive" | "printerConnected";
+export type ProjectOptionalActionPrerequisiteWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectActionPrerequisiteWire};
+export interface ProjectCapabilityReasonWire {readonly code: ProjectCapabilityReasonCodeWire;readonly prerequisite: ProjectOptionalActionPrerequisiteWire;readonly text: ProjectEditTextWire;}
+export type ProjectActionAvailabilityWire = {readonly enabled:ProjectEmptyWire} | {readonly disabled:ProjectCapabilityReasonWire} | {readonly hidden:ProjectCapabilityReasonWire};
+export interface ProjectActionCapabilityWire {readonly id: ProjectEditTextWire;readonly label: ProjectEditTextWire;readonly availability: ProjectActionAvailabilityWire;}
+export type ProjectActionCapabilityListWire = readonly ProjectActionCapabilityWire[];
+export interface ProjectWorkspaceFactsWire {readonly modelCount: ProjectCounterWire;readonly plateCount: ProjectCounterWire;readonly hasSelection: ProjectFlagWire;readonly hasInstanceSelection: ProjectFlagWire;readonly canUndo: ProjectFlagWire;readonly canRedo: ProjectFlagWire;readonly dirty: ProjectFlagWire;}
+export interface ProjectCapabilityPageWire {readonly sourceRevision: ProjectCounterWire;readonly historyRevision: ProjectCounterWire;readonly facts: ProjectWorkspaceFactsWire;readonly total: ProjectCounterWire;readonly actions: ProjectActionCapabilityListWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -3162,3 +3426,9 @@ export function encodeProjectPaintPaletteRequest(value:ProjectPaintPaletteReques
 export function captureProjectPaintPalette(value:unknown):ProjectPaintPaletteWire { return captureIntent("PaintPalette",value,shapes,limits) as ProjectPaintPaletteWire; }
 export function decodeProjectPaintPalette(text:string):ProjectPaintPaletteWire { return captureProjectPaintPalette(parseIntentJson(text,limits)); }
 export function encodeProjectPaintPalette(value:ProjectPaintPaletteWire):string { return JSON.stringify(captureProjectPaintPalette(value)); }
+export function captureProjectCapabilityRequest(value:unknown):ProjectCapabilityRequestWire { return captureIntent("CapabilityRequest",value,shapes,limits) as ProjectCapabilityRequestWire; }
+export function decodeProjectCapabilityRequest(text:string):ProjectCapabilityRequestWire { return captureProjectCapabilityRequest(parseIntentJson(text,limits)); }
+export function encodeProjectCapabilityRequest(value:ProjectCapabilityRequestWire):string { return JSON.stringify(captureProjectCapabilityRequest(value)); }
+export function captureProjectCapabilityPage(value:unknown):ProjectCapabilityPageWire { return captureIntent("CapabilityPage",value,shapes,limits) as ProjectCapabilityPageWire; }
+export function decodeProjectCapabilityPage(text:string):ProjectCapabilityPageWire { return captureProjectCapabilityPage(parseIntentJson(text,limits)); }
+export function encodeProjectCapabilityPage(value:ProjectCapabilityPageWire):string { return JSON.stringify(captureProjectCapabilityPage(value)); }

@@ -2675,6 +2675,245 @@
         "physicalCount": "Counter",
         "enabledMixedCount": "Counter"
       }
+    },
+    "ActionSurface": {
+      "kind": "enum",
+      "values": [
+        "domScene",
+        "xrScene",
+        "domPrimary",
+        "domToolbar",
+        "domMenu",
+        "domInspector",
+        "domContext",
+        "commandPalette",
+        "keyboard",
+        "xrPrimary",
+        "xrToolbar",
+        "xrMenu",
+        "xrInspector",
+        "xrContext",
+        "automation"
+      ]
+    },
+    "ActionContextTarget": {
+      "kind": "enum",
+      "values": [
+        "object",
+        "plate"
+      ]
+    },
+    "WorkspaceMode": {
+      "kind": "enum",
+      "values": [
+        "prepare",
+        "preview"
+      ]
+    },
+    "PrinterJobUiState": {
+      "kind": "enum",
+      "values": [
+        "standby",
+        "printing",
+        "paused",
+        "complete",
+        "cancelled",
+        "error",
+        "unknown",
+        "disconnected"
+      ]
+    },
+    "StartupFeaturePhase": {
+      "kind": "enum",
+      "values": [
+        "idle",
+        "loading",
+        "ready",
+        "failed"
+      ]
+    },
+    "StartupBootPhase": {
+      "kind": "enum",
+      "values": [
+        "loading",
+        "ready",
+        "degraded",
+        "failed"
+      ]
+    },
+    "StartupFeature": {
+      "kind": "object",
+      "fields": {
+        "id": "EditText",
+        "label": "EditText",
+        "phase": "StartupFeaturePhase",
+        "reason": "EditText"
+      }
+    },
+    "StartupFeatures": {
+      "kind": "array",
+      "items": "StartupFeature",
+      "min": 0,
+      "max": 64
+    },
+    "StartupSnapshot": {
+      "kind": "object",
+      "fields": {
+        "phase": "StartupBootPhase",
+        "features": "StartupFeatures"
+      }
+    },
+    "OptionalStartupSnapshot": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "StartupSnapshot"
+      }
+    },
+    "CapabilityHostState": {
+      "kind": "object",
+      "fields": {
+        "initialization": "OptionalStartupSnapshot",
+        "mode": "WorkspaceMode",
+        "simplifyPreviewing": "Flag",
+        "calibrationSessionOpen": "Flag",
+        "projectionHealthy": "Flag",
+        "hasClipboard": "Flag",
+        "isSlicing": "Flag",
+        "gcodeReady": "Flag",
+        "preflightBlocked": "Flag",
+        "printerJobState": "PrinterJobUiState"
+      }
+    },
+    "CapabilityContextPage": {
+      "kind": "object",
+      "fields": {
+        "target": "ActionContextTarget",
+        "start": "Counter",
+        "count": "Counter"
+      }
+    },
+    "ActionIds": {
+      "kind": "array",
+      "items": "EditText",
+      "min": 0,
+      "max": 64
+    },
+    "CapabilityActions": {
+      "kind": "object",
+      "fields": {
+        "ids": "ActionIds"
+      }
+    },
+    "CapabilityQuery": {
+      "kind": "union",
+      "variants": {
+        "page": "SettingsTargetPageRequest",
+        "context": "CapabilityContextPage",
+        "actions": "CapabilityActions"
+      }
+    },
+    "CapabilityRequest": {
+      "kind": "object",
+      "fields": {
+        "surface": "ActionSurface",
+        "host": "CapabilityHostState",
+        "query": "CapabilityQuery"
+      }
+    },
+    "CapabilityReasonCode": {
+      "kind": "enum",
+      "values": [
+        "unknownAction",
+        "notOffered",
+        "xrUnsupported",
+        "notApplicable",
+        "capability",
+        "unavailable",
+        "startupFailed",
+        "startupLoading",
+        "prerequisite",
+        "notAvailable"
+      ]
+    },
+    "ActionPrerequisite": {
+      "kind": "enum",
+      "values": [
+        "hasModel",
+        "hasSelection",
+        "hasInstanceSelection",
+        "hasClipboard",
+        "hasGcode",
+        "previewAvailable",
+        "hasTwoModels",
+        "hasMultiplePlates",
+        "notSlicing",
+        "preflightClear",
+        "projectionHealthy",
+        "printerPrinting",
+        "printerPaused",
+        "printerJobActive",
+        "printerConnected"
+      ]
+    },
+    "OptionalActionPrerequisite": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "ActionPrerequisite"
+      }
+    },
+    "CapabilityReason": {
+      "kind": "object",
+      "fields": {
+        "code": "CapabilityReasonCode",
+        "prerequisite": "OptionalActionPrerequisite",
+        "text": "EditText"
+      }
+    },
+    "ActionAvailability": {
+      "kind": "union",
+      "variants": {
+        "enabled": "Empty",
+        "disabled": "CapabilityReason",
+        "hidden": "CapabilityReason"
+      }
+    },
+    "ActionCapability": {
+      "kind": "object",
+      "fields": {
+        "id": "EditText",
+        "label": "EditText",
+        "availability": "ActionAvailability"
+      }
+    },
+    "ActionCapabilityList": {
+      "kind": "array",
+      "items": "ActionCapability",
+      "min": 0,
+      "max": 64
+    },
+    "WorkspaceFacts": {
+      "kind": "object",
+      "fields": {
+        "modelCount": "Counter",
+        "plateCount": "Counter",
+        "hasSelection": "Flag",
+        "hasInstanceSelection": "Flag",
+        "canUndo": "Flag",
+        "canRedo": "Flag",
+        "dirty": "Flag"
+      }
+    },
+    "CapabilityPage": {
+      "kind": "object",
+      "fields": {
+        "sourceRevision": "Counter",
+        "historyRevision": "Counter",
+        "facts": "WorkspaceFacts",
+        "total": "Counter",
+        "actions": "ActionCapabilityList"
+      }
     }
   },
   "roots": [
@@ -2731,7 +2970,9 @@
     "SettingsExplainResult",
     "SettingsSessionRequest",
     "PaintPaletteRequest",
-    "PaintPalette"
+    "PaintPalette",
+    "CapabilityRequest",
+    "CapabilityPage"
   ],
   "sessionVersion": 1
 }

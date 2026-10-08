@@ -152,6 +152,7 @@ export const projectsession_asset: (a: number, b: number) => [number, number, nu
 export const projectsession_asset_fingerprint: (a: number) => [number, number];
 export const projectsession_begin_open: (a: number) => [number, number, number];
 export const projectsession_cancel_open: (a: number, b: number) => number;
+export const projectsession_capabilities: (a: number, b: number, c: number) => [number, number, number, number];
 export const projectsession_capture_clipboard: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const projectsession_capture_export: (a: number, b: number) => [number, number, number];
 export const projectsession_capture_guard: (a: number) => [number, number, number];

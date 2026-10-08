@@ -4024,6 +4024,292 @@ object ProjectIntents {
             w.field("enabledMixedCount") { writeCounter(w, v.enabledMixedCount) }
         }
     }
+    enum class ActionSurface {DomScene,XrScene,DomPrimary,DomToolbar,DomMenu,DomInspector,DomContext,CommandPalette,Keyboard,XrPrimary,XrToolbar,XrMenu,XrInspector,XrContext,Automation}
+    private fun readActionSurface(v: Any): ActionSurface {
+        return when(v) {"domScene" -> ActionSurface.DomScene;"xrScene" -> ActionSurface.XrScene;"domPrimary" -> ActionSurface.DomPrimary;"domToolbar" -> ActionSurface.DomToolbar;"domMenu" -> ActionSurface.DomMenu;"domInspector" -> ActionSurface.DomInspector;"domContext" -> ActionSurface.DomContext;"commandPalette" -> ActionSurface.CommandPalette;"keyboard" -> ActionSurface.Keyboard;"xrPrimary" -> ActionSurface.XrPrimary;"xrToolbar" -> ActionSurface.XrToolbar;"xrMenu" -> ActionSurface.XrMenu;"xrInspector" -> ActionSurface.XrInspector;"xrContext" -> ActionSurface.XrContext;"automation" -> ActionSurface.Automation; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeActionSurface(w: ProjectIntentWriter, v: ActionSurface) {
+        w.literal(when(v) {ActionSurface.DomScene -> "domScene";ActionSurface.XrScene -> "xrScene";ActionSurface.DomPrimary -> "domPrimary";ActionSurface.DomToolbar -> "domToolbar";ActionSurface.DomMenu -> "domMenu";ActionSurface.DomInspector -> "domInspector";ActionSurface.DomContext -> "domContext";ActionSurface.CommandPalette -> "commandPalette";ActionSurface.Keyboard -> "keyboard";ActionSurface.XrPrimary -> "xrPrimary";ActionSurface.XrToolbar -> "xrToolbar";ActionSurface.XrMenu -> "xrMenu";ActionSurface.XrInspector -> "xrInspector";ActionSurface.XrContext -> "xrContext";ActionSurface.Automation -> "automation";})
+    }
+    enum class ActionContextTarget {Object,Plate}
+    private fun readActionContextTarget(v: Any): ActionContextTarget {
+        return when(v) {"object" -> ActionContextTarget.Object;"plate" -> ActionContextTarget.Plate; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeActionContextTarget(w: ProjectIntentWriter, v: ActionContextTarget) {
+        w.literal(when(v) {ActionContextTarget.Object -> "object";ActionContextTarget.Plate -> "plate";})
+    }
+    enum class WorkspaceMode {Prepare,Preview}
+    private fun readWorkspaceMode(v: Any): WorkspaceMode {
+        return when(v) {"prepare" -> WorkspaceMode.Prepare;"preview" -> WorkspaceMode.Preview; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeWorkspaceMode(w: ProjectIntentWriter, v: WorkspaceMode) {
+        w.literal(when(v) {WorkspaceMode.Prepare -> "prepare";WorkspaceMode.Preview -> "preview";})
+    }
+    enum class PrinterJobUiState {Standby,Printing,Paused,Complete,Cancelled,Error,Unknown,Disconnected}
+    private fun readPrinterJobUiState(v: Any): PrinterJobUiState {
+        return when(v) {"standby" -> PrinterJobUiState.Standby;"printing" -> PrinterJobUiState.Printing;"paused" -> PrinterJobUiState.Paused;"complete" -> PrinterJobUiState.Complete;"cancelled" -> PrinterJobUiState.Cancelled;"error" -> PrinterJobUiState.Error;"unknown" -> PrinterJobUiState.Unknown;"disconnected" -> PrinterJobUiState.Disconnected; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrinterJobUiState(w: ProjectIntentWriter, v: PrinterJobUiState) {
+        w.literal(when(v) {PrinterJobUiState.Standby -> "standby";PrinterJobUiState.Printing -> "printing";PrinterJobUiState.Paused -> "paused";PrinterJobUiState.Complete -> "complete";PrinterJobUiState.Cancelled -> "cancelled";PrinterJobUiState.Error -> "error";PrinterJobUiState.Unknown -> "unknown";PrinterJobUiState.Disconnected -> "disconnected";})
+    }
+    enum class StartupFeaturePhase {Idle,Loading,Ready,Failed}
+    private fun readStartupFeaturePhase(v: Any): StartupFeaturePhase {
+        return when(v) {"idle" -> StartupFeaturePhase.Idle;"loading" -> StartupFeaturePhase.Loading;"ready" -> StartupFeaturePhase.Ready;"failed" -> StartupFeaturePhase.Failed; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeStartupFeaturePhase(w: ProjectIntentWriter, v: StartupFeaturePhase) {
+        w.literal(when(v) {StartupFeaturePhase.Idle -> "idle";StartupFeaturePhase.Loading -> "loading";StartupFeaturePhase.Ready -> "ready";StartupFeaturePhase.Failed -> "failed";})
+    }
+    enum class StartupBootPhase {Loading,Ready,Degraded,Failed}
+    private fun readStartupBootPhase(v: Any): StartupBootPhase {
+        return when(v) {"loading" -> StartupBootPhase.Loading;"ready" -> StartupBootPhase.Ready;"degraded" -> StartupBootPhase.Degraded;"failed" -> StartupBootPhase.Failed; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeStartupBootPhase(w: ProjectIntentWriter, v: StartupBootPhase) {
+        w.literal(when(v) {StartupBootPhase.Loading -> "loading";StartupBootPhase.Ready -> "ready";StartupBootPhase.Degraded -> "degraded";StartupBootPhase.Failed -> "failed";})
+    }
+    data class StartupFeature(val id: List<Int>, val label: List<Int>, val phase: StartupFeaturePhase, val reason: List<Int>)
+    private fun readStartupFeature(v: Any): StartupFeature {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "label", "phase", "reason"), false)
+        return StartupFeature(readEditText(obj.get("id")), readEditText(obj.get("label")), readStartupFeaturePhase(obj.get("phase")), readEditText(obj.get("reason")))
+    }
+    private fun writeStartupFeature(w: ProjectIntentWriter, v: StartupFeature) {
+        w.obj {
+            w.field("id") { writeEditText(w, v.id) }
+            w.field("label") { writeEditText(w, v.label) }
+            w.field("phase") { writeStartupFeaturePhase(w, v.phase) }
+            w.field("reason") { writeEditText(w, v.reason) }
+        }
+    }
+    private fun readStartupFeatures(v: Any): List<StartupFeature> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readStartupFeature(array.get(it)) }
+    }
+    private fun writeStartupFeatures(w: ProjectIntentWriter, v: List<StartupFeature>) {
+        w.array(v, 0, 64) { writeStartupFeature(w, it) }
+    }
+    data class StartupSnapshot(val phase: StartupBootPhase, val features: List<StartupFeature>)
+    private fun readStartupSnapshot(v: Any): StartupSnapshot {
+        val obj = ProjectIntentJson.fields(v, setOf("phase", "features"), false)
+        return StartupSnapshot(readStartupBootPhase(obj.get("phase")), readStartupFeatures(obj.get("features")))
+    }
+    private fun writeStartupSnapshot(w: ProjectIntentWriter, v: StartupSnapshot) {
+        w.obj {
+            w.field("phase") { writeStartupBootPhase(w, v.phase) }
+            w.field("features") { writeStartupFeatures(w, v.features) }
+        }
+    }
+    sealed interface OptionalStartupSnapshot {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalStartupSnapshot
+        data class Value(val value: ProjectIntents.StartupSnapshot) : OptionalStartupSnapshot
+    }
+    private fun readOptionalStartupSnapshot(v: Any): OptionalStartupSnapshot {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalStartupSnapshot.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalStartupSnapshot.Value(readStartupSnapshot(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalStartupSnapshot(w: ProjectIntentWriter, v: OptionalStartupSnapshot) {
+        w.obj { when(v) {
+            is OptionalStartupSnapshot.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalStartupSnapshot.Value -> w.field("value") { writeStartupSnapshot(w, v.value) }
+        } }
+    }
+    data class CapabilityHostState(val initialization: OptionalStartupSnapshot, val mode: WorkspaceMode, val simplifyPreviewing: Boolean, val calibrationSessionOpen: Boolean, val projectionHealthy: Boolean, val hasClipboard: Boolean, val isSlicing: Boolean, val gcodeReady: Boolean, val preflightBlocked: Boolean, val printerJobState: PrinterJobUiState)
+    private fun readCapabilityHostState(v: Any): CapabilityHostState {
+        val obj = ProjectIntentJson.fields(v, setOf("initialization", "mode", "simplifyPreviewing", "calibrationSessionOpen", "projectionHealthy", "hasClipboard", "isSlicing", "gcodeReady", "preflightBlocked", "printerJobState"), false)
+        return CapabilityHostState(readOptionalStartupSnapshot(obj.get("initialization")), readWorkspaceMode(obj.get("mode")), readFlag(obj.get("simplifyPreviewing")), readFlag(obj.get("calibrationSessionOpen")), readFlag(obj.get("projectionHealthy")), readFlag(obj.get("hasClipboard")), readFlag(obj.get("isSlicing")), readFlag(obj.get("gcodeReady")), readFlag(obj.get("preflightBlocked")), readPrinterJobUiState(obj.get("printerJobState")))
+    }
+    private fun writeCapabilityHostState(w: ProjectIntentWriter, v: CapabilityHostState) {
+        w.obj {
+            w.field("initialization") { writeOptionalStartupSnapshot(w, v.initialization) }
+            w.field("mode") { writeWorkspaceMode(w, v.mode) }
+            w.field("simplifyPreviewing") { writeFlag(w, v.simplifyPreviewing) }
+            w.field("calibrationSessionOpen") { writeFlag(w, v.calibrationSessionOpen) }
+            w.field("projectionHealthy") { writeFlag(w, v.projectionHealthy) }
+            w.field("hasClipboard") { writeFlag(w, v.hasClipboard) }
+            w.field("isSlicing") { writeFlag(w, v.isSlicing) }
+            w.field("gcodeReady") { writeFlag(w, v.gcodeReady) }
+            w.field("preflightBlocked") { writeFlag(w, v.preflightBlocked) }
+            w.field("printerJobState") { writePrinterJobUiState(w, v.printerJobState) }
+        }
+    }
+    data class CapabilityContextPage(val target: ActionContextTarget, val start: Long, val count: Long)
+    private fun readCapabilityContextPage(v: Any): CapabilityContextPage {
+        val obj = ProjectIntentJson.fields(v, setOf("target", "start", "count"), false)
+        return CapabilityContextPage(readActionContextTarget(obj.get("target")), readCounter(obj.get("start")), readCounter(obj.get("count")))
+    }
+    private fun writeCapabilityContextPage(w: ProjectIntentWriter, v: CapabilityContextPage) {
+        w.obj {
+            w.field("target") { writeActionContextTarget(w, v.target) }
+            w.field("start") { writeCounter(w, v.start) }
+            w.field("count") { writeCounter(w, v.count) }
+        }
+    }
+    private fun readActionIds(v: Any): List<List<Int>> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readEditText(array.get(it)) }
+    }
+    private fun writeActionIds(w: ProjectIntentWriter, v: List<List<Int>>) {
+        w.array(v, 0, 64) { writeEditText(w, it) }
+    }
+    data class CapabilityActions(val ids: List<List<Int>>)
+    private fun readCapabilityActions(v: Any): CapabilityActions {
+        val obj = ProjectIntentJson.fields(v, setOf("ids"), false)
+        return CapabilityActions(readActionIds(obj.get("ids")))
+    }
+    private fun writeCapabilityActions(w: ProjectIntentWriter, v: CapabilityActions) {
+        w.obj {
+            w.field("ids") { writeActionIds(w, v.ids) }
+        }
+    }
+    sealed interface CapabilityQuery {
+        data class Page(val value: ProjectIntents.SettingsTargetPageRequest) : CapabilityQuery
+        data class Context(val value: ProjectIntents.CapabilityContextPage) : CapabilityQuery
+        data class Actions(val value: ProjectIntents.CapabilityActions) : CapabilityQuery
+    }
+    private fun readCapabilityQuery(v: Any): CapabilityQuery {
+        val obj = ProjectIntentJson.fields(v, setOf("page", "context", "actions"), true)
+        return when(val key = obj.keys().next()) {
+            "page" -> CapabilityQuery.Page(readSettingsTargetPageRequest(obj.get(key)))
+            "context" -> CapabilityQuery.Context(readCapabilityContextPage(obj.get(key)))
+            "actions" -> CapabilityQuery.Actions(readCapabilityActions(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeCapabilityQuery(w: ProjectIntentWriter, v: CapabilityQuery) {
+        w.obj { when(v) {
+            is CapabilityQuery.Page -> w.field("page") { writeSettingsTargetPageRequest(w, v.value) }
+            is CapabilityQuery.Context -> w.field("context") { writeCapabilityContextPage(w, v.value) }
+            is CapabilityQuery.Actions -> w.field("actions") { writeCapabilityActions(w, v.value) }
+        } }
+    }
+    data class CapabilityRequest(val surface: ActionSurface, val host: CapabilityHostState, val query: CapabilityQuery)
+    private fun readCapabilityRequest(v: Any): CapabilityRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("surface", "host", "query"), false)
+        return CapabilityRequest(readActionSurface(obj.get("surface")), readCapabilityHostState(obj.get("host")), readCapabilityQuery(obj.get("query")))
+    }
+    private fun writeCapabilityRequest(w: ProjectIntentWriter, v: CapabilityRequest) {
+        w.obj {
+            w.field("surface") { writeActionSurface(w, v.surface) }
+            w.field("host") { writeCapabilityHostState(w, v.host) }
+            w.field("query") { writeCapabilityQuery(w, v.query) }
+        }
+    }
+    enum class CapabilityReasonCode {UnknownAction,NotOffered,XrUnsupported,NotApplicable,Capability,Unavailable,StartupFailed,StartupLoading,Prerequisite,NotAvailable}
+    private fun readCapabilityReasonCode(v: Any): CapabilityReasonCode {
+        return when(v) {"unknownAction" -> CapabilityReasonCode.UnknownAction;"notOffered" -> CapabilityReasonCode.NotOffered;"xrUnsupported" -> CapabilityReasonCode.XrUnsupported;"notApplicable" -> CapabilityReasonCode.NotApplicable;"capability" -> CapabilityReasonCode.Capability;"unavailable" -> CapabilityReasonCode.Unavailable;"startupFailed" -> CapabilityReasonCode.StartupFailed;"startupLoading" -> CapabilityReasonCode.StartupLoading;"prerequisite" -> CapabilityReasonCode.Prerequisite;"notAvailable" -> CapabilityReasonCode.NotAvailable; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeCapabilityReasonCode(w: ProjectIntentWriter, v: CapabilityReasonCode) {
+        w.literal(when(v) {CapabilityReasonCode.UnknownAction -> "unknownAction";CapabilityReasonCode.NotOffered -> "notOffered";CapabilityReasonCode.XrUnsupported -> "xrUnsupported";CapabilityReasonCode.NotApplicable -> "notApplicable";CapabilityReasonCode.Capability -> "capability";CapabilityReasonCode.Unavailable -> "unavailable";CapabilityReasonCode.StartupFailed -> "startupFailed";CapabilityReasonCode.StartupLoading -> "startupLoading";CapabilityReasonCode.Prerequisite -> "prerequisite";CapabilityReasonCode.NotAvailable -> "notAvailable";})
+    }
+    enum class ActionPrerequisite {HasModel,HasSelection,HasInstanceSelection,HasClipboard,HasGcode,PreviewAvailable,HasTwoModels,HasMultiplePlates,NotSlicing,PreflightClear,ProjectionHealthy,PrinterPrinting,PrinterPaused,PrinterJobActive,PrinterConnected}
+    private fun readActionPrerequisite(v: Any): ActionPrerequisite {
+        return when(v) {"hasModel" -> ActionPrerequisite.HasModel;"hasSelection" -> ActionPrerequisite.HasSelection;"hasInstanceSelection" -> ActionPrerequisite.HasInstanceSelection;"hasClipboard" -> ActionPrerequisite.HasClipboard;"hasGcode" -> ActionPrerequisite.HasGcode;"previewAvailable" -> ActionPrerequisite.PreviewAvailable;"hasTwoModels" -> ActionPrerequisite.HasTwoModels;"hasMultiplePlates" -> ActionPrerequisite.HasMultiplePlates;"notSlicing" -> ActionPrerequisite.NotSlicing;"preflightClear" -> ActionPrerequisite.PreflightClear;"projectionHealthy" -> ActionPrerequisite.ProjectionHealthy;"printerPrinting" -> ActionPrerequisite.PrinterPrinting;"printerPaused" -> ActionPrerequisite.PrinterPaused;"printerJobActive" -> ActionPrerequisite.PrinterJobActive;"printerConnected" -> ActionPrerequisite.PrinterConnected; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeActionPrerequisite(w: ProjectIntentWriter, v: ActionPrerequisite) {
+        w.literal(when(v) {ActionPrerequisite.HasModel -> "hasModel";ActionPrerequisite.HasSelection -> "hasSelection";ActionPrerequisite.HasInstanceSelection -> "hasInstanceSelection";ActionPrerequisite.HasClipboard -> "hasClipboard";ActionPrerequisite.HasGcode -> "hasGcode";ActionPrerequisite.PreviewAvailable -> "previewAvailable";ActionPrerequisite.HasTwoModels -> "hasTwoModels";ActionPrerequisite.HasMultiplePlates -> "hasMultiplePlates";ActionPrerequisite.NotSlicing -> "notSlicing";ActionPrerequisite.PreflightClear -> "preflightClear";ActionPrerequisite.ProjectionHealthy -> "projectionHealthy";ActionPrerequisite.PrinterPrinting -> "printerPrinting";ActionPrerequisite.PrinterPaused -> "printerPaused";ActionPrerequisite.PrinterJobActive -> "printerJobActive";ActionPrerequisite.PrinterConnected -> "printerConnected";})
+    }
+    sealed interface OptionalActionPrerequisite {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalActionPrerequisite
+        data class Value(val value: ProjectIntents.ActionPrerequisite) : OptionalActionPrerequisite
+    }
+    private fun readOptionalActionPrerequisite(v: Any): OptionalActionPrerequisite {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalActionPrerequisite.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalActionPrerequisite.Value(readActionPrerequisite(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalActionPrerequisite(w: ProjectIntentWriter, v: OptionalActionPrerequisite) {
+        w.obj { when(v) {
+            is OptionalActionPrerequisite.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalActionPrerequisite.Value -> w.field("value") { writeActionPrerequisite(w, v.value) }
+        } }
+    }
+    data class CapabilityReason(val code: CapabilityReasonCode, val prerequisite: OptionalActionPrerequisite, val text: List<Int>)
+    private fun readCapabilityReason(v: Any): CapabilityReason {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "prerequisite", "text"), false)
+        return CapabilityReason(readCapabilityReasonCode(obj.get("code")), readOptionalActionPrerequisite(obj.get("prerequisite")), readEditText(obj.get("text")))
+    }
+    private fun writeCapabilityReason(w: ProjectIntentWriter, v: CapabilityReason) {
+        w.obj {
+            w.field("code") { writeCapabilityReasonCode(w, v.code) }
+            w.field("prerequisite") { writeOptionalActionPrerequisite(w, v.prerequisite) }
+            w.field("text") { writeEditText(w, v.text) }
+        }
+    }
+    sealed interface ActionAvailability {
+        data class Enabled(val value: ProjectIntents.Empty) : ActionAvailability
+        data class Disabled(val value: ProjectIntents.CapabilityReason) : ActionAvailability
+        data class Hidden(val value: ProjectIntents.CapabilityReason) : ActionAvailability
+    }
+    private fun readActionAvailability(v: Any): ActionAvailability {
+        val obj = ProjectIntentJson.fields(v, setOf("enabled", "disabled", "hidden"), true)
+        return when(val key = obj.keys().next()) {
+            "enabled" -> ActionAvailability.Enabled(readEmpty(obj.get(key)))
+            "disabled" -> ActionAvailability.Disabled(readCapabilityReason(obj.get(key)))
+            "hidden" -> ActionAvailability.Hidden(readCapabilityReason(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeActionAvailability(w: ProjectIntentWriter, v: ActionAvailability) {
+        w.obj { when(v) {
+            is ActionAvailability.Enabled -> w.field("enabled") { writeEmpty(w, v.value) }
+            is ActionAvailability.Disabled -> w.field("disabled") { writeCapabilityReason(w, v.value) }
+            is ActionAvailability.Hidden -> w.field("hidden") { writeCapabilityReason(w, v.value) }
+        } }
+    }
+    data class ActionCapability(val id: List<Int>, val label: List<Int>, val availability: ActionAvailability)
+    private fun readActionCapability(v: Any): ActionCapability {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "label", "availability"), false)
+        return ActionCapability(readEditText(obj.get("id")), readEditText(obj.get("label")), readActionAvailability(obj.get("availability")))
+    }
+    private fun writeActionCapability(w: ProjectIntentWriter, v: ActionCapability) {
+        w.obj {
+            w.field("id") { writeEditText(w, v.id) }
+            w.field("label") { writeEditText(w, v.label) }
+            w.field("availability") { writeActionAvailability(w, v.availability) }
+        }
+    }
+    private fun readActionCapabilityList(v: Any): List<ActionCapability> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readActionCapability(array.get(it)) }
+    }
+    private fun writeActionCapabilityList(w: ProjectIntentWriter, v: List<ActionCapability>) {
+        w.array(v, 0, 64) { writeActionCapability(w, it) }
+    }
+    data class WorkspaceFacts(val modelCount: Long, val plateCount: Long, val hasSelection: Boolean, val hasInstanceSelection: Boolean, val canUndo: Boolean, val canRedo: Boolean, val dirty: Boolean)
+    private fun readWorkspaceFacts(v: Any): WorkspaceFacts {
+        val obj = ProjectIntentJson.fields(v, setOf("modelCount", "plateCount", "hasSelection", "hasInstanceSelection", "canUndo", "canRedo", "dirty"), false)
+        return WorkspaceFacts(readCounter(obj.get("modelCount")), readCounter(obj.get("plateCount")), readFlag(obj.get("hasSelection")), readFlag(obj.get("hasInstanceSelection")), readFlag(obj.get("canUndo")), readFlag(obj.get("canRedo")), readFlag(obj.get("dirty")))
+    }
+    private fun writeWorkspaceFacts(w: ProjectIntentWriter, v: WorkspaceFacts) {
+        w.obj {
+            w.field("modelCount") { writeCounter(w, v.modelCount) }
+            w.field("plateCount") { writeCounter(w, v.plateCount) }
+            w.field("hasSelection") { writeFlag(w, v.hasSelection) }
+            w.field("hasInstanceSelection") { writeFlag(w, v.hasInstanceSelection) }
+            w.field("canUndo") { writeFlag(w, v.canUndo) }
+            w.field("canRedo") { writeFlag(w, v.canRedo) }
+            w.field("dirty") { writeFlag(w, v.dirty) }
+        }
+    }
+    data class CapabilityPage(val sourceRevision: Long, val historyRevision: Long, val facts: WorkspaceFacts, val total: Long, val actions: List<ActionCapability>)
+    private fun readCapabilityPage(v: Any): CapabilityPage {
+        val obj = ProjectIntentJson.fields(v, setOf("sourceRevision", "historyRevision", "facts", "total", "actions"), false)
+        return CapabilityPage(readCounter(obj.get("sourceRevision")), readCounter(obj.get("historyRevision")), readWorkspaceFacts(obj.get("facts")), readCounter(obj.get("total")), readActionCapabilityList(obj.get("actions")))
+    }
+    private fun writeCapabilityPage(w: ProjectIntentWriter, v: CapabilityPage) {
+        w.obj {
+            w.field("sourceRevision") { writeCounter(w, v.sourceRevision) }
+            w.field("historyRevision") { writeCounter(w, v.historyRevision) }
+            w.field("facts") { writeWorkspaceFacts(w, v.facts) }
+            w.field("total") { writeCounter(w, v.total) }
+            w.field("actions") { writeActionCapabilityList(w, v.actions) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -4132,4 +4418,8 @@ object ProjectIntents {
     fun encodePaintPaletteRequest(value: PaintPaletteRequest): String = ProjectIntentWriter().also { writePaintPaletteRequest(it, value) }.finish()
     fun decodePaintPalette(text: String): PaintPalette = readPaintPalette(ProjectIntentJson.parse(text))
     fun encodePaintPalette(value: PaintPalette): String = ProjectIntentWriter().also { writePaintPalette(it, value) }.finish()
+    fun decodeCapabilityRequest(text: String): CapabilityRequest = readCapabilityRequest(ProjectIntentJson.parse(text))
+    fun encodeCapabilityRequest(value: CapabilityRequest): String = ProjectIntentWriter().also { writeCapabilityRequest(it, value) }.finish()
+    fun decodeCapabilityPage(text: String): CapabilityPage = readCapabilityPage(ProjectIntentJson.parse(text))
+    fun encodeCapabilityPage(value: CapabilityPage): String = ProjectIntentWriter().also { writeCapabilityPage(it, value) }.finish()
 }

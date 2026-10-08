@@ -115,6 +115,28 @@ pub enum Reason<'a> {
 }
 
 impl Reason<'_> {
+    /// The browser's `AvailabilityCode`.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::UnknownAction => "unknown-action",
+            Self::NotOffered(_) => "not-offered",
+            Self::XrUnsupported(_) => "xr-unsupported",
+            Self::NotApplicable => "not-applicable",
+            Self::Capability(_) => "capability",
+            Self::Unavailable => "unavailable",
+            Self::StartupFailed(_) => "startup-failed",
+            Self::StartupLoading(_) => "startup-loading",
+            Self::Prerequisite(_) => "prerequisite",
+            Self::NotAvailable => "not-available",
+        }
+    }
+    /// The unmet prerequisite, for a `prerequisite` reason.
+    pub fn prerequisite(&self) -> Option<Prerequisite> {
+        match self {
+            Self::Prerequisite(p) => Some(*p),
+            _ => None,
+        }
+    }
     /// The browser's text.
     pub fn text(&self) -> Vec<u16> {
         let units = |text: &str| text.encode_utf16().collect::<Vec<u16>>();
@@ -271,12 +293,19 @@ mod tests {
             "../../../../../testdata/cross-platform/action-capability-vectors.json"
         ))
         .unwrap();
-        let text = |key: &str| -> Vec<u16> {
-            corpus["syntheticReasons"][key]
-                .as_str()
-                .unwrap()
-                .encode_utf16()
-                .collect()
+        let expected = |reason: &Reason<'_>, key: &str| {
+            let synthetic = &corpus["syntheticReasons"][key];
+            assert_eq!(reason.code(), synthetic["code"]);
+            assert_eq!(reason.prerequisite(), None);
+            assert!(synthetic.get("prerequisite").is_none());
+            assert_eq!(
+                reason.text(),
+                synthetic["text"]
+                    .as_str()
+                    .unwrap()
+                    .encode_utf16()
+                    .collect::<Vec<_>>()
+            );
         };
         let base = action("edit_undo").unwrap();
         let state = UiState::default();
@@ -288,7 +317,7 @@ mod tests {
             panic!("a visibility rule hides");
         };
         assert_eq!(reason, Reason::NotApplicable);
-        assert_eq!(reason.text(), text("notApplicable"));
+        expected(&reason, "notApplicable");
         let blocked = Action {
             status: Status::Blocked,
             reason: None,
@@ -298,6 +327,6 @@ mod tests {
             panic!("a blocked status disables");
         };
         assert_eq!(reason, Reason::Unavailable);
-        assert_eq!(reason.text(), text("unavailable"));
+        expected(&reason, "unavailable");
     }
 }

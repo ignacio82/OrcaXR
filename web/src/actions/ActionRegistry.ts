@@ -1,5 +1,5 @@
 import type { PrintJobConfirmation } from '../printer/PrinterSessionController';
-import { initializationBlockReason } from '../startup/InitializationPolicy';
+import { initializationBlock, initializationBlockReason } from '../startup/InitializationPolicy';
 /**
  * ActionRegistry — the ONE declaration of everything OrcaXR can do.
  *
@@ -436,8 +436,27 @@ function localizeAction(action: Action, source: ActionTextSource): Action {
   };
 }
 
+/**
+ * Why an action is hidden or disabled, so a surface (or a native shell, which
+ * ports this registry) can explain it in its own words; `reason` stays the
+ * English text.
+ */
+export type AvailabilityCode =
+  | 'unknown-action'
+  | 'not-offered'
+  | 'xr-unsupported'
+  | 'not-applicable'
+  | 'capability'
+  | 'unavailable'
+  | 'startup-failed'
+  | 'startup-loading'
+  | 'prerequisite'
+  | 'not-available';
+
 export type ActionAvailability =
-  { state: 'hidden'; reason: string } | { state: 'disabled'; reason: string } | { state: 'enabled' };
+  | { state: 'hidden'; reason: string; code: AvailabilityCode }
+  | { state: 'disabled'; reason: string; code: AvailabilityCode; prerequisite?: PrerequisiteId }
+  | { state: 'enabled' };
 
 /**
  * Menu-bar sections, in left-to-right order. Mirrors Snapmaker Orca's menu bar
@@ -831,30 +850,30 @@ export class ActionRegistry {
 
   availability(actionOrId: Action | string, surface: ActionSurface, state: Readonly<UiStateShape>): ActionAvailability {
     const action = typeof actionOrId === 'string' ? this.get(actionOrId) : actionOrId;
-    if (!action) return { state: 'hidden', reason: 'Unknown action.' };
+    if (!action) return { state: 'hidden', reason: 'Unknown action.', code: 'unknown-action' };
     if (!action.capability.surfaces.includes(surface)) {
-      return {
-        state: 'hidden',
-        reason:
-          surface.startsWith('xr-') && action.xrUnsupportedReason
-            ? action.xrUnsupportedReason
-            : `Not offered on ${surface}.`,
-      };
+      return surface.startsWith('xr-') && action.xrUnsupportedReason
+        ? { state: 'hidden', reason: action.xrUnsupportedReason, code: 'xr-unsupported' }
+        : { state: 'hidden', reason: `Not offered on ${surface}.`, code: 'not-offered' };
     }
     if (action.isVisible && !action.isVisible(state)) {
-      return { state: 'hidden', reason: 'Not applicable in the current workspace state.' };
+      return { state: 'hidden', reason: 'Not applicable in the current workspace state.', code: 'not-applicable' };
     }
     if (action.capability.status === 'unavailable' || action.capability.status === 'blocked') {
-      return { state: 'disabled', reason: action.capability.reason ?? 'Unavailable.' };
+      return action.capability.reason === undefined
+        ? { state: 'disabled', reason: 'Unavailable.', code: 'unavailable' }
+        : { state: 'disabled', reason: action.capability.reason, code: 'capability' };
     }
-    const startup = initializationBlockReason(action, state.initialization);
-    if (startup) return { state: 'disabled', reason: startup };
+    const startup = initializationBlock(action, state.initialization);
+    if (startup) {
+      return { state: 'disabled', reason: startup.reason, code: startup.failed ? 'startup-failed' : 'startup-loading' };
+    }
     for (const prerequisite of action.capability.prerequisites) {
       const rule = PREREQUISITES[prerequisite];
-      if (!rule.met(state)) return { state: 'disabled', reason: rule.reason };
+      if (!rule.met(state)) return { state: 'disabled', reason: rule.reason, code: 'prerequisite', prerequisite };
     }
     if (action.isEnabled && !action.isEnabled(state)) {
-      return { state: 'disabled', reason: 'Not available in the current workspace state.' };
+      return { state: 'disabled', reason: 'Not available in the current workspace state.', code: 'not-available' };
     }
     return { state: 'enabled' };
   }

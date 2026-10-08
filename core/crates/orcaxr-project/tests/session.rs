@@ -9,6 +9,25 @@ fn fixture() -> Value {
     ))
     .unwrap()
 }
+/// The registry facts the browser read at every trace step (`canonicalUiFacts`).
+fn capability_fixture() -> Value {
+    serde_json::from_str(include_str!(
+        "../../../../testdata/cross-platform/capability-exchange-vectors.json"
+    ))
+    .unwrap()
+}
+fn facts_value<P: TimestampPolicy>(session: &ProjectSession<P>) -> Value {
+    let f = orcaxr_project::capabilities::session_facts(session);
+    json!([
+        f.model_count,
+        f.plate_count,
+        f.has_selection,
+        f.has_instance_selection,
+        f.can_undo,
+        f.can_redo,
+        f.dirty
+    ])
+}
 fn utc() -> impl TimestampPolicy<Error = ()> {
     V8Timestamps::new(
         timestamp::V8IntegerMode::Smi32,
@@ -127,10 +146,19 @@ fn owned_session_matches_typescript_queue_protocol_commands_and_effects() {
     let recorder = Recorder {
         contents: f["contents"].as_array().unwrap(),
     };
+    let capabilities = capability_fixture();
     let mut groups = 0;
     let mut requests = 0;
-    for trace in f["traces"].as_array().unwrap() {
+    for (trace_index, trace) in f["traces"].as_array().unwrap().iter().enumerate() {
+        let facts = &capabilities["traces"][trace_index];
+        assert_eq!(facts["name"], trace["name"]);
         let mut session = session(trace);
+        assert_eq!(
+            facts_value(&session),
+            facts["facts"][0],
+            "{} initial facts",
+            trace["name"]
+        );
         let initial_assets = session.assets().capture_internal();
         let asset = session
             .assets()
@@ -225,6 +253,12 @@ fn owned_session_matches_typescript_queue_protocol_commands_and_effects() {
             actual["replies"] = json!(replies);
             actual["effects"] = json!(effects);
             assert_eq!(&actual, group, "{} group {index}", trace["name"]);
+            assert_eq!(
+                facts_value(&session),
+                facts["facts"][index + 1],
+                "{} group {index} facts",
+                trace["name"]
+            );
             assert!(
                 session
                     .assets()

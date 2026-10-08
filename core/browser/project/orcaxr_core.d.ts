@@ -437,6 +437,11 @@ export class ProjectSession {
     asset_fingerprint(): string;
     begin_open(): ProjectOpen;
     cancel_open(ticket: ProjectOpen): boolean;
+    /**
+     * A `CapabilityRequest` against the session's current state; returns a
+     * `CapabilityPage`.
+     */
+    capabilities(request: string): string;
     capture_clipboard(guard: ProjectGuard, node: ProjectQueryNode, version: number, options: Float64Array): ProjectClipboard;
     /**
      * Freeze the project and its assets for an export or a live preflight.
@@ -740,6 +745,7 @@ export interface InitOutput {
     readonly projectsession_asset_fingerprint: (a: number) => [number, number];
     readonly projectsession_begin_open: (a: number) => [number, number, number];
     readonly projectsession_cancel_open: (a: number, b: number) => number;
+    readonly projectsession_capabilities: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_capture_clipboard: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly projectsession_capture_export: (a: number, b: number) => [number, number, number];
     readonly projectsession_capture_guard: (a: number) => [number, number, number];

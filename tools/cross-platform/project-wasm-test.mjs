@@ -9,6 +9,7 @@ import { replayCatalogs } from "./catalog-replay.mjs";
 import { replayLibrary } from "./library-replay.mjs";
 import { replayEditor } from "./editor-replay.mjs";
 import { replayProjection } from "./projection-replay.mjs";
+import { replayCapabilities } from "./capability-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -56,6 +57,11 @@ if (isMainThread) {
     assert.deepEqual(
       [result.projectionReplies, result.projectionRefusals],
       [281, 36],
+    );
+    // Capability pages over live sessions, selected and edited.
+    assert.deepEqual(
+      [result.capabilityPages, result.capabilityRefusals],
+      [366, 183],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -288,6 +294,15 @@ if (isMainThread) {
       },
     }],
   );
+  const capabilities = replayCapabilities(
+    core,
+    JSON.parse(
+      await readFile(
+        new URL("testdata/cross-platform/capability-exchange-vectors.json", root),
+      ),
+    ),
+    layout,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -307,6 +322,7 @@ if (isMainThread) {
       ...libraries,
       ...editors,
       ...projections,
+      ...capabilities,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

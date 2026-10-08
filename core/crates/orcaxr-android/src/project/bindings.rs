@@ -514,6 +514,12 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

@@ -175,6 +175,7 @@ import type { ActionRegistry, ActionSurface, TransformEditRequest, ActionInvocat
 import type { AsyncSessionAcknowledgement } from '../project/AsyncEditorSession';
 import { type ContextTarget } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/ActionContext';
+import type { CanonicalUiFacts } from '../actions/canonicalUiFacts';
 import { xrBlocksUiAdapter } from '../ui/xr/XrUiAdapter';
 import { SceneGestureGuard, type SceneGestureSnapshot } from '../ui/xr/SceneGestureGuard';
 import { DEFAULT_BRIM_EAR_DETECTION, detectBrimEars } from '../project/objects/brimEarDetection';
@@ -1173,6 +1174,11 @@ export class OrcaWorkspace extends xb.Script {
   public guardProjectNavigation(reason: NavigationReason): Promise<boolean> {
     if (this.persistence) return this.persistence.guardNavigation(reason);
     return Promise.resolve(!this.canonicalProject.getSummary().dirty);
+  }
+
+  /** The action registry's facts the canonical session decides. */
+  public getCanonicalUiFacts(): CanonicalUiFacts {
+    return this.canonicalProject.getUiFacts();
   }
 
   /** Read-only canonical hierarchy/selection snapshot for DOM and XR Objects surfaces. */

@@ -261,6 +261,7 @@ import {
   type ScopedOverrideTargetOption,
 } from '../project/scopedOverrides';
 import { EditorSession, UnhealthyProjectProjectionError } from '../project/session';
+import { canonicalUiFacts, type CanonicalUiFacts } from '../actions/canonicalUiFacts';
 import { StoreProjectSliceSource } from '../project/slicing/source';
 import type { CanonicalProjectSliceGuard, CanonicalProjectSliceSourcePort } from '../project/slicing/types';
 import {
@@ -1051,6 +1052,16 @@ export class CanonicalWorkspaceController {
    * Derive the complete Objects hierarchy from the current canonical graph.
    * The returned rows carry stable entity IDs and cannot mutate project state.
    */
+  /** The registry facts the canonical session decides, from one consistent boundary. */
+  getUiFacts(): CanonicalUiFacts {
+    this.assertActive();
+    return canonicalUiFacts(
+      this.session.project.getSnapshot().state,
+      this.session.selection.getSnapshot(),
+      this.session.commands.getHistorySnapshot(),
+    );
+  }
+
   getObjectsTree(): CanonicalObjectsTreeSnapshot {
     this.assertActive();
     const project = this.session.project.getSnapshot();

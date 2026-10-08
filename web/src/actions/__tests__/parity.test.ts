@@ -180,6 +180,7 @@ test('legacy mutating and lossy actions fail closed throughout the canonical cut
     assert.deepStrictEqual(registry.availability(action, 'command-palette', FULL_STATE), {
       state: 'disabled',
       reason: action.capability.reason,
+      code: 'capability',
     });
   }
 });
@@ -314,6 +315,7 @@ test('every action declares command-palette plus only its truthful presentation 
       assert.deepStrictEqual(registry.availability(action, xrSurface, FULL_STATE), {
         state: 'hidden',
         reason: action.xrUnsupportedReason,
+        code: 'xr-unsupported',
       });
     } else {
       assert.ok(action.capability.surfaces.includes(xrSurface), `${action.id} missing ${xrSurface}`);
@@ -395,10 +397,14 @@ test('prerequisite evaluator gives actionable disabled reasons', () => {
   assert.deepStrictEqual(registry.availability('tool_move', 'dom-toolbar', empty), {
     state: 'disabled',
     reason: 'Select a model instance for this action.',
+    code: 'prerequisite',
+    prerequisite: 'has-instance-selection',
   });
   assert.deepStrictEqual(registry.availability('toggle_preview', 'dom-primary', empty), {
     state: 'disabled',
     reason: 'Slice successfully first.',
+    code: 'prerequisite',
+    prerequisite: 'preview-available',
   });
 });
 

@@ -192,15 +192,22 @@ for (let i = 0; i < 64; i += 1)
       : {}),
   });
 
-// Availability as `e` (enabled) or `d<reason>` / `h<reason>`, reasons interned.
+// Availability as `e` (enabled) or `d<reason>` / `h<reason>`, with each
+// distinct reason — code, prerequisite and text — interned once.
 const reasons = [];
 const reasonIndex = new Map();
-const intern = (text) => {
-  if (!reasonIndex.has(text)) {
-    reasonIndex.set(text, reasons.length);
-    reasons.push(text);
+const reason = (a) => ({
+  code: a.code,
+  ...(a.prerequisite === undefined ? {} : { prerequisite: a.prerequisite }),
+  text: a.reason,
+});
+const intern = (a) => {
+  const key = JSON.stringify(reason(a));
+  if (!reasonIndex.has(key)) {
+    reasonIndex.set(key, reasons.length);
+    reasons.push(reason(a));
   }
-  return reasonIndex.get(text);
+  return reasonIndex.get(key);
 };
 const cases = states.map(([name, ui]) => ({
   name,
@@ -215,19 +222,18 @@ const cases = states.map(([name, ui]) => ({
             assert.equal(a.reason, undefined);
             return "e";
           }
-          return `${a.state[0]}${intern(a.reason)}`;
+          return `${a.state[0]}${intern(a)}`;
         })
         .join(" "),
     ]),
   ),
 }));
-assert.deepEqual(
-  registry.availability("not_an_action", "dom-menu", INITIAL_UI_STATE),
-  {
-    state: "hidden",
-    reason: "Unknown action.",
-  },
+const unknownAction = registry.availability(
+  "not_an_action",
+  "dom-menu",
+  INITIAL_UI_STATE,
 );
+assert.equal(unknownAction.state, "hidden");
 
 // Paths no catalog action takes today, through the registry itself: a
 // visibility rule that hides, and a disabling status declared without a reason.
@@ -249,8 +255,8 @@ const blocked = registry.availability(
 );
 assert.equal(blocked.state, "disabled");
 const syntheticReasons = {
-  notApplicable: hidden.reason,
-  unavailable: blocked.reason,
+  notApplicable: reason(hidden),
+  unavailable: reason(blocked),
 };
 
 const ids = actions.map((a) => a.id);
@@ -284,6 +290,7 @@ const output =
       ),
       reasons,
       syntheticReasons,
+      unknownAction: reason(unknownAction),
       cases,
     },
     null,

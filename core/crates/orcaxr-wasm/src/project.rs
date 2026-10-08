@@ -425,6 +425,19 @@ impl ProjectSession {
     pub fn history_revision(&self) -> f64 {
         self.inner.history_revision() as f64
     }
+    /// A `CapabilityRequest` against the session's current state; returns a
+    /// `CapabilityPage`.
+    pub fn capabilities(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_capability_request(request).map_err(|_| error("invalid_request"))?;
+        let page = orcaxr_project::capabilities::session_page(&self.inner, &request)
+            .map_err(|refusal| error(refusal.code()))?;
+        wire::encode_capability_page(&page).map_err(|_| error("output_limit"))
+    }
     pub fn asset_fingerprint(&self) -> String {
         self.inner.assets().bundle_fingerprint().into()
     }

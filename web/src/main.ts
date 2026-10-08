@@ -4628,17 +4628,12 @@ function setupDomUI(
   renderPlateBar();
 
   const updateCanonicalUi = (summary: ReturnType<OrcaWorkspace['getCanonicalSummary']>) => {
-    const active = summary.plates.find((plate) => plate.id === summary.activePlateId);
+    // The session decides its own facts (`canonicalUiFacts`, which the native
+    // core ports); the shell adds the ones it owns.
     uiState.update({
-      modelCount: active?.instanceCount ?? 0,
-      plateCount: summary.plates.length,
-      hasSelection: workspace.getObjectsTreeSnapshot().selection.refs.length > 0,
+      ...workspace.getCanonicalUiFacts(),
       simplifyPreviewing: workspace.getSimplifySnapshot().previewing,
       calibrationSessionOpen: workspace.calibrationSessionOpen,
-      hasInstanceSelection: summary.primaryInstanceId !== undefined,
-      canUndo: summary.history.undoCount > 0,
-      canRedo: summary.history.redoCount > 0,
-      dirty: summary.dirty,
       projectionHealthy: summary.projectionHealth.healthy,
     });
   };
