@@ -1567,8 +1567,20 @@ painting, and FullSpectrum operations that can support real native projects.
     regression: faces without a normal (exact slivers, repeated corners)
     never joined their corners' sets, so no collapse removed them and they
     survived dangling; they now join them as upstream references every face.
-  - [ ] Port the remaining preparation kernels (brim ears, measurement,
-    emboss/SVG), mesh renderer packets and device qualification. Brim ears first need a browser fix: the workspace
+  - [x] Port surface measurement (`measure`, with V8's fdlibm `acos` in
+    `js_math`): volumes captured into the pinned plane/border/feature
+    decomposition with the browser's circle fit, picks resolved to the
+    claimed feature in an optional host frame with the workspace's readout,
+    and any two features measured (1,260 picks and 679 pairs exact in every
+    binding). Four browser Measure defects are fixed with regressions: picks
+    were transformed into the scaled, Y-up scene instead of printer
+    millimetres (a 10 mm box read 0.0175 mm, the annotation was misplaced and
+    assembly alignment moved parts by scene units); a pick took the first
+    part in scene order, not the nearest; it recorded an object's first
+    instance, not the one hit; and extractors were cached by mesh counts, so
+    a same-count replacement was measured stale (now keyed by asset).
+  - [ ] Port the remaining preparation kernels (brim ears, emboss/SVG), mesh
+    renderer packets and device qualification. Brim ears first need a browser fix: the workspace
     detects, places and draws ears in the first volume's own space, while the
     model and the engine read them as object-local, so an object whose first
     volume is transformed (split parts are recentred) gets misplaced ears; the

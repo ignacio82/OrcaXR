@@ -5650,6 +5650,304 @@ object ProjectIntents {
             w.field("assetId") { writeId(w, v.assetId) }
         }
     }
+    data class MeasurePoint(val point: List<Double>)
+    private fun readMeasurePoint(v: Any): MeasurePoint {
+        val obj = ProjectIntentJson.fields(v, setOf("point"), false)
+        return MeasurePoint(readVector(obj.get("point")))
+    }
+    private fun writeMeasurePoint(w: ProjectIntentWriter, v: MeasurePoint) {
+        w.obj {
+            w.field("point") { writeVector(w, v.point) }
+        }
+    }
+    data class MeasureEdge(val from: List<Double>, val to: List<Double>, val extraPoint: OptionalVector)
+    private fun readMeasureEdge(v: Any): MeasureEdge {
+        val obj = ProjectIntentJson.fields(v, setOf("from", "to", "extraPoint"), false)
+        return MeasureEdge(readVector(obj.get("from")), readVector(obj.get("to")), readOptionalVector(obj.get("extraPoint")))
+    }
+    private fun writeMeasureEdge(w: ProjectIntentWriter, v: MeasureEdge) {
+        w.obj {
+            w.field("from") { writeVector(w, v.from) }
+            w.field("to") { writeVector(w, v.to) }
+            w.field("extraPoint") { writeOptionalVector(w, v.extraPoint) }
+        }
+    }
+    data class MeasureCircle(val center: List<Double>, val normal: List<Double>, val radius: Double)
+    private fun readMeasureCircle(v: Any): MeasureCircle {
+        val obj = ProjectIntentJson.fields(v, setOf("center", "normal", "radius"), false)
+        return MeasureCircle(readVector(obj.get("center")), readVector(obj.get("normal")), readFinite(obj.get("radius")))
+    }
+    private fun writeMeasureCircle(w: ProjectIntentWriter, v: MeasureCircle) {
+        w.obj {
+            w.field("center") { writeVector(w, v.center) }
+            w.field("normal") { writeVector(w, v.normal) }
+            w.field("radius") { writeFinite(w, v.radius) }
+        }
+    }
+    data class MeasurePlane(val index: Long, val normal: List<Double>, val origin: List<Double>)
+    private fun readMeasurePlane(v: Any): MeasurePlane {
+        val obj = ProjectIntentJson.fields(v, setOf("index", "normal", "origin"), false)
+        return MeasurePlane(readCounter(obj.get("index")), readVector(obj.get("normal")), readVector(obj.get("origin")))
+    }
+    private fun writeMeasurePlane(w: ProjectIntentWriter, v: MeasurePlane) {
+        w.obj {
+            w.field("index") { writeCounter(w, v.index) }
+            w.field("normal") { writeVector(w, v.normal) }
+            w.field("origin") { writeVector(w, v.origin) }
+        }
+    }
+    sealed interface SurfaceFeature {
+        data class Point(val value: ProjectIntents.MeasurePoint) : SurfaceFeature
+        data class Edge(val value: ProjectIntents.MeasureEdge) : SurfaceFeature
+        data class Circle(val value: ProjectIntents.MeasureCircle) : SurfaceFeature
+        data class Plane(val value: ProjectIntents.MeasurePlane) : SurfaceFeature
+    }
+    private fun readSurfaceFeature(v: Any): SurfaceFeature {
+        val obj = ProjectIntentJson.fields(v, setOf("point", "edge", "circle", "plane"), true)
+        return when(val key = obj.keys().next()) {
+            "point" -> SurfaceFeature.Point(readMeasurePoint(obj.get(key)))
+            "edge" -> SurfaceFeature.Edge(readMeasureEdge(obj.get(key)))
+            "circle" -> SurfaceFeature.Circle(readMeasureCircle(obj.get(key)))
+            "plane" -> SurfaceFeature.Plane(readMeasurePlane(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeSurfaceFeature(w: ProjectIntentWriter, v: SurfaceFeature) {
+        w.obj { when(v) {
+            is SurfaceFeature.Point -> w.field("point") { writeMeasurePoint(w, v.value) }
+            is SurfaceFeature.Edge -> w.field("edge") { writeMeasureEdge(w, v.value) }
+            is SurfaceFeature.Circle -> w.field("circle") { writeMeasureCircle(w, v.value) }
+            is SurfaceFeature.Plane -> w.field("plane") { writeMeasurePlane(w, v.value) }
+        } }
+    }
+    enum class MeasureRefusalCode {UnknownVolume,MissingAsset,InvalidMesh,DegenerateMesh,UnknownFace,UnevenScale,NonFinite}
+    private fun readMeasureRefusalCode(v: Any): MeasureRefusalCode {
+        return when(v) {"unknownVolume" -> MeasureRefusalCode.UnknownVolume;"missingAsset" -> MeasureRefusalCode.MissingAsset;"invalidMesh" -> MeasureRefusalCode.InvalidMesh;"degenerateMesh" -> MeasureRefusalCode.DegenerateMesh;"unknownFace" -> MeasureRefusalCode.UnknownFace;"unevenScale" -> MeasureRefusalCode.UnevenScale;"nonFinite" -> MeasureRefusalCode.NonFinite; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeMeasureRefusalCode(w: ProjectIntentWriter, v: MeasureRefusalCode) {
+        w.literal(when(v) {MeasureRefusalCode.UnknownVolume -> "unknownVolume";MeasureRefusalCode.MissingAsset -> "missingAsset";MeasureRefusalCode.InvalidMesh -> "invalidMesh";MeasureRefusalCode.DegenerateMesh -> "degenerateMesh";MeasureRefusalCode.UnknownFace -> "unknownFace";MeasureRefusalCode.UnevenScale -> "unevenScale";MeasureRefusalCode.NonFinite -> "nonFinite";})
+    }
+    data class MeasureRefusal(val code: MeasureRefusalCode, val message: List<Int>)
+    private fun readMeasureRefusal(v: Any): MeasureRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return MeasureRefusal(readMeasureRefusalCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writeMeasureRefusal(w: ProjectIntentWriter, v: MeasureRefusal) {
+        w.obj {
+            w.field("code") { writeMeasureRefusalCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    data class MeasureVolumeRequest(val volumeId: List<Int>)
+    private fun readMeasureVolumeRequest(v: Any): MeasureVolumeRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("volumeId"), false)
+        return MeasureVolumeRequest(readId(obj.get("volumeId")))
+    }
+    private fun writeMeasureVolumeRequest(w: ProjectIntentWriter, v: MeasureVolumeRequest) {
+        w.obj {
+            w.field("volumeId") { writeId(w, v.volumeId) }
+        }
+    }
+    data class MeasureVolumeSummary(val planeCount: Long, val triangleCount: Long)
+    private fun readMeasureVolumeSummary(v: Any): MeasureVolumeSummary {
+        val obj = ProjectIntentJson.fields(v, setOf("planeCount", "triangleCount"), false)
+        return MeasureVolumeSummary(readCounter(obj.get("planeCount")), readCounter(obj.get("triangleCount")))
+    }
+    private fun writeMeasureVolumeSummary(w: ProjectIntentWriter, v: MeasureVolumeSummary) {
+        w.obj {
+            w.field("planeCount") { writeCounter(w, v.planeCount) }
+            w.field("triangleCount") { writeCounter(w, v.triangleCount) }
+        }
+    }
+    sealed interface MeasureVolumeReply {
+        data class Captured(val value: ProjectIntents.MeasureVolumeSummary) : MeasureVolumeReply
+        data class Refused(val value: ProjectIntents.MeasureRefusal) : MeasureVolumeReply
+    }
+    private fun readMeasureVolumeReply(v: Any): MeasureVolumeReply {
+        val obj = ProjectIntentJson.fields(v, setOf("captured", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "captured" -> MeasureVolumeReply.Captured(readMeasureVolumeSummary(obj.get(key)))
+            "refused" -> MeasureVolumeReply.Refused(readMeasureRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMeasureVolumeReply(w: ProjectIntentWriter, v: MeasureVolumeReply) {
+        w.obj { when(v) {
+            is MeasureVolumeReply.Captured -> w.field("captured") { writeMeasureVolumeSummary(w, v.value) }
+            is MeasureVolumeReply.Refused -> w.field("refused") { writeMeasureRefusal(w, v.value) }
+        } }
+    }
+    private fun readWorldTransform(v: Any): List<Double> {
+        val array = ProjectIntentJson.list(v, 16, 16)
+        return List(array.length()) { readFinite(array.get(it)) }
+    }
+    private fun writeWorldTransform(w: ProjectIntentWriter, v: List<Double>) {
+        w.array(v, 16, 16) { writeFinite(w, it) }
+    }
+    sealed interface OptionalWorldTransform {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalWorldTransform
+        data class Value(val value: List<Double>) : OptionalWorldTransform
+    }
+    private fun readOptionalWorldTransform(v: Any): OptionalWorldTransform {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalWorldTransform.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalWorldTransform.Value(readWorldTransform(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalWorldTransform(w: ProjectIntentWriter, v: OptionalWorldTransform) {
+        w.obj { when(v) {
+            is OptionalWorldTransform.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalWorldTransform.Value -> w.field("value") { writeWorldTransform(w, v.value) }
+        } }
+    }
+    data class MeasureFeatureRequest(val faceIndex: Long, val point: List<Double>, val onlyPlane: Boolean, val transform: OptionalWorldTransform)
+    private fun readMeasureFeatureRequest(v: Any): MeasureFeatureRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("faceIndex", "point", "onlyPlane", "transform"), false)
+        return MeasureFeatureRequest(readCounter(obj.get("faceIndex")), readVector(obj.get("point")), readFlag(obj.get("onlyPlane")), readOptionalWorldTransform(obj.get("transform")))
+    }
+    private fun writeMeasureFeatureRequest(w: ProjectIntentWriter, v: MeasureFeatureRequest) {
+        w.obj {
+            w.field("faceIndex") { writeCounter(w, v.faceIndex) }
+            w.field("point") { writeVector(w, v.point) }
+            w.field("onlyPlane") { writeFlag(w, v.onlyPlane) }
+            w.field("transform") { writeOptionalWorldTransform(w, v.transform) }
+        }
+    }
+    data class MeasuredFeature(val feature: SurfaceFeature, val summary: List<Int>)
+    private fun readMeasuredFeature(v: Any): MeasuredFeature {
+        val obj = ProjectIntentJson.fields(v, setOf("feature", "summary"), false)
+        return MeasuredFeature(readSurfaceFeature(obj.get("feature")), readEditText(obj.get("summary")))
+    }
+    private fun writeMeasuredFeature(w: ProjectIntentWriter, v: MeasuredFeature) {
+        w.obj {
+            w.field("feature") { writeSurfaceFeature(w, v.feature) }
+            w.field("summary") { writeEditText(w, v.summary) }
+        }
+    }
+    sealed interface MeasureFeatureReply {
+        data class Feature(val value: ProjectIntents.MeasuredFeature) : MeasureFeatureReply
+        data class Refused(val value: ProjectIntents.MeasureRefusal) : MeasureFeatureReply
+    }
+    private fun readMeasureFeatureReply(v: Any): MeasureFeatureReply {
+        val obj = ProjectIntentJson.fields(v, setOf("feature", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "feature" -> MeasureFeatureReply.Feature(readMeasuredFeature(obj.get(key)))
+            "refused" -> MeasureFeatureReply.Refused(readMeasureRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMeasureFeatureReply(w: ProjectIntentWriter, v: MeasureFeatureReply) {
+        w.obj { when(v) {
+            is MeasureFeatureReply.Feature -> w.field("feature") { writeMeasuredFeature(w, v.value) }
+            is MeasureFeatureReply.Refused -> w.field("refused") { writeMeasureRefusal(w, v.value) }
+        } }
+    }
+    data class MeasureRequest(val first: SurfaceFeature, val second: SurfaceFeature)
+    private fun readMeasureRequest(v: Any): MeasureRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("first", "second"), false)
+        return MeasureRequest(readSurfaceFeature(obj.get("first")), readSurfaceFeature(obj.get("second")))
+    }
+    private fun writeMeasureRequest(w: ProjectIntentWriter, v: MeasureRequest) {
+        w.obj {
+            w.field("first") { writeSurfaceFeature(w, v.first) }
+            w.field("second") { writeSurfaceFeature(w, v.second) }
+        }
+    }
+    data class MeasureDistance(val distance: Double, val from: List<Double>, val to: List<Double>)
+    private fun readMeasureDistance(v: Any): MeasureDistance {
+        val obj = ProjectIntentJson.fields(v, setOf("distance", "from", "to"), false)
+        return MeasureDistance(readFinite(obj.get("distance")), readVector(obj.get("from")), readVector(obj.get("to")))
+    }
+    private fun writeMeasureDistance(w: ProjectIntentWriter, v: MeasureDistance) {
+        w.obj {
+            w.field("distance") { writeFinite(w, v.distance) }
+            w.field("from") { writeVector(w, v.from) }
+            w.field("to") { writeVector(w, v.to) }
+        }
+    }
+    sealed interface OptionalMeasureDistance {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalMeasureDistance
+        data class Value(val value: ProjectIntents.MeasureDistance) : OptionalMeasureDistance
+    }
+    private fun readOptionalMeasureDistance(v: Any): OptionalMeasureDistance {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalMeasureDistance.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalMeasureDistance.Value(readMeasureDistance(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalMeasureDistance(w: ProjectIntentWriter, v: OptionalMeasureDistance) {
+        w.obj { when(v) {
+            is OptionalMeasureDistance.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalMeasureDistance.Value -> w.field("value") { writeMeasureDistance(w, v.value) }
+        } }
+    }
+    data class MeasureAngle(val angle: Double, val center: List<Double>, val radius: Double, val coplanar: Boolean)
+    private fun readMeasureAngle(v: Any): MeasureAngle {
+        val obj = ProjectIntentJson.fields(v, setOf("angle", "center", "radius", "coplanar"), false)
+        return MeasureAngle(readFinite(obj.get("angle")), readVector(obj.get("center")), readFinite(obj.get("radius")), readFlag(obj.get("coplanar")))
+    }
+    private fun writeMeasureAngle(w: ProjectIntentWriter, v: MeasureAngle) {
+        w.obj {
+            w.field("angle") { writeFinite(w, v.angle) }
+            w.field("center") { writeVector(w, v.center) }
+            w.field("radius") { writeFinite(w, v.radius) }
+            w.field("coplanar") { writeFlag(w, v.coplanar) }
+        }
+    }
+    sealed interface OptionalMeasureAngle {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalMeasureAngle
+        data class Value(val value: ProjectIntents.MeasureAngle) : OptionalMeasureAngle
+    }
+    private fun readOptionalMeasureAngle(v: Any): OptionalMeasureAngle {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalMeasureAngle.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalMeasureAngle.Value(readMeasureAngle(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalMeasureAngle(w: ProjectIntentWriter, v: OptionalMeasureAngle) {
+        w.obj { when(v) {
+            is OptionalMeasureAngle.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalMeasureAngle.Value -> w.field("value") { writeMeasureAngle(w, v.value) }
+        } }
+    }
+    data class MeasureResult(val angle: OptionalMeasureAngle, val distanceInfinite: OptionalMeasureDistance, val distanceStrict: OptionalMeasureDistance, val distanceXyz: OptionalVector, val unsupported: Boolean)
+    private fun readMeasureResult(v: Any): MeasureResult {
+        val obj = ProjectIntentJson.fields(v, setOf("angle", "distanceInfinite", "distanceStrict", "distanceXyz", "unsupported"), false)
+        return MeasureResult(readOptionalMeasureAngle(obj.get("angle")), readOptionalMeasureDistance(obj.get("distanceInfinite")), readOptionalMeasureDistance(obj.get("distanceStrict")), readOptionalVector(obj.get("distanceXyz")), readFlag(obj.get("unsupported")))
+    }
+    private fun writeMeasureResult(w: ProjectIntentWriter, v: MeasureResult) {
+        w.obj {
+            w.field("angle") { writeOptionalMeasureAngle(w, v.angle) }
+            w.field("distanceInfinite") { writeOptionalMeasureDistance(w, v.distanceInfinite) }
+            w.field("distanceStrict") { writeOptionalMeasureDistance(w, v.distanceStrict) }
+            w.field("distanceXyz") { writeOptionalVector(w, v.distanceXyz) }
+            w.field("unsupported") { writeFlag(w, v.unsupported) }
+        }
+    }
+    sealed interface MeasureReply {
+        data class Measured(val value: ProjectIntents.MeasureResult) : MeasureReply
+        data class Refused(val value: ProjectIntents.MeasureRefusal) : MeasureReply
+    }
+    private fun readMeasureReply(v: Any): MeasureReply {
+        val obj = ProjectIntentJson.fields(v, setOf("measured", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "measured" -> MeasureReply.Measured(readMeasureResult(obj.get(key)))
+            "refused" -> MeasureReply.Refused(readMeasureRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMeasureReply(w: ProjectIntentWriter, v: MeasureReply) {
+        w.obj { when(v) {
+            is MeasureReply.Measured -> w.field("measured") { writeMeasureResult(w, v.value) }
+            is MeasureReply.Refused -> w.field("refused") { writeMeasureRefusal(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -5818,4 +6116,16 @@ object ProjectIntents {
     fun encodeVolumeSimplifyReply(value: VolumeSimplifyReply): String = ProjectIntentWriter().also { writeVolumeSimplifyReply(it, value) }.finish()
     fun decodeVolumeSimplifyStage(text: String): VolumeSimplifyStage = readVolumeSimplifyStage(ProjectIntentJson.parse(text))
     fun encodeVolumeSimplifyStage(value: VolumeSimplifyStage): String = ProjectIntentWriter().also { writeVolumeSimplifyStage(it, value) }.finish()
+    fun decodeMeasureVolumeRequest(text: String): MeasureVolumeRequest = readMeasureVolumeRequest(ProjectIntentJson.parse(text))
+    fun encodeMeasureVolumeRequest(value: MeasureVolumeRequest): String = ProjectIntentWriter().also { writeMeasureVolumeRequest(it, value) }.finish()
+    fun decodeMeasureVolumeReply(text: String): MeasureVolumeReply = readMeasureVolumeReply(ProjectIntentJson.parse(text))
+    fun encodeMeasureVolumeReply(value: MeasureVolumeReply): String = ProjectIntentWriter().also { writeMeasureVolumeReply(it, value) }.finish()
+    fun decodeMeasureFeatureRequest(text: String): MeasureFeatureRequest = readMeasureFeatureRequest(ProjectIntentJson.parse(text))
+    fun encodeMeasureFeatureRequest(value: MeasureFeatureRequest): String = ProjectIntentWriter().also { writeMeasureFeatureRequest(it, value) }.finish()
+    fun decodeMeasureFeatureReply(text: String): MeasureFeatureReply = readMeasureFeatureReply(ProjectIntentJson.parse(text))
+    fun encodeMeasureFeatureReply(value: MeasureFeatureReply): String = ProjectIntentWriter().also { writeMeasureFeatureReply(it, value) }.finish()
+    fun decodeMeasureRequest(text: String): MeasureRequest = readMeasureRequest(ProjectIntentJson.parse(text))
+    fun encodeMeasureRequest(value: MeasureRequest): String = ProjectIntentWriter().also { writeMeasureRequest(it, value) }.finish()
+    fun decodeMeasureReply(text: String): MeasureReply = readMeasureReply(ProjectIntentJson.parse(text))
+    fun encodeMeasureReply(value: MeasureReply): String = ProjectIntentWriter().also { writeMeasureReply(it, value) }.finish()
 }

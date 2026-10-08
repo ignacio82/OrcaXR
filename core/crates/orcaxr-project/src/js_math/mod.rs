@@ -1,7 +1,7 @@
 //! ECMAScript `Math` exactly as the browser oracle (V8 12.4, Node 22) computes
 //! it, for ports whose results are compared bit for bit with the browser.
 //!
-//! `sin`, `cos` and `exp` are V8's own fdlibm 5.3 port (`fdlibm`); the `libm`
+//! `sin`, `cos`, `exp` and `acos` are V8's own fdlibm 5.3 port (`fdlibm`); the `libm`
 //! crate follows later FreeBSD revisions and differs in the last bit for about
 //! one argument in a hundred. `hypot` is V8's scaled, compensated sum, and
 //! `min`/`max` keep JavaScript's NaN and signed-zero rules. The
@@ -10,7 +10,7 @@
 pub mod convert;
 mod fdlibm;
 
-pub use fdlibm::{cos, exp, sin};
+pub use fdlibm::{acos, cos, exp, sin};
 
 /// `Math.min(a, b)`: NaN wins, and -0 is below +0.
 pub fn min(a: f64, b: f64) -> f64 {

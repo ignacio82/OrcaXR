@@ -1,4 +1,4 @@
-//! `Math.sin`, `Math.cos` and `Math.exp` exactly as V8 computes them: a
+//! `Math.sin`, `Math.cos`, `Math.exp` and `Math.acos` exactly as V8 computes them: a
 //! line-for-line port of V8 12.4's `src/base/ieee754.cc` (fdlibm 5.3, which
 //! Node 22's V8 uses for sin/cos rather than its optional glibc routines), not
 //! the later FreeBSD msun revisions the `libm` crate follows (different
@@ -502,5 +502,64 @@ pub fn exp(x: f64) -> f64 {
         y * twopk
     } else {
         y * twopk * TWOM1000
+    }
+}
+
+/// `__ieee754_acos` (fdlibm 5.3 `e_acos.c`), V8's `Math.acos`.
+pub fn acos(x: f64) -> f64 {
+    const ONE: f64 = 1.00000000000000000000e+00;
+    const PI: f64 = 3.14159265358979311600e+00;
+    const PIO2_HI: f64 = 1.57079632679489655800e+00;
+    const PIO2_LO: f64 = 6.12323399573676603587e-17;
+    const PS0: f64 = 1.66666666666666657415e-01;
+    const PS1: f64 = -3.25565818622400915405e-01;
+    const PS2: f64 = 2.01212532134862925881e-01;
+    const PS3: f64 = -4.00555345006794114027e-02;
+    const PS4: f64 = 7.91534994289814532176e-04;
+    const PS5: f64 = 3.47933107596021167570e-05;
+    const QS1: f64 = -2.40339491173441421878e+00;
+    const QS2: f64 = 2.02094576023350569471e+00;
+    const QS3: f64 = -6.88283971605453293030e-01;
+    const QS4: f64 = 7.70381505559019352791e-02;
+    let hx = high(x);
+    let ix = hx & 0x7fffffff;
+    if ix >= 0x3ff00000 {
+        // |x| >= 1
+        if ((ix - 0x3ff00000) as u32 | low(x)) == 0 {
+            // |x| == 1
+            return if hx > 0 { 0.0 } else { PI + 2.0 * PIO2_LO };
+        }
+        return f64::NAN; // acos(|x| > 1) is NaN, and JavaScript has one NaN
+    }
+    if ix < 0x3fe00000 {
+        // |x| < 0.5
+        if ix <= 0x3c600000 {
+            return PIO2_HI + PIO2_LO; // |x| < 2**-57
+        }
+        let z = x * x;
+        let p = z * (PS0 + z * (PS1 + z * (PS2 + z * (PS3 + z * (PS4 + z * PS5)))));
+        let q = ONE + z * (QS1 + z * (QS2 + z * (QS3 + z * QS4)));
+        let r = p / q;
+        PIO2_HI - (x - (PIO2_LO - x * r))
+    } else if hx < 0 {
+        // x < -0.5
+        let z = (ONE + x) * 0.5;
+        let p = z * (PS0 + z * (PS1 + z * (PS2 + z * (PS3 + z * (PS4 + z * PS5)))));
+        let q = ONE + z * (QS1 + z * (QS2 + z * (QS3 + z * QS4)));
+        let s = z.sqrt();
+        let r = p / q;
+        let w = r * s - PIO2_LO;
+        PI - 2.0 * (s + w)
+    } else {
+        // x > 0.5
+        let z = (ONE - x) * 0.5;
+        let s = z.sqrt();
+        let df = words(high(s), 0);
+        let c = (z - df * df) / (s + df);
+        let p = z * (PS0 + z * (PS1 + z * (PS2 + z * (PS3 + z * (PS4 + z * PS5)))));
+        let q = ONE + z * (QS1 + z * (QS2 + z * (QS3 + z * QS4)));
+        let r = p / q;
+        let w = r * s + c;
+        2.0 * (df + w)
     }
 }

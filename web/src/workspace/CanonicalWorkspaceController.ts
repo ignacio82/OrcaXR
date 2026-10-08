@@ -3904,6 +3904,12 @@ export class CanonicalWorkspaceController {
     return found ? cloneJson(found.instance.transform) : undefined;
   }
 
+  /** The asset holding one volume's mesh: an ID that names immutable bytes. */
+  getVolumeSourceAssetId(volumeId: VolumeId): AssetId | undefined {
+    this.assertActive();
+    return findVolume(this.session.project.getSnapshot().state, volumeId)?.volume.source.assetId;
+  }
+
   /**
    * Immutable decoded mesh of one volume, for read-only geometry tools such as
    * measurement. It never caches into canonical state.

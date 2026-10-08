@@ -405,6 +405,52 @@ pub(super) fn stage_volume_simplify(
         })
     })
 }
+/// One volume's features captured for measuring.
+pub(super) fn session_measure_volume(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jlong> {
+    let request = decoded(env, &request, wire::decode_measure_volume_request)?;
+    capture(|| {
+        with_session(handle, |s| {
+            s.measure_volume(&request)
+                .map(|volume| Record::MeasureVolume(Box::new(volume)))
+                .map_err(session_error)
+        })
+    })
+}
+/// The capture's plane and facet counts, or its refusal.
+pub(super) fn measure_volume_reply(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let json = with_measure_volume(handle, |volume| {
+        encoded(&volume.reply(), wire::encode_measure_volume_reply)
+    })?;
+    string(env, json)
+}
+/// The feature a pick claims.
+pub(super) fn measure_volume_feature(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_measure_feature_request)?;
+    let json = with_measure_volume(handle, |volume| {
+        encoded(
+            &volume.feature(&request),
+            wire::encode_measure_feature_reply,
+        )
+    })?;
+    string(env, json)
+}
+/// Two features measured.
+pub(super) fn measure_features(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    let request = decoded(env, &request, wire::decode_measure_request)?;
+    let json = encoded(
+        &orcaxr_project::measure::measure_wire(&request),
+        wire::encode_measure_reply,
+    )?;
+    string(env, json)
+}
 fn session_error(error: wire::SessionError) -> &'static str {
     match error {
         wire::SessionError::Disposed => "disposed",

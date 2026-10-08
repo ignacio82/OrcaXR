@@ -7829,6 +7829,343 @@ fn read_volume_simplify_stage(v: &Value) -> Result<VolumeSimplifyStage, InvalidI
         asset_id: read_id(&object["assetId"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasurePoint {
+    pub point: Vector,
+}
+fn read_measure_point(v: &Value) -> Result<MeasurePoint, InvalidIntent> {
+    let object = fields(v, &["point"], false)?;
+    Ok(MeasurePoint {
+        point: read_vector(&object["point"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasureEdge {
+    pub from: Vector,
+    pub to: Vector,
+    pub extra_point: OptionalVector,
+}
+fn read_measure_edge(v: &Value) -> Result<MeasureEdge, InvalidIntent> {
+    let object = fields(v, &["from", "to", "extraPoint"], false)?;
+    Ok(MeasureEdge {
+        from: read_vector(&object["from"])?,
+        to: read_vector(&object["to"])?,
+        extra_point: read_optional_vector(&object["extraPoint"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasureCircle {
+    pub center: Vector,
+    pub normal: Vector,
+    pub radius: Finite,
+}
+fn read_measure_circle(v: &Value) -> Result<MeasureCircle, InvalidIntent> {
+    let object = fields(v, &["center", "normal", "radius"], false)?;
+    Ok(MeasureCircle {
+        center: read_vector(&object["center"])?,
+        normal: read_vector(&object["normal"])?,
+        radius: read_finite(&object["radius"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasurePlane {
+    pub index: Counter,
+    pub normal: Vector,
+    pub origin: Vector,
+}
+fn read_measure_plane(v: &Value) -> Result<MeasurePlane, InvalidIntent> {
+    let object = fields(v, &["index", "normal", "origin"], false)?;
+    Ok(MeasurePlane {
+        index: read_counter(&object["index"])?,
+        normal: read_vector(&object["normal"])?,
+        origin: read_vector(&object["origin"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SurfaceFeature {
+    Point(MeasurePoint),
+    Edge(MeasureEdge),
+    Circle(MeasureCircle),
+    Plane(MeasurePlane),
+}
+fn read_surface_feature(v: &Value) -> Result<SurfaceFeature, InvalidIntent> {
+    let object = fields(v, &["point", "edge", "circle", "plane"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "point" => Ok(SurfaceFeature::Point(read_measure_point(value)?)),
+        "edge" => Ok(SurfaceFeature::Edge(read_measure_edge(value)?)),
+        "circle" => Ok(SurfaceFeature::Circle(read_measure_circle(value)?)),
+        "plane" => Ok(SurfaceFeature::Plane(read_measure_plane(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MeasureRefusalCode {
+    UnknownVolume,
+    MissingAsset,
+    InvalidMesh,
+    DegenerateMesh,
+    UnknownFace,
+    UnevenScale,
+    NonFinite,
+}
+fn read_measure_refusal_code(v: &Value) -> Result<MeasureRefusalCode, InvalidIntent> {
+    match v.as_str() {
+        Some("unknownVolume") => Ok(MeasureRefusalCode::UnknownVolume),
+        Some("missingAsset") => Ok(MeasureRefusalCode::MissingAsset),
+        Some("invalidMesh") => Ok(MeasureRefusalCode::InvalidMesh),
+        Some("degenerateMesh") => Ok(MeasureRefusalCode::DegenerateMesh),
+        Some("unknownFace") => Ok(MeasureRefusalCode::UnknownFace),
+        Some("unevenScale") => Ok(MeasureRefusalCode::UnevenScale),
+        Some("nonFinite") => Ok(MeasureRefusalCode::NonFinite),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasureRefusal {
+    pub code: MeasureRefusalCode,
+    pub message: EditText,
+}
+fn read_measure_refusal(v: &Value) -> Result<MeasureRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(MeasureRefusal {
+        code: read_measure_refusal_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasureVolumeRequest {
+    pub volume_id: Id,
+}
+fn read_measure_volume_request(v: &Value) -> Result<MeasureVolumeRequest, InvalidIntent> {
+    let object = fields(v, &["volumeId"], false)?;
+    Ok(MeasureVolumeRequest {
+        volume_id: read_id(&object["volumeId"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasureVolumeSummary {
+    pub plane_count: Counter,
+    pub triangle_count: Counter,
+}
+fn read_measure_volume_summary(v: &Value) -> Result<MeasureVolumeSummary, InvalidIntent> {
+    let object = fields(v, &["planeCount", "triangleCount"], false)?;
+    Ok(MeasureVolumeSummary {
+        plane_count: read_counter(&object["planeCount"])?,
+        triangle_count: read_counter(&object["triangleCount"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MeasureVolumeReply {
+    Captured(MeasureVolumeSummary),
+    Refused(MeasureRefusal),
+}
+fn read_measure_volume_reply(v: &Value) -> Result<MeasureVolumeReply, InvalidIntent> {
+    let object = fields(v, &["captured", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "captured" => Ok(MeasureVolumeReply::Captured(read_measure_volume_summary(
+            value,
+        )?)),
+        "refused" => Ok(MeasureVolumeReply::Refused(read_measure_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type WorldTransform = Vec<Finite>;
+fn read_world_transform(v: &Value) -> Result<WorldTransform, InvalidIntent> {
+    list(v, 16, 16)?.iter().map(read_finite).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalWorldTransform {
+    Absent(Empty),
+    Value(WorldTransform),
+}
+fn read_optional_world_transform(v: &Value) -> Result<OptionalWorldTransform, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalWorldTransform::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalWorldTransform::Value(read_world_transform(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasureFeatureRequest {
+    pub face_index: Counter,
+    pub point: Vector,
+    pub only_plane: Flag,
+    pub transform: OptionalWorldTransform,
+}
+fn read_measure_feature_request(v: &Value) -> Result<MeasureFeatureRequest, InvalidIntent> {
+    let object = fields(v, &["faceIndex", "point", "onlyPlane", "transform"], false)?;
+    Ok(MeasureFeatureRequest {
+        face_index: read_counter(&object["faceIndex"])?,
+        point: read_vector(&object["point"])?,
+        only_plane: read_flag(&object["onlyPlane"])?,
+        transform: read_optional_world_transform(&object["transform"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasuredFeature {
+    pub feature: SurfaceFeature,
+    pub summary: EditText,
+}
+fn read_measured_feature(v: &Value) -> Result<MeasuredFeature, InvalidIntent> {
+    let object = fields(v, &["feature", "summary"], false)?;
+    Ok(MeasuredFeature {
+        feature: read_surface_feature(&object["feature"])?,
+        summary: read_edit_text(&object["summary"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MeasureFeatureReply {
+    Feature(MeasuredFeature),
+    Refused(MeasureRefusal),
+}
+fn read_measure_feature_reply(v: &Value) -> Result<MeasureFeatureReply, InvalidIntent> {
+    let object = fields(v, &["feature", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "feature" => Ok(MeasureFeatureReply::Feature(read_measured_feature(value)?)),
+        "refused" => Ok(MeasureFeatureReply::Refused(read_measure_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasureRequest {
+    pub first: SurfaceFeature,
+    pub second: SurfaceFeature,
+}
+fn read_measure_request(v: &Value) -> Result<MeasureRequest, InvalidIntent> {
+    let object = fields(v, &["first", "second"], false)?;
+    Ok(MeasureRequest {
+        first: read_surface_feature(&object["first"])?,
+        second: read_surface_feature(&object["second"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasureDistance {
+    pub distance: Finite,
+    pub from: Vector,
+    pub to: Vector,
+}
+fn read_measure_distance(v: &Value) -> Result<MeasureDistance, InvalidIntent> {
+    let object = fields(v, &["distance", "from", "to"], false)?;
+    Ok(MeasureDistance {
+        distance: read_finite(&object["distance"])?,
+        from: read_vector(&object["from"])?,
+        to: read_vector(&object["to"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalMeasureDistance {
+    Absent(Empty),
+    Value(MeasureDistance),
+}
+fn read_optional_measure_distance(v: &Value) -> Result<OptionalMeasureDistance, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalMeasureDistance::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalMeasureDistance::Value(read_measure_distance(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasureAngle {
+    pub angle: Finite,
+    pub center: Vector,
+    pub radius: Finite,
+    pub coplanar: Flag,
+}
+fn read_measure_angle(v: &Value) -> Result<MeasureAngle, InvalidIntent> {
+    let object = fields(v, &["angle", "center", "radius", "coplanar"], false)?;
+    Ok(MeasureAngle {
+        angle: read_finite(&object["angle"])?,
+        center: read_vector(&object["center"])?,
+        radius: read_finite(&object["radius"])?,
+        coplanar: read_flag(&object["coplanar"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalMeasureAngle {
+    Absent(Empty),
+    Value(MeasureAngle),
+}
+fn read_optional_measure_angle(v: &Value) -> Result<OptionalMeasureAngle, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalMeasureAngle::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalMeasureAngle::Value(read_measure_angle(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeasureResult {
+    pub angle: OptionalMeasureAngle,
+    pub distance_infinite: OptionalMeasureDistance,
+    pub distance_strict: OptionalMeasureDistance,
+    pub distance_xyz: OptionalVector,
+    pub unsupported: Flag,
+}
+fn read_measure_result(v: &Value) -> Result<MeasureResult, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "angle",
+            "distanceInfinite",
+            "distanceStrict",
+            "distanceXyz",
+            "unsupported",
+        ],
+        false,
+    )?;
+    Ok(MeasureResult {
+        angle: read_optional_measure_angle(&object["angle"])?,
+        distance_infinite: read_optional_measure_distance(&object["distanceInfinite"])?,
+        distance_strict: read_optional_measure_distance(&object["distanceStrict"])?,
+        distance_xyz: read_optional_vector(&object["distanceXyz"])?,
+        unsupported: read_flag(&object["unsupported"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MeasureReply {
+    Measured(MeasureResult),
+    Refused(MeasureRefusal),
+}
+fn read_measure_reply(v: &Value) -> Result<MeasureReply, InvalidIntent> {
+    let object = fields(v, &["measured", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "measured" => Ok(MeasureReply::Measured(read_measure_result(value)?)),
+        "refused" => Ok(MeasureReply::Refused(read_measure_refusal(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -8545,5 +8882,57 @@ pub fn decode_volume_simplify_stage(text: &str) -> Result<VolumeSimplifyStage, I
 pub fn encode_volume_simplify_stage(value: &VolumeSimplifyStage) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_volume_simplify_stage(&text)?;
+    Ok(text)
+}
+pub fn decode_measure_volume_request(text: &str) -> Result<MeasureVolumeRequest, InvalidIntent> {
+    read_measure_volume_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_measure_volume_request(
+    value: &MeasureVolumeRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_measure_volume_request(&text)?;
+    Ok(text)
+}
+pub fn decode_measure_volume_reply(text: &str) -> Result<MeasureVolumeReply, InvalidIntent> {
+    read_measure_volume_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_measure_volume_reply(value: &MeasureVolumeReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_measure_volume_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_measure_feature_request(text: &str) -> Result<MeasureFeatureRequest, InvalidIntent> {
+    read_measure_feature_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_measure_feature_request(
+    value: &MeasureFeatureRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_measure_feature_request(&text)?;
+    Ok(text)
+}
+pub fn decode_measure_feature_reply(text: &str) -> Result<MeasureFeatureReply, InvalidIntent> {
+    read_measure_feature_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_measure_feature_reply(value: &MeasureFeatureReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_measure_feature_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_measure_request(text: &str) -> Result<MeasureRequest, InvalidIntent> {
+    read_measure_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_measure_request(value: &MeasureRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_measure_request(&text)?;
+    Ok(text)
+}
+pub fn decode_measure_reply(text: &str) -> Result<MeasureReply, InvalidIntent> {
+    read_measure_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_measure_reply(value: &MeasureReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_measure_reply(&text)?;
     Ok(text)
 }

@@ -1698,6 +1698,76 @@ export class ProjectImportPreview {
 }
 if (Symbol.dispose) ProjectImportPreview.prototype[Symbol.dispose] = ProjectImportPreview.prototype.free;
 
+/**
+ * One volume's features, captured for measuring.
+ */
+export class ProjectMeasureVolume {
+    static __wrap(ptr) {
+        const obj = Object.create(ProjectMeasureVolume.prototype);
+        obj.__wbg_ptr = ptr;
+        ProjectMeasureVolumeFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ProjectMeasureVolumeFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_projectmeasurevolume_free(ptr, 0);
+    }
+    /**
+     * A `MeasureFeatureRequest`; returns a `MeasureFeatureReply`.
+     * @param {string} request
+     * @returns {string}
+     */
+    feature(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.projectmeasurevolume_feature(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * The `MeasureVolumeReply`: plane and facet counts, or the refusal.
+     * @returns {string}
+     */
+    reply() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.projectmeasurevolume_reply(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ProjectMeasureVolume.prototype[Symbol.dispose] = ProjectMeasureVolume.prototype.free;
+
 export class ProjectModelUpload {
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
@@ -2608,6 +2678,22 @@ export class ProjectSession {
         _assertClass(ticket, ProjectOpen);
         const ret = wasm.projectsession_is_open_current(this.__wbg_ptr, ticket.__wbg_ptr);
         return ret !== 0;
+    }
+    /**
+     * One volume's features captured for measuring: a
+     * `MeasureVolumeRequest`. Its `reply` gives the counts or the refusal,
+     * and `feature` resolves picks off this session.
+     * @param {string} request
+     * @returns {ProjectMeasureVolume}
+     */
+    measure_volume(request) {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectsession_measure_volume(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectMeasureVolume.__wrap(ret[0]);
     }
     /**
      * The canonical paint overlay of one volume's channel: a
@@ -3576,6 +3662,33 @@ export function format_override_value(request) {
 }
 
 /**
+ * The workspace's measurement of two features: a `MeasureRequest`; returns
+ * a `MeasureReply`.
+ * @param {string} request
+ * @returns {string}
+ */
+export function measure_features(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.measure_features(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * The Full Spectrum rules: an `EditorRuleRequest` to `EditorRules`.
  * @param {string} rules
  * @returns {string}
@@ -3741,6 +3854,9 @@ const ProjectImportBaseFinalization = (typeof FinalizationRegistry === 'undefine
 const ProjectImportPreviewFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectimportpreview_free(ptr, 1));
+const ProjectMeasureVolumeFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_projectmeasurevolume_free(ptr, 1));
 const ProjectModelUploadFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_projectmodelupload_free(ptr, 1));

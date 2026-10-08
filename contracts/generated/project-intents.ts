@@ -3752,6 +3752,175 @@ const shapes = {
     "fields": {
       "assetId": "Id"
     }
+  },
+  "MeasurePoint": {
+    "kind": "object",
+    "fields": {
+      "point": "Vector"
+    }
+  },
+  "MeasureEdge": {
+    "kind": "object",
+    "fields": {
+      "from": "Vector",
+      "to": "Vector",
+      "extraPoint": "OptionalVector"
+    }
+  },
+  "MeasureCircle": {
+    "kind": "object",
+    "fields": {
+      "center": "Vector",
+      "normal": "Vector",
+      "radius": "Finite"
+    }
+  },
+  "MeasurePlane": {
+    "kind": "object",
+    "fields": {
+      "index": "Counter",
+      "normal": "Vector",
+      "origin": "Vector"
+    }
+  },
+  "SurfaceFeature": {
+    "kind": "union",
+    "variants": {
+      "point": "MeasurePoint",
+      "edge": "MeasureEdge",
+      "circle": "MeasureCircle",
+      "plane": "MeasurePlane"
+    }
+  },
+  "MeasureRefusalCode": {
+    "kind": "enum",
+    "values": [
+      "unknownVolume",
+      "missingAsset",
+      "invalidMesh",
+      "degenerateMesh",
+      "unknownFace",
+      "unevenScale",
+      "nonFinite"
+    ]
+  },
+  "MeasureRefusal": {
+    "kind": "object",
+    "fields": {
+      "code": "MeasureRefusalCode",
+      "message": "EditText"
+    }
+  },
+  "MeasureVolumeRequest": {
+    "kind": "object",
+    "fields": {
+      "volumeId": "Id"
+    }
+  },
+  "MeasureVolumeSummary": {
+    "kind": "object",
+    "fields": {
+      "planeCount": "Counter",
+      "triangleCount": "Counter"
+    }
+  },
+  "MeasureVolumeReply": {
+    "kind": "union",
+    "variants": {
+      "captured": "MeasureVolumeSummary",
+      "refused": "MeasureRefusal"
+    }
+  },
+  "WorldTransform": {
+    "kind": "array",
+    "items": "Finite",
+    "min": 16,
+    "max": 16
+  },
+  "OptionalWorldTransform": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "WorldTransform"
+    }
+  },
+  "MeasureFeatureRequest": {
+    "kind": "object",
+    "fields": {
+      "faceIndex": "Counter",
+      "point": "Vector",
+      "onlyPlane": "Flag",
+      "transform": "OptionalWorldTransform"
+    }
+  },
+  "MeasuredFeature": {
+    "kind": "object",
+    "fields": {
+      "feature": "SurfaceFeature",
+      "summary": "EditText"
+    }
+  },
+  "MeasureFeatureReply": {
+    "kind": "union",
+    "variants": {
+      "feature": "MeasuredFeature",
+      "refused": "MeasureRefusal"
+    }
+  },
+  "MeasureRequest": {
+    "kind": "object",
+    "fields": {
+      "first": "SurfaceFeature",
+      "second": "SurfaceFeature"
+    }
+  },
+  "MeasureDistance": {
+    "kind": "object",
+    "fields": {
+      "distance": "Finite",
+      "from": "Vector",
+      "to": "Vector"
+    }
+  },
+  "OptionalMeasureDistance": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "MeasureDistance"
+    }
+  },
+  "MeasureAngle": {
+    "kind": "object",
+    "fields": {
+      "angle": "Finite",
+      "center": "Vector",
+      "radius": "Finite",
+      "coplanar": "Flag"
+    }
+  },
+  "OptionalMeasureAngle": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "MeasureAngle"
+    }
+  },
+  "MeasureResult": {
+    "kind": "object",
+    "fields": {
+      "angle": "OptionalMeasureAngle",
+      "distanceInfinite": "OptionalMeasureDistance",
+      "distanceStrict": "OptionalMeasureDistance",
+      "distanceXyz": "OptionalVector",
+      "unsupported": "Flag"
+    }
+  },
+  "MeasureReply": {
+    "kind": "union",
+    "variants": {
+      "measured": "MeasureResult",
+      "refused": "MeasureRefusal"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -4204,6 +4373,28 @@ export type ProjectVolumeSimplifyRefusalCodeWire = "unknownVolume" | "missingAss
 export interface ProjectVolumeSimplifyRefusalWire {readonly code: ProjectVolumeSimplifyRefusalCodeWire;readonly message: ProjectEditTextWire;}
 export type ProjectVolumeSimplifyReplyWire = {readonly prepared:ProjectVolumeSimplifyPreviewWire} | {readonly unchanged:ProjectVolumeSimplifyUnchangedWire} | {readonly refused:ProjectVolumeSimplifyRefusalWire};
 export interface ProjectVolumeSimplifyStageWire {readonly assetId: ProjectIdWire;}
+export interface ProjectMeasurePointWire {readonly point: ProjectVectorWire;}
+export interface ProjectMeasureEdgeWire {readonly from: ProjectVectorWire;readonly to: ProjectVectorWire;readonly extraPoint: ProjectOptionalVectorWire;}
+export interface ProjectMeasureCircleWire {readonly center: ProjectVectorWire;readonly normal: ProjectVectorWire;readonly radius: ProjectFiniteWire;}
+export interface ProjectMeasurePlaneWire {readonly index: ProjectCounterWire;readonly normal: ProjectVectorWire;readonly origin: ProjectVectorWire;}
+export type ProjectSurfaceFeatureWire = {readonly point:ProjectMeasurePointWire} | {readonly edge:ProjectMeasureEdgeWire} | {readonly circle:ProjectMeasureCircleWire} | {readonly plane:ProjectMeasurePlaneWire};
+export type ProjectMeasureRefusalCodeWire = "unknownVolume" | "missingAsset" | "invalidMesh" | "degenerateMesh" | "unknownFace" | "unevenScale" | "nonFinite";
+export interface ProjectMeasureRefusalWire {readonly code: ProjectMeasureRefusalCodeWire;readonly message: ProjectEditTextWire;}
+export interface ProjectMeasureVolumeRequestWire {readonly volumeId: ProjectIdWire;}
+export interface ProjectMeasureVolumeSummaryWire {readonly planeCount: ProjectCounterWire;readonly triangleCount: ProjectCounterWire;}
+export type ProjectMeasureVolumeReplyWire = {readonly captured:ProjectMeasureVolumeSummaryWire} | {readonly refused:ProjectMeasureRefusalWire};
+export type ProjectWorldTransformWire = readonly ProjectFiniteWire[];
+export type ProjectOptionalWorldTransformWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectWorldTransformWire};
+export interface ProjectMeasureFeatureRequestWire {readonly faceIndex: ProjectCounterWire;readonly point: ProjectVectorWire;readonly onlyPlane: ProjectFlagWire;readonly transform: ProjectOptionalWorldTransformWire;}
+export interface ProjectMeasuredFeatureWire {readonly feature: ProjectSurfaceFeatureWire;readonly summary: ProjectEditTextWire;}
+export type ProjectMeasureFeatureReplyWire = {readonly feature:ProjectMeasuredFeatureWire} | {readonly refused:ProjectMeasureRefusalWire};
+export interface ProjectMeasureRequestWire {readonly first: ProjectSurfaceFeatureWire;readonly second: ProjectSurfaceFeatureWire;}
+export interface ProjectMeasureDistanceWire {readonly distance: ProjectFiniteWire;readonly from: ProjectVectorWire;readonly to: ProjectVectorWire;}
+export type ProjectOptionalMeasureDistanceWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectMeasureDistanceWire};
+export interface ProjectMeasureAngleWire {readonly angle: ProjectFiniteWire;readonly center: ProjectVectorWire;readonly radius: ProjectFiniteWire;readonly coplanar: ProjectFlagWire;}
+export type ProjectOptionalMeasureAngleWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectMeasureAngleWire};
+export interface ProjectMeasureResultWire {readonly angle: ProjectOptionalMeasureAngleWire;readonly distanceInfinite: ProjectOptionalMeasureDistanceWire;readonly distanceStrict: ProjectOptionalMeasureDistanceWire;readonly distanceXyz: ProjectOptionalVectorWire;readonly unsupported: ProjectFlagWire;}
+export type ProjectMeasureReplyWire = {readonly measured:ProjectMeasureResultWire} | {readonly refused:ProjectMeasureRefusalWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -4456,3 +4647,21 @@ export function encodeProjectVolumeSimplifyReply(value:ProjectVolumeSimplifyRepl
 export function captureProjectVolumeSimplifyStage(value:unknown):ProjectVolumeSimplifyStageWire { return captureIntent("VolumeSimplifyStage",value,shapes,limits) as ProjectVolumeSimplifyStageWire; }
 export function decodeProjectVolumeSimplifyStage(text:string):ProjectVolumeSimplifyStageWire { return captureProjectVolumeSimplifyStage(parseIntentJson(text,limits)); }
 export function encodeProjectVolumeSimplifyStage(value:ProjectVolumeSimplifyStageWire):string { return JSON.stringify(captureProjectVolumeSimplifyStage(value)); }
+export function captureProjectMeasureVolumeRequest(value:unknown):ProjectMeasureVolumeRequestWire { return captureIntent("MeasureVolumeRequest",value,shapes,limits) as ProjectMeasureVolumeRequestWire; }
+export function decodeProjectMeasureVolumeRequest(text:string):ProjectMeasureVolumeRequestWire { return captureProjectMeasureVolumeRequest(parseIntentJson(text,limits)); }
+export function encodeProjectMeasureVolumeRequest(value:ProjectMeasureVolumeRequestWire):string { return JSON.stringify(captureProjectMeasureVolumeRequest(value)); }
+export function captureProjectMeasureVolumeReply(value:unknown):ProjectMeasureVolumeReplyWire { return captureIntent("MeasureVolumeReply",value,shapes,limits) as ProjectMeasureVolumeReplyWire; }
+export function decodeProjectMeasureVolumeReply(text:string):ProjectMeasureVolumeReplyWire { return captureProjectMeasureVolumeReply(parseIntentJson(text,limits)); }
+export function encodeProjectMeasureVolumeReply(value:ProjectMeasureVolumeReplyWire):string { return JSON.stringify(captureProjectMeasureVolumeReply(value)); }
+export function captureProjectMeasureFeatureRequest(value:unknown):ProjectMeasureFeatureRequestWire { return captureIntent("MeasureFeatureRequest",value,shapes,limits) as ProjectMeasureFeatureRequestWire; }
+export function decodeProjectMeasureFeatureRequest(text:string):ProjectMeasureFeatureRequestWire { return captureProjectMeasureFeatureRequest(parseIntentJson(text,limits)); }
+export function encodeProjectMeasureFeatureRequest(value:ProjectMeasureFeatureRequestWire):string { return JSON.stringify(captureProjectMeasureFeatureRequest(value)); }
+export function captureProjectMeasureFeatureReply(value:unknown):ProjectMeasureFeatureReplyWire { return captureIntent("MeasureFeatureReply",value,shapes,limits) as ProjectMeasureFeatureReplyWire; }
+export function decodeProjectMeasureFeatureReply(text:string):ProjectMeasureFeatureReplyWire { return captureProjectMeasureFeatureReply(parseIntentJson(text,limits)); }
+export function encodeProjectMeasureFeatureReply(value:ProjectMeasureFeatureReplyWire):string { return JSON.stringify(captureProjectMeasureFeatureReply(value)); }
+export function captureProjectMeasureRequest(value:unknown):ProjectMeasureRequestWire { return captureIntent("MeasureRequest",value,shapes,limits) as ProjectMeasureRequestWire; }
+export function decodeProjectMeasureRequest(text:string):ProjectMeasureRequestWire { return captureProjectMeasureRequest(parseIntentJson(text,limits)); }
+export function encodeProjectMeasureRequest(value:ProjectMeasureRequestWire):string { return JSON.stringify(captureProjectMeasureRequest(value)); }
+export function captureProjectMeasureReply(value:unknown):ProjectMeasureReplyWire { return captureIntent("MeasureReply",value,shapes,limits) as ProjectMeasureReplyWire; }
+export function decodeProjectMeasureReply(text:string):ProjectMeasureReplyWire { return captureProjectMeasureReply(parseIntentJson(text,limits)); }
+export function encodeProjectMeasureReply(value:ProjectMeasureReplyWire):string { return JSON.stringify(captureProjectMeasureReply(value)); }

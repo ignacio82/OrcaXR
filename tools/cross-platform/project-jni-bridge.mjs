@@ -37,6 +37,7 @@ export function startProjectJni(profile = "debug") {
   signatures.wipeTowerChecks = ["String", "byte[]", "byte[]", "byte[]", "String"];
   signatures.volumeSplitChecks = ["String", ...Array(6).fill("byte[]"), "String"];
   signatures.simplifyChecks = ["String", ...Array(7).fill("byte[]"), "String"];
+  signatures.measureChecks = ["String", ...Array(6).fill("byte[]"), "String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -382,6 +383,12 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return wrap(
         ProjectVolumeSimplify,
         call("volumeSimplify", this.handle, guard.handle, request),
+      );
+    }
+    measure_volume(request) {
+      return wrap(
+        ProjectMeasureVolume,
+        call("sessionMeasureVolume", this.handle, request),
       );
     }
     stage_volume_simplify(simplify, request) {
@@ -780,6 +787,14 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return wrap(ProjectPaintOverlay, call("paintStrokePreview", this.handle));
     }
   }
+  class ProjectMeasureVolume extends Handle {
+    reply() {
+      return call("measureVolumeReply", this.handle);
+    }
+    feature(request) {
+      return call("measureVolumeFeature", this.handle, request);
+    }
+  }
   class ProjectVolumeSimplify extends Handle {
     reply() {
       return call("volumeSimplifyReply", this.handle);
@@ -988,5 +1003,6 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     settings_rules: (request) => call("settingsRules", request),
     coerce_override_value: (request) => call("libraryCoerce", request),
     format_override_value: (request) => call("libraryFormat", request),
+    measure_features: (request) => call("measureFeatures", request),
   };
 }

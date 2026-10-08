@@ -122,10 +122,9 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Engine patches must be reproducible from the tracked build inputs. Update
   patches, rebuild, publish and update provenance together. Browser/server source
   and patch identities must agree before an external engine is usable.
-- Generate parity manifests/reports through `tools/parity/`; never hand-edit
-  them. Mapping a leaf or rendering a control is not evidence of live parity.
-  Preserve incomplete human review, security, firmware, calibration and Galaxy
-  XR gates until their evidence exists.
+- Generate parity manifests/reports through `tools/parity/`; never hand-edit them. Mapping a leaf or
+  rendering a control is not evidence of live parity. Preserve incomplete human review, security,
+  firmware, calibration and Galaxy XR gates until their evidence exists.
 - Generate settings and scope tables from pinned definitions. Engine precedence
   is object, then part, then height range; the last wins. Reject authoring at
   unsupported scopes while preserving imported values for lossless round trips.
@@ -321,9 +320,10 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   simplifications prepare on a guard and stage under host IDs.
 - Smart Paint is a validated, bounded proposal plus operator correction and one
   canonical transaction. Check per-provider/payload consent before sending data.
-- Wipe towers reserve their complete printed footprint against the printable
-  rectangle's actual origin, including brim/ribs. A bed's far corner is not its
-  size; planning, ghosts and preflight share the same footprint authority.
+- Wipe towers reserve their complete printed footprint against the printable rectangle's actual origin,
+  including brim/ribs. A bed's far corner is not its size; planning, ghosts and preflight share the same
+  footprint authority. The workspace three.js world is scaled, Y-up and bed-centred: geometry tools read
+  printer mm via `root.matrixWorld⁻¹ × display.matrixWorld`.
 
 ## Surface and startup ownership
 

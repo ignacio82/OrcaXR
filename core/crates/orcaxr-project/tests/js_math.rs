@@ -1,5 +1,6 @@
 //! `js_math` against V8 (`js-math-vectors.json`): sin/cos through every glibc
-//! range-reduction branch, fdlibm exp and V8's hypot, compared as bit patterns.
+//! range-reduction branch, fdlibm exp and acos and V8's hypot, compared as bit
+//! patterns.
 use orcaxr_project::js_math;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -49,6 +50,16 @@ fn exp_matches_v8_bit_for_bit() {
     for row in corpus()["exp"].as_array().unwrap() {
         let x = f(&row[0]);
         assert!(same(js_math::exp(x), f(&row[1])), "exp({x:e})");
+    }
+}
+
+#[test]
+fn acos_matches_v8_bit_for_bit() {
+    let rows = corpus()["acos"].as_array().unwrap().clone();
+    assert!(rows.len() > 3_000);
+    for row in rows {
+        let x = f(&row[0]);
+        assert!(same(js_math::acos(x), f(&row[1])), "acos({x:e})");
     }
 }
 

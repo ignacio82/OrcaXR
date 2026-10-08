@@ -339,6 +339,22 @@ impl<P: TimestampPolicy> ProjectSession<P> {
                 })?;
         self.stage(guard, work)
     }
+    /// One volume's features captured for measuring from the acknowledged
+    /// state ([`crate::measure::MeasureVolume::reply`]); the capture owns its
+    /// mesh, so picks run off the session.
+    pub fn measure_volume(
+        &self,
+        request: &wire::MeasureVolumeRequest,
+    ) -> Result<crate::measure::MeasureVolume, wire::SessionError> {
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        Ok(crate::measure::capture(
+            self.bus.snapshot().state(),
+            self.bus.assets(),
+            request,
+        ))
+    }
     /// The transforms one placement edit submits, planned from the
     /// acknowledged state (`PlacementRequest` → `PlacementReply`).
     pub fn plan_placement(

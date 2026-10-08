@@ -284,7 +284,9 @@ function pointToCircle(point: Vec3, circle: Extract<SurfaceFeature, { kind: 'cir
     return { distanceStrict: { distance: circle.radius, from: circle.center, to: onCircle } };
   }
   const radial = sub(projection, circle.center);
-  const distance = Math.sqrt((norm(radial) - circle.radius) ** 2 + squaredNorm(sub(point, projection)));
+  // A product, not `** 2`: the interpreter's `Math.pow` need not square exactly.
+  const gap = norm(radial) - circle.radius;
+  const distance = Math.sqrt(gap * gap + squaredNorm(sub(point, projection)));
   const onCircle = add(circle.center, scale(normalized(radial), circle.radius));
   return { distanceStrict: { distance, from: point, to: onCircle } };
 }

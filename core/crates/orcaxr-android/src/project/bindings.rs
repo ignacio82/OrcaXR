@@ -662,6 +662,28 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_sessionMeasureVolume, session_measure_volume, jlong,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_measureVolumeReply, measure_volume_reply, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_measureVolumeFeature, measure_volume_feature, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_measureFeatures, measure_features, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_modelUploadNew, model_upload_new, jlong,
     version: jint,
     model_bytes: jlong,

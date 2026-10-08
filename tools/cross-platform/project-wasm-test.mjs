@@ -19,6 +19,7 @@ import { replayArrangements } from "./arrange-replay.mjs";
 import { replayWipeTowers } from "./wipe-tower-replay.mjs";
 import { replayVolumeSplits } from "./volume-split-replay.mjs";
 import { replaySimplify } from "./simplify-replay.mjs";
+import { replayMeasure } from "./measure-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -125,6 +126,18 @@ if (isMainThread) {
         result.simplifyHistory,
       ],
       [34, 12, 8, 34, 9, 3, 3],
+    );
+    // Surface measurement over a live session: captures, picks and pairs.
+    assert.deepEqual(
+      [
+        result.measureCaptures,
+        result.measureCaptureRefusals,
+        result.measurePicks,
+        result.measurePickRefusals,
+        result.measurePairs,
+        result.measurePairRefusals,
+      ],
+      [6, 1, 1260, 10, 679, 1],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -449,6 +462,13 @@ if (isMainThread) {
       .version,
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
   );
+  const measured = replayMeasure(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/measure-vectors.json", root)),
+    ),
+    layout,
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -478,6 +498,7 @@ if (isMainThread) {
       ...towers,
       ...splits,
       ...simplified,
+      ...measured,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

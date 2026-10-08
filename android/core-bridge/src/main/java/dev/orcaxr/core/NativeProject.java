@@ -140,6 +140,12 @@ final class NativeProject {
     static native String volumeSimplifyReply(long handle);
     static native byte[] volumeSimplifyMesh(long handle, long start, long count);
     static native long stageVolumeSimplify(long handle, long simplify, String request);
+    // Measurement: capture one volume's features, resolve picks off the
+    // session, and measure any two features.
+    static native long sessionMeasureVolume(long handle, String request);
+    static native String measureVolumeReply(long handle);
+    static native String measureVolumeFeature(long handle, String request);
+    static native String measureFeatures(String request);
     // Model import: stage source bytes (-1 for open-ended), capture the base on
     // the authority, prepare the browser's preview privately (consuming the
     // upload in place), then commit with a JSON array of acknowledged notice IDs.

@@ -19,6 +19,7 @@ import { replayArrangements } from "./arrange-replay.mjs";
 import { replayWipeTowers } from "./wipe-tower-replay.mjs";
 import { replayVolumeSplits } from "./volume-split-replay.mjs";
 import { replaySimplify } from "./simplify-replay.mjs";
+import { replayMeasure } from "./measure-replay.mjs";
 import { projectJniBoundaries } from "./project-jni-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
 import { replayStagedProject } from "./project-staged-replay.mjs";
@@ -669,6 +670,37 @@ try {
       .join("\n"),
   );
   assert.equal(simplifyChecks, 177);
+  // Surface measurement over a live session, then the Kotlin wrapper.
+  const measureFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/measure-vectors.json", root)),
+  );
+  const measured = replayMeasure(projectJniCore(jvm.call), measureFixture, layout);
+  assert.deepEqual(
+    [
+      measured.measureCaptures,
+      measured.measureCaptureRefusals,
+      measured.measurePicks,
+      measured.measurePickRefusals,
+      measured.measurePairs,
+      measured.measurePairRefusals,
+    ],
+    [6, 1, 1260, 10, 679, 1],
+  );
+  const measureChecks = jvm.call(
+    "measureChecks",
+    measureFixture.stateJson,
+    ...measureFixture.assets.map((a) => Uint8Array.from(a.bytes)),
+    measureFixture.steps
+      .map((s) =>
+        "capture" in s
+          ? `C\t${s.volume}\t${s.capture}\t${s.reply}`
+          : "feature" in s
+            ? `F\t${s.volume}\t${s.feature}\t${s.reply}`
+            : `M\t${s.measure}\t${s.reply}`,
+      )
+      .join("\n"),
+  );
+  assert.equal(measureChecks, 3915);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

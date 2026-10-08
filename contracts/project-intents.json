@@ -3751,6 +3751,175 @@
       "fields": {
         "assetId": "Id"
       }
+    },
+    "MeasurePoint": {
+      "kind": "object",
+      "fields": {
+        "point": "Vector"
+      }
+    },
+    "MeasureEdge": {
+      "kind": "object",
+      "fields": {
+        "from": "Vector",
+        "to": "Vector",
+        "extraPoint": "OptionalVector"
+      }
+    },
+    "MeasureCircle": {
+      "kind": "object",
+      "fields": {
+        "center": "Vector",
+        "normal": "Vector",
+        "radius": "Finite"
+      }
+    },
+    "MeasurePlane": {
+      "kind": "object",
+      "fields": {
+        "index": "Counter",
+        "normal": "Vector",
+        "origin": "Vector"
+      }
+    },
+    "SurfaceFeature": {
+      "kind": "union",
+      "variants": {
+        "point": "MeasurePoint",
+        "edge": "MeasureEdge",
+        "circle": "MeasureCircle",
+        "plane": "MeasurePlane"
+      }
+    },
+    "MeasureRefusalCode": {
+      "kind": "enum",
+      "values": [
+        "unknownVolume",
+        "missingAsset",
+        "invalidMesh",
+        "degenerateMesh",
+        "unknownFace",
+        "unevenScale",
+        "nonFinite"
+      ]
+    },
+    "MeasureRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "MeasureRefusalCode",
+        "message": "EditText"
+      }
+    },
+    "MeasureVolumeRequest": {
+      "kind": "object",
+      "fields": {
+        "volumeId": "Id"
+      }
+    },
+    "MeasureVolumeSummary": {
+      "kind": "object",
+      "fields": {
+        "planeCount": "Counter",
+        "triangleCount": "Counter"
+      }
+    },
+    "MeasureVolumeReply": {
+      "kind": "union",
+      "variants": {
+        "captured": "MeasureVolumeSummary",
+        "refused": "MeasureRefusal"
+      }
+    },
+    "WorldTransform": {
+      "kind": "array",
+      "items": "Finite",
+      "min": 16,
+      "max": 16
+    },
+    "OptionalWorldTransform": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "WorldTransform"
+      }
+    },
+    "MeasureFeatureRequest": {
+      "kind": "object",
+      "fields": {
+        "faceIndex": "Counter",
+        "point": "Vector",
+        "onlyPlane": "Flag",
+        "transform": "OptionalWorldTransform"
+      }
+    },
+    "MeasuredFeature": {
+      "kind": "object",
+      "fields": {
+        "feature": "SurfaceFeature",
+        "summary": "EditText"
+      }
+    },
+    "MeasureFeatureReply": {
+      "kind": "union",
+      "variants": {
+        "feature": "MeasuredFeature",
+        "refused": "MeasureRefusal"
+      }
+    },
+    "MeasureRequest": {
+      "kind": "object",
+      "fields": {
+        "first": "SurfaceFeature",
+        "second": "SurfaceFeature"
+      }
+    },
+    "MeasureDistance": {
+      "kind": "object",
+      "fields": {
+        "distance": "Finite",
+        "from": "Vector",
+        "to": "Vector"
+      }
+    },
+    "OptionalMeasureDistance": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "MeasureDistance"
+      }
+    },
+    "MeasureAngle": {
+      "kind": "object",
+      "fields": {
+        "angle": "Finite",
+        "center": "Vector",
+        "radius": "Finite",
+        "coplanar": "Flag"
+      }
+    },
+    "OptionalMeasureAngle": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "MeasureAngle"
+      }
+    },
+    "MeasureResult": {
+      "kind": "object",
+      "fields": {
+        "angle": "OptionalMeasureAngle",
+        "distanceInfinite": "OptionalMeasureDistance",
+        "distanceStrict": "OptionalMeasureDistance",
+        "distanceXyz": "OptionalVector",
+        "unsupported": "Flag"
+      }
+    },
+    "MeasureReply": {
+      "kind": "union",
+      "variants": {
+        "measured": "MeasureResult",
+        "refused": "MeasureRefusal"
+      }
     }
   },
   "roots": [
@@ -3837,7 +4006,13 @@
     "VolumeSplitStage",
     "VolumeSimplifyRequest",
     "VolumeSimplifyReply",
-    "VolumeSimplifyStage"
+    "VolumeSimplifyStage",
+    "MeasureVolumeRequest",
+    "MeasureVolumeReply",
+    "MeasureFeatureRequest",
+    "MeasureFeatureReply",
+    "MeasureRequest",
+    "MeasureReply"
   ],
   "sessionVersion": 1
 }

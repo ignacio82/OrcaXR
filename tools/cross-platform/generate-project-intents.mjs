@@ -121,6 +121,12 @@ assert.deepEqual(schema.roots, [
   "VolumeSimplifyRequest",
   "VolumeSimplifyReply",
   "VolumeSimplifyStage",
+  "MeasureVolumeRequest",
+  "MeasureVolumeReply",
+  "MeasureFeatureRequest",
+  "MeasureFeatureReply",
+  "MeasureRequest",
+  "MeasureReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

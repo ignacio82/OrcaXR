@@ -2669,9 +2669,11 @@ export class OrcaWorkspace extends xb.Script {
     }
     if (!distance) return;
 
-    const scale = CURRENT_THREE_WORLD_UNITS_PER_MM;
-    const from = new THREE.Vector3(distance.from[0] * scale, distance.from[1] * scale, distance.from[2] * scale);
-    const to = new THREE.Vector3(distance.to[0] * scale, distance.to[1] * scale, distance.to[2] * scale);
+    // Printer millimetres into the workspace, as the surface root maps them.
+    const root = this.canonicalProject.surface.root;
+    root.updateMatrix();
+    const from = new THREE.Vector3(...distance.from).applyMatrix4(root.matrix);
+    const to = new THREE.Vector3(...distance.to).applyMatrix4(root.matrix);
     const group = new THREE.Group();
     group.name = 'measureAnnotation';
     const line = new THREE.Line(
@@ -3503,18 +3505,34 @@ export class OrcaWorkspace extends xb.Script {
     return false;
   }
 
-  /** Resolve a ray to a canonical surface feature in world millimetres. */
+  /**
+   * Resolve a ray to a canonical surface feature in world millimetres, on the
+   * nearest part it meets — the visible one, not the first in scene order.
+   */
   private pickMeasureFeature(raycaster: THREE.Raycaster): boolean {
+    let nearest: { target: ReturnType<OrcaWorkspace['paintTargets']>[number]; hit: THREE.Intersection } | undefined;
     for (const target of this.paintTargets()) {
       const [hit] = raycaster.intersectObject(target.display, false);
       if (!hit || hit.faceIndex === undefined || hit.faceIndex === null) continue;
+      if (!nearest || hit.distance < nearest.hit.distance) nearest = { target, hit };
+    }
+    if (nearest) {
+      const { target, hit } = nearest;
+      const faceIndex = hit.faceIndex as number;
       try {
         const extractor = this.measureExtractorFor(target.volumeId);
-        if (!extractor) continue;
+        if (!extractor) {
+          this.setStatus(t('workspace.orcaWorkspace.clickAModelSurfaceTo', 'Click a model surface to measure it.'));
+          return false;
+        }
         const local = target.display.worldToLocal(hit.point.clone());
-        const localFeature = extractor.featureAt(hit.faceIndex, [local.x, local.y, local.z]);
+        const localFeature = extractor.featureAt(faceIndex, [local.x, local.y, local.z]);
+        // Features measure in printer millimetres (the instance's and the
+        // volume's own transforms): the surface root above them only maps
+        // printer space into the scaled, Y-up scene.
         target.display.updateWorldMatrix(true, false);
-        const m = target.display.matrixWorld.elements;
+        const root = this.canonicalProject.surface.root;
+        const m = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(target.display.matrixWorld).elements;
         // Three stores column-major; the measure port takes row-major.
         const worldFeature = transformSurfaceFeature(localFeature, [
           m[0],
@@ -3546,10 +3564,8 @@ export class OrcaWorkspace extends xb.Script {
         }
         // A third pick starts a new measurement rather than silently replacing one.
         if (this.measurePicks.length >= 2) this.measurePicks = [];
-        const instanceId = this.projectedModels(this.activePlateId).find(
-          (entry) => entry.volumeId === target.volumeId,
-        )?.instanceId;
-        this.measurePicks.push({ feature: worldFeature, ...(instanceId ? { instanceId } : {}) });
+        // The instance the ray met: an object's instances share its volumes.
+        this.measurePicks.push({ feature: worldFeature, instanceId: target.instanceId });
         this.setStatus(`Measure: picked ${describeSurfaceFeature(worldFeature)}.`);
         this.onMeasureStateChanged?.();
         return true;
@@ -3562,12 +3578,18 @@ export class OrcaWorkspace extends xb.Script {
     return false;
   }
 
+  /**
+   * Features depend only on the mesh bytes, and an asset ID names immutable
+   * bytes, so extractors are cached by the volume's source asset: a mesh
+   * replaced by another of the same counts is never measured stale.
+   */
   private measureExtractorFor(volumeId: VolumeId): SurfaceFeatureExtractor | undefined {
-    const mesh = this.canonicalProject.getVolumeMesh(volumeId);
-    if (!mesh) return undefined;
-    const key = `${volumeId}:${mesh.triangles.length}:${mesh.vertices.length}`;
+    const key = this.canonicalProject.getVolumeSourceAssetId(volumeId);
+    if (!key) return undefined;
     const cached = this.measureExtractors.get(key);
     if (cached) return cached;
+    const mesh = this.canonicalProject.getVolumeMesh(volumeId);
+    if (!mesh) return undefined;
     const extractor = new SurfaceFeatureExtractor(mesh);
     this.measureExtractors.set(key, extractor);
     return extractor;
@@ -3601,15 +3623,20 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   /** Every rendered volume mesh on the active plate, with canonical identity. */
-  private paintTargets(): { volumeId: VolumeId; objectId: ObjectId; display: THREE.Mesh }[] {
-    const targets: { volumeId: VolumeId; objectId: ObjectId; display: THREE.Mesh }[] = [];
+  private paintTargets(): { volumeId: VolumeId; objectId: ObjectId; instanceId: InstanceId; display: THREE.Mesh }[] {
+    const targets: { volumeId: VolumeId; objectId: ObjectId; instanceId: InstanceId; display: THREE.Mesh }[] = [];
     for (const viewer of this.canonicalProject.surface.root.children) {
       const instance = getThreeProjectEntity(viewer);
       if (!instance || instance.kind !== 'instance' || instance.plateId !== this.activePlateId) continue;
       for (const child of viewer.children) {
         const entity = getThreeProjectEntity(child);
         if (!(child instanceof THREE.Mesh) || entity?.kind !== 'volume' || !entity.volumeId) continue;
-        targets.push({ volumeId: entity.volumeId, objectId: instance.objectId, display: child });
+        targets.push({
+          volumeId: entity.volumeId,
+          objectId: instance.objectId,
+          instanceId: instance.instanceId,
+          display: child,
+        });
       }
     }
     return targets;

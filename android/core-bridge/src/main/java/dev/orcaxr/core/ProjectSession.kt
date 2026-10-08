@@ -217,6 +217,12 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun stageVolumeSimplify(simplify: ProjectVolumeSimplify, request: ProjectIntents.VolumeSimplifyStage): ProjectStagedInput = read {
         ProjectStagedInput.own(this, NativeProject.stageVolumeSimplify(it, simplify.reference(), ProjectIntents.encodeVolumeSimplifyStage(request)))
     }
+    /** One volume's features captured for the Measure tool: the capture owns
+     * its mesh, so [ProjectMeasureVolume.feature] picks run off this
+     * session's call gate. Capture again when the volume's mesh changes. */
+    fun measureVolume(request: ProjectIntents.MeasureVolumeRequest): ProjectMeasureVolume = read {
+        own(NativeProject.sessionMeasureVolume(it, ProjectIntents.encodeMeasureVolumeRequest(request)), ::ProjectMeasureVolume)
+    }
     /** The plate's wipe tower auto-placed: the winning candidate and the tower
      * one `setPlateWipeTower` intent sets. */
     fun planWipeTower(request: ProjectIntents.WipeTowerRequest): ProjectIntents.WipeTowerReply = read {
@@ -277,6 +283,22 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
 }
 class ProjectGuard internal constructor(handle: Long) : ProjectHandle(handle)
 
+/** One volume's features, captured by [ProjectSession.measureVolume]. */
+class ProjectMeasureVolume internal constructor(handle: Long) : ProjectHandle(handle) {
+    fun reply(): ProjectIntents.MeasureVolumeReply = read {
+        ProjectIntents.decodeMeasureVolumeReply(NativeProject.measureVolumeReply(it))
+    }
+    /** The feature a pick claims at a volume-local point on a facet, moved
+     * by the request's row-major transform when it has one. */
+    fun feature(request: ProjectIntents.MeasureFeatureRequest): ProjectIntents.MeasureFeatureReply = read {
+        ProjectIntents.decodeMeasureFeatureReply(NativeProject.measureVolumeFeature(it, ProjectIntents.encodeMeasureFeatureRequest(request)))
+    }
+    companion object {
+        /** The Measure tool's distances and angle between two features. */
+        fun measure(request: ProjectIntents.MeasureRequest): ProjectIntents.MeasureReply =
+            ProjectIntents.decodeMeasureReply(NativeProject.measureFeatures(ProjectIntents.encodeMeasureRequest(request)))
+    }
+}
 /** One volume's decimation, prepared by [ProjectSession.volumeSimplify]:
  * its summary and the result's indexed-mesh bytes (float32 positions, then
  * uint32 indices), the very payload staging installs. */

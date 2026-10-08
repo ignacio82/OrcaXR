@@ -557,6 +557,21 @@ impl ProjectSession {
             .map(|id| id as f64)
             .map_err(|value| error(session_error(value)))
     }
+    /// One volume's features captured for measuring: a
+    /// `MeasureVolumeRequest`. Its `reply` gives the counts or the refusal,
+    /// and `feature` resolves picks off this session.
+    pub fn measure_volume(&self, request: &str) -> Result<ProjectMeasureVolume, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_measure_volume_request(request).map_err(|_| error("invalid_request"))?;
+        self.inner
+            .measure_volume(&request)
+            .map(|inner| ProjectMeasureVolume { inner })
+            .map_err(|value| error(session_error(value)))
+    }
     /// The plate's wipe tower, auto-placed: a `WipeTowerRequest`; returns a
     /// `WipeTowerReply`.
     pub fn plan_wipe_tower(&self, request: &str) -> Result<String, JsValue> {
@@ -815,6 +830,42 @@ impl ProjectVolumeSimplify {
             .map(<[u8]>::to_vec)
             .map_err(|_| error("invalid_request"))
     }
+}
+/// One volume's features, captured for measuring.
+#[wasm_bindgen]
+pub struct ProjectMeasureVolume {
+    inner: orcaxr_project::measure::MeasureVolume,
+}
+#[wasm_bindgen]
+impl ProjectMeasureVolume {
+    /// The `MeasureVolumeReply`: plane and facet counts, or the refusal.
+    pub fn reply(&self) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        wire::encode_measure_volume_reply(&self.inner.reply()).map_err(|_| error("output_limit"))
+    }
+    /// A `MeasureFeatureRequest`; returns a `MeasureFeatureReply`.
+    pub fn feature(&self, request: &str) -> Result<String, JsValue> {
+        use orcaxr_contracts::project_intent_types as wire;
+        if request.len() > wire::MAX_BYTES {
+            return Err(error("input_limit"));
+        }
+        let request =
+            wire::decode_measure_feature_request(request).map_err(|_| error("invalid_request"))?;
+        wire::encode_measure_feature_reply(&self.inner.feature(&request))
+            .map_err(|_| error("output_limit"))
+    }
+}
+/// The workspace's measurement of two features: a `MeasureRequest`; returns
+/// a `MeasureReply`.
+#[wasm_bindgen]
+pub fn measure_features(request: &str) -> Result<String, JsValue> {
+    use orcaxr_contracts::project_intent_types as wire;
+    if request.len() > wire::MAX_BYTES {
+        return Err(error("input_limit"));
+    }
+    let request = wire::decode_measure_request(request).map_err(|_| error("invalid_request"))?;
+    wire::encode_measure_reply(&orcaxr_project::measure::measure_wire(&request))
+        .map_err(|_| error("output_limit"))
 }
 fn session_error(value: orcaxr_contracts::project_intent_types::SessionError) -> &'static str {
     use orcaxr_contracts::project_intent_types::SessionError;

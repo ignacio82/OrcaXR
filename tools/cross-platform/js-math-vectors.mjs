@@ -1,6 +1,6 @@
 // Bit-exact references for the ECMAScript `Math` functions the native core
 // reproduces (`orcaxr_project::js_math`): sin and cos (V8's vendored glibc),
-// exp (fdlibm) and hypot (V8's scaled, compensated sum). Inputs cover every
+// exp and acos (fdlibm) and hypot (V8's scaled, compensated sum). Inputs cover every
 // range-reduction branch of the trig routines, their thresholds, signed zeros,
 // non-finite values and seeded random doubles across magnitudes. Values are
 // IEEE-754 bit patterns in hex, so no decimal parsing sits between V8 and Rust.
@@ -71,6 +71,25 @@ for (let i = 0; i < 2000; i += 1) exp.add(bits(uniform(-40, 40)));
 for (let i = 0; i < 500; i += 1) exp.add(bits(uniform(-745, 710)));
 const expRows = [...exp].sort().map((hex) => [hex, bits(Math.exp(fromBits(hex)))]);
 
+// acos: its |x| >= 1, 0.5 and 2**-57 thresholds and neighbours, both signs,
+// out-of-domain and non-finite inputs, the tails near ±1 and seeded doubles.
+const acos = new Set();
+for (const value of [0, -0, 1, -1, 0.5, -0.5, 1 + Number.EPSILON, -1 - Number.EPSILON, 2, -2, Infinity, -Infinity, NaN])
+  acos.add(bits(value));
+for (const high of [0x3c600000, 0x3fe00000, 0x3fefffff]) {
+  for (const low of [0, 1, 0x7fffffff, 0xffffffff]) {
+    for (const sign of [0n, 1n << 63n]) {
+      const value = fromBits(((sign | (BigInt(high) << 32n) | BigInt(low)) & 0xffffffffffffffffn).toString(16));
+      acos.add(bits(value));
+      acos.add(((BigInt(`0x${bits(value)}`) - 1n) & 0xffffffffffffffffn).toString(16).padStart(16, "0"));
+    }
+  }
+}
+for (let i = 0; i < 3000; i += 1) acos.add(bits(uniform(-1, 1)));
+for (let i = 0; i < 500; i += 1) acos.add(bits((1 - Math.abs(logUniform(1e-16, 1e-2))) * (unit() < 0.5 ? -1 : 1)));
+for (let i = 0; i < 300; i += 1) acos.add(bits(logUniform(1e-20, 1e-6)));
+const acosRows = [...acos].sort().map((hex) => [hex, bits(Math.acos(fromBits(hex)))]);
+
 const hypotRows = [];
 const hypotCases = [[], [0], [-0, 0], [3, 4], [NaN, Infinity], [NaN, 1], [1e308, 1e308], [1e-320, 1e-320, 1e-320], [-2, 0, 1e-300]];
 for (let i = 0; i < 1500; i += 1) {
@@ -88,6 +107,7 @@ const output =
       engine: { node: process.versions.node, v8: process.versions.v8 },
       trig: trigRows,
       exp: expRows,
+      acos: acosRows,
       hypot: hypotRows,
     },
     null,
@@ -96,4 +116,4 @@ const output =
 const path = new URL("testdata/cross-platform/js-math-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);
 else assert.equal(readFileSync(path, "utf8"), output, "JS Math reference drift");
-console.log(`JS Math references: ${trigRows.length} sin/cos, ${expRows.length} exp, ${hypotRows.length} hypot (V8 ${process.versions.v8})`);
+console.log(`JS Math references: ${trigRows.length} sin/cos, ${expRows.length} exp, ${acosRows.length} acos, ${hypotRows.length} hypot (V8 ${process.versions.v8})`);

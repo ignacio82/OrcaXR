@@ -29,6 +29,7 @@ pub mod import;
 pub mod ingress;
 pub mod js_math;
 pub mod layer_heights;
+pub mod measure;
 pub mod mesh;
 pub mod model;
 pub mod picking;

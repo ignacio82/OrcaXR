@@ -353,6 +353,23 @@ export class ProjectImportPreview {
     read(start: number, count: number): Uint8Array;
 }
 
+/**
+ * One volume's features, captured for measuring.
+ */
+export class ProjectMeasureVolume {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * A `MeasureFeatureRequest`; returns a `MeasureFeatureReply`.
+     */
+    feature(request: string): string;
+    /**
+     * The `MeasureVolumeReply`: plane and facet counts, or the refusal.
+     */
+    reply(): string;
+}
+
 export class ProjectModelUpload {
     free(): void;
     [Symbol.dispose](): void;
@@ -518,6 +535,12 @@ export class ProjectSession {
     is_disposed(): boolean;
     is_export_current(guard: ProjectGuard): boolean;
     is_open_current(ticket: ProjectOpen): boolean;
+    /**
+     * One volume's features captured for measuring: a
+     * `MeasureVolumeRequest`. Its `reply` gives the counts or the refusal,
+     * and `feature` resolves picks off this session.
+     */
+    measure_volume(request: string): ProjectMeasureVolume;
     /**
      * The canonical paint overlay of one volume's channel: a
      * `PaintOverlayRequest`. The capture owns its facets and packets.
@@ -729,6 +752,12 @@ export function evaluate(request: string): string;
 export function format_override_value(request: string): string;
 
 /**
+ * The workspace's measurement of two features: a `MeasureRequest`; returns
+ * a `MeasureReply`.
+ */
+export function measure_features(request: string): string;
+
+/**
  * The Full Spectrum rules: an `EditorRuleRequest` to `EditorRules`.
  */
 export function settings_rules(rules: string): string;
@@ -761,6 +790,7 @@ export interface InitOutput {
     readonly __wbg_projectguard_free: (a: number, b: number) => void;
     readonly __wbg_projectimportbase_free: (a: number, b: number) => void;
     readonly __wbg_projectimportpreview_free: (a: number, b: number) => void;
+    readonly __wbg_projectmeasurevolume_free: (a: number, b: number) => void;
     readonly __wbg_projectmodelupload_free: (a: number, b: number) => void;
     readonly __wbg_projectopen_free: (a: number, b: number) => void;
     readonly __wbg_projectpaintoverlay_free: (a: number, b: number) => void;
@@ -802,6 +832,7 @@ export interface InitOutput {
     readonly core_info: () => [number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
     readonly format_override_value: (a: number, b: number) => [number, number, number, number];
+    readonly measure_features: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_apply: (a: number, b: number, c: number) => [number, number, number, number];
     readonly presetlibrary_apply_update: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_bases: (a: number, b: number, c: number) => [number, number, number, number];
@@ -873,6 +904,8 @@ export interface InitOutput {
     readonly projectimportpreview_blocked: (a: number) => [number, number, number];
     readonly projectimportpreview_length: (a: number) => number;
     readonly projectimportpreview_read: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectmeasurevolume_feature: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectmeasurevolume_reply: (a: number) => [number, number, number, number];
     readonly projectmodelupload_append: (a: number, b: number, c: number, d: number) => [number, number];
     readonly projectmodelupload_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly projectpaintoverlay_packet: (a: number, b: number, c: number) => [number, number, number, number];
@@ -922,6 +955,7 @@ export interface InitOutput {
     readonly projectsession_is_disposed: (a: number) => number;
     readonly projectsession_is_export_current: (a: number, b: number) => number;
     readonly projectsession_is_open_current: (a: number, b: number) => number;
+    readonly projectsession_measure_volume: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_paint_overlay: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_pending_count: (a: number) => number;
