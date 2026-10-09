@@ -128,10 +128,14 @@ const SERVICES: ReadonlySet<string> = new Set([
   'webrtc-mediamtx',
 ]);
 
-/** Poll interval in milliseconds for one camera, bounded at both ends. */
+/** Frames per second this app fetches for one camera, bounded at both ends. */
+export function cameraFrameRate(camera: PrinterCamera): number {
+  return Math.min(Math.max(camera.targetFps, 0.2), MAX_SNAPSHOT_FPS);
+}
+
+/** Poll interval in milliseconds for one camera. */
 export function cameraPollIntervalMs(camera: PrinterCamera): number {
-  const fps = Math.min(Math.max(camera.targetFps, 0.2), MAX_SNAPSHOT_FPS);
-  return Math.round(1000 / fps);
+  return Math.round(1000 / cameraFrameRate(camera));
 }
 
 /** Every camera the printer knows about, whether or not it can be shown. */
@@ -208,61 +212,36 @@ function readCamera(entry: unknown, endpointHttpUrl?: string): PrinterCamera | u
 }
 
 /**
- * Fetch one frame, credential in a header.
+ * How one frame is fetched.
  *
- * Bytes rather than a URL: an `<img>` cannot authenticate, and the transport
- * refuses a credential in the query string.
+ * A camera served by anything but Moonraker is a different service, so it is
+ * fetched directly and without the printer's API key — handing one service's
+ * credential to another is not something to do for a convenience. A camera
+ * Moonraker serves is downloaded through the transport, credential in a
+ * header: bytes rather than a URL, because an `<img>` cannot authenticate and
+ * the transport refuses a credential in the query string.
  */
-export async function fetchCameraSnapshot(
-  transport: PrinterCameraTransport,
-  camera: PrinterCamera,
-  signal?: AbortSignal,
-  /** Which route to take; defaults to the first fetchable one for this camera. */
-  mechanism?: CameraMechanism,
-): Promise<Uint8Array> {
+export type CameraSnapshotPlan =
+  | { readonly kind: 'direct'; readonly url: string; readonly timeoutMs: number }
+  | { readonly kind: 'transport'; readonly path: string; readonly operation: string };
+
+/** How one frame's fetch ended without bytes. */
+export type CameraSnapshotOutcome =
+  | { readonly kind: 'cancelled' }
+  /** A direct fetch answered with a status that is not OK. */
+  | { readonly kind: 'status'; readonly status: number }
+  /** A direct fetch got no answer within the plan's deadline. */
+  | { readonly kind: 'timeout' }
+  /** A direct fetch failed; the platform's own words. */
+  | { readonly kind: 'unreachable'; readonly detail: string }
+  /** The transport failed, with its code when it gave one. */
+  | { readonly kind: 'transport'; readonly code?: string };
+
+/** The route a frame takes: [mechanism], or the first fetchable one. */
+export function planCameraSnapshot(camera: PrinterCamera, mechanism?: CameraMechanism): CameraSnapshotPlan {
   const route = mechanism ?? (camera.snapshotUrl ? 'direct' : 'transport');
-  // A camera served by anything but Moonraker is a different service, so it is
-  // fetched directly and without the printer's API key. Handing one service's
-  // credential to another is not something to do for a convenience.
   if (route === 'direct' && camera.snapshotUrl) {
-    const deadline = new AbortController();
-    const expiry = setTimeout(() => deadline.abort(), SNAPSHOT_TIMEOUT_MS);
-    const forward = () => deadline.abort();
-    signal?.addEventListener('abort', forward, { once: true });
-    try {
-      // No headers, deliberately. This has to stay a *simple* cross-origin GET:
-      // mjpg-streamer answers `OPTIONS` with 501, so anything that turns this
-      // into a preflighted request stops it working entirely.
-      const response = await fetchLocalNetwork(camera.snapshotUrl, {
-        signal: deadline.signal,
-        cache: 'no-store',
-      });
-      if (!response.ok) {
-        throw new PrinterCameraError(
-          `${camera.name} answered ${response.status} at ${camera.snapshotUrl}.`,
-          'snapshot-failed',
-        );
-      }
-      return new Uint8Array(await response.arrayBuffer());
-    } catch (error) {
-      if (error instanceof PrinterCameraError) throw error;
-      if (signal?.aborted) throw new PrinterCameraError('The snapshot request was cancelled.', 'cancelled');
-      throw new PrinterCameraError(
-        deadline.signal.aborted
-          ? `${camera.name} did not answer at ${camera.snapshotUrl} within ${SNAPSHOT_TIMEOUT_MS / 1000} seconds.`
-          : // A browser reports a refused connection and a refused *origin* the
-            // same way, so the message names both possibilities: this is a
-            // separate service from Moonraker, and it has to allow cross-origin
-            // reads as well as be reachable.
-            `${camera.name} could not be read from ${camera.snapshotUrl} ` +
-              `(${error instanceof Error ? error.message : 'request failed'}). ` +
-              'It is a separate service from Moonraker, so it has to be reachable and allow cross-origin requests.',
-        'snapshot-failed',
-      );
-    } finally {
-      clearTimeout(expiry);
-      signal?.removeEventListener('abort', forward);
-    }
+    return { kind: 'direct', url: camera.snapshotUrl, timeoutMs: SNAPSHOT_TIMEOUT_MS };
   }
   if (!camera.snapshotPath) {
     throw new PrinterCameraError(camera.unsupportedReason ?? 'This camera has no snapshot endpoint.', 'no-snapshot');
@@ -270,20 +249,91 @@ export async function fetchCameraSnapshot(
   if (route === 'image') {
     throw new PrinterCameraError('An image route is loaded by the browser, not fetched here.', 'no-snapshot');
   }
-  try {
-    return await transport.download(camera.snapshotPath, {
-      operation: 'camera_snapshot',
-      ...(signal ? { signal } : {}),
-    });
-  } catch (error) {
-    if (signal?.aborted || (error instanceof MoonrakerTransportError && error.code === 'cancelled')) {
-      throw new PrinterCameraError('The snapshot request was cancelled.', 'cancelled');
-    }
-    throw new PrinterCameraError(
-      `${camera.name} did not return a frame from ${camera.snapshotPath} (${
-        error instanceof MoonrakerTransportError ? error.code : 'request failed'
+  return { kind: 'transport', path: camera.snapshotPath, operation: 'camera_snapshot' };
+}
+
+/** What a frame's failed fetch reads as. */
+export function cameraSnapshotFailure(
+  camera: PrinterCamera,
+  plan: CameraSnapshotPlan,
+  outcome: CameraSnapshotOutcome,
+): PrinterCameraError {
+  if (outcome.kind === 'cancelled') return new PrinterCameraError('The snapshot request was cancelled.', 'cancelled');
+  if (plan.kind === 'transport') {
+    return new PrinterCameraError(
+      `${camera.name} did not return a frame from ${plan.path} (${
+        outcome.kind === 'transport' && outcome.code !== undefined ? outcome.code : 'request failed'
       }).`,
       'snapshot-failed',
+    );
+  }
+  if (outcome.kind === 'status') {
+    return new PrinterCameraError(`${camera.name} answered ${outcome.status} at ${plan.url}.`, 'snapshot-failed');
+  }
+  if (outcome.kind === 'timeout') {
+    return new PrinterCameraError(
+      `${camera.name} did not answer at ${plan.url} within ${plan.timeoutMs / 1000} seconds.`,
+      'snapshot-failed',
+    );
+  }
+  // A browser reports a refused connection and a refused *origin* the same
+  // way, so the message names both possibilities: this is a separate service
+  // from Moonraker, and it has to allow cross-origin reads as well as be
+  // reachable.
+  return new PrinterCameraError(
+    `${camera.name} could not be read from ${plan.url} ` +
+      `(${outcome.kind === 'unreachable' ? outcome.detail : 'request failed'}). ` +
+      'It is a separate service from Moonraker, so it has to be reachable and allow cross-origin requests.',
+    'snapshot-failed',
+  );
+}
+
+/** Fetch one frame along [mechanism], or the first fetchable route. */
+export async function fetchCameraSnapshot(
+  transport: PrinterCameraTransport,
+  camera: PrinterCamera,
+  signal?: AbortSignal,
+  /** Which route to take; defaults to the first fetchable one for this camera. */
+  mechanism?: CameraMechanism,
+): Promise<Uint8Array> {
+  const plan = planCameraSnapshot(camera, mechanism);
+  if (plan.kind === 'direct') {
+    const deadline = new AbortController();
+    const expiry = setTimeout(() => deadline.abort(), plan.timeoutMs);
+    const forward = () => deadline.abort();
+    signal?.addEventListener('abort', forward, { once: true });
+    let response: Response;
+    try {
+      // No headers, deliberately. This has to stay a *simple* cross-origin GET:
+      // mjpg-streamer answers `OPTIONS` with 501, so anything that turns this
+      // into a preflighted request stops it working entirely.
+      response = await fetchLocalNetwork(plan.url, { signal: deadline.signal, cache: 'no-store' });
+      if (response.ok) return new Uint8Array(await response.arrayBuffer());
+    } catch (error) {
+      throw cameraSnapshotFailure(
+        camera,
+        plan,
+        signal?.aborted
+          ? { kind: 'cancelled' }
+          : deadline.signal.aborted
+            ? { kind: 'timeout' }
+            : { kind: 'unreachable', detail: error instanceof Error ? error.message : 'request failed' },
+      );
+    } finally {
+      clearTimeout(expiry);
+      signal?.removeEventListener('abort', forward);
+    }
+    throw cameraSnapshotFailure(camera, plan, { kind: 'status', status: response.status });
+  }
+  try {
+    return await transport.download(plan.path, { operation: plan.operation, ...(signal ? { signal } : {}) });
+  } catch (error) {
+    throw cameraSnapshotFailure(
+      camera,
+      plan,
+      signal?.aborted || (error instanceof MoonrakerTransportError && error.code === 'cancelled')
+        ? { kind: 'cancelled' }
+        : { kind: 'transport', ...(error instanceof MoonrakerTransportError ? { code: error.code } : {}) },
     );
   }
 }
@@ -309,14 +359,16 @@ export function cameraCanShowFrames(camera: PrinterCamera): boolean {
   return camera.snapshotPath !== undefined || camera.snapshotUrl !== undefined;
 }
 
-export function describeCameraService(camera: PrinterCamera, route?: CameraMechanism): string {
+export function describeCameraService(camera: PrinterCamera, route?: CameraMechanism, pageProtocol?: string): string {
   const service = camera.service === 'unknown' ? 'an unrecognised service' : camera.service;
   if (!cameraCanShowFrames(camera)) return service;
-  const rate = `at up to ${Math.min(camera.targetFps, MAX_SNAPSHOT_FPS)} fps`;
+  // The rate frames are actually fetched at; it used to quote the camera's own
+  // rate below the floor, as "0.1 fps" for a camera polled at 0.2.
+  const rate = `at up to ${cameraFrameRate(camera)} fps`;
   // Named by how the frames are actually being obtained, because
   // "authenticated" is a claim about this app's own behaviour and only one of
   // these routes carries a credential at all.
-  return (route ?? cameraMechanisms(camera)[0]) === 'transport'
+  return (route ?? cameraMechanisms(camera, pageProtocol)[0]) === 'transport'
     ? `${service}, shown as authenticated snapshots ${rate}`
     : `${service}, shown as snapshots ${rate}`;
 }
@@ -385,8 +437,10 @@ export function resolveCameraSources(url: string | undefined, endpointHttpUrl?: 
   const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
   if (!endpoint) return { snapshotPath: path };
   // The printer's web origin: same machine, default port for the scheme, which
-  // is where a stock install's nginx serves both the UI and `/webcam/`.
-  return { snapshotUrl: `${endpoint.protocol}//${endpoint.host.split(':')[0]}${path}`, snapshotPath: path };
+  // is where a stock install's nginx serves both the UI and `/webcam/`. The
+  // host name, brackets and all: cutting the host at its first `:` turned an
+  // IPv6 printer into `http://[fd00/webcam/…`.
+  return { snapshotUrl: `${endpoint.protocol}//${endpoint.hostname}${path}`, snapshotPath: path };
 }
 
 function parseUrl(value: string | undefined): URL | undefined {

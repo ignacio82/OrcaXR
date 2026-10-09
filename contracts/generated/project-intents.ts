@@ -6735,6 +6735,168 @@ const shapes = {
       "limit": "Finite"
     }
   },
+  "CameraService": {
+    "kind": "enum",
+    "values": [
+      "mjpegstreamer",
+      "mjpegstreamerAdaptive",
+      "uv4lMjpeg",
+      "hlsstream",
+      "ipstream",
+      "webrtcCamerastreamer",
+      "webrtcGo2rtc",
+      "webrtcMediamtx",
+      "unknown"
+    ]
+  },
+  "PrinterCamera": {
+    "kind": "object",
+    "fields": {
+      "uid": "PrinterReplyText",
+      "name": "PrinterReplyText",
+      "service": "CameraService",
+      "enabled": "Flag",
+      "snapshotPath": "OptionalPrinterReplyText",
+      "snapshotUrl": "OptionalPrinterReplyText",
+      "streamPath": "OptionalPrinterReplyText",
+      "targetFps": "Finite",
+      "rotationDegrees": "Finite",
+      "flipHorizontal": "Flag",
+      "flipVertical": "Flag",
+      "unsupportedReason": "OptionalPrinterReplyText"
+    }
+  },
+  "PrinterCameras": {
+    "kind": "array",
+    "items": "PrinterCamera",
+    "min": 0,
+    "max": 262144
+  },
+  "CameraListRequest": {
+    "kind": "object",
+    "fields": {
+      "endpoint": "OptionalText"
+    }
+  },
+  "CameraErrorCode": {
+    "kind": "enum",
+    "values": [
+      "unavailable",
+      "noSnapshot",
+      "snapshotFailed",
+      "cancelled"
+    ]
+  },
+  "CameraFailure": {
+    "kind": "object",
+    "fields": {
+      "code": "CameraErrorCode",
+      "message": "PrinterReplyText"
+    }
+  },
+  "CameraListFinish": {
+    "kind": "object",
+    "fields": {
+      "request": "CameraListRequest",
+      "outcome": "PrinterExchangeOutcome"
+    }
+  },
+  "CameraListResult": {
+    "kind": "union",
+    "variants": {
+      "cameras": "PrinterCameras",
+      "failed": "CameraFailure"
+    }
+  },
+  "CameraMechanism": {
+    "kind": "enum",
+    "values": [
+      "image",
+      "direct",
+      "transport"
+    ]
+  },
+  "OptionalCameraMechanism": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "CameraMechanism"
+    }
+  },
+  "CameraMechanisms": {
+    "kind": "array",
+    "items": "CameraMechanism",
+    "min": 0,
+    "max": 3
+  },
+  "CameraSnapshotRequest": {
+    "kind": "object",
+    "fields": {
+      "camera": "PrinterCamera",
+      "mechanism": "OptionalCameraMechanism"
+    }
+  },
+  "CameraDirectFetch": {
+    "kind": "object",
+    "fields": {
+      "url": "PrinterReplyText",
+      "timeoutMs": "Finite"
+    }
+  },
+  "CameraDownload": {
+    "kind": "object",
+    "fields": {
+      "path": "PrinterReplyText",
+      "operation": "EditText"
+    }
+  },
+  "CameraSnapshotPlan": {
+    "kind": "union",
+    "variants": {
+      "direct": "CameraDirectFetch",
+      "transport": "CameraDownload",
+      "refused": "CameraFailure"
+    }
+  },
+  "CameraSnapshotOutcome": {
+    "kind": "union",
+    "variants": {
+      "cancelled": "Empty",
+      "status": "Finite",
+      "timeout": "Empty",
+      "unreachable": "EditText",
+      "transport": "OptionalMoonrakerErrorCode"
+    }
+  },
+  "CameraSnapshotFinish": {
+    "kind": "object",
+    "fields": {
+      "request": "CameraSnapshotRequest",
+      "outcome": "CameraSnapshotOutcome"
+    }
+  },
+  "CameraMechanismsRequest": {
+    "kind": "object",
+    "fields": {
+      "camera": "PrinterCamera",
+      "pageProtocol": "OptionalText"
+    }
+  },
+  "CameraDescribeRequest": {
+    "kind": "object",
+    "fields": {
+      "camera": "PrinterCamera",
+      "route": "OptionalCameraMechanism",
+      "pageProtocol": "OptionalText"
+    }
+  },
+  "CameraFrameRequest": {
+    "kind": "object",
+    "fields": {
+      "camera": "PrinterCamera",
+      "nonce": "EditText"
+    }
+  },
   "PrinterStorageResult": {
     "kind": "union",
     "variants": {
@@ -7558,6 +7720,26 @@ export interface ProjectConsoleLineRequestWire {readonly line: ProjectConsoleLin
 export interface ProjectConsoleNotificationRequestWire {readonly method: ProjectEditTextWire;readonly secrets: ProjectTextListWire;}
 export type ProjectConsoleLinesWire = readonly ProjectConsoleLineWire[];
 export interface ProjectConsoleRecentRequestWire {readonly lines: ProjectConsoleLinesWire;readonly limit: ProjectFiniteWire;}
+export type ProjectCameraServiceWire = "mjpegstreamer" | "mjpegstreamerAdaptive" | "uv4lMjpeg" | "hlsstream" | "ipstream" | "webrtcCamerastreamer" | "webrtcGo2rtc" | "webrtcMediamtx" | "unknown";
+export interface ProjectPrinterCameraWire {readonly uid: ProjectPrinterReplyTextWire;readonly name: ProjectPrinterReplyTextWire;readonly service: ProjectCameraServiceWire;readonly enabled: ProjectFlagWire;readonly snapshotPath: ProjectOptionalPrinterReplyTextWire;readonly snapshotUrl: ProjectOptionalPrinterReplyTextWire;readonly streamPath: ProjectOptionalPrinterReplyTextWire;readonly targetFps: ProjectFiniteWire;readonly rotationDegrees: ProjectFiniteWire;readonly flipHorizontal: ProjectFlagWire;readonly flipVertical: ProjectFlagWire;readonly unsupportedReason: ProjectOptionalPrinterReplyTextWire;}
+export type ProjectPrinterCamerasWire = readonly ProjectPrinterCameraWire[];
+export interface ProjectCameraListRequestWire {readonly endpoint: ProjectOptionalTextWire;}
+export type ProjectCameraErrorCodeWire = "unavailable" | "noSnapshot" | "snapshotFailed" | "cancelled";
+export interface ProjectCameraFailureWire {readonly code: ProjectCameraErrorCodeWire;readonly message: ProjectPrinterReplyTextWire;}
+export interface ProjectCameraListFinishWire {readonly request: ProjectCameraListRequestWire;readonly outcome: ProjectPrinterExchangeOutcomeWire;}
+export type ProjectCameraListResultWire = {readonly cameras:ProjectPrinterCamerasWire} | {readonly failed:ProjectCameraFailureWire};
+export type ProjectCameraMechanismWire = "image" | "direct" | "transport";
+export type ProjectOptionalCameraMechanismWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectCameraMechanismWire};
+export type ProjectCameraMechanismsWire = readonly ProjectCameraMechanismWire[];
+export interface ProjectCameraSnapshotRequestWire {readonly camera: ProjectPrinterCameraWire;readonly mechanism: ProjectOptionalCameraMechanismWire;}
+export interface ProjectCameraDirectFetchWire {readonly url: ProjectPrinterReplyTextWire;readonly timeoutMs: ProjectFiniteWire;}
+export interface ProjectCameraDownloadWire {readonly path: ProjectPrinterReplyTextWire;readonly operation: ProjectEditTextWire;}
+export type ProjectCameraSnapshotPlanWire = {readonly direct:ProjectCameraDirectFetchWire} | {readonly transport:ProjectCameraDownloadWire} | {readonly refused:ProjectCameraFailureWire};
+export type ProjectCameraSnapshotOutcomeWire = {readonly cancelled:ProjectEmptyWire} | {readonly status:ProjectFiniteWire} | {readonly timeout:ProjectEmptyWire} | {readonly unreachable:ProjectEditTextWire} | {readonly transport:ProjectOptionalMoonrakerErrorCodeWire};
+export interface ProjectCameraSnapshotFinishWire {readonly request: ProjectCameraSnapshotRequestWire;readonly outcome: ProjectCameraSnapshotOutcomeWire;}
+export interface ProjectCameraMechanismsRequestWire {readonly camera: ProjectPrinterCameraWire;readonly pageProtocol: ProjectOptionalTextWire;}
+export interface ProjectCameraDescribeRequestWire {readonly camera: ProjectPrinterCameraWire;readonly route: ProjectOptionalCameraMechanismWire;readonly pageProtocol: ProjectOptionalTextWire;}
+export interface ProjectCameraFrameRequestWire {readonly camera: ProjectPrinterCameraWire;readonly nonce: ProjectEditTextWire;}
 export type ProjectPrinterStorageResultWire = {readonly listing:ProjectPrinterStorageListingWire} | {readonly metadata:ProjectPrinterStorageMetadataWire} | {readonly done:ProjectEmptyWire} | {readonly moved:ProjectPrinterTextWire} | {readonly started:ProjectPrinterTextWire} | {readonly failed:ProjectPrinterStorageFailureWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
@@ -8198,3 +8380,42 @@ export function encodeProjectConsoleRecentRequest(value:ProjectConsoleRecentRequ
 export function captureProjectTextList(value:unknown):ProjectTextListWire { return captureIntent("TextList",value,shapes,limits) as ProjectTextListWire; }
 export function decodeProjectTextList(text:string):ProjectTextListWire { return captureProjectTextList(parseIntentJson(text,limits)); }
 export function encodeProjectTextList(value:ProjectTextListWire):string { return JSON.stringify(captureProjectTextList(value)); }
+export function captureProjectCameraListRequest(value:unknown):ProjectCameraListRequestWire { return captureIntent("CameraListRequest",value,shapes,limits) as ProjectCameraListRequestWire; }
+export function decodeProjectCameraListRequest(text:string):ProjectCameraListRequestWire { return captureProjectCameraListRequest(parseIntentJson(text,limits)); }
+export function encodeProjectCameraListRequest(value:ProjectCameraListRequestWire):string { return JSON.stringify(captureProjectCameraListRequest(value)); }
+export function captureProjectCameraListFinish(value:unknown):ProjectCameraListFinishWire { return captureIntent("CameraListFinish",value,shapes,limits) as ProjectCameraListFinishWire; }
+export function decodeProjectCameraListFinish(text:string):ProjectCameraListFinishWire { return captureProjectCameraListFinish(parseIntentJson(text,limits)); }
+export function encodeProjectCameraListFinish(value:ProjectCameraListFinishWire):string { return JSON.stringify(captureProjectCameraListFinish(value)); }
+export function captureProjectCameraListResult(value:unknown):ProjectCameraListResultWire { return captureIntent("CameraListResult",value,shapes,bulkLimits) as ProjectCameraListResultWire; }
+export function decodeProjectCameraListResult(text:string):ProjectCameraListResultWire { return captureProjectCameraListResult(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCameraListResult(value:ProjectCameraListResultWire):string { return JSON.stringify(captureProjectCameraListResult(value)); }
+export function captureProjectPrinterCamera(value:unknown):ProjectPrinterCameraWire { return captureIntent("PrinterCamera",value,shapes,bulkLimits) as ProjectPrinterCameraWire; }
+export function decodeProjectPrinterCamera(text:string):ProjectPrinterCameraWire { return captureProjectPrinterCamera(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectPrinterCamera(value:ProjectPrinterCameraWire):string { return JSON.stringify(captureProjectPrinterCamera(value)); }
+export function captureProjectCameraSnapshotRequest(value:unknown):ProjectCameraSnapshotRequestWire { return captureIntent("CameraSnapshotRequest",value,shapes,bulkLimits) as ProjectCameraSnapshotRequestWire; }
+export function decodeProjectCameraSnapshotRequest(text:string):ProjectCameraSnapshotRequestWire { return captureProjectCameraSnapshotRequest(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCameraSnapshotRequest(value:ProjectCameraSnapshotRequestWire):string { return JSON.stringify(captureProjectCameraSnapshotRequest(value)); }
+export function captureProjectCameraSnapshotPlan(value:unknown):ProjectCameraSnapshotPlanWire { return captureIntent("CameraSnapshotPlan",value,shapes,bulkLimits) as ProjectCameraSnapshotPlanWire; }
+export function decodeProjectCameraSnapshotPlan(text:string):ProjectCameraSnapshotPlanWire { return captureProjectCameraSnapshotPlan(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCameraSnapshotPlan(value:ProjectCameraSnapshotPlanWire):string { return JSON.stringify(captureProjectCameraSnapshotPlan(value)); }
+export function captureProjectCameraSnapshotFinish(value:unknown):ProjectCameraSnapshotFinishWire { return captureIntent("CameraSnapshotFinish",value,shapes,bulkLimits) as ProjectCameraSnapshotFinishWire; }
+export function decodeProjectCameraSnapshotFinish(text:string):ProjectCameraSnapshotFinishWire { return captureProjectCameraSnapshotFinish(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCameraSnapshotFinish(value:ProjectCameraSnapshotFinishWire):string { return JSON.stringify(captureProjectCameraSnapshotFinish(value)); }
+export function captureProjectCameraFailure(value:unknown):ProjectCameraFailureWire { return captureIntent("CameraFailure",value,shapes,bulkLimits) as ProjectCameraFailureWire; }
+export function decodeProjectCameraFailure(text:string):ProjectCameraFailureWire { return captureProjectCameraFailure(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCameraFailure(value:ProjectCameraFailureWire):string { return JSON.stringify(captureProjectCameraFailure(value)); }
+export function captureProjectCameraMechanismsRequest(value:unknown):ProjectCameraMechanismsRequestWire { return captureIntent("CameraMechanismsRequest",value,shapes,bulkLimits) as ProjectCameraMechanismsRequestWire; }
+export function decodeProjectCameraMechanismsRequest(text:string):ProjectCameraMechanismsRequestWire { return captureProjectCameraMechanismsRequest(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCameraMechanismsRequest(value:ProjectCameraMechanismsRequestWire):string { return JSON.stringify(captureProjectCameraMechanismsRequest(value)); }
+export function captureProjectCameraMechanisms(value:unknown):ProjectCameraMechanismsWire { return captureIntent("CameraMechanisms",value,shapes,limits) as ProjectCameraMechanismsWire; }
+export function decodeProjectCameraMechanisms(text:string):ProjectCameraMechanismsWire { return captureProjectCameraMechanisms(parseIntentJson(text,limits)); }
+export function encodeProjectCameraMechanisms(value:ProjectCameraMechanismsWire):string { return JSON.stringify(captureProjectCameraMechanisms(value)); }
+export function captureProjectCameraDescribeRequest(value:unknown):ProjectCameraDescribeRequestWire { return captureIntent("CameraDescribeRequest",value,shapes,bulkLimits) as ProjectCameraDescribeRequestWire; }
+export function decodeProjectCameraDescribeRequest(text:string):ProjectCameraDescribeRequestWire { return captureProjectCameraDescribeRequest(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCameraDescribeRequest(value:ProjectCameraDescribeRequestWire):string { return JSON.stringify(captureProjectCameraDescribeRequest(value)); }
+export function captureProjectCameraFrameRequest(value:unknown):ProjectCameraFrameRequestWire { return captureIntent("CameraFrameRequest",value,shapes,bulkLimits) as ProjectCameraFrameRequestWire; }
+export function decodeProjectCameraFrameRequest(text:string):ProjectCameraFrameRequestWire { return captureProjectCameraFrameRequest(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectCameraFrameRequest(value:ProjectCameraFrameRequestWire):string { return JSON.stringify(captureProjectCameraFrameRequest(value)); }
+export function captureProjectOptionalPrinterReplyText(value:unknown):ProjectOptionalPrinterReplyTextWire { return captureIntent("OptionalPrinterReplyText",value,shapes,bulkLimits) as ProjectOptionalPrinterReplyTextWire; }
+export function decodeProjectOptionalPrinterReplyText(text:string):ProjectOptionalPrinterReplyTextWire { return captureProjectOptionalPrinterReplyText(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectOptionalPrinterReplyText(value:ProjectOptionalPrinterReplyTextWire):string { return JSON.stringify(captureProjectOptionalPrinterReplyText(value)); }

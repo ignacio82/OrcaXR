@@ -1146,6 +1146,51 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_cameraListPlan, camera_list_plan, jstring,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_cameraListFinish, camera_list_finish, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_cameraListRead, camera_list_read, jstring,
+    request: JString<'local>,
+    reply: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_cameraSnapshotPlan, camera_snapshot_plan, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_cameraSnapshotFailure, camera_snapshot_failure, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_cameraMechanisms, camera_mechanisms, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_cameraDescribe, camera_describe, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_cameraPollInterval, camera_poll_interval, jdouble,
+    camera: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_cameraFrameUrl, camera_frame_url, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,

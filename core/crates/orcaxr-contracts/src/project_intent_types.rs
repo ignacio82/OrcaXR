@@ -14258,6 +14258,332 @@ fn read_console_recent_request(v: &Value) -> Result<ConsoleRecentRequest, Invali
         limit: read_finite(&object["limit"])?,
     })
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CameraService {
+    Mjpegstreamer,
+    MjpegstreamerAdaptive,
+    Uv4lMjpeg,
+    Hlsstream,
+    Ipstream,
+    WebrtcCamerastreamer,
+    WebrtcGo2rtc,
+    WebrtcMediamtx,
+    Unknown,
+}
+fn read_camera_service(v: &Value) -> Result<CameraService, InvalidIntent> {
+    match v.as_str() {
+        Some("mjpegstreamer") => Ok(CameraService::Mjpegstreamer),
+        Some("mjpegstreamerAdaptive") => Ok(CameraService::MjpegstreamerAdaptive),
+        Some("uv4lMjpeg") => Ok(CameraService::Uv4lMjpeg),
+        Some("hlsstream") => Ok(CameraService::Hlsstream),
+        Some("ipstream") => Ok(CameraService::Ipstream),
+        Some("webrtcCamerastreamer") => Ok(CameraService::WebrtcCamerastreamer),
+        Some("webrtcGo2rtc") => Ok(CameraService::WebrtcGo2rtc),
+        Some("webrtcMediamtx") => Ok(CameraService::WebrtcMediamtx),
+        Some("unknown") => Ok(CameraService::Unknown),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterCamera {
+    pub uid: PrinterReplyText,
+    pub name: PrinterReplyText,
+    pub service: CameraService,
+    pub enabled: Flag,
+    pub snapshot_path: OptionalPrinterReplyText,
+    pub snapshot_url: OptionalPrinterReplyText,
+    pub stream_path: OptionalPrinterReplyText,
+    pub target_fps: Finite,
+    pub rotation_degrees: Finite,
+    pub flip_horizontal: Flag,
+    pub flip_vertical: Flag,
+    pub unsupported_reason: OptionalPrinterReplyText,
+}
+fn read_printer_camera(v: &Value) -> Result<PrinterCamera, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "uid",
+            "name",
+            "service",
+            "enabled",
+            "snapshotPath",
+            "snapshotUrl",
+            "streamPath",
+            "targetFps",
+            "rotationDegrees",
+            "flipHorizontal",
+            "flipVertical",
+            "unsupportedReason",
+        ],
+        false,
+    )?;
+    Ok(PrinterCamera {
+        uid: read_printer_reply_text(&object["uid"])?,
+        name: read_printer_reply_text(&object["name"])?,
+        service: read_camera_service(&object["service"])?,
+        enabled: read_flag(&object["enabled"])?,
+        snapshot_path: read_optional_printer_reply_text(&object["snapshotPath"])?,
+        snapshot_url: read_optional_printer_reply_text(&object["snapshotUrl"])?,
+        stream_path: read_optional_printer_reply_text(&object["streamPath"])?,
+        target_fps: read_finite(&object["targetFps"])?,
+        rotation_degrees: read_finite(&object["rotationDegrees"])?,
+        flip_horizontal: read_flag(&object["flipHorizontal"])?,
+        flip_vertical: read_flag(&object["flipVertical"])?,
+        unsupported_reason: read_optional_printer_reply_text(&object["unsupportedReason"])?,
+    })
+}
+pub type PrinterCameras = Vec<PrinterCamera>;
+fn read_printer_cameras(v: &Value) -> Result<PrinterCameras, InvalidIntent> {
+    list(v, 0, 262144)?
+        .iter()
+        .map(read_printer_camera)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CameraListRequest {
+    pub endpoint: OptionalText,
+}
+fn read_camera_list_request(v: &Value) -> Result<CameraListRequest, InvalidIntent> {
+    let object = fields(v, &["endpoint"], false)?;
+    Ok(CameraListRequest {
+        endpoint: read_optional_text(&object["endpoint"])?,
+    })
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CameraErrorCode {
+    Unavailable,
+    NoSnapshot,
+    SnapshotFailed,
+    Cancelled,
+}
+fn read_camera_error_code(v: &Value) -> Result<CameraErrorCode, InvalidIntent> {
+    match v.as_str() {
+        Some("unavailable") => Ok(CameraErrorCode::Unavailable),
+        Some("noSnapshot") => Ok(CameraErrorCode::NoSnapshot),
+        Some("snapshotFailed") => Ok(CameraErrorCode::SnapshotFailed),
+        Some("cancelled") => Ok(CameraErrorCode::Cancelled),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CameraFailure {
+    pub code: CameraErrorCode,
+    pub message: PrinterReplyText,
+}
+fn read_camera_failure(v: &Value) -> Result<CameraFailure, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(CameraFailure {
+        code: read_camera_error_code(&object["code"])?,
+        message: read_printer_reply_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CameraListFinish {
+    pub request: CameraListRequest,
+    pub outcome: PrinterExchangeOutcome,
+}
+fn read_camera_list_finish(v: &Value) -> Result<CameraListFinish, InvalidIntent> {
+    let object = fields(v, &["request", "outcome"], false)?;
+    Ok(CameraListFinish {
+        request: read_camera_list_request(&object["request"])?,
+        outcome: read_printer_exchange_outcome(&object["outcome"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CameraListResult {
+    Cameras(PrinterCameras),
+    Failed(CameraFailure),
+}
+fn read_camera_list_result(v: &Value) -> Result<CameraListResult, InvalidIntent> {
+    let object = fields(v, &["cameras", "failed"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "cameras" => Ok(CameraListResult::Cameras(read_printer_cameras(value)?)),
+        "failed" => Ok(CameraListResult::Failed(read_camera_failure(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CameraMechanism {
+    Image,
+    Direct,
+    Transport,
+}
+fn read_camera_mechanism(v: &Value) -> Result<CameraMechanism, InvalidIntent> {
+    match v.as_str() {
+        Some("image") => Ok(CameraMechanism::Image),
+        Some("direct") => Ok(CameraMechanism::Direct),
+        Some("transport") => Ok(CameraMechanism::Transport),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalCameraMechanism {
+    Absent(Empty),
+    Value(CameraMechanism),
+}
+fn read_optional_camera_mechanism(v: &Value) -> Result<OptionalCameraMechanism, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalCameraMechanism::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalCameraMechanism::Value(read_camera_mechanism(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type CameraMechanisms = Vec<CameraMechanism>;
+fn read_camera_mechanisms(v: &Value) -> Result<CameraMechanisms, InvalidIntent> {
+    list(v, 0, 3)?.iter().map(read_camera_mechanism).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CameraSnapshotRequest {
+    pub camera: PrinterCamera,
+    pub mechanism: OptionalCameraMechanism,
+}
+fn read_camera_snapshot_request(v: &Value) -> Result<CameraSnapshotRequest, InvalidIntent> {
+    let object = fields(v, &["camera", "mechanism"], false)?;
+    Ok(CameraSnapshotRequest {
+        camera: read_printer_camera(&object["camera"])?,
+        mechanism: read_optional_camera_mechanism(&object["mechanism"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CameraDirectFetch {
+    pub url: PrinterReplyText,
+    pub timeout_ms: Finite,
+}
+fn read_camera_direct_fetch(v: &Value) -> Result<CameraDirectFetch, InvalidIntent> {
+    let object = fields(v, &["url", "timeoutMs"], false)?;
+    Ok(CameraDirectFetch {
+        url: read_printer_reply_text(&object["url"])?,
+        timeout_ms: read_finite(&object["timeoutMs"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CameraDownload {
+    pub path: PrinterReplyText,
+    pub operation: EditText,
+}
+fn read_camera_download(v: &Value) -> Result<CameraDownload, InvalidIntent> {
+    let object = fields(v, &["path", "operation"], false)?;
+    Ok(CameraDownload {
+        path: read_printer_reply_text(&object["path"])?,
+        operation: read_edit_text(&object["operation"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CameraSnapshotPlan {
+    Direct(CameraDirectFetch),
+    Transport(CameraDownload),
+    Refused(CameraFailure),
+}
+fn read_camera_snapshot_plan(v: &Value) -> Result<CameraSnapshotPlan, InvalidIntent> {
+    let object = fields(v, &["direct", "transport", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "direct" => Ok(CameraSnapshotPlan::Direct(read_camera_direct_fetch(value)?)),
+        "transport" => Ok(CameraSnapshotPlan::Transport(read_camera_download(value)?)),
+        "refused" => Ok(CameraSnapshotPlan::Refused(read_camera_failure(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CameraSnapshotOutcome {
+    Cancelled(Empty),
+    Status(Finite),
+    Timeout(Empty),
+    Unreachable(EditText),
+    Transport(OptionalMoonrakerErrorCode),
+}
+fn read_camera_snapshot_outcome(v: &Value) -> Result<CameraSnapshotOutcome, InvalidIntent> {
+    let object = fields(
+        v,
+        &["cancelled", "status", "timeout", "unreachable", "transport"],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "cancelled" => Ok(CameraSnapshotOutcome::Cancelled(read_empty(value)?)),
+        "status" => Ok(CameraSnapshotOutcome::Status(read_finite(value)?)),
+        "timeout" => Ok(CameraSnapshotOutcome::Timeout(read_empty(value)?)),
+        "unreachable" => Ok(CameraSnapshotOutcome::Unreachable(read_edit_text(value)?)),
+        "transport" => Ok(CameraSnapshotOutcome::Transport(
+            read_optional_moonraker_error_code(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CameraSnapshotFinish {
+    pub request: CameraSnapshotRequest,
+    pub outcome: CameraSnapshotOutcome,
+}
+fn read_camera_snapshot_finish(v: &Value) -> Result<CameraSnapshotFinish, InvalidIntent> {
+    let object = fields(v, &["request", "outcome"], false)?;
+    Ok(CameraSnapshotFinish {
+        request: read_camera_snapshot_request(&object["request"])?,
+        outcome: read_camera_snapshot_outcome(&object["outcome"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CameraMechanismsRequest {
+    pub camera: PrinterCamera,
+    pub page_protocol: OptionalText,
+}
+fn read_camera_mechanisms_request(v: &Value) -> Result<CameraMechanismsRequest, InvalidIntent> {
+    let object = fields(v, &["camera", "pageProtocol"], false)?;
+    Ok(CameraMechanismsRequest {
+        camera: read_printer_camera(&object["camera"])?,
+        page_protocol: read_optional_text(&object["pageProtocol"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CameraDescribeRequest {
+    pub camera: PrinterCamera,
+    pub route: OptionalCameraMechanism,
+    pub page_protocol: OptionalText,
+}
+fn read_camera_describe_request(v: &Value) -> Result<CameraDescribeRequest, InvalidIntent> {
+    let object = fields(v, &["camera", "route", "pageProtocol"], false)?;
+    Ok(CameraDescribeRequest {
+        camera: read_printer_camera(&object["camera"])?,
+        route: read_optional_camera_mechanism(&object["route"])?,
+        page_protocol: read_optional_text(&object["pageProtocol"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CameraFrameRequest {
+    pub camera: PrinterCamera,
+    pub nonce: EditText,
+}
+fn read_camera_frame_request(v: &Value) -> Result<CameraFrameRequest, InvalidIntent> {
+    let object = fields(v, &["camera", "nonce"], false)?;
+    Ok(CameraFrameRequest {
+        camera: read_printer_camera(&object["camera"])?,
+        nonce: read_edit_text(&object["nonce"])?,
+    })
+}
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PrinterStorageResult {
@@ -16251,5 +16577,123 @@ pub fn decode_text_list(text: &str) -> Result<TextList, InvalidIntent> {
 pub fn encode_text_list(value: &TextList) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_text_list(&text)?;
+    Ok(text)
+}
+pub fn decode_camera_list_request(text: &str) -> Result<CameraListRequest, InvalidIntent> {
+    read_camera_list_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_camera_list_request(value: &CameraListRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_camera_list_request(&text)?;
+    Ok(text)
+}
+pub fn decode_camera_list_finish(text: &str) -> Result<CameraListFinish, InvalidIntent> {
+    read_camera_list_finish(&super::project_intents::parse(text)?)
+}
+pub fn encode_camera_list_finish(value: &CameraListFinish) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_camera_list_finish(&text)?;
+    Ok(text)
+}
+pub fn decode_camera_list_result(text: &str) -> Result<CameraListResult, InvalidIntent> {
+    read_camera_list_result(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_camera_list_result(value: &CameraListResult) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_camera_list_result(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_camera(text: &str) -> Result<PrinterCamera, InvalidIntent> {
+    read_printer_camera(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_printer_camera(value: &PrinterCamera) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_printer_camera(&text)?;
+    Ok(text)
+}
+pub fn decode_camera_snapshot_request(text: &str) -> Result<CameraSnapshotRequest, InvalidIntent> {
+    read_camera_snapshot_request(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_camera_snapshot_request(
+    value: &CameraSnapshotRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_camera_snapshot_request(&text)?;
+    Ok(text)
+}
+pub fn decode_camera_snapshot_plan(text: &str) -> Result<CameraSnapshotPlan, InvalidIntent> {
+    read_camera_snapshot_plan(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_camera_snapshot_plan(value: &CameraSnapshotPlan) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_camera_snapshot_plan(&text)?;
+    Ok(text)
+}
+pub fn decode_camera_snapshot_finish(text: &str) -> Result<CameraSnapshotFinish, InvalidIntent> {
+    read_camera_snapshot_finish(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_camera_snapshot_finish(
+    value: &CameraSnapshotFinish,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_camera_snapshot_finish(&text)?;
+    Ok(text)
+}
+pub fn decode_camera_failure(text: &str) -> Result<CameraFailure, InvalidIntent> {
+    read_camera_failure(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_camera_failure(value: &CameraFailure) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_camera_failure(&text)?;
+    Ok(text)
+}
+pub fn decode_camera_mechanisms_request(
+    text: &str,
+) -> Result<CameraMechanismsRequest, InvalidIntent> {
+    read_camera_mechanisms_request(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_camera_mechanisms_request(
+    value: &CameraMechanismsRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_camera_mechanisms_request(&text)?;
+    Ok(text)
+}
+pub fn decode_camera_mechanisms(text: &str) -> Result<CameraMechanisms, InvalidIntent> {
+    read_camera_mechanisms(&super::project_intents::parse(text)?)
+}
+pub fn encode_camera_mechanisms(value: &CameraMechanisms) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_camera_mechanisms(&text)?;
+    Ok(text)
+}
+pub fn decode_camera_describe_request(text: &str) -> Result<CameraDescribeRequest, InvalidIntent> {
+    read_camera_describe_request(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_camera_describe_request(
+    value: &CameraDescribeRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_camera_describe_request(&text)?;
+    Ok(text)
+}
+pub fn decode_camera_frame_request(text: &str) -> Result<CameraFrameRequest, InvalidIntent> {
+    read_camera_frame_request(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_camera_frame_request(value: &CameraFrameRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_camera_frame_request(&text)?;
+    Ok(text)
+}
+pub fn decode_optional_printer_reply_text(
+    text: &str,
+) -> Result<OptionalPrinterReplyText, InvalidIntent> {
+    read_optional_printer_reply_text(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_optional_printer_reply_text(
+    value: &OptionalPrinterReplyText,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_optional_printer_reply_text(&text)?;
     Ok(text)
 }

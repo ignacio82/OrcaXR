@@ -238,6 +238,53 @@ export class ToolUsageScanner {
 }
 
 /**
+ * A `CameraDescribeRequest`; the `PrinterText` describing the service.
+ */
+export function camera_describe(request: string): string;
+
+/**
+ * A `CameraFrameRequest`; the `OptionalPrinterReplyText` frame URL.
+ */
+export function camera_frame_url(request: string): string;
+
+/**
+ * A `CameraListFinish`; the `CameraListResult` a listing that ended without
+ * a reply to read reads as.
+ */
+export function camera_list_finish(request: string): string;
+
+/**
+ * The `PrinterSend` that lists a printer's cameras.
+ */
+export function camera_list_plan(): string;
+
+/**
+ * A `CameraListRequest` and its `/server/webcams/list` reply (Moonraker's
+ * `result`, as JSON); the `CameraListResult`.
+ */
+export function camera_list_read(request: string, reply: string): string;
+
+/**
+ * A `CameraMechanismsRequest`; the `CameraMechanisms` worth trying, in order.
+ */
+export function camera_mechanisms(request: string): string;
+
+/**
+ * A `PrinterCamera`; the milliseconds between its frames.
+ */
+export function camera_poll_interval(camera: string): number;
+
+/**
+ * A `CameraSnapshotFinish`; the `CameraFailure` a failed fetch reads as.
+ */
+export function camera_snapshot_failure(request: string): string;
+
+/**
+ * A `CameraSnapshotRequest`; the `CameraSnapshotPlan`: how one frame is fetched.
+ */
+export function camera_snapshot_plan(request: string): string;
+
+/**
  * A `GcodeAssessRequest`; the `GcodeAssessment`: what sending the script at
  * this machine, right now, would do.
  */
@@ -500,6 +547,15 @@ export interface InitOutput {
     readonly __wbg_printjobstatus_free: (a: number, b: number) => void;
     readonly __wbg_printworkflow_free: (a: number, b: number) => void;
     readonly __wbg_toolusagescanner_free: (a: number, b: number) => void;
+    readonly camera_describe: (a: number, b: number) => [number, number, number, number];
+    readonly camera_frame_url: (a: number, b: number) => [number, number, number, number];
+    readonly camera_list_finish: (a: number, b: number) => [number, number, number, number];
+    readonly camera_list_plan: () => [number, number, number, number];
+    readonly camera_list_read: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly camera_mechanisms: (a: number, b: number) => [number, number, number, number];
+    readonly camera_poll_interval: (a: number, b: number) => [number, number, number];
+    readonly camera_snapshot_failure: (a: number, b: number) => [number, number, number, number];
+    readonly camera_snapshot_plan: (a: number, b: number) => [number, number, number, number];
     readonly console_assess: (a: number, b: number) => [number, number, number, number];
     readonly console_finish: (a: number, b: number) => [number, number, number, number];
     readonly console_invocation: (a: number, b: number) => [number, number, number, number];

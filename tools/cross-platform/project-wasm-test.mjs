@@ -36,6 +36,7 @@ import { replayMoonrakerTransport } from "./moonraker-transport-replay.mjs";
 import { replayPrinterStorage } from "./printer-storage-replay.mjs";
 import { replayPrintHistory } from "./printer-history-replay.mjs";
 import { replayPrinterConsole } from "./printer-console-replay.mjs";
+import { replayPrinterCamera } from "./printer-camera-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -280,6 +281,8 @@ if (isMainThread) {
     assert.deepEqual(result.printHistoryAnswers, [290, 1363, 258, 55, 55, 76, 23, 39]);
     // The printer console: assessments, plans, reads, invocations and lines.
     assert.deepEqual(result.printerConsoleAnswers, [408, 44, 284, 51, 76, 33, 34, 28]);
+    // Printer cameras: listings, frame routes and failures, and descriptions.
+    assert.deepEqual(result.printerCameraAnswers, [62, 12, 462, 462, 616, 308, 154, 154]);
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -742,6 +745,12 @@ if (isMainThread) {
       await readFile(new URL("testdata/cross-platform/printer-console-vectors.json", root)),
     ),
   );
+  const printerCamera = replayPrinterCamera(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/printer-camera-vectors.json", root)),
+    ),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -789,6 +798,7 @@ if (isMainThread) {
       ...printerStorage,
       ...printHistory,
       ...printerConsole,
+      ...printerCamera,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

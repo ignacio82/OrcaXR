@@ -265,6 +265,19 @@ assert.deepEqual(schema.roots, [
   "OptionalConsoleLine",
   "ConsoleRecentRequest",
   "TextList",
+  "CameraListRequest",
+  "CameraListFinish",
+  "CameraListResult",
+  "PrinterCamera",
+  "CameraSnapshotRequest",
+  "CameraSnapshotPlan",
+  "CameraSnapshotFinish",
+  "CameraFailure",
+  "CameraMechanismsRequest",
+  "CameraMechanisms",
+  "CameraDescribeRequest",
+  "CameraFrameRequest",
+  "OptionalPrinterReplyText",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

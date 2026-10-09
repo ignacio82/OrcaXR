@@ -4053,6 +4053,49 @@ configuration replies read, 76 invocations, 33 transcript lines, 34
 notifications and 28 recalls. Rust, WASM in Node and Chrome, the printer
 core, JNI and 958 Kotlin checks reproduce every one.
 
+### Printer cameras
+
+`orcaxr_printer::camera` ports `PrinterCamera.ts`: watching the print.
+A printer's camera list is read against the endpoint the session uses, each
+reported URL resolved by the URL Standard (the `url` crate): a relative path
+belongs to the printer's web origin — nginx on the scheme's default port,
+where a stock install serves `/webcam/` — with Moonraker's own path kept as
+a second candidate; an absolute URL on Moonraker's origin yields both; one
+on the same host at another port is another service, loaded without the
+printer's credential; another host is refused, so a camera list never makes
+the app a request forwarder. Only snapshots are shown, at the camera's rate
+bounded to 0.2–4 frames a second. A frame's route is planned
+(`snapshot_plan`: the camera's own URL fetched directly within 8 seconds,
+or Moonraker's path downloaded through the transport with the credential)
+and a failed fetch read (`snapshot_failure`: cancelled, a status, a
+timeout, the platform's own reason, or the transport's code); the routes
+worth trying from a page (an image where the page can load it, a direct
+fetch where it cannot, the transport last), the service's description, the
+poll interval and a frame URL made unique per frame are answered too. The
+browser's snapshot fetch now runs on the same planner and failure reader,
+so the shell and the exchange share them. Requests carrying a camera back
+travel on the bulk tier, since a camera holds the printer's own text.
+
+Porting fixed two browser defects, each with a regression test: a relative
+snapshot path on an IPv6 printer cut the host at its first `:`, giving
+`http://[fd00/webcam/…`; and the service description quoted the camera's
+own rate where frames are fetched at the bounded one ("0.1 fps" for a
+camera polled at 0.2).
+
+Bindings: WASM `camera_list_plan`, `camera_list_finish`,
+`camera_list_read`, `camera_snapshot_plan`, `camera_snapshot_failure`,
+`camera_mechanisms`, `camera_describe`, `camera_poll_interval` and
+`camera_frame_url`, the matching JNI `camera*` exports and Kotlin
+`PrinterCamera`. `printer-camera-vectors.mjs` drives the production
+functions through `PrinterCameraExchange.ts`: 62 listings read against
+twelve kinds of endpoint (relative, rooted, same origin, other ports and
+hosts, IPv6, credentials, unreadable URLs, every service, rate and
+rotation), 12 finished listings, 462 frame routes and 462 failed fetches,
+616 route lists, 308 descriptions, 154 poll intervals and 154 frame URLs.
+Rust, WASM in Node and Chrome, the printer core, JNI and 2,231 Kotlin
+checks reproduce every one. The polling lifecycle (stopping when hidden or
+disposed) and the route fallback state stay with each host's panel.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

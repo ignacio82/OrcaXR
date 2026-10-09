@@ -45,6 +45,7 @@ import { replayMoonrakerPolicy } from "./moonraker-policy-replay.mjs";
 import { replayPrinterStorage, storageBytes } from "./printer-storage-replay.mjs";
 import { historyNumber, replayPrintHistory } from "./printer-history-replay.mjs";
 import { replayPrinterConsole } from "./printer-console-replay.mjs";
+import { replayPrinterCamera } from "./printer-camera-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -1148,6 +1149,23 @@ try {
     ),
   ];
   assert.equal(jvm.call("printerConsoleChecks", consoleScript.join("\n")), 958);
+  // Printer cameras through the real JNI exports, then the Kotlin wrapper.
+  const cameraFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/printer-camera-vectors.json", root)),
+  );
+  assert.deepEqual(
+    replayPrinterCamera(projectJniCore(jvm.call), cameraFixture).printerCameraAnswers,
+    [62, 12, 462, 462, 616, 308, 154, 154],
+  );
+  const cameraScript = [
+    ["listPlan", "", cameraFixture.listPlan.replyJson].join("\t"),
+    ...["listFinishes", "snapshotPlans", "snapshotFailures", "mechanisms", "describes", "frameUrls"].flatMap(
+      (section) => cameraFixture[section].map((c) => [section, c.requestJson, c.replyJson].join("\t")),
+    ),
+    ...cameraFixture.listReads.map((c) => ["listReads", c.requestJson, c.reply, c.replyJson].join("\t")),
+    ...cameraFixture.pollIntervals.map((c) => ["pollIntervals", c.requestJson, String(c.intervalMs)].join("\t")),
+  ];
+  assert.equal(jvm.call("printerCameraChecks", cameraScript.join("\n")), 2231);
   // The Moonraker transport through the real JNI exports, then the Kotlin
   // wrapper: step and state, or reply, for each input.
   const transportFixture = JSON.parse(

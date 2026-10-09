@@ -2000,7 +2000,15 @@ credential storage, and explicit permission/error flows.
   and redacts transcript lines; 958 browser answers agree in every binding,
   and Kotlin `PrinterConsole` exposes it. Porting fixed four browser defects,
   the first a safety one: `N10 M112`, `M112X` and similar lines halt the
-  printer but read only as unknown. Camera and the operator surfaces remain.
+  printer but read only as unknown. Camera policy is shared too:
+  `orcaxr_printer::camera` reads a printer's cameras against the endpoint
+  (resolving each URL by the URL Standard, refusing other hosts), plans a
+  frame's route and reads its failure, and answers the routes worth trying,
+  the description, poll interval and frame URL; 2,230 browser answers agree
+  in every binding, and Kotlin `PrinterCamera` exposes it. Porting fixed two
+  browser defects (an IPv6 printer's camera URL cut at the first `:`, a
+  description quoting the unbounded rate). The operator surfaces, and their
+  polling lifecycle, belong to the application shell.
 - [ ] Test with the existing printer simulator before qualified, supervised U1
   and CC trials. Automated tests do not issue commands to real printers.
 

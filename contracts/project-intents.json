@@ -9,7 +9,7 @@
     "maxNodes": 4194304,
     "maxDepth": 12
   },
-  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView", "GcodeAssessment", "ConsolePlan", "ConsoleResult", "MacroInvocation"],
+  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView", "GcodeAssessment", "ConsolePlan", "ConsoleResult", "MacroInvocation", "CameraListResult", "PrinterCamera", "CameraSnapshotRequest", "CameraSnapshotPlan", "CameraSnapshotFinish", "CameraFailure", "CameraMechanismsRequest", "CameraDescribeRequest", "CameraFrameRequest", "OptionalPrinterReplyText"],
   "description": "Prepared project commands, session messages and slice preflight exchanges. Text is lossless UTF-16 units. Project transport, command format and persisted schema versions are distinct.",
   "definitions": {
     "Unit": {
@@ -6711,6 +6711,149 @@
         "limit": "Finite"
       }
     },
+    "CameraService": {
+      "kind": "enum",
+      "values": ["mjpegstreamer", "mjpegstreamerAdaptive", "uv4lMjpeg", "hlsstream", "ipstream", "webrtcCamerastreamer", "webrtcGo2rtc", "webrtcMediamtx", "unknown"]
+    },
+    "PrinterCamera": {
+      "kind": "object",
+      "fields": {
+        "uid": "PrinterReplyText",
+        "name": "PrinterReplyText",
+        "service": "CameraService",
+        "enabled": "Flag",
+        "snapshotPath": "OptionalPrinterReplyText",
+        "snapshotUrl": "OptionalPrinterReplyText",
+        "streamPath": "OptionalPrinterReplyText",
+        "targetFps": "Finite",
+        "rotationDegrees": "Finite",
+        "flipHorizontal": "Flag",
+        "flipVertical": "Flag",
+        "unsupportedReason": "OptionalPrinterReplyText"
+      }
+    },
+    "PrinterCameras": {
+      "kind": "array",
+      "items": "PrinterCamera",
+      "min": 0,
+      "max": 262144
+    },
+    "CameraListRequest": {
+      "kind": "object",
+      "fields": {
+        "endpoint": "OptionalText"
+      }
+    },
+    "CameraErrorCode": {
+      "kind": "enum",
+      "values": ["unavailable", "noSnapshot", "snapshotFailed", "cancelled"]
+    },
+    "CameraFailure": {
+      "kind": "object",
+      "fields": {
+        "code": "CameraErrorCode",
+        "message": "PrinterReplyText"
+      }
+    },
+    "CameraListFinish": {
+      "kind": "object",
+      "fields": {
+        "request": "CameraListRequest",
+        "outcome": "PrinterExchangeOutcome"
+      }
+    },
+    "CameraListResult": {
+      "kind": "union",
+      "variants": {
+        "cameras": "PrinterCameras",
+        "failed": "CameraFailure"
+      }
+    },
+    "CameraMechanism": {
+      "kind": "enum",
+      "values": ["image", "direct", "transport"]
+    },
+    "OptionalCameraMechanism": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "CameraMechanism"
+      }
+    },
+    "CameraMechanisms": {
+      "kind": "array",
+      "items": "CameraMechanism",
+      "min": 0,
+      "max": 3
+    },
+    "CameraSnapshotRequest": {
+      "kind": "object",
+      "fields": {
+        "camera": "PrinterCamera",
+        "mechanism": "OptionalCameraMechanism"
+      }
+    },
+    "CameraDirectFetch": {
+      "kind": "object",
+      "fields": {
+        "url": "PrinterReplyText",
+        "timeoutMs": "Finite"
+      }
+    },
+    "CameraDownload": {
+      "kind": "object",
+      "fields": {
+        "path": "PrinterReplyText",
+        "operation": "EditText"
+      }
+    },
+    "CameraSnapshotPlan": {
+      "kind": "union",
+      "variants": {
+        "direct": "CameraDirectFetch",
+        "transport": "CameraDownload",
+        "refused": "CameraFailure"
+      }
+    },
+    "CameraSnapshotOutcome": {
+      "kind": "union",
+      "variants": {
+        "cancelled": "Empty",
+        "status": "Finite",
+        "timeout": "Empty",
+        "unreachable": "EditText",
+        "transport": "OptionalMoonrakerErrorCode"
+      }
+    },
+    "CameraSnapshotFinish": {
+      "kind": "object",
+      "fields": {
+        "request": "CameraSnapshotRequest",
+        "outcome": "CameraSnapshotOutcome"
+      }
+    },
+    "CameraMechanismsRequest": {
+      "kind": "object",
+      "fields": {
+        "camera": "PrinterCamera",
+        "pageProtocol": "OptionalText"
+      }
+    },
+    "CameraDescribeRequest": {
+      "kind": "object",
+      "fields": {
+        "camera": "PrinterCamera",
+        "route": "OptionalCameraMechanism",
+        "pageProtocol": "OptionalText"
+      }
+    },
+    "CameraFrameRequest": {
+      "kind": "object",
+      "fields": {
+        "camera": "PrinterCamera",
+        "nonce": "EditText"
+      }
+    },
     "PrinterStorageResult": {
       "kind": "union",
       "variants": {
@@ -6936,7 +7079,20 @@
     "ConsoleNotificationRequest",
     "OptionalConsoleLine",
     "ConsoleRecentRequest",
-    "TextList"
+    "TextList",
+    "CameraListRequest",
+    "CameraListFinish",
+    "CameraListResult",
+    "PrinterCamera",
+    "CameraSnapshotRequest",
+    "CameraSnapshotPlan",
+    "CameraSnapshotFinish",
+    "CameraFailure",
+    "CameraMechanismsRequest",
+    "CameraMechanisms",
+    "CameraDescribeRequest",
+    "CameraFrameRequest",
+    "OptionalPrinterReplyText"
   ],
   "sessionVersion": 1
 }

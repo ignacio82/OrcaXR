@@ -222,6 +222,18 @@ final class NativeProject {
     static native String consoleLine(String request);
     static native String consoleNotification(String request, String params);
     static native String consoleRecent(String request);
+    // Printer cameras: the listing's request, result and reply read, a
+    // frame's route and failure, the routes worth trying, the description,
+    // the poll interval and a frame URL.
+    static native String cameraListPlan();
+    static native String cameraListFinish(String request);
+    static native String cameraListRead(String request, String reply);
+    static native String cameraSnapshotPlan(String request);
+    static native String cameraSnapshotFailure(String request);
+    static native String cameraMechanisms(String request);
+    static native String cameraDescribe(String request);
+    static native double cameraPollInterval(String camera);
+    static native String cameraFrameUrl(String request);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

@@ -3,8 +3,8 @@ use crate::error;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
-    console, control, history, moonraker, preparation, reply, session, status::JobStatus, storage,
-    summary, tools, transport, workflow,
+    camera, console, control, history, moonraker, preparation, reply, session, status::JobStatus,
+    storage, summary, tools, transport, workflow,
 };
 use wasm_bindgen::prelude::*;
 
@@ -981,5 +981,108 @@ pub fn console_recent(request: &str) -> Result<String, JsValue> {
         wire::decode_console_recent_request,
         console::recent,
         wire::encode_text_list,
+    )
+}
+/// `exchange` for an input on the intent contract's bulk tier: a request
+/// carrying a printer's own text back.
+fn bulk_exchange<T, R>(
+    request: &str,
+    decode: fn(&str) -> Result<T, InvalidIntent>,
+    answer: impl FnOnce(&T) -> R,
+    encode: fn(&R) -> Result<String, InvalidIntent>,
+) -> Result<String, JsValue> {
+    if request.len() > wire::BULK.bytes {
+        return Err(error("input_limit"));
+    }
+    let request = decode(request).map_err(|_| error("invalid_request"))?;
+    encode(&answer(&request)).map_err(|_| error("output_limit"))
+}
+/// The `PrinterSend` that lists a printer's cameras.
+#[wasm_bindgen]
+pub fn camera_list_plan() -> Result<String, JsValue> {
+    wire::encode_printer_send(&camera::list_plan()).map_err(|_| error("output_limit"))
+}
+/// A `CameraListFinish`; the `CameraListResult` a listing that ended without
+/// a reply to read reads as.
+#[wasm_bindgen]
+pub fn camera_list_finish(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_camera_list_finish,
+        camera::list_finish,
+        wire::encode_camera_list_result,
+    )
+}
+/// A `CameraListRequest` and its `/server/webcams/list` reply (Moonraker's
+/// `result`, as JSON); the `CameraListResult`.
+#[wasm_bindgen]
+pub fn camera_list_read(request: &str, reply: &str) -> Result<String, JsValue> {
+    if request.len() > wire::MAX_BYTES || reply.len() > reply::LIMITS.bytes {
+        return Err(error("input_limit"));
+    }
+    let request =
+        wire::decode_camera_list_request(request).map_err(|_| error("invalid_request"))?;
+    wire::encode_camera_list_result(&camera::list_read(&request, reply))
+        .map_err(|_| error("output_limit"))
+}
+/// A `CameraSnapshotRequest`; the `CameraSnapshotPlan`: how one frame is fetched.
+#[wasm_bindgen]
+pub fn camera_snapshot_plan(request: &str) -> Result<String, JsValue> {
+    bulk_exchange(
+        request,
+        wire::decode_camera_snapshot_request,
+        camera::snapshot_plan,
+        wire::encode_camera_snapshot_plan,
+    )
+}
+/// A `CameraSnapshotFinish`; the `CameraFailure` a failed fetch reads as.
+#[wasm_bindgen]
+pub fn camera_snapshot_failure(request: &str) -> Result<String, JsValue> {
+    bulk_exchange(
+        request,
+        wire::decode_camera_snapshot_finish,
+        camera::snapshot_failure,
+        wire::encode_camera_failure,
+    )
+}
+/// A `CameraMechanismsRequest`; the `CameraMechanisms` worth trying, in order.
+#[wasm_bindgen]
+pub fn camera_mechanisms(request: &str) -> Result<String, JsValue> {
+    bulk_exchange(
+        request,
+        wire::decode_camera_mechanisms_request,
+        camera::mechanisms_for,
+        wire::encode_camera_mechanisms,
+    )
+}
+/// A `CameraDescribeRequest`; the `PrinterText` describing the service.
+#[wasm_bindgen]
+pub fn camera_describe(request: &str) -> Result<String, JsValue> {
+    bulk_exchange(
+        request,
+        wire::decode_camera_describe_request,
+        |r| wire::PrinterText {
+            text: camera::describe(r),
+        },
+        wire::encode_printer_text,
+    )
+}
+/// A `PrinterCamera`; the milliseconds between its frames.
+#[wasm_bindgen]
+pub fn camera_poll_interval(camera: &str) -> Result<f64, JsValue> {
+    if camera.len() > wire::BULK.bytes {
+        return Err(error("input_limit"));
+    }
+    let camera = wire::decode_printer_camera(camera).map_err(|_| error("invalid_request"))?;
+    Ok(camera::poll_interval_ms(&camera))
+}
+/// A `CameraFrameRequest`; the `OptionalPrinterReplyText` frame URL.
+#[wasm_bindgen]
+pub fn camera_frame_url(request: &str) -> Result<String, JsValue> {
+    bulk_exchange(
+        request,
+        wire::decode_camera_frame_request,
+        camera::frame,
+        wire::encode_optional_printer_reply_text,
     )
 }

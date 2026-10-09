@@ -1076,6 +1076,53 @@ export function assembly_availability(request: string): string;
 export function assembly_explosion(request: string): string;
 
 /**
+ * A `CameraDescribeRequest`; the `PrinterText` describing the service.
+ */
+export function camera_describe(request: string): string;
+
+/**
+ * A `CameraFrameRequest`; the `OptionalPrinterReplyText` frame URL.
+ */
+export function camera_frame_url(request: string): string;
+
+/**
+ * A `CameraListFinish`; the `CameraListResult` a listing that ended without
+ * a reply to read reads as.
+ */
+export function camera_list_finish(request: string): string;
+
+/**
+ * The `PrinterSend` that lists a printer's cameras.
+ */
+export function camera_list_plan(): string;
+
+/**
+ * A `CameraListRequest` and its `/server/webcams/list` reply (Moonraker's
+ * `result`, as JSON); the `CameraListResult`.
+ */
+export function camera_list_read(request: string, reply: string): string;
+
+/**
+ * A `CameraMechanismsRequest`; the `CameraMechanisms` worth trying, in order.
+ */
+export function camera_mechanisms(request: string): string;
+
+/**
+ * A `PrinterCamera`; the milliseconds between its frames.
+ */
+export function camera_poll_interval(camera: string): number;
+
+/**
+ * A `CameraSnapshotFinish`; the `CameraFailure` a failed fetch reads as.
+ */
+export function camera_snapshot_failure(request: string): string;
+
+/**
+ * A `CameraSnapshotRequest`; the `CameraSnapshotPlan`: how one frame is fetched.
+ */
+export function camera_snapshot_plan(request: string): string;
+
+/**
  * `coerceOverrideValue`: a `LibraryCoerceRequest` to a `LibraryCoercedValue`.
  */
 export function coerce_override_value(request: string): string;
@@ -1415,6 +1462,15 @@ export interface InitOutput {
     readonly assembly_alignment: (a: number, b: number) => [number, number, number, number];
     readonly assembly_availability: (a: number, b: number) => [number, number, number, number];
     readonly assembly_explosion: (a: number, b: number) => [number, number, number, number];
+    readonly camera_describe: (a: number, b: number) => [number, number, number, number];
+    readonly camera_frame_url: (a: number, b: number) => [number, number, number, number];
+    readonly camera_list_finish: (a: number, b: number) => [number, number, number, number];
+    readonly camera_list_plan: () => [number, number, number, number];
+    readonly camera_list_read: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly camera_mechanisms: (a: number, b: number) => [number, number, number, number];
+    readonly camera_poll_interval: (a: number, b: number) => [number, number, number];
+    readonly camera_snapshot_failure: (a: number, b: number) => [number, number, number, number];
+    readonly camera_snapshot_plan: (a: number, b: number) => [number, number, number, number];
     readonly capturedhistory_dirty_categories: (a: number) => [number, number];
     readonly capturedhistory_has_label: (a: number, b: number) => number;
     readonly capturedhistory_label_length: (a: number, b: number) => number;

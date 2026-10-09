@@ -10346,6 +10346,256 @@ object ProjectIntents {
             w.field("limit") { writeFinite(w, v.limit) }
         }
     }
+    enum class CameraService {Mjpegstreamer,MjpegstreamerAdaptive,Uv4lMjpeg,Hlsstream,Ipstream,WebrtcCamerastreamer,WebrtcGo2rtc,WebrtcMediamtx,Unknown}
+    private fun readCameraService(v: Any): CameraService {
+        return when(v) {"mjpegstreamer" -> CameraService.Mjpegstreamer;"mjpegstreamerAdaptive" -> CameraService.MjpegstreamerAdaptive;"uv4lMjpeg" -> CameraService.Uv4lMjpeg;"hlsstream" -> CameraService.Hlsstream;"ipstream" -> CameraService.Ipstream;"webrtcCamerastreamer" -> CameraService.WebrtcCamerastreamer;"webrtcGo2rtc" -> CameraService.WebrtcGo2rtc;"webrtcMediamtx" -> CameraService.WebrtcMediamtx;"unknown" -> CameraService.Unknown; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeCameraService(w: ProjectIntentWriter, v: CameraService) {
+        w.literal(when(v) {CameraService.Mjpegstreamer -> "mjpegstreamer";CameraService.MjpegstreamerAdaptive -> "mjpegstreamerAdaptive";CameraService.Uv4lMjpeg -> "uv4lMjpeg";CameraService.Hlsstream -> "hlsstream";CameraService.Ipstream -> "ipstream";CameraService.WebrtcCamerastreamer -> "webrtcCamerastreamer";CameraService.WebrtcGo2rtc -> "webrtcGo2rtc";CameraService.WebrtcMediamtx -> "webrtcMediamtx";CameraService.Unknown -> "unknown";})
+    }
+    data class PrinterCamera(val uid: List<Int>, val name: List<Int>, val service: CameraService, val enabled: Boolean, val snapshotPath: OptionalPrinterReplyText, val snapshotUrl: OptionalPrinterReplyText, val streamPath: OptionalPrinterReplyText, val targetFps: Double, val rotationDegrees: Double, val flipHorizontal: Boolean, val flipVertical: Boolean, val unsupportedReason: OptionalPrinterReplyText)
+    private fun readPrinterCamera(v: Any): PrinterCamera {
+        val obj = ProjectIntentJson.fields(v, setOf("uid", "name", "service", "enabled", "snapshotPath", "snapshotUrl", "streamPath", "targetFps", "rotationDegrees", "flipHorizontal", "flipVertical", "unsupportedReason"), false)
+        return PrinterCamera(readPrinterReplyText(obj.get("uid")), readPrinterReplyText(obj.get("name")), readCameraService(obj.get("service")), readFlag(obj.get("enabled")), readOptionalPrinterReplyText(obj.get("snapshotPath")), readOptionalPrinterReplyText(obj.get("snapshotUrl")), readOptionalPrinterReplyText(obj.get("streamPath")), readFinite(obj.get("targetFps")), readFinite(obj.get("rotationDegrees")), readFlag(obj.get("flipHorizontal")), readFlag(obj.get("flipVertical")), readOptionalPrinterReplyText(obj.get("unsupportedReason")))
+    }
+    private fun writePrinterCamera(w: ProjectIntentWriter, v: PrinterCamera) {
+        w.obj {
+            w.field("uid") { writePrinterReplyText(w, v.uid) }
+            w.field("name") { writePrinterReplyText(w, v.name) }
+            w.field("service") { writeCameraService(w, v.service) }
+            w.field("enabled") { writeFlag(w, v.enabled) }
+            w.field("snapshotPath") { writeOptionalPrinterReplyText(w, v.snapshotPath) }
+            w.field("snapshotUrl") { writeOptionalPrinterReplyText(w, v.snapshotUrl) }
+            w.field("streamPath") { writeOptionalPrinterReplyText(w, v.streamPath) }
+            w.field("targetFps") { writeFinite(w, v.targetFps) }
+            w.field("rotationDegrees") { writeFinite(w, v.rotationDegrees) }
+            w.field("flipHorizontal") { writeFlag(w, v.flipHorizontal) }
+            w.field("flipVertical") { writeFlag(w, v.flipVertical) }
+            w.field("unsupportedReason") { writeOptionalPrinterReplyText(w, v.unsupportedReason) }
+        }
+    }
+    private fun readPrinterCameras(v: Any): List<PrinterCamera> {
+        val array = ProjectIntentJson.list(v, 0, 262144)
+        return List(array.length()) { readPrinterCamera(array.get(it)) }
+    }
+    private fun writePrinterCameras(w: ProjectIntentWriter, v: List<PrinterCamera>) {
+        w.array(v, 0, 262144) { writePrinterCamera(w, it) }
+    }
+    data class CameraListRequest(val endpoint: OptionalText)
+    private fun readCameraListRequest(v: Any): CameraListRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("endpoint"), false)
+        return CameraListRequest(readOptionalText(obj.get("endpoint")))
+    }
+    private fun writeCameraListRequest(w: ProjectIntentWriter, v: CameraListRequest) {
+        w.obj {
+            w.field("endpoint") { writeOptionalText(w, v.endpoint) }
+        }
+    }
+    enum class CameraErrorCode {Unavailable,NoSnapshot,SnapshotFailed,Cancelled}
+    private fun readCameraErrorCode(v: Any): CameraErrorCode {
+        return when(v) {"unavailable" -> CameraErrorCode.Unavailable;"noSnapshot" -> CameraErrorCode.NoSnapshot;"snapshotFailed" -> CameraErrorCode.SnapshotFailed;"cancelled" -> CameraErrorCode.Cancelled; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeCameraErrorCode(w: ProjectIntentWriter, v: CameraErrorCode) {
+        w.literal(when(v) {CameraErrorCode.Unavailable -> "unavailable";CameraErrorCode.NoSnapshot -> "noSnapshot";CameraErrorCode.SnapshotFailed -> "snapshotFailed";CameraErrorCode.Cancelled -> "cancelled";})
+    }
+    data class CameraFailure(val code: CameraErrorCode, val message: List<Int>)
+    private fun readCameraFailure(v: Any): CameraFailure {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return CameraFailure(readCameraErrorCode(obj.get("code")), readPrinterReplyText(obj.get("message")))
+    }
+    private fun writeCameraFailure(w: ProjectIntentWriter, v: CameraFailure) {
+        w.obj {
+            w.field("code") { writeCameraErrorCode(w, v.code) }
+            w.field("message") { writePrinterReplyText(w, v.message) }
+        }
+    }
+    data class CameraListFinish(val request: CameraListRequest, val outcome: PrinterExchangeOutcome)
+    private fun readCameraListFinish(v: Any): CameraListFinish {
+        val obj = ProjectIntentJson.fields(v, setOf("request", "outcome"), false)
+        return CameraListFinish(readCameraListRequest(obj.get("request")), readPrinterExchangeOutcome(obj.get("outcome")))
+    }
+    private fun writeCameraListFinish(w: ProjectIntentWriter, v: CameraListFinish) {
+        w.obj {
+            w.field("request") { writeCameraListRequest(w, v.request) }
+            w.field("outcome") { writePrinterExchangeOutcome(w, v.outcome) }
+        }
+    }
+    sealed interface CameraListResult {
+        data class Cameras(val value: List<ProjectIntents.PrinterCamera>) : CameraListResult
+        data class Failed(val value: ProjectIntents.CameraFailure) : CameraListResult
+    }
+    private fun readCameraListResult(v: Any): CameraListResult {
+        val obj = ProjectIntentJson.fields(v, setOf("cameras", "failed"), true)
+        return when(val key = obj.keys().next()) {
+            "cameras" -> CameraListResult.Cameras(readPrinterCameras(obj.get(key)))
+            "failed" -> CameraListResult.Failed(readCameraFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeCameraListResult(w: ProjectIntentWriter, v: CameraListResult) {
+        w.obj { when(v) {
+            is CameraListResult.Cameras -> w.field("cameras") { writePrinterCameras(w, v.value) }
+            is CameraListResult.Failed -> w.field("failed") { writeCameraFailure(w, v.value) }
+        } }
+    }
+    enum class CameraMechanism {Image,Direct,Transport}
+    private fun readCameraMechanism(v: Any): CameraMechanism {
+        return when(v) {"image" -> CameraMechanism.Image;"direct" -> CameraMechanism.Direct;"transport" -> CameraMechanism.Transport; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeCameraMechanism(w: ProjectIntentWriter, v: CameraMechanism) {
+        w.literal(when(v) {CameraMechanism.Image -> "image";CameraMechanism.Direct -> "direct";CameraMechanism.Transport -> "transport";})
+    }
+    sealed interface OptionalCameraMechanism {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalCameraMechanism
+        data class Value(val value: ProjectIntents.CameraMechanism) : OptionalCameraMechanism
+    }
+    private fun readOptionalCameraMechanism(v: Any): OptionalCameraMechanism {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalCameraMechanism.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalCameraMechanism.Value(readCameraMechanism(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalCameraMechanism(w: ProjectIntentWriter, v: OptionalCameraMechanism) {
+        w.obj { when(v) {
+            is OptionalCameraMechanism.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalCameraMechanism.Value -> w.field("value") { writeCameraMechanism(w, v.value) }
+        } }
+    }
+    private fun readCameraMechanisms(v: Any): List<CameraMechanism> {
+        val array = ProjectIntentJson.list(v, 0, 3)
+        return List(array.length()) { readCameraMechanism(array.get(it)) }
+    }
+    private fun writeCameraMechanisms(w: ProjectIntentWriter, v: List<CameraMechanism>) {
+        w.array(v, 0, 3) { writeCameraMechanism(w, it) }
+    }
+    data class CameraSnapshotRequest(val camera: PrinterCamera, val mechanism: OptionalCameraMechanism)
+    private fun readCameraSnapshotRequest(v: Any): CameraSnapshotRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("camera", "mechanism"), false)
+        return CameraSnapshotRequest(readPrinterCamera(obj.get("camera")), readOptionalCameraMechanism(obj.get("mechanism")))
+    }
+    private fun writeCameraSnapshotRequest(w: ProjectIntentWriter, v: CameraSnapshotRequest) {
+        w.obj {
+            w.field("camera") { writePrinterCamera(w, v.camera) }
+            w.field("mechanism") { writeOptionalCameraMechanism(w, v.mechanism) }
+        }
+    }
+    data class CameraDirectFetch(val url: List<Int>, val timeoutMs: Double)
+    private fun readCameraDirectFetch(v: Any): CameraDirectFetch {
+        val obj = ProjectIntentJson.fields(v, setOf("url", "timeoutMs"), false)
+        return CameraDirectFetch(readPrinterReplyText(obj.get("url")), readFinite(obj.get("timeoutMs")))
+    }
+    private fun writeCameraDirectFetch(w: ProjectIntentWriter, v: CameraDirectFetch) {
+        w.obj {
+            w.field("url") { writePrinterReplyText(w, v.url) }
+            w.field("timeoutMs") { writeFinite(w, v.timeoutMs) }
+        }
+    }
+    data class CameraDownload(val path: List<Int>, val operation: List<Int>)
+    private fun readCameraDownload(v: Any): CameraDownload {
+        val obj = ProjectIntentJson.fields(v, setOf("path", "operation"), false)
+        return CameraDownload(readPrinterReplyText(obj.get("path")), readEditText(obj.get("operation")))
+    }
+    private fun writeCameraDownload(w: ProjectIntentWriter, v: CameraDownload) {
+        w.obj {
+            w.field("path") { writePrinterReplyText(w, v.path) }
+            w.field("operation") { writeEditText(w, v.operation) }
+        }
+    }
+    sealed interface CameraSnapshotPlan {
+        data class Direct(val value: ProjectIntents.CameraDirectFetch) : CameraSnapshotPlan
+        data class Transport(val value: ProjectIntents.CameraDownload) : CameraSnapshotPlan
+        data class Refused(val value: ProjectIntents.CameraFailure) : CameraSnapshotPlan
+    }
+    private fun readCameraSnapshotPlan(v: Any): CameraSnapshotPlan {
+        val obj = ProjectIntentJson.fields(v, setOf("direct", "transport", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "direct" -> CameraSnapshotPlan.Direct(readCameraDirectFetch(obj.get(key)))
+            "transport" -> CameraSnapshotPlan.Transport(readCameraDownload(obj.get(key)))
+            "refused" -> CameraSnapshotPlan.Refused(readCameraFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeCameraSnapshotPlan(w: ProjectIntentWriter, v: CameraSnapshotPlan) {
+        w.obj { when(v) {
+            is CameraSnapshotPlan.Direct -> w.field("direct") { writeCameraDirectFetch(w, v.value) }
+            is CameraSnapshotPlan.Transport -> w.field("transport") { writeCameraDownload(w, v.value) }
+            is CameraSnapshotPlan.Refused -> w.field("refused") { writeCameraFailure(w, v.value) }
+        } }
+    }
+    sealed interface CameraSnapshotOutcome {
+        data class Cancelled(val value: ProjectIntents.Empty) : CameraSnapshotOutcome
+        data class Status(val value: Double) : CameraSnapshotOutcome
+        data class Timeout(val value: ProjectIntents.Empty) : CameraSnapshotOutcome
+        data class Unreachable(val value: List<Int>) : CameraSnapshotOutcome
+        data class Transport(val value: ProjectIntents.OptionalMoonrakerErrorCode) : CameraSnapshotOutcome
+    }
+    private fun readCameraSnapshotOutcome(v: Any): CameraSnapshotOutcome {
+        val obj = ProjectIntentJson.fields(v, setOf("cancelled", "status", "timeout", "unreachable", "transport"), true)
+        return when(val key = obj.keys().next()) {
+            "cancelled" -> CameraSnapshotOutcome.Cancelled(readEmpty(obj.get(key)))
+            "status" -> CameraSnapshotOutcome.Status(readFinite(obj.get(key)))
+            "timeout" -> CameraSnapshotOutcome.Timeout(readEmpty(obj.get(key)))
+            "unreachable" -> CameraSnapshotOutcome.Unreachable(readEditText(obj.get(key)))
+            "transport" -> CameraSnapshotOutcome.Transport(readOptionalMoonrakerErrorCode(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeCameraSnapshotOutcome(w: ProjectIntentWriter, v: CameraSnapshotOutcome) {
+        w.obj { when(v) {
+            is CameraSnapshotOutcome.Cancelled -> w.field("cancelled") { writeEmpty(w, v.value) }
+            is CameraSnapshotOutcome.Status -> w.field("status") { writeFinite(w, v.value) }
+            is CameraSnapshotOutcome.Timeout -> w.field("timeout") { writeEmpty(w, v.value) }
+            is CameraSnapshotOutcome.Unreachable -> w.field("unreachable") { writeEditText(w, v.value) }
+            is CameraSnapshotOutcome.Transport -> w.field("transport") { writeOptionalMoonrakerErrorCode(w, v.value) }
+        } }
+    }
+    data class CameraSnapshotFinish(val request: CameraSnapshotRequest, val outcome: CameraSnapshotOutcome)
+    private fun readCameraSnapshotFinish(v: Any): CameraSnapshotFinish {
+        val obj = ProjectIntentJson.fields(v, setOf("request", "outcome"), false)
+        return CameraSnapshotFinish(readCameraSnapshotRequest(obj.get("request")), readCameraSnapshotOutcome(obj.get("outcome")))
+    }
+    private fun writeCameraSnapshotFinish(w: ProjectIntentWriter, v: CameraSnapshotFinish) {
+        w.obj {
+            w.field("request") { writeCameraSnapshotRequest(w, v.request) }
+            w.field("outcome") { writeCameraSnapshotOutcome(w, v.outcome) }
+        }
+    }
+    data class CameraMechanismsRequest(val camera: PrinterCamera, val pageProtocol: OptionalText)
+    private fun readCameraMechanismsRequest(v: Any): CameraMechanismsRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("camera", "pageProtocol"), false)
+        return CameraMechanismsRequest(readPrinterCamera(obj.get("camera")), readOptionalText(obj.get("pageProtocol")))
+    }
+    private fun writeCameraMechanismsRequest(w: ProjectIntentWriter, v: CameraMechanismsRequest) {
+        w.obj {
+            w.field("camera") { writePrinterCamera(w, v.camera) }
+            w.field("pageProtocol") { writeOptionalText(w, v.pageProtocol) }
+        }
+    }
+    data class CameraDescribeRequest(val camera: PrinterCamera, val route: OptionalCameraMechanism, val pageProtocol: OptionalText)
+    private fun readCameraDescribeRequest(v: Any): CameraDescribeRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("camera", "route", "pageProtocol"), false)
+        return CameraDescribeRequest(readPrinterCamera(obj.get("camera")), readOptionalCameraMechanism(obj.get("route")), readOptionalText(obj.get("pageProtocol")))
+    }
+    private fun writeCameraDescribeRequest(w: ProjectIntentWriter, v: CameraDescribeRequest) {
+        w.obj {
+            w.field("camera") { writePrinterCamera(w, v.camera) }
+            w.field("route") { writeOptionalCameraMechanism(w, v.route) }
+            w.field("pageProtocol") { writeOptionalText(w, v.pageProtocol) }
+        }
+    }
+    data class CameraFrameRequest(val camera: PrinterCamera, val nonce: List<Int>)
+    private fun readCameraFrameRequest(v: Any): CameraFrameRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("camera", "nonce"), false)
+        return CameraFrameRequest(readPrinterCamera(obj.get("camera")), readEditText(obj.get("nonce")))
+    }
+    private fun writeCameraFrameRequest(w: ProjectIntentWriter, v: CameraFrameRequest) {
+        w.obj {
+            w.field("camera") { writePrinterCamera(w, v.camera) }
+            w.field("nonce") { writeEditText(w, v.nonce) }
+        }
+    }
     sealed interface PrinterStorageResult {
         data class Listing(val value: ProjectIntents.PrinterStorageListing) : PrinterStorageResult
         data class Metadata(val value: ProjectIntents.PrinterStorageMetadata) : PrinterStorageResult
@@ -10802,4 +11052,30 @@ object ProjectIntents {
     fun encodeConsoleRecentRequest(value: ConsoleRecentRequest): String = ProjectIntentWriter().also { writeConsoleRecentRequest(it, value) }.finish()
     fun decodeTextList(text: String): List<List<Int>> = readTextList(ProjectIntentJson.parse(text))
     fun encodeTextList(value: List<List<Int>>): String = ProjectIntentWriter().also { writeTextList(it, value) }.finish()
+    fun decodeCameraListRequest(text: String): CameraListRequest = readCameraListRequest(ProjectIntentJson.parse(text))
+    fun encodeCameraListRequest(value: CameraListRequest): String = ProjectIntentWriter().also { writeCameraListRequest(it, value) }.finish()
+    fun decodeCameraListFinish(text: String): CameraListFinish = readCameraListFinish(ProjectIntentJson.parse(text))
+    fun encodeCameraListFinish(value: CameraListFinish): String = ProjectIntentWriter().also { writeCameraListFinish(it, value) }.finish()
+    fun decodeCameraListResult(text: String): CameraListResult = readCameraListResult(ProjectIntentJson.parse(text, BULK))
+    fun encodeCameraListResult(value: CameraListResult): String = ProjectIntentWriter(BULK).also { writeCameraListResult(it, value) }.finish()
+    fun decodePrinterCamera(text: String): PrinterCamera = readPrinterCamera(ProjectIntentJson.parse(text, BULK))
+    fun encodePrinterCamera(value: PrinterCamera): String = ProjectIntentWriter(BULK).also { writePrinterCamera(it, value) }.finish()
+    fun decodeCameraSnapshotRequest(text: String): CameraSnapshotRequest = readCameraSnapshotRequest(ProjectIntentJson.parse(text, BULK))
+    fun encodeCameraSnapshotRequest(value: CameraSnapshotRequest): String = ProjectIntentWriter(BULK).also { writeCameraSnapshotRequest(it, value) }.finish()
+    fun decodeCameraSnapshotPlan(text: String): CameraSnapshotPlan = readCameraSnapshotPlan(ProjectIntentJson.parse(text, BULK))
+    fun encodeCameraSnapshotPlan(value: CameraSnapshotPlan): String = ProjectIntentWriter(BULK).also { writeCameraSnapshotPlan(it, value) }.finish()
+    fun decodeCameraSnapshotFinish(text: String): CameraSnapshotFinish = readCameraSnapshotFinish(ProjectIntentJson.parse(text, BULK))
+    fun encodeCameraSnapshotFinish(value: CameraSnapshotFinish): String = ProjectIntentWriter(BULK).also { writeCameraSnapshotFinish(it, value) }.finish()
+    fun decodeCameraFailure(text: String): CameraFailure = readCameraFailure(ProjectIntentJson.parse(text, BULK))
+    fun encodeCameraFailure(value: CameraFailure): String = ProjectIntentWriter(BULK).also { writeCameraFailure(it, value) }.finish()
+    fun decodeCameraMechanismsRequest(text: String): CameraMechanismsRequest = readCameraMechanismsRequest(ProjectIntentJson.parse(text, BULK))
+    fun encodeCameraMechanismsRequest(value: CameraMechanismsRequest): String = ProjectIntentWriter(BULK).also { writeCameraMechanismsRequest(it, value) }.finish()
+    fun decodeCameraMechanisms(text: String): List<CameraMechanism> = readCameraMechanisms(ProjectIntentJson.parse(text))
+    fun encodeCameraMechanisms(value: List<CameraMechanism>): String = ProjectIntentWriter().also { writeCameraMechanisms(it, value) }.finish()
+    fun decodeCameraDescribeRequest(text: String): CameraDescribeRequest = readCameraDescribeRequest(ProjectIntentJson.parse(text, BULK))
+    fun encodeCameraDescribeRequest(value: CameraDescribeRequest): String = ProjectIntentWriter(BULK).also { writeCameraDescribeRequest(it, value) }.finish()
+    fun decodeCameraFrameRequest(text: String): CameraFrameRequest = readCameraFrameRequest(ProjectIntentJson.parse(text, BULK))
+    fun encodeCameraFrameRequest(value: CameraFrameRequest): String = ProjectIntentWriter(BULK).also { writeCameraFrameRequest(it, value) }.finish()
+    fun decodeOptionalPrinterReplyText(text: String): OptionalPrinterReplyText = readOptionalPrinterReplyText(ProjectIntentJson.parse(text, BULK))
+    fun encodeOptionalPrinterReplyText(value: OptionalPrinterReplyText): String = ProjectIntentWriter(BULK).also { writeOptionalPrinterReplyText(it, value) }.finish()
 }

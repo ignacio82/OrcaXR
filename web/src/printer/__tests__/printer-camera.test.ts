@@ -339,4 +339,29 @@ await test('reports a printer with no camera component instead of an empty list'
   assert.deepEqual(await listPrinterCameras(new FakeTransport({ webcams: [] })), []);
 });
 
+await test('a relative path on an IPv6 printer keeps the whole address', () => {
+  // The host used to be cut at its first `:`, giving `http://[fd00/webcam/…`.
+  assert.deepEqual(resolveCameraSources('/webcam/?action=snapshot', 'http://[fd00::1:5]:7125'), {
+    snapshotUrl: 'http://[fd00::1:5]/webcam/?action=snapshot',
+    snapshotPath: '/webcam/?action=snapshot',
+  });
+});
+
+await test('the service says the rate frames are actually fetched at', () => {
+  const camera = (targetFps: number) =>
+    ({ name: 'Bed', service: 'ipstream', snapshotPath: '/s', targetFps }) as unknown as Parameters<
+      typeof describeCameraService
+    >[0];
+  // A camera asking for 0.1 fps is polled at the 0.2 floor; it used to say 0.1.
+  assert.equal(
+    describeCameraService(camera(0.1), 'transport'),
+    'ipstream, shown as authenticated snapshots at up to 0.2 fps',
+  );
+  assert.equal(cameraPollIntervalMs(camera(0.1)), 5000);
+  assert.equal(
+    describeCameraService(camera(30), 'transport'),
+    `ipstream, shown as authenticated snapshots at up to ${MAX_SNAPSHOT_FPS} fps`,
+  );
+});
+
 console.log(`\nPrinter camera: ${passed} tests passed.`);

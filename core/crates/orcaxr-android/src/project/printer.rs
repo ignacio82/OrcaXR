@@ -4,7 +4,7 @@ use super::*;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
-    console,
+    camera, console,
     control::{self, HoldToConfirm},
     history, moonraker, preparation, reply,
     session::{self, PrinterSession},
@@ -895,6 +895,100 @@ pub(super) fn console_recent(env: &mut JNIEnv<'_>, request: JString<'_>) -> Resu
         wire::decode_console_recent_request,
         console::recent,
         wire::encode_text_list,
+    )
+}
+
+/// `exchange` for an input on the intent contract's bulk tier.
+fn bulk_exchange<T, R>(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+    decode: fn(&str) -> std::result::Result<T, InvalidIntent>,
+    answer: impl FnOnce(&T) -> R,
+    encode: fn(&R) -> std::result::Result<String, InvalidIntent>,
+) -> Result<jstring> {
+    let request =
+        decode(&bounded_text(env, &request, wire::BULK.bytes)?).map_err(|_| "invalid_request")?;
+    let json = encode(&answer(&request)).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn camera_list_plan(env: &mut JNIEnv<'_>) -> Result<jstring> {
+    let json = wire::encode_printer_send(&camera::list_plan()).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn camera_list_finish(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_camera_list_finish,
+        camera::list_finish,
+        wire::encode_camera_list_result,
+    )
+}
+pub(super) fn camera_list_read(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+    reply: JString<'_>,
+) -> Result<jstring> {
+    let request = wire::decode_camera_list_request(&intent_text(env, &request)?)
+        .map_err(|_| "invalid_request")?;
+    let reply = bounded_text(env, &reply, reply::LIMITS.bytes)?;
+    let json = wire::encode_camera_list_result(&camera::list_read(&request, &reply))
+        .map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn camera_snapshot_plan(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    bulk_exchange(
+        env,
+        request,
+        wire::decode_camera_snapshot_request,
+        camera::snapshot_plan,
+        wire::encode_camera_snapshot_plan,
+    )
+}
+pub(super) fn camera_snapshot_failure(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    bulk_exchange(
+        env,
+        request,
+        wire::decode_camera_snapshot_finish,
+        camera::snapshot_failure,
+        wire::encode_camera_failure,
+    )
+}
+pub(super) fn camera_mechanisms(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    bulk_exchange(
+        env,
+        request,
+        wire::decode_camera_mechanisms_request,
+        camera::mechanisms_for,
+        wire::encode_camera_mechanisms,
+    )
+}
+pub(super) fn camera_describe(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    bulk_exchange(
+        env,
+        request,
+        wire::decode_camera_describe_request,
+        |r| wire::PrinterText {
+            text: camera::describe(r),
+        },
+        wire::encode_printer_text,
+    )
+}
+pub(super) fn camera_poll_interval(env: &mut JNIEnv<'_>, camera: JString<'_>) -> Result<jdouble> {
+    let camera = wire::decode_printer_camera(&bounded_text(env, &camera, wire::BULK.bytes)?)
+        .map_err(|_| "invalid_request")?;
+    Ok(camera::poll_interval_ms(&camera))
+}
+pub(super) fn camera_frame_url(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    bulk_exchange(
+        env,
+        request,
+        wire::decode_camera_frame_request,
+        camera::frame,
+        wire::encode_optional_printer_reply_text,
     )
 }
 
