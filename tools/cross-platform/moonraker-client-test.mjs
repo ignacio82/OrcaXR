@@ -81,9 +81,21 @@ try {
     "GET /server/info",
     "GET /printer/info",
   ]);
+  const nearby = await simulator();
+  printers.push(nearby);
+  assert.equal(jvm.call("localNetworkChecks", nearby.url), 28);
+  // Denied clients sent nothing; the granted one its handshake (whose two
+  // requests may arrive in either order), nothing while revoked, and its
+  // request once granted again.
+  assert.deepEqual((await nearby.summary()).requests.toSorted(), [
+    "GET /printer/info",
+    "GET /printer/info",
+    "GET /server/info",
+  ]);
   console.log(
     JSON.stringify({
       lanPolicyChecks: 21,
+      localNetworkChecks: 28,
       moonrakerClientChecks: 21,
       printerSessionClientChecks: 17,
       printWorkflowClientChecks: 12,

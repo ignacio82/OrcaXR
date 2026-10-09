@@ -1970,6 +1970,15 @@ credential storage, and explicit permission/error flows.
 - [ ] Handle local-network permission grant, denial, revocation, and re-entry,
   including SDK 37 behavior. Keep manual endpoint entry and platform-supported
   discovery distinct; avoid indiscriminate subnet scanning.
+  The app targets SDK 37, where local-network access is blocked by default,
+  so it declares `ACCESS_LOCAL_NETWORK`, and every `MoonrakerClient` exchange
+  is judged first (`LocalNetworkAccess`): a `.local` name or local address is
+  refused at once while the permission is denied — rather than left to time
+  out like a switched-off printer — and the permission is asked afresh for
+  each exchange, so denial, revocation and a later grant take effect on the
+  next one. 28 host checks cover them against the simulator. Requesting the
+  permission and explaining a refusal belong to the application shell; no
+  discovery or subnet scanning exists.
 - [x] Store remembered printer/slicer secrets using Android Keystore-backed
   encryption and clear them on explicit forget. Keep AI credentials memory-only
   unless a separate preference is deliberately introduced. Exclude secrets and

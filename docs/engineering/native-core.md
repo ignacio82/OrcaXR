@@ -3869,6 +3869,28 @@ app's network security config permits cleartext because typed addresses
 cannot be named by domain rules, and trusts only the system's certificate
 anchors. Its checks redirect sockets to the simulator while a fake resolver
 names a public or a private address, so only the judged address differs.
+Android 17 adds a second gate: an app targeting it may not use the local
+network until the operator grants `ACCESS_LOCAL_NETWORK` (the "nearby
+devices" group), and a blocked TCP connection is not refused but left to
+time out — indistinguishable from a printer that is switched off. So
+`LocalNetworkAccess` judges every exchange before it connects: a `.local`
+name (resolved by multicast DNS, which itself needs the permission) or an
+address on the local network (private, link-local, unique-local or
+multicast, IPv4-mapped included; never loopback or the public internet)
+needs the permission, and without it the exchange fails at once with a
+`LocalNetworkDeniedException` that names the remedy. It is an application
+interceptor on the client's OkHttp, so it runs before resolution and
+connection for HTTP and WebSocket alike, and it asks the permission afresh
+for every exchange (`AndroidLocalNetwork.permission` reads it from the
+platform; before Android 17 the network itself grants it), so a grant, a
+denial or a revocation in the system settings takes effect on the next
+exchange, with no state to go stale. The app declares the permission, which
+implies no hardware feature. Its 28 checks classify addresses and names and
+drive a client against the simulator: refused promptly while denied, a
+`.local` name refused before it is resolved, connected once granted, its
+next request refused after a revocation, and reaching the printer again on a
+new grant — the simulator receives exactly the granted exchanges. Asking the
+operator, and explaining a refusal, belong to the application shell.
 `PrinterSessionClient` hosts the session machine over those clients the same
 way: it opens a client when the core asks (subscribing it to
 `status::OBJECTS` and answering the opening with its first state), feeds its

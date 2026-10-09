@@ -88,6 +88,8 @@ class MoonrakerClient(
     private val clock: () -> Double = { System.currentTimeMillis().toDouble() },
     private val random: () -> Double = { secure.nextDouble() },
     private val logger: ((ProjectIntents.MoonrakerLog) -> Unit)? = null,
+    /** The local-network permission each exchange is judged by before it connects; none for a host with no such permission. */
+    localNetwork: LocalNetworkPermission? = null,
 ) : AutoCloseable {
     companion object {
         /** A request deadline of none at all, for a transfer the operator can stop. */
@@ -100,6 +102,8 @@ class MoonrakerClient(
     }
 
     private val http: OkHttpClient = http.newBuilder()
+        // Refused at once, rather than left to time out, while the app may not use the local network.
+        .apply { localNetwork?.let { addInterceptor(LocalNetworkAccess.gate(it, http.dns)) } }
         // Plain HTTP only to a local address, judged where the connection landed.
         .addNetworkInterceptor(LanTransportPolicy.cleartextGuard)
         .followRedirects(false)

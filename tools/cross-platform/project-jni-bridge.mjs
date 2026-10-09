@@ -57,6 +57,7 @@ export function startProjectJni(profile = "debug") {
   signatures.printerCameraChecks = ["String"];
   signatures.printerDirectoryChecks = ["String"];
   signatures.credentialsChecks = ["String"];
+  signatures.localNetworkChecks = ["String"];
   signatures.credentialVaultChecks = [];
   signatures.moonrakerTransportChecks = ["String"];
   signatures.moonrakerClientChecks = ["String"];
