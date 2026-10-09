@@ -4477,6 +4477,32 @@ re-tints it, and undo restores the empty bed. Shading is baked flat (the
 browser lights its surface); paint colours, the session's selection, the
 printer profile's bed size and toolpaths are not drawn yet.
 
+### Android Preview area
+
+The Preview area is the browser's "Open G-code Viewer…" (`file_open_gcode`)
+over the shared core's G-code preview — no parsing of its own. `PreviewModel`
+reads a picked document through a bounded stream (refused above 64 MB) and
+runs the `GcodeSession` on a worker thread; `GcodePreviewPlan`
+(`renderer-api`, platform-free, 10 JVM tests) ports the view state of the
+browser's `GcodePreviewController`: whether a print loads whole or in bounded
+windows, which window a top- or bottom-layer move loads, previous/next
+window steps (single layer included), clamped and swapped layer ranges, the
+hidden move types and the window notice word for word. The toolpaths draw as
+`FilamentScene.setToolpath` lines in the core's colours, framed
+(`PreviewFraming`, 3 tests) above the bed; the screen offers the 12 colour
+modes in the browser's order and names, top and bottom layer sliders with the
+layer's Z, single layer, the move filters (each a labelled toggle, so
+accessibility services read its name) and the legend, value range and
+layer count as the browser's panel words them. `android-preview-smoke.py`
+opens a two-layer, two-tool reference through the system picker on the
+emulator: about 520 pixels of the toolpath view take the core's colours
+(the empty view has none), the tool mode and single layer each change the
+picture, the preview survives leaving the area, and an empty file is refused
+as the browser refuses it. Estimated time, filament and per-tool usage await
+the shared artifact summary's bindings; the bed is 200 mm, enlarged to the
+toolpath (G-code carries no bed). The bottom navigation's labels now stay on
+one line: with four areas a phone left "Workspace" wrapped.
+
 ### Android Device area
 
 The app's Device area is the first product area on Android, built only from

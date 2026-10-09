@@ -228,3 +228,17 @@ def changed_pixels(first, second, left, top, right, bottom, delta=40):
                 changed.append((x, y))
     return changed
 
+
+def saturated_pixels(image, left, top, right, bottom, spread=60):
+    """How many pixels in the box are strongly coloured (channels differing by more than [spread]):
+    toolpaths and tinted models, not the grey-blue bed or the dark background."""
+    _, _, rows = image
+    count = 0
+    for y in range(top, bottom):
+        row = rows[y]
+        for x in range(left, right):
+            r, g, b = row[x * 4], row[x * 4 + 1], row[x * 4 + 2]
+            if max(r, g, b) - min(r, g, b) > spread:
+                count += 1
+    return count
+

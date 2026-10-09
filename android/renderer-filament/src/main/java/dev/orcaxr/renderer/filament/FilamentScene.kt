@@ -30,6 +30,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         val draws: Int, val drawEntities: Int, val gpuBufferBytes: Long, val pendingUploadBytes: Long,
         val peakUploadBytes: Long, val totalUploadBytes: Long, val bufferUploads: Long,
         val frames: Long, val maxFrameCpuMs: Double, val closed: Boolean,
+        val toolpathSegments: Int = 0,
     )
     data class Pick(val key: String, val instanceId: String, val facet: Int, val distanceMetres: Double)
 
@@ -59,6 +60,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private val opaque: Material
     private val transparent: Material
     private val bedMaterial: MaterialInstance
+    private val toolpathMaterial: MaterialInstance
     private val helper = UiHelper(UiHelper.ContextErrorPolicy.DONT_CHECK)
     private val display = DisplayHelper(surface.context)
     private val scheduler = Choreographer.getInstance()
@@ -66,6 +68,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private val meshes = LinkedHashMap<String, Mesh>()
     private val placed = LinkedHashMap<String, Placed>()
     private var bed: Lines? = null
+    private var toolpath: Lines? = null
+    private var toolpathSegments = 0
     private var selected: String? = null
     private var busy = false
     private var pending = 0L
@@ -98,6 +102,10 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             bedMaterial.setParameter("clipHeight", clipHeight)
             bedMaterial.setParameter("opacity", 1f)
             bedMaterial.setParameter("tint", BED_TINT[0], BED_TINT[1], BED_TINT[2], 1f)
+            toolpathMaterial = opaque.createInstance()
+            toolpathMaterial.setParameter("clipHeight", clipHeight)
+            toolpathMaterial.setParameter("opacity", 1f)
+            toolpathMaterial.setParameter("tint", 1f, 1f, 1f, 1f)
             view.scene = scene
             view.camera = camera
             view.isPostProcessingEnabled = false
@@ -150,9 +158,9 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         requireUi()
         return Metrics(state, meshes.size, meshes.values.sumOf { it.source.facetCount },
             meshes.values.sumOf { it.uploadedFacets }, placed.size,
-            placed.values.sumOf { it.entities.size } + (if (bed == null) 0 else 1),
-            meshes.values.sumOf { mesh -> mesh.chunks.sumOf { it.bytes } } + (bed?.bytes ?: 0),
-            pending, peakPending, uploaded, uploads, frames, maxFrameCpuMs, closed)
+            placed.values.sumOf { it.entities.size } + (if (bed == null) 0 else 1) + (if (toolpath == null) 0 else 1),
+            meshes.values.sumOf { mesh -> mesh.chunks.sumOf { it.bytes } } + (bed?.bytes ?: 0) + (toolpath?.bytes ?: 0),
+            pending, peakPending, uploaded, uploads, frames, maxFrameCpuMs, closed, toolpathSegments)
     }
 
     fun setActive(value: Boolean) {
@@ -412,7 +420,33 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             }
         }
         positions.flip(); colors.flip(); indices.flip()
-        val count = segments.size * 2
+        bed = createLines(positions, colors, indices,
+            FloatArray(3) { (low[it] + high[it]) * .5f }, FloatArray(3) { max((high[it] - low[it]) * .5f, 1e-5f) }, bedMaterial)
+        invalidate()
+    }
+
+    /**
+     * Shows a G-code toolpath (replacing the one shown before), drawn as lines
+     * in the colours Rust chose for each record; none clears it. Its buffers are
+     * copied to the GPU in the background; the geometry stays the caller's.
+     */
+    fun setToolpath(value: ToolpathGeometry?) {
+        checkOpen()
+        require(value == null || value.segments <= MAX_TOOLPATH_SEGMENTS) { "Toolpath exceeds the renderer segment budget" }
+        toolpath?.let(::destroyLines); toolpath = null; toolpathSegments = 0
+        if (value != null && value.segments > 0) {
+            // Duplicates: the caller may show the same geometry again in a scene made afresh.
+            toolpath = createLines(value.positions.duplicate(), value.colors.duplicate(), value.indices.duplicate(),
+                value.center, value.halfExtent, toolpathMaterial)
+            toolpathSegments = value.segments
+        }
+        invalidate()
+    }
+
+    /** LINES geometry: float3 render-space positions, float4 RGBA colours, uint indices; one entity. */
+    private fun createLines(positions: ByteBuffer, colors: ByteBuffer, indices: ByteBuffer, center: FloatArray,
+        halfExtent: FloatArray, material: MaterialInstance): Lines {
+        val count = indices.remaining() / 4
         val vertices = VertexBuffer.Builder().bufferCount(2).vertexCount(count)
             .attribute(VertexBuffer.VertexAttribute.POSITION, 0, VertexBuffer.AttributeType.FLOAT3, 0, 12)
             .attribute(VertexBuffer.VertexAttribute.COLOR, 1, VertexBuffer.AttributeType.FLOAT4, 0, 16)
@@ -426,10 +460,9 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         val entity = engine.entityManager.create()
         try {
             RenderableManager.Builder(1)
-                .boundingBox(Box((low[0] + high[0]) * .5f, (low[1] + high[1]) * .5f, (low[2] + high[2]) * .5f,
-                    max((high[0] - low[0]) * .5f, 1e-5f), max((high[1] - low[1]) * .5f, 1e-5f), max((high[2] - low[2]) * .5f, 1e-5f)))
+                .boundingBox(Box(center[0], center[1], center[2], halfExtent[0], halfExtent[1], halfExtent[2]))
                 .geometry(0, RenderableManager.PrimitiveType.LINES, vertices, index, 0, count)
-                .material(0, bedMaterial)
+                .material(0, material)
                 .culling(false).castShadows(false).receiveShadows(false)
                 .build(engine, entity)
             scene.addEntity(entity)
@@ -442,8 +475,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             engine.destroyVertexBuffer(vertices); engine.destroyIndexBuffer(index)
             throw failure
         }
-        bed = Lines(vertices, index, entity, positions.remaining().toLong() + colors.remaining() + indices.remaining())
-        invalidate()
+        return Lines(vertices, index, entity, positions.remaining().toLong() + colors.remaining() + indices.remaining())
     }
 
     private fun destroyLines(value: Lines) {
@@ -463,6 +495,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         checkOpen(); require(height == null || height.isFinite() && height in -1_000_000f..1_000_000f)
         clipHeight = height?.times(.001f) ?: 10000f
         bedMaterial.setParameter("clipHeight", clipHeight)
+        toolpathMaterial.setParameter("clipHeight", clipHeight)
         for (each in placed.values) each.material.setParameter("clipHeight", clipHeight)
         invalidate()
     }
@@ -471,9 +504,15 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     fun cameraState() = orbit
 
     /** Aims the camera at the middle of a [widthMm] by [depthMm] bed, far enough to show all of it. */
-    fun frame(widthMm: Double, depthMm: Double) {
-        checkOpen(); require(widthMm.isFinite() && depthMm.isFinite() && widthMm > 0 && depthMm > 0)
-        val target = RenderSpace.point(Point3(widthMm / 2, depthMm / 2, 0.0))
+    fun frame(widthMm: Double, depthMm: Double) = frameArea(0.0, 0.0, widthMm, depthMm)
+
+    /** Aims the camera at the middle of the area from ([minXMm], [minYMm]) to ([maxXMm], [maxYMm]) on z = 0, far enough to show all of it. */
+    fun frameArea(minXMm: Double, minYMm: Double, maxXMm: Double, maxYMm: Double) {
+        checkOpen()
+        require(listOf(minXMm, minYMm, maxXMm, maxYMm).all { it.isFinite() } && maxXMm > minXMm && maxYMm > minYMm)
+        val widthMm = maxXMm - minXMm
+        val depthMm = maxYMm - minYMm
+        val target = RenderSpace.point(Point3((minXMm + maxXMm) / 2, (minYMm + maxYMm) / 2, 0.0))
         val radius = .5 * sqrt(widthMm * widthMm + depthMm * depthMm) * .001
         val width = view.viewport.width.takeIf { it > 0 } ?: surface.width
         val height = view.viewport.height.takeIf { it > 0 } ?: surface.height
@@ -538,7 +577,9 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         placed.values.forEach(::destroyPlaced); placed.clear()
         meshes.values.forEach(::discard); meshes.clear()
         bed?.let(::destroyLines); bed = null
+        toolpath?.let(::destroyLines); toolpath = null; toolpathSegments = 0
         engine.destroyMaterialInstance(bedMaterial)
+        engine.destroyMaterialInstance(toolpathMaterial)
         engine.destroyMaterial(opaque); engine.destroyMaterial(transparent)
         engine.destroyView(view); engine.destroyScene(scene); engine.destroyRenderer(renderer)
         val cameraEntity = camera.entity
@@ -556,5 +597,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         val BED_TINT = floatArrayOf(.42f, .47f, .55f)
         const val BED_GRID_SHADE = .55f
         const val MAX_BED_LINES = 1000.0
+        /** The viewport experiment's toolpath bound and `ToolpathGeometry`'s default budget. */
+        const val MAX_TOOLPATH_SEGMENTS = 240_000
     }
 }

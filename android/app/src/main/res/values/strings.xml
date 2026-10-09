@@ -7,6 +7,25 @@
     <string name="nav_workspace">Workspace</string>
     <string name="nav_device">Device</string>
     <string name="nav_project">Project</string>
+    <string name="nav_preview">Preview</string>
+    <!-- The browser's G-code viewer wording (web/src/ui/dom/GcodePreviewPanel.ts). -->
+    <string name="preview_heading">G-code preview</string>
+    <string name="preview_open">Open G-code file…</string>
+    <string name="preview_loading">Reading G-code preview…</string>
+    <string name="preview_showing">Showing %1$s</string>
+    <string name="preview_showing_layers">Showing %1$s — %2$s</string>
+    <string name="preview_unavailable">Preview unavailable for %1$s. Adjust the controls below or open another G-code file.</string>
+    <string name="preview_idle">Slice the plate or open a G-code file to inspect toolpaths.</string>
+    <string name="preview_view">View</string>
+    <string name="preview_top_layer">Top layer</string>
+    <string name="preview_bottom_layer">Bottom layer</string>
+    <string name="preview_single_layer">Single layer</string>
+    <string name="preview_layer_of">Layer %1$d of %2$d</string>
+    <string name="preview_z_mm">Z %1$s mm</string>
+    <string name="preview_moves">Moves</string>
+    <string name="preview_previous_moves">Previous moves</string>
+    <string name="preview_next_moves">Next moves</string>
+    <string name="preview_layers">%1$d layers</string>
     <string name="project_saved">No unsaved changes</string>
     <string name="project_unsaved">Unsaved changes</string>
     <!-- The browser's action names (web/src/actions/groups/file.ts). -->

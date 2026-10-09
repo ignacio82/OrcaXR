@@ -1833,7 +1833,9 @@ storage journeys on phone, tablet, and desktop-sized windows.
   `DeviceWorkspace`; each publishes projections to Compose. The Project
   area's actions carry the browser's action names (New Project, Open
   Project…, Save Project, Save Project As…, Import Model…, Undo, Redo).
-  Prepare and Preview wait for their complete shared workflows.
+  The Preview area is the browser's G-code viewer over the shared core's
+  preview (picker, colour modes, layer window and filters, emulator-verified);
+  previewing a slice and Prepare wait for the slicing route.
 - [ ] Adapt inspector/object tree, toolbars, menus, command palette, dialogs,
   settings, and progress states to narrow, medium, and wide windows. Support
   keyboard traversal, shortcuts, hover, context menus, trackpad navigation,

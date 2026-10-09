@@ -31,10 +31,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import dev.orcaxr.core.CoreCompatibility
 import dev.orcaxr.core.DocumentOwners
 import dev.orcaxr.nativeapp.device.DeviceModel
 import dev.orcaxr.nativeapp.device.DeviceScreen
+import dev.orcaxr.nativeapp.preview.PreviewModel
+import dev.orcaxr.nativeapp.preview.PreviewScreen
 import dev.orcaxr.nativeapp.project.ProjectModel
 import dev.orcaxr.nativeapp.project.ProjectScreen
 import dev.orcaxr.nativeapp.workspace.WorkspaceScreen
@@ -43,10 +46,12 @@ import kotlinx.coroutines.withContext
 
 /** The shell. Product areas are added only with complete shared workflows: the
  * workspace preview, the Project area's documents over the shared project
- * session, and the Device area's printers over the shared printer core. */
+ * session, the Preview area's G-code viewer over the shared G-code preview,
+ * and the Device area's printers over the shared printer core. */
 class MainActivity : ComponentActivity() {
     private val device: DeviceModel by viewModels()
     private val project: ProjectModel by viewModels()
+    private val preview: PreviewModel by viewModels()
     /** The area shown; an opened or shared document switches to the Project area. */
     private var area by mutableIntStateOf(R.string.nav_workspace)
 
@@ -141,13 +146,15 @@ class MainActivity : ComponentActivity() {
                                 for ((label, icon) in listOf(
                                     R.string.nav_workspace to android.R.drawable.ic_menu_gallery,
                                     R.string.nav_project to android.R.drawable.ic_menu_save,
+                                    R.string.nav_preview to android.R.drawable.ic_menu_view,
                                     R.string.nav_device to android.R.drawable.ic_menu_share,
                                 )) {
                                     NavigationBarItem(
                                         selected = area == label,
                                         onClick = { area = label },
                                         icon = { Icon(painterResource(icon), contentDescription = null) },
-                                        label = { Text(stringResource(label)) },
+                                        // One line: four areas leave a narrow phone little room per label.
+                                        label = { Text(stringResource(label), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
                                     )
                                 }
                             }
@@ -158,6 +165,8 @@ class MainActivity : ComponentActivity() {
                         DeviceScreen(device, Modifier.fillMaxSize().padding(padding))
                     } else if (area == R.string.nav_project && state == R.string.workspace_development) {
                         ProjectScreen(project, Modifier.fillMaxSize().padding(padding))
+                    } else if (area == R.string.nav_preview && state == R.string.workspace_development) {
+                        PreviewScreen(preview, Modifier.fillMaxSize().padding(padding))
                     } else if (state == R.string.workspace_development) {
                         Box(Modifier.fillMaxSize().padding(padding)) {
                             WorkspaceScreen(project, Modifier.fillMaxSize())
