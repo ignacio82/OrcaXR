@@ -3832,6 +3832,23 @@ and both Moonraker simulators (a real HTTP server: uploads, storage, prints),
 29 transports in all, with the same fakes
 (`moonraker-transport-shared.test.ts`).
 
+On Android, `MoonrakerClient` (core-bridge) hosts the same machine over
+OkHttp 4.12: HTTP exchanges with no redirect followed (a redirect fails the
+exchange, as `fetch` with `redirect: "error"` does), no retry and no deadline
+of OkHttp's own, multipart uploads from the caller's fields and bytes, body
+reads on an I/O pool bounded to what decides any outcome (text past
+`MAX_TEXT_UNITS`, downloads past 256 MiB), an OkHttp WebSocket, scheduled
+timers and `SecureRandom` draws. Every call into the core runs on the
+client's one thread, steps apply in the core's order, and listeners run
+there; calls answer `CompletableFuture`s with a `cancel()` that aborts as a
+caller's signal would. `moonraker-client-test.mjs` runs it end to end on the
+host JVM against the Moonraker simulator (a real HTTP and WebSocket server, on
+a worker thread because the JNI bridge blocks the main one): handshake,
+credentials, queries, a held upload cancelled in flight, upload and download
+byte for byte, refusals before anything is sent, the printer's status
+notification after a start, heartbeats, a 404 with the server's own detail,
+recovery and a disconnect — 21 Kotlin checks, then what the printer received.
+
 It runs on the printer core, a package of its own (`core/browser/printer`,
 `web/public/core-printer/<manifest-sha256>`, the `printer` feature; 1,495,957
 WASM bytes against the project core's 8.8 MB, bounded at 3 MiB), loaded on

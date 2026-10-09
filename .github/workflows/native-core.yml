@@ -312,6 +312,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/test-project-query.mjs --jni
           node tools/cross-platform/project-jni-test.mjs
           node tools/cross-platform/project-jni-test.mjs --release
+          node tools/cross-platform/moonraker-client-test.mjs
       - name: Run JNI, non-XR startup, renderer pixels and lifecycle on an owned emulator
         run: |
           sudo chmod a+rw /dev/kvm

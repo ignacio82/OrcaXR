@@ -27,6 +27,11 @@ def jar(group, name, version):
 
 stdlib = jar("org.jetbrains.kotlin", "kotlin-stdlib", "2.4.0")
 annotations = jar("org.jetbrains", "annotations", "23.0.0")
+# The Moonraker host's HTTP/WebSocket client, as core-bridge resolves it.
+network = os.pathsep.join([
+    jar("com.squareup.okhttp3", "okhttp", "4.12.0"),
+    jar("com.squareup.okio", "okio-jvm", "3.17.0"),
+])
 compiler = os.pathsep.join([
     jar("org.jetbrains.kotlin", "kotlin-compiler-embeddable", "2.3.21"),
     jar("org.jetbrains.kotlin", "kotlin-stdlib", "2.3.21"),
@@ -63,10 +68,10 @@ java = sorted(main.rglob("*.java"))
 subprocess.run(["javac", "--release", "17", "-d", str(output), *map(str, java)], check=True)
 subprocess.run(["java", "-cp", compiler, "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
                 "-no-stdlib", "-no-reflect", "-jvm-target", "17", "-classpath",
-                os.pathsep.join([str(output), stdlib, annotations, str(android)]), "-d", str(output),
+                os.pathsep.join([str(output), stdlib, network, annotations, str(android)]), "-d", str(output),
                 *map(str, sorted(main.rglob("*.kt"))),
                 *map(str, sorted((ROOT / "android/core-bridge/src/androidTest/java/dev/orcaxr/core").glob("*Checks.kt")))], check=True)
-subprocess.run(["javac", "--release", "17", "-cp", os.pathsep.join([str(output), stdlib]),
+subprocess.run(["javac", "--release", "17", "-cp", os.pathsep.join([str(output), stdlib, network]),
                 "-d", str(output), str(ROOT / "tools/cross-platform/jvm/ProjectJniHarness.java")], check=True)
-(output / "classpath.txt").write_text(os.pathsep.join([str(output), stdlib]))
+(output / "classpath.txt").write_text(os.pathsep.join([str(output), stdlib, network]))
 print("Compiled Java/Kotlin project bridge and host JNI test harness")
