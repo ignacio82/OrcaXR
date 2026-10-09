@@ -10,6 +10,7 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.ConnectionPool
 import okhttp3.Headers.Companion.headersOf
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -98,6 +99,10 @@ class MoonrakerClient(
         /** The core refuses a download past this many bytes; reading stops one byte later. */
         const val MAX_DOWNLOAD_BYTES = 256L * 1024 * 1024
 
+        /** How long an idle connection is kept for reuse: below any server's idle timeout. */
+        const val KEEP_ALIVE_MS = 2_000L
+        private const val MAX_IDLE_CONNECTIONS = 4
+
         private val secure = SecureRandom()
     }
 
@@ -106,6 +111,11 @@ class MoonrakerClient(
         .apply { localNetwork?.let { addInterceptor(LocalNetworkAccess.gate(it, http.dns)) } }
         // Plain HTTP only to a local address, judged where the connection landed.
         .addNetworkInterceptor(LanTransportPolicy.cleartextGuard)
+        // An idle connection is let go well before a server closes it (a Node
+        // server after 5 s, nginx after 75): with no retry, reusing one the
+        // server has closed fails the next request — and a retry could repeat
+        // a print start the printer already received.
+        .connectionPool(ConnectionPool(MAX_IDLE_CONNECTIONS, KEEP_ALIVE_MS, TimeUnit.MILLISECONDS))
         .followRedirects(false)
         .followSslRedirects(false)
         .retryOnConnectionFailure(false)

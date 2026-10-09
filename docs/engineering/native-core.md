@@ -255,6 +255,17 @@ out. After the owned emulator exited and builds finished, the fresh retry passed
 all suites with unchanged limits. The runner now clears stale reports before a
 run and preserves the original failure if log capture fails.
 
+### Emulator evidence on 2026-10-09
+
+All 45 `core-bridge` real-JNI instrumentation tests — now including
+`CredentialVaultTest` over the real Android Keystore — three shell cold
+starts and the Device area smoke (`android-device-smoke.py`, against the
+Moonraker simulator on the host) pass on a freshly owned API 34 x86_64
+emulator through `emulator-smoke.py`. The host's `/tmp` is a tmpfs and its
+disk was nearly full: give `TMPDIR` a disk-backed directory with at least
+8 GB free before running it. API 34 cannot exercise Android 17's
+local-network permission prompt; no API 37 image was available.
+
 ## SceneCore candidate
 
 `android/renderer-scenecore` and the separate `dev.orcaxr.xrexperiment`
@@ -4198,6 +4209,52 @@ hostile, oversized secrets, many keys in any order, ids past their length,
 the switch, and every saved record) and 63 records saved; Rust, WASM in
 Node and Chrome, the printer core, JNI and 142 Kotlin checks reproduce
 every one.
+
+### Android Device area
+
+The app's Device area is the first product area on Android, built only from
+complete shared workflows. `DeviceWorkspace` (core-bridge, host-testable)
+holds what the browser shell's printer flows do: the shared directory stored
+as the browser stores it (a private preferences file, no secret in it), each
+printer's API key its own in the `CredentialVault` (kept in memory for the
+run while remembering is off, removed with its printer), the active printer
+switched by clearing the session so nothing crosses from the printer before,
+a `PrinterSessionClient` connecting with the active printer's key, the
+status summary the browser renders, and the local-network permission judged
+before any exchange. `DeviceModel` is its host adapter: a ViewModel running
+every call that may block (storage, the Keystore, name resolution, the
+session) on one worker thread and publishing a `DeviceState` projection to
+Compose on the main thread — Compose holds projections and drafts, never a
+second directory. `DeviceScreen` lists printers (the active one chosen by a
+radio row), adds them (name, address, port), takes the active printer's key
+with a remember switch and a forget action, asks for local-network access
+when the active printer needs it (and, once refused for good, opens the
+app's settings; the permission is read again on every resume), connects and
+disconnects, shows the connection, the status headline, detail, progress and
+facts, and offers every job command with the reason one is not available,
+confirming a destructive one in a dialog the core asks for.
+
+`ProjectDeviceWorkspaceChecks` (28 host checks against the simulator) adds,
+refuses, switches and removes printers, keeps keys with their printers across
+reloads, honours the remember switch and forgetting, reads an idle printer's
+status, pauses a job another client started once the session identifies it,
+cancels it through the dialog, and refuses a printer behind a denied
+local-network permission promptly until it is granted; the simulator receives
+only that printer's key. `android-device-smoke.py` drives the real app on an
+owned emulator against the simulator on the host (10.0.2.2): add the
+simulator, save its key, connect and read "Idle", restart with printer and
+key remembered, reconnect, pause, resume and — confirmed — cancel a job
+started elsewhere, disconnect and remove the printer; the printer receives
+exactly `start, pause, resume, cancel`, every request with that key.
+
+That run found a defect the host checks could not: `MoonrakerClient`
+reused pooled HTTP connections with retries off, so the first request after
+any idle gap longer than the server's keep-alive (the simulator's Node server
+closes idle connections after 5 s, nginx after 75 s) failed on a connection
+the server had closed — the job identity query, then every reconnect. Its
+pool now lets an idle connection go after 2 s, and a client check idles past
+the server's keep-alive before its next request. Retrying instead could
+repeat a print start the printer had already received.
 
 ### Action capabilities
 

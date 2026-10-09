@@ -37,7 +37,7 @@ const printers = [];
 try {
   const transport = await simulator({ holdFirstUpload: true });
   printers.push(transport);
-  assert.equal(jvm.call("moonrakerClientChecks", transport.url), 21);
+  assert.equal(jvm.call("moonrakerClientChecks", transport.url), 22);
   const received = await transport.summary();
   assert.deepEqual(received.stored, ["android.gcode", "held.gcode"]);
   assert.equal(received.started, "android.gcode");
@@ -76,10 +76,11 @@ try {
   const lan = await simulator();
   printers.push(lan);
   assert.equal(jvm.call("lanPolicyChecks", lan.url), 21);
-  // The public-address client sent nothing; the private one, its handshake.
-  assert.deepEqual((await lan.summary()).requests, [
-    "GET /server/info",
+  // The public-address client sent nothing; the private one, its handshake
+  // (whose two requests may arrive in either order).
+  assert.deepEqual((await lan.summary()).requests.toSorted(), [
     "GET /printer/info",
+    "GET /server/info",
   ]);
   const nearby = await simulator();
   printers.push(nearby);
@@ -92,11 +93,18 @@ try {
     "GET /printer/info",
     "GET /server/info",
   ]);
+  const workshop = await simulator();
+  printers.push(workshop);
+  assert.equal(jvm.call("deviceWorkspaceChecks", workshop.url), 28);
+  // The simulator printer's own key reached it and no other key ever did;
+  // the printer without one sent none.
+  assert.deepEqual([...new Set((await workshop.summary()).apiKeys.filter(Boolean))], ["sim-key-1234"]);
   console.log(
     JSON.stringify({
+      deviceWorkspaceChecks: 28,
       lanPolicyChecks: 21,
       localNetworkChecks: 28,
-      moonrakerClientChecks: 21,
+      moonrakerClientChecks: 22,
       printerSessionClientChecks: 17,
       printWorkflowClientChecks: 12,
       requests:

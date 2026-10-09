@@ -2,7 +2,7 @@
   "cargo": "cargo 1.94.1 (29ea6fb6a 2026-03-24)",
   "defaultFeatures": false,
   "features": [
-    "printer"
+    "project"
   ],
   "inputs": {
     "contracts/core-protocol.json": "63e7ed821d0da12f863004109a41f5dbfd00b73a2c29584ae2b3a3a6b1320f7a",
@@ -413,21 +413,22 @@
     "core/crates/orcaxr-wasm/src/printer.rs": "9da07d96fede4549d421de4369fbbc68fc1e53c288045861f8548cca9668dba4",
     "core/crates/orcaxr-wasm/src/project.rs": "da536d5de488b58151497d2d2ebb54017614864627edcce325faf00130358042",
     "core/rust-toolchain.toml": "f0c85cfd5110f10de478e970a3c3caa2f96d55266b20724ddbb7f949f64ff05f",
+    "tools/cross-platform/android-device-smoke.py": "532e561e46136621b4ac150cbb1786279be5dcdffedb5dcbde71cf70e192a0da",
     "tools/cross-platform/android-smoke.py": "7450fe82a7f4a146f1057cc997bfb1e366368902fbf02709a82202fa29da3e1c",
     "tools/cross-platform/artifacts.py": "e6addc1df707757faf498ea6d1dca298f065038546958a0cee46d5e46205e8fd",
     "tools/cross-platform/build-android.py": "28f80643b01f0ef59c6e1cd645d80eb67742417d3ab218a0d6b5ad6cd0d1891e",
     "tools/cross-platform/build-project-jvm.py": "55bc972040cc3d7028f611631309070ddde7f61c79e1223fc4f3fc38d2478d64",
     "tools/cross-platform/build-wasm.py": "6311757d4e2261a1121247fabf0b6eaa0b8840ef371e161d407c4a1c0d75b53c",
-    "tools/cross-platform/emulator-smoke.py": "db69a5f0e87a2713d10c29a1920a287950b8a928555b0e44313215bead92c2f0",
+    "tools/cross-platform/emulator-smoke.py": "aaac13028a6e8e0f45aab8fe524827046d4741d89a8741e85e73c55a08bc43a0",
     "tools/cross-platform/test-zip-write.py": "af58df31f97dc99c8c644c4e820878265d9ebf5a0d2a0d622b00b63b11b5a2a0",
     "tools/cross-platform/verify-artifacts.py": "608f9bc1505fcc91843fe0aaf9c707bf28ecf10507481adfb2df2a69ac2f9ff3"
   },
-  "kind": "browser-printer-wasm",
+  "kind": "browser-project-wasm",
   "outputs": {
-    "orcaxr_core.d.ts": "5e05373c9aa8b63495b68cc358be712158d98bffcbdf3532b32e494b0693535a",
-    "orcaxr_core.js": "4030d0f099b181b7bcb29b3f8a54c72fa5ba8ec10dc8868a4ca1e5e14d56f1c0",
-    "orcaxr_core_bg.wasm": "eaebc050bf2d57148b88ba6bc266050bfd6411afbecea102aa76632b1774a64b",
-    "orcaxr_core_bg.wasm.d.ts": "f24fcb6618ab8e6999deb73d874e61cec3b56a5cc05fcf68695be4683581ab3f"
+    "orcaxr_core.d.ts": "4254dbce0f44fb0cea9272ccaf1d5df975ce133ec203438ca610cabf6c2e56ed",
+    "orcaxr_core.js": "e2b634a5f944294447688279cb4fd099b9aa2fd176770bff33036d884313b4da",
+    "orcaxr_core_bg.wasm": "3d4d40dd61037884a442df268308f8765f14b8fe063cea1180a13594bb317a54",
+    "orcaxr_core_bg.wasm.d.ts": "c5f97efb8ff53d0370c838272af503f5e4208150ec6a205d142313c49a730fdb"
   },
   "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",
   "schemaVersion": 1,

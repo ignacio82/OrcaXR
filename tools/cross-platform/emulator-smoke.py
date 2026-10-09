@@ -36,6 +36,7 @@ with tempfile.TemporaryDirectory(prefix="orcaxr-avd-") as directory:
             else:
                 raise RuntimeError("Owned emulator did not boot before the deadline")
             subprocess.run(["python3", "tools/cross-platform/android-smoke.py", "--serial", serial], cwd=ROOT, check=True)
+            subprocess.run(["python3", "tools/cross-platform/android-device-smoke.py", "--serial", serial], cwd=ROOT, check=True)
         finally:
             process.terminate()
             try:

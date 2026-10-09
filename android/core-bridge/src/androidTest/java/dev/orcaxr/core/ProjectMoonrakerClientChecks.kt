@@ -115,6 +115,14 @@ object ProjectMoonrakerClientChecks {
             // Recovery reaches HTTP.
             check(client.recovery("firmware-restart").await() == "\"ok\"") { "recovery" }; checks++
 
+            // An idle gap past the server's keep-alive (the simulator's Node
+            // server closes idle connections after 5 s): the next request
+            // opens a fresh connection rather than failing on the closed one.
+            Thread.sleep(6_000)
+            check(client.request("/server/info", MoonrakerRequestOptions(operation = "after_idle")).await().contains("klippy")) {
+                "after_idle"
+            }; checks++
+
             client.disconnect()
             val after = client.state as ProjectIntents.MoonrakerConnectionState.Disconnected
             check(after.value.reason == ProjectIntents.MoonrakerDisconnectReason.User) { "disconnected" }; checks++

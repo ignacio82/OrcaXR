@@ -1799,6 +1799,10 @@ storage journeys on phone, tablet, and desktop-sized windows.
 - [ ] Implement Prepare, Preview, Device, and Project navigation with the existing
   action names and semantics. Use ViewModels/coroutines as host adapters to the
   core; Compose state contains projections and drafts, never a second project.
+  The shell navigates between the workspace preview and the Device area,
+  whose `DeviceModel` ViewModel is the host adapter over `DeviceWorkspace`
+  and publishes projections to Compose. Prepare, Preview and Project wait for
+  their complete shared workflows.
 - [ ] Adapt inspector/object tree, toolbars, menus, command palette, dialogs,
   settings, and progress states to narrow, medium, and wide windows. Support
   keyboard traversal, shortcuts, hover, context menus, trackpad navigation,
@@ -1951,8 +1955,11 @@ credential storage, and explicit permission/error flows.
   defects (another spelling of a saved address saved twice, an unusable
   address accepted until connect, a name cut inside a character, a repeated
   stored id removing two printers, a tool count a reload drops). The
-  directory's screens, credential entry and discovery, which need the
-  application shell, remain.
+  directory's screens and credential entry now exist in the app's Device area
+  (`DeviceWorkspace`, `DeviceScreen`): saved printers added, chosen and
+  removed, each with its own key, remember switch and forget, verified by 28
+  host checks and an owned-emulator smoke against the simulator. Discovery
+  remains.
 - [x] Support intentional HTTP LAN connections through an explicit transport
   policy. Android configuration must allow the intended user-entered endpoints;
   application routing restricts cleartext requests to those selected local
@@ -1978,7 +1985,11 @@ credential storage, and explicit permission/error flows.
   each exchange, so denial, revocation and a later grant take effect on the
   next one. 28 host checks cover them against the simulator. Requesting the
   permission and explaining a refusal belong to the application shell; no
-  discovery or subnet scanning exists.
+  discovery or subnet scanning exists. The Device area asks for the
+  permission when the active printer needs it, offers the app's settings once
+  it is refused for good, and reads it again on every resume; API 34
+  emulators cannot show Android 17's prompt, so the prompt itself is
+  unverified.
 - [x] Store remembered printer/slicer secrets using Android Keystore-backed
   encryption and clear them on explicit forget. Keep AI credentials memory-only
   unless a separate preference is deliberately introduced. Exclude secrets and
@@ -2035,8 +2046,14 @@ credential storage, and explicit permission/error flows.
   the description, poll interval and frame URL; 2,230 browser answers agree
   in every binding, and Kotlin `PrinterCamera` exposes it. Porting fixed two
   browser defects (an IPv6 printer's camera URL cut at the first `:`, a
-  description quoting the unbounded rate). The operator surfaces, and their
-  polling lifecycle, belong to the application shell.
+  description quoting the unbounded rate). On Android the Device area shows
+  the active printer's status (headline, detail, progress, facts) and offers
+  every job command with its reason when unavailable, confirming a
+  destructive one in a dialog; pause, resume and a confirmed cancel pass on
+  an owned emulator against the simulator. Emergency stop and firmware
+  restart stayed offered while the status was stale (seen on the emulator),
+  as the core's availability keeps them. History, storage,
+  console and camera screens, and the camera's polling lifecycle, remain.
 - [ ] Test with the existing printer simulator before qualified, supervised U1
   and CC trials. Automated tests do not issue commands to real printers.
 
