@@ -127,6 +127,20 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
             dismissButton = { TextButton(onClick = { model.answerDiscard(DiscardAnswer.Cancel) }) { Text(stringResource(R.string.device_cancel)) } },
         )
     }
+    model.pendingConflict?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { model.answerConflict(ConflictAnswer.Cancel) },
+            title = { Text(stringResource(R.string.project_conflict_title, pending.name)) },
+            text = { Text(stringResource(R.string.project_conflict_detail)) },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { model.answerConflict(ConflictAnswer.Overwrite) }) { Text(stringResource(R.string.project_overwrite)) }
+                    TextButton(onClick = { model.answerConflict(ConflictAnswer.SaveAs) }) { Text(stringResource(R.string.project_save_as)) }
+                }
+            },
+            dismissButton = { TextButton(onClick = { model.answerConflict(ConflictAnswer.Cancel) }) { Text(stringResource(R.string.device_cancel)) } },
+        )
+    }
     model.pendingImport?.let { pending ->
         AlertDialog(
             onDismissRequest = { model.answerImport(false) },

@@ -840,6 +840,10 @@ Snapmaker NDK build proof, and an explicit renderer decision.
 - [ ] Check 16 KB alignment and dependency loading in the installed APK. Confirm
   required geometry libraries and engine operations can be packaged within the
   selected distribution format.
+  The shared core's libraries align (`verify-artifacts.py`) and load: the 48
+  instrumented tests, cold starts and the app's smokes pass on the 16 KB
+  page-size Android 17 emulator (`emulator-smoke.py --api 37 --pages 16`).
+  The slicing engine is not packaged yet (Phase 6), so its part remains.
 - [ ] Record the flat/spatial renderer selection and any required alternative
   prototype. Resolve blockers before building the full XR interface.
 
@@ -1834,7 +1838,7 @@ storage journeys on phone, tablet, and desktop-sized windows.
   drives them through the system picker; Share offers a 3MF copy through a
   read-only provider. A disk-full or revoked grant on a device and
   large-file timing remain unverified.
-- [ ] Implement recovery storage and Save/Discard/Cancel guards for back,
+- [x] Implement recovery storage and Save/Discard/Cancel guards for back,
   navigation, new/open/replace, window close where observable, and app updates.
   Test process death during capture, write, commit, and restore.
   New, Open (picked, recent or handed over) and Back (from any area) ask
@@ -1843,14 +1847,25 @@ storage journeys on phone, tablet, and desktop-sized windows.
   already saved). Recovery storage now keeps unsaved work per session
   (`ProjectRecovery`, the browser's capture timing and budget, atomic
   replacement, digests and identity-checked restore before adoption) and
-  captures when the app leaves the screen; 24 host checks pass and the
-  emulator smoke restores work after the process is killed in the
-  background. Process death during a capture's write and commit is covered
-  only by host checks; window-close and update guards remain.
-- [ ] Introduce document-session ownership for multiple windows. Different
+  captures whenever the app leaves the screen; 24 host checks pass. Android
+  cannot hold a closing window or an update for a question, so those guards
+  are the recovery copy: the emulator smoke restores work after the process
+  is killed in the background, after the app's task is removed (a closed
+  window or a swipe from Recents) under 4 s after an edit, and after the app
+  is reinstalled over itself while running. Process death mid-write is
+  exercised by host checks (an interrupted capture keeps the previous copy; a
+  refused save never opens the destination), not timed on a device.
+- [x] Introduce document-session ownership for multiple windows. Different
   documents may coexist; reopening an already-owned document focuses its owner
   or opens an explicit read-only view. External changes require conflict handling
   before overwrite. Do not create two unsynchronized writers to one document.
+  `DocumentOwners` gives each document one holding window: opening or saving
+  as a document another window holds brings that window forward instead
+  (a window created for a handed-over document closes), and `DigestingDocument`
+  hashes what Open read and Save wrote so "Save" asks Overwrite / Save as /
+  Cancel when the document changed outside OrcaXR. 14 host checks over JNI
+  and the emulator smoke (the holder brought forward; an outside byte caught,
+  Cancel leaving it, Overwrite writing a package) pass on API 34 and 37.
 - [ ] Generate Android localization resources and design tokens from maintained
   sources. Preserve placeholder/plural behavior and canonical locale independence.
   Test TalkBack, enlarged text, RTL/pseudo-locales, contrast, reduced motion,

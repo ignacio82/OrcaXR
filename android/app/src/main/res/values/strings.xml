@@ -18,6 +18,9 @@
     <string name="project_recovered_detail">Kept on %1$s when OrcaXR last closed without saving it.</string>
     <string name="project_recovered_damaged">Kept on %1$s, but the copy is damaged and cannot be restored.</string>
     <string name="project_restore">Restore</string>
+    <string name="project_conflict_title">%1$s changed outside OrcaXR</string>
+    <string name="project_conflict_detail">Saving now replaces those changes. Save a copy elsewhere to keep both.</string>
+    <string name="project_overwrite">Overwrite</string>
     <string name="project_undo">Undo</string>
     <string name="project_redo">Redo</string>
     <string name="project_undo_named">Undo %1$s</string>

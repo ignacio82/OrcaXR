@@ -92,20 +92,42 @@ class Screen:
                 time.sleep(0.2)
         raise AssertionError("The soft keyboard would not close")
 
-    def type_into(self, label, value):
-        """Focuses the text field labelled [label] and types [value]."""
-        field = None
+    def field(self, label):
+        """The text field labelled [label] (its label is a child node), else the node showing it."""
         for node in self.nodes():
             if node.get("class") == "android.widget.EditText" and any(
                 (child.get("text") or "") == label for child in node.iter("node")
             ):
-                field = node
-        if field is None:
-            field = self.find(label)
-        x, y = self.center(field)
-        self.adb("shell", "input", "tap", str(x), str(y))
-        self.adb("shell", "input", "text", value.replace(" ", "%s"))
-        self.hide_keyboard()
+                return node
+        return self.find(label)
+
+    def type_into(self, label, value):
+        """Focuses the field labelled [label] and types [value], checking what landed. Typing
+        before the keyboard is connected can drop or misplace the first keys on a slow
+        emulator, so it waits for the keyboard, types in short bursts and, when the field
+        shows something else (a masked field by its length), clears it and types again."""
+        shown = lambda: "mInputShown=true" in self.adb("shell", "dumpsys", "input_method")
+        for attempt in range(3):
+            x, y = self.center(self.field(label))
+            self.adb("shell", "input", "tap", str(x), str(y))
+            deadline = time.monotonic() + 3
+            while not shown() and time.monotonic() < deadline:
+                time.sleep(0.2)
+            time.sleep(0.3)
+            if attempt:
+                # Select everything in the field and delete it before typing again.
+                self.adb("shell", "input", "keycombination", "113", "29")
+                self.key(67)
+            for start in range(0, len(value), 6):
+                self.adb("shell", "input", "text", value[start:start + 6].replace(" ", "%s"))
+                time.sleep(0.1)
+            node = self.field(label)
+            typed = node.get("text") or ""
+            masked = node.get("password") == "true"
+            if (len(typed) == len(value)) if masked else (typed == value):
+                self.hide_keyboard()
+                return
+        raise AssertionError(f"Could not type into '{label}'")
 
     def focused(self):
         """The window that has the focus, as the window manager reports it."""

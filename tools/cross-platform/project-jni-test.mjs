@@ -304,6 +304,9 @@ try {
   // Recovery of unsaved work: the store, the browser's capture timing, checked restore.
   const projectRecoveryChecks = jvm.call("projectRecoveryChecks", decodeBytes("stl-binary/cube"));
   assert.equal(projectRecoveryChecks, 24);
+  // One writer per document, and changes made outside detected by digest.
+  const documentOwnersChecks = jvm.call("documentOwnersChecks", decodeBytes("stl-binary/cube"));
+  assert.equal(documentOwnersChecks, 14);
   const archiveCase = JSON.parse(
     await readFile(new URL("testdata/cross-platform/foreign-import-vectors.json", root)),
   ).cases.find((c) => c.name === ACTOR_ARCHIVE_CASE);
@@ -1287,6 +1290,7 @@ try {
     actorImportChecks,
     projectWorkspaceChecks,
     projectRecoveryChecks,
+    documentOwnersChecks,
     actorArchiveChecks,
     providerDocumentChecks,
     ...preflights,

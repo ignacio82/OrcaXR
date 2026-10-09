@@ -1,5 +1,6 @@
 package dev.orcaxr.nativeapp.project
 
+import android.app.ActivityManager
 import android.app.Application
 import android.content.ClipData
 import android.content.Intent
@@ -12,6 +13,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import dev.orcaxr.core.ContentProjectDocument
+import dev.orcaxr.core.DigestingDocument
+import dev.orcaxr.core.DocumentOwners
 import dev.orcaxr.core.ProjectActorImport
 import dev.orcaxr.core.ProjectArchiveFormat
 import dev.orcaxr.core.ProjectDocumentOutput
@@ -44,6 +47,12 @@ class PendingDiscard(val name: String, internal val action: () -> Unit)
 /** How the operator answers [PendingDiscard]: save first and go on, go on without saving, or stay. */
 enum class DiscardAnswer { Save, Discard, Cancel }
 
+/** A save that would overwrite changes made to the document outside OrcaXR, held until the operator decides. */
+class PendingConflict(val name: String, internal val uri: Uri, internal val then: (() -> Unit)?)
+
+/** How the operator answers [PendingConflict]: replace the outside changes, save a copy elsewhere, or stay. */
+enum class ConflictAnswer { Overwrite, SaveAs, Cancel }
+
 /**
  * The Project area's host adapter: it owns the [ProjectWorkspace], runs
  * provider reads and writes on one worker thread, keeps recently used
@@ -62,6 +71,17 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     /** The document "Save" writes to: one this app saved, or an opened one in OrcaXR's own
      * canonical package (writing it back loses nothing); never a foreign 3MF it would convert. */
     private var savedUri: Uri? = null
+    /** What [savedUri] held when this window last read or wrote it, to notice changes made outside. */
+    private var knownDigest: String? = null
+    /** The task this window lives in, so another window can bring it forward. */
+    var taskId: Int = -1
+    /** This window, as the holder of the document it opened or saved to. */
+    val owner = DocumentOwners.Owner {
+        val tasks = getApplication<Application>().getSystemService(ActivityManager::class.java).appTasks
+        tasks.firstOrNull { it.taskInfo?.taskId == taskId }?.moveToFront()
+    }
+    private val owners = DocumentOwners.process
+    private var held: String? = null
 
     var view by mutableStateOf(ProjectView())
         private set
@@ -78,10 +98,14 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
         private set
     var pendingDiscard by mutableStateOf<PendingDiscard?>(null)
         private set
+    var pendingConflict by mutableStateOf<PendingConflict?>(null)
+        private set
     /** Set while the screen should ask where to save before going on with [afterSave]. */
     var saveAsRequested by mutableStateOf(false)
         private set
     private var afterSave: (() -> Unit)? = null
+    /** The view whose changes the operator discarded: not to be kept again as the app leaves. */
+    private var discarded: ProjectView? = null
     /** The system's share sheet for a copy of the project, for the screen to show once. */
     var shareRequest by mutableStateOf<Intent?>(null)
         private set
@@ -161,6 +185,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
         work {
             workspace.restore(entry).await()
             savedUri = null
+            hold(null)
             main.post { message = "Restored ${entry.projectName}. Save it to keep it." }
         }
     }
@@ -172,7 +197,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
 
     /** Keeps the unsaved work now, as the app leaves the screen: the system may end it there. */
     fun captureNow() {
-        if (view.dirty && ::workspace.isInitialized) work { workspace.captureRecovery().await() }
+        // Not the very state the operator chose to discard: that is gone on purpose. Any
+        // other way of leaving — a closed window, the app swiped away — keeps the work.
+        if (view.dirty && view != discarded && ::workspace.isInitialized) work { workspace.captureRecovery().await() }
     }
 
     fun answerDiscard(answer: DiscardAnswer) {
@@ -182,6 +209,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
             DiscardAnswer.Cancel -> Unit
             DiscardAnswer.Discard -> {
                 // The changes are dropped, and their recovery copy with them.
+                discarded = view
                 work { workspace.discardRecovery() }
                 pending.action()
             }
@@ -189,10 +217,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
                 val target = savedUri
                 if (target != null) {
                     // Goes on only once the save is confirmed; a failed save leaves the project as it was.
-                    work {
-                        saveDocument(target)
-                        main.post { pending.action() }
-                    }
+                    saveChecked(target, pending.action)
                 } else {
                     afterSave = pending.action
                     saveAsRequested = true
@@ -221,6 +246,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
         work {
             workspace.newProject().await()
             savedUri = null
+            hold(null)
         }
     }
 
@@ -228,8 +254,11 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     fun open(uri: Uri) = unlessDirty {
         work {
             val name = displayName(uri)
-            val format = workspace.open(ContentProjectDocument(resolver, uri), name).await()
-            savedUri = uri.takeIf { format == ProjectArchiveFormat.CANONICAL }
+            claimed(uri) {
+                val document = DigestingDocument(ContentProjectDocument(resolver, uri), null)
+                val format = workspace.open(document, name).await()
+                adopt(uri, format, document.digest)
+            }
             remember(uri, name)
         }
     }
@@ -238,8 +267,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     fun openRecent(entry: RecentDocuments.Entry) = unlessDirty {
         work {
             val uri = Uri.parse(entry.uri)
+            val document = DigestingDocument(ContentProjectDocument(resolver, uri), null)
             val format = try {
-                workspace.open(ContentProjectDocument(resolver, uri), entry.name).await()
+                claimed(uri) { workspace.open(document, entry.name).await() }
             } catch (failure: Throwable) {
                 val reason = cause(failure).message.orEmpty()
                 if ("document_permission" in reason || "document_unavailable" in reason) {
@@ -250,7 +280,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
                 }
                 throw failure
             }
-            savedUri = uri.takeIf { format == ProjectArchiveFormat.CANONICAL }
+            adopt(uri, format, document.digest)
             remember(uri, entry.name)
         }
     }
@@ -268,7 +298,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
         unlessDirty {
             work {
                 workspace.open(ContentProjectDocument(resolver, uri), displayName(uri)).await()
+                // A one-time grant: this window does not write it back, so it holds nothing.
                 savedUri = null
+                hold(null)
             }
         }
     }
@@ -276,19 +308,91 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     /** Saves to the document "Save as" created; returns false when there is none yet. */
     fun save(): Boolean {
         val target = savedUri ?: return false
-        saveTo(target)
+        saveChecked(target, null)
         return true
     }
 
-    fun saveTo(uri: Uri) = work { saveDocument(uri) }
+    /** "Save as" to a document the operator picked; refused when another window holds it. */
+    fun saveTo(uri: Uri) = work { claimed(uri) { saveDocument(uri) } }
 
-    /** Saves to [uri] on the worker; it becomes the document "Save" writes to. */
+    /**
+     * Saves to [uri] — the document this window holds — unless it changed
+     * outside OrcaXR since it was last read or written here: then the
+     * operator decides first. [then] runs once the save is confirmed.
+     */
+    private fun saveChecked(uri: Uri, then: (() -> Unit)?) = work {
+        val known = knownDigest
+        val current = known?.let { DigestingDocument.current(ContentProjectDocument(resolver, uri)) }
+        if (known != null && current != known) {
+            val name = displayName(uri)
+            main.post { pendingConflict = PendingConflict(name, uri, then) }
+            return@work
+        }
+        saveDocument(uri)
+        then?.let { main.post(it) }
+    }
+
+    fun answerConflict(answer: ConflictAnswer) {
+        val pending = pendingConflict ?: return
+        pendingConflict = null
+        when (answer) {
+            ConflictAnswer.Cancel -> Unit
+            ConflictAnswer.Overwrite -> work {
+                saveDocument(pending.uri)
+                pending.then?.let { main.post(it) }
+            }
+            ConflictAnswer.SaveAs -> {
+                afterSave = pending.then ?: {}
+                saveAsRequested = true
+            }
+        }
+    }
+
+    /** Saves to [uri] on the worker; it becomes the document "Save" writes to, held by this window. */
     private fun saveDocument(uri: Uri) {
         val name = displayName(uri)
-        workspace.save(ContentProjectDocument(resolver, uri), name).await()
+        val document = DigestingDocument(null, ContentProjectDocument(resolver, uri))
+        workspace.save(document, name).await()
         savedUri = uri
+        knownDigest = document.digest
+        hold(uri)
         remember(uri, name)
         main.post { message = "Saved $name." }
+    }
+
+    /**
+     * Runs [work] holding [uri] for this window. When another window holds
+     * it, that window is brought forward and nothing is done here: a document
+     * never gets a second writer. A claim the work did not keep is released.
+     */
+    private fun <T> claimed(uri: Uri, work: () -> T): T {
+        val document = uri.toString()
+        val previous = held
+        owners.claim(document, owner)?.let { other ->
+            main.post { other.focus() }
+            throw IllegalStateException("That document is open in another OrcaXR window, which was brought forward.")
+        }
+        return try {
+            work()
+        } catch (failure: Throwable) {
+            if (previous != document) owners.release(document, owner)
+            throw failure
+        }
+    }
+
+    /** The document an Open adopted: held by this window, saved back only in OrcaXR's own format. */
+    private fun adopt(uri: Uri, format: ProjectArchiveFormat, digest: String?) {
+        savedUri = uri.takeIf { format == ProjectArchiveFormat.CANONICAL }
+        hold(uri)
+        knownDigest = digest
+    }
+
+    /** Holds [uri] (or nothing) as this window's document, releasing the one held before. */
+    private fun hold(uri: Uri?) {
+        val document = uri?.toString()
+        held?.takeIf { it != document }?.let { owners.release(it, owner) }
+        held = document
+        if (document == null) knownDigest = null
     }
 
     /**
@@ -354,6 +458,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         worker.execute {
+            owners.releaseAll(owner)
             subscription?.close()
             pendingImport?.candidate?.close()
             if (::workspace.isInitialized) workspace.close()

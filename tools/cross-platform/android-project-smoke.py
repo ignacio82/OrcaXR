@@ -5,16 +5,21 @@ The app's data is cleared and a binary STL is placed in Downloads. The run
 imports it (previewed, then committed as one undoable step), undoes and redoes
 it, saves the project as a 3MF with "Save as", starts a new project, reopens
 the saved one from the recent documents, keeps unsaved changes on Cancel,
-saves them first on Save and drops them only on Discard, refuses a document handed over outside the system's
+saves them first on Save and drops them only on Discard, brings the window
+holding a document forward rather than opening it twice, asks before saving
+over a change made outside OrcaXR, refuses a document handed over outside the system's
 document sharing, and after a restart reopens the recent document through its
 persisted grant; a shared copy reaches the share sheet without saving; Back
 with unsaved changes asks first, from any area; unsaved work survives the
-process being killed in the background and is restored in the next session. The
+process being killed in the background and the app's task being removed (as
+a closed window or a swipe from Recents) or replaced by an update, and is
+restored in the next session. The
 saved file is checked to be a ZIP package.
 """
 import argparse
 import base64
 import json
+import re
 import tempfile
 from pathlib import Path
 import subprocess
@@ -105,6 +110,37 @@ find("0 objects", timeout=30)
 find(f"Saved {SAVED}.")
 tap(SAVED)
 find("2 objects", timeout=30)
+# One writer per document: the document this window holds, handed over again in
+# a window of its own, brings this window forward and closes the new one.
+recent = adb("shell", f"run-as {PACKAGE} cat shared_prefs/orcaxr.projects.xml")
+held = re.search(r"content://[^\s<&\x00]+", recent).group(0)
+adb("shell", f"am start -W -a android.intent.action.VIEW -t model/3mf -f 0x18080000 -d '{held}' -n {PACKAGE}/.MainActivity")
+
+
+def windows():
+    """The tasks the app's windows live in."""
+    return set(re.findall(re.escape(PACKAGE) + r"/\.MainActivity t(\d+)", adb("shell", "dumpsys", "activity", "activities")))
+
+
+time.sleep(2)
+deadline = time.monotonic() + 20
+while len(windows()) > 1:
+    assert time.monotonic() < deadline, "A second window kept the held document"
+    time.sleep(0.5)
+assert PACKAGE in focused(), "The holding window was not brought forward"
+find(f"{SAVED} · No unsaved changes")
+# A change made outside OrcaXR is not overwritten unnoticed: Save asks first.
+before = int(adb("shell", f"stat -c %s '/sdcard/Download/{SAVED}'"))
+adb("shell", f"printf x >> '/sdcard/Download/{SAVED}'")
+tap("Save")
+find(f"{SAVED} changed outside OrcaXR", timeout=20)
+tap("Cancel")
+time.sleep(1)
+assert int(adb("shell", f"stat -c %s '/sdcard/Download/{SAVED}'")) == before + 1, "Cancel wrote the document"
+tap("Save")
+tap("Overwrite", timeout=20)
+find(f"Saved {SAVED}.", timeout=30)
+assert adb("shell", f"head -c 2 '/sdcard/Download/{SAVED}'") == "PK", "Overwrite did not write a package"
 import_cube(3)
 find("3 objects", timeout=30)
 tap("New project")
@@ -167,6 +203,49 @@ tap("Discard")
 absent_deadline = time.monotonic() + 20
 while any((node.get("text") or "") == "Unsaved work: Untitled project" for node in nodes()):
     assert time.monotonic() < absent_deadline, "The discarded copy is still offered"
+    time.sleep(0.5)
+# Its task removed right after an edit — as a window closed or the app swiped
+# away from Recents, it finishes without asking, before the timed capture: the
+# unsaved work is kept as it leaves and offered by the next session.
+task = re.search(r"taskId=(\d+): " + re.escape(PACKAGE), adb("shell", "am", "stack", "list")).group(1)
+screen.to_top()
+tap("Import model")
+tap("cube.stl", timeout=30)
+find("Import cube.stl?", timeout=30)
+tap("Import")
+edited = time.monotonic()
+find("Unsaved changes", timeout=10)
+adb("shell", "am", "stack", "remove", task)
+# Well before the 5 s timed capture: only the capture as the app leaves can keep it.
+assert time.monotonic() - edited < 4, "The task was removed too late to tell the captures apart"
+deadline = time.monotonic() + 20
+while f"{PACKAGE}/.MainActivity" in adb("shell", "dumpsys", "activity", "activities"):
+    assert time.monotonic() < deadline, "The app's activity outlived its task"
+    time.sleep(0.5)
+time.sleep(4)
+launch()
+find("Unsaved work: Untitled project", timeout=30)
+tap("Discard")
+deadline = time.monotonic() + 20
+while any((node.get("text") or "") == "Unsaved work: Untitled project" for node in nodes()):
+    assert time.monotonic() < deadline, "The discarded copy is still offered"
+    time.sleep(0.5)
+# An update replaces the app while it runs: the system ends it without asking.
+# Work older than the timed capture's 5 s is offered by the updated app.
+screen.to_top()
+tap("Import model")
+tap("cube.stl", timeout=30)
+find("Import cube.stl?", timeout=30)
+tap("Import")
+find("Unsaved changes", timeout=10)
+time.sleep(7)
+adb("install", "-r", str(app_apk))
+launch()
+find("Unsaved work: Untitled project", timeout=30)
+tap("Discard")
+deadline = time.monotonic() + 20
+while any((node.get("text") or "") == "Unsaved work: Untitled project" for node in nodes()):
+    assert time.monotonic() < deadline, "The discarded copy is still offered"
     time.sleep(0.5)
 report = {
     "evidenceKind": "emulator-only",

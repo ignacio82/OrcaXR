@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import dev.orcaxr.core.CoreCompatibility
+import dev.orcaxr.core.DocumentOwners
 import dev.orcaxr.nativeapp.device.DeviceModel
 import dev.orcaxr.nativeapp.device.DeviceScreen
 import dev.orcaxr.nativeapp.project.ProjectModel
@@ -57,17 +58,25 @@ class MainActivity : ComponentActivity() {
         else -> null
     }
 
-    private fun handle(intent: Intent?) {
+    /** Opens a handed-over document here — or, when another window already holds it, brings that
+     * window forward instead (a window opened just for it then closes): one writer per document. */
+    private fun handle(intent: Intent?, created: Boolean) {
         val uri = incoming(intent) ?: return
+        val holder = DocumentOwners.process.holder(uri.toString())
+        if (holder != null && holder !== project.owner) {
+            holder.focus()
+            if (created) finish()
+            return
+        }
         area = R.string.nav_project
         project.openIncoming(uri)
     }
 
     override fun onStop() {
         super.onStop()
-        // The system may end the app once it is out of sight: keep unsaved work now —
-        // unless the operator is leaving, having just chosen to discard it.
-        if (!isFinishing) project.captureNow()
+        // The system may end the app once it is out of sight, and a window closed or swiped
+        // away finishes it without asking: keep unsaved work now (not what was just discarded).
+        project.captureNow()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -77,13 +86,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handle(intent)
+        handle(intent, created = false)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) handle(intent) else area = savedInstanceState.getInt(AREA, area)
+        project.taskId = taskId
+        if (savedInstanceState == null) handle(intent, created = true) else area = savedInstanceState.getInt(AREA, area)
         setContent {
             // Back with unsaved changes, from any area, asks in the Project area first.
             BackHandler(enabled = project.view.dirty) {

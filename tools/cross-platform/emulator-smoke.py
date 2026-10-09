@@ -4,6 +4,8 @@
 API 34 by default; `--api 37` runs them on Android 17, where every printer
 exchange needs the local-network permission, and adds that permission's own
 smoke (asking, denial, denial for good, grant in settings, revocation).
+`--pages 16` uses the 16 KB page-size image of that release, so the packaged
+native libraries load on a 16 KB kernel.
 """
 import argparse
 import os
@@ -15,8 +17,16 @@ from artifacts import ROOT
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--api", type=int, choices=(34, 37), default=34)
-api = parser.parse_args().api
-images = {34: "system-images;android-34;google_apis;x86_64", 37: "system-images;android-37.0;google_apis;x86_64"}
+parser.add_argument("--pages", type=int, choices=(4, 16), default=4)
+arguments = parser.parse_args()
+api = arguments.api
+images = {
+    (34, 4): "system-images;android-34;google_apis;x86_64",
+    (37, 4): "system-images;android-37.0;google_apis;x86_64",
+    (37, 16): "system-images;android-37.0;google_apis_ps16k;x86_64",
+}
+if (api, arguments.pages) not in images:
+    raise SystemExit(f"No {arguments.pages} KB page image is configured for API {api}")
 sdk = Path(os.environ["ANDROID_HOME"])
 serial = "emulator-5580" if api == 34 else "emulator-5582"
 devices = subprocess.check_output(["adb", "devices"], text=True)
@@ -27,7 +37,7 @@ output.mkdir(parents=True, exist_ok=True)
 with tempfile.TemporaryDirectory(prefix="orcaxr-avd-") as directory:
     env = dict(os.environ, ANDROID_AVD_HOME=directory)
     subprocess.run([sdk / "cmdline-tools/latest/bin/avdmanager", "create", "avd",
-                    "--name", "orcaxr_core_ci", "--package", images[api],
+                    "--name", "orcaxr_core_ci", "--package", images[(api, arguments.pages)],
                     "--device", "pixel_2"], input="no\n", text=True, env=env, check=True)
     with (output / "emulator.log").open("w") as log:
         process = subprocess.Popen([sdk / "emulator/emulator", "-avd", "orcaxr_core_ci", "-port", serial.rsplit("-", 1)[1],
@@ -45,6 +55,8 @@ with tempfile.TemporaryDirectory(prefix="orcaxr-avd-") as directory:
                 time.sleep(2)
             else:
                 raise RuntimeError("Owned emulator did not boot before the deadline")
+            page = subprocess.check_output(["adb", "-s", serial, "shell", "getconf", "PAGESIZE"], text=True).strip()
+            assert page == str(arguments.pages * 1024), f"Expected {arguments.pages} KB pages, the kernel uses {page} bytes"
             subprocess.run(["python3", "tools/cross-platform/android-smoke.py", "--serial", serial], cwd=ROOT, check=True)
             if api >= 37:
                 subprocess.run(["python3", "tools/cross-platform/android-local-network-smoke.py", "--serial", serial], cwd=ROOT, check=True)

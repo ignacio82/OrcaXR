@@ -269,6 +269,17 @@ document picker) pass on a freshly owned API 34 x86_64 emulator through
 disk was nearly full: give `TMPDIR` a disk-backed directory with at least
 8 GB free before running it.
 
+### Emulator evidence on 16 KB pages
+
+`emulator-smoke.py --api 37 --pages 16` owns an AVD from the 16 KB
+page-size Android 17 image and checks the kernel's page size before
+running: all 48 instrumented tests (the shared core's JNI libraries loading
+and running), three cold starts, the local-network, Device and Project
+smokes pass with 16384-byte pages, so the packaged native libraries load as
+well as align (`verify-artifacts.py`). The slower emulator dropped the first
+keys of an API key typed before the keyboard connected; `smoke_ui.type_into`
+now waits for the keyboard, types in bursts and checks what landed.
+
 ### Emulator evidence on Android 17
 
 `emulator-smoke.py --api 37` owns a fresh API 37 (Android 17) x86_64 AVD
@@ -4322,9 +4333,11 @@ the browser's recovery proof does: the prepared document's identities
 (`ProjectDocument.identity`, from the shared core's `PreparedDocument`)
 must be those recorded, or the restore is refused and the project is
 untouched; the copy stays until the operator discards it. The app also
-captures at once when it leaves the screen with unsaved changes (not when
-the operator is leaving after choosing Discard), since the system may end it
-there, and lists earlier sessions' copies with Restore and Discard.
+captures at once whenever it leaves the screen with unsaved changes — sent
+home, its window closed, swiped from Recents — since the system may end it
+there and a closed window or removed task finishes it without asking; only
+the very state the operator just chose to discard is not kept. It lists
+earlier sessions' copies with Restore and Discard.
 `ProjectRecoveryChecks` (24 checks over real JNI) cover an interrupted
 capture keeping the previous copy, the budget, damage, session names, the
 capture timing with a controlled clock and scheduler, a clean project
@@ -4332,8 +4345,36 @@ cancelling it, discard on save and on Discard, a forged identity refused
 before adoption, and a later session restoring the copy. The emulator smoke
 imports a model, sends the app home, kills its process, relaunches (the
 system restores the Project area the activity showed), restores the work and
-discards the copy. The window-close and update guards and
-multi-window ownership remain.
+discards the copy; removes the app's task (as a closed window or a swipe from
+Recents does) under 4 s after an edit — before the timed capture — and finds
+the work offered by the next session (the earlier rule, which skipped the
+capture for a finishing activity, lost it: the step fails on it); and
+reinstalls the app over itself while it runs, as an update does, after which
+the updated app offers the work. Android cannot hold a closing window or an
+update for a question, so those guards are the recovery copy. Process death
+in the middle of a capture's or a save's write is exercised by the host
+checks (an interrupted capture keeps the previous copy; a refused save never
+opens the destination), not timed on a device.
+
+A document has one writer. `DocumentOwners` (core-bridge) records, for the
+app process, which window holds each document — the one it opened or last
+saved to — weakly, so a window the system destroyed never blocks it. Open,
+a recent document and "Save as" claim the document first; when another
+window holds it, that window is brought forward (its task moved to the
+front) and nothing is opened here, and a window created only to receive a
+handed-over document another window holds closes after bringing that window
+forward. Different documents coexist in different windows. Changes made
+outside OrcaXR are caught by digest (`DigestingDocument`): what Open read and
+Save wrote is hashed as it streams (Open reads the archive to its end, so
+the hash is exact), and "Save" — including the save before New or Open —
+first hashes the document as it is now; when it differs, the operator
+chooses Overwrite, Save as or Cancel. `DocumentOwnersChecks` (14 checks)
+cover claims, refusals, releases, a destroyed window's weak claim, and the
+digests through the real archive Save and Open; the emulator smoke hands the
+held document over again in a window of its own (the holder comes forward,
+the new window closes) and appends a byte to the saved file from the shell
+(Save asks; Cancel leaves the file as it is; Overwrite writes a package
+again).
 
 ### Android Device area
 
