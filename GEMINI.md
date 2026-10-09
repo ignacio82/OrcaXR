@@ -377,7 +377,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 
 ## Networking, printer and server safety
 
-- Plain HTTP LAN is intentional. Assume secure-context APIs are absent: WebCrypto
+- Plain HTTP LAN is intentional (Android: cleartext only to local addresses, `LanTransportPolicy`). Assume secure-context APIs are absent: WebCrypto
   subtle/randomUUID, service workers, clipboard and isolation must degrade explicitly.
   Content SHA-256 has a byte-identical fallback; getRandomValues supplies random IDs.
 - HTTPS-to-HTTP LAN failures need an actionable Local Network Access/mixed-content

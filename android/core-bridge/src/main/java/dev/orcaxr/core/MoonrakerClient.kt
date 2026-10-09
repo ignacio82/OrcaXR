@@ -79,7 +79,8 @@ private fun optionalText(value: String?): ProjectIntents.OptionalText =
  * socket's construction, a random draw) is answered at once. Listeners run on
  * that thread too. OkHttp follows no redirect (a redirect fails the exchange,
  * as `fetch` with `redirect: "error"` does), retries nothing and keeps no
- * deadline of its own: the core keeps every one.
+ * deadline of its own: the core keeps every one. Plain HTTP reaches only a
+ * local address ([LanTransportPolicy]).
  */
 class MoonrakerClient(
     config: ProjectIntents.MoonrakerTransportConfig,
@@ -99,6 +100,8 @@ class MoonrakerClient(
     }
 
     private val http: OkHttpClient = http.newBuilder()
+        // Plain HTTP only to a local address, judged where the connection landed.
+        .addNetworkInterceptor(LanTransportPolicy.cleartextGuard)
         .followRedirects(false)
         .followSslRedirects(false)
         .retryOnConnectionFailure(false)

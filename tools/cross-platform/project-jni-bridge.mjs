@@ -55,6 +55,7 @@ export function startProjectJni(profile = "debug") {
   signatures.moonrakerClientChecks = ["String"];
   signatures.printerSessionClientChecks = ["String"];
   signatures.printWorkflowClientChecks = ["String"];
+  signatures.lanPolicyChecks = ["String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];

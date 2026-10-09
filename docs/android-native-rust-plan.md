@@ -1945,11 +1945,20 @@ credential storage, and explicit permission/error flows.
   emergency stop, with the printer receiving exactly those commands. Endpoint
   management, credential entry and discovery, which need the application
   shell, remain.
-- [ ] Support intentional HTTP LAN connections through an explicit transport
+- [x] Support intentional HTTP LAN connections through an explicit transport
   policy. Android configuration must allow the intended user-entered endpoints;
   application routing restricts cleartext requests to those selected local
   services. Do not send credentials across unexpected redirects or disable TLS
   certificate validation to make arbitrary HTTPS endpoints work.
+  The app's network security config permits cleartext (user-entered addresses
+  cannot be named by domain rules) and trusts only the system's anchors;
+  `LanTransportPolicy`, an OkHttp network interceptor on every
+  `MoonrakerClient`, admits a plain-HTTP or plain-WebSocket exchange only when
+  the address the connection reached is local (loopback, link-local,
+  RFC 1918, IPv6 unique-local, RFC 6598) and unproxied. A client never follows
+  a redirect. 21 checks classify addresses and reach the simulator through a
+  name resolved to a public address (refused before anything is sent) and to a
+  private one (admitted, socket included).
 - [ ] Handle local-network permission grant, denial, revocation, and re-entry,
   including SDK 37 behavior. Keep manual endpoint entry and platform-supported
   discovery distinct; avoid indiscriminate subnet scanning.

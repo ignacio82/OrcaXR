@@ -73,8 +73,17 @@ try {
   );
   assert.equal(sent.started, "part.gcode");
   assert.deepEqual(sent.commands, ["start"]);
+  const lan = await simulator();
+  printers.push(lan);
+  assert.equal(jvm.call("lanPolicyChecks", lan.url), 21);
+  // The public-address client sent nothing; the private one, its handshake.
+  assert.deepEqual((await lan.summary()).requests, [
+    "GET /server/info",
+    "GET /printer/info",
+  ]);
   console.log(
     JSON.stringify({
+      lanPolicyChecks: 21,
       moonrakerClientChecks: 21,
       printerSessionClientChecks: 17,
       printWorkflowClientChecks: 12,

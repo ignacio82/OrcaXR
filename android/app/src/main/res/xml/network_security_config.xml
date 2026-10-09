@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Printers and the operator's own slicer are plain-HTTP LAN services at
+  addresses the operator types, which no domain rule here can name. The
+  platform therefore permits cleartext, and the app's own policy
+  (dev.orcaxr.core.LanTransportPolicy) admits it only to a local address the
+  connection actually reached. TLS trusts the system's anchors alone: no user
+  or debug certificate authority can intercept it.
+-->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <!-- Deliberate, and narrowed by LanTransportPolicy as described above. -->
+    <base-config cleartextTrafficPermitted="true" tools:ignore="InsecureBaseConfiguration">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

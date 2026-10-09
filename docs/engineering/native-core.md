@@ -3848,6 +3848,16 @@ credentials, queries, a held upload cancelled in flight, upload and download
 byte for byte, refusals before anything is sent, the printer's status
 notification after a start, heartbeats, a 404 with the server's own detail,
 recovery and a disconnect — 21 Kotlin checks, then what the printer received.
+Plain HTTP and plain WebSockets reach only the local network:
+`LanTransportPolicy` is a network interceptor on every client's OkHttp, so it
+judges the address the connection actually reached, after name resolution —
+loopback, link-local, RFC 1918, IPv6 unique-local (fc00::/7) or the RFC 6598
+shared space VPN overlays use — and refuses anything else, or any cleartext
+through a proxy, with `CleartextRefusedException` before a byte is sent. The
+app's network security config permits cleartext because typed addresses
+cannot be named by domain rules, and trusts only the system's certificate
+anchors. Its checks redirect sockets to the simulator while a fake resolver
+names a public or a private address, so only the judged address differs.
 `PrinterSessionClient` hosts the session machine over those clients the same
 way: it opens a client when the core asks (subscribing it to
 `status::OBJECTS` and answering the opening with its first state), feeds its
