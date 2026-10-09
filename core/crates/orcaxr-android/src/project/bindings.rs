@@ -1104,6 +1104,48 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_consoleAssess, console_assess, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_consolePlan, console_plan, jstring,
+    operation: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_consoleFinish, console_finish, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_consoleRead, console_read, jstring,
+    operation: JString<'local>,
+    reply: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_consoleInvocation, console_invocation, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_consoleLine, console_line, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_consoleNotification, console_notification, jstring,
+    request: JString<'local>,
+    params: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_consoleRecent, console_recent, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,

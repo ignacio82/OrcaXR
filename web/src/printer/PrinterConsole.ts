@@ -65,7 +65,14 @@ export class PrinterConsoleError extends Error {
 
   constructor(
     message: string,
-    readonly code: 'empty-script' | 'too-long' | 'send-failed' | 'macros-unavailable' | 'cancelled',
+    readonly code:
+      | 'empty-script'
+      | 'too-long'
+      | 'invalid-script'
+      | 'invalid-macro'
+      | 'send-failed'
+      | 'macros-unavailable'
+      | 'cancelled',
   ) {
     super(message);
   }
@@ -148,10 +155,25 @@ function stripComment(line: string): string {
   return (semicolon === -1 ? line : line.slice(0, semicolon)).trim();
 }
 
+/** Klipper's split of a line: runs of letters, or one `*`. */
+const KLIPPER_PARTS = /([A-Z_]+|[A-Z*])/;
+
+/**
+ * The command Klipper runs for one line, uppercased.
+ *
+ * Klipper names it from the line's first letters and the text that follows
+ * them, after a leading `N` line number — so `N10 M112` and `M112X` both halt
+ * the printer. Older builds also skip anything before the first letter, so a
+ * line is read the way that runs the most. It used to be the first
+ * whitespace-separated token, which called those lines unknown. A line
+ * Klipper reads no command from keeps that token, which is unknown.
+ */
 export function gcodeCommandName(line: string): string {
-  const cleaned = stripComment(line);
-  const token = cleaned.split(/[\s=]/, 1)[0] ?? '';
-  return token.toUpperCase();
+  const cleaned = stripComment(line).toUpperCase();
+  const parts = cleaned.split(KLIPPER_PARTS);
+  const command =
+    parts[1] === 'N' ? (parts[3] ?? '') + (parts[4] ?? '').trim() : (parts[1] ?? '') + (parts[2] ?? '').trim();
+  return command || (cleaned.split(/[\s=]/, 1)[0] ?? '');
 }
 
 /**
@@ -224,6 +246,11 @@ export async function runGcodeScript(
       `That script is ${trimmed.length} characters; the printer accepts at most ${MAX_SCRIPT_LENGTH}.`,
       'too-long',
     );
+  }
+  // No URL can spell a lone surrogate; it used to fail as "The printer
+  // refused …" although nothing was sent.
+  if (/\p{Surrogate}/u.test(trimmed)) {
+    throw new PrinterConsoleError('That script has text that is not valid.', 'invalid-script');
   }
   try {
     await transport.request<unknown>(`/printer/gcode/script?script=${encodeURIComponent(trimmed)}`, {
@@ -303,6 +330,7 @@ export async function listPrinterMacros(
   }
 
   const macros: PrinterMacro[] = [];
+  const sections: string[] = [];
   for (const [section, value] of Object.entries(settings)) {
     const match = MACRO_SECTION.exec(section);
     if (!match || !isRecord(value)) continue;
@@ -320,8 +348,16 @@ export async function listPrinterMacros(
         reasons: assessment.reasons,
       }),
     );
+    sections.push(section);
   }
-  return Object.freeze(macros.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0)));
+  // By name, and by section where two name the same macro, so the order never
+  // depends on how the reply ordered its keys.
+  return Object.freeze(
+    macros
+      .map((macro, index) => ({ macro, section: sections[index] }))
+      .sort((left, right) => compareText(left.macro.name, right.macro.name) || compareText(left.section, right.section))
+      .map(({ macro }) => macro),
+  );
 }
 
 export function extractMacroParameters(body: string): readonly PrinterMacroParameter[] {
@@ -343,13 +379,33 @@ export function extractMacroParameters(body: string): readonly PrinterMacroParam
   return Object.freeze([...found.values()].sort((left, right) => (left.name < right.name ? -1 : 1)));
 }
 
-/** `MACRO NAME=value` with values quoted only when they need it. */
+/**
+ * `MACRO NAME=value`, each value spelled so Klipper reads it back exactly.
+ *
+ * Klipper cuts a line at its first `;` — inside quotes too — and a line break
+ * starts another command, so a value holding either cannot be sent, nor can a
+ * name Klipper would split. Its parameters are read like a POSIX shell's
+ * words with `#` a comment: a value holding white space, a quote, a
+ * backslash or `#` is double-quoted with `"` and `\` escaped. Values used to
+ * be quoted only around white space and quotes, so `a#b` arrived as `a` and
+ * `a\b` as `ab`, and a quoted line break arrived as a backslash and `n`.
+ */
 export function buildMacroInvocation(name: string, values: Readonly<Record<string, string>>): string {
   const parts = [name.toUpperCase()];
   for (const key of Object.keys(values).sort()) {
     const value = values[key].trim();
     if (value.length === 0) continue;
-    parts.push(`${key.toUpperCase()}=${/[\s"']/.test(value) ? JSON.stringify(value) : value}`);
+    const parameter = key.toUpperCase();
+    if (parameter.length === 0 || /[\s=;#"'\\]/.test(parameter)) {
+      throw new PrinterConsoleError(`${parameter} cannot be written as a parameter name.`, 'invalid-macro');
+    }
+    if (/[;\r\n]/.test(value)) {
+      throw new PrinterConsoleError(
+        `The value for ${parameter} holds a ";" or a line break, which a command line cannot carry.`,
+        'invalid-macro',
+      );
+    }
+    parts.push(`${parameter}=${/[\s"'\\#]/.test(value) ? `"${value.replace(/["\\]/g, '\\$&')}"` : value}`);
   }
   return parts.join(' ');
 }
@@ -419,6 +475,10 @@ export function recentCommands(entries: readonly PrinterConsoleEntry[], limit = 
     commands.push(entry.text);
   }
   return Object.freeze(commands);
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function unquote(value: string): string {

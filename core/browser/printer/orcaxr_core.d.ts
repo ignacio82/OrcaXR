@@ -237,6 +237,52 @@ export class ToolUsageScanner {
     constructor();
 }
 
+/**
+ * A `GcodeAssessRequest`; the `GcodeAssessment`: what sending the script at
+ * this machine, right now, would do.
+ */
+export function console_assess(request: string): string;
+
+/**
+ * A `ConsoleFinish`; the `ConsoleResult` an exchange that ended without a
+ * reply to read reads as.
+ */
+export function console_finish(request: string): string;
+
+/**
+ * A `MacroInvocationRequest`; the `MacroInvocation`: the script, or why it
+ * cannot be spelled.
+ */
+export function console_invocation(request: string): string;
+
+/**
+ * A `ConsoleLineRequest`; the `ConsoleLine` the transcript keeps.
+ */
+export function console_line(request: string): string;
+
+/**
+ * A `ConsoleNotificationRequest` and the notification's params (as JSON);
+ * the `OptionalConsoleLine` it adds.
+ */
+export function console_notification(request: string, params: string): string;
+
+/**
+ * A `ConsoleOperation`; the `ConsolePlan`: the request it sends, or why it
+ * is refused before anything leaves.
+ */
+export function console_plan(operation: string): string;
+
+/**
+ * A `ConsoleOperation` and its reply (Moonraker's `result`, as JSON); the
+ * `ConsoleResult`.
+ */
+export function console_read(operation: string, reply: string): string;
+
+/**
+ * A `ConsoleRecentRequest`; the `TextList` of recent commands.
+ */
+export function console_recent(request: string): string;
+
 export function core_info(): string;
 
 /**
@@ -454,6 +500,14 @@ export interface InitOutput {
     readonly __wbg_printjobstatus_free: (a: number, b: number) => void;
     readonly __wbg_printworkflow_free: (a: number, b: number) => void;
     readonly __wbg_toolusagescanner_free: (a: number, b: number) => void;
+    readonly console_assess: (a: number, b: number) => [number, number, number, number];
+    readonly console_finish: (a: number, b: number) => [number, number, number, number];
+    readonly console_invocation: (a: number, b: number) => [number, number, number, number];
+    readonly console_line: (a: number, b: number) => [number, number, number, number];
+    readonly console_notification: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly console_plan: (a: number, b: number) => [number, number, number, number];
+    readonly console_read: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly console_recent: (a: number, b: number) => [number, number, number, number];
     readonly core_info: () => [number, number];
     readonly describe_transport_failure: (a: number, b: number) => [number, number, number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
@@ -560,10 +614,10 @@ export interface InitOutput {
     readonly toolusagescanner_finish: (a: number) => [number, number, number, number];
     readonly toolusagescanner_new: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
-    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __externref_table_dealloc: (a: number) => void;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

@@ -212,6 +212,16 @@ final class NativeProject {
     static native String printHistoryJobView(String job);
     static native String printHistoryTotalsText(String totals);
     static native String printHistoryPageView(String shape);
+    // Printer console: a script assessed, a send's or macro listing's request
+    // or refusal, its result, a macro invocation, and transcript lines.
+    static native String consoleAssess(String request);
+    static native String consolePlan(String operation);
+    static native String consoleFinish(String request);
+    static native String consoleRead(String operation, String reply);
+    static native String consoleInvocation(String request);
+    static native String consoleLine(String request);
+    static native String consoleNotification(String request, String params);
+    static native String consoleRecent(String request);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

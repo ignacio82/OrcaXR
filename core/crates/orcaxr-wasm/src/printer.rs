@@ -3,8 +3,8 @@ use crate::error;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
-    control, history, moonraker, preparation, reply, session, status::JobStatus, storage, summary,
-    tools, transport, workflow,
+    console, control, history, moonraker, preparation, reply, session, status::JobStatus, storage,
+    summary, tools, transport, workflow,
 };
 use wasm_bindgen::prelude::*;
 
@@ -882,5 +882,104 @@ pub fn print_history_page_view(shape: &str) -> Result<String, JsValue> {
         wire::decode_print_history_page_shape,
         history::page_view,
         wire::encode_print_history_page_view,
+    )
+}
+/// A `GcodeAssessRequest`; the `GcodeAssessment`: what sending the script at
+/// this machine, right now, would do.
+#[wasm_bindgen]
+pub fn console_assess(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_gcode_assess_request,
+        |r| {
+            console::assess(
+                &r.script,
+                match r.job_state {
+                    wire::OptionalPrintJobState::Value(state) => Some(state),
+                    wire::OptionalPrintJobState::Absent(_) => None,
+                },
+            )
+        },
+        wire::encode_gcode_assessment,
+    )
+}
+/// A `ConsoleOperation`; the `ConsolePlan`: the request it sends, or why it
+/// is refused before anything leaves.
+#[wasm_bindgen]
+pub fn console_plan(operation: &str) -> Result<String, JsValue> {
+    exchange(
+        operation,
+        wire::decode_console_operation,
+        console::plan,
+        wire::encode_console_plan,
+    )
+}
+/// A `ConsoleFinish`; the `ConsoleResult` an exchange that ended without a
+/// reply to read reads as.
+#[wasm_bindgen]
+pub fn console_finish(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_console_finish,
+        console::finish,
+        wire::encode_console_result,
+    )
+}
+/// A `ConsoleOperation` and its reply (Moonraker's `result`, as JSON); the
+/// `ConsoleResult`.
+#[wasm_bindgen]
+pub fn console_read(operation: &str, reply: &str) -> Result<String, JsValue> {
+    if operation.len() > wire::MAX_BYTES || reply.len() > reply::LIMITS.bytes {
+        return Err(error("input_limit"));
+    }
+    let operation =
+        wire::decode_console_operation(operation).map_err(|_| error("invalid_request"))?;
+    wire::encode_console_result(&console::read(&operation, reply))
+        .map_err(|_| error("output_limit"))
+}
+/// A `MacroInvocationRequest`; the `MacroInvocation`: the script, or why it
+/// cannot be spelled.
+#[wasm_bindgen]
+pub fn console_invocation(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_macro_invocation_request,
+        console::invocation,
+        wire::encode_macro_invocation,
+    )
+}
+/// A `ConsoleLineRequest`; the `ConsoleLine` the transcript keeps.
+#[wasm_bindgen]
+pub fn console_line(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_console_line_request,
+        console::line,
+        wire::encode_console_line,
+    )
+}
+/// A `ConsoleNotificationRequest` and the notification's params (as JSON);
+/// the `OptionalConsoleLine` it adds.
+#[wasm_bindgen]
+pub fn console_notification(request: &str, params: &str) -> Result<String, JsValue> {
+    if request.len() > wire::MAX_BYTES || params.len() > reply::LIMITS.bytes {
+        return Err(error("input_limit"));
+    }
+    let request =
+        wire::decode_console_notification_request(request).map_err(|_| error("invalid_request"))?;
+    let line = match console::notification(&request, params) {
+        Some(line) => wire::OptionalConsoleLine::Value(line),
+        None => wire::OptionalConsoleLine::Absent(wire::Empty {}),
+    };
+    wire::encode_optional_console_line(&line).map_err(|_| error("output_limit"))
+}
+/// A `ConsoleRecentRequest`; the `TextList` of recent commands.
+#[wasm_bindgen]
+pub fn console_recent(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_console_recent_request,
+        console::recent,
+        wire::encode_text_list,
     )
 }

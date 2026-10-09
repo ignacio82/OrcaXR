@@ -205,4 +205,63 @@ await test('recent commands are for retyping: newest first, no repeats, sent onl
   assert.deepEqual(recentCommands(log.entries, 1), ['M105']);
 });
 
+await test('names the command Klipper runs, line numbers and glued parameters included', () => {
+  // Each of these halts or frees the machine; they used to read as unknown.
+  for (const line of ['N10 M112', 'n10 m112 ; stop', 'M112X', 'M112*45', 'M84E', '1 M112', 'M 112']) {
+    const name = gcodeCommandName(line);
+    assert.equal(assessGcodeCommand(line).level, 'dangerous', `${line} → ${name}`);
+  }
+  assert.equal(gcodeCommandName('G1X10Y10'), 'G1');
+  assert.equal(gcodeCommandName('PRINT_START2 BED=60'), 'PRINT_START2');
+  // A line Klipper reads no command from stays unknown, never safe.
+  assert.equal(gcodeCommandName('123'), '123');
+  assert.equal(assessGcodeCommand('N10').level, 'caution');
+});
+
+await test('a script with text no URL can spell is refused before anything is sent', async () => {
+  const transport = new FakeTransport();
+  // It used to read "The printer refused M117 (request failed)." though nothing left.
+  await assert.rejects(
+    () => runGcodeScript(transport, 'M117 x\uD800'),
+    (error: unknown) => error instanceof PrinterConsoleError && error.code === 'invalid-script',
+  );
+  assert.deepEqual(transport.calls, []);
+});
+
+await test('macro values arrive exactly as typed, or are refused', () => {
+  // `#` began a comment and `\` an escape; both used to be sent bare.
+  assert.equal(buildMacroInvocation('M', { a: 'x#y' }), 'M A="x#y"');
+  assert.equal(buildMacroInvocation('M', { a: 'c:\\dir' }), 'M A="c:\\\\dir"');
+  assert.equal(buildMacroInvocation('M', { a: 'say "hi"' }), 'M A="say \\"hi\\""');
+  const refused: Record<string, string>[] = [{ a: 'x;y' }, { a: 'x\ny' }, { 'a b': '1' }, { 'a=b': '1' }, { '': '1' }];
+  for (const values of refused) {
+    assert.throws(
+      () => buildMacroInvocation('M', values),
+      (error: unknown) => error instanceof PrinterConsoleError && error.code === 'invalid-macro',
+      JSON.stringify(values),
+    );
+  }
+});
+
+await test('macros sharing a name list in section order, whatever the reply’s key order', async () => {
+  const bodies: Record<string, string> = { 'gcode_macro foo': 'M84', 'gcode_macro FOO': 'G28' };
+  const listed = (sections: string[]) =>
+    listPrinterMacros(
+      new FakeTransport({
+        status: {
+          configfile: {
+            settings: Object.fromEntries(sections.map((section) => [section, { gcode: bodies[section] }])),
+          },
+        },
+      }),
+    );
+  const forward = await listed(['gcode_macro foo', 'gcode_macro FOO']);
+  const backward = await listed(['gcode_macro FOO', 'gcode_macro foo']);
+  assert.deepEqual(forward, backward);
+  assert.deepEqual(
+    forward.map((macro) => macro.level),
+    ['caution', 'dangerous'],
+  );
+});
+
 console.log(`\nPrinter console: ${passed} tests passed.`);

@@ -4004,6 +4004,55 @@ views, 23 totals lines and 39 pager views. Rust, WASM in Node and Chrome,
 the printer core, JNI and 2,159 Kotlin checks reproduce every one, and Rust
 and Kotlin give every job the browser's id.
 
+### Printer console
+
+`orcaxr_printer::console` ports `PrinterConsole.ts`, the one printer surface
+with no guard rails of its own: whatever is typed goes to the firmware. A
+script is assessed before it is sent — each line named as Klipper names its
+command, classified against the console's dangerous, caution and report-only
+tables (anything else, every user macro included, is `caution`), the
+riskiest line deciding, and a printing or paused job making anything that is
+not report-only dangerous. A send is planned (refused when empty, longer
+than 4,096 units, or holding text no URL can spell) and finished; the
+printer's macros are read from `configfile.settings` with their parameters
+taken from the bodies (`params.X`, `params['X']`, `|default(...)`) and their
+risk from their own content; a macro invocation is spelled or refused; and
+transcript lines are redacted on the way in (`moonraker::redact_text`),
+notifications classified as received or error, and sent commands recalled
+newest first without repeats. The host keeps the bounded transcript itself.
+
+A command is named the way Klipper parses a line: runs of letters or a `*`,
+the command taken from the first run and the text after it, after a leading
+`N` line number. Older Klipper builds also skip anything before the first
+letter, so the console reads a line the way that runs the most. Macro
+parameters are written as Klipper's shell-like parser reads them back:
+a value holding white space, a quote, a backslash or `#` is double-quoted
+with `"` and `\` escaped, and a value holding `;` or a line break, or a name
+Klipper would split, is refused, since Klipper cuts a line at `;` even inside
+quotes. Macros list by name, then by section, so their order never depends
+on the reply's key order. Results that carry a printer's or operator's text
+(assessments, plans, results, invocations) travel on the bulk tier.
+
+Porting fixed browser defects, each with a regression test: a line Klipper
+runs as an emergency stop or a stepper release — `N10 M112`, `M112X`,
+`M112*45`, `M84E`, and on older builds `1 M112` or `M 112` — was named by
+its first token and read only as unknown; a script with a lone surrogate was
+reported as "The printer refused …" though nothing was sent; macro values
+holding `#` or a backslash arrived truncated or altered and a quoted line
+break arrived as a backslash and `n`; and macros sharing a name listed in
+the reply's key order.
+
+Bindings: WASM `console_assess`, `console_plan`, `console_finish`,
+`console_read`, `console_invocation`, `console_line`, `console_notification`
+and `console_recent`, the matching JNI `console*` exports and Kotlin
+`PrinterConsole`. `printer-console-vectors.mjs` drives the production
+functions through `PrinterConsoleExchange.ts`: 408 assessments (line
+numbers, glued parameters, comments, line endings, Jinja, case mapping,
+every table entry and job state), 44 plans, 284 finished exchanges, 51
+configuration replies read, 76 invocations, 33 transcript lines, 34
+notifications and 28 recalls. Rust, WASM in Node and Chrome, the printer
+core, JNI and 958 Kotlin checks reproduce every one.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

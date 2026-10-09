@@ -662,6 +662,11 @@ fn replace_all(text: &[u16], needle: &[u16], with: &[u16]) -> Vec<u16> {
     }
     out
 }
+/// `redactMoonrakerDiagnostic` over text: no control runs, URLs, `secrets`
+/// (none empty) or credential-shaped assignments, at most 512 units.
+pub fn redact_text(text: &[u16], secrets: &[&[u16]]) -> Vec<u16> {
+    redact_string(text, secrets)
+}
 fn redact_string(text: &[u16], secrets: &[&[u16]]) -> Vec<u16> {
     let mut result = redact_urls(&replace_controls(text));
     for secret in secrets {

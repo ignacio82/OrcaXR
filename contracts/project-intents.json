@@ -9,7 +9,7 @@
     "maxNodes": 4194304,
     "maxDepth": 12
   },
-  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView"],
+  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView", "GcodeAssessment", "ConsolePlan", "ConsoleResult", "MacroInvocation"],
   "description": "Prepared project commands, session messages and slice preflight exchanges. Text is lossless UTF-16 units. Project transport, command format and persisted schema versions are distinct.",
   "definitions": {
     "Unit": {
@@ -6536,6 +6536,181 @@
         "label": "EditText"
       }
     },
+    "OptionalPrintJobState": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "PrintJobState"
+      }
+    },
+    "GcodeRiskLevel": {
+      "kind": "enum",
+      "values": ["safe", "caution", "dangerous"]
+    },
+    "GcodeAssessRequest": {
+      "kind": "object",
+      "fields": {
+        "script": "EditText",
+        "jobState": "OptionalPrintJobState"
+      }
+    },
+    "ConsoleTexts": {
+      "kind": "array",
+      "items": "PrinterReplyText",
+      "min": 0,
+      "max": 2097152
+    },
+    "GcodeAssessment": {
+      "kind": "object",
+      "fields": {
+        "command": "PrinterReplyText",
+        "level": "GcodeRiskLevel",
+        "reasons": "ConsoleTexts",
+        "commands": "ConsoleTexts"
+      }
+    },
+    "ConsoleOperation": {
+      "kind": "union",
+      "variants": {
+        "send": "PrinterText",
+        "macros": "Empty"
+      }
+    },
+    "ConsoleErrorCode": {
+      "kind": "enum",
+      "values": ["emptyScript", "tooLong", "invalidScript", "invalidMacro", "sendFailed", "macrosUnavailable", "cancelled"]
+    },
+    "ConsoleFailure": {
+      "kind": "object",
+      "fields": {
+        "code": "ConsoleErrorCode",
+        "message": "PrinterReplyText"
+      }
+    },
+    "ConsolePlan": {
+      "kind": "union",
+      "variants": {
+        "request": "PrinterSend",
+        "refused": "ConsoleFailure"
+      }
+    },
+    "ConsoleFinish": {
+      "kind": "object",
+      "fields": {
+        "operation": "ConsoleOperation",
+        "outcome": "PrinterExchangeOutcome"
+      }
+    },
+    "MacroParameter": {
+      "kind": "object",
+      "fields": {
+        "name": "PrinterReplyText",
+        "defaultValue": "OptionalPrinterReplyText",
+        "required": "Flag"
+      }
+    },
+    "MacroParameters": {
+      "kind": "array",
+      "items": "MacroParameter",
+      "min": 0,
+      "max": 262144
+    },
+    "PrinterMacro": {
+      "kind": "object",
+      "fields": {
+        "name": "PrinterReplyText",
+        "description": "OptionalPrinterReplyText",
+        "parameters": "MacroParameters",
+        "level": "GcodeRiskLevel",
+        "reasons": "ConsoleTexts"
+      }
+    },
+    "PrinterMacros": {
+      "kind": "array",
+      "items": "PrinterMacro",
+      "min": 0,
+      "max": 262144
+    },
+    "ConsoleResult": {
+      "kind": "union",
+      "variants": {
+        "sent": "Empty",
+        "macros": "PrinterMacros",
+        "failed": "ConsoleFailure"
+      }
+    },
+    "MacroValue": {
+      "kind": "object",
+      "fields": {
+        "key": "EditText",
+        "value": "EditText"
+      }
+    },
+    "MacroValues": {
+      "kind": "array",
+      "items": "MacroValue",
+      "min": 0,
+      "max": 4096
+    },
+    "MacroInvocationRequest": {
+      "kind": "object",
+      "fields": {
+        "name": "EditText",
+        "values": "MacroValues"
+      }
+    },
+    "MacroInvocation": {
+      "kind": "union",
+      "variants": {
+        "script": "PrinterReplyText",
+        "refused": "ConsoleFailure"
+      }
+    },
+    "ConsoleLineKind": {
+      "kind": "enum",
+      "values": ["sent", "received", "error"]
+    },
+    "ConsoleLine": {
+      "kind": "object",
+      "fields": {
+        "kind": "ConsoleLineKind",
+        "text": "EditText"
+      }
+    },
+    "OptionalConsoleLine": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "ConsoleLine"
+      }
+    },
+    "ConsoleLineRequest": {
+      "kind": "object",
+      "fields": {
+        "line": "ConsoleLine",
+        "secrets": "TextList"
+      }
+    },
+    "ConsoleNotificationRequest": {
+      "kind": "object",
+      "fields": {
+        "method": "EditText",
+        "secrets": "TextList"
+      }
+    },
+    "ConsoleLines": {
+      "kind": "array",
+      "items": "ConsoleLine",
+      "min": 0,
+      "max": 4096
+    },
+    "ConsoleRecentRequest": {
+      "kind": "object",
+      "fields": {
+        "lines": "ConsoleLines",
+        "limit": "Finite"
+      }
+    },
     "PrinterStorageResult": {
       "kind": "union",
       "variants": {
@@ -6747,7 +6922,21 @@
     "PrintHistoryJobView",
     "OptionalPrintHistoryTotals",
     "PrintHistoryPageShape",
-    "PrintHistoryPageView"
+    "PrintHistoryPageView",
+    "GcodeAssessRequest",
+    "GcodeAssessment",
+    "ConsoleOperation",
+    "ConsolePlan",
+    "ConsoleFinish",
+    "ConsoleResult",
+    "MacroInvocationRequest",
+    "MacroInvocation",
+    "ConsoleLineRequest",
+    "ConsoleLine",
+    "ConsoleNotificationRequest",
+    "OptionalConsoleLine",
+    "ConsoleRecentRequest",
+    "TextList"
   ],
   "sessionVersion": 1
 }

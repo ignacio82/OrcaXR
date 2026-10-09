@@ -4,6 +4,7 @@ use super::*;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
+    console,
     control::{self, HoldToConfirm},
     history, moonraker, preparation, reply,
     session::{self, PrinterSession},
@@ -804,6 +805,96 @@ pub(super) fn print_history_page_view(env: &mut JNIEnv<'_>, shape: JString<'_>) 
         wire::decode_print_history_page_shape,
         history::page_view,
         wire::encode_print_history_page_view,
+    )
+}
+
+pub(super) fn console_assess(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_gcode_assess_request,
+        |r| {
+            console::assess(
+                &r.script,
+                match r.job_state {
+                    wire::OptionalPrintJobState::Value(state) => Some(state),
+                    wire::OptionalPrintJobState::Absent(_) => None,
+                },
+            )
+        },
+        wire::encode_gcode_assessment,
+    )
+}
+pub(super) fn console_plan(env: &mut JNIEnv<'_>, operation: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        operation,
+        wire::decode_console_operation,
+        console::plan,
+        wire::encode_console_plan,
+    )
+}
+pub(super) fn console_finish(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_console_finish,
+        console::finish,
+        wire::encode_console_result,
+    )
+}
+pub(super) fn console_read(
+    env: &mut JNIEnv<'_>,
+    operation: JString<'_>,
+    reply: JString<'_>,
+) -> Result<jstring> {
+    let operation = wire::decode_console_operation(&intent_text(env, &operation)?)
+        .map_err(|_| "invalid_request")?;
+    let reply = bounded_text(env, &reply, reply::LIMITS.bytes)?;
+    let json = wire::encode_console_result(&console::read(&operation, &reply))
+        .map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn console_invocation(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_macro_invocation_request,
+        console::invocation,
+        wire::encode_macro_invocation,
+    )
+}
+pub(super) fn console_line(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_console_line_request,
+        console::line,
+        wire::encode_console_line,
+    )
+}
+pub(super) fn console_notification(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+    params: JString<'_>,
+) -> Result<jstring> {
+    let request = wire::decode_console_notification_request(&intent_text(env, &request)?)
+        .map_err(|_| "invalid_request")?;
+    let params = bounded_text(env, &params, reply::LIMITS.bytes)?;
+    let line = match console::notification(&request, &params) {
+        Some(line) => wire::OptionalConsoleLine::Value(line),
+        None => wire::OptionalConsoleLine::Absent(wire::Empty {}),
+    };
+    let json = wire::encode_optional_console_line(&line).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn console_recent(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_console_recent_request,
+        console::recent,
+        wire::encode_text_list,
     )
 }
 

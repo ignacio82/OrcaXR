@@ -6544,6 +6544,197 @@ const shapes = {
       "label": "EditText"
     }
   },
+  "OptionalPrintJobState": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "PrintJobState"
+    }
+  },
+  "GcodeRiskLevel": {
+    "kind": "enum",
+    "values": [
+      "safe",
+      "caution",
+      "dangerous"
+    ]
+  },
+  "GcodeAssessRequest": {
+    "kind": "object",
+    "fields": {
+      "script": "EditText",
+      "jobState": "OptionalPrintJobState"
+    }
+  },
+  "ConsoleTexts": {
+    "kind": "array",
+    "items": "PrinterReplyText",
+    "min": 0,
+    "max": 2097152
+  },
+  "GcodeAssessment": {
+    "kind": "object",
+    "fields": {
+      "command": "PrinterReplyText",
+      "level": "GcodeRiskLevel",
+      "reasons": "ConsoleTexts",
+      "commands": "ConsoleTexts"
+    }
+  },
+  "ConsoleOperation": {
+    "kind": "union",
+    "variants": {
+      "send": "PrinterText",
+      "macros": "Empty"
+    }
+  },
+  "ConsoleErrorCode": {
+    "kind": "enum",
+    "values": [
+      "emptyScript",
+      "tooLong",
+      "invalidScript",
+      "invalidMacro",
+      "sendFailed",
+      "macrosUnavailable",
+      "cancelled"
+    ]
+  },
+  "ConsoleFailure": {
+    "kind": "object",
+    "fields": {
+      "code": "ConsoleErrorCode",
+      "message": "PrinterReplyText"
+    }
+  },
+  "ConsolePlan": {
+    "kind": "union",
+    "variants": {
+      "request": "PrinterSend",
+      "refused": "ConsoleFailure"
+    }
+  },
+  "ConsoleFinish": {
+    "kind": "object",
+    "fields": {
+      "operation": "ConsoleOperation",
+      "outcome": "PrinterExchangeOutcome"
+    }
+  },
+  "MacroParameter": {
+    "kind": "object",
+    "fields": {
+      "name": "PrinterReplyText",
+      "defaultValue": "OptionalPrinterReplyText",
+      "required": "Flag"
+    }
+  },
+  "MacroParameters": {
+    "kind": "array",
+    "items": "MacroParameter",
+    "min": 0,
+    "max": 262144
+  },
+  "PrinterMacro": {
+    "kind": "object",
+    "fields": {
+      "name": "PrinterReplyText",
+      "description": "OptionalPrinterReplyText",
+      "parameters": "MacroParameters",
+      "level": "GcodeRiskLevel",
+      "reasons": "ConsoleTexts"
+    }
+  },
+  "PrinterMacros": {
+    "kind": "array",
+    "items": "PrinterMacro",
+    "min": 0,
+    "max": 262144
+  },
+  "ConsoleResult": {
+    "kind": "union",
+    "variants": {
+      "sent": "Empty",
+      "macros": "PrinterMacros",
+      "failed": "ConsoleFailure"
+    }
+  },
+  "MacroValue": {
+    "kind": "object",
+    "fields": {
+      "key": "EditText",
+      "value": "EditText"
+    }
+  },
+  "MacroValues": {
+    "kind": "array",
+    "items": "MacroValue",
+    "min": 0,
+    "max": 4096
+  },
+  "MacroInvocationRequest": {
+    "kind": "object",
+    "fields": {
+      "name": "EditText",
+      "values": "MacroValues"
+    }
+  },
+  "MacroInvocation": {
+    "kind": "union",
+    "variants": {
+      "script": "PrinterReplyText",
+      "refused": "ConsoleFailure"
+    }
+  },
+  "ConsoleLineKind": {
+    "kind": "enum",
+    "values": [
+      "sent",
+      "received",
+      "error"
+    ]
+  },
+  "ConsoleLine": {
+    "kind": "object",
+    "fields": {
+      "kind": "ConsoleLineKind",
+      "text": "EditText"
+    }
+  },
+  "OptionalConsoleLine": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "ConsoleLine"
+    }
+  },
+  "ConsoleLineRequest": {
+    "kind": "object",
+    "fields": {
+      "line": "ConsoleLine",
+      "secrets": "TextList"
+    }
+  },
+  "ConsoleNotificationRequest": {
+    "kind": "object",
+    "fields": {
+      "method": "EditText",
+      "secrets": "TextList"
+    }
+  },
+  "ConsoleLines": {
+    "kind": "array",
+    "items": "ConsoleLine",
+    "min": 0,
+    "max": 4096
+  },
+  "ConsoleRecentRequest": {
+    "kind": "object",
+    "fields": {
+      "lines": "ConsoleLines",
+      "limit": "Finite"
+    }
+  },
   "PrinterStorageResult": {
     "kind": "union",
     "variants": {
@@ -7341,6 +7532,32 @@ export type ProjectPrintHistoryResultWire = {readonly page:ProjectPrintHistoryPa
 export interface ProjectPrintHistoryJobViewWire {readonly status: ProjectPrinterReplyTextWire;readonly facts: ProjectEditTextWire;readonly estimateDelta: ProjectOptionalFiniteWire;}
 export interface ProjectPrintHistoryPageShapeWire {readonly jobCount: ProjectFiniteWire;readonly total: ProjectFiniteWire;readonly start: ProjectFiniteWire;readonly limit: ProjectFiniteWire;}
 export interface ProjectPrintHistoryPageViewWire {readonly pageIndex: ProjectFiniteWire;readonly pageCount: ProjectFiniteWire;readonly hasPrevious: ProjectFlagWire;readonly hasNext: ProjectFlagWire;readonly previousStart: ProjectFiniteWire;readonly nextStart: ProjectFiniteWire;readonly label: ProjectEditTextWire;}
+export type ProjectOptionalPrintJobStateWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectPrintJobStateWire};
+export type ProjectGcodeRiskLevelWire = "safe" | "caution" | "dangerous";
+export interface ProjectGcodeAssessRequestWire {readonly script: ProjectEditTextWire;readonly jobState: ProjectOptionalPrintJobStateWire;}
+export type ProjectConsoleTextsWire = readonly ProjectPrinterReplyTextWire[];
+export interface ProjectGcodeAssessmentWire {readonly command: ProjectPrinterReplyTextWire;readonly level: ProjectGcodeRiskLevelWire;readonly reasons: ProjectConsoleTextsWire;readonly commands: ProjectConsoleTextsWire;}
+export type ProjectConsoleOperationWire = {readonly send:ProjectPrinterTextWire} | {readonly macros:ProjectEmptyWire};
+export type ProjectConsoleErrorCodeWire = "emptyScript" | "tooLong" | "invalidScript" | "invalidMacro" | "sendFailed" | "macrosUnavailable" | "cancelled";
+export interface ProjectConsoleFailureWire {readonly code: ProjectConsoleErrorCodeWire;readonly message: ProjectPrinterReplyTextWire;}
+export type ProjectConsolePlanWire = {readonly request:ProjectPrinterSendWire} | {readonly refused:ProjectConsoleFailureWire};
+export interface ProjectConsoleFinishWire {readonly operation: ProjectConsoleOperationWire;readonly outcome: ProjectPrinterExchangeOutcomeWire;}
+export interface ProjectMacroParameterWire {readonly name: ProjectPrinterReplyTextWire;readonly defaultValue: ProjectOptionalPrinterReplyTextWire;readonly required: ProjectFlagWire;}
+export type ProjectMacroParametersWire = readonly ProjectMacroParameterWire[];
+export interface ProjectPrinterMacroWire {readonly name: ProjectPrinterReplyTextWire;readonly description: ProjectOptionalPrinterReplyTextWire;readonly parameters: ProjectMacroParametersWire;readonly level: ProjectGcodeRiskLevelWire;readonly reasons: ProjectConsoleTextsWire;}
+export type ProjectPrinterMacrosWire = readonly ProjectPrinterMacroWire[];
+export type ProjectConsoleResultWire = {readonly sent:ProjectEmptyWire} | {readonly macros:ProjectPrinterMacrosWire} | {readonly failed:ProjectConsoleFailureWire};
+export interface ProjectMacroValueWire {readonly key: ProjectEditTextWire;readonly value: ProjectEditTextWire;}
+export type ProjectMacroValuesWire = readonly ProjectMacroValueWire[];
+export interface ProjectMacroInvocationRequestWire {readonly name: ProjectEditTextWire;readonly values: ProjectMacroValuesWire;}
+export type ProjectMacroInvocationWire = {readonly script:ProjectPrinterReplyTextWire} | {readonly refused:ProjectConsoleFailureWire};
+export type ProjectConsoleLineKindWire = "sent" | "received" | "error";
+export interface ProjectConsoleLineWire {readonly kind: ProjectConsoleLineKindWire;readonly text: ProjectEditTextWire;}
+export type ProjectOptionalConsoleLineWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectConsoleLineWire};
+export interface ProjectConsoleLineRequestWire {readonly line: ProjectConsoleLineWire;readonly secrets: ProjectTextListWire;}
+export interface ProjectConsoleNotificationRequestWire {readonly method: ProjectEditTextWire;readonly secrets: ProjectTextListWire;}
+export type ProjectConsoleLinesWire = readonly ProjectConsoleLineWire[];
+export interface ProjectConsoleRecentRequestWire {readonly lines: ProjectConsoleLinesWire;readonly limit: ProjectFiniteWire;}
 export type ProjectPrinterStorageResultWire = {readonly listing:ProjectPrinterStorageListingWire} | {readonly metadata:ProjectPrinterStorageMetadataWire} | {readonly done:ProjectEmptyWire} | {readonly moved:ProjectPrinterTextWire} | {readonly started:ProjectPrinterTextWire} | {readonly failed:ProjectPrinterStorageFailureWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
@@ -7939,3 +8156,45 @@ export function encodeProjectPrintHistoryPageShape(value:ProjectPrintHistoryPage
 export function captureProjectPrintHistoryPageView(value:unknown):ProjectPrintHistoryPageViewWire { return captureIntent("PrintHistoryPageView",value,shapes,limits) as ProjectPrintHistoryPageViewWire; }
 export function decodeProjectPrintHistoryPageView(text:string):ProjectPrintHistoryPageViewWire { return captureProjectPrintHistoryPageView(parseIntentJson(text,limits)); }
 export function encodeProjectPrintHistoryPageView(value:ProjectPrintHistoryPageViewWire):string { return JSON.stringify(captureProjectPrintHistoryPageView(value)); }
+export function captureProjectGcodeAssessRequest(value:unknown):ProjectGcodeAssessRequestWire { return captureIntent("GcodeAssessRequest",value,shapes,limits) as ProjectGcodeAssessRequestWire; }
+export function decodeProjectGcodeAssessRequest(text:string):ProjectGcodeAssessRequestWire { return captureProjectGcodeAssessRequest(parseIntentJson(text,limits)); }
+export function encodeProjectGcodeAssessRequest(value:ProjectGcodeAssessRequestWire):string { return JSON.stringify(captureProjectGcodeAssessRequest(value)); }
+export function captureProjectGcodeAssessment(value:unknown):ProjectGcodeAssessmentWire { return captureIntent("GcodeAssessment",value,shapes,bulkLimits) as ProjectGcodeAssessmentWire; }
+export function decodeProjectGcodeAssessment(text:string):ProjectGcodeAssessmentWire { return captureProjectGcodeAssessment(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectGcodeAssessment(value:ProjectGcodeAssessmentWire):string { return JSON.stringify(captureProjectGcodeAssessment(value)); }
+export function captureProjectConsoleOperation(value:unknown):ProjectConsoleOperationWire { return captureIntent("ConsoleOperation",value,shapes,limits) as ProjectConsoleOperationWire; }
+export function decodeProjectConsoleOperation(text:string):ProjectConsoleOperationWire { return captureProjectConsoleOperation(parseIntentJson(text,limits)); }
+export function encodeProjectConsoleOperation(value:ProjectConsoleOperationWire):string { return JSON.stringify(captureProjectConsoleOperation(value)); }
+export function captureProjectConsolePlan(value:unknown):ProjectConsolePlanWire { return captureIntent("ConsolePlan",value,shapes,bulkLimits) as ProjectConsolePlanWire; }
+export function decodeProjectConsolePlan(text:string):ProjectConsolePlanWire { return captureProjectConsolePlan(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectConsolePlan(value:ProjectConsolePlanWire):string { return JSON.stringify(captureProjectConsolePlan(value)); }
+export function captureProjectConsoleFinish(value:unknown):ProjectConsoleFinishWire { return captureIntent("ConsoleFinish",value,shapes,limits) as ProjectConsoleFinishWire; }
+export function decodeProjectConsoleFinish(text:string):ProjectConsoleFinishWire { return captureProjectConsoleFinish(parseIntentJson(text,limits)); }
+export function encodeProjectConsoleFinish(value:ProjectConsoleFinishWire):string { return JSON.stringify(captureProjectConsoleFinish(value)); }
+export function captureProjectConsoleResult(value:unknown):ProjectConsoleResultWire { return captureIntent("ConsoleResult",value,shapes,bulkLimits) as ProjectConsoleResultWire; }
+export function decodeProjectConsoleResult(text:string):ProjectConsoleResultWire { return captureProjectConsoleResult(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectConsoleResult(value:ProjectConsoleResultWire):string { return JSON.stringify(captureProjectConsoleResult(value)); }
+export function captureProjectMacroInvocationRequest(value:unknown):ProjectMacroInvocationRequestWire { return captureIntent("MacroInvocationRequest",value,shapes,limits) as ProjectMacroInvocationRequestWire; }
+export function decodeProjectMacroInvocationRequest(text:string):ProjectMacroInvocationRequestWire { return captureProjectMacroInvocationRequest(parseIntentJson(text,limits)); }
+export function encodeProjectMacroInvocationRequest(value:ProjectMacroInvocationRequestWire):string { return JSON.stringify(captureProjectMacroInvocationRequest(value)); }
+export function captureProjectMacroInvocation(value:unknown):ProjectMacroInvocationWire { return captureIntent("MacroInvocation",value,shapes,bulkLimits) as ProjectMacroInvocationWire; }
+export function decodeProjectMacroInvocation(text:string):ProjectMacroInvocationWire { return captureProjectMacroInvocation(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectMacroInvocation(value:ProjectMacroInvocationWire):string { return JSON.stringify(captureProjectMacroInvocation(value)); }
+export function captureProjectConsoleLineRequest(value:unknown):ProjectConsoleLineRequestWire { return captureIntent("ConsoleLineRequest",value,shapes,limits) as ProjectConsoleLineRequestWire; }
+export function decodeProjectConsoleLineRequest(text:string):ProjectConsoleLineRequestWire { return captureProjectConsoleLineRequest(parseIntentJson(text,limits)); }
+export function encodeProjectConsoleLineRequest(value:ProjectConsoleLineRequestWire):string { return JSON.stringify(captureProjectConsoleLineRequest(value)); }
+export function captureProjectConsoleLine(value:unknown):ProjectConsoleLineWire { return captureIntent("ConsoleLine",value,shapes,limits) as ProjectConsoleLineWire; }
+export function decodeProjectConsoleLine(text:string):ProjectConsoleLineWire { return captureProjectConsoleLine(parseIntentJson(text,limits)); }
+export function encodeProjectConsoleLine(value:ProjectConsoleLineWire):string { return JSON.stringify(captureProjectConsoleLine(value)); }
+export function captureProjectConsoleNotificationRequest(value:unknown):ProjectConsoleNotificationRequestWire { return captureIntent("ConsoleNotificationRequest",value,shapes,limits) as ProjectConsoleNotificationRequestWire; }
+export function decodeProjectConsoleNotificationRequest(text:string):ProjectConsoleNotificationRequestWire { return captureProjectConsoleNotificationRequest(parseIntentJson(text,limits)); }
+export function encodeProjectConsoleNotificationRequest(value:ProjectConsoleNotificationRequestWire):string { return JSON.stringify(captureProjectConsoleNotificationRequest(value)); }
+export function captureProjectOptionalConsoleLine(value:unknown):ProjectOptionalConsoleLineWire { return captureIntent("OptionalConsoleLine",value,shapes,limits) as ProjectOptionalConsoleLineWire; }
+export function decodeProjectOptionalConsoleLine(text:string):ProjectOptionalConsoleLineWire { return captureProjectOptionalConsoleLine(parseIntentJson(text,limits)); }
+export function encodeProjectOptionalConsoleLine(value:ProjectOptionalConsoleLineWire):string { return JSON.stringify(captureProjectOptionalConsoleLine(value)); }
+export function captureProjectConsoleRecentRequest(value:unknown):ProjectConsoleRecentRequestWire { return captureIntent("ConsoleRecentRequest",value,shapes,limits) as ProjectConsoleRecentRequestWire; }
+export function decodeProjectConsoleRecentRequest(text:string):ProjectConsoleRecentRequestWire { return captureProjectConsoleRecentRequest(parseIntentJson(text,limits)); }
+export function encodeProjectConsoleRecentRequest(value:ProjectConsoleRecentRequestWire):string { return JSON.stringify(captureProjectConsoleRecentRequest(value)); }
+export function captureProjectTextList(value:unknown):ProjectTextListWire { return captureIntent("TextList",value,shapes,limits) as ProjectTextListWire; }
+export function decodeProjectTextList(text:string):ProjectTextListWire { return captureProjectTextList(parseIntentJson(text,limits)); }
+export function encodeProjectTextList(value:ProjectTextListWire):string { return JSON.stringify(captureProjectTextList(value)); }

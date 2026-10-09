@@ -10041,6 +10041,311 @@ object ProjectIntents {
             w.field("label") { writeEditText(w, v.label) }
         }
     }
+    sealed interface OptionalPrintJobState {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalPrintJobState
+        data class Value(val value: ProjectIntents.PrintJobState) : OptionalPrintJobState
+    }
+    private fun readOptionalPrintJobState(v: Any): OptionalPrintJobState {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalPrintJobState.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalPrintJobState.Value(readPrintJobState(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalPrintJobState(w: ProjectIntentWriter, v: OptionalPrintJobState) {
+        w.obj { when(v) {
+            is OptionalPrintJobState.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalPrintJobState.Value -> w.field("value") { writePrintJobState(w, v.value) }
+        } }
+    }
+    enum class GcodeRiskLevel {Safe,Caution,Dangerous}
+    private fun readGcodeRiskLevel(v: Any): GcodeRiskLevel {
+        return when(v) {"safe" -> GcodeRiskLevel.Safe;"caution" -> GcodeRiskLevel.Caution;"dangerous" -> GcodeRiskLevel.Dangerous; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeGcodeRiskLevel(w: ProjectIntentWriter, v: GcodeRiskLevel) {
+        w.literal(when(v) {GcodeRiskLevel.Safe -> "safe";GcodeRiskLevel.Caution -> "caution";GcodeRiskLevel.Dangerous -> "dangerous";})
+    }
+    data class GcodeAssessRequest(val script: List<Int>, val jobState: OptionalPrintJobState)
+    private fun readGcodeAssessRequest(v: Any): GcodeAssessRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("script", "jobState"), false)
+        return GcodeAssessRequest(readEditText(obj.get("script")), readOptionalPrintJobState(obj.get("jobState")))
+    }
+    private fun writeGcodeAssessRequest(w: ProjectIntentWriter, v: GcodeAssessRequest) {
+        w.obj {
+            w.field("script") { writeEditText(w, v.script) }
+            w.field("jobState") { writeOptionalPrintJobState(w, v.jobState) }
+        }
+    }
+    private fun readConsoleTexts(v: Any): List<List<Int>> {
+        val array = ProjectIntentJson.list(v, 0, 2097152)
+        return List(array.length()) { readPrinterReplyText(array.get(it)) }
+    }
+    private fun writeConsoleTexts(w: ProjectIntentWriter, v: List<List<Int>>) {
+        w.array(v, 0, 2097152) { writePrinterReplyText(w, it) }
+    }
+    data class GcodeAssessment(val command: List<Int>, val level: GcodeRiskLevel, val reasons: List<List<Int>>, val commands: List<List<Int>>)
+    private fun readGcodeAssessment(v: Any): GcodeAssessment {
+        val obj = ProjectIntentJson.fields(v, setOf("command", "level", "reasons", "commands"), false)
+        return GcodeAssessment(readPrinterReplyText(obj.get("command")), readGcodeRiskLevel(obj.get("level")), readConsoleTexts(obj.get("reasons")), readConsoleTexts(obj.get("commands")))
+    }
+    private fun writeGcodeAssessment(w: ProjectIntentWriter, v: GcodeAssessment) {
+        w.obj {
+            w.field("command") { writePrinterReplyText(w, v.command) }
+            w.field("level") { writeGcodeRiskLevel(w, v.level) }
+            w.field("reasons") { writeConsoleTexts(w, v.reasons) }
+            w.field("commands") { writeConsoleTexts(w, v.commands) }
+        }
+    }
+    sealed interface ConsoleOperation {
+        data class Send(val value: ProjectIntents.PrinterText) : ConsoleOperation
+        data class Macros(val value: ProjectIntents.Empty) : ConsoleOperation
+    }
+    private fun readConsoleOperation(v: Any): ConsoleOperation {
+        val obj = ProjectIntentJson.fields(v, setOf("send", "macros"), true)
+        return when(val key = obj.keys().next()) {
+            "send" -> ConsoleOperation.Send(readPrinterText(obj.get(key)))
+            "macros" -> ConsoleOperation.Macros(readEmpty(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeConsoleOperation(w: ProjectIntentWriter, v: ConsoleOperation) {
+        w.obj { when(v) {
+            is ConsoleOperation.Send -> w.field("send") { writePrinterText(w, v.value) }
+            is ConsoleOperation.Macros -> w.field("macros") { writeEmpty(w, v.value) }
+        } }
+    }
+    enum class ConsoleErrorCode {EmptyScript,TooLong,InvalidScript,InvalidMacro,SendFailed,MacrosUnavailable,Cancelled}
+    private fun readConsoleErrorCode(v: Any): ConsoleErrorCode {
+        return when(v) {"emptyScript" -> ConsoleErrorCode.EmptyScript;"tooLong" -> ConsoleErrorCode.TooLong;"invalidScript" -> ConsoleErrorCode.InvalidScript;"invalidMacro" -> ConsoleErrorCode.InvalidMacro;"sendFailed" -> ConsoleErrorCode.SendFailed;"macrosUnavailable" -> ConsoleErrorCode.MacrosUnavailable;"cancelled" -> ConsoleErrorCode.Cancelled; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeConsoleErrorCode(w: ProjectIntentWriter, v: ConsoleErrorCode) {
+        w.literal(when(v) {ConsoleErrorCode.EmptyScript -> "emptyScript";ConsoleErrorCode.TooLong -> "tooLong";ConsoleErrorCode.InvalidScript -> "invalidScript";ConsoleErrorCode.InvalidMacro -> "invalidMacro";ConsoleErrorCode.SendFailed -> "sendFailed";ConsoleErrorCode.MacrosUnavailable -> "macrosUnavailable";ConsoleErrorCode.Cancelled -> "cancelled";})
+    }
+    data class ConsoleFailure(val code: ConsoleErrorCode, val message: List<Int>)
+    private fun readConsoleFailure(v: Any): ConsoleFailure {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return ConsoleFailure(readConsoleErrorCode(obj.get("code")), readPrinterReplyText(obj.get("message")))
+    }
+    private fun writeConsoleFailure(w: ProjectIntentWriter, v: ConsoleFailure) {
+        w.obj {
+            w.field("code") { writeConsoleErrorCode(w, v.code) }
+            w.field("message") { writePrinterReplyText(w, v.message) }
+        }
+    }
+    sealed interface ConsolePlan {
+        data class Request(val value: ProjectIntents.PrinterSend) : ConsolePlan
+        data class Refused(val value: ProjectIntents.ConsoleFailure) : ConsolePlan
+    }
+    private fun readConsolePlan(v: Any): ConsolePlan {
+        val obj = ProjectIntentJson.fields(v, setOf("request", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "request" -> ConsolePlan.Request(readPrinterSend(obj.get(key)))
+            "refused" -> ConsolePlan.Refused(readConsoleFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeConsolePlan(w: ProjectIntentWriter, v: ConsolePlan) {
+        w.obj { when(v) {
+            is ConsolePlan.Request -> w.field("request") { writePrinterSend(w, v.value) }
+            is ConsolePlan.Refused -> w.field("refused") { writeConsoleFailure(w, v.value) }
+        } }
+    }
+    data class ConsoleFinish(val operation: ConsoleOperation, val outcome: PrinterExchangeOutcome)
+    private fun readConsoleFinish(v: Any): ConsoleFinish {
+        val obj = ProjectIntentJson.fields(v, setOf("operation", "outcome"), false)
+        return ConsoleFinish(readConsoleOperation(obj.get("operation")), readPrinterExchangeOutcome(obj.get("outcome")))
+    }
+    private fun writeConsoleFinish(w: ProjectIntentWriter, v: ConsoleFinish) {
+        w.obj {
+            w.field("operation") { writeConsoleOperation(w, v.operation) }
+            w.field("outcome") { writePrinterExchangeOutcome(w, v.outcome) }
+        }
+    }
+    data class MacroParameter(val name: List<Int>, val defaultValue: OptionalPrinterReplyText, val required: Boolean)
+    private fun readMacroParameter(v: Any): MacroParameter {
+        val obj = ProjectIntentJson.fields(v, setOf("name", "defaultValue", "required"), false)
+        return MacroParameter(readPrinterReplyText(obj.get("name")), readOptionalPrinterReplyText(obj.get("defaultValue")), readFlag(obj.get("required")))
+    }
+    private fun writeMacroParameter(w: ProjectIntentWriter, v: MacroParameter) {
+        w.obj {
+            w.field("name") { writePrinterReplyText(w, v.name) }
+            w.field("defaultValue") { writeOptionalPrinterReplyText(w, v.defaultValue) }
+            w.field("required") { writeFlag(w, v.required) }
+        }
+    }
+    private fun readMacroParameters(v: Any): List<MacroParameter> {
+        val array = ProjectIntentJson.list(v, 0, 262144)
+        return List(array.length()) { readMacroParameter(array.get(it)) }
+    }
+    private fun writeMacroParameters(w: ProjectIntentWriter, v: List<MacroParameter>) {
+        w.array(v, 0, 262144) { writeMacroParameter(w, it) }
+    }
+    data class PrinterMacro(val name: List<Int>, val description: OptionalPrinterReplyText, val parameters: List<MacroParameter>, val level: GcodeRiskLevel, val reasons: List<List<Int>>)
+    private fun readPrinterMacro(v: Any): PrinterMacro {
+        val obj = ProjectIntentJson.fields(v, setOf("name", "description", "parameters", "level", "reasons"), false)
+        return PrinterMacro(readPrinterReplyText(obj.get("name")), readOptionalPrinterReplyText(obj.get("description")), readMacroParameters(obj.get("parameters")), readGcodeRiskLevel(obj.get("level")), readConsoleTexts(obj.get("reasons")))
+    }
+    private fun writePrinterMacro(w: ProjectIntentWriter, v: PrinterMacro) {
+        w.obj {
+            w.field("name") { writePrinterReplyText(w, v.name) }
+            w.field("description") { writeOptionalPrinterReplyText(w, v.description) }
+            w.field("parameters") { writeMacroParameters(w, v.parameters) }
+            w.field("level") { writeGcodeRiskLevel(w, v.level) }
+            w.field("reasons") { writeConsoleTexts(w, v.reasons) }
+        }
+    }
+    private fun readPrinterMacros(v: Any): List<PrinterMacro> {
+        val array = ProjectIntentJson.list(v, 0, 262144)
+        return List(array.length()) { readPrinterMacro(array.get(it)) }
+    }
+    private fun writePrinterMacros(w: ProjectIntentWriter, v: List<PrinterMacro>) {
+        w.array(v, 0, 262144) { writePrinterMacro(w, it) }
+    }
+    sealed interface ConsoleResult {
+        data class Sent(val value: ProjectIntents.Empty) : ConsoleResult
+        data class Macros(val value: List<ProjectIntents.PrinterMacro>) : ConsoleResult
+        data class Failed(val value: ProjectIntents.ConsoleFailure) : ConsoleResult
+    }
+    private fun readConsoleResult(v: Any): ConsoleResult {
+        val obj = ProjectIntentJson.fields(v, setOf("sent", "macros", "failed"), true)
+        return when(val key = obj.keys().next()) {
+            "sent" -> ConsoleResult.Sent(readEmpty(obj.get(key)))
+            "macros" -> ConsoleResult.Macros(readPrinterMacros(obj.get(key)))
+            "failed" -> ConsoleResult.Failed(readConsoleFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeConsoleResult(w: ProjectIntentWriter, v: ConsoleResult) {
+        w.obj { when(v) {
+            is ConsoleResult.Sent -> w.field("sent") { writeEmpty(w, v.value) }
+            is ConsoleResult.Macros -> w.field("macros") { writePrinterMacros(w, v.value) }
+            is ConsoleResult.Failed -> w.field("failed") { writeConsoleFailure(w, v.value) }
+        } }
+    }
+    data class MacroValue(val key: List<Int>, val value: List<Int>)
+    private fun readMacroValue(v: Any): MacroValue {
+        val obj = ProjectIntentJson.fields(v, setOf("key", "value"), false)
+        return MacroValue(readEditText(obj.get("key")), readEditText(obj.get("value")))
+    }
+    private fun writeMacroValue(w: ProjectIntentWriter, v: MacroValue) {
+        w.obj {
+            w.field("key") { writeEditText(w, v.key) }
+            w.field("value") { writeEditText(w, v.value) }
+        }
+    }
+    private fun readMacroValues(v: Any): List<MacroValue> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readMacroValue(array.get(it)) }
+    }
+    private fun writeMacroValues(w: ProjectIntentWriter, v: List<MacroValue>) {
+        w.array(v, 0, 4096) { writeMacroValue(w, it) }
+    }
+    data class MacroInvocationRequest(val name: List<Int>, val values: List<MacroValue>)
+    private fun readMacroInvocationRequest(v: Any): MacroInvocationRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("name", "values"), false)
+        return MacroInvocationRequest(readEditText(obj.get("name")), readMacroValues(obj.get("values")))
+    }
+    private fun writeMacroInvocationRequest(w: ProjectIntentWriter, v: MacroInvocationRequest) {
+        w.obj {
+            w.field("name") { writeEditText(w, v.name) }
+            w.field("values") { writeMacroValues(w, v.values) }
+        }
+    }
+    sealed interface MacroInvocation {
+        data class Script(val value: List<Int>) : MacroInvocation
+        data class Refused(val value: ProjectIntents.ConsoleFailure) : MacroInvocation
+    }
+    private fun readMacroInvocation(v: Any): MacroInvocation {
+        val obj = ProjectIntentJson.fields(v, setOf("script", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "script" -> MacroInvocation.Script(readPrinterReplyText(obj.get(key)))
+            "refused" -> MacroInvocation.Refused(readConsoleFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMacroInvocation(w: ProjectIntentWriter, v: MacroInvocation) {
+        w.obj { when(v) {
+            is MacroInvocation.Script -> w.field("script") { writePrinterReplyText(w, v.value) }
+            is MacroInvocation.Refused -> w.field("refused") { writeConsoleFailure(w, v.value) }
+        } }
+    }
+    enum class ConsoleLineKind {Sent,Received,Error}
+    private fun readConsoleLineKind(v: Any): ConsoleLineKind {
+        return when(v) {"sent" -> ConsoleLineKind.Sent;"received" -> ConsoleLineKind.Received;"error" -> ConsoleLineKind.Error; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeConsoleLineKind(w: ProjectIntentWriter, v: ConsoleLineKind) {
+        w.literal(when(v) {ConsoleLineKind.Sent -> "sent";ConsoleLineKind.Received -> "received";ConsoleLineKind.Error -> "error";})
+    }
+    data class ConsoleLine(val kind: ConsoleLineKind, val text: List<Int>)
+    private fun readConsoleLine(v: Any): ConsoleLine {
+        val obj = ProjectIntentJson.fields(v, setOf("kind", "text"), false)
+        return ConsoleLine(readConsoleLineKind(obj.get("kind")), readEditText(obj.get("text")))
+    }
+    private fun writeConsoleLine(w: ProjectIntentWriter, v: ConsoleLine) {
+        w.obj {
+            w.field("kind") { writeConsoleLineKind(w, v.kind) }
+            w.field("text") { writeEditText(w, v.text) }
+        }
+    }
+    sealed interface OptionalConsoleLine {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalConsoleLine
+        data class Value(val value: ProjectIntents.ConsoleLine) : OptionalConsoleLine
+    }
+    private fun readOptionalConsoleLine(v: Any): OptionalConsoleLine {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalConsoleLine.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalConsoleLine.Value(readConsoleLine(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalConsoleLine(w: ProjectIntentWriter, v: OptionalConsoleLine) {
+        w.obj { when(v) {
+            is OptionalConsoleLine.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalConsoleLine.Value -> w.field("value") { writeConsoleLine(w, v.value) }
+        } }
+    }
+    data class ConsoleLineRequest(val line: ConsoleLine, val secrets: List<List<Int>>)
+    private fun readConsoleLineRequest(v: Any): ConsoleLineRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("line", "secrets"), false)
+        return ConsoleLineRequest(readConsoleLine(obj.get("line")), readTextList(obj.get("secrets")))
+    }
+    private fun writeConsoleLineRequest(w: ProjectIntentWriter, v: ConsoleLineRequest) {
+        w.obj {
+            w.field("line") { writeConsoleLine(w, v.line) }
+            w.field("secrets") { writeTextList(w, v.secrets) }
+        }
+    }
+    data class ConsoleNotificationRequest(val method: List<Int>, val secrets: List<List<Int>>)
+    private fun readConsoleNotificationRequest(v: Any): ConsoleNotificationRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("method", "secrets"), false)
+        return ConsoleNotificationRequest(readEditText(obj.get("method")), readTextList(obj.get("secrets")))
+    }
+    private fun writeConsoleNotificationRequest(w: ProjectIntentWriter, v: ConsoleNotificationRequest) {
+        w.obj {
+            w.field("method") { writeEditText(w, v.method) }
+            w.field("secrets") { writeTextList(w, v.secrets) }
+        }
+    }
+    private fun readConsoleLines(v: Any): List<ConsoleLine> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readConsoleLine(array.get(it)) }
+    }
+    private fun writeConsoleLines(w: ProjectIntentWriter, v: List<ConsoleLine>) {
+        w.array(v, 0, 4096) { writeConsoleLine(w, it) }
+    }
+    data class ConsoleRecentRequest(val lines: List<ConsoleLine>, val limit: Double)
+    private fun readConsoleRecentRequest(v: Any): ConsoleRecentRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("lines", "limit"), false)
+        return ConsoleRecentRequest(readConsoleLines(obj.get("lines")), readFinite(obj.get("limit")))
+    }
+    private fun writeConsoleRecentRequest(w: ProjectIntentWriter, v: ConsoleRecentRequest) {
+        w.obj {
+            w.field("lines") { writeConsoleLines(w, v.lines) }
+            w.field("limit") { writeFinite(w, v.limit) }
+        }
+    }
     sealed interface PrinterStorageResult {
         data class Listing(val value: ProjectIntents.PrinterStorageListing) : PrinterStorageResult
         data class Metadata(val value: ProjectIntents.PrinterStorageMetadata) : PrinterStorageResult
@@ -10469,4 +10774,32 @@ object ProjectIntents {
     fun encodePrintHistoryPageShape(value: PrintHistoryPageShape): String = ProjectIntentWriter().also { writePrintHistoryPageShape(it, value) }.finish()
     fun decodePrintHistoryPageView(text: String): PrintHistoryPageView = readPrintHistoryPageView(ProjectIntentJson.parse(text))
     fun encodePrintHistoryPageView(value: PrintHistoryPageView): String = ProjectIntentWriter().also { writePrintHistoryPageView(it, value) }.finish()
+    fun decodeGcodeAssessRequest(text: String): GcodeAssessRequest = readGcodeAssessRequest(ProjectIntentJson.parse(text))
+    fun encodeGcodeAssessRequest(value: GcodeAssessRequest): String = ProjectIntentWriter().also { writeGcodeAssessRequest(it, value) }.finish()
+    fun decodeGcodeAssessment(text: String): GcodeAssessment = readGcodeAssessment(ProjectIntentJson.parse(text, BULK))
+    fun encodeGcodeAssessment(value: GcodeAssessment): String = ProjectIntentWriter(BULK).also { writeGcodeAssessment(it, value) }.finish()
+    fun decodeConsoleOperation(text: String): ConsoleOperation = readConsoleOperation(ProjectIntentJson.parse(text))
+    fun encodeConsoleOperation(value: ConsoleOperation): String = ProjectIntentWriter().also { writeConsoleOperation(it, value) }.finish()
+    fun decodeConsolePlan(text: String): ConsolePlan = readConsolePlan(ProjectIntentJson.parse(text, BULK))
+    fun encodeConsolePlan(value: ConsolePlan): String = ProjectIntentWriter(BULK).also { writeConsolePlan(it, value) }.finish()
+    fun decodeConsoleFinish(text: String): ConsoleFinish = readConsoleFinish(ProjectIntentJson.parse(text))
+    fun encodeConsoleFinish(value: ConsoleFinish): String = ProjectIntentWriter().also { writeConsoleFinish(it, value) }.finish()
+    fun decodeConsoleResult(text: String): ConsoleResult = readConsoleResult(ProjectIntentJson.parse(text, BULK))
+    fun encodeConsoleResult(value: ConsoleResult): String = ProjectIntentWriter(BULK).also { writeConsoleResult(it, value) }.finish()
+    fun decodeMacroInvocationRequest(text: String): MacroInvocationRequest = readMacroInvocationRequest(ProjectIntentJson.parse(text))
+    fun encodeMacroInvocationRequest(value: MacroInvocationRequest): String = ProjectIntentWriter().also { writeMacroInvocationRequest(it, value) }.finish()
+    fun decodeMacroInvocation(text: String): MacroInvocation = readMacroInvocation(ProjectIntentJson.parse(text, BULK))
+    fun encodeMacroInvocation(value: MacroInvocation): String = ProjectIntentWriter(BULK).also { writeMacroInvocation(it, value) }.finish()
+    fun decodeConsoleLineRequest(text: String): ConsoleLineRequest = readConsoleLineRequest(ProjectIntentJson.parse(text))
+    fun encodeConsoleLineRequest(value: ConsoleLineRequest): String = ProjectIntentWriter().also { writeConsoleLineRequest(it, value) }.finish()
+    fun decodeConsoleLine(text: String): ConsoleLine = readConsoleLine(ProjectIntentJson.parse(text))
+    fun encodeConsoleLine(value: ConsoleLine): String = ProjectIntentWriter().also { writeConsoleLine(it, value) }.finish()
+    fun decodeConsoleNotificationRequest(text: String): ConsoleNotificationRequest = readConsoleNotificationRequest(ProjectIntentJson.parse(text))
+    fun encodeConsoleNotificationRequest(value: ConsoleNotificationRequest): String = ProjectIntentWriter().also { writeConsoleNotificationRequest(it, value) }.finish()
+    fun decodeOptionalConsoleLine(text: String): OptionalConsoleLine = readOptionalConsoleLine(ProjectIntentJson.parse(text))
+    fun encodeOptionalConsoleLine(value: OptionalConsoleLine): String = ProjectIntentWriter().also { writeOptionalConsoleLine(it, value) }.finish()
+    fun decodeConsoleRecentRequest(text: String): ConsoleRecentRequest = readConsoleRecentRequest(ProjectIntentJson.parse(text))
+    fun encodeConsoleRecentRequest(value: ConsoleRecentRequest): String = ProjectIntentWriter().also { writeConsoleRecentRequest(it, value) }.finish()
+    fun decodeTextList(text: String): List<List<Int>> = readTextList(ProjectIntentJson.parse(text))
+    fun encodeTextList(value: List<List<Int>>): String = ProjectIntentWriter().also { writeTextList(it, value) }.finish()
 }

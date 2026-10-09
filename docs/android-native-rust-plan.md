@@ -1993,8 +1993,14 @@ credential storage, and explicit permission/error flows.
   2,159 browser answers agree in every binding, and Kotlin `PrintHistory`
   exposes it. Porting fixed five browser defects (an infinite start time,
   rows past the page repeated on the next, counts that were not counts, an
-  unspellable start, an infinite estimate gap). Console, camera and the
-  operator surfaces remain.
+  unspellable start, an infinite estimate gap). The console's policy is
+  shared: `orcaxr_printer::console` names each line's command as Klipper
+  parses it, assesses a script against the running job, plans sends, reads
+  macros and their parameters, spells invocations Klipper reads back exactly,
+  and redacts transcript lines; 958 browser answers agree in every binding,
+  and Kotlin `PrinterConsole` exposes it. Porting fixed four browser defects,
+  the first a safety one: `N10 M112`, `M112X` and similar lines halt the
+  printer but read only as unknown. Camera and the operator surfaces remain.
 - [ ] Test with the existing printer simulator before qualified, supervised U1
   and CC trials. Automated tests do not issue commands to real printers.
 

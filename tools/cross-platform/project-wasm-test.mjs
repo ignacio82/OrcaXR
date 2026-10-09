@@ -35,6 +35,7 @@ import { replayMoonrakerPolicy } from "./moonraker-policy-replay.mjs";
 import { replayMoonrakerTransport } from "./moonraker-transport-replay.mjs";
 import { replayPrinterStorage } from "./printer-storage-replay.mjs";
 import { replayPrintHistory } from "./printer-history-replay.mjs";
+import { replayPrinterConsole } from "./printer-console-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -277,6 +278,8 @@ if (isMainThread) {
     assert.deepEqual(result.printerStorageAnswers, [218, 1460, 326, 64]);
     // Print history: plans, finishes, reads and what a panel shows.
     assert.deepEqual(result.printHistoryAnswers, [290, 1363, 258, 55, 55, 76, 23, 39]);
+    // The printer console: assessments, plans, reads, invocations and lines.
+    assert.deepEqual(result.printerConsoleAnswers, [408, 44, 284, 51, 76, 33, 34, 28]);
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -733,6 +736,12 @@ if (isMainThread) {
       await readFile(new URL("testdata/cross-platform/printer-history-vectors.json", root)),
     ),
   );
+  const printerConsole = replayPrinterConsole(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/printer-console-vectors.json", root)),
+    ),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -779,6 +788,7 @@ if (isMainThread) {
       ...moonrakerTransport,
       ...printerStorage,
       ...printHistory,
+      ...printerConsole,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

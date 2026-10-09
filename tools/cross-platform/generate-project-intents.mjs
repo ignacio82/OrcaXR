@@ -251,6 +251,20 @@ assert.deepEqual(schema.roots, [
   "OptionalPrintHistoryTotals",
   "PrintHistoryPageShape",
   "PrintHistoryPageView",
+  "GcodeAssessRequest",
+  "GcodeAssessment",
+  "ConsoleOperation",
+  "ConsolePlan",
+  "ConsoleFinish",
+  "ConsoleResult",
+  "MacroInvocationRequest",
+  "MacroInvocation",
+  "ConsoleLineRequest",
+  "ConsoleLine",
+  "ConsoleNotificationRequest",
+  "OptionalConsoleLine",
+  "ConsoleRecentRequest",
+  "TextList",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

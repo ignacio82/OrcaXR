@@ -13915,6 +13915,351 @@ fn read_print_history_page_view(v: &Value) -> Result<PrintHistoryPageView, Inval
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub enum OptionalPrintJobState {
+    Absent(Empty),
+    Value(PrintJobState),
+}
+fn read_optional_print_job_state(v: &Value) -> Result<OptionalPrintJobState, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPrintJobState::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPrintJobState::Value(read_print_job_state(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GcodeRiskLevel {
+    Safe,
+    Caution,
+    Dangerous,
+}
+fn read_gcode_risk_level(v: &Value) -> Result<GcodeRiskLevel, InvalidIntent> {
+    match v.as_str() {
+        Some("safe") => Ok(GcodeRiskLevel::Safe),
+        Some("caution") => Ok(GcodeRiskLevel::Caution),
+        Some("dangerous") => Ok(GcodeRiskLevel::Dangerous),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GcodeAssessRequest {
+    pub script: EditText,
+    pub job_state: OptionalPrintJobState,
+}
+fn read_gcode_assess_request(v: &Value) -> Result<GcodeAssessRequest, InvalidIntent> {
+    let object = fields(v, &["script", "jobState"], false)?;
+    Ok(GcodeAssessRequest {
+        script: read_edit_text(&object["script"])?,
+        job_state: read_optional_print_job_state(&object["jobState"])?,
+    })
+}
+pub type ConsoleTexts = Vec<PrinterReplyText>;
+fn read_console_texts(v: &Value) -> Result<ConsoleTexts, InvalidIntent> {
+    list(v, 0, 2097152)?
+        .iter()
+        .map(read_printer_reply_text)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GcodeAssessment {
+    pub command: PrinterReplyText,
+    pub level: GcodeRiskLevel,
+    pub reasons: ConsoleTexts,
+    pub commands: ConsoleTexts,
+}
+fn read_gcode_assessment(v: &Value) -> Result<GcodeAssessment, InvalidIntent> {
+    let object = fields(v, &["command", "level", "reasons", "commands"], false)?;
+    Ok(GcodeAssessment {
+        command: read_printer_reply_text(&object["command"])?,
+        level: read_gcode_risk_level(&object["level"])?,
+        reasons: read_console_texts(&object["reasons"])?,
+        commands: read_console_texts(&object["commands"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConsoleOperation {
+    Send(PrinterText),
+    Macros(Empty),
+}
+fn read_console_operation(v: &Value) -> Result<ConsoleOperation, InvalidIntent> {
+    let object = fields(v, &["send", "macros"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "send" => Ok(ConsoleOperation::Send(read_printer_text(value)?)),
+        "macros" => Ok(ConsoleOperation::Macros(read_empty(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConsoleErrorCode {
+    EmptyScript,
+    TooLong,
+    InvalidScript,
+    InvalidMacro,
+    SendFailed,
+    MacrosUnavailable,
+    Cancelled,
+}
+fn read_console_error_code(v: &Value) -> Result<ConsoleErrorCode, InvalidIntent> {
+    match v.as_str() {
+        Some("emptyScript") => Ok(ConsoleErrorCode::EmptyScript),
+        Some("tooLong") => Ok(ConsoleErrorCode::TooLong),
+        Some("invalidScript") => Ok(ConsoleErrorCode::InvalidScript),
+        Some("invalidMacro") => Ok(ConsoleErrorCode::InvalidMacro),
+        Some("sendFailed") => Ok(ConsoleErrorCode::SendFailed),
+        Some("macrosUnavailable") => Ok(ConsoleErrorCode::MacrosUnavailable),
+        Some("cancelled") => Ok(ConsoleErrorCode::Cancelled),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsoleFailure {
+    pub code: ConsoleErrorCode,
+    pub message: PrinterReplyText,
+}
+fn read_console_failure(v: &Value) -> Result<ConsoleFailure, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(ConsoleFailure {
+        code: read_console_error_code(&object["code"])?,
+        message: read_printer_reply_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConsolePlan {
+    Request(PrinterSend),
+    Refused(ConsoleFailure),
+}
+fn read_console_plan(v: &Value) -> Result<ConsolePlan, InvalidIntent> {
+    let object = fields(v, &["request", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "request" => Ok(ConsolePlan::Request(read_printer_send(value)?)),
+        "refused" => Ok(ConsolePlan::Refused(read_console_failure(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsoleFinish {
+    pub operation: ConsoleOperation,
+    pub outcome: PrinterExchangeOutcome,
+}
+fn read_console_finish(v: &Value) -> Result<ConsoleFinish, InvalidIntent> {
+    let object = fields(v, &["operation", "outcome"], false)?;
+    Ok(ConsoleFinish {
+        operation: read_console_operation(&object["operation"])?,
+        outcome: read_printer_exchange_outcome(&object["outcome"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MacroParameter {
+    pub name: PrinterReplyText,
+    pub default_value: OptionalPrinterReplyText,
+    pub required: Flag,
+}
+fn read_macro_parameter(v: &Value) -> Result<MacroParameter, InvalidIntent> {
+    let object = fields(v, &["name", "defaultValue", "required"], false)?;
+    Ok(MacroParameter {
+        name: read_printer_reply_text(&object["name"])?,
+        default_value: read_optional_printer_reply_text(&object["defaultValue"])?,
+        required: read_flag(&object["required"])?,
+    })
+}
+pub type MacroParameters = Vec<MacroParameter>;
+fn read_macro_parameters(v: &Value) -> Result<MacroParameters, InvalidIntent> {
+    list(v, 0, 262144)?
+        .iter()
+        .map(read_macro_parameter)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterMacro {
+    pub name: PrinterReplyText,
+    pub description: OptionalPrinterReplyText,
+    pub parameters: MacroParameters,
+    pub level: GcodeRiskLevel,
+    pub reasons: ConsoleTexts,
+}
+fn read_printer_macro(v: &Value) -> Result<PrinterMacro, InvalidIntent> {
+    let object = fields(
+        v,
+        &["name", "description", "parameters", "level", "reasons"],
+        false,
+    )?;
+    Ok(PrinterMacro {
+        name: read_printer_reply_text(&object["name"])?,
+        description: read_optional_printer_reply_text(&object["description"])?,
+        parameters: read_macro_parameters(&object["parameters"])?,
+        level: read_gcode_risk_level(&object["level"])?,
+        reasons: read_console_texts(&object["reasons"])?,
+    })
+}
+pub type PrinterMacros = Vec<PrinterMacro>;
+fn read_printer_macros(v: &Value) -> Result<PrinterMacros, InvalidIntent> {
+    list(v, 0, 262144)?.iter().map(read_printer_macro).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConsoleResult {
+    Sent(Empty),
+    Macros(PrinterMacros),
+    Failed(ConsoleFailure),
+}
+fn read_console_result(v: &Value) -> Result<ConsoleResult, InvalidIntent> {
+    let object = fields(v, &["sent", "macros", "failed"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "sent" => Ok(ConsoleResult::Sent(read_empty(value)?)),
+        "macros" => Ok(ConsoleResult::Macros(read_printer_macros(value)?)),
+        "failed" => Ok(ConsoleResult::Failed(read_console_failure(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MacroValue {
+    pub key: EditText,
+    pub value: EditText,
+}
+fn read_macro_value(v: &Value) -> Result<MacroValue, InvalidIntent> {
+    let object = fields(v, &["key", "value"], false)?;
+    Ok(MacroValue {
+        key: read_edit_text(&object["key"])?,
+        value: read_edit_text(&object["value"])?,
+    })
+}
+pub type MacroValues = Vec<MacroValue>;
+fn read_macro_values(v: &Value) -> Result<MacroValues, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_macro_value).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MacroInvocationRequest {
+    pub name: EditText,
+    pub values: MacroValues,
+}
+fn read_macro_invocation_request(v: &Value) -> Result<MacroInvocationRequest, InvalidIntent> {
+    let object = fields(v, &["name", "values"], false)?;
+    Ok(MacroInvocationRequest {
+        name: read_edit_text(&object["name"])?,
+        values: read_macro_values(&object["values"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MacroInvocation {
+    Script(PrinterReplyText),
+    Refused(ConsoleFailure),
+}
+fn read_macro_invocation(v: &Value) -> Result<MacroInvocation, InvalidIntent> {
+    let object = fields(v, &["script", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "script" => Ok(MacroInvocation::Script(read_printer_reply_text(value)?)),
+        "refused" => Ok(MacroInvocation::Refused(read_console_failure(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConsoleLineKind {
+    Sent,
+    Received,
+    Error,
+}
+fn read_console_line_kind(v: &Value) -> Result<ConsoleLineKind, InvalidIntent> {
+    match v.as_str() {
+        Some("sent") => Ok(ConsoleLineKind::Sent),
+        Some("received") => Ok(ConsoleLineKind::Received),
+        Some("error") => Ok(ConsoleLineKind::Error),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsoleLine {
+    pub kind: ConsoleLineKind,
+    pub text: EditText,
+}
+fn read_console_line(v: &Value) -> Result<ConsoleLine, InvalidIntent> {
+    let object = fields(v, &["kind", "text"], false)?;
+    Ok(ConsoleLine {
+        kind: read_console_line_kind(&object["kind"])?,
+        text: read_edit_text(&object["text"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalConsoleLine {
+    Absent(Empty),
+    Value(ConsoleLine),
+}
+fn read_optional_console_line(v: &Value) -> Result<OptionalConsoleLine, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalConsoleLine::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalConsoleLine::Value(read_console_line(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsoleLineRequest {
+    pub line: ConsoleLine,
+    pub secrets: TextList,
+}
+fn read_console_line_request(v: &Value) -> Result<ConsoleLineRequest, InvalidIntent> {
+    let object = fields(v, &["line", "secrets"], false)?;
+    Ok(ConsoleLineRequest {
+        line: read_console_line(&object["line"])?,
+        secrets: read_text_list(&object["secrets"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsoleNotificationRequest {
+    pub method: EditText,
+    pub secrets: TextList,
+}
+fn read_console_notification_request(
+    v: &Value,
+) -> Result<ConsoleNotificationRequest, InvalidIntent> {
+    let object = fields(v, &["method", "secrets"], false)?;
+    Ok(ConsoleNotificationRequest {
+        method: read_edit_text(&object["method"])?,
+        secrets: read_text_list(&object["secrets"])?,
+    })
+}
+pub type ConsoleLines = Vec<ConsoleLine>;
+fn read_console_lines(v: &Value) -> Result<ConsoleLines, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_console_line).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsoleRecentRequest {
+    pub lines: ConsoleLines,
+    pub limit: Finite,
+}
+fn read_console_recent_request(v: &Value) -> Result<ConsoleRecentRequest, InvalidIntent> {
+    let object = fields(v, &["lines", "limit"], false)?;
+    Ok(ConsoleRecentRequest {
+        lines: read_console_lines(&object["lines"])?,
+        limit: read_finite(&object["limit"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PrinterStorageResult {
     Listing(PrinterStorageListing),
     Metadata(PrinterStorageMetadata),
@@ -15784,5 +16129,127 @@ pub fn encode_print_history_page_view(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_print_history_page_view(&text)?;
+    Ok(text)
+}
+pub fn decode_gcode_assess_request(text: &str) -> Result<GcodeAssessRequest, InvalidIntent> {
+    read_gcode_assess_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_gcode_assess_request(value: &GcodeAssessRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_gcode_assess_request(&text)?;
+    Ok(text)
+}
+pub fn decode_gcode_assessment(text: &str) -> Result<GcodeAssessment, InvalidIntent> {
+    read_gcode_assessment(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_gcode_assessment(value: &GcodeAssessment) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_gcode_assessment(&text)?;
+    Ok(text)
+}
+pub fn decode_console_operation(text: &str) -> Result<ConsoleOperation, InvalidIntent> {
+    read_console_operation(&super::project_intents::parse(text)?)
+}
+pub fn encode_console_operation(value: &ConsoleOperation) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_console_operation(&text)?;
+    Ok(text)
+}
+pub fn decode_console_plan(text: &str) -> Result<ConsolePlan, InvalidIntent> {
+    read_console_plan(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_console_plan(value: &ConsolePlan) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_console_plan(&text)?;
+    Ok(text)
+}
+pub fn decode_console_finish(text: &str) -> Result<ConsoleFinish, InvalidIntent> {
+    read_console_finish(&super::project_intents::parse(text)?)
+}
+pub fn encode_console_finish(value: &ConsoleFinish) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_console_finish(&text)?;
+    Ok(text)
+}
+pub fn decode_console_result(text: &str) -> Result<ConsoleResult, InvalidIntent> {
+    read_console_result(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_console_result(value: &ConsoleResult) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_console_result(&text)?;
+    Ok(text)
+}
+pub fn decode_macro_invocation_request(
+    text: &str,
+) -> Result<MacroInvocationRequest, InvalidIntent> {
+    read_macro_invocation_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_macro_invocation_request(
+    value: &MacroInvocationRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_macro_invocation_request(&text)?;
+    Ok(text)
+}
+pub fn decode_macro_invocation(text: &str) -> Result<MacroInvocation, InvalidIntent> {
+    read_macro_invocation(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_macro_invocation(value: &MacroInvocation) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_macro_invocation(&text)?;
+    Ok(text)
+}
+pub fn decode_console_line_request(text: &str) -> Result<ConsoleLineRequest, InvalidIntent> {
+    read_console_line_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_console_line_request(value: &ConsoleLineRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_console_line_request(&text)?;
+    Ok(text)
+}
+pub fn decode_console_line(text: &str) -> Result<ConsoleLine, InvalidIntent> {
+    read_console_line(&super::project_intents::parse(text)?)
+}
+pub fn encode_console_line(value: &ConsoleLine) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_console_line(&text)?;
+    Ok(text)
+}
+pub fn decode_console_notification_request(
+    text: &str,
+) -> Result<ConsoleNotificationRequest, InvalidIntent> {
+    read_console_notification_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_console_notification_request(
+    value: &ConsoleNotificationRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_console_notification_request(&text)?;
+    Ok(text)
+}
+pub fn decode_optional_console_line(text: &str) -> Result<OptionalConsoleLine, InvalidIntent> {
+    read_optional_console_line(&super::project_intents::parse(text)?)
+}
+pub fn encode_optional_console_line(value: &OptionalConsoleLine) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_optional_console_line(&text)?;
+    Ok(text)
+}
+pub fn decode_console_recent_request(text: &str) -> Result<ConsoleRecentRequest, InvalidIntent> {
+    read_console_recent_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_console_recent_request(
+    value: &ConsoleRecentRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_console_recent_request(&text)?;
+    Ok(text)
+}
+pub fn decode_text_list(text: &str) -> Result<TextList, InvalidIntent> {
+    read_text_list(&super::project_intents::parse(text)?)
+}
+pub fn encode_text_list(value: &TextList) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_text_list(&text)?;
     Ok(text)
 }
