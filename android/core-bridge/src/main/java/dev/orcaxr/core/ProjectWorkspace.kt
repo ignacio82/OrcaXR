@@ -182,13 +182,26 @@ class ProjectWorkspace(
         if (result is ProjectOutcome.Reset || result is ProjectOutcome.ResetWithoutSummary) update { it.copy(document = null) } else null
     }
 
-    /** Opens a project document (3MF, canonical or foreign) in place of the current project. */
-    fun open(input: ProjectDocumentInput, name: String): CompletableFuture<Unit> = run({ _, record ->
-        actor.openDocument { scope ->
-            capturing(record) { ProjectDocuments.prepare(scope, input, ARCHIVE, resolver, ProjectIntegerProfile.CHROMIUM).document() }
+    /** Opens a project document (3MF, canonical or foreign) in place of the current project; answers its format. */
+    fun open(input: ProjectDocumentInput, name: String): CompletableFuture<ProjectArchiveFormat> {
+        var format: ProjectArchiveFormat? = null
+        return run({ _, record ->
+            actor.openDocument { scope ->
+                capturing(record) {
+                    ProjectDocuments.prepare(scope, input, ARCHIVE, resolver, ProjectIntegerProfile.CHROMIUM).let { prepared ->
+                        format = prepared.format()
+                        prepared.document()
+                    }
+                }
+            }
+        }) { result ->
+            if (result is ProjectOutcome.Opened || result is ProjectOutcome.OpenedWithoutSummary) {
+                update { it.copy(document = name) }
+                format
+            } else {
+                null
+            }
         }
-    }) { result ->
-        if (result is ProjectOutcome.Opened || result is ProjectOutcome.OpenedWithoutSummary) update { it.copy(document = name) } else null
     }
 
     /** Saves the project as a 3MF document; the checkpoint is acknowledged once the provider accepted it. */

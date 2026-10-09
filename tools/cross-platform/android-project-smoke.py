@@ -4,8 +4,8 @@
 The app's data is cleared and a binary STL is placed in Downloads. The run
 imports it (previewed, then committed as one undoable step), undoes and redoes
 it, saves the project as a 3MF with "Save as", starts a new project, reopens
-the saved one from the recent documents, refuses to discard unsaved changes
-until the operator agrees, refuses a document handed over outside the system's
+the saved one from the recent documents, keeps unsaved changes on Cancel,
+saves them first on Save and drops them only on Discard, refuses a document handed over outside the system's
 document sharing, and after a restart reopens the recent document through its
 persisted grant. The saved file is checked to be a ZIP package.
 """
@@ -128,13 +128,23 @@ find("0 objects", timeout=30)
 tap(SAVED)
 find("1 object", timeout=30)
 find(f"{SAVED} · No unsaved changes")
-# Unsaved changes are discarded only once the operator agrees.
+# Unsaved changes: kept on Cancel; on Save, written to the document "Save as"
+# created before the new project replaces them; dropped only on Discard.
 import_cube(2)
 find("2 objects", timeout=30)
 tap("New project")
-find("Discard changes to Untitled project?")
+find("Save changes to Untitled project?")
 tap("Cancel")
 find("2 objects")
+tap("New project")
+find("Save changes to Untitled project?")
+tap("Save")
+find("0 objects", timeout=30)
+find(f"Saved {SAVED}.")
+tap(SAVED)
+find("2 objects", timeout=30)
+import_cube(3)
+find("3 objects", timeout=30)
 tap("New project")
 tap("Discard")
 find("0 objects", timeout=30)
@@ -145,7 +155,7 @@ find("OrcaXR opens only documents shared through the system.", timeout=30)
 # After a restart the recent document opens through its persisted grant.
 launch()
 tap(SAVED)
-find("1 object", timeout=30)
+find("2 objects", timeout=30)
 report = {
     "evidenceKind": "emulator-only",
     "api": adb("shell", "getprop", "ro.build.version.sdk"),

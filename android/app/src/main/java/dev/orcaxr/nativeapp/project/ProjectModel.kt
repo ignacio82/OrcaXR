@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import dev.orcaxr.core.ContentProjectDocument
 import dev.orcaxr.core.ProjectActorImport
+import dev.orcaxr.core.ProjectArchiveFormat
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.core.RecentDocuments
@@ -36,6 +37,9 @@ class PendingImport(
 /** Something that would discard unsaved changes, held until the operator decides. */
 class PendingDiscard(val name: String, internal val action: () -> Unit)
 
+/** How the operator answers [PendingDiscard]: save first and go on, go on without saving, or stay. */
+enum class DiscardAnswer { Save, Discard, Cancel }
+
 /**
  * The Project area's host adapter: it owns the [ProjectWorkspace], runs
  * provider reads and writes on one worker thread, keeps recently used
@@ -49,7 +53,8 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     private val recentStore = RecentDocuments(PreferencesTextStore(application, "orcaxr.projects", "recent"))
     private lateinit var workspace: ProjectWorkspace
     private var subscription: AutoCloseable? = null
-    /** The document "Save" writes to: one this app created or saved, never an opened foreign file. */
+    /** The document "Save" writes to: one this app saved, or an opened one in OrcaXR's own
+     * canonical package (writing it back loses nothing); never a foreign 3MF it would convert. */
     private var savedUri: Uri? = null
 
     var view by mutableStateOf(ProjectView())
@@ -64,6 +69,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
         private set
     var pendingDiscard by mutableStateOf<PendingDiscard?>(null)
         private set
+    /** Set while the screen should ask where to save before going on with [afterSave]. */
+    var saveAsRequested by mutableStateOf(false)
+        private set
+    private var afterSave: (() -> Unit)? = null
 
     init {
         work {
@@ -126,10 +135,38 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
         if (view.dirty) pendingDiscard = PendingDiscard(view.name, action) else action()
     }
 
-    fun answerDiscard(discard: Boolean) {
+    fun answerDiscard(answer: DiscardAnswer) {
         val pending = pendingDiscard ?: return
         pendingDiscard = null
-        if (discard) pending.action()
+        when (answer) {
+            DiscardAnswer.Cancel -> Unit
+            DiscardAnswer.Discard -> pending.action()
+            DiscardAnswer.Save -> {
+                val target = savedUri
+                if (target != null) {
+                    // Goes on only once the save is confirmed; a failed save leaves the project as it was.
+                    work {
+                        saveDocument(target)
+                        main.post { pending.action() }
+                    }
+                } else {
+                    afterSave = pending.action
+                    saveAsRequested = true
+                }
+            }
+        }
+    }
+
+    /** Where the operator chose to save before going on; none (the picker dismissed) keeps everything as it was. */
+    fun saveAsAnswered(uri: Uri?) {
+        saveAsRequested = false
+        val next = afterSave
+        afterSave = null
+        if (uri == null || next == null) return
+        work {
+            saveDocument(uri)
+            main.post { next() }
+        }
     }
 
     fun dismissMessage() {
@@ -147,8 +184,8 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     fun open(uri: Uri) = unlessDirty {
         work {
             val name = displayName(uri)
-            workspace.open(ContentProjectDocument(resolver, uri), name).await()
-            savedUri = null
+            val format = workspace.open(ContentProjectDocument(resolver, uri), name).await()
+            savedUri = uri.takeIf { format == ProjectArchiveFormat.CANONICAL }
             remember(uri, name)
         }
     }
@@ -157,7 +194,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     fun openRecent(entry: RecentDocuments.Entry) = unlessDirty {
         work {
             val uri = Uri.parse(entry.uri)
-            try {
+            val format = try {
                 workspace.open(ContentProjectDocument(resolver, uri), entry.name).await()
             } catch (failure: Throwable) {
                 val reason = cause(failure).message.orEmpty()
@@ -169,7 +206,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
                 }
                 throw failure
             }
-            savedUri = null
+            savedUri = uri.takeIf { format == ProjectArchiveFormat.CANONICAL }
             remember(uri, entry.name)
         }
     }
@@ -199,7 +236,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
         return true
     }
 
-    fun saveTo(uri: Uri) = work {
+    fun saveTo(uri: Uri) = work { saveDocument(uri) }
+
+    /** Saves to [uri] on the worker; it becomes the document "Save" writes to. */
+    private fun saveDocument(uri: Uri) {
         val name = displayName(uri)
         workspace.save(ContentProjectDocument(resolver, uri), name).await()
         savedUri = uri

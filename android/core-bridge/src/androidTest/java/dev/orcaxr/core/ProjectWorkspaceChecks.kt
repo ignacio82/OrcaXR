@@ -105,7 +105,7 @@ object ProjectWorkspaceChecks {
             done(workspace.newProject())
             val fresh = until(workspace) { labels(it).size == 1 }
             check(!fresh.dirty && fresh.undo == null && fresh.document == null && fresh.name == "Untitled project", "new_project $fresh")
-            done(workspace.open(saved, "parts.3mf"))
+            check(done(workspace.open(saved, "parts.3mf")) == ProjectArchiveFormat.CANONICAL, "saved_in_its_own_format")
             val reopened = until(workspace) { labels(it).size == 3 }
             check(labels(reopened) == labels(both) && !reopened.dirty && reopened.document == "parts.3mf", "reopened ${labels(reopened)}")
             check(failure(workspace.open(Memory("not a zip".toByteArray()), "bad.3mf"))?.startsWith("OrcaXR could not read it") == true, "bad_document_refused")

@@ -20,8 +20,8 @@
     <string name="project_objects">Plates and objects</string>
     <string name="project_more_rows">%1$d more not shown</string>
     <string name="project_recent">Recent documents</string>
-    <string name="project_discard_title">Discard changes to %1$s?</string>
-    <string name="project_discard_detail">The changes since it was last saved are lost.</string>
+    <string name="project_discard_title">Save changes to %1$s?</string>
+    <string name="project_discard_detail">Save them first, or discard the changes since it was last saved.</string>
     <string name="project_discard">Discard</string>
     <string name="project_import_title">Import %1$s?</string>
     <string name="project_import_objects">The project will then have %1$d object(s). Importing is one step you can undo.</string>

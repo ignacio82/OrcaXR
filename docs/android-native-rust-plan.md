@@ -129,11 +129,12 @@ Detailed evidence and reproducible commands live in
   but have not run on a device.
 - [x] Wire provider Open/Save and model import into the application UI
   (pickers, persisted grants, recent files, share intents) in Phase 7.
-  The app's Project area (`ProjectWorkspace`/`ProjectModel`) opens, saves as,
+  The app's Project area (`ProjectWorkspace`/`ProjectModel`) opens, saves
+  (back into a canonical document, never over a foreign 3MF), saves as,
   imports (previewed, acknowledged, one undoable entry), undoes, redoes and
   starts new projects (the shared `fresh_project`, replayed against the
   browser), keeps recent documents with persisted grants and accepts incoming
-  VIEW/SEND only as `content:` URIs; 24 host checks over JNI and an
+  VIEW/SEND only as `content:` URIs; 25 host checks over JNI and an
   owned-emulator smoke through the system picker pass.
 - [x] Share bounded G-code text windows and case-insensitive line search through
   Rust, WASM and JNI (Phase 3). Browser, host and Chrome WASM replays agree on
@@ -162,7 +163,10 @@ refined (dense-root) facet commits are native too, so every browser command
 class now has a native counterpart replayed against browser-authored traces.
 All of them stage through command uploads: records declare their payload
 descriptors, then the bytes stream per declared payload, through Rust, WASM and
-JNI/Kotlin. Session cutover, the application shell and the device gates remain. Each family adds intent variants to
+JNI/Kotlin. Session cutover, the application shell and the device gates remain;
+the Android app now has its Device area (Phase 9, printers end to end) and
+Project area (Phase 7: new/open/save-as/import/undo, recents, guards), and
+Prepare/Preview wait for native slicing. Each family adds intent variants to
 `contracts/project-intents.json` (definitions before first use; regenerate with
 `generate-project-intents.mjs --write`), maps them in
 `web/src/project/PreparedProjectCommands.ts`, appends a scenario to
@@ -1831,6 +1835,11 @@ storage journeys on phone, tablet, and desktop-sized windows.
 - [ ] Implement recovery storage and Save/Discard/Cancel guards for back,
   navigation, new/open/replace, window close where observable, and app updates.
   Test process death during capture, write, commit, and restore.
+  New and Open (picked, recent or handed over) in the Project area ask
+  Save/Discard/Cancel when changes are unsaved; Save writes first and goes on
+  only once confirmed (emulator-verified for a document already saved).
+  Recovery storage, back/window-close/update guards and process-death tests
+  remain.
 - [ ] Introduce document-session ownership for multiple windows. Different
   documents may coexist; reopening an already-owned document focuses its owner
   or opens an explicit read-only view. External changes require conflict handling

@@ -300,7 +300,7 @@ try {
   assert.equal(actorImportChecks, 7);
   // The Project area's session: start, import, undo/redo, Save/Open, New project, recent documents.
   const projectWorkspaceChecks = jvm.call("projectWorkspaceChecks", decodeBytes("stl-binary/cube"), decodeBytes("obj/mtllib-unresolved"));
-  assert.equal(projectWorkspaceChecks, 24);
+  assert.equal(projectWorkspaceChecks, 25);
   const archiveCase = JSON.parse(
     await readFile(new URL("testdata/cross-platform/foreign-import-vectors.json", root)),
   ).cases.find((c) => c.name === ACTOR_ARCHIVE_CASE);

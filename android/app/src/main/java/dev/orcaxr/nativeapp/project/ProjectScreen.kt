@@ -20,6 +20,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -38,6 +39,9 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::importModel) }
     val saveAs = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(MIME_3MF)) { uri -> uri?.let(model::saveTo) }
     val suggested = "${view.name.ifBlank { "Untitled project" }}.3mf"
+    // "Save" in the unsaved-changes dialog with nowhere to save yet: ask where, then go on.
+    val saveBeforeGoingOn = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(MIME_3MF), model::saveAsAnswered)
+    LaunchedEffect(model.saveAsRequested) { if (model.saveAsRequested) saveBeforeGoingOn.launch(suggested) }
 
     LazyColumn(
         modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -100,11 +104,16 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
 
     model.pendingDiscard?.let { pending ->
         AlertDialog(
-            onDismissRequest = { model.answerDiscard(false) },
+            onDismissRequest = { model.answerDiscard(DiscardAnswer.Cancel) },
             title = { Text(stringResource(R.string.project_discard_title, pending.name)) },
             text = { Text(stringResource(R.string.project_discard_detail)) },
-            confirmButton = { TextButton(onClick = { model.answerDiscard(true) }) { Text(stringResource(R.string.project_discard)) } },
-            dismissButton = { TextButton(onClick = { model.answerDiscard(false) }) { Text(stringResource(R.string.device_cancel)) } },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { model.answerDiscard(DiscardAnswer.Discard) }) { Text(stringResource(R.string.project_discard)) }
+                    TextButton(onClick = { model.answerDiscard(DiscardAnswer.Save) }) { Text(stringResource(R.string.project_save)) }
+                }
+            },
+            dismissButton = { TextButton(onClick = { model.answerDiscard(DiscardAnswer.Cancel) }) { Text(stringResource(R.string.device_cancel)) } },
         )
     }
     model.pendingImport?.let { pending ->
