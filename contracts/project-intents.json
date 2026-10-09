@@ -5452,6 +5452,217 @@
         "effects": "PrintWorkflowPendingEffects",
         "state": "PrintWorkflowState"
       }
+    },
+    "PrinterSelection": {
+      "kind": "object",
+      "fields": {
+        "id": "EditText",
+        "name": "OptionalText",
+        "endpoint": "EditText",
+        "port": "Counter",
+        "apiKey": "OptionalText"
+      }
+    },
+    "ConnectionStatus": {
+      "kind": "enum",
+      "values": [
+        "disconnected",
+        "connecting",
+        "connected",
+        "reconnecting",
+        "error"
+      ]
+    },
+    "ConnectionSignal": {
+      "kind": "object",
+      "fields": {
+        "status": "ConnectionStatus",
+        "generation": "Counter",
+        "socketEpoch": "OptionalCounter"
+      }
+    },
+    "PrintJobIdentity": {
+      "kind": "object",
+      "fields": {
+        "jobId": "EditText",
+        "startedAt": "Finite",
+        "filename": "EditText",
+        "size": "Finite",
+        "modified": "Finite"
+      }
+    },
+    "OptionalPrintJobIdentity": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "PrintJobIdentity"
+      }
+    },
+    "PrintJobCommandIntent": {
+      "kind": "object",
+      "fields": {
+        "id": "Counter",
+        "printerId": "EditText",
+        "printerLabel": "EditText",
+        "generation": "Counter",
+        "command": "PrintJobCommand",
+        "displayedFilename": "OptionalText",
+        "observedState": "PrintJobState",
+        "job": "OptionalPrintJobIdentity"
+      }
+    },
+    "PrintJobIntentReply": {
+      "kind": "union",
+      "variants": {
+        "intent": "PrintJobCommandIntent",
+        "refused": "PrintJobCommandRefusal"
+      }
+    },
+    "PrintJobConfirmReply": {
+      "kind": "union",
+      "variants": {
+        "token": "Counter",
+        "refused": "PrintJobCommandRefusal"
+      }
+    },
+    "PrinterSessionLease": {
+      "kind": "object",
+      "fields": {
+        "printerId": "EditText",
+        "label": "EditText",
+        "generation": "Counter",
+        "transport": "Counter"
+      }
+    },
+    "PrinterSessionLeaseReply": {
+      "kind": "union",
+      "variants": {
+        "lease": "PrinterSessionLease",
+        "refused": "PrinterText"
+      }
+    },
+    "PrinterTransportOpen": {
+      "kind": "object",
+      "fields": {
+        "transport": "Counter",
+        "selection": "PrinterSelection"
+      }
+    },
+    "PrinterTransportRef": {
+      "kind": "object",
+      "fields": {
+        "transport": "Counter"
+      }
+    },
+    "PrinterSessionRequest": {
+      "kind": "object",
+      "fields": {
+        "transport": "Counter",
+        "epoch": "Counter",
+        "send": "PrinterSend"
+      }
+    },
+    "PrinterSessionRecovery": {
+      "kind": "object",
+      "fields": {
+        "transport": "Counter",
+        "epoch": "Counter",
+        "command": "PrintJobCommand"
+      }
+    },
+    "PrinterSessionEffect": {
+      "kind": "union",
+      "variants": {
+        "openTransport": "PrinterTransportOpen",
+        "connect": "PrinterTransportRef",
+        "request": "PrinterSessionRequest",
+        "recovery": "PrinterSessionRecovery",
+        "confirmCommand": "PrintJobCommandIntent"
+      }
+    },
+    "PrinterSessionPendingEffect": {
+      "kind": "object",
+      "fields": {
+        "id": "Counter",
+        "effect": "PrinterSessionEffect"
+      }
+    },
+    "PrinterSessionPendingEffects": {
+      "kind": "array",
+      "items": "PrinterSessionPendingEffect",
+      "min": 0,
+      "max": 64
+    },
+    "PrinterSessionOutcome": {
+      "kind": "union",
+      "variants": {
+        "state": "ConnectionSignal",
+        "connected": "Empty",
+        "failed": "TransportFailure",
+        "confirmed": "Flag"
+      }
+    },
+    "PrinterTaskResult": {
+      "kind": "union",
+      "variants": {
+        "done": "Empty",
+        "failed": "PrinterText",
+        "refused": "PrintJobCommandRefusal"
+      }
+    },
+    "PrinterTaskFinished": {
+      "kind": "object",
+      "fields": {
+        "task": "Counter",
+        "result": "PrinterTaskResult"
+      }
+    },
+    "PrinterTasksFinished": {
+      "kind": "array",
+      "items": "PrinterTaskFinished",
+      "min": 0,
+      "max": 64
+    },
+    "PrinterSessionIds": {
+      "kind": "array",
+      "items": "Counter",
+      "min": 0,
+      "max": 256
+    },
+    "PrinterSessionStep": {
+      "kind": "object",
+      "fields": {
+        "changed": "Counter",
+        "effects": "PrinterSessionPendingEffects",
+        "withdrawn": "PrinterSessionIds",
+        "closed": "PrinterSessionIds",
+        "aborted": "PrinterSessionIds",
+        "task": "OptionalCounter",
+        "finished": "PrinterTasksFinished"
+      }
+    },
+    "PrintJobExecuteConfirmation": {
+      "kind": "union",
+      "variants": {
+        "none": "Empty",
+        "token": "Counter",
+        "dialog": "Empty"
+      }
+    },
+    "PrintJobExecuteRequest": {
+      "kind": "object",
+      "fields": {
+        "intent": "Counter",
+        "confirmation": "PrintJobExecuteConfirmation"
+      }
+    },
+    "PrinterSessionView": {
+      "kind": "object",
+      "fields": {
+        "generation": "Counter",
+        "snapshot": "OptionalPrintJobSnapshot",
+        "availability": "PrintJobCommandDescriptors"
+      }
     }
   },
   "roots": [
@@ -5598,7 +5809,18 @@
     "PrintWorkflowIntent",
     "PrintWorkflowOutcome",
     "PrintWorkflowStep",
-    "PrintWorkflowEffect"
+    "PrintWorkflowEffect",
+    "PrinterSelection",
+    "ConnectionSignal",
+    "PrintJobIntentReply",
+    "PrintJobConfirmReply",
+    "PrinterSessionLease",
+    "PrinterSessionLeaseReply",
+    "PrinterSessionOutcome",
+    "PrinterSessionStep",
+    "PrintJobExecuteRequest",
+    "PrinterSessionView",
+    "PrinterSessionEffect"
   ],
   "sessionVersion": 1
 }

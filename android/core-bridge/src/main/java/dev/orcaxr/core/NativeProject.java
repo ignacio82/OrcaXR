@@ -141,6 +141,23 @@ final class NativeProject {
     static native String printWorkflowReply(long handle, long id, String text);
     static native String printWorkflowCancel(long handle);
     static native String printWorkflowDispose(long handle);
+    // The printer session: stepping calls answer a PrinterSessionStep.
+    static native long printerSessionNew();
+    static native String printerSessionSelect(long handle, String selection);
+    static native String printerSessionClear(long handle);
+    static native String printerSessionDispose(long handle);
+    static native String printerSessionConnect(long handle);
+    static native String printerSessionRefresh(long handle);
+    static native String printerSessionExecute(long handle, String request);
+    static native String printerSessionState(long handle, long transport, String signal);
+    static native String printerSessionNotification(long handle, long transport, String method, String params, double nowMs);
+    static native String printerSessionResolve(long handle, long id, String outcome);
+    static native String printerSessionReply(long handle, long id, String text, double nowMs);
+    static native String printerSessionView(long handle);
+    static native String printerSessionCaptureIntent(long handle, String command);
+    static native String printerSessionConfirm(long handle, long intent);
+    static native String printerSessionCaptureLease(long handle);
+    static native boolean printerSessionLeaseCurrent(long handle, String lease);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

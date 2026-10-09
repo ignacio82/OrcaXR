@@ -102,15 +102,23 @@ impl JobStatus {
         now: f64,
     ) -> Result<&wire::PrintJobSnapshot, Refusal> {
         let payload = read(text, now)?;
+        Ok(self.apply_query_value(&payload, now))
+    }
+    /// [`Self::apply_query`] over a reply already parsed; `now` is finite.
+    pub(crate) fn apply_query_value(
+        &mut self,
+        payload: &Value,
+        now: f64,
+    ) -> &wire::PrintJobSnapshot {
         self.raw.clear();
-        let status = match &payload {
+        let status = match payload {
             Value::Object(payload) => match payload.get(&units("status")) {
                 Some(Value::Object(status)) => Some(status),
                 _ => None,
             },
             _ => None,
         };
-        Ok(self.apply_status(status, now))
+        self.apply_status(status, now)
     }
     /// Apply one `notify_status_update` params array (`[status, eventtime]`),
     /// or a bare status. `None` when it concerns none of [`OBJECTS`] (as an
@@ -121,20 +129,28 @@ impl JobStatus {
         now: f64,
     ) -> Result<Option<&wire::PrintJobSnapshot>, Refusal> {
         let params = read(text, now)?;
-        let status = match &params {
+        Ok(self.apply_notification_value(&params, now))
+    }
+    /// [`Self::apply_notification`] over params already parsed; `now` is finite.
+    pub(crate) fn apply_notification_value(
+        &mut self,
+        params: &Value,
+        now: f64,
+    ) -> Option<&wire::PrintJobSnapshot> {
+        let status = match params {
             Value::Array(items) => items.first(),
             other => Some(other),
         };
         let Some(Value::Object(status)) = status else {
-            return Ok(None);
+            return None;
         };
         if !status
             .keys()
             .any(|key| OBJECTS.iter().any(|o| *key == units(o)))
         {
-            return Ok(None);
+            return None;
         }
-        Ok(Some(self.apply_status(Some(status), now)))
+        Some(self.apply_status(Some(status), now))
     }
     fn apply_status(&mut self, status: Option<&Record>, now: f64) -> &wire::PrintJobSnapshot {
         for (object, value) in status.into_iter().flatten() {

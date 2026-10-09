@@ -4,6 +4,7 @@
 //! credentials, and feed it the text they received.
 pub mod control;
 pub mod preparation;
+pub mod session;
 pub mod status;
 pub mod summary;
 pub mod tools;

@@ -190,6 +190,66 @@ export class PrintWorkflow {
 }
 
 /**
+ * The printer session (`PrinterSessionController`): one selected printer
+ * and every query, subscription and command in it. Stepping calls answer a
+ * `PrinterSessionStep`; queries answer their own replies.
+ */
+export class PrinterSession {
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * A command's wire name; the `PrintJobIntentReply`.
+     */
+    capture_intent(command: string): string;
+    /**
+     * The `PrinterSessionLeaseReply`.
+     */
+    capture_lease(): string;
+    clear(): string;
+    /**
+     * An intent id; the `PrintJobConfirmReply`.
+     */
+    confirm(intent: number): string;
+    connect(): string;
+    dispose(): string;
+    /**
+     * A `PrintJobExecuteRequest`.
+     */
+    execute(request: string): string;
+    /**
+     * A `PrinterSessionLease`; whether it is still current.
+     */
+    lease_current(lease: string): boolean;
+    constructor();
+    /**
+     * A notification's method and params (JSON) as transport `transport`
+     * received them at `now_ms`.
+     */
+    notification(transport: number, method: string, params: string, now_ms: number): string;
+    refresh(): string;
+    /**
+     * A `PrinterSessionOutcome` answering effect `id`.
+     */
+    resolve(id: number, outcome: string): string;
+    /**
+     * A request's reply (Moonraker's `result`, as JSON) received at `now_ms`.
+     */
+    resolve_reply(id: number, text: string, now_ms: number): string;
+    /**
+     * A `PrinterSelection`.
+     */
+    select(selection: string): string;
+    /**
+     * A `ConnectionSignal` from transport `transport`.
+     */
+    transport_state(transport: number, signal: string): string;
+    /**
+     * The `PrinterSessionView`: generation, snapshot and availability.
+     */
+    view(): string;
+}
+
+/**
  * A loaded catalog: compiled, or refused with its diagnostics.
  */
 export class ProfileCatalog {
@@ -1058,6 +1118,7 @@ export interface InitOutput {
     readonly __wbg_capturedselection_free: (a: number, b: number) => void;
     readonly __wbg_holdtoconfirm_free: (a: number, b: number) => void;
     readonly __wbg_presetlibrary_free: (a: number, b: number) => void;
+    readonly __wbg_printersession_free: (a: number, b: number) => void;
     readonly __wbg_printjobstatus_free: (a: number, b: number) => void;
     readonly __wbg_printworkflow_free: (a: number, b: number) => void;
     readonly __wbg_profilecatalog_free: (a: number, b: number) => void;
@@ -1162,6 +1223,22 @@ export interface InitOutput {
     readonly print_start_options: (a: number, b: number) => [number, number, number, number];
     readonly printer_objects: (a: number, b: number) => [number, number, number, number];
     readonly printer_status_summary: (a: number, b: number) => [number, number, number, number];
+    readonly printersession_capture_intent: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly printersession_capture_lease: (a: number) => [number, number, number, number];
+    readonly printersession_clear: (a: number) => [number, number, number, number];
+    readonly printersession_confirm: (a: number, b: number) => [number, number, number, number];
+    readonly printersession_connect: (a: number) => [number, number, number, number];
+    readonly printersession_dispose: (a: number) => [number, number, number, number];
+    readonly printersession_execute: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly printersession_lease_current: (a: number, b: number, c: number) => [number, number, number];
+    readonly printersession_new: () => number;
+    readonly printersession_notification: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+    readonly printersession_refresh: (a: number) => [number, number, number, number];
+    readonly printersession_resolve: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly printersession_resolve_reply: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly printersession_select: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly printersession_transport_state: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly printersession_view: (a: number) => [number, number, number, number];
     readonly printjobstatus_apply_notification: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly printjobstatus_apply_query: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly printjobstatus_new: () => number;

@@ -30,6 +30,7 @@ import { replayPrinterControl } from "./printer-control-replay.mjs";
 import { replayPrinterTools } from "./printer-tools-replay.mjs";
 import { replayPrinterPreparation } from "./printer-preparation-replay.mjs";
 import { replayPrinterWorkflow } from "./printer-workflow-replay.mjs";
+import { replayPrinterSession } from "./printer-session-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -244,6 +245,16 @@ if (isMainThread) {
     assert.deepEqual(
       [result.printerWorkflowScenarios, result.printerWorkflowSteps, result.printerWorkflowRefusals],
       [402, 19688, 13],
+    );
+    // The printer session, step, view and reply for each.
+    assert.deepEqual(
+      [
+        result.printerSessionScenarios,
+        result.printerSessionSteps,
+        result.printerSessionReplies,
+        result.printerSessionRefusals,
+      ],
+      [80, 3254, 557, 8],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -671,6 +682,12 @@ if (isMainThread) {
       await readFile(new URL("testdata/cross-platform/printer-workflow-vectors.json", root)),
     ),
   );
+  const printerSession = replayPrinterSession(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/printer-session-vectors.json", root)),
+    ),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -712,6 +729,7 @@ if (isMainThread) {
       ...printerTools,
       ...printerPreparation,
       ...printerWorkflow,
+      ...printerSession,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

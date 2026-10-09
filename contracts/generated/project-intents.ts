@@ -5453,6 +5453,217 @@ const shapes = {
       "effects": "PrintWorkflowPendingEffects",
       "state": "PrintWorkflowState"
     }
+  },
+  "PrinterSelection": {
+    "kind": "object",
+    "fields": {
+      "id": "EditText",
+      "name": "OptionalText",
+      "endpoint": "EditText",
+      "port": "Counter",
+      "apiKey": "OptionalText"
+    }
+  },
+  "ConnectionStatus": {
+    "kind": "enum",
+    "values": [
+      "disconnected",
+      "connecting",
+      "connected",
+      "reconnecting",
+      "error"
+    ]
+  },
+  "ConnectionSignal": {
+    "kind": "object",
+    "fields": {
+      "status": "ConnectionStatus",
+      "generation": "Counter",
+      "socketEpoch": "OptionalCounter"
+    }
+  },
+  "PrintJobIdentity": {
+    "kind": "object",
+    "fields": {
+      "jobId": "EditText",
+      "startedAt": "Finite",
+      "filename": "EditText",
+      "size": "Finite",
+      "modified": "Finite"
+    }
+  },
+  "OptionalPrintJobIdentity": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "PrintJobIdentity"
+    }
+  },
+  "PrintJobCommandIntent": {
+    "kind": "object",
+    "fields": {
+      "id": "Counter",
+      "printerId": "EditText",
+      "printerLabel": "EditText",
+      "generation": "Counter",
+      "command": "PrintJobCommand",
+      "displayedFilename": "OptionalText",
+      "observedState": "PrintJobState",
+      "job": "OptionalPrintJobIdentity"
+    }
+  },
+  "PrintJobIntentReply": {
+    "kind": "union",
+    "variants": {
+      "intent": "PrintJobCommandIntent",
+      "refused": "PrintJobCommandRefusal"
+    }
+  },
+  "PrintJobConfirmReply": {
+    "kind": "union",
+    "variants": {
+      "token": "Counter",
+      "refused": "PrintJobCommandRefusal"
+    }
+  },
+  "PrinterSessionLease": {
+    "kind": "object",
+    "fields": {
+      "printerId": "EditText",
+      "label": "EditText",
+      "generation": "Counter",
+      "transport": "Counter"
+    }
+  },
+  "PrinterSessionLeaseReply": {
+    "kind": "union",
+    "variants": {
+      "lease": "PrinterSessionLease",
+      "refused": "PrinterText"
+    }
+  },
+  "PrinterTransportOpen": {
+    "kind": "object",
+    "fields": {
+      "transport": "Counter",
+      "selection": "PrinterSelection"
+    }
+  },
+  "PrinterTransportRef": {
+    "kind": "object",
+    "fields": {
+      "transport": "Counter"
+    }
+  },
+  "PrinterSessionRequest": {
+    "kind": "object",
+    "fields": {
+      "transport": "Counter",
+      "epoch": "Counter",
+      "send": "PrinterSend"
+    }
+  },
+  "PrinterSessionRecovery": {
+    "kind": "object",
+    "fields": {
+      "transport": "Counter",
+      "epoch": "Counter",
+      "command": "PrintJobCommand"
+    }
+  },
+  "PrinterSessionEffect": {
+    "kind": "union",
+    "variants": {
+      "openTransport": "PrinterTransportOpen",
+      "connect": "PrinterTransportRef",
+      "request": "PrinterSessionRequest",
+      "recovery": "PrinterSessionRecovery",
+      "confirmCommand": "PrintJobCommandIntent"
+    }
+  },
+  "PrinterSessionPendingEffect": {
+    "kind": "object",
+    "fields": {
+      "id": "Counter",
+      "effect": "PrinterSessionEffect"
+    }
+  },
+  "PrinterSessionPendingEffects": {
+    "kind": "array",
+    "items": "PrinterSessionPendingEffect",
+    "min": 0,
+    "max": 64
+  },
+  "PrinterSessionOutcome": {
+    "kind": "union",
+    "variants": {
+      "state": "ConnectionSignal",
+      "connected": "Empty",
+      "failed": "TransportFailure",
+      "confirmed": "Flag"
+    }
+  },
+  "PrinterTaskResult": {
+    "kind": "union",
+    "variants": {
+      "done": "Empty",
+      "failed": "PrinterText",
+      "refused": "PrintJobCommandRefusal"
+    }
+  },
+  "PrinterTaskFinished": {
+    "kind": "object",
+    "fields": {
+      "task": "Counter",
+      "result": "PrinterTaskResult"
+    }
+  },
+  "PrinterTasksFinished": {
+    "kind": "array",
+    "items": "PrinterTaskFinished",
+    "min": 0,
+    "max": 64
+  },
+  "PrinterSessionIds": {
+    "kind": "array",
+    "items": "Counter",
+    "min": 0,
+    "max": 256
+  },
+  "PrinterSessionStep": {
+    "kind": "object",
+    "fields": {
+      "changed": "Counter",
+      "effects": "PrinterSessionPendingEffects",
+      "withdrawn": "PrinterSessionIds",
+      "closed": "PrinterSessionIds",
+      "aborted": "PrinterSessionIds",
+      "task": "OptionalCounter",
+      "finished": "PrinterTasksFinished"
+    }
+  },
+  "PrintJobExecuteConfirmation": {
+    "kind": "union",
+    "variants": {
+      "none": "Empty",
+      "token": "Counter",
+      "dialog": "Empty"
+    }
+  },
+  "PrintJobExecuteRequest": {
+    "kind": "object",
+    "fields": {
+      "intent": "Counter",
+      "confirmation": "PrintJobExecuteConfirmation"
+    }
+  },
+  "PrinterSessionView": {
+    "kind": "object",
+    "fields": {
+      "generation": "Counter",
+      "snapshot": "OptionalPrintJobSnapshot",
+      "availability": "PrintJobCommandDescriptors"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -6109,6 +6320,32 @@ export interface ProjectPrintSubmissionResultWire {readonly path: ProjectEditTex
 export type ProjectPrintWorkflowPhaseWire = "idle" | "checking" | "confirming" | "uploading" | "verifying" | "preparing" | "starting" | "completed" | "cancelled" | "failed" | "uncertain";
 export type ProjectPrintWorkflowStateWire = {readonly idle:ProjectEmptyWire} | {readonly pending:ProjectEmptyWire} | {readonly submitted:ProjectPrintSubmissionResultWire} | {readonly started:ProjectPrinterTextWire} | {readonly declined:ProjectEmptyWire} | {readonly failed:ProjectPrintWorkflowFailureWire};
 export interface ProjectPrintWorkflowStepWire {readonly phase: ProjectPrintWorkflowPhaseWire;readonly phases: ProjectPrintSubmissionPhasesWire;readonly effects: ProjectPrintWorkflowPendingEffectsWire;readonly state: ProjectPrintWorkflowStateWire;}
+export interface ProjectPrinterSelectionWire {readonly id: ProjectEditTextWire;readonly name: ProjectOptionalTextWire;readonly endpoint: ProjectEditTextWire;readonly port: ProjectCounterWire;readonly apiKey: ProjectOptionalTextWire;}
+export type ProjectConnectionStatusWire = "disconnected" | "connecting" | "connected" | "reconnecting" | "error";
+export interface ProjectConnectionSignalWire {readonly status: ProjectConnectionStatusWire;readonly generation: ProjectCounterWire;readonly socketEpoch: ProjectOptionalCounterWire;}
+export interface ProjectPrintJobIdentityWire {readonly jobId: ProjectEditTextWire;readonly startedAt: ProjectFiniteWire;readonly filename: ProjectEditTextWire;readonly size: ProjectFiniteWire;readonly modified: ProjectFiniteWire;}
+export type ProjectOptionalPrintJobIdentityWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectPrintJobIdentityWire};
+export interface ProjectPrintJobCommandIntentWire {readonly id: ProjectCounterWire;readonly printerId: ProjectEditTextWire;readonly printerLabel: ProjectEditTextWire;readonly generation: ProjectCounterWire;readonly command: ProjectPrintJobCommandWire;readonly displayedFilename: ProjectOptionalTextWire;readonly observedState: ProjectPrintJobStateWire;readonly job: ProjectOptionalPrintJobIdentityWire;}
+export type ProjectPrintJobIntentReplyWire = {readonly intent:ProjectPrintJobCommandIntentWire} | {readonly refused:ProjectPrintJobCommandRefusalWire};
+export type ProjectPrintJobConfirmReplyWire = {readonly token:ProjectCounterWire} | {readonly refused:ProjectPrintJobCommandRefusalWire};
+export interface ProjectPrinterSessionLeaseWire {readonly printerId: ProjectEditTextWire;readonly label: ProjectEditTextWire;readonly generation: ProjectCounterWire;readonly transport: ProjectCounterWire;}
+export type ProjectPrinterSessionLeaseReplyWire = {readonly lease:ProjectPrinterSessionLeaseWire} | {readonly refused:ProjectPrinterTextWire};
+export interface ProjectPrinterTransportOpenWire {readonly transport: ProjectCounterWire;readonly selection: ProjectPrinterSelectionWire;}
+export interface ProjectPrinterTransportRefWire {readonly transport: ProjectCounterWire;}
+export interface ProjectPrinterSessionRequestWire {readonly transport: ProjectCounterWire;readonly epoch: ProjectCounterWire;readonly send: ProjectPrinterSendWire;}
+export interface ProjectPrinterSessionRecoveryWire {readonly transport: ProjectCounterWire;readonly epoch: ProjectCounterWire;readonly command: ProjectPrintJobCommandWire;}
+export type ProjectPrinterSessionEffectWire = {readonly openTransport:ProjectPrinterTransportOpenWire} | {readonly connect:ProjectPrinterTransportRefWire} | {readonly request:ProjectPrinterSessionRequestWire} | {readonly recovery:ProjectPrinterSessionRecoveryWire} | {readonly confirmCommand:ProjectPrintJobCommandIntentWire};
+export interface ProjectPrinterSessionPendingEffectWire {readonly id: ProjectCounterWire;readonly effect: ProjectPrinterSessionEffectWire;}
+export type ProjectPrinterSessionPendingEffectsWire = readonly ProjectPrinterSessionPendingEffectWire[];
+export type ProjectPrinterSessionOutcomeWire = {readonly state:ProjectConnectionSignalWire} | {readonly connected:ProjectEmptyWire} | {readonly failed:ProjectTransportFailureWire} | {readonly confirmed:ProjectFlagWire};
+export type ProjectPrinterTaskResultWire = {readonly done:ProjectEmptyWire} | {readonly failed:ProjectPrinterTextWire} | {readonly refused:ProjectPrintJobCommandRefusalWire};
+export interface ProjectPrinterTaskFinishedWire {readonly task: ProjectCounterWire;readonly result: ProjectPrinterTaskResultWire;}
+export type ProjectPrinterTasksFinishedWire = readonly ProjectPrinterTaskFinishedWire[];
+export type ProjectPrinterSessionIdsWire = readonly ProjectCounterWire[];
+export interface ProjectPrinterSessionStepWire {readonly changed: ProjectCounterWire;readonly effects: ProjectPrinterSessionPendingEffectsWire;readonly withdrawn: ProjectPrinterSessionIdsWire;readonly closed: ProjectPrinterSessionIdsWire;readonly aborted: ProjectPrinterSessionIdsWire;readonly task: ProjectOptionalCounterWire;readonly finished: ProjectPrinterTasksFinishedWire;}
+export type ProjectPrintJobExecuteConfirmationWire = {readonly none:ProjectEmptyWire} | {readonly token:ProjectCounterWire} | {readonly dialog:ProjectEmptyWire};
+export interface ProjectPrintJobExecuteRequestWire {readonly intent: ProjectCounterWire;readonly confirmation: ProjectPrintJobExecuteConfirmationWire;}
+export interface ProjectPrinterSessionViewWire {readonly generation: ProjectCounterWire;readonly snapshot: ProjectOptionalPrintJobSnapshotWire;readonly availability: ProjectPrintJobCommandDescriptorsWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -6541,3 +6778,36 @@ export function encodeProjectPrintWorkflowStep(value:ProjectPrintWorkflowStepWir
 export function captureProjectPrintWorkflowEffect(value:unknown):ProjectPrintWorkflowEffectWire { return captureIntent("PrintWorkflowEffect",value,shapes,limits) as ProjectPrintWorkflowEffectWire; }
 export function decodeProjectPrintWorkflowEffect(text:string):ProjectPrintWorkflowEffectWire { return captureProjectPrintWorkflowEffect(parseIntentJson(text,limits)); }
 export function encodeProjectPrintWorkflowEffect(value:ProjectPrintWorkflowEffectWire):string { return JSON.stringify(captureProjectPrintWorkflowEffect(value)); }
+export function captureProjectPrinterSelection(value:unknown):ProjectPrinterSelectionWire { return captureIntent("PrinterSelection",value,shapes,limits) as ProjectPrinterSelectionWire; }
+export function decodeProjectPrinterSelection(text:string):ProjectPrinterSelectionWire { return captureProjectPrinterSelection(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterSelection(value:ProjectPrinterSelectionWire):string { return JSON.stringify(captureProjectPrinterSelection(value)); }
+export function captureProjectConnectionSignal(value:unknown):ProjectConnectionSignalWire { return captureIntent("ConnectionSignal",value,shapes,limits) as ProjectConnectionSignalWire; }
+export function decodeProjectConnectionSignal(text:string):ProjectConnectionSignalWire { return captureProjectConnectionSignal(parseIntentJson(text,limits)); }
+export function encodeProjectConnectionSignal(value:ProjectConnectionSignalWire):string { return JSON.stringify(captureProjectConnectionSignal(value)); }
+export function captureProjectPrintJobIntentReply(value:unknown):ProjectPrintJobIntentReplyWire { return captureIntent("PrintJobIntentReply",value,shapes,limits) as ProjectPrintJobIntentReplyWire; }
+export function decodeProjectPrintJobIntentReply(text:string):ProjectPrintJobIntentReplyWire { return captureProjectPrintJobIntentReply(parseIntentJson(text,limits)); }
+export function encodeProjectPrintJobIntentReply(value:ProjectPrintJobIntentReplyWire):string { return JSON.stringify(captureProjectPrintJobIntentReply(value)); }
+export function captureProjectPrintJobConfirmReply(value:unknown):ProjectPrintJobConfirmReplyWire { return captureIntent("PrintJobConfirmReply",value,shapes,limits) as ProjectPrintJobConfirmReplyWire; }
+export function decodeProjectPrintJobConfirmReply(text:string):ProjectPrintJobConfirmReplyWire { return captureProjectPrintJobConfirmReply(parseIntentJson(text,limits)); }
+export function encodeProjectPrintJobConfirmReply(value:ProjectPrintJobConfirmReplyWire):string { return JSON.stringify(captureProjectPrintJobConfirmReply(value)); }
+export function captureProjectPrinterSessionLease(value:unknown):ProjectPrinterSessionLeaseWire { return captureIntent("PrinterSessionLease",value,shapes,limits) as ProjectPrinterSessionLeaseWire; }
+export function decodeProjectPrinterSessionLease(text:string):ProjectPrinterSessionLeaseWire { return captureProjectPrinterSessionLease(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterSessionLease(value:ProjectPrinterSessionLeaseWire):string { return JSON.stringify(captureProjectPrinterSessionLease(value)); }
+export function captureProjectPrinterSessionLeaseReply(value:unknown):ProjectPrinterSessionLeaseReplyWire { return captureIntent("PrinterSessionLeaseReply",value,shapes,limits) as ProjectPrinterSessionLeaseReplyWire; }
+export function decodeProjectPrinterSessionLeaseReply(text:string):ProjectPrinterSessionLeaseReplyWire { return captureProjectPrinterSessionLeaseReply(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterSessionLeaseReply(value:ProjectPrinterSessionLeaseReplyWire):string { return JSON.stringify(captureProjectPrinterSessionLeaseReply(value)); }
+export function captureProjectPrinterSessionOutcome(value:unknown):ProjectPrinterSessionOutcomeWire { return captureIntent("PrinterSessionOutcome",value,shapes,limits) as ProjectPrinterSessionOutcomeWire; }
+export function decodeProjectPrinterSessionOutcome(text:string):ProjectPrinterSessionOutcomeWire { return captureProjectPrinterSessionOutcome(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterSessionOutcome(value:ProjectPrinterSessionOutcomeWire):string { return JSON.stringify(captureProjectPrinterSessionOutcome(value)); }
+export function captureProjectPrinterSessionStep(value:unknown):ProjectPrinterSessionStepWire { return captureIntent("PrinterSessionStep",value,shapes,limits) as ProjectPrinterSessionStepWire; }
+export function decodeProjectPrinterSessionStep(text:string):ProjectPrinterSessionStepWire { return captureProjectPrinterSessionStep(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterSessionStep(value:ProjectPrinterSessionStepWire):string { return JSON.stringify(captureProjectPrinterSessionStep(value)); }
+export function captureProjectPrintJobExecuteRequest(value:unknown):ProjectPrintJobExecuteRequestWire { return captureIntent("PrintJobExecuteRequest",value,shapes,limits) as ProjectPrintJobExecuteRequestWire; }
+export function decodeProjectPrintJobExecuteRequest(text:string):ProjectPrintJobExecuteRequestWire { return captureProjectPrintJobExecuteRequest(parseIntentJson(text,limits)); }
+export function encodeProjectPrintJobExecuteRequest(value:ProjectPrintJobExecuteRequestWire):string { return JSON.stringify(captureProjectPrintJobExecuteRequest(value)); }
+export function captureProjectPrinterSessionView(value:unknown):ProjectPrinterSessionViewWire { return captureIntent("PrinterSessionView",value,shapes,limits) as ProjectPrinterSessionViewWire; }
+export function decodeProjectPrinterSessionView(text:string):ProjectPrinterSessionViewWire { return captureProjectPrinterSessionView(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterSessionView(value:ProjectPrinterSessionViewWire):string { return JSON.stringify(captureProjectPrinterSessionView(value)); }
+export function captureProjectPrinterSessionEffect(value:unknown):ProjectPrinterSessionEffectWire { return captureIntent("PrinterSessionEffect",value,shapes,limits) as ProjectPrinterSessionEffectWire; }
+export function decodeProjectPrinterSessionEffect(text:string):ProjectPrinterSessionEffectWire { return captureProjectPrinterSessionEffect(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterSessionEffect(value:ProjectPrinterSessionEffectWire):string { return JSON.stringify(captureProjectPrinterSessionEffect(value)); }

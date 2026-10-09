@@ -728,6 +728,101 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionNew, printer_session_new, jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionSelect, printer_session_select, jstring,
+    handle: jlong,
+    selection: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionClear, printer_session_clear, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionDispose, printer_session_dispose, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionConnect, printer_session_connect, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionRefresh, printer_session_refresh, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionExecute, printer_session_execute, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionState, printer_session_state, jstring,
+    handle: jlong,
+    transport: jlong,
+    signal: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionNotification, printer_session_notification, jstring,
+    handle: jlong,
+    transport: jlong,
+    method: JString<'local>,
+    params: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionResolve, printer_session_resolve, jstring,
+    handle: jlong,
+    id: jlong,
+    outcome: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionReply, printer_session_reply, jstring,
+    handle: jlong,
+    id: jlong,
+    text: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionView, printer_session_view, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionCaptureIntent, printer_session_capture_intent, jstring,
+    handle: jlong,
+    command: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionConfirm, printer_session_confirm, jstring,
+    handle: jlong,
+    intent: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionCaptureLease, printer_session_capture_lease, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerSessionLeaseCurrent, printer_session_lease_current, jboolean,
+    handle: jlong,
+    lease: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,

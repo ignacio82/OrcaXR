@@ -181,6 +181,17 @@ assert.deepEqual(schema.roots, [
   "PrintWorkflowOutcome",
   "PrintWorkflowStep",
   "PrintWorkflowEffect",
+  "PrinterSelection",
+  "ConnectionSignal",
+  "PrintJobIntentReply",
+  "PrintJobConfirmReply",
+  "PrinterSessionLease",
+  "PrinterSessionLeaseReply",
+  "PrinterSessionOutcome",
+  "PrinterSessionStep",
+  "PrintJobExecuteRequest",
+  "PrinterSessionView",
+  "PrinterSessionEffect",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

@@ -39,6 +39,7 @@ import { replayPrinterControl } from "./printer-control-replay.mjs";
 import { replayPrinterTools } from "./printer-tools-replay.mjs";
 import { replayPrinterPreparation } from "./printer-preparation-replay.mjs";
 import { replayPrinterWorkflow } from "./printer-workflow-replay.mjs";
+import { replayPrinterSession } from "./printer-session-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -1036,6 +1037,42 @@ try {
     }),
   ]);
   assert.equal(jvm.call("printWorkflowChecks", workflowScript.join("\n")), 19689);
+  // The printer session through the real JNI exports, then the Kotlin
+  // wrapper: step, view and reply for each input.
+  const sessionFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/printer-session-vectors.json", root)),
+  );
+  assert.deepEqual(
+    Object.values(replayPrinterSession(projectJniCore(jvm.call), sessionFixture)),
+    [80, 3254, 557, 8],
+  );
+  const base64 = (text) => Buffer.from(text, "utf8").toString("base64");
+  const sessionScript = sessionFixture.scenarios.flatMap((scenario) => [
+    "N",
+    ...scenario.records.map((record) => {
+      const [kind, value] = Object.entries(record.input)[0];
+      const columns =
+        kind === "state"
+          ? [value.transport, value.signal, "", ""]
+          : kind === "notification"
+            ? [value.transport, base64(value.method), base64(value.params), value.now]
+            : kind === "resolve"
+              ? [value.id, value.outcome, "", ""]
+              : kind === "reply"
+                ? [value.id, "", base64(value.text), value.now]
+                : kind === "confirm"
+                  ? [value, "", "", ""]
+                  : typeof value === "string"
+                    ? ["", value, "", ""]
+                    : ["", "", "", ""];
+      const expected =
+        record.refused !== undefined
+          ? `!${record.refused}`
+          : (record.step ?? record.intent ?? record.token ?? record.lease ?? String(record.current));
+      return [kind, ...columns, expected, record.view ?? ""].join("\t");
+    }),
+  ]);
+  assert.equal(jvm.call("printerSessionChecks", sessionScript.join("\n")), 3820);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

@@ -2,7 +2,7 @@
 use crate::project::error;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
-use orcaxr_printer::{control, preparation, status::JobStatus, summary, tools, workflow};
+use orcaxr_printer::{control, preparation, session, status::JobStatus, summary, tools, workflow};
 use wasm_bindgen::prelude::*;
 
 fn encoded(snapshot: &wire::PrintJobSnapshot) -> Result<String, JsValue> {
@@ -372,5 +372,120 @@ impl PrintWorkflow {
     }
     pub fn dispose(&mut self) -> Result<String, JsValue> {
         workflow_step(Ok(self.inner.dispose()))
+    }
+}
+
+/// The printer session (`PrinterSessionController`): one selected printer
+/// and every query, subscription and command in it. Stepping calls answer a
+/// `PrinterSessionStep`; queries answer their own replies.
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct PrinterSession {
+    inner: session::PrinterSession,
+}
+fn session_step(
+    step: Result<wire::PrinterSessionStep, session::Refusal>,
+) -> Result<String, JsValue> {
+    let step = step.map_err(|refusal| error(refusal.code()))?;
+    wire::encode_printer_session_step(&step).map_err(|_| error("output_limit"))
+}
+fn wire_text(text: &str) -> Result<&str, JsValue> {
+    if text.len() > wire::MAX_BYTES {
+        Err(error("input_limit"))
+    } else {
+        Ok(text)
+    }
+}
+#[wasm_bindgen]
+impl PrinterSession {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// A `PrinterSelection`.
+    pub fn select(&mut self, selection: &str) -> Result<String, JsValue> {
+        let selection = wire::decode_printer_selection(wire_text(selection)?)
+            .map_err(|_| error("invalid_request"))?;
+        session_step(self.inner.select(selection))
+    }
+    pub fn clear(&mut self) -> Result<String, JsValue> {
+        session_step(Ok(self.inner.clear()))
+    }
+    pub fn dispose(&mut self) -> Result<String, JsValue> {
+        session_step(Ok(self.inner.dispose()))
+    }
+    pub fn connect(&mut self) -> Result<String, JsValue> {
+        session_step(Ok(self.inner.connect()))
+    }
+    pub fn refresh(&mut self) -> Result<String, JsValue> {
+        session_step(Ok(self.inner.refresh()))
+    }
+    /// A `PrintJobExecuteRequest`.
+    pub fn execute(&mut self, request: &str) -> Result<String, JsValue> {
+        let request = wire::decode_print_job_execute_request(wire_text(request)?)
+            .map_err(|_| error("invalid_request"))?;
+        session_step(Ok(self.inner.execute(request)))
+    }
+    /// A `ConnectionSignal` from transport `transport`.
+    pub fn transport_state(&mut self, transport: f64, signal: &str) -> Result<String, JsValue> {
+        let transport = effect_id(transport)?;
+        let signal = wire::decode_connection_signal(wire_text(signal)?)
+            .map_err(|_| error("invalid_request"))?;
+        session_step(Ok(self.inner.transport_state(transport, signal)))
+    }
+    /// A notification's method and params (JSON) as transport `transport`
+    /// received them at `now_ms`.
+    pub fn notification(
+        &mut self,
+        transport: f64,
+        method: &str,
+        params: &str,
+        now_ms: f64,
+    ) -> Result<String, JsValue> {
+        let transport = effect_id(transport)?;
+        session_step(self.inner.notification(
+            transport,
+            reply_text(method)?,
+            reply_text(params)?,
+            now_ms,
+        ))
+    }
+    /// A `PrinterSessionOutcome` answering effect `id`.
+    pub fn resolve(&mut self, id: f64, outcome: &str) -> Result<String, JsValue> {
+        let outcome = wire::decode_printer_session_outcome(wire_text(outcome)?)
+            .map_err(|_| error("invalid_request"))?;
+        session_step(self.inner.resolve(effect_id(id)?, outcome))
+    }
+    /// A request's reply (Moonraker's `result`, as JSON) received at `now_ms`.
+    pub fn resolve_reply(&mut self, id: f64, text: &str, now_ms: f64) -> Result<String, JsValue> {
+        let id = effect_id(id)?;
+        session_step(self.inner.resolve_reply(id, reply_text(text)?, now_ms))
+    }
+    /// The `PrinterSessionView`: generation, snapshot and availability.
+    pub fn view(&self) -> Result<String, JsValue> {
+        wire::encode_printer_session_view(&self.inner.view()).map_err(|_| error("output_limit"))
+    }
+    /// A command's wire name; the `PrintJobIntentReply`.
+    pub fn capture_intent(&mut self, command: &str) -> Result<String, JsValue> {
+        let command = session::command_named(command).ok_or_else(|| error("invalid_request"))?;
+        wire::encode_print_job_intent_reply(&self.inner.capture_intent(command))
+            .map_err(|_| error("output_limit"))
+    }
+    /// An intent id; the `PrintJobConfirmReply`.
+    pub fn confirm(&mut self, intent: f64) -> Result<String, JsValue> {
+        let intent = effect_id(intent)?;
+        wire::encode_print_job_confirm_reply(&self.inner.confirm(intent))
+            .map_err(|_| error("output_limit"))
+    }
+    /// The `PrinterSessionLeaseReply`.
+    pub fn capture_lease(&self) -> Result<String, JsValue> {
+        wire::encode_printer_session_lease_reply(&self.inner.capture_lease())
+            .map_err(|_| error("output_limit"))
+    }
+    /// A `PrinterSessionLease`; whether it is still current.
+    pub fn lease_current(&self, lease: &str) -> Result<bool, JsValue> {
+        let lease = wire::decode_printer_session_lease(wire_text(lease)?)
+            .map_err(|_| error("invalid_request"))?;
+        Ok(self.inner.lease_current(&lease))
     }
 }

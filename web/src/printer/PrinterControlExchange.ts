@@ -62,6 +62,8 @@ const COMMANDS: Readonly<Record<PrintJobCommand, ProjectPrintJobCommandWire>> = 
 };
 const command = (wire: ProjectPrintJobCommandWire): PrintJobCommand =>
   (Object.keys(COMMANDS) as PrintJobCommand[]).find((key) => COMMANDS[key] === wire)!;
+export const printJobCommandWire = (value: PrintJobCommand): ProjectPrintJobCommandWire => COMMANDS[value];
+export const printJobCommandFromWire = command;
 const ERRORS: Readonly<Record<PrintJobCommandErrorCode, ProjectPrintJobCommandErrorCodeWire>> = {
   'not-allowed': 'notAllowed',
   'job-changed': 'jobChanged',
@@ -116,7 +118,9 @@ function connection(wire: ProjectMoonrakerConnectionViewWire): MoonrakerConnecti
   return { status } as unknown as MoonrakerConnectionState;
 }
 
-function descriptorWire(descriptor: PrintJobCommandDescriptor): ProjectPrintJobCommandDescriptorWire {
+export function printJobCommandDescriptorWire(
+  descriptor: PrintJobCommandDescriptor,
+): ProjectPrintJobCommandDescriptorWire {
   return {
     command: COMMANDS[descriptor.command],
     label: units(descriptor.label),
@@ -139,10 +143,10 @@ function descriptorFromWire(wire: ProjectPrintJobCommandDescriptorWire): PrintJo
 export function answerPrintJobAvailability(
   request: ProjectPrintJobAvailabilityRequestWire,
 ): ProjectPrintJobCommandDescriptorWire[] {
-  return printJobCommandAvailability(observed(request.observed)).map(descriptorWire);
+  return printJobCommandAvailability(observed(request.observed)).map(printJobCommandDescriptorWire);
 }
 
-function refusal(error: unknown): ProjectPrintJobCommandRefusalWire {
+export function printJobCommandRefusalWire(error: unknown): ProjectPrintJobCommandRefusalWire {
   if (!(error instanceof PrintJobCommandError)) throw error;
   return { code: ERRORS[error.code], message: units(error.message) };
 }
@@ -168,7 +172,7 @@ export async function answerPrintJobCommandCheck(
       },
     );
   } catch (error) {
-    return { refused: refusal(error) };
+    return { refused: printJobCommandRefusalWire(error) };
   }
   return { send: { path: units(sent!.path), method: units(sent!.method), operation: units(sent!.operation) } };
 }
@@ -198,7 +202,7 @@ export async function answerPrintJobCommandFailure(
       },
     );
   } catch (error) {
-    return refusal(error);
+    return printJobCommandRefusalWire(error);
   }
   throw new Error('A failing transport cannot succeed');
 }

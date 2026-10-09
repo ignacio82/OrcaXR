@@ -3684,6 +3684,39 @@ reading metadata reported a stale context. The reprint also re-checks the
 abort after its session answers, since in the machine that answer is a step
 a cancel can land in before the start request.
 
+`session` ports `PrinterSessionController.ts`: the owner of one selected
+printer and of every query, subscription and command in its session. It is
+an effect machine with several tasks in flight: refreshes (asked for, or
+started by the session when it connects, the job changes or a command ends),
+connects and commands. A `PrinterSessionStep` reports how many times the
+session changed, the effects issued (open a transport, answered with its
+state; connect; a request or recovery command, each tagged with its epoch;
+a confirmation dialog), the effects withdrawn, transports to close, epochs
+ended, the task a call started and the tasks that finished (by task id).
+Transport state changes and notifications are inputs; replies carry the
+host's clock, which the status model stamps on its snapshot. An epoch
+equals the generation: a printer switch, clear, status or generation change,
+or a new socket ends it, and its requests fail as `cancelled` and its dialogs
+are withdrawn at once, as the browser's transport and dialog guard do. Tasks
+are polled when their effect settles, in the order effects settle; a task
+the session starts is polled before anything else, and nothing runs while a
+transport is being opened, so what the browser does synchronously happens
+here in the same order. The status model a refresh publishes is shared with
+it (the browser aliases one object), so a reset or a later query reaches
+both. Queries answer directly: availability with the reason each command
+is held back, `capture_intent` (bound to the printer, generation and
+running job at press time), `confirm` (a single-use token for that intent),
+`capture_lease` and `lease_current` for sends.
+
+Bindings: WASM `PrinterSession`, the JNI `printerSession*` exports and
+Kotlin `PrinterSession`. `printer-session-vectors.mjs` drives the production
+controller through `PrinterSessionExchange.ts` over a scripted transport,
+numbering its epochs as they are made and fixing its clock: 80 scenarios
+(the browser's own session tests, connection and notification cases, leases,
+refused identities and 40 seeded interleavings) of 3,254 steps, each with
+the view after it, and 557 query replies. Rust, WASM in Node and Chrome, JNI
+and 3,820 Kotlin checks reproduce every one.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

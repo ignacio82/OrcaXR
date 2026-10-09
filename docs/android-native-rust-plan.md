@@ -1897,8 +1897,12 @@ credential storage, and explicit permission/error flows.
   a start the printer accepted was reported failed when the session changed
   afterwards, a stored path with a lone surrogate failed as "URI malformed",
   a cancel during a readiness query was reported as a readiness failure, and
-  a reprint cancelled mid-metadata read as a stale context. The session and
-  transport state machines remain.
+  a reprint cancelled mid-metadata read as a stale context. `session` ports
+  `PrinterSessionController` as a multi-task effect machine (refreshes,
+  connects and commands in flight together, epochs that withdraw what they
+  carried, leases for sends): 80 browser scenarios (3,254 steps with the
+  view after each, 557 query replies), including 40 seeded interleavings,
+  agree in every binding. The transport state machine remains.
 - [ ] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
   credential entry, and optional discovery. Discovery proposes verified endpoints
   and cannot overwrite preferences while a stale probe completes.

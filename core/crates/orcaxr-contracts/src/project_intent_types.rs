@@ -11451,6 +11451,472 @@ fn read_print_workflow_step(v: &Value) -> Result<PrintWorkflowStep, InvalidInten
         state: read_print_workflow_state(&object["state"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterSelection {
+    pub id: EditText,
+    pub name: OptionalText,
+    pub endpoint: EditText,
+    pub port: Counter,
+    pub api_key: OptionalText,
+}
+fn read_printer_selection(v: &Value) -> Result<PrinterSelection, InvalidIntent> {
+    let object = fields(v, &["id", "name", "endpoint", "port", "apiKey"], false)?;
+    Ok(PrinterSelection {
+        id: read_edit_text(&object["id"])?,
+        name: read_optional_text(&object["name"])?,
+        endpoint: read_edit_text(&object["endpoint"])?,
+        port: read_counter(&object["port"])?,
+        api_key: read_optional_text(&object["apiKey"])?,
+    })
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConnectionStatus {
+    Disconnected,
+    Connecting,
+    Connected,
+    Reconnecting,
+    Error,
+}
+fn read_connection_status(v: &Value) -> Result<ConnectionStatus, InvalidIntent> {
+    match v.as_str() {
+        Some("disconnected") => Ok(ConnectionStatus::Disconnected),
+        Some("connecting") => Ok(ConnectionStatus::Connecting),
+        Some("connected") => Ok(ConnectionStatus::Connected),
+        Some("reconnecting") => Ok(ConnectionStatus::Reconnecting),
+        Some("error") => Ok(ConnectionStatus::Error),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionSignal {
+    pub status: ConnectionStatus,
+    pub generation: Counter,
+    pub socket_epoch: OptionalCounter,
+}
+fn read_connection_signal(v: &Value) -> Result<ConnectionSignal, InvalidIntent> {
+    let object = fields(v, &["status", "generation", "socketEpoch"], false)?;
+    Ok(ConnectionSignal {
+        status: read_connection_status(&object["status"])?,
+        generation: read_counter(&object["generation"])?,
+        socket_epoch: read_optional_counter(&object["socketEpoch"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintJobIdentity {
+    pub job_id: EditText,
+    pub started_at: Finite,
+    pub filename: EditText,
+    pub size: Finite,
+    pub modified: Finite,
+}
+fn read_print_job_identity(v: &Value) -> Result<PrintJobIdentity, InvalidIntent> {
+    let object = fields(
+        v,
+        &["jobId", "startedAt", "filename", "size", "modified"],
+        false,
+    )?;
+    Ok(PrintJobIdentity {
+        job_id: read_edit_text(&object["jobId"])?,
+        started_at: read_finite(&object["startedAt"])?,
+        filename: read_edit_text(&object["filename"])?,
+        size: read_finite(&object["size"])?,
+        modified: read_finite(&object["modified"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalPrintJobIdentity {
+    Absent(Empty),
+    Value(PrintJobIdentity),
+}
+fn read_optional_print_job_identity(v: &Value) -> Result<OptionalPrintJobIdentity, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPrintJobIdentity::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPrintJobIdentity::Value(read_print_job_identity(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintJobCommandIntent {
+    pub id: Counter,
+    pub printer_id: EditText,
+    pub printer_label: EditText,
+    pub generation: Counter,
+    pub command: PrintJobCommand,
+    pub displayed_filename: OptionalText,
+    pub observed_state: PrintJobState,
+    pub job: OptionalPrintJobIdentity,
+}
+fn read_print_job_command_intent(v: &Value) -> Result<PrintJobCommandIntent, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "id",
+            "printerId",
+            "printerLabel",
+            "generation",
+            "command",
+            "displayedFilename",
+            "observedState",
+            "job",
+        ],
+        false,
+    )?;
+    Ok(PrintJobCommandIntent {
+        id: read_counter(&object["id"])?,
+        printer_id: read_edit_text(&object["printerId"])?,
+        printer_label: read_edit_text(&object["printerLabel"])?,
+        generation: read_counter(&object["generation"])?,
+        command: read_print_job_command(&object["command"])?,
+        displayed_filename: read_optional_text(&object["displayedFilename"])?,
+        observed_state: read_print_job_state(&object["observedState"])?,
+        job: read_optional_print_job_identity(&object["job"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintJobIntentReply {
+    Intent(PrintJobCommandIntent),
+    Refused(PrintJobCommandRefusal),
+}
+fn read_print_job_intent_reply(v: &Value) -> Result<PrintJobIntentReply, InvalidIntent> {
+    let object = fields(v, &["intent", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "intent" => Ok(PrintJobIntentReply::Intent(read_print_job_command_intent(
+            value,
+        )?)),
+        "refused" => Ok(PrintJobIntentReply::Refused(
+            read_print_job_command_refusal(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintJobConfirmReply {
+    Token(Counter),
+    Refused(PrintJobCommandRefusal),
+}
+fn read_print_job_confirm_reply(v: &Value) -> Result<PrintJobConfirmReply, InvalidIntent> {
+    let object = fields(v, &["token", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "token" => Ok(PrintJobConfirmReply::Token(read_counter(value)?)),
+        "refused" => Ok(PrintJobConfirmReply::Refused(
+            read_print_job_command_refusal(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterSessionLease {
+    pub printer_id: EditText,
+    pub label: EditText,
+    pub generation: Counter,
+    pub transport: Counter,
+}
+fn read_printer_session_lease(v: &Value) -> Result<PrinterSessionLease, InvalidIntent> {
+    let object = fields(v, &["printerId", "label", "generation", "transport"], false)?;
+    Ok(PrinterSessionLease {
+        printer_id: read_edit_text(&object["printerId"])?,
+        label: read_edit_text(&object["label"])?,
+        generation: read_counter(&object["generation"])?,
+        transport: read_counter(&object["transport"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterSessionLeaseReply {
+    Lease(PrinterSessionLease),
+    Refused(PrinterText),
+}
+fn read_printer_session_lease_reply(v: &Value) -> Result<PrinterSessionLeaseReply, InvalidIntent> {
+    let object = fields(v, &["lease", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "lease" => Ok(PrinterSessionLeaseReply::Lease(read_printer_session_lease(
+            value,
+        )?)),
+        "refused" => Ok(PrinterSessionLeaseReply::Refused(read_printer_text(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterTransportOpen {
+    pub transport: Counter,
+    pub selection: PrinterSelection,
+}
+fn read_printer_transport_open(v: &Value) -> Result<PrinterTransportOpen, InvalidIntent> {
+    let object = fields(v, &["transport", "selection"], false)?;
+    Ok(PrinterTransportOpen {
+        transport: read_counter(&object["transport"])?,
+        selection: read_printer_selection(&object["selection"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterTransportRef {
+    pub transport: Counter,
+}
+fn read_printer_transport_ref(v: &Value) -> Result<PrinterTransportRef, InvalidIntent> {
+    let object = fields(v, &["transport"], false)?;
+    Ok(PrinterTransportRef {
+        transport: read_counter(&object["transport"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterSessionRequest {
+    pub transport: Counter,
+    pub epoch: Counter,
+    pub send: PrinterSend,
+}
+fn read_printer_session_request(v: &Value) -> Result<PrinterSessionRequest, InvalidIntent> {
+    let object = fields(v, &["transport", "epoch", "send"], false)?;
+    Ok(PrinterSessionRequest {
+        transport: read_counter(&object["transport"])?,
+        epoch: read_counter(&object["epoch"])?,
+        send: read_printer_send(&object["send"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterSessionRecovery {
+    pub transport: Counter,
+    pub epoch: Counter,
+    pub command: PrintJobCommand,
+}
+fn read_printer_session_recovery(v: &Value) -> Result<PrinterSessionRecovery, InvalidIntent> {
+    let object = fields(v, &["transport", "epoch", "command"], false)?;
+    Ok(PrinterSessionRecovery {
+        transport: read_counter(&object["transport"])?,
+        epoch: read_counter(&object["epoch"])?,
+        command: read_print_job_command(&object["command"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterSessionEffect {
+    OpenTransport(PrinterTransportOpen),
+    Connect(PrinterTransportRef),
+    Request(PrinterSessionRequest),
+    Recovery(PrinterSessionRecovery),
+    ConfirmCommand(PrintJobCommandIntent),
+}
+fn read_printer_session_effect(v: &Value) -> Result<PrinterSessionEffect, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "openTransport",
+            "connect",
+            "request",
+            "recovery",
+            "confirmCommand",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "openTransport" => Ok(PrinterSessionEffect::OpenTransport(
+            read_printer_transport_open(value)?,
+        )),
+        "connect" => Ok(PrinterSessionEffect::Connect(read_printer_transport_ref(
+            value,
+        )?)),
+        "request" => Ok(PrinterSessionEffect::Request(read_printer_session_request(
+            value,
+        )?)),
+        "recovery" => Ok(PrinterSessionEffect::Recovery(
+            read_printer_session_recovery(value)?,
+        )),
+        "confirmCommand" => Ok(PrinterSessionEffect::ConfirmCommand(
+            read_print_job_command_intent(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterSessionPendingEffect {
+    pub id: Counter,
+    pub effect: PrinterSessionEffect,
+}
+fn read_printer_session_pending_effect(
+    v: &Value,
+) -> Result<PrinterSessionPendingEffect, InvalidIntent> {
+    let object = fields(v, &["id", "effect"], false)?;
+    Ok(PrinterSessionPendingEffect {
+        id: read_counter(&object["id"])?,
+        effect: read_printer_session_effect(&object["effect"])?,
+    })
+}
+pub type PrinterSessionPendingEffects = Vec<PrinterSessionPendingEffect>;
+fn read_printer_session_pending_effects(
+    v: &Value,
+) -> Result<PrinterSessionPendingEffects, InvalidIntent> {
+    list(v, 0, 64)?
+        .iter()
+        .map(read_printer_session_pending_effect)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterSessionOutcome {
+    State(ConnectionSignal),
+    Connected(Empty),
+    Failed(TransportFailure),
+    Confirmed(Flag),
+}
+fn read_printer_session_outcome(v: &Value) -> Result<PrinterSessionOutcome, InvalidIntent> {
+    let object = fields(v, &["state", "connected", "failed", "confirmed"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "state" => Ok(PrinterSessionOutcome::State(read_connection_signal(value)?)),
+        "connected" => Ok(PrinterSessionOutcome::Connected(read_empty(value)?)),
+        "failed" => Ok(PrinterSessionOutcome::Failed(read_transport_failure(
+            value,
+        )?)),
+        "confirmed" => Ok(PrinterSessionOutcome::Confirmed(read_flag(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterTaskResult {
+    Done(Empty),
+    Failed(PrinterText),
+    Refused(PrintJobCommandRefusal),
+}
+fn read_printer_task_result(v: &Value) -> Result<PrinterTaskResult, InvalidIntent> {
+    let object = fields(v, &["done", "failed", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "done" => Ok(PrinterTaskResult::Done(read_empty(value)?)),
+        "failed" => Ok(PrinterTaskResult::Failed(read_printer_text(value)?)),
+        "refused" => Ok(PrinterTaskResult::Refused(read_print_job_command_refusal(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterTaskFinished {
+    pub task: Counter,
+    pub result: PrinterTaskResult,
+}
+fn read_printer_task_finished(v: &Value) -> Result<PrinterTaskFinished, InvalidIntent> {
+    let object = fields(v, &["task", "result"], false)?;
+    Ok(PrinterTaskFinished {
+        task: read_counter(&object["task"])?,
+        result: read_printer_task_result(&object["result"])?,
+    })
+}
+pub type PrinterTasksFinished = Vec<PrinterTaskFinished>;
+fn read_printer_tasks_finished(v: &Value) -> Result<PrinterTasksFinished, InvalidIntent> {
+    list(v, 0, 64)?
+        .iter()
+        .map(read_printer_task_finished)
+        .collect()
+}
+pub type PrinterSessionIds = Vec<Counter>;
+fn read_printer_session_ids(v: &Value) -> Result<PrinterSessionIds, InvalidIntent> {
+    list(v, 0, 256)?.iter().map(read_counter).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterSessionStep {
+    pub changed: Counter,
+    pub effects: PrinterSessionPendingEffects,
+    pub withdrawn: PrinterSessionIds,
+    pub closed: PrinterSessionIds,
+    pub aborted: PrinterSessionIds,
+    pub task: OptionalCounter,
+    pub finished: PrinterTasksFinished,
+}
+fn read_printer_session_step(v: &Value) -> Result<PrinterSessionStep, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "changed",
+            "effects",
+            "withdrawn",
+            "closed",
+            "aborted",
+            "task",
+            "finished",
+        ],
+        false,
+    )?;
+    Ok(PrinterSessionStep {
+        changed: read_counter(&object["changed"])?,
+        effects: read_printer_session_pending_effects(&object["effects"])?,
+        withdrawn: read_printer_session_ids(&object["withdrawn"])?,
+        closed: read_printer_session_ids(&object["closed"])?,
+        aborted: read_printer_session_ids(&object["aborted"])?,
+        task: read_optional_counter(&object["task"])?,
+        finished: read_printer_tasks_finished(&object["finished"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintJobExecuteConfirmation {
+    None(Empty),
+    Token(Counter),
+    Dialog(Empty),
+}
+fn read_print_job_execute_confirmation(
+    v: &Value,
+) -> Result<PrintJobExecuteConfirmation, InvalidIntent> {
+    let object = fields(v, &["none", "token", "dialog"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "none" => Ok(PrintJobExecuteConfirmation::None(read_empty(value)?)),
+        "token" => Ok(PrintJobExecuteConfirmation::Token(read_counter(value)?)),
+        "dialog" => Ok(PrintJobExecuteConfirmation::Dialog(read_empty(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintJobExecuteRequest {
+    pub intent: Counter,
+    pub confirmation: PrintJobExecuteConfirmation,
+}
+fn read_print_job_execute_request(v: &Value) -> Result<PrintJobExecuteRequest, InvalidIntent> {
+    let object = fields(v, &["intent", "confirmation"], false)?;
+    Ok(PrintJobExecuteRequest {
+        intent: read_counter(&object["intent"])?,
+        confirmation: read_print_job_execute_confirmation(&object["confirmation"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterSessionView {
+    pub generation: Counter,
+    pub snapshot: OptionalPrintJobSnapshot,
+    pub availability: PrintJobCommandDescriptors,
+}
+fn read_printer_session_view(v: &Value) -> Result<PrinterSessionView, InvalidIntent> {
+    let object = fields(v, &["generation", "snapshot", "availability"], false)?;
+    Ok(PrinterSessionView {
+        generation: read_counter(&object["generation"])?,
+        snapshot: read_optional_print_job_snapshot(&object["snapshot"])?,
+        availability: read_print_job_command_descriptors(&object["availability"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -12725,5 +13191,107 @@ pub fn decode_print_workflow_effect(text: &str) -> Result<PrintWorkflowEffect, I
 pub fn encode_print_workflow_effect(value: &PrintWorkflowEffect) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_print_workflow_effect(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_selection(text: &str) -> Result<PrinterSelection, InvalidIntent> {
+    read_printer_selection(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_selection(value: &PrinterSelection) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_selection(&text)?;
+    Ok(text)
+}
+pub fn decode_connection_signal(text: &str) -> Result<ConnectionSignal, InvalidIntent> {
+    read_connection_signal(&super::project_intents::parse(text)?)
+}
+pub fn encode_connection_signal(value: &ConnectionSignal) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_connection_signal(&text)?;
+    Ok(text)
+}
+pub fn decode_print_job_intent_reply(text: &str) -> Result<PrintJobIntentReply, InvalidIntent> {
+    read_print_job_intent_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_job_intent_reply(value: &PrintJobIntentReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_job_intent_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_print_job_confirm_reply(text: &str) -> Result<PrintJobConfirmReply, InvalidIntent> {
+    read_print_job_confirm_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_job_confirm_reply(
+    value: &PrintJobConfirmReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_job_confirm_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_session_lease(text: &str) -> Result<PrinterSessionLease, InvalidIntent> {
+    read_printer_session_lease(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_session_lease(value: &PrinterSessionLease) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_session_lease(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_session_lease_reply(
+    text: &str,
+) -> Result<PrinterSessionLeaseReply, InvalidIntent> {
+    read_printer_session_lease_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_session_lease_reply(
+    value: &PrinterSessionLeaseReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_session_lease_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_session_outcome(text: &str) -> Result<PrinterSessionOutcome, InvalidIntent> {
+    read_printer_session_outcome(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_session_outcome(
+    value: &PrinterSessionOutcome,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_session_outcome(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_session_step(text: &str) -> Result<PrinterSessionStep, InvalidIntent> {
+    read_printer_session_step(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_session_step(value: &PrinterSessionStep) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_session_step(&text)?;
+    Ok(text)
+}
+pub fn decode_print_job_execute_request(
+    text: &str,
+) -> Result<PrintJobExecuteRequest, InvalidIntent> {
+    read_print_job_execute_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_job_execute_request(
+    value: &PrintJobExecuteRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_job_execute_request(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_session_view(text: &str) -> Result<PrinterSessionView, InvalidIntent> {
+    read_printer_session_view(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_session_view(value: &PrinterSessionView) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_session_view(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_session_effect(text: &str) -> Result<PrinterSessionEffect, InvalidIntent> {
+    read_printer_session_effect(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_session_effect(
+    value: &PrinterSessionEffect,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_session_effect(&text)?;
     Ok(text)
 }

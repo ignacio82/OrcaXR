@@ -8246,6 +8246,375 @@ object ProjectIntents {
             w.field("state") { writePrintWorkflowState(w, v.state) }
         }
     }
+    data class PrinterSelection(val id: List<Int>, val name: OptionalText, val endpoint: List<Int>, val port: Long, val apiKey: OptionalText)
+    private fun readPrinterSelection(v: Any): PrinterSelection {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "name", "endpoint", "port", "apiKey"), false)
+        return PrinterSelection(readEditText(obj.get("id")), readOptionalText(obj.get("name")), readEditText(obj.get("endpoint")), readCounter(obj.get("port")), readOptionalText(obj.get("apiKey")))
+    }
+    private fun writePrinterSelection(w: ProjectIntentWriter, v: PrinterSelection) {
+        w.obj {
+            w.field("id") { writeEditText(w, v.id) }
+            w.field("name") { writeOptionalText(w, v.name) }
+            w.field("endpoint") { writeEditText(w, v.endpoint) }
+            w.field("port") { writeCounter(w, v.port) }
+            w.field("apiKey") { writeOptionalText(w, v.apiKey) }
+        }
+    }
+    enum class ConnectionStatus {Disconnected,Connecting,Connected,Reconnecting,Error}
+    private fun readConnectionStatus(v: Any): ConnectionStatus {
+        return when(v) {"disconnected" -> ConnectionStatus.Disconnected;"connecting" -> ConnectionStatus.Connecting;"connected" -> ConnectionStatus.Connected;"reconnecting" -> ConnectionStatus.Reconnecting;"error" -> ConnectionStatus.Error; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeConnectionStatus(w: ProjectIntentWriter, v: ConnectionStatus) {
+        w.literal(when(v) {ConnectionStatus.Disconnected -> "disconnected";ConnectionStatus.Connecting -> "connecting";ConnectionStatus.Connected -> "connected";ConnectionStatus.Reconnecting -> "reconnecting";ConnectionStatus.Error -> "error";})
+    }
+    data class ConnectionSignal(val status: ConnectionStatus, val generation: Long, val socketEpoch: OptionalCounter)
+    private fun readConnectionSignal(v: Any): ConnectionSignal {
+        val obj = ProjectIntentJson.fields(v, setOf("status", "generation", "socketEpoch"), false)
+        return ConnectionSignal(readConnectionStatus(obj.get("status")), readCounter(obj.get("generation")), readOptionalCounter(obj.get("socketEpoch")))
+    }
+    private fun writeConnectionSignal(w: ProjectIntentWriter, v: ConnectionSignal) {
+        w.obj {
+            w.field("status") { writeConnectionStatus(w, v.status) }
+            w.field("generation") { writeCounter(w, v.generation) }
+            w.field("socketEpoch") { writeOptionalCounter(w, v.socketEpoch) }
+        }
+    }
+    data class PrintJobIdentity(val jobId: List<Int>, val startedAt: Double, val filename: List<Int>, val size: Double, val modified: Double)
+    private fun readPrintJobIdentity(v: Any): PrintJobIdentity {
+        val obj = ProjectIntentJson.fields(v, setOf("jobId", "startedAt", "filename", "size", "modified"), false)
+        return PrintJobIdentity(readEditText(obj.get("jobId")), readFinite(obj.get("startedAt")), readEditText(obj.get("filename")), readFinite(obj.get("size")), readFinite(obj.get("modified")))
+    }
+    private fun writePrintJobIdentity(w: ProjectIntentWriter, v: PrintJobIdentity) {
+        w.obj {
+            w.field("jobId") { writeEditText(w, v.jobId) }
+            w.field("startedAt") { writeFinite(w, v.startedAt) }
+            w.field("filename") { writeEditText(w, v.filename) }
+            w.field("size") { writeFinite(w, v.size) }
+            w.field("modified") { writeFinite(w, v.modified) }
+        }
+    }
+    sealed interface OptionalPrintJobIdentity {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalPrintJobIdentity
+        data class Value(val value: ProjectIntents.PrintJobIdentity) : OptionalPrintJobIdentity
+    }
+    private fun readOptionalPrintJobIdentity(v: Any): OptionalPrintJobIdentity {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalPrintJobIdentity.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalPrintJobIdentity.Value(readPrintJobIdentity(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalPrintJobIdentity(w: ProjectIntentWriter, v: OptionalPrintJobIdentity) {
+        w.obj { when(v) {
+            is OptionalPrintJobIdentity.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalPrintJobIdentity.Value -> w.field("value") { writePrintJobIdentity(w, v.value) }
+        } }
+    }
+    data class PrintJobCommandIntent(val id: Long, val printerId: List<Int>, val printerLabel: List<Int>, val generation: Long, val command: PrintJobCommand, val displayedFilename: OptionalText, val observedState: PrintJobState, val job: OptionalPrintJobIdentity)
+    private fun readPrintJobCommandIntent(v: Any): PrintJobCommandIntent {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "printerId", "printerLabel", "generation", "command", "displayedFilename", "observedState", "job"), false)
+        return PrintJobCommandIntent(readCounter(obj.get("id")), readEditText(obj.get("printerId")), readEditText(obj.get("printerLabel")), readCounter(obj.get("generation")), readPrintJobCommand(obj.get("command")), readOptionalText(obj.get("displayedFilename")), readPrintJobState(obj.get("observedState")), readOptionalPrintJobIdentity(obj.get("job")))
+    }
+    private fun writePrintJobCommandIntent(w: ProjectIntentWriter, v: PrintJobCommandIntent) {
+        w.obj {
+            w.field("id") { writeCounter(w, v.id) }
+            w.field("printerId") { writeEditText(w, v.printerId) }
+            w.field("printerLabel") { writeEditText(w, v.printerLabel) }
+            w.field("generation") { writeCounter(w, v.generation) }
+            w.field("command") { writePrintJobCommand(w, v.command) }
+            w.field("displayedFilename") { writeOptionalText(w, v.displayedFilename) }
+            w.field("observedState") { writePrintJobState(w, v.observedState) }
+            w.field("job") { writeOptionalPrintJobIdentity(w, v.job) }
+        }
+    }
+    sealed interface PrintJobIntentReply {
+        data class Intent(val value: ProjectIntents.PrintJobCommandIntent) : PrintJobIntentReply
+        data class Refused(val value: ProjectIntents.PrintJobCommandRefusal) : PrintJobIntentReply
+    }
+    private fun readPrintJobIntentReply(v: Any): PrintJobIntentReply {
+        val obj = ProjectIntentJson.fields(v, setOf("intent", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "intent" -> PrintJobIntentReply.Intent(readPrintJobCommandIntent(obj.get(key)))
+            "refused" -> PrintJobIntentReply.Refused(readPrintJobCommandRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrintJobIntentReply(w: ProjectIntentWriter, v: PrintJobIntentReply) {
+        w.obj { when(v) {
+            is PrintJobIntentReply.Intent -> w.field("intent") { writePrintJobCommandIntent(w, v.value) }
+            is PrintJobIntentReply.Refused -> w.field("refused") { writePrintJobCommandRefusal(w, v.value) }
+        } }
+    }
+    sealed interface PrintJobConfirmReply {
+        data class Token(val value: Long) : PrintJobConfirmReply
+        data class Refused(val value: ProjectIntents.PrintJobCommandRefusal) : PrintJobConfirmReply
+    }
+    private fun readPrintJobConfirmReply(v: Any): PrintJobConfirmReply {
+        val obj = ProjectIntentJson.fields(v, setOf("token", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "token" -> PrintJobConfirmReply.Token(readCounter(obj.get(key)))
+            "refused" -> PrintJobConfirmReply.Refused(readPrintJobCommandRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrintJobConfirmReply(w: ProjectIntentWriter, v: PrintJobConfirmReply) {
+        w.obj { when(v) {
+            is PrintJobConfirmReply.Token -> w.field("token") { writeCounter(w, v.value) }
+            is PrintJobConfirmReply.Refused -> w.field("refused") { writePrintJobCommandRefusal(w, v.value) }
+        } }
+    }
+    data class PrinterSessionLease(val printerId: List<Int>, val label: List<Int>, val generation: Long, val transport: Long)
+    private fun readPrinterSessionLease(v: Any): PrinterSessionLease {
+        val obj = ProjectIntentJson.fields(v, setOf("printerId", "label", "generation", "transport"), false)
+        return PrinterSessionLease(readEditText(obj.get("printerId")), readEditText(obj.get("label")), readCounter(obj.get("generation")), readCounter(obj.get("transport")))
+    }
+    private fun writePrinterSessionLease(w: ProjectIntentWriter, v: PrinterSessionLease) {
+        w.obj {
+            w.field("printerId") { writeEditText(w, v.printerId) }
+            w.field("label") { writeEditText(w, v.label) }
+            w.field("generation") { writeCounter(w, v.generation) }
+            w.field("transport") { writeCounter(w, v.transport) }
+        }
+    }
+    sealed interface PrinterSessionLeaseReply {
+        data class Lease(val value: ProjectIntents.PrinterSessionLease) : PrinterSessionLeaseReply
+        data class Refused(val value: ProjectIntents.PrinterText) : PrinterSessionLeaseReply
+    }
+    private fun readPrinterSessionLeaseReply(v: Any): PrinterSessionLeaseReply {
+        val obj = ProjectIntentJson.fields(v, setOf("lease", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "lease" -> PrinterSessionLeaseReply.Lease(readPrinterSessionLease(obj.get(key)))
+            "refused" -> PrinterSessionLeaseReply.Refused(readPrinterText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrinterSessionLeaseReply(w: ProjectIntentWriter, v: PrinterSessionLeaseReply) {
+        w.obj { when(v) {
+            is PrinterSessionLeaseReply.Lease -> w.field("lease") { writePrinterSessionLease(w, v.value) }
+            is PrinterSessionLeaseReply.Refused -> w.field("refused") { writePrinterText(w, v.value) }
+        } }
+    }
+    data class PrinterTransportOpen(val transport: Long, val selection: PrinterSelection)
+    private fun readPrinterTransportOpen(v: Any): PrinterTransportOpen {
+        val obj = ProjectIntentJson.fields(v, setOf("transport", "selection"), false)
+        return PrinterTransportOpen(readCounter(obj.get("transport")), readPrinterSelection(obj.get("selection")))
+    }
+    private fun writePrinterTransportOpen(w: ProjectIntentWriter, v: PrinterTransportOpen) {
+        w.obj {
+            w.field("transport") { writeCounter(w, v.transport) }
+            w.field("selection") { writePrinterSelection(w, v.selection) }
+        }
+    }
+    data class PrinterTransportRef(val transport: Long)
+    private fun readPrinterTransportRef(v: Any): PrinterTransportRef {
+        val obj = ProjectIntentJson.fields(v, setOf("transport"), false)
+        return PrinterTransportRef(readCounter(obj.get("transport")))
+    }
+    private fun writePrinterTransportRef(w: ProjectIntentWriter, v: PrinterTransportRef) {
+        w.obj {
+            w.field("transport") { writeCounter(w, v.transport) }
+        }
+    }
+    data class PrinterSessionRequest(val transport: Long, val epoch: Long, val send: PrinterSend)
+    private fun readPrinterSessionRequest(v: Any): PrinterSessionRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("transport", "epoch", "send"), false)
+        return PrinterSessionRequest(readCounter(obj.get("transport")), readCounter(obj.get("epoch")), readPrinterSend(obj.get("send")))
+    }
+    private fun writePrinterSessionRequest(w: ProjectIntentWriter, v: PrinterSessionRequest) {
+        w.obj {
+            w.field("transport") { writeCounter(w, v.transport) }
+            w.field("epoch") { writeCounter(w, v.epoch) }
+            w.field("send") { writePrinterSend(w, v.send) }
+        }
+    }
+    data class PrinterSessionRecovery(val transport: Long, val epoch: Long, val command: PrintJobCommand)
+    private fun readPrinterSessionRecovery(v: Any): PrinterSessionRecovery {
+        val obj = ProjectIntentJson.fields(v, setOf("transport", "epoch", "command"), false)
+        return PrinterSessionRecovery(readCounter(obj.get("transport")), readCounter(obj.get("epoch")), readPrintJobCommand(obj.get("command")))
+    }
+    private fun writePrinterSessionRecovery(w: ProjectIntentWriter, v: PrinterSessionRecovery) {
+        w.obj {
+            w.field("transport") { writeCounter(w, v.transport) }
+            w.field("epoch") { writeCounter(w, v.epoch) }
+            w.field("command") { writePrintJobCommand(w, v.command) }
+        }
+    }
+    sealed interface PrinterSessionEffect {
+        data class OpenTransport(val value: ProjectIntents.PrinterTransportOpen) : PrinterSessionEffect
+        data class Connect(val value: ProjectIntents.PrinterTransportRef) : PrinterSessionEffect
+        data class Request(val value: ProjectIntents.PrinterSessionRequest) : PrinterSessionEffect
+        data class Recovery(val value: ProjectIntents.PrinterSessionRecovery) : PrinterSessionEffect
+        data class ConfirmCommand(val value: ProjectIntents.PrintJobCommandIntent) : PrinterSessionEffect
+    }
+    private fun readPrinterSessionEffect(v: Any): PrinterSessionEffect {
+        val obj = ProjectIntentJson.fields(v, setOf("openTransport", "connect", "request", "recovery", "confirmCommand"), true)
+        return when(val key = obj.keys().next()) {
+            "openTransport" -> PrinterSessionEffect.OpenTransport(readPrinterTransportOpen(obj.get(key)))
+            "connect" -> PrinterSessionEffect.Connect(readPrinterTransportRef(obj.get(key)))
+            "request" -> PrinterSessionEffect.Request(readPrinterSessionRequest(obj.get(key)))
+            "recovery" -> PrinterSessionEffect.Recovery(readPrinterSessionRecovery(obj.get(key)))
+            "confirmCommand" -> PrinterSessionEffect.ConfirmCommand(readPrintJobCommandIntent(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrinterSessionEffect(w: ProjectIntentWriter, v: PrinterSessionEffect) {
+        w.obj { when(v) {
+            is PrinterSessionEffect.OpenTransport -> w.field("openTransport") { writePrinterTransportOpen(w, v.value) }
+            is PrinterSessionEffect.Connect -> w.field("connect") { writePrinterTransportRef(w, v.value) }
+            is PrinterSessionEffect.Request -> w.field("request") { writePrinterSessionRequest(w, v.value) }
+            is PrinterSessionEffect.Recovery -> w.field("recovery") { writePrinterSessionRecovery(w, v.value) }
+            is PrinterSessionEffect.ConfirmCommand -> w.field("confirmCommand") { writePrintJobCommandIntent(w, v.value) }
+        } }
+    }
+    data class PrinterSessionPendingEffect(val id: Long, val effect: PrinterSessionEffect)
+    private fun readPrinterSessionPendingEffect(v: Any): PrinterSessionPendingEffect {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "effect"), false)
+        return PrinterSessionPendingEffect(readCounter(obj.get("id")), readPrinterSessionEffect(obj.get("effect")))
+    }
+    private fun writePrinterSessionPendingEffect(w: ProjectIntentWriter, v: PrinterSessionPendingEffect) {
+        w.obj {
+            w.field("id") { writeCounter(w, v.id) }
+            w.field("effect") { writePrinterSessionEffect(w, v.effect) }
+        }
+    }
+    private fun readPrinterSessionPendingEffects(v: Any): List<PrinterSessionPendingEffect> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readPrinterSessionPendingEffect(array.get(it)) }
+    }
+    private fun writePrinterSessionPendingEffects(w: ProjectIntentWriter, v: List<PrinterSessionPendingEffect>) {
+        w.array(v, 0, 64) { writePrinterSessionPendingEffect(w, it) }
+    }
+    sealed interface PrinterSessionOutcome {
+        data class State(val value: ProjectIntents.ConnectionSignal) : PrinterSessionOutcome
+        data class Connected(val value: ProjectIntents.Empty) : PrinterSessionOutcome
+        data class Failed(val value: ProjectIntents.TransportFailure) : PrinterSessionOutcome
+        data class Confirmed(val value: Boolean) : PrinterSessionOutcome
+    }
+    private fun readPrinterSessionOutcome(v: Any): PrinterSessionOutcome {
+        val obj = ProjectIntentJson.fields(v, setOf("state", "connected", "failed", "confirmed"), true)
+        return when(val key = obj.keys().next()) {
+            "state" -> PrinterSessionOutcome.State(readConnectionSignal(obj.get(key)))
+            "connected" -> PrinterSessionOutcome.Connected(readEmpty(obj.get(key)))
+            "failed" -> PrinterSessionOutcome.Failed(readTransportFailure(obj.get(key)))
+            "confirmed" -> PrinterSessionOutcome.Confirmed(readFlag(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrinterSessionOutcome(w: ProjectIntentWriter, v: PrinterSessionOutcome) {
+        w.obj { when(v) {
+            is PrinterSessionOutcome.State -> w.field("state") { writeConnectionSignal(w, v.value) }
+            is PrinterSessionOutcome.Connected -> w.field("connected") { writeEmpty(w, v.value) }
+            is PrinterSessionOutcome.Failed -> w.field("failed") { writeTransportFailure(w, v.value) }
+            is PrinterSessionOutcome.Confirmed -> w.field("confirmed") { writeFlag(w, v.value) }
+        } }
+    }
+    sealed interface PrinterTaskResult {
+        data class Done(val value: ProjectIntents.Empty) : PrinterTaskResult
+        data class Failed(val value: ProjectIntents.PrinterText) : PrinterTaskResult
+        data class Refused(val value: ProjectIntents.PrintJobCommandRefusal) : PrinterTaskResult
+    }
+    private fun readPrinterTaskResult(v: Any): PrinterTaskResult {
+        val obj = ProjectIntentJson.fields(v, setOf("done", "failed", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "done" -> PrinterTaskResult.Done(readEmpty(obj.get(key)))
+            "failed" -> PrinterTaskResult.Failed(readPrinterText(obj.get(key)))
+            "refused" -> PrinterTaskResult.Refused(readPrintJobCommandRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrinterTaskResult(w: ProjectIntentWriter, v: PrinterTaskResult) {
+        w.obj { when(v) {
+            is PrinterTaskResult.Done -> w.field("done") { writeEmpty(w, v.value) }
+            is PrinterTaskResult.Failed -> w.field("failed") { writePrinterText(w, v.value) }
+            is PrinterTaskResult.Refused -> w.field("refused") { writePrintJobCommandRefusal(w, v.value) }
+        } }
+    }
+    data class PrinterTaskFinished(val task: Long, val result: PrinterTaskResult)
+    private fun readPrinterTaskFinished(v: Any): PrinterTaskFinished {
+        val obj = ProjectIntentJson.fields(v, setOf("task", "result"), false)
+        return PrinterTaskFinished(readCounter(obj.get("task")), readPrinterTaskResult(obj.get("result")))
+    }
+    private fun writePrinterTaskFinished(w: ProjectIntentWriter, v: PrinterTaskFinished) {
+        w.obj {
+            w.field("task") { writeCounter(w, v.task) }
+            w.field("result") { writePrinterTaskResult(w, v.result) }
+        }
+    }
+    private fun readPrinterTasksFinished(v: Any): List<PrinterTaskFinished> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readPrinterTaskFinished(array.get(it)) }
+    }
+    private fun writePrinterTasksFinished(w: ProjectIntentWriter, v: List<PrinterTaskFinished>) {
+        w.array(v, 0, 64) { writePrinterTaskFinished(w, it) }
+    }
+    private fun readPrinterSessionIds(v: Any): List<Long> {
+        val array = ProjectIntentJson.list(v, 0, 256)
+        return List(array.length()) { readCounter(array.get(it)) }
+    }
+    private fun writePrinterSessionIds(w: ProjectIntentWriter, v: List<Long>) {
+        w.array(v, 0, 256) { writeCounter(w, it) }
+    }
+    data class PrinterSessionStep(val changed: Long, val effects: List<PrinterSessionPendingEffect>, val withdrawn: List<Long>, val closed: List<Long>, val aborted: List<Long>, val task: OptionalCounter, val finished: List<PrinterTaskFinished>)
+    private fun readPrinterSessionStep(v: Any): PrinterSessionStep {
+        val obj = ProjectIntentJson.fields(v, setOf("changed", "effects", "withdrawn", "closed", "aborted", "task", "finished"), false)
+        return PrinterSessionStep(readCounter(obj.get("changed")), readPrinterSessionPendingEffects(obj.get("effects")), readPrinterSessionIds(obj.get("withdrawn")), readPrinterSessionIds(obj.get("closed")), readPrinterSessionIds(obj.get("aborted")), readOptionalCounter(obj.get("task")), readPrinterTasksFinished(obj.get("finished")))
+    }
+    private fun writePrinterSessionStep(w: ProjectIntentWriter, v: PrinterSessionStep) {
+        w.obj {
+            w.field("changed") { writeCounter(w, v.changed) }
+            w.field("effects") { writePrinterSessionPendingEffects(w, v.effects) }
+            w.field("withdrawn") { writePrinterSessionIds(w, v.withdrawn) }
+            w.field("closed") { writePrinterSessionIds(w, v.closed) }
+            w.field("aborted") { writePrinterSessionIds(w, v.aborted) }
+            w.field("task") { writeOptionalCounter(w, v.task) }
+            w.field("finished") { writePrinterTasksFinished(w, v.finished) }
+        }
+    }
+    sealed interface PrintJobExecuteConfirmation {
+        data class None(val value: ProjectIntents.Empty) : PrintJobExecuteConfirmation
+        data class Token(val value: Long) : PrintJobExecuteConfirmation
+        data class Dialog(val value: ProjectIntents.Empty) : PrintJobExecuteConfirmation
+    }
+    private fun readPrintJobExecuteConfirmation(v: Any): PrintJobExecuteConfirmation {
+        val obj = ProjectIntentJson.fields(v, setOf("none", "token", "dialog"), true)
+        return when(val key = obj.keys().next()) {
+            "none" -> PrintJobExecuteConfirmation.None(readEmpty(obj.get(key)))
+            "token" -> PrintJobExecuteConfirmation.Token(readCounter(obj.get(key)))
+            "dialog" -> PrintJobExecuteConfirmation.Dialog(readEmpty(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrintJobExecuteConfirmation(w: ProjectIntentWriter, v: PrintJobExecuteConfirmation) {
+        w.obj { when(v) {
+            is PrintJobExecuteConfirmation.None -> w.field("none") { writeEmpty(w, v.value) }
+            is PrintJobExecuteConfirmation.Token -> w.field("token") { writeCounter(w, v.value) }
+            is PrintJobExecuteConfirmation.Dialog -> w.field("dialog") { writeEmpty(w, v.value) }
+        } }
+    }
+    data class PrintJobExecuteRequest(val intent: Long, val confirmation: PrintJobExecuteConfirmation)
+    private fun readPrintJobExecuteRequest(v: Any): PrintJobExecuteRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("intent", "confirmation"), false)
+        return PrintJobExecuteRequest(readCounter(obj.get("intent")), readPrintJobExecuteConfirmation(obj.get("confirmation")))
+    }
+    private fun writePrintJobExecuteRequest(w: ProjectIntentWriter, v: PrintJobExecuteRequest) {
+        w.obj {
+            w.field("intent") { writeCounter(w, v.intent) }
+            w.field("confirmation") { writePrintJobExecuteConfirmation(w, v.confirmation) }
+        }
+    }
+    data class PrinterSessionView(val generation: Long, val snapshot: OptionalPrintJobSnapshot, val availability: List<PrintJobCommandDescriptor>)
+    private fun readPrinterSessionView(v: Any): PrinterSessionView {
+        val obj = ProjectIntentJson.fields(v, setOf("generation", "snapshot", "availability"), false)
+        return PrinterSessionView(readCounter(obj.get("generation")), readOptionalPrintJobSnapshot(obj.get("snapshot")), readPrintJobCommandDescriptors(obj.get("availability")))
+    }
+    private fun writePrinterSessionView(w: ProjectIntentWriter, v: PrinterSessionView) {
+        w.obj {
+            w.field("generation") { writeCounter(w, v.generation) }
+            w.field("snapshot") { writeOptionalPrintJobSnapshot(w, v.snapshot) }
+            w.field("availability") { writePrintJobCommandDescriptors(w, v.availability) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -8534,4 +8903,26 @@ object ProjectIntents {
     fun encodePrintWorkflowStep(value: PrintWorkflowStep): String = ProjectIntentWriter().also { writePrintWorkflowStep(it, value) }.finish()
     fun decodePrintWorkflowEffect(text: String): PrintWorkflowEffect = readPrintWorkflowEffect(ProjectIntentJson.parse(text))
     fun encodePrintWorkflowEffect(value: PrintWorkflowEffect): String = ProjectIntentWriter().also { writePrintWorkflowEffect(it, value) }.finish()
+    fun decodePrinterSelection(text: String): PrinterSelection = readPrinterSelection(ProjectIntentJson.parse(text))
+    fun encodePrinterSelection(value: PrinterSelection): String = ProjectIntentWriter().also { writePrinterSelection(it, value) }.finish()
+    fun decodeConnectionSignal(text: String): ConnectionSignal = readConnectionSignal(ProjectIntentJson.parse(text))
+    fun encodeConnectionSignal(value: ConnectionSignal): String = ProjectIntentWriter().also { writeConnectionSignal(it, value) }.finish()
+    fun decodePrintJobIntentReply(text: String): PrintJobIntentReply = readPrintJobIntentReply(ProjectIntentJson.parse(text))
+    fun encodePrintJobIntentReply(value: PrintJobIntentReply): String = ProjectIntentWriter().also { writePrintJobIntentReply(it, value) }.finish()
+    fun decodePrintJobConfirmReply(text: String): PrintJobConfirmReply = readPrintJobConfirmReply(ProjectIntentJson.parse(text))
+    fun encodePrintJobConfirmReply(value: PrintJobConfirmReply): String = ProjectIntentWriter().also { writePrintJobConfirmReply(it, value) }.finish()
+    fun decodePrinterSessionLease(text: String): PrinterSessionLease = readPrinterSessionLease(ProjectIntentJson.parse(text))
+    fun encodePrinterSessionLease(value: PrinterSessionLease): String = ProjectIntentWriter().also { writePrinterSessionLease(it, value) }.finish()
+    fun decodePrinterSessionLeaseReply(text: String): PrinterSessionLeaseReply = readPrinterSessionLeaseReply(ProjectIntentJson.parse(text))
+    fun encodePrinterSessionLeaseReply(value: PrinterSessionLeaseReply): String = ProjectIntentWriter().also { writePrinterSessionLeaseReply(it, value) }.finish()
+    fun decodePrinterSessionOutcome(text: String): PrinterSessionOutcome = readPrinterSessionOutcome(ProjectIntentJson.parse(text))
+    fun encodePrinterSessionOutcome(value: PrinterSessionOutcome): String = ProjectIntentWriter().also { writePrinterSessionOutcome(it, value) }.finish()
+    fun decodePrinterSessionStep(text: String): PrinterSessionStep = readPrinterSessionStep(ProjectIntentJson.parse(text))
+    fun encodePrinterSessionStep(value: PrinterSessionStep): String = ProjectIntentWriter().also { writePrinterSessionStep(it, value) }.finish()
+    fun decodePrintJobExecuteRequest(text: String): PrintJobExecuteRequest = readPrintJobExecuteRequest(ProjectIntentJson.parse(text))
+    fun encodePrintJobExecuteRequest(value: PrintJobExecuteRequest): String = ProjectIntentWriter().also { writePrintJobExecuteRequest(it, value) }.finish()
+    fun decodePrinterSessionView(text: String): PrinterSessionView = readPrinterSessionView(ProjectIntentJson.parse(text))
+    fun encodePrinterSessionView(value: PrinterSessionView): String = ProjectIntentWriter().also { writePrinterSessionView(it, value) }.finish()
+    fun decodePrinterSessionEffect(text: String): PrinterSessionEffect = readPrinterSessionEffect(ProjectIntentJson.parse(text))
+    fun encodePrinterSessionEffect(value: PrinterSessionEffect): String = ProjectIntentWriter().also { writePrinterSessionEffect(it, value) }.finish()
 }

@@ -121,6 +121,7 @@ enum Record {
     HoldToConfirm(Box<orcaxr_printer::control::HoldToConfirm>),
     ToolUsage(Box<orcaxr_printer::tools::ToolUsageScanner>),
     PrintWorkflow(Box<orcaxr_printer::workflow::PrintWorkflow>),
+    PrinterSession(Box<orcaxr_printer::session::PrinterSession>),
 }
 fn registry() -> &'static Registry<Record> {
     static REGISTRY: OnceLock<Registry<Record>> = OnceLock::new();

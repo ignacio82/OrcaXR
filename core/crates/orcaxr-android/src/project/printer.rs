@@ -6,6 +6,7 @@ use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
     control::{self, HoldToConfirm},
     preparation,
+    session::{self, PrinterSession},
     status::{JobStatus, LIMITS},
     summary, tools,
     workflow::{PrintWorkflow, Refusal},
@@ -433,4 +434,162 @@ pub(super) fn print_workflow_cancel(env: &mut JNIEnv<'_>, handle: jlong) -> Resu
 pub(super) fn print_workflow_dispose(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
     let step = with_workflow(handle, |w| Ok(w.dispose()))?;
     workflow_step(env, step)
+}
+
+fn with_session<R>(
+    handle: jlong,
+    call: impl FnOnce(&mut PrinterSession) -> std::result::Result<R, session::Refusal>,
+) -> Result<R> {
+    registry().slot(handle)?.with(|record| match record {
+        Some(Record::PrinterSession(session)) => call(session).map_err(session::Refusal::code),
+        _ => Err("invalid_handle_kind"),
+    })
+}
+fn session_step(env: &mut JNIEnv<'_>, step: wire::PrinterSessionStep) -> Result<jstring> {
+    let json = wire::encode_printer_session_step(&step).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn printer_session_new(_: &mut JNIEnv<'_>) -> Result<jlong> {
+    let reserved = registry().reserve(false)?;
+    reserved.insert(Record::PrinterSession(Box::default()))
+}
+/// A `PrinterSelection`.
+pub(super) fn printer_session_select(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    selection: JString<'_>,
+) -> Result<jstring> {
+    let selection = wire::decode_printer_selection(&intent_text(env, &selection)?)
+        .map_err(|_| "invalid_request")?;
+    let step = with_session(handle, |s| s.select(selection))?;
+    session_step(env, step)
+}
+pub(super) fn printer_session_clear(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let step = with_session(handle, |s| Ok(s.clear()))?;
+    session_step(env, step)
+}
+pub(super) fn printer_session_dispose(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let step = with_session(handle, |s| Ok(s.dispose()))?;
+    session_step(env, step)
+}
+pub(super) fn printer_session_connect(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let step = with_session(handle, |s| Ok(s.connect()))?;
+    session_step(env, step)
+}
+pub(super) fn printer_session_refresh(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let step = with_session(handle, |s| Ok(s.refresh()))?;
+    session_step(env, step)
+}
+/// A `PrintJobExecuteRequest`.
+pub(super) fn printer_session_execute(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = wire::decode_print_job_execute_request(&intent_text(env, &request)?)
+        .map_err(|_| "invalid_request")?;
+    let step = with_session(handle, |s| Ok(s.execute(request)))?;
+    session_step(env, step)
+}
+/// A `ConnectionSignal` from transport `transport`.
+pub(super) fn printer_session_state(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    transport: jlong,
+    signal: JString<'_>,
+) -> Result<jstring> {
+    let transport = effect_id(transport)?;
+    let signal = wire::decode_connection_signal(&intent_text(env, &signal)?)
+        .map_err(|_| "invalid_request")?;
+    let step = with_session(handle, |s| Ok(s.transport_state(transport, signal)))?;
+    session_step(env, step)
+}
+/// A notification's method and params (JSON) as transport `transport`
+/// received them at `now_ms`.
+pub(super) fn printer_session_notification(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    transport: jlong,
+    method: JString<'_>,
+    params: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let transport = effect_id(transport)?;
+    let method = printer_text(env, &method)?;
+    let params = printer_text(env, &params)?;
+    let step = with_session(handle, |s| {
+        s.notification(transport, &method, &params, now_ms)
+    })?;
+    session_step(env, step)
+}
+/// A `PrinterSessionOutcome` answering effect `id`.
+pub(super) fn printer_session_resolve(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    id: jlong,
+    outcome: JString<'_>,
+) -> Result<jstring> {
+    let id = effect_id(id)?;
+    let outcome = wire::decode_printer_session_outcome(&intent_text(env, &outcome)?)
+        .map_err(|_| "invalid_request")?;
+    let step = with_session(handle, |s| s.resolve(id, outcome))?;
+    session_step(env, step)
+}
+/// A request's reply (Moonraker's `result`, as JSON) received at `now_ms`.
+pub(super) fn printer_session_reply(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    id: jlong,
+    text: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let id = effect_id(id)?;
+    let text = printer_text(env, &text)?;
+    let step = with_session(handle, |s| s.resolve_reply(id, &text, now_ms))?;
+    session_step(env, step)
+}
+pub(super) fn printer_session_view(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let view = with_session(handle, |s| Ok(s.view()))?;
+    let json = wire::encode_printer_session_view(&view).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+/// A command's wire name; the `PrintJobIntentReply`.
+pub(super) fn printer_session_capture_intent(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    command: JString<'_>,
+) -> Result<jstring> {
+    let command = session::command_named(&intent_text(env, &command)?).ok_or("invalid_request")?;
+    let reply = with_session(handle, |s| Ok(s.capture_intent(command)))?;
+    let json = wire::encode_print_job_intent_reply(&reply).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+/// An intent id; the `PrintJobConfirmReply`.
+pub(super) fn printer_session_confirm(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    intent: jlong,
+) -> Result<jstring> {
+    let intent = effect_id(intent)?;
+    let reply = with_session(handle, |s| Ok(s.confirm(intent)))?;
+    let json = wire::encode_print_job_confirm_reply(&reply).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn printer_session_capture_lease(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+) -> Result<jstring> {
+    let reply = with_session(handle, |s| Ok(s.capture_lease()))?;
+    let json = wire::encode_printer_session_lease_reply(&reply).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+/// A `PrinterSessionLease`; whether it is still current.
+pub(super) fn printer_session_lease_current(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    lease: JString<'_>,
+) -> Result<jboolean> {
+    let lease = wire::decode_printer_session_lease(&intent_text(env, &lease)?)
+        .map_err(|_| "invalid_request")?;
+    with_session(handle, |s| Ok(u8::from(s.lease_current(&lease))))
 }

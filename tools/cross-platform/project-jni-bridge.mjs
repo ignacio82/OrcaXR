@@ -49,6 +49,7 @@ export function startProjectJni(profile = "debug") {
   signatures.printerToolsChecks = ["String"];
   signatures.printPreparationChecks = ["String"];
   signatures.printWorkflowChecks = ["String"];
+  signatures.printerSessionChecks = ["String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -1112,6 +1113,56 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return call("printWorkflowDispose", this.handle);
     }
   }
+  class PrinterSession extends Handle {
+    constructor() {
+      super(call("printerSessionNew"));
+    }
+    select(selection) {
+      return call("printerSessionSelect", this.handle, selection);
+    }
+    clear() {
+      return call("printerSessionClear", this.handle);
+    }
+    dispose() {
+      return call("printerSessionDispose", this.handle);
+    }
+    connect() {
+      return call("printerSessionConnect", this.handle);
+    }
+    refresh() {
+      return call("printerSessionRefresh", this.handle);
+    }
+    execute(request) {
+      return call("printerSessionExecute", this.handle, request);
+    }
+    transport_state(transport, signal) {
+      return call("printerSessionState", this.handle, transport, signal);
+    }
+    notification(transport, method, params, nowMs) {
+      return call("printerSessionNotification", this.handle, transport, method, params, nowMs);
+    }
+    resolve(id, outcome) {
+      return call("printerSessionResolve", this.handle, id, outcome);
+    }
+    resolve_reply(id, text, nowMs) {
+      return call("printerSessionReply", this.handle, id, text, nowMs);
+    }
+    view() {
+      return call("printerSessionView", this.handle);
+    }
+    capture_intent(command) {
+      return call("printerSessionCaptureIntent", this.handle, command);
+    }
+    confirm(intent) {
+      return call("printerSessionConfirm", this.handle, intent);
+    }
+    capture_lease() {
+      return call("printerSessionCaptureLease", this.handle);
+    }
+    lease_current(lease) {
+      return call("printerSessionLeaseCurrent", this.handle, lease);
+    }
+  }
   class ToolUsageScanner extends Handle {
     constructor() {
       super(call("toolUsageNew"));
@@ -1129,6 +1180,7 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     PrintJobStatus,
     HoldToConfirm,
     PrintWorkflow,
+    PrinterSession,
     ToolUsageScanner,
     filament_slots: (text) => call("filamentSlots", text),
     printer_objects: (text) => call("printerObjects", text),
