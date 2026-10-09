@@ -2011,7 +2011,7 @@ credential storage, and explicit permission/error flows.
   a redirect. 21 checks classify addresses and reach the simulator through a
   name resolved to a public address (refused before anything is sent) and to a
   private one (admitted, socket included).
-- [ ] Handle local-network permission grant, denial, revocation, and re-entry,
+- [x] Handle local-network permission grant, denial, revocation, and re-entry,
   including SDK 37 behavior. Keep manual endpoint entry and platform-supported
   discovery distinct; avoid indiscriminate subnet scanning.
   The app targets SDK 37, where local-network access is blocked by default,
@@ -2026,9 +2026,18 @@ credential storage, and explicit permission/error flows.
   DNS-SD browse (no subnet scanning), never saves on its own, and on
   Android 17 asks for the permission before it searches. The Device area asks for the
   permission when the active printer needs it, offers the app's settings once
-  it is refused for good, and reads it again on every resume; API 34
-  emulators cannot show Android 17's prompt, so the prompt itself is
-  unverified.
+  it is refused for good, and reads it again on every resume. An Android 17
+  (API 37) emulator now drives the whole lifecycle against the simulator
+  (`android-local-network-smoke.py`, `emulator-smoke.py --api 37`): a
+  connection refused at once and explained before the permission is asked,
+  the system prompt denied once and then again — after which the card offers
+  the app's settings —, a grant made there read on resume and connecting,
+  revocation refusing again, and "Find printers" asking before it searches;
+  the simulator receives nothing while access is denied. That run found the
+  card offering a request the system no longer showed after a second denial
+  (now read from the answer itself) and a refusal reported only as a network
+  fault (now refused up front in words); the Device and Project smokes and
+  all 48 instrumented tests also pass on API 37.
 - [x] Store remembered printer/slicer secrets using Android Keystore-backed
   encryption and clear them on explicit forget. Keep AI credentials memory-only
   unless a separate preference is deliberately introduced. Exclude secrets and

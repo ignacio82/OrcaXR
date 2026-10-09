@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,16 +65,21 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    var askedOnce by rememberSaveable { mutableStateOf(false) }
+    // Denied for good: the system no longer asks, so only its settings can grant it. It is read
+    // from the answer itself — the rationale flag is not state, and nothing else changes when it
+    // flips on a second denial, so the card would keep offering a request that does nothing.
+    var deniedForGood by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.localNetworkGranted) { if (state.localNetworkGranted) deniedForGood = false }
     // Set while the permission is asked for so a search can follow.
     var finding by rememberSaveable { mutableStateOf(false) }
     val findNeedsPermission = stringResource(R.string.device_find_needs_permission)
+    val findNeedsSettings = stringResource(R.string.device_find_needs_settings)
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        askedOnce = true
+        deniedForGood = !granted && (context as? Activity)?.shouldShowRequestPermissionRationale(LOCAL_NETWORK) == false
         model.refresh()
         if (finding) {
             finding = false
-            if (granted) model.findPrinters() else model.notify(findNeedsPermission)
+            if (granted) model.findPrinters() else model.notify(if (deniedForGood) findNeedsSettings else findNeedsPermission)
         }
     }
     val find = {
@@ -130,9 +136,7 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(stringResource(R.string.device_local_network_needed))
-                            val activity = context as? Activity
-                            val canAsk = !askedOnce || activity?.shouldShowRequestPermissionRationale(LOCAL_NETWORK) == true
-                            if (canAsk && Build.VERSION.SDK_INT >= ANDROID_17) {
+                            if (!deniedForGood && Build.VERSION.SDK_INT >= ANDROID_17) {
                                 Button(onClick = { permission.launch(LOCAL_NETWORK) }) {
                                     Text(stringResource(R.string.device_local_network_allow))
                                 }

@@ -267,8 +267,32 @@ and the Project area smoke (`android-project-smoke.py`, through the system
 document picker) pass on a freshly owned API 34 x86_64 emulator through
 `emulator-smoke.py`. The host's `/tmp` is a tmpfs and its
 disk was nearly full: give `TMPDIR` a disk-backed directory with at least
-8 GB free before running it. API 34 cannot exercise Android 17's
-local-network permission prompt; no API 37 image was available.
+8 GB free before running it.
+
+### Emulator evidence on Android 17
+
+`emulator-smoke.py --api 37` owns a fresh API 37 (Android 17) x86_64 AVD
+and runs the same suite — the 48 instrumented tests, three cold starts, the
+Device and Project smokes — plus `android-local-network-smoke.py`, which
+drives `ACCESS_LOCAL_NETWORK` (a runtime permission in the Nearby devices
+group, denied by default) against the simulator at 10.0.2.2: the card and an
+immediate refusal before it is asked, the system prompt ("Allow OrcaXR to
+find, connect to, and determine the relative position of nearby devices?")
+denied once and again, the card then offering the app's settings, a grant
+made there read on resume and connecting, revocation refusing again, and
+"Find printers" asking before it searches. Nothing reaches the simulator
+while access is denied. The run found four things the API 34 runs could not:
+after a second denial the card kept offering a request the system no longer
+shows (the rationale flag is not Compose state, so nothing recomposed — the
+card now reads "denied for good" from the answer itself); a denied
+connection was reported only as `Network: handshake_server` (the workspace
+now refuses up front with the reason); service discovery and registration
+throw `SecurityException` without the permission, so the instrumented test
+APK declares and grants it; and a UiAutomation connection opened by a test
+process takes the one `uiautomator dump` needs, so the smoke grants the
+advertiser's permission with `pm grant` instead. The smokes now share
+`smoke_ui.py`, whose launch retries while `pm clear` still tears down the
+app's task and collapses a notification shade a home-screen swipe opened.
 
 ## SceneCore candidate
 

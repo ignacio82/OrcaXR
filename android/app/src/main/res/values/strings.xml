@@ -43,6 +43,7 @@
     <string name="device_found_needs_key">Moonraker answered and asks for an API key</string>
     <string name="device_found_saved">Saved as %1$s</string>
     <string name="device_found_add">Add %1$s</string>
+    <string name="device_find_needs_settings">OrcaXR can look for printers only with permission to reach devices on your local network. Allow nearby devices for OrcaXR in its app settings.</string>
     <string name="device_find_needs_permission">OrcaXR can look for printers only with permission to reach devices on your local network.</string>
     <string name="device_printer_name">Name</string>
     <string name="device_printer_address">Address</string>

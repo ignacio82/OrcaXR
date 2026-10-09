@@ -264,7 +264,11 @@ class DeviceWorkspace(
 
     /** Connects to the active printer with its own key. */
     fun connect(): CompletableFuture<ProjectIntents.MoonrakerHandshake> {
-        if (active == null) return CompletableFuture.failedFuture(DeviceRefusal("Add a printer first."))
+        val printer = active ?: return CompletableFuture.failedFuture(DeviceRefusal("Add a printer first."))
+        // Refused up front, in words: the transport would report only a network fault.
+        if (localNetworkBlocked()) {
+            return CompletableFuture.failedFuture(DeviceRefusal(LocalNetworkDeniedException(text(printer.host)).message.orEmpty()))
+        }
         // The same selection reuses its client.
         selectActive()
         return session.connect()

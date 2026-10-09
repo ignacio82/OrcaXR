@@ -15,18 +15,15 @@ printers. What the printer received is checked at the end.
 """
 import argparse
 import json
-import re
 import subprocess
 import time
 import urllib.request
-import xml.etree.ElementTree as ET
 from artifacts import ROOT, sha256
+from smoke_ui import Screen
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--serial", required=True)
 args = parser.parse_args()
-if not re.fullmatch(r"emulator-\d+", args.serial):
-    raise SystemExit("This unattended smoke test only installs on an explicitly selected emulator")
 output = ROOT / "tools/cross-platform/results"
 output.mkdir(parents=True, exist_ok=True)
 PACKAGE = "dev.orcaxr.nativeapp"
@@ -35,94 +32,9 @@ core_tests_apk = ROOT / "android/core-bridge/build/outputs/apk/androidTest/debug
 CORE_TESTS = "dev.orcaxr.core.test"
 
 
-def adb(*command, timeout=120):
-    return subprocess.check_output(["adb", "-s", args.serial, *command], text=True, timeout=timeout).strip()
-
-
-def nodes():
-    adb("shell", "uiautomator", "dump", "/data/local/tmp/orcaxr-device.xml")
-    layout = ET.fromstring(adb("shell", "cat", "/data/local/tmp/orcaxr-device.xml"))
-    return list(layout.iter("node"))
-
-
-def center(node):
-    left, top, right, bottom = map(int, re.findall(r"\d+", node.get("bounds")))
-    return (left + right) // 2, (top + bottom) // 2
-
-
-def find(text, timeout=20, exact=True):
-    """The node showing [text], scrolling the screen's list to bring it into view: on down the
-    list until it stops moving (its end), then back up to its start, and so on."""
-    deadline = time.monotonic() + timeout
-    onward = True
-    placed = None
-    seen = []
-    while time.monotonic() < deadline:
-        current = nodes()
-        for node in current:
-            value = node.get("text") or node.get("content-desc") or ""
-            if value == text or (not exact and text in value):
-                return node
-            if value and value not in seen:
-                seen.append(value)
-        # Nothing moved since the last swipe: this end of the list is reached.
-        layout = [node.get("bounds") for node in current]
-        if layout == placed:
-            onward = not onward
-        placed = layout
-        start, end = ("900", "400") if onward else ("400", "900")
-        adb("shell", "input", "swipe", "360", start, "360", end, "300")
-        time.sleep(0.3)
-    (output / "device-smoke-failed.xml").write_text(adb("shell", "cat", "/data/local/tmp/orcaxr-device.xml"))
-    (output / "device-smoke-seen.txt").write_text("\n".join(seen) + "\n")
-    raise AssertionError(f"'{text}' never appeared")
-
-
-def to_top():
-    """Flings the screen's list back to its first item."""
-    for _ in range(6):
-        adb("shell", "input", "swipe", "360", "300", "360", "1100", "100")
-    time.sleep(0.5)
-
-
-def absent(text, timeout=20):
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if not any((node.get("text") or "") == text for node in nodes()):
-            return
-        time.sleep(0.5)
-    raise AssertionError(f"'{text}' never went away")
-
-
-def tap(text, **kwargs):
-    x, y = center(find(text, **kwargs))
-    adb("shell", "input", "tap", str(x), str(y))
-
-
-def type_into(label, value):
-    """Focus the text field labelled [label] and type [value]."""
-    field = None
-    for node in nodes():
-        if node.get("class") == "android.widget.EditText" and any(
-            (child.get("text") or "") == label for child in node.iter("node")
-        ):
-            field = node
-    if field is None:
-        field = find(label)
-    x, y = center(field)
-    adb("shell", "input", "tap", str(x), str(y))
-    adb("shell", "input", "text", value.replace(" ", "%s"))
-    hide_keyboard()
-
-
-def hide_keyboard():
-    """Close the soft keyboard, which would cover the next field or button; Back closes it first."""
-    for _ in range(10):
-        if "mInputShown=true" not in adb("shell", "dumpsys", "input_method"):
-            return
-        adb("shell", "input", "keyevent", "4")
-        time.sleep(0.3)
-    raise AssertionError("The soft keyboard would not close")
+screen = Screen(args.serial, output, "device")
+adb, nodes, find, absent, tap = screen.adb, screen.nodes, screen.find, screen.absent, screen.tap
+to_top, hide_keyboard, type_into, focused = screen.to_top, screen.hide_keyboard, screen.type_into, screen.focused
 
 
 def start_print(url, filename):
@@ -140,8 +52,7 @@ def start_print(url, filename):
 
 
 def launch():
-    adb("shell", "am", "force-stop", PACKAGE)
-    adb("shell", "am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
+    screen.launch(PACKAGE)
     find("Workspace preview — editing is not available yet.")
     tap("Device")
 
@@ -168,6 +79,9 @@ try:
     port = url.rsplit(":", 1)[1]
     adb("install", "-r", str(app_apk))
     adb("shell", "pm", "clear", PACKAGE)
+    if int(adb("shell", "getprop", "ro.build.version.sdk")) >= 37:
+        # Granted up front: android-local-network-smoke.py drives the prompt itself.
+        adb("shell", "pm", "grant", PACKAGE, "android.permission.ACCESS_LOCAL_NETWORK")
     launch()
     find("No printer saved yet. Add one by its address on your network.")
     tap("Add printer")
@@ -237,6 +151,8 @@ try:
     # Discovery: the printer announces itself, is verified with no key sent and
     # proposed under the name it gives itself; nothing is saved until it is added.
     adb("install", "-r", str(core_tests_apk))
+    if int(adb("shell", "getprop", "ro.build.version.sdk")) >= 37:
+        adb("shell", "pm", "grant", CORE_TESTS, "android.permission.ACCESS_LOCAL_NETWORK")
     advertiser = subprocess.Popen(
         ["adb", "-s", args.serial, "shell", "am", "instrument", "-w", "-e", "class", "dev.orcaxr.core.MoonrakerAdvertiser",
          "-e", "advertiseMoonraker", f"10.0.2.2:{port}", "-e", "advertiseSeconds", "300",

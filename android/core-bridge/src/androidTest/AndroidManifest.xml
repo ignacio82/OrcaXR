@@ -2,4 +2,6 @@
 <!-- The instrumentation's own APK: the discovery tests advertise a service and answer on a socket. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 17 refuses service discovery and registration without it; granted by the tests. -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 </manifest>

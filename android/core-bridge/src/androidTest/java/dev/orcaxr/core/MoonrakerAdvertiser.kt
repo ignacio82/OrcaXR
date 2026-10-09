@@ -39,6 +39,8 @@ class MoonrakerAdvertiser {
         assumeTrue(target != null)
         val seconds = arguments.getString("advertiseSeconds")?.toLong() ?: 120
         val (host, port) = target!!.split(":").let { it[0] to it[1].toInt() }
+        // On Android 17 the driver grants the local-network permission (`pm grant`): asking
+        // UiAutomation here would take the one connection its screen reads need.
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val nsd = context.getSystemService(NsdManager::class.java)
         ServerSocket(0).use { server ->

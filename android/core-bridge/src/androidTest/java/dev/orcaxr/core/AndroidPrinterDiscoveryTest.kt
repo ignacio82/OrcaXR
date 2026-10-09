@@ -36,6 +36,7 @@ class AndroidPrinterDiscoveryTest {
     }
 
     @Test fun aMoonrakerServiceOnTheNetworkIsOfferedWhereItAnswers() {
+        grantLocalNetwork()
         val nsd = context.getSystemService(NsdManager::class.java)
         ServerSocket(0).use { server ->
             val registered = CountDownLatch(1)
@@ -86,4 +87,11 @@ class AndroidPrinterDiscoveryTest {
             }
         }
     }
+}
+
+/** Android 17 refuses service discovery and registration without the local-network permission. */
+internal fun grantLocalNetwork() {
+    if (android.os.Build.VERSION.SDK_INT < 37) return
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    instrumentation.uiAutomation.grantRuntimePermission(instrumentation.targetContext.packageName, "android.permission.ACCESS_LOCAL_NETWORK")
 }

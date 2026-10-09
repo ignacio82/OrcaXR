@@ -17,17 +17,14 @@ import base64
 import json
 import tempfile
 from pathlib import Path
-import re
 import subprocess
 import time
-import xml.etree.ElementTree as ET
 from artifacts import ROOT, sha256
+from smoke_ui import Screen
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--serial", required=True)
 args = parser.parse_args()
-if not re.fullmatch(r"emulator-\d+", args.serial):
-    raise SystemExit("This unattended smoke test only installs on an explicitly selected emulator")
 output = ROOT / "tools/cross-platform/results"
 output.mkdir(parents=True, exist_ok=True)
 PACKAGE = "dev.orcaxr.nativeapp"
@@ -35,58 +32,13 @@ app_apk = ROOT / "android/app/build/outputs/apk/debug/app-debug.apk"
 SAVED = "Untitled project.3mf"
 
 
-def adb(*command, timeout=120):
-    return subprocess.check_output(["adb", "-s", args.serial, *command], text=True, timeout=timeout).strip()
-
-
-def nodes():
-    adb("shell", "uiautomator", "dump", "/data/local/tmp/orcaxr-project.xml")
-    return list(ET.fromstring(adb("shell", "cat", "/data/local/tmp/orcaxr-project.xml")).iter("node"))
-
-
-def center(node):
-    left, top, right, bottom = map(int, re.findall(r"\d+", node.get("bounds")))
-    return (left + right) // 2, (top + bottom) // 2
-
-
-def find(text, timeout=20):
-    """The node showing [text], scrolling the list on to its end and back until it shows."""
-    deadline = time.monotonic() + timeout
-    onward, placed, seen = True, None, []
-    while time.monotonic() < deadline:
-        current = nodes()
-        for node in current:
-            value = node.get("text") or node.get("content-desc") or ""
-            if value == text:
-                return node
-            if value and value not in seen:
-                seen.append(value)
-        layout = [node.get("bounds") for node in current]
-        if layout == placed:
-            onward = not onward
-        placed = layout
-        start, end = ("900", "500") if onward else ("500", "900")
-        adb("shell", "input", "swipe", "360", start, "360", end, "300")
-        time.sleep(0.3)
-    (output / "project-smoke-seen.txt").write_text("\n".join(seen) + "\n")
-    raise AssertionError(f"'{text}' never appeared")
-
-
-def tap(text, **kwargs):
-    x, y = center(find(text, **kwargs))
-    adb("shell", "input", "tap", str(x), str(y))
-
-
-def focused():
-    """The window that has focus, as the window manager reports it."""
-    lines = [line for line in adb("shell", "dumpsys", "window").splitlines() if "mCurrentFocus=" in line]
-    assert lines, "The window manager reported no focus"
-    return lines[0]
+screen = Screen(args.serial, output, "project")
+adb, nodes, find, absent, tap = screen.adb, screen.nodes, screen.find, screen.absent, screen.tap
+to_top, hide_keyboard, type_into, focused = screen.to_top, screen.hide_keyboard, screen.type_into, screen.focused
 
 
 def launch():
-    adb("shell", "am", "force-stop", PACKAGE)
-    adb("shell", "am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
+    screen.launch(PACKAGE)
     find("Workspace preview — editing is not available yet.")
     tap("Project")
     find("Untitled project", timeout=30)
