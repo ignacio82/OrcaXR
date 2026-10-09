@@ -1970,10 +1970,21 @@ credential storage, and explicit permission/error flows.
 - [ ] Handle local-network permission grant, denial, revocation, and re-entry,
   including SDK 37 behavior. Keep manual endpoint entry and platform-supported
   discovery distinct; avoid indiscriminate subnet scanning.
-- [ ] Store remembered printer/slicer secrets using Android Keystore-backed
+- [x] Store remembered printer/slicer secrets using Android Keystore-backed
   encryption and clear them on explicit forget. Keep AI credentials memory-only
   unless a separate preference is deliberately introduced. Exclude secrets and
   private model contents from logs, backups, crash attachments, and test fixtures.
+  The record is the browser's, shared as `orcaxr_printer::credentials` (142
+  browser answers agree in every binding). `CredentialVault` seals its text
+  with AES-256-GCM under a non-exportable Android Keystore key, bound to its
+  purpose, in a private preferences file; forgetting removes the blob and the
+  key, and a blob that no longer opens is forgotten. 17 host checks run it over
+  a software key and `CredentialVaultTest` over the real Keystore on an owned
+  API 34 emulator (45 instrumented tests pass, 2026-10-09). The app disallows
+  backup and excludes all data from cloud backup and device transfer; it has
+  no AI integration or crash reporter, diagnostics redact credentials, and
+  every corpus secret is synthetic. The shell's credential entry, which uses
+  the vault, belongs to endpoint management.
 - [x] Implement upload/prepare/start with digest and artifact checks, random
   non-overwriting names, post-upload revalidation, explicit overwrite handling,
   and unknown-outcome recovery. Never blindly retry an uncertain print start.

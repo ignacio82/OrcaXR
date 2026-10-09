@@ -1226,6 +1226,16 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_credentialsLoad, credentials_load, jstring,
+    stored: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_credentialsSave, credentials_save, jstring,
+    record: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,

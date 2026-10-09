@@ -47,6 +47,7 @@ import { historyNumber, replayPrintHistory } from "./printer-history-replay.mjs"
 import { replayPrinterConsole } from "./printer-console-replay.mjs";
 import { replayPrinterCamera } from "./printer-camera-replay.mjs";
 import { replayPrinterDirectory } from "./printer-directory-replay.mjs";
+import { replayRememberedCredentials } from "./printer-credentials-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -1183,6 +1184,21 @@ try {
     ),
   ];
   assert.equal(jvm.call("printerDirectoryChecks", directoryScript.join("\n")), 382);
+  // Remembered credentials through the real JNI exports, then the Kotlin
+  // wrapper and the sealed vault over a software key.
+  const credentialsFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/printer-credentials-vectors.json", root)),
+  );
+  assert.deepEqual(
+    replayRememberedCredentials(projectJniCore(jvm.call), credentialsFixture).rememberedCredentialsAnswers,
+    [79, 63],
+  );
+  const credentialsScript = [
+    ...credentialsFixture.loads.map((c) => ["loads", c.stored ?? "-", c.replyJson].join("\t")),
+    ...credentialsFixture.saves.map((c) => ["saves", c.requestJson, c.stored ?? "-"].join("\t")),
+  ];
+  assert.equal(jvm.call("credentialsChecks", credentialsScript.join("\n")), 142);
+  assert.equal(jvm.call("credentialVaultChecks"), 17);
   // The Moonraker transport through the real JNI exports, then the Kotlin
   // wrapper: step and state, or reply, for each input.
   const transportFixture = JSON.parse(

@@ -121,11 +121,17 @@ export function forgetRememberedCredentials(storage: KeyValueStorage | null = br
   }
 }
 
-/** Per-printer keys, bounded so a corrupt store cannot grow without limit. */
+/**
+ * Per-printer keys, bounded so a corrupt store cannot grow without limit.
+ *
+ * Read in key order, so the keys kept and the order they are written back in
+ * never depend on the order a store happened to list them.
+ */
 function readSecretMap(value: unknown): Readonly<Record<string, string>> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return Object.freeze({});
   const map: Record<string, string> = {};
-  for (const [key, entry] of Object.entries(value).slice(0, 32)) {
+  const entries = Object.entries(value).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+  for (const [key, entry] of entries.slice(0, 32)) {
     const secret = readSecret(entry);
     if (secret) map[key.slice(0, 64)] = secret;
   }

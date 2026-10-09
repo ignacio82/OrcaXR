@@ -6997,6 +6997,28 @@ const shapes = {
       "id": "EditText"
     }
   },
+  "RememberedSecret": {
+    "kind": "object",
+    "fields": {
+      "key": "EditText",
+      "secret": "EditText"
+    }
+  },
+  "RememberedSecrets": {
+    "kind": "array",
+    "items": "RememberedSecret",
+    "min": 0,
+    "max": 4096
+  },
+  "RememberedCredentials": {
+    "kind": "object",
+    "fields": {
+      "printerApiKey": "EditText",
+      "printerApiKeys": "RememberedSecrets",
+      "slicerToken": "EditText",
+      "remember": "Flag"
+    }
+  },
   "PrinterStorageResult": {
     "kind": "union",
     "variants": {
@@ -7852,6 +7874,9 @@ export interface ProjectPrinterDirectorySelectWire {readonly directory: ProjectP
 export interface ProjectLegacyPrinterEndpointWire {readonly host: ProjectEditTextWire;readonly port: ProjectFiniteWire;}
 export type ProjectOptionalLegacyPrinterEndpointWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectLegacyPrinterEndpointWire};
 export interface ProjectPrinterDirectoryAdoptWire {readonly directory: ProjectPrinterDirectoryWire;readonly legacy: ProjectOptionalLegacyPrinterEndpointWire;readonly id: ProjectEditTextWire;}
+export interface ProjectRememberedSecretWire {readonly key: ProjectEditTextWire;readonly secret: ProjectEditTextWire;}
+export type ProjectRememberedSecretsWire = readonly ProjectRememberedSecretWire[];
+export interface ProjectRememberedCredentialsWire {readonly printerApiKey: ProjectEditTextWire;readonly printerApiKeys: ProjectRememberedSecretsWire;readonly slicerToken: ProjectEditTextWire;readonly remember: ProjectFlagWire;}
 export type ProjectPrinterStorageResultWire = {readonly listing:ProjectPrinterStorageListingWire} | {readonly metadata:ProjectPrinterStorageMetadataWire} | {readonly done:ProjectEmptyWire} | {readonly moved:ProjectPrinterTextWire} | {readonly started:ProjectPrinterTextWire} | {readonly failed:ProjectPrinterStorageFailureWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
@@ -8549,3 +8574,6 @@ export function encodeProjectPrinterDirectorySelect(value:ProjectPrinterDirector
 export function captureProjectPrinterDirectoryAdopt(value:unknown):ProjectPrinterDirectoryAdoptWire { return captureIntent("PrinterDirectoryAdopt",value,shapes,limits) as ProjectPrinterDirectoryAdoptWire; }
 export function decodeProjectPrinterDirectoryAdopt(text:string):ProjectPrinterDirectoryAdoptWire { return captureProjectPrinterDirectoryAdopt(parseIntentJson(text,limits)); }
 export function encodeProjectPrinterDirectoryAdopt(value:ProjectPrinterDirectoryAdoptWire):string { return JSON.stringify(captureProjectPrinterDirectoryAdopt(value)); }
+export function captureProjectRememberedCredentials(value:unknown):ProjectRememberedCredentialsWire { return captureIntent("RememberedCredentials",value,shapes,bulkLimits) as ProjectRememberedCredentialsWire; }
+export function decodeProjectRememberedCredentials(text:string):ProjectRememberedCredentialsWire { return captureProjectRememberedCredentials(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectRememberedCredentials(value:ProjectRememberedCredentialsWire):string { return JSON.stringify(captureProjectRememberedCredentials(value)); }

@@ -9,7 +9,7 @@
     "maxNodes": 4194304,
     "maxDepth": 12
   },
-  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView", "GcodeAssessment", "ConsolePlan", "ConsoleResult", "MacroInvocation", "CameraListResult", "PrinterCamera", "CameraSnapshotRequest", "CameraSnapshotPlan", "CameraSnapshotFinish", "CameraFailure", "CameraMechanismsRequest", "CameraDescribeRequest", "CameraFrameRequest", "OptionalPrinterReplyText"],
+  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView", "GcodeAssessment", "ConsolePlan", "ConsoleResult", "MacroInvocation", "CameraListResult", "PrinterCamera", "CameraSnapshotRequest", "CameraSnapshotPlan", "CameraSnapshotFinish", "CameraFailure", "CameraMechanismsRequest", "CameraDescribeRequest", "CameraFrameRequest", "OptionalPrinterReplyText", "RememberedCredentials"],
   "description": "Prepared project commands, session messages and slice preflight exchanges. Text is lossless UTF-16 units. Project transport, command format and persisted schema versions are distinct.",
   "definitions": {
     "Unit": {
@@ -6947,6 +6947,28 @@
         "id": "EditText"
       }
     },
+    "RememberedSecret": {
+      "kind": "object",
+      "fields": {
+        "key": "EditText",
+        "secret": "EditText"
+      }
+    },
+    "RememberedSecrets": {
+      "kind": "array",
+      "items": "RememberedSecret",
+      "min": 0,
+      "max": 4096
+    },
+    "RememberedCredentials": {
+      "kind": "object",
+      "fields": {
+        "printerApiKey": "EditText",
+        "printerApiKeys": "RememberedSecrets",
+        "slicerToken": "EditText",
+        "remember": "Flag"
+      }
+    },
     "PrinterStorageResult": {
       "kind": "union",
       "variants": {
@@ -7191,7 +7213,8 @@
     "PrinterDirectoryAdd",
     "PrinterDirectoryUpdate",
     "PrinterDirectorySelect",
-    "PrinterDirectoryAdopt"
+    "PrinterDirectoryAdopt",
+    "RememberedCredentials"
   ],
   "sessionVersion": 1
 }

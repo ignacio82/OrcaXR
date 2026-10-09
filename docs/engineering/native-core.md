@@ -4137,6 +4137,46 @@ removals, 41 defaults and 15 adoptions. Rust, WASM in Node and Chrome, the
 printer core, JNI and 382 Kotlin checks reproduce every one, and every saved
 text loads back as itself.
 
+### Remembered credentials
+
+`orcaxr_printer::credentials` ports `RememberedCredentials.ts`: the printer
+keys and slicer token remembered on a device, under a switch the operator
+can turn off and a way to forget them. The record is read from and written
+to the browser's stored text (`load`, `save`): a secret longer than any
+issued key (4,096 units) is dropped rather than stored, at most 32
+per-printer keys are kept, remembering off stores the switch and no secret,
+and a record with nothing in it removes the stored text. The per-printer
+keys are read in key order, so which are kept, and the order they are
+written back in, never depend on how a store listed them; the browser now
+reads them that way too (it used to keep whichever 32 a store listed first).
+An id of `__proto__` is dropped, as assigning it on a plain JavaScript
+object sets nothing.
+
+On Android, `CredentialVault` (core-bridge) keeps that text sealed. The
+`SealingCipher` is AES-256-GCM with the cipher's own random IV and the
+purpose authenticated alongside, so a blob sealed for one use cannot be
+opened as another; its key comes from a `SecretKeySource`, in the app a
+non-exportable Android Keystore key (`AndroidKeyStoreKeys`), and the sealed
+blob lives in a private preferences file (`SharedPreferencesBlobStore`)
+that the app's backup and device-transfer rules exclude, as they exclude
+all app data. Forgetting removes the blob and the key, so nothing sealed
+before can be opened again, and a blob that no longer opens (tampered, or
+its key gone) is forgotten rather than kept. The host checks run the vault
+over a software key (17 checks: no secret in the clear, a fresh IV per seal,
+the switch, tampering, a lost key, purpose binding, forgetting), and
+`CredentialVaultTest` runs it over the real Keystore on an owned emulator.
+The Android-only adapters live apart (`AndroidSecrets.kt`), so the host JVM
+loads none of them.
+
+Bindings: WASM `credentials_load` and `credentials_save`, the JNI
+`credentials*` exports and Kotlin `RememberedCredentialsPolicy`.
+`printer-credentials-vectors.mjs` drives the production functions through
+`RememberedCredentialsExchange.ts`: 79 stored records loaded (corrupt,
+hostile, oversized secrets, many keys in any order, ids past their length,
+the switch, and every saved record) and 63 records saved; Rust, WASM in
+Node and Chrome, the printer core, JNI and 142 Kotlin checks reproduce
+every one.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

@@ -20,6 +20,7 @@ import { replayPrintHistory } from "./printer-history-replay.mjs";
 import { replayPrinterConsole } from "./printer-console-replay.mjs";
 import { replayPrinterCamera } from "./printer-camera-replay.mjs";
 import { replayPrinterDirectory } from "./printer-directory-replay.mjs";
+import { replayRememberedCredentials } from "./printer-credentials-replay.mjs";
 
 const root = new URL("../../", import.meta.url);
 const asset = await readFile(
@@ -60,6 +61,7 @@ const result = {
   ...replayPrinterConsole(core, await fixture("printer-console-vectors")),
   ...replayPrinterCamera(core, await fixture("printer-camera-vectors")),
   ...replayPrinterDirectory(core, await fixture("printer-directory-vectors")),
+  ...replayRememberedCredentials(core, await fixture("printer-credentials-vectors")),
 };
 assert.deepEqual(
   [result.printJobSnapshots, result.printJobIgnored, result.printJobRefusals],
@@ -114,6 +116,7 @@ assert.deepEqual(result.printHistoryAnswers, [290, 1363, 258, 55, 55, 76, 23, 39
 assert.deepEqual(result.printerConsoleAnswers, [408, 44, 284, 51, 76, 33, 34, 28]);
 assert.deepEqual(result.printerCameraAnswers, [62, 12, 462, 462, 616, 308, 154, 154]);
 assert.deepEqual(result.printerDirectoryAnswers, [37, 25, 160, 60, 44, 41, 15]);
+assert.deepEqual(result.rememberedCredentialsAnswers, [79, 63]);
 console.log(
   JSON.stringify({ ...result, wasmBytes: bytes.length, wasmSha256: sha256 }),
 );

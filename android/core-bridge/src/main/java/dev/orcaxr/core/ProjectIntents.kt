@@ -10747,6 +10747,37 @@ object ProjectIntents {
             w.field("id") { writeEditText(w, v.id) }
         }
     }
+    data class RememberedSecret(val key: List<Int>, val secret: List<Int>)
+    private fun readRememberedSecret(v: Any): RememberedSecret {
+        val obj = ProjectIntentJson.fields(v, setOf("key", "secret"), false)
+        return RememberedSecret(readEditText(obj.get("key")), readEditText(obj.get("secret")))
+    }
+    private fun writeRememberedSecret(w: ProjectIntentWriter, v: RememberedSecret) {
+        w.obj {
+            w.field("key") { writeEditText(w, v.key) }
+            w.field("secret") { writeEditText(w, v.secret) }
+        }
+    }
+    private fun readRememberedSecrets(v: Any): List<RememberedSecret> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readRememberedSecret(array.get(it)) }
+    }
+    private fun writeRememberedSecrets(w: ProjectIntentWriter, v: List<RememberedSecret>) {
+        w.array(v, 0, 4096) { writeRememberedSecret(w, it) }
+    }
+    data class RememberedCredentials(val printerApiKey: List<Int>, val printerApiKeys: List<RememberedSecret>, val slicerToken: List<Int>, val remember: Boolean)
+    private fun readRememberedCredentials(v: Any): RememberedCredentials {
+        val obj = ProjectIntentJson.fields(v, setOf("printerApiKey", "printerApiKeys", "slicerToken", "remember"), false)
+        return RememberedCredentials(readEditText(obj.get("printerApiKey")), readRememberedSecrets(obj.get("printerApiKeys")), readEditText(obj.get("slicerToken")), readFlag(obj.get("remember")))
+    }
+    private fun writeRememberedCredentials(w: ProjectIntentWriter, v: RememberedCredentials) {
+        w.obj {
+            w.field("printerApiKey") { writeEditText(w, v.printerApiKey) }
+            w.field("printerApiKeys") { writeRememberedSecrets(w, v.printerApiKeys) }
+            w.field("slicerToken") { writeEditText(w, v.slicerToken) }
+            w.field("remember") { writeFlag(w, v.remember) }
+        }
+    }
     sealed interface PrinterStorageResult {
         data class Listing(val value: ProjectIntents.PrinterStorageListing) : PrinterStorageResult
         data class Metadata(val value: ProjectIntents.PrinterStorageMetadata) : PrinterStorageResult
@@ -11241,4 +11272,6 @@ object ProjectIntents {
     fun encodePrinterDirectorySelect(value: PrinterDirectorySelect): String = ProjectIntentWriter().also { writePrinterDirectorySelect(it, value) }.finish()
     fun decodePrinterDirectoryAdopt(text: String): PrinterDirectoryAdopt = readPrinterDirectoryAdopt(ProjectIntentJson.parse(text))
     fun encodePrinterDirectoryAdopt(value: PrinterDirectoryAdopt): String = ProjectIntentWriter().also { writePrinterDirectoryAdopt(it, value) }.finish()
+    fun decodeRememberedCredentials(text: String): RememberedCredentials = readRememberedCredentials(ProjectIntentJson.parse(text, BULK))
+    fun encodeRememberedCredentials(value: RememberedCredentials): String = ProjectIntentWriter(BULK).also { writeRememberedCredentials(it, value) }.finish()
 }

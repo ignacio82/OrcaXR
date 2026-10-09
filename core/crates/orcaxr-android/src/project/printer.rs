@@ -6,7 +6,7 @@ use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
     camera, console,
     control::{self, HoldToConfirm},
-    directory, history, moonraker, preparation, reply,
+    credentials, directory, history, moonraker, preparation, reply,
     session::{self, PrinterSession},
     status::{JobStatus, LIMITS},
     storage, summary, tools,
@@ -1066,6 +1066,27 @@ pub(super) fn printer_directory_adopt(
         directory::adopt,
         wire::encode_printer_directory,
     )
+}
+
+pub(super) fn credentials_load(env: &mut JNIEnv<'_>, stored: JString<'_>) -> Result<jstring> {
+    let stored = if stored.is_null() {
+        None
+    } else {
+        Some(bounded_text(env, &stored, reply::LIMITS.bytes)?)
+    };
+    let json = wire::encode_remembered_credentials(&credentials::load(stored.as_deref()))
+        .map_err(|_| "output_limit")?;
+    string(env, json)
+}
+/// The text to store, or null to remove what is stored.
+pub(super) fn credentials_save(env: &mut JNIEnv<'_>, record: JString<'_>) -> Result<jstring> {
+    let record =
+        wire::decode_remembered_credentials(&bounded_text(env, &record, wire::BULK.bytes)?)
+            .map_err(|_| "invalid_request")?;
+    match credentials::save(&record) {
+        Some(text) => string(env, String::from_utf16_lossy(&text)),
+        None => Ok(std::ptr::null_mut()),
+    }
 }
 
 fn with_transport<R>(

@@ -1176,6 +1176,18 @@ export function console_recent(request: string): string;
 export function core_info(): string;
 
 /**
+ * The stored credentials text (none: nothing stored); the
+ * `RememberedCredentials` it reads as.
+ */
+export function credentials_load(stored?: string | null): string;
+
+/**
+ * A `RememberedCredentials`; the text to store, or none to remove what is
+ * stored.
+ */
+export function credentials_save(record: string): string | undefined;
+
+/**
  * A `TransportFailure`; how it reads, as `PrinterText`.
  */
 export function describe_transport_failure(request: string): string;
@@ -1540,6 +1552,8 @@ export interface InitOutput {
     readonly console_read: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly console_recent: (a: number, b: number) => [number, number, number, number];
     readonly core_info: () => [number, number];
+    readonly credentials_load: (a: number, b: number) => [number, number, number, number];
+    readonly credentials_save: (a: number, b: number) => [number, number, number, number];
     readonly describe_transport_failure: (a: number, b: number) => [number, number, number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
     readonly filament_slots: (a: number, b: number) => [number, number, number, number];

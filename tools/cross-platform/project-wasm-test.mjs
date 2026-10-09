@@ -38,6 +38,7 @@ import { replayPrintHistory } from "./printer-history-replay.mjs";
 import { replayPrinterConsole } from "./printer-console-replay.mjs";
 import { replayPrinterCamera } from "./printer-camera-replay.mjs";
 import { replayPrinterDirectory } from "./printer-directory-replay.mjs";
+import { replayRememberedCredentials } from "./printer-credentials-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -286,6 +287,8 @@ if (isMainThread) {
     assert.deepEqual(result.printerCameraAnswers, [62, 12, 462, 462, 616, 308, 154, 154]);
     // The printer directory: loads, saves and every edit.
     assert.deepEqual(result.printerDirectoryAnswers, [37, 25, 160, 60, 44, 41, 15]);
+    // Remembered credentials: stored records loaded and records saved.
+    assert.deepEqual(result.rememberedCredentialsAnswers, [79, 63]);
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -760,6 +763,12 @@ if (isMainThread) {
       await readFile(new URL("testdata/cross-platform/printer-directory-vectors.json", root)),
     ),
   );
+  const rememberedCredentials = replayRememberedCredentials(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/printer-credentials-vectors.json", root)),
+    ),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -809,6 +818,7 @@ if (isMainThread) {
       ...printerConsole,
       ...printerCamera,
       ...printerDirectory,
+      ...rememberedCredentials,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

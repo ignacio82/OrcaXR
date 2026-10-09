@@ -395,8 +395,8 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
 - Discovery probes without mutating preferences, then atomically commits endpoint,
   enabled state and attestation only for the still-current connection generation.
   Preserve explicit disable; unavailable storage leaves session-only operation.
-- Printer/slicer credentials are optionally remembered in device-local storage,
-  which is not encrypted by OrcaXR. AI keys are tab-memory only. Never log credentials,
+- Printer/slicer credentials are optionally remembered in device-local storage (browser: not
+  encrypted; Android: `CredentialVault`, Keystore AES-GCM, forget drops key). AI keys are tab-memory only. Never log credentials,
   full engine errors or unbounded private data. Source cleanup does not revoke keys.
 - Native output stays private until successful process exit and bounded regular-file
   validation. Track the owned process group after leader exit, escalate TERM to KILL,

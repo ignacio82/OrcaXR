@@ -284,6 +284,7 @@ assert.deepEqual(schema.roots, [
   "PrinterDirectoryUpdate",
   "PrinterDirectorySelect",
   "PrinterDirectoryAdopt",
+  "RememberedCredentials",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

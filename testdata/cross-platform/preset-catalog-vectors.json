@@ -23,7 +23,7 @@
     },
     {
       "path": "contracts/project-intents.json",
-      "sha256": "214f4b470a3cd665abb626a1c8083e8969bdfa40c3972446008d368425127de6"
+      "sha256": "9aaf4c2e87591b037664e34a6e23bd469a1535830788650b39d058e5eac1ff5b"
     },
     {
       "path": "web/src/settings/configSerialization.ts",

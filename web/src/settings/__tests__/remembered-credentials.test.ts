@@ -164,4 +164,20 @@ test('a corrupt per-printer map yields no keys rather than junk', () => {
   }
 });
 
+test('the keys kept, and their stored order, never depend on the order a store listed them', () => {
+  const keys = Array.from({ length: 40 }, (_, i) => `printer-${String(i).padStart(2, '0')}`);
+  const stored = (order: string[]) =>
+    storage({
+      'orcaxr.credentials': JSON.stringify({
+        printerApiKeys: Object.fromEntries(order.map((key) => [key, `k-${key}`])),
+      }),
+    });
+  const forward = loadRememberedCredentials(stored(keys));
+  const backward = loadRememberedCredentials(stored([...keys].reverse()));
+  // The first 32 listed used to be kept, so the same store read either way
+  // round kept different printers' keys.
+  assert.deepEqual(Object.entries(forward.printerApiKeys), Object.entries(backward.printerApiKeys));
+  assert.deepEqual(Object.keys(forward.printerApiKeys), keys.slice(0, 32));
+});
+
 console.log(`\nRemembered credentials: ${passed} tests passed.`);

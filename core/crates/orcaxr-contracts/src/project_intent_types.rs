@@ -14797,6 +14797,47 @@ fn read_printer_directory_adopt(v: &Value) -> Result<PrinterDirectoryAdopt, Inva
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RememberedSecret {
+    pub key: EditText,
+    pub secret: EditText,
+}
+fn read_remembered_secret(v: &Value) -> Result<RememberedSecret, InvalidIntent> {
+    let object = fields(v, &["key", "secret"], false)?;
+    Ok(RememberedSecret {
+        key: read_edit_text(&object["key"])?,
+        secret: read_edit_text(&object["secret"])?,
+    })
+}
+pub type RememberedSecrets = Vec<RememberedSecret>;
+fn read_remembered_secrets(v: &Value) -> Result<RememberedSecrets, InvalidIntent> {
+    list(v, 0, 4096)?
+        .iter()
+        .map(read_remembered_secret)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RememberedCredentials {
+    pub printer_api_key: EditText,
+    pub printer_api_keys: RememberedSecrets,
+    pub slicer_token: EditText,
+    pub remember: Flag,
+}
+fn read_remembered_credentials(v: &Value) -> Result<RememberedCredentials, InvalidIntent> {
+    let object = fields(
+        v,
+        &["printerApiKey", "printerApiKeys", "slicerToken", "remember"],
+        false,
+    )?;
+    Ok(RememberedCredentials {
+        printer_api_key: read_edit_text(&object["printerApiKey"])?,
+        printer_api_keys: read_remembered_secrets(&object["printerApiKeys"])?,
+        slicer_token: read_edit_text(&object["slicerToken"])?,
+        remember: read_flag(&object["remember"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PrinterStorageResult {
     Listing(PrinterStorageListing),
     Metadata(PrinterStorageMetadata),
@@ -16966,5 +17007,15 @@ pub fn encode_printer_directory_adopt(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_printer_directory_adopt(&text)?;
+    Ok(text)
+}
+pub fn decode_remembered_credentials(text: &str) -> Result<RememberedCredentials, InvalidIntent> {
+    read_remembered_credentials(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_remembered_credentials(
+    value: &RememberedCredentials,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_remembered_credentials(&text)?;
     Ok(text)
 }

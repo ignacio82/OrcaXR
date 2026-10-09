@@ -56,6 +56,8 @@ export function startProjectJni(profile = "debug") {
   signatures.printerConsoleChecks = ["String"];
   signatures.printerCameraChecks = ["String"];
   signatures.printerDirectoryChecks = ["String"];
+  signatures.credentialsChecks = ["String"];
+  signatures.credentialVaultChecks = [];
   signatures.moonrakerTransportChecks = ["String"];
   signatures.moonrakerClientChecks = ["String"];
   signatures.printerSessionClientChecks = ["String"];
@@ -1328,6 +1330,8 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     printer_directory_remove: (request) => call("printerDirectoryRemove", request),
     printer_directory_set_default: (request) => call("printerDirectorySetDefault", request),
     printer_directory_adopt: (request) => call("printerDirectoryAdopt", request),
+    credentials_load: (stored) => call("credentialsLoad", stored ?? null),
+    credentials_save: (record) => call("credentialsSave", record),
     print_preparation_plan: (request) => call("printPreparationPlan", request),
     print_preparation_send: (request) => call("printPreparationSend", request),
     print_readiness: (text) => call("printReadiness", text),

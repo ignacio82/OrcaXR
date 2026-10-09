@@ -3,8 +3,8 @@ use crate::error;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
-    camera, console, control, directory, history, moonraker, preparation, reply, session,
-    status::JobStatus, storage, summary, tools, transport, workflow,
+    camera, console, control, credentials, directory, history, moonraker, preparation, reply,
+    session, status::JobStatus, storage, summary, tools, transport, workflow,
 };
 use wasm_bindgen::prelude::*;
 
@@ -1158,4 +1158,28 @@ pub fn printer_directory_adopt(request: &str) -> Result<String, JsValue> {
         directory::adopt,
         wire::encode_printer_directory,
     )
+}
+/// The stored credentials text (none: nothing stored); the
+/// `RememberedCredentials` it reads as.
+#[wasm_bindgen]
+pub fn credentials_load(stored: Option<String>) -> Result<String, JsValue> {
+    if stored
+        .as_ref()
+        .is_some_and(|s| s.len() > reply::LIMITS.bytes)
+    {
+        return Err(error("input_limit"));
+    }
+    wire::encode_remembered_credentials(&credentials::load(stored.as_deref()))
+        .map_err(|_| error("output_limit"))
+}
+/// A `RememberedCredentials`; the text to store, or none to remove what is
+/// stored.
+#[wasm_bindgen]
+pub fn credentials_save(record: &str) -> Result<Option<String>, JsValue> {
+    if record.len() > wire::BULK.bytes {
+        return Err(error("input_limit"));
+    }
+    let record =
+        wire::decode_remembered_credentials(record).map_err(|_| error("invalid_request"))?;
+    Ok(credentials::save(&record).map(|text| String::from_utf16_lossy(&text)))
 }

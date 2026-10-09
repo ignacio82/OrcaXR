@@ -243,6 +243,10 @@ final class NativeProject {
     static native String printerDirectoryRemove(String request);
     static native String printerDirectorySetDefault(String request);
     static native String printerDirectoryAdopt(String request);
+    // Remembered credentials: the stored text read (null: nothing stored),
+    // and a record's text to store (null: remove what is stored).
+    static native String credentialsLoad(String stored);
+    static native String credentialsSave(String record);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.
