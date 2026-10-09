@@ -69,6 +69,25 @@ export class CapturedSelection {
 }
 
 /**
+ * The hold-to-confirm gesture; each call takes the host's clock.
+ */
+export class HoldToConfirm {
+    free(): void;
+    [Symbol.dispose](): void;
+    cancel(): string;
+    constructor();
+    poll(now_ms: number): string;
+    /**
+     * A `GuardedPrinterAction`; the `HoldToConfirmState`.
+     */
+    press(action: string, now_ms: number): string;
+    /**
+     * The `HoldToConfirmRelease`: the command to run, if the hold was long enough.
+     */
+    release(now_ms: number): string;
+}
+
+/**
  * Installed printers and custom presets over a pinned catalog.
  */
 export class PresetLibrary {
@@ -871,6 +890,11 @@ export function evaluate(request: string): string;
 export function format_override_value(request: string): string;
 
 /**
+ * A `GuardedPrinterActionsRequest`; the `GuardedPrinterActions` to offer.
+ */
+export function guarded_printer_actions(request: string): string;
+
+/**
  * The workspace's measurement of two features: a `MeasureRequest`; returns
  * a `MeasureReply`.
  */
@@ -885,6 +909,27 @@ export function prepare_emboss(request: string): ProjectEmboss;
  * Cut a drawing's file bytes with a recipe: an `SvgPartRequest`.
  */
 export function prepare_svg_part(request: string, drawing: Uint8Array): ProjectSvgPart;
+
+/**
+ * A `PrintJobAvailabilityRequest`; the `PrintJobCommandDescriptors` the
+ * observed state allows.
+ */
+export function print_job_availability(request: string): string;
+
+/**
+ * A `PrintJobCommandFailureRequest`; the `PrintJobCommandRefusal` it reports.
+ */
+export function print_job_command_failure(request: string): string;
+
+/**
+ * A `PrintJobCommandCheckRequest`; the `PrintJobCommandPlan`.
+ */
+export function print_job_command_plan(request: string): string;
+
+/**
+ * A `PrinterStatusRequest`; the `PrinterStatusSummary` compact surfaces show.
+ */
+export function printer_status_summary(request: string): string;
 
 /**
  * The Full Spectrum rules: an `EditorRuleRequest` to `EditorRules`.
@@ -903,6 +948,7 @@ export interface InitOutput {
     readonly __wbg_capturedhistory_free: (a: number, b: number) => void;
     readonly __wbg_capturedproject_free: (a: number, b: number) => void;
     readonly __wbg_capturedselection_free: (a: number, b: number) => void;
+    readonly __wbg_holdtoconfirm_free: (a: number, b: number) => void;
     readonly __wbg_presetlibrary_free: (a: number, b: number) => void;
     readonly __wbg_printjobstatus_free: (a: number, b: number) => void;
     readonly __wbg_profilecatalog_free: (a: number, b: number) => void;
@@ -969,6 +1015,12 @@ export interface InitOutput {
     readonly core_info: () => [number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
     readonly format_override_value: (a: number, b: number) => [number, number, number, number];
+    readonly guarded_printer_actions: (a: number, b: number) => [number, number, number, number];
+    readonly holdtoconfirm_cancel: (a: number) => [number, number, number, number];
+    readonly holdtoconfirm_new: () => number;
+    readonly holdtoconfirm_poll: (a: number, b: number) => [number, number, number, number];
+    readonly holdtoconfirm_press: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly holdtoconfirm_release: (a: number, b: number) => [number, number, number, number];
     readonly measure_features: (a: number, b: number) => [number, number, number, number];
     readonly prepare_emboss: (a: number, b: number) => [number, number, number];
     readonly prepare_svg_part: (a: number, b: number, c: number, d: number) => [number, number, number];
@@ -986,6 +1038,10 @@ export interface InitOutput {
     readonly presetlibrary_plan_update: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_state: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_view: (a: number) => [number, number, number, number];
+    readonly print_job_availability: (a: number, b: number) => [number, number, number, number];
+    readonly print_job_command_failure: (a: number, b: number) => [number, number, number, number];
+    readonly print_job_command_plan: (a: number, b: number) => [number, number, number, number];
+    readonly printer_status_summary: (a: number, b: number) => [number, number, number, number];
     readonly printjobstatus_apply_notification: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly printjobstatus_apply_query: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly printjobstatus_new: () => number;

@@ -377,7 +377,7 @@ pub fn plan(
     let margin = optional(&request.margin_mm).unwrap_or_else(|| footprint_margin(state, plate));
     let safety = optional(&request.safety_mm).unwrap_or(5.0);
     let bias = match &request.bias {
-        wire::OptionalWipeTowerBias::Value(bias) => bias.clone(),
+        wire::OptionalWipeTowerBias::Value(bias) => *bias,
         wire::OptionalWipeTowerBias::Absent(_) => wire::WipeTowerBiasName::BackLeft,
     };
     let margin = js_max(0.0, margin);

@@ -549,6 +549,59 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_printJobAvailability, print_job_availability, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printJobCommandPlan, print_job_command_plan, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printJobCommandFailure, print_job_command_failure, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerStatusSummary, printer_status_summary, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_guardedPrinterActions, guarded_printer_actions, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_holdNew, hold_new, jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_holdPress, hold_press, jstring,
+    handle: jlong,
+    action: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_holdPoll, hold_poll, jstring,
+    handle: jlong,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_holdRelease, hold_release, jstring,
+    handle: jlong,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_holdCancel, hold_cancel, jstring,
+    handle: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,

@@ -3564,6 +3564,35 @@ two browser defects with regressions: `key in PRINT_JOB_OBJECTS` matched
 and merging into object literals let a `__proto__` key replace a record's
 prototype, so a patch could make the state `printing` by inheritance.
 
+`control` ports `PrintJobControl.ts` and the action half of
+`PrinterStatusSummary.ts`. Availability comes from the reported state and
+Klippy readiness, never from what this client last asked for: pause needs a
+printing job, resume a paused one, cancel either, and emergency stop and
+firmware restart are always offered (also while the state is unreported). A
+send plan posts to the command's endpoint, or is refused when the state does
+not allow it or an expected file is no longer the one running; a failed send
+reports the transport's code, a cancelled one says so. Guarded actions hold
+back ordinary commands on a stale reading (recovery commands never depend on
+a status query) and carry each command's hold (cancel and firmware restart
+800 ms, emergency stop 1200 ms, pause and resume none). `HoldToConfirm` fires
+a command only when released at least its hold after the press, taking the
+host's clock once per call. `summary` ports the compact status: headline,
+detail, clamped progress, facts (layer, elapsed, approximate time left,
+temperatures), the reading's age once it can no longer be confirmed, the
+recovery a dropped session offers and whether to show itself unasked, with
+V8's rounding and number spelling.
+
+Bindings: WASM `print_job_availability`, `print_job_command_plan`,
+`print_job_command_failure`, `printer_status_summary`,
+`guarded_printer_actions` and `HoldToConfirm`; the matching JNI exports;
+Kotlin `PrinterControl` and `HoldToConfirm`. `printer-control-vectors.mjs`
+records 45 availabilities, 1,125 send plans, 100 failure sentences, 1,173
+summaries (every connection state and error, reading ages across each
+boundary), 540 guarded lists and 8 hold traces (35 steps); Rust, WASM in
+Node and Chrome and JNI answer all of them, and 3,019 Kotlin checks cover
+the wrappers. Generated wire enums now derive `Copy`, and Kotlin codecs for
+array roots use their list types.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

@@ -385,6 +385,121 @@ export class CapturedSelection {
 if (Symbol.dispose) CapturedSelection.prototype[Symbol.dispose] = CapturedSelection.prototype.free;
 
 /**
+ * The hold-to-confirm gesture; each call takes the host's clock.
+ */
+export class HoldToConfirm {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        HoldToConfirmFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_holdtoconfirm_free(ptr, 0);
+    }
+    /**
+     * @returns {string}
+     */
+    cancel() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.holdtoconfirm_cancel(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    constructor() {
+        const ret = wasm.holdtoconfirm_new();
+        this.__wbg_ptr = ret;
+        HoldToConfirmFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    poll(now_ms) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.holdtoconfirm_poll(this.__wbg_ptr, now_ms);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * A `GuardedPrinterAction`; the `HoldToConfirmState`.
+     * @param {string} action
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    press(action, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(action, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.holdtoconfirm_press(this.__wbg_ptr, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * The `HoldToConfirmRelease`: the command to run, if the hold was long enough.
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    release(now_ms) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.holdtoconfirm_release(this.__wbg_ptr, now_ms);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) HoldToConfirm.prototype[Symbol.dispose] = HoldToConfirm.prototype.free;
+
+/**
  * Installed printers and custom presets over a pinned catalog.
  */
 export class PresetLibrary {
@@ -4165,6 +4280,32 @@ export function format_override_value(request) {
 }
 
 /**
+ * A `GuardedPrinterActionsRequest`; the `GuardedPrinterActions` to offer.
+ * @param {string} request
+ * @returns {string}
+ */
+export function guarded_printer_actions(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.guarded_printer_actions(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * The workspace's measurement of two features: a `MeasureRequest`; returns
  * a `MeasureReply`.
  * @param {string} request
@@ -4222,6 +4363,111 @@ export function prepare_svg_part(request, drawing) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return ProjectSvgPart.__wrap(ret[0]);
+}
+
+/**
+ * A `PrintJobAvailabilityRequest`; the `PrintJobCommandDescriptors` the
+ * observed state allows.
+ * @param {string} request
+ * @returns {string}
+ */
+export function print_job_availability(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.print_job_availability(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * A `PrintJobCommandFailureRequest`; the `PrintJobCommandRefusal` it reports.
+ * @param {string} request
+ * @returns {string}
+ */
+export function print_job_command_failure(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.print_job_command_failure(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * A `PrintJobCommandCheckRequest`; the `PrintJobCommandPlan`.
+ * @param {string} request
+ * @returns {string}
+ */
+export function print_job_command_plan(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.print_job_command_plan(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * A `PrinterStatusRequest`; the `PrinterStatusSummary` compact surfaces show.
+ * @param {string} request
+ * @returns {string}
+ */
+export function printer_status_summary(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.printer_status_summary(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
 }
 
 /**
@@ -4342,6 +4588,9 @@ const CapturedProjectFinalization = (typeof FinalizationRegistry === 'undefined'
 const CapturedSelectionFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_capturedselection_free(ptr, 1));
+const HoldToConfirmFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_holdtoconfirm_free(ptr, 1));
 const PresetLibraryFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_presetlibrary_free(ptr, 1));

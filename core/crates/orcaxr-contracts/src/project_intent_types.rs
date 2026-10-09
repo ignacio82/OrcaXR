@@ -549,7 +549,7 @@ fn read_delete_layer_range(v: &Value) -> Result<DeleteLayerRange, InvalidIntent>
         layer_range_id: read_id(&object["layerRangeId"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LayerEventType {
     ColorChange,
@@ -852,7 +852,7 @@ fn read_layer_height_parameters(v: &Value) -> Result<LayerHeightParameters, Inva
         object_height_mm: read_finite(&object["objectHeightMm"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LayerHeightAction {
     Increase,
@@ -1312,7 +1312,7 @@ pub type PatternGroups = Vec<Ids>;
 fn read_pattern_groups(v: &Value) -> Result<PatternGroups, InvalidIntent> {
     list(v, 0, 4096)?.iter().map(read_ids).collect()
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum FullSpectrumUiMode {
     Legacy,
@@ -1331,7 +1331,7 @@ fn read_full_spectrum_ui_mode(v: &Value) -> Result<FullSpectrumUiMode, InvalidIn
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum FullSpectrumDistributionMode {
     M0,
@@ -1683,7 +1683,7 @@ fn read_set_scoped_overrides(v: &Value) -> Result<SetScopedOverrides, InvalidInt
         overrides_json: read_json_text(&object["overridesJson"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum VolumeRoleName {
     Model,
@@ -1754,7 +1754,7 @@ fn read_paint_value_input(v: &Value) -> Result<PaintValueInput, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum FacetChannelName {
     Color,
@@ -2368,7 +2368,7 @@ fn read_display_label(v: &Value) -> Result<DisplayLabel, InvalidIntent> {
         truncated: read_flag(&object["truncated"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum DirtyCategory {
     ProjectData,
@@ -2641,7 +2641,7 @@ fn read_welcome(v: &Value) -> Result<Welcome, InvalidIntent> {
         max_nodes: read_counter(&object["maxNodes"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CancelStatus {
     Requested,
@@ -2654,7 +2654,7 @@ fn read_cancel_status(v: &Value) -> Result<CancelStatus, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SessionError {
     InvalidRequest,
@@ -2926,7 +2926,7 @@ fn read_preflight_summary(v: &Value) -> Result<PreflightSummary, InvalidIntent> 
         used_filament_count: read_counter(&object["usedFilamentCount"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PreflightCode {
     InvalidProjectState,
@@ -3001,7 +3001,7 @@ fn read_preflight_code(v: &Value) -> Result<PreflightCode, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PreflightSeverity {
     Error,
@@ -3014,7 +3014,7 @@ fn read_preflight_severity(v: &Value) -> Result<PreflightSeverity, InvalidIntent
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PreflightActionId {
     Reveal,
@@ -3163,7 +3163,7 @@ fn read_preflight_issue(v: &Value) -> Result<PreflightIssue, InvalidIntent> {
         actions: read_preflight_actions(&object["actions"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PreflightOmissionCode {
     MaterialNotDeclared,
@@ -3314,7 +3314,7 @@ fn read_catalog_config(v: &Value) -> Result<CatalogConfig, InvalidIntent> {
         entries: read_catalog_config_entries(&object["entries"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CatalogDiagnosticCode {
     ProfileCorpusPinnedOverlay,
@@ -3365,7 +3365,7 @@ fn read_catalog_diagnostic(v: &Value) -> Result<CatalogDiagnostic, InvalidIntent
         preset_id: read_optional_text(&object["presetId"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CatalogPresetKind {
     Machine,
@@ -3380,7 +3380,7 @@ fn read_catalog_preset_kind(v: &Value) -> Result<CatalogPresetKind, InvalidInten
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CatalogPresetSource {
     System,
@@ -3463,7 +3463,7 @@ fn read_catalog_selection_request(v: &Value) -> Result<CatalogSelectionRequest, 
         installed_vendors: read_optional_text_list(&object["installedVendors"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CatalogSubstitutionReason {
     Missing,
@@ -3508,7 +3508,7 @@ fn read_catalog_substitutions(v: &Value) -> Result<CatalogSubstitutions, Invalid
         .map(read_catalog_substitution)
         .collect()
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CatalogSelectionDiagnosticCode {
     UnresolvedCondition,
@@ -3631,7 +3631,7 @@ fn read_catalog_target_request(v: &Value) -> Result<CatalogTargetRequest, Invali
         tool_count: read_finite(&object["toolCount"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LibraryIssueCode {
     InvalidState,
@@ -3706,7 +3706,7 @@ fn read_library_outcome(v: &Value) -> Result<LibraryOutcome, InvalidIntent> {
         issue_count: read_counter(&object["issueCount"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LibraryProvenanceSource {
     UserDerived,
@@ -4249,7 +4249,7 @@ fn read_library_formatted_value(v: &Value) -> Result<LibraryFormattedValue, Inva
         text: read_edit_text(&object["text"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorMode {
     Simple,
@@ -4264,7 +4264,7 @@ fn read_editor_mode(v: &Value) -> Result<EditorMode, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorTechnology {
     Fff,
@@ -4279,7 +4279,7 @@ fn read_editor_technology(v: &Value) -> Result<EditorTechnology, InvalidIntent> 
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorDefinitionTechnology {
     Unknown,
@@ -4298,7 +4298,7 @@ fn read_editor_definition_technology(
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorSurface {
     Process,
@@ -4332,7 +4332,7 @@ fn read_optional_editor_surface(v: &Value) -> Result<OptionalEditorSurface, Inva
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorScope {
     Project,
@@ -4498,7 +4498,7 @@ pub type EditorChoices = Vec<EditorChoice>;
 fn read_editor_choices(v: &Value) -> Result<EditorChoices, InvalidIntent> {
     list(v, 0, 4096)?.iter().map(read_editor_choice).collect()
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorMatchField {
     Key,
@@ -4550,7 +4550,7 @@ pub type EditorMatches = Vec<EditorMatch>;
 fn read_editor_matches(v: &Value) -> Result<EditorMatches, InvalidIntent> {
     list(v, 0, 4096)?.iter().map(read_editor_match).collect()
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorApplicability {
     Applicable,
@@ -4661,7 +4661,7 @@ pub type EditorIssues = Vec<EditorIssue>;
 fn read_editor_issues(v: &Value) -> Result<EditorIssues, InvalidIntent> {
     list(v, 0, 4096)?.iter().map(read_editor_issue).collect()
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorOrigin {
     Changed,
@@ -4837,7 +4837,7 @@ fn read_editor_edit_result(v: &Value) -> Result<EditorEditResult, InvalidIntent>
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorChangeAction {
     Set,
@@ -4940,7 +4940,7 @@ fn read_editor_step_request(v: &Value) -> Result<EditorStepRequest, InvalidInten
         up: read_flag(&object["up"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorStepRefusalCode {
     NotNumeric,
@@ -4987,7 +4987,7 @@ fn read_editor_step(v: &Value) -> Result<EditorStep, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorRowKind {
     Numeric,
@@ -5465,7 +5465,7 @@ fn read_paint_palette_request(v: &Value) -> Result<PaintPaletteRequest, InvalidI
         include_unavailable: read_flag(&object["includeUnavailable"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PaintPaletteKind {
     Default,
@@ -5549,7 +5549,7 @@ fn read_paint_palette(v: &Value) -> Result<PaintPalette, InvalidIntent> {
         enabled_mixed_count: read_counter(&object["enabledMixedCount"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ActionSurface {
     DomScene,
@@ -5588,7 +5588,7 @@ fn read_action_surface(v: &Value) -> Result<ActionSurface, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ActionContextTarget {
     Object,
@@ -5601,7 +5601,7 @@ fn read_action_context_target(v: &Value) -> Result<ActionContextTarget, InvalidI
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceMode {
     Prepare,
@@ -5614,7 +5614,7 @@ fn read_workspace_mode(v: &Value) -> Result<WorkspaceMode, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PrinterJobUiState {
     Standby,
@@ -5639,7 +5639,7 @@ fn read_printer_job_ui_state(v: &Value) -> Result<PrinterJobUiState, InvalidInte
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum StartupFeaturePhase {
     Idle,
@@ -5656,7 +5656,7 @@ fn read_startup_feature_phase(v: &Value) -> Result<StartupFeaturePhase, InvalidI
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum StartupBootPhase {
     Loading,
@@ -5834,7 +5834,7 @@ fn read_capability_request(v: &Value) -> Result<CapabilityRequest, InvalidIntent
         query: read_capability_query(&object["query"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CapabilityReasonCode {
     UnknownAction,
@@ -5863,7 +5863,7 @@ fn read_capability_reason_code(v: &Value) -> Result<CapabilityReasonCode, Invali
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ActionPrerequisite {
     HasModel,
@@ -6830,7 +6830,7 @@ fn read_pick_reply(v: &Value) -> Result<PickReply, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PlacementAxis {
     X,
@@ -7017,7 +7017,7 @@ fn read_placement_plan(v: &Value) -> Result<PlacementPlan, InvalidIntent> {
         drops: read_placement_drops(&object["drops"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PlacementRefusalCode {
     EmptySelection,
@@ -7208,7 +7208,7 @@ fn read_arrangement(v: &Value) -> Result<Arrangement, InvalidIntent> {
         locked_instance_ids: read_ids(&object["lockedInstanceIds"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ArrangeRefusalCode {
     InvalidBed,
@@ -7383,7 +7383,7 @@ fn read_optional_planar_position(v: &Value) -> Result<OptionalPlanarPosition, In
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum WipeTowerBiasName {
     BackLeft,
@@ -7496,7 +7496,7 @@ fn read_wipe_tower_plan(v: &Value) -> Result<WipeTowerPlan, InvalidIntent> {
         wipe_tower: read_wipe_tower_input(&object["wipeTower"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum WipeTowerRefusalCode {
     UnknownPlate,
@@ -7609,7 +7609,7 @@ fn read_volume_split_preview(v: &Value) -> Result<VolumeSplitPreview, InvalidInt
         geometries: read_volume_split_geometries(&object["geometries"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum VolumeSplitRefusalCode {
     UnknownVolume,
@@ -7761,7 +7761,7 @@ fn read_volume_simplify_unchanged(v: &Value) -> Result<VolumeSimplifyUnchanged, 
         triangle_count: read_counter(&object["triangleCount"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum VolumeSimplifyRefusalCode {
     UnknownVolume,
@@ -7904,7 +7904,7 @@ fn read_surface_feature(v: &Value) -> Result<SurfaceFeature, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MeasureRefusalCode {
     UnknownVolume,
@@ -8230,7 +8230,7 @@ fn read_brim_ear_detection(v: &Value) -> Result<BrimEarDetection, InvalidIntent>
         reason: read_optional_text(&object["reason"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BrimEarRefusalCode {
     UnknownObject,
@@ -8318,7 +8318,7 @@ fn read_brim_ear_stranded_reply(v: &Value) -> Result<BrimEarStrandedReply, Inval
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EmbossHorizontalAlign {
     Left,
@@ -8333,7 +8333,7 @@ fn read_emboss_horizontal_align(v: &Value) -> Result<EmbossHorizontalAlign, Inva
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EmbossVerticalAlign {
     Top,
@@ -8541,7 +8541,7 @@ fn read_emboss_preview(v: &Value) -> Result<EmbossPreview, InvalidIntent> {
         byte_length: read_counter(&object["byteLength"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EmbossRefusalCode {
     InvalidConfiguration,
@@ -8654,7 +8654,7 @@ fn read_svg_part_request(v: &Value) -> Result<SvgPartRequest, InvalidIntent> {
         source_path: read_optional_text(&object["sourcePath"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SvgUnsupportedReason {
     NeedsFont,
@@ -8750,7 +8750,7 @@ fn read_svg_part_preview(v: &Value) -> Result<SvgPartPreview, InvalidIntent> {
         drawing_byte_length: read_counter(&object["drawingByteLength"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SvgPartRefusalCode {
     InvalidSvg,
@@ -8945,7 +8945,7 @@ fn read_mesh_packet(v: &Value) -> Result<MeshPacket, InvalidIntent> {
         byte_length: read_counter(&object["byteLength"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MeshPacketRefusalCode {
     UnknownAsset,
@@ -8988,7 +8988,7 @@ fn read_mesh_packet_reply(v: &Value) -> Result<MeshPacketReply, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AssemblyAlignmentKind {
     Parallel,
@@ -9058,7 +9058,7 @@ fn read_assembly_availability(v: &Value) -> Result<AssemblyAvailability, Invalid
         angle_radians: read_finite(&object["angleRadians"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AssemblyRefusalCode {
     UnsupportedFeaturePair,
@@ -9109,7 +9109,7 @@ fn read_assembly_availability_reply(v: &Value) -> Result<AssemblyAvailabilityRep
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AssemblyFeature {
     First,
@@ -9410,7 +9410,7 @@ fn read_object_tree_page_request(v: &Value) -> Result<ObjectTreePageRequest, Inv
         count: read_counter(&object["count"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ObjectTreeSelectionMode {
     Replace,
@@ -9489,7 +9489,7 @@ fn read_object_tree_request(v: &Value) -> Result<ObjectTreeRequest, InvalidInten
         operation: read_object_tree_operation(&object["operation"])?,
     })
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ObjectTreeRowKind {
     Plate,
@@ -9514,7 +9514,7 @@ fn read_object_tree_row_kind(v: &Value) -> Result<ObjectTreeRowKind, InvalidInte
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ObjectTreeRowExpansion {
     Leaf,
@@ -9529,7 +9529,7 @@ fn read_object_tree_row_expansion(v: &Value) -> Result<ObjectTreeRowExpansion, I
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ObjectTreePrintable {
     Unknown,
@@ -9788,7 +9788,7 @@ fn read_optional_flag(v: &Value) -> Result<OptionalFlag, InvalidIntent> {
         _ => Err(InvalidIntent),
     }
 }
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PrintJobState {
     Standby,
@@ -9900,6 +9900,592 @@ fn read_print_job_snapshot(v: &Value) -> Result<PrintJobSnapshot, InvalidIntent>
         extruder: read_optional_print_job_temperature(&object["extruder"])?,
         bed: read_optional_print_job_temperature(&object["bed"])?,
         updated_at_ms: read_finite(&object["updatedAtMs"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalPrintJobSnapshot {
+    Absent(Empty),
+    Value(PrintJobSnapshot),
+}
+fn read_optional_print_job_snapshot(v: &Value) -> Result<OptionalPrintJobSnapshot, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPrintJobSnapshot::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPrintJobSnapshot::Value(read_print_job_snapshot(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintJobCommand {
+    Pause,
+    Resume,
+    Cancel,
+    EmergencyStop,
+    FirmwareRestart,
+}
+fn read_print_job_command(v: &Value) -> Result<PrintJobCommand, InvalidIntent> {
+    match v.as_str() {
+        Some("pause") => Ok(PrintJobCommand::Pause),
+        Some("resume") => Ok(PrintJobCommand::Resume),
+        Some("cancel") => Ok(PrintJobCommand::Cancel),
+        Some("emergencyStop") => Ok(PrintJobCommand::EmergencyStop),
+        Some("firmwareRestart") => Ok(PrintJobCommand::FirmwareRestart),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalPrintJobCommand {
+    Absent(Empty),
+    Value(PrintJobCommand),
+}
+fn read_optional_print_job_command(v: &Value) -> Result<OptionalPrintJobCommand, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPrintJobCommand::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPrintJobCommand::Value(read_print_job_command(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintJobCommandDescriptor {
+    pub command: PrintJobCommand,
+    pub label: EditText,
+    pub destructive: Flag,
+    pub allowed: Flag,
+    pub reason: OptionalText,
+}
+fn read_print_job_command_descriptor(
+    v: &Value,
+) -> Result<PrintJobCommandDescriptor, InvalidIntent> {
+    let object = fields(
+        v,
+        &["command", "label", "destructive", "allowed", "reason"],
+        false,
+    )?;
+    Ok(PrintJobCommandDescriptor {
+        command: read_print_job_command(&object["command"])?,
+        label: read_edit_text(&object["label"])?,
+        destructive: read_flag(&object["destructive"])?,
+        allowed: read_flag(&object["allowed"])?,
+        reason: read_optional_text(&object["reason"])?,
+    })
+}
+pub type PrintJobCommandDescriptors = Vec<PrintJobCommandDescriptor>;
+fn read_print_job_command_descriptors(
+    v: &Value,
+) -> Result<PrintJobCommandDescriptors, InvalidIntent> {
+    list(v, 0, 16)?
+        .iter()
+        .map(read_print_job_command_descriptor)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintJobAvailabilityRequest {
+    pub observed: OptionalPrintJobSnapshot,
+}
+fn read_print_job_availability_request(
+    v: &Value,
+) -> Result<PrintJobAvailabilityRequest, InvalidIntent> {
+    let object = fields(v, &["observed"], false)?;
+    Ok(PrintJobAvailabilityRequest {
+        observed: read_optional_print_job_snapshot(&object["observed"])?,
+    })
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintJobCommandErrorCode {
+    NotAllowed,
+    JobChanged,
+    RequestFailed,
+    Cancelled,
+    SessionChanged,
+    ConfirmationRequired,
+    Busy,
+    IdentityUnavailable,
+}
+fn read_print_job_command_error_code(v: &Value) -> Result<PrintJobCommandErrorCode, InvalidIntent> {
+    match v.as_str() {
+        Some("notAllowed") => Ok(PrintJobCommandErrorCode::NotAllowed),
+        Some("jobChanged") => Ok(PrintJobCommandErrorCode::JobChanged),
+        Some("requestFailed") => Ok(PrintJobCommandErrorCode::RequestFailed),
+        Some("cancelled") => Ok(PrintJobCommandErrorCode::Cancelled),
+        Some("sessionChanged") => Ok(PrintJobCommandErrorCode::SessionChanged),
+        Some("confirmationRequired") => Ok(PrintJobCommandErrorCode::ConfirmationRequired),
+        Some("busy") => Ok(PrintJobCommandErrorCode::Busy),
+        Some("identityUnavailable") => Ok(PrintJobCommandErrorCode::IdentityUnavailable),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintJobCommandRefusal {
+    pub code: PrintJobCommandErrorCode,
+    pub message: EditText,
+}
+fn read_print_job_command_refusal(v: &Value) -> Result<PrintJobCommandRefusal, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(PrintJobCommandRefusal {
+        code: read_print_job_command_error_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintJobCommandSend {
+    pub path: EditText,
+    pub method: EditText,
+    pub operation: EditText,
+}
+fn read_print_job_command_send(v: &Value) -> Result<PrintJobCommandSend, InvalidIntent> {
+    let object = fields(v, &["path", "method", "operation"], false)?;
+    Ok(PrintJobCommandSend {
+        path: read_edit_text(&object["path"])?,
+        method: read_edit_text(&object["method"])?,
+        operation: read_edit_text(&object["operation"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintJobCommandCheckRequest {
+    pub command: PrintJobCommand,
+    pub observed: OptionalPrintJobSnapshot,
+    pub expected_filename: OptionalText,
+}
+fn read_print_job_command_check_request(
+    v: &Value,
+) -> Result<PrintJobCommandCheckRequest, InvalidIntent> {
+    let object = fields(v, &["command", "observed", "expectedFilename"], false)?;
+    Ok(PrintJobCommandCheckRequest {
+        command: read_print_job_command(&object["command"])?,
+        observed: read_optional_print_job_snapshot(&object["observed"])?,
+        expected_filename: read_optional_text(&object["expectedFilename"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintJobCommandPlan {
+    Send(PrintJobCommandSend),
+    Refused(PrintJobCommandRefusal),
+}
+fn read_print_job_command_plan(v: &Value) -> Result<PrintJobCommandPlan, InvalidIntent> {
+    let object = fields(v, &["send", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "send" => Ok(PrintJobCommandPlan::Send(read_print_job_command_send(
+            value,
+        )?)),
+        "refused" => Ok(PrintJobCommandPlan::Refused(
+            read_print_job_command_refusal(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MoonrakerErrorCode {
+    InvalidEndpoint,
+    InvalidCredentials,
+    InvalidState,
+    InvalidRequest,
+    Cancelled,
+    Timeout,
+    Network,
+    AuthRequired,
+    Forbidden,
+    HttpError,
+    InvalidResponse,
+    ProtocolError,
+    VersionUnsupported,
+    WebsocketUnavailable,
+    WebsocketFailed,
+    HeartbeatTimeout,
+    ReconnectExhausted,
+}
+fn read_moonraker_error_code(v: &Value) -> Result<MoonrakerErrorCode, InvalidIntent> {
+    match v.as_str() {
+        Some("invalidEndpoint") => Ok(MoonrakerErrorCode::InvalidEndpoint),
+        Some("invalidCredentials") => Ok(MoonrakerErrorCode::InvalidCredentials),
+        Some("invalidState") => Ok(MoonrakerErrorCode::InvalidState),
+        Some("invalidRequest") => Ok(MoonrakerErrorCode::InvalidRequest),
+        Some("cancelled") => Ok(MoonrakerErrorCode::Cancelled),
+        Some("timeout") => Ok(MoonrakerErrorCode::Timeout),
+        Some("network") => Ok(MoonrakerErrorCode::Network),
+        Some("authRequired") => Ok(MoonrakerErrorCode::AuthRequired),
+        Some("forbidden") => Ok(MoonrakerErrorCode::Forbidden),
+        Some("httpError") => Ok(MoonrakerErrorCode::HttpError),
+        Some("invalidResponse") => Ok(MoonrakerErrorCode::InvalidResponse),
+        Some("protocolError") => Ok(MoonrakerErrorCode::ProtocolError),
+        Some("versionUnsupported") => Ok(MoonrakerErrorCode::VersionUnsupported),
+        Some("websocketUnavailable") => Ok(MoonrakerErrorCode::WebsocketUnavailable),
+        Some("websocketFailed") => Ok(MoonrakerErrorCode::WebsocketFailed),
+        Some("heartbeatTimeout") => Ok(MoonrakerErrorCode::HeartbeatTimeout),
+        Some("reconnectExhausted") => Ok(MoonrakerErrorCode::ReconnectExhausted),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalMoonrakerErrorCode {
+    Absent(Empty),
+    Value(MoonrakerErrorCode),
+}
+fn read_optional_moonraker_error_code(
+    v: &Value,
+) -> Result<OptionalMoonrakerErrorCode, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalMoonrakerErrorCode::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalMoonrakerErrorCode::Value(
+            read_moonraker_error_code(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintJobCommandFailureRequest {
+    pub command: PrintJobCommand,
+    pub transport_code: OptionalMoonrakerErrorCode,
+    pub cancelled: Flag,
+}
+fn read_print_job_command_failure_request(
+    v: &Value,
+) -> Result<PrintJobCommandFailureRequest, InvalidIntent> {
+    let object = fields(v, &["command", "transportCode", "cancelled"], false)?;
+    Ok(PrintJobCommandFailureRequest {
+        command: read_print_job_command(&object["command"])?,
+        transport_code: read_optional_moonraker_error_code(&object["transportCode"])?,
+        cancelled: read_flag(&object["cancelled"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerReconnectingView {
+    pub delay_ms: Finite,
+}
+fn read_moonraker_reconnecting_view(v: &Value) -> Result<MoonrakerReconnectingView, InvalidIntent> {
+    let object = fields(v, &["delayMs"], false)?;
+    Ok(MoonrakerReconnectingView {
+        delay_ms: read_finite(&object["delayMs"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerErrorView {
+    pub code: MoonrakerErrorCode,
+}
+fn read_moonraker_error_view(v: &Value) -> Result<MoonrakerErrorView, InvalidIntent> {
+    let object = fields(v, &["code"], false)?;
+    Ok(MoonrakerErrorView {
+        code: read_moonraker_error_code(&object["code"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MoonrakerConnectionView {
+    Disconnected(Empty),
+    Connecting(Empty),
+    Connected(Empty),
+    Reconnecting(MoonrakerReconnectingView),
+    Error(MoonrakerErrorView),
+}
+fn read_moonraker_connection_view(v: &Value) -> Result<MoonrakerConnectionView, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "disconnected",
+            "connecting",
+            "connected",
+            "reconnecting",
+            "error",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "disconnected" => Ok(MoonrakerConnectionView::Disconnected(read_empty(value)?)),
+        "connecting" => Ok(MoonrakerConnectionView::Connecting(read_empty(value)?)),
+        "connected" => Ok(MoonrakerConnectionView::Connected(read_empty(value)?)),
+        "reconnecting" => Ok(MoonrakerConnectionView::Reconnecting(
+            read_moonraker_reconnecting_view(value)?,
+        )),
+        "error" => Ok(MoonrakerConnectionView::Error(read_moonraker_error_view(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalMoonrakerConnectionView {
+    Absent(Empty),
+    Value(MoonrakerConnectionView),
+}
+fn read_optional_moonraker_connection_view(
+    v: &Value,
+) -> Result<OptionalMoonrakerConnectionView, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalMoonrakerConnectionView::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalMoonrakerConnectionView::Value(
+            read_moonraker_connection_view(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStatusRequest {
+    pub snapshot: OptionalPrintJobSnapshot,
+    pub connection: OptionalMoonrakerConnectionView,
+    pub now_ms: Finite,
+    pub configured: Flag,
+}
+fn read_printer_status_request(v: &Value) -> Result<PrinterStatusRequest, InvalidIntent> {
+    let object = fields(v, &["snapshot", "connection", "nowMs", "configured"], false)?;
+    Ok(PrinterStatusRequest {
+        snapshot: read_optional_print_job_snapshot(&object["snapshot"])?,
+        connection: read_optional_moonraker_connection_view(&object["connection"])?,
+        now_ms: read_finite(&object["nowMs"])?,
+        configured: read_flag(&object["configured"])?,
+    })
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterStatusTone {
+    Idle,
+    Active,
+    Attention,
+    Danger,
+    Unknown,
+}
+fn read_printer_status_tone(v: &Value) -> Result<PrinterStatusTone, InvalidIntent> {
+    match v.as_str() {
+        Some("idle") => Ok(PrinterStatusTone::Idle),
+        Some("active") => Ok(PrinterStatusTone::Active),
+        Some("attention") => Ok(PrinterStatusTone::Attention),
+        Some("danger") => Ok(PrinterStatusTone::Danger),
+        Some("unknown") => Ok(PrinterStatusTone::Unknown),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStatusFact {
+    pub label: EditText,
+    pub value: EditText,
+}
+fn read_printer_status_fact(v: &Value) -> Result<PrinterStatusFact, InvalidIntent> {
+    let object = fields(v, &["label", "value"], false)?;
+    Ok(PrinterStatusFact {
+        label: read_edit_text(&object["label"])?,
+        value: read_edit_text(&object["value"])?,
+    })
+}
+pub type PrinterStatusFacts = Vec<PrinterStatusFact>;
+fn read_printer_status_facts(v: &Value) -> Result<PrinterStatusFacts, InvalidIntent> {
+    list(v, 0, 16)?
+        .iter()
+        .map(read_printer_status_fact)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStatusRecovery {
+    pub message: EditText,
+    pub action_label: EditText,
+    pub retry_in_s: OptionalFinite,
+    pub automatic: Flag,
+}
+fn read_printer_status_recovery(v: &Value) -> Result<PrinterStatusRecovery, InvalidIntent> {
+    let object = fields(
+        v,
+        &["message", "actionLabel", "retryInS", "automatic"],
+        false,
+    )?;
+    Ok(PrinterStatusRecovery {
+        message: read_edit_text(&object["message"])?,
+        action_label: read_edit_text(&object["actionLabel"])?,
+        retry_in_s: read_optional_finite(&object["retryInS"])?,
+        automatic: read_flag(&object["automatic"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalPrinterStatusRecovery {
+    Absent(Empty),
+    Value(PrinterStatusRecovery),
+}
+fn read_optional_printer_status_recovery(
+    v: &Value,
+) -> Result<OptionalPrinterStatusRecovery, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPrinterStatusRecovery::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPrinterStatusRecovery::Value(
+            read_printer_status_recovery(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStatusSummary {
+    pub tone: PrinterStatusTone,
+    pub headline: EditText,
+    pub detail: EditText,
+    pub progress: OptionalFinite,
+    pub progress_label: OptionalText,
+    pub stale: Flag,
+    pub age_label: OptionalText,
+    pub recovery: OptionalPrinterStatusRecovery,
+    pub facts: PrinterStatusFacts,
+    pub present: Flag,
+}
+fn read_printer_status_summary(v: &Value) -> Result<PrinterStatusSummary, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "tone",
+            "headline",
+            "detail",
+            "progress",
+            "progressLabel",
+            "stale",
+            "ageLabel",
+            "recovery",
+            "facts",
+            "present",
+        ],
+        false,
+    )?;
+    Ok(PrinterStatusSummary {
+        tone: read_printer_status_tone(&object["tone"])?,
+        headline: read_edit_text(&object["headline"])?,
+        detail: read_edit_text(&object["detail"])?,
+        progress: read_optional_finite(&object["progress"])?,
+        progress_label: read_optional_text(&object["progressLabel"])?,
+        stale: read_flag(&object["stale"])?,
+        age_label: read_optional_text(&object["ageLabel"])?,
+        recovery: read_optional_printer_status_recovery(&object["recovery"])?,
+        facts: read_printer_status_facts(&object["facts"])?,
+        present: read_flag(&object["present"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuardedPrinterActionsRequest {
+    pub descriptors: PrintJobCommandDescriptors,
+    pub stale: Flag,
+    pub stale_reason: OptionalText,
+}
+fn read_guarded_printer_actions_request(
+    v: &Value,
+) -> Result<GuardedPrinterActionsRequest, InvalidIntent> {
+    let object = fields(v, &["descriptors", "stale", "staleReason"], false)?;
+    Ok(GuardedPrinterActionsRequest {
+        descriptors: read_print_job_command_descriptors(&object["descriptors"])?,
+        stale: read_flag(&object["stale"])?,
+        stale_reason: read_optional_text(&object["staleReason"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuardedPrinterAction {
+    pub command: PrintJobCommand,
+    pub label: EditText,
+    pub enabled: Flag,
+    pub reason: OptionalText,
+    pub hold_ms: Counter,
+    pub confirmation: OptionalText,
+    pub destructive: Flag,
+}
+fn read_guarded_printer_action(v: &Value) -> Result<GuardedPrinterAction, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "command",
+            "label",
+            "enabled",
+            "reason",
+            "holdMs",
+            "confirmation",
+            "destructive",
+        ],
+        false,
+    )?;
+    Ok(GuardedPrinterAction {
+        command: read_print_job_command(&object["command"])?,
+        label: read_edit_text(&object["label"])?,
+        enabled: read_flag(&object["enabled"])?,
+        reason: read_optional_text(&object["reason"])?,
+        hold_ms: read_counter(&object["holdMs"])?,
+        confirmation: read_optional_text(&object["confirmation"])?,
+        destructive: read_flag(&object["destructive"])?,
+    })
+}
+pub type GuardedPrinterActions = Vec<GuardedPrinterAction>;
+fn read_guarded_printer_actions(v: &Value) -> Result<GuardedPrinterActions, InvalidIntent> {
+    list(v, 0, 16)?
+        .iter()
+        .map(read_guarded_printer_action)
+        .collect()
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HoldToConfirmPhase {
+    Idle,
+    Holding,
+    Fired,
+}
+fn read_hold_to_confirm_phase(v: &Value) -> Result<HoldToConfirmPhase, InvalidIntent> {
+    match v.as_str() {
+        Some("idle") => Ok(HoldToConfirmPhase::Idle),
+        Some("holding") => Ok(HoldToConfirmPhase::Holding),
+        Some("fired") => Ok(HoldToConfirmPhase::Fired),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HoldToConfirmState {
+    pub phase: HoldToConfirmPhase,
+    pub progress: Finite,
+    pub command: OptionalPrintJobCommand,
+}
+fn read_hold_to_confirm_state(v: &Value) -> Result<HoldToConfirmState, InvalidIntent> {
+    let object = fields(v, &["phase", "progress", "command"], false)?;
+    Ok(HoldToConfirmState {
+        phase: read_hold_to_confirm_phase(&object["phase"])?,
+        progress: read_finite(&object["progress"])?,
+        command: read_optional_print_job_command(&object["command"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HoldToConfirmRelease {
+    pub command: OptionalPrintJobCommand,
+    pub state: HoldToConfirmState,
+}
+fn read_hold_to_confirm_release(v: &Value) -> Result<HoldToConfirmRelease, InvalidIntent> {
+    let object = fields(v, &["command", "state"], false)?;
+    Ok(HoldToConfirmRelease {
+        command: read_optional_print_job_command(&object["command"])?,
+        state: read_hold_to_confirm_state(&object["state"])?,
     })
 }
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
@@ -10858,5 +11444,143 @@ pub fn decode_print_job_snapshot(text: &str) -> Result<PrintJobSnapshot, Invalid
 pub fn encode_print_job_snapshot(value: &PrintJobSnapshot) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_print_job_snapshot(&text)?;
+    Ok(text)
+}
+pub fn decode_print_job_availability_request(
+    text: &str,
+) -> Result<PrintJobAvailabilityRequest, InvalidIntent> {
+    read_print_job_availability_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_job_availability_request(
+    value: &PrintJobAvailabilityRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_job_availability_request(&text)?;
+    Ok(text)
+}
+pub fn decode_print_job_command_descriptors(
+    text: &str,
+) -> Result<PrintJobCommandDescriptors, InvalidIntent> {
+    read_print_job_command_descriptors(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_job_command_descriptors(
+    value: &PrintJobCommandDescriptors,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_job_command_descriptors(&text)?;
+    Ok(text)
+}
+pub fn decode_print_job_command_check_request(
+    text: &str,
+) -> Result<PrintJobCommandCheckRequest, InvalidIntent> {
+    read_print_job_command_check_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_job_command_check_request(
+    value: &PrintJobCommandCheckRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_job_command_check_request(&text)?;
+    Ok(text)
+}
+pub fn decode_print_job_command_plan(text: &str) -> Result<PrintJobCommandPlan, InvalidIntent> {
+    read_print_job_command_plan(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_job_command_plan(value: &PrintJobCommandPlan) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_job_command_plan(&text)?;
+    Ok(text)
+}
+pub fn decode_print_job_command_failure_request(
+    text: &str,
+) -> Result<PrintJobCommandFailureRequest, InvalidIntent> {
+    read_print_job_command_failure_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_job_command_failure_request(
+    value: &PrintJobCommandFailureRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_job_command_failure_request(&text)?;
+    Ok(text)
+}
+pub fn decode_print_job_command_refusal(
+    text: &str,
+) -> Result<PrintJobCommandRefusal, InvalidIntent> {
+    read_print_job_command_refusal(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_job_command_refusal(
+    value: &PrintJobCommandRefusal,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_job_command_refusal(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_status_request(text: &str) -> Result<PrinterStatusRequest, InvalidIntent> {
+    read_printer_status_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_status_request(
+    value: &PrinterStatusRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_status_request(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_status_summary(text: &str) -> Result<PrinterStatusSummary, InvalidIntent> {
+    read_printer_status_summary(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_status_summary(
+    value: &PrinterStatusSummary,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_status_summary(&text)?;
+    Ok(text)
+}
+pub fn decode_guarded_printer_actions_request(
+    text: &str,
+) -> Result<GuardedPrinterActionsRequest, InvalidIntent> {
+    read_guarded_printer_actions_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_guarded_printer_actions_request(
+    value: &GuardedPrinterActionsRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_guarded_printer_actions_request(&text)?;
+    Ok(text)
+}
+pub fn decode_guarded_printer_actions(text: &str) -> Result<GuardedPrinterActions, InvalidIntent> {
+    read_guarded_printer_actions(&super::project_intents::parse(text)?)
+}
+pub fn encode_guarded_printer_actions(
+    value: &GuardedPrinterActions,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_guarded_printer_actions(&text)?;
+    Ok(text)
+}
+pub fn decode_guarded_printer_action(text: &str) -> Result<GuardedPrinterAction, InvalidIntent> {
+    read_guarded_printer_action(&super::project_intents::parse(text)?)
+}
+pub fn encode_guarded_printer_action(
+    value: &GuardedPrinterAction,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_guarded_printer_action(&text)?;
+    Ok(text)
+}
+pub fn decode_hold_to_confirm_state(text: &str) -> Result<HoldToConfirmState, InvalidIntent> {
+    read_hold_to_confirm_state(&super::project_intents::parse(text)?)
+}
+pub fn encode_hold_to_confirm_state(value: &HoldToConfirmState) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_hold_to_confirm_state(&text)?;
+    Ok(text)
+}
+pub fn decode_hold_to_confirm_release(text: &str) -> Result<HoldToConfirmRelease, InvalidIntent> {
+    read_hold_to_confirm_release(&super::project_intents::parse(text)?)
+}
+pub fn encode_hold_to_confirm_release(
+    value: &HoldToConfirmRelease,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_hold_to_confirm_release(&text)?;
     Ok(text)
 }

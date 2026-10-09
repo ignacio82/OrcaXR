@@ -106,6 +106,16 @@ final class NativeProject {
     static native String printJobStatusNotify(long handle, String text, double nowMs);
     static native String printJobStatusReset(long handle);
     static native String printJobStatusSnapshot(long handle);
+    static native String printJobAvailability(String request);
+    static native String printJobCommandPlan(String request);
+    static native String printJobCommandFailure(String request);
+    static native String printerStatusSummary(String request);
+    static native String guardedPrinterActions(String request);
+    static native long holdNew();
+    static native String holdPress(long handle, String action, double nowMs);
+    static native String holdPoll(long handle, double nowMs);
+    static native String holdRelease(long handle, double nowMs);
+    static native String holdCancel(long handle);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

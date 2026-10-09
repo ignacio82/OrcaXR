@@ -35,6 +35,7 @@ import { replayArchives, archiveCases, replayHostileArchives } from "./archive-w
 import { replayModelImports } from "./model-import-replay.mjs";
 import { replayObjectTree } from "./object-tree-replay.mjs";
 import { replayPrintJobStatus } from "./print-job-status-replay.mjs";
+import { replayPrinterControl } from "./printer-control-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -937,6 +938,36 @@ try {
       .join("\n"),
   );
   assert.equal(printJobChecks, 1747);
+  // Printer control through the real JNI exports, then the Kotlin wrappers.
+  const controlFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/printer-control-vectors.json", root)),
+  );
+  const control = replayPrinterControl(projectJniCore(jvm.call), controlFixture);
+  assert.deepEqual(
+    [
+      control.printerAvailability,
+      control.printerChecks,
+      control.printerFailures,
+      control.printerSummaries,
+      control.printerGuarded,
+      control.printerHoldSteps,
+    ],
+    [45, 1125, 100, 1173, 540, 35],
+  );
+  const tag = { availability: "A", checks: "C", failures: "F", summaries: "S", guarded: "G" };
+  const controlChecks = jvm.call(
+    "printerControlChecks",
+    [
+      ...Object.entries(tag).flatMap(([section, letter]) =>
+        controlFixture[section].map((c) => `${letter}\t${c.requestJson}\t${c.replyJson}`),
+      ),
+      ...controlFixture.holds.flatMap((trace) => [
+        "T",
+        ...trace.steps.map((s) => [s.op, String(s.nowMs), s.actionJson ?? "", s.replyJson].join("\t")),
+      ]),
+    ].join("\n"),
+  );
+  assert.equal(controlChecks, 3019);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

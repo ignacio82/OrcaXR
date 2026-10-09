@@ -217,6 +217,13 @@ fn state(value: Option<&Value>) -> wire::PrintJobState {
         _ => wire::PrintJobState::Unknown,
     }
 }
+/// `isActivePrintState`: running, or holding a job the operator can control.
+pub fn is_active(state: wire::PrintJobState) -> bool {
+    matches!(
+        state,
+        wire::PrintJobState::Printing | wire::PrintJobState::Paused
+    )
+}
 /// `estimateRemaining`: file-progress extrapolation, withheld while heat-up
 /// and start G-code dominate (2% or less) or once the file is done.
 fn remaining(progress: Option<f64>, duration: Option<f64>) -> Option<f64> {

@@ -45,6 +45,7 @@ export function startProjectJni(profile = "debug") {
   signatures.assemblyChecks = ["String"];
   signatures.objectTreeChecks = ["String", "byte[]", "String"];
   signatures.printJobStatusChecks = ["String"];
+  signatures.printerControlChecks = ["String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -1065,8 +1066,31 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return call("printJobStatusSnapshot", this.handle);
     }
   }
+  class HoldToConfirm extends Handle {
+    constructor() {
+      super(call("holdNew"));
+    }
+    press(action, nowMs) {
+      return call("holdPress", this.handle, action, nowMs);
+    }
+    poll(nowMs) {
+      return call("holdPoll", this.handle, nowMs);
+    }
+    release(nowMs) {
+      return call("holdRelease", this.handle, nowMs);
+    }
+    cancel() {
+      return call("holdCancel", this.handle);
+    }
+  }
   return {
     PrintJobStatus,
+    HoldToConfirm,
+    print_job_availability: (request) => call("printJobAvailability", request),
+    print_job_command_plan: (request) => call("printJobCommandPlan", request),
+    print_job_command_failure: (request) => call("printJobCommandFailure", request),
+    printer_status_summary: (request) => call("printerStatusSummary", request),
+    guarded_printer_actions: (request) => call("guardedPrinterActions", request),
     ProjectUpload,
     ProjectSelectionInput,
     ProjectArchiveUpload,

@@ -148,6 +148,19 @@ assert.deepEqual(schema.roots, [
   "ObjectTreeRequest",
   "ObjectTreeReply",
   "PrintJobSnapshot",
+  "PrintJobAvailabilityRequest",
+  "PrintJobCommandDescriptors",
+  "PrintJobCommandCheckRequest",
+  "PrintJobCommandPlan",
+  "PrintJobCommandFailureRequest",
+  "PrintJobCommandRefusal",
+  "PrinterStatusRequest",
+  "PrinterStatusSummary",
+  "GuardedPrinterActionsRequest",
+  "GuardedPrinterActions",
+  "GuardedPrinterAction",
+  "HoldToConfirmState",
+  "HoldToConfirmRelease",
 ]);
 const definitions = schema.definitions;
 const known = new Set();
@@ -289,7 +302,7 @@ for (const [name, shape] of Object.entries(definitions)) {
             .join(", ")})\n`;
   } else if (shape.kind === "enum") {
     ts += `export type ${type} = ${shape.values.map((v) => JSON.stringify(v)).join(" | ")};\n`;
-    rust += `#[derive(Debug, Clone, PartialEq, Serialize)]\n#[serde(rename_all="camelCase")]\npub enum ${name} {${shape.values.map(title).join(",")}}\n`;
+    rust += `#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]\n#[serde(rename_all="camelCase")]\npub enum ${name} {${shape.values.map(title).join(",")}}\n`;
     kt += `    enum class ${name} {${shape.values.map(title).join(",")}}\n`;
   } else {
     ts += `export type ${type} = ${Object.entries(shape.variants)
@@ -377,8 +390,8 @@ for (const name of schema.roots) {
   ts += `export function encodeProject${name}(value:Project${name}Wire):string { return JSON.stringify(captureProject${name}(value)); }\n`;
   rust += `pub fn decode_${snake(name)}(text:&str)->Result<${name},InvalidIntent> {read_${snake(name)}(&super::project_intents::parse(text)?)}\n`;
   rust += `pub fn encode_${snake(name)}(value:&${name})->Result<String,InvalidIntent> {let text=super::project_intents::encode(value)?; decode_${snake(name)}(&text)?; Ok(text)}\n`;
-  kt += `    fun decode${name}(text: String): ${name} = read${name}(ProjectIntentJson.parse(text))\n`;
-  kt += `    fun encode${name}(value: ${name}): String = ProjectIntentWriter().also { write${name}(it, value) }.finish()\n`;
+  kt += `    fun decode${name}(text: String): ${ktType(name)} = read${name}(ProjectIntentJson.parse(text))\n`;
+  kt += `    fun encode${name}(value: ${ktType(name)}): String = ProjectIntentWriter().also { write${name}(it, value) }.finish()\n`;
 }
 kt += "}\n";
 // Every helper must be used. Unreachable definitions indicate schema drift.

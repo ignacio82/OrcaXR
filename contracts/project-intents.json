@@ -4735,6 +4735,273 @@
         "bed": "OptionalPrintJobTemperature",
         "updatedAtMs": "Finite"
       }
+    },
+    "OptionalPrintJobSnapshot": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "PrintJobSnapshot"
+      }
+    },
+    "PrintJobCommand": {
+      "kind": "enum",
+      "values": [
+        "pause",
+        "resume",
+        "cancel",
+        "emergencyStop",
+        "firmwareRestart"
+      ]
+    },
+    "OptionalPrintJobCommand": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "PrintJobCommand"
+      }
+    },
+    "PrintJobCommandDescriptor": {
+      "kind": "object",
+      "fields": {
+        "command": "PrintJobCommand",
+        "label": "EditText",
+        "destructive": "Flag",
+        "allowed": "Flag",
+        "reason": "OptionalText"
+      }
+    },
+    "PrintJobCommandDescriptors": {
+      "kind": "array",
+      "items": "PrintJobCommandDescriptor",
+      "min": 0,
+      "max": 16
+    },
+    "PrintJobAvailabilityRequest": {
+      "kind": "object",
+      "fields": {
+        "observed": "OptionalPrintJobSnapshot"
+      }
+    },
+    "PrintJobCommandErrorCode": {
+      "kind": "enum",
+      "values": [
+        "notAllowed",
+        "jobChanged",
+        "requestFailed",
+        "cancelled",
+        "sessionChanged",
+        "confirmationRequired",
+        "busy",
+        "identityUnavailable"
+      ]
+    },
+    "PrintJobCommandRefusal": {
+      "kind": "object",
+      "fields": {
+        "code": "PrintJobCommandErrorCode",
+        "message": "EditText"
+      }
+    },
+    "PrintJobCommandSend": {
+      "kind": "object",
+      "fields": {
+        "path": "EditText",
+        "method": "EditText",
+        "operation": "EditText"
+      }
+    },
+    "PrintJobCommandCheckRequest": {
+      "kind": "object",
+      "fields": {
+        "command": "PrintJobCommand",
+        "observed": "OptionalPrintJobSnapshot",
+        "expectedFilename": "OptionalText"
+      }
+    },
+    "PrintJobCommandPlan": {
+      "kind": "union",
+      "variants": {
+        "send": "PrintJobCommandSend",
+        "refused": "PrintJobCommandRefusal"
+      }
+    },
+    "MoonrakerErrorCode": {
+      "kind": "enum",
+      "values": [
+        "invalidEndpoint",
+        "invalidCredentials",
+        "invalidState",
+        "invalidRequest",
+        "cancelled",
+        "timeout",
+        "network",
+        "authRequired",
+        "forbidden",
+        "httpError",
+        "invalidResponse",
+        "protocolError",
+        "versionUnsupported",
+        "websocketUnavailable",
+        "websocketFailed",
+        "heartbeatTimeout",
+        "reconnectExhausted"
+      ]
+    },
+    "OptionalMoonrakerErrorCode": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "MoonrakerErrorCode"
+      }
+    },
+    "PrintJobCommandFailureRequest": {
+      "kind": "object",
+      "fields": {
+        "command": "PrintJobCommand",
+        "transportCode": "OptionalMoonrakerErrorCode",
+        "cancelled": "Flag"
+      }
+    },
+    "MoonrakerReconnectingView": {
+      "kind": "object",
+      "fields": {
+        "delayMs": "Finite"
+      }
+    },
+    "MoonrakerErrorView": {
+      "kind": "object",
+      "fields": {
+        "code": "MoonrakerErrorCode"
+      }
+    },
+    "MoonrakerConnectionView": {
+      "kind": "union",
+      "variants": {
+        "disconnected": "Empty",
+        "connecting": "Empty",
+        "connected": "Empty",
+        "reconnecting": "MoonrakerReconnectingView",
+        "error": "MoonrakerErrorView"
+      }
+    },
+    "OptionalMoonrakerConnectionView": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "MoonrakerConnectionView"
+      }
+    },
+    "PrinterStatusRequest": {
+      "kind": "object",
+      "fields": {
+        "snapshot": "OptionalPrintJobSnapshot",
+        "connection": "OptionalMoonrakerConnectionView",
+        "nowMs": "Finite",
+        "configured": "Flag"
+      }
+    },
+    "PrinterStatusTone": {
+      "kind": "enum",
+      "values": [
+        "idle",
+        "active",
+        "attention",
+        "danger",
+        "unknown"
+      ]
+    },
+    "PrinterStatusFact": {
+      "kind": "object",
+      "fields": {
+        "label": "EditText",
+        "value": "EditText"
+      }
+    },
+    "PrinterStatusFacts": {
+      "kind": "array",
+      "items": "PrinterStatusFact",
+      "min": 0,
+      "max": 16
+    },
+    "PrinterStatusRecovery": {
+      "kind": "object",
+      "fields": {
+        "message": "EditText",
+        "actionLabel": "EditText",
+        "retryInS": "OptionalFinite",
+        "automatic": "Flag"
+      }
+    },
+    "OptionalPrinterStatusRecovery": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "PrinterStatusRecovery"
+      }
+    },
+    "PrinterStatusSummary": {
+      "kind": "object",
+      "fields": {
+        "tone": "PrinterStatusTone",
+        "headline": "EditText",
+        "detail": "EditText",
+        "progress": "OptionalFinite",
+        "progressLabel": "OptionalText",
+        "stale": "Flag",
+        "ageLabel": "OptionalText",
+        "recovery": "OptionalPrinterStatusRecovery",
+        "facts": "PrinterStatusFacts",
+        "present": "Flag"
+      }
+    },
+    "GuardedPrinterActionsRequest": {
+      "kind": "object",
+      "fields": {
+        "descriptors": "PrintJobCommandDescriptors",
+        "stale": "Flag",
+        "staleReason": "OptionalText"
+      }
+    },
+    "GuardedPrinterAction": {
+      "kind": "object",
+      "fields": {
+        "command": "PrintJobCommand",
+        "label": "EditText",
+        "enabled": "Flag",
+        "reason": "OptionalText",
+        "holdMs": "Counter",
+        "confirmation": "OptionalText",
+        "destructive": "Flag"
+      }
+    },
+    "GuardedPrinterActions": {
+      "kind": "array",
+      "items": "GuardedPrinterAction",
+      "min": 0,
+      "max": 16
+    },
+    "HoldToConfirmPhase": {
+      "kind": "enum",
+      "values": [
+        "idle",
+        "holding",
+        "fired"
+      ]
+    },
+    "HoldToConfirmState": {
+      "kind": "object",
+      "fields": {
+        "phase": "HoldToConfirmPhase",
+        "progress": "Finite",
+        "command": "OptionalPrintJobCommand"
+      }
+    },
+    "HoldToConfirmRelease": {
+      "kind": "object",
+      "fields": {
+        "command": "OptionalPrintJobCommand",
+        "state": "HoldToConfirmState"
+      }
     }
   },
   "roots": [
@@ -4848,7 +5115,20 @@
     "ExplosionReply",
     "ObjectTreeRequest",
     "ObjectTreeReply",
-    "PrintJobSnapshot"
+    "PrintJobSnapshot",
+    "PrintJobAvailabilityRequest",
+    "PrintJobCommandDescriptors",
+    "PrintJobCommandCheckRequest",
+    "PrintJobCommandPlan",
+    "PrintJobCommandFailureRequest",
+    "PrintJobCommandRefusal",
+    "PrinterStatusRequest",
+    "PrinterStatusSummary",
+    "GuardedPrinterActionsRequest",
+    "GuardedPrinterActions",
+    "GuardedPrinterAction",
+    "HoldToConfirmState",
+    "HoldToConfirmRelease"
   ],
   "sessionVersion": 1
 }

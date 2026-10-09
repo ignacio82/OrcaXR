@@ -118,6 +118,7 @@ enum Record {
     PaintOverlay(Box<orcaxr_project::facets::overlay::Overlay>),
     PickScene(Box<orcaxr_project::picking::PickScene>),
     PrintJobStatus(Box<orcaxr_printer::status::JobStatus>),
+    HoldToConfirm(Box<orcaxr_printer::control::HoldToConfirm>),
 }
 fn registry() -> &'static Registry<Record> {
     static REGISTRY: OnceLock<Registry<Record>> = OnceLock::new();

@@ -1,7 +1,8 @@
 //! Printer workflow policy (`orcaxr_printer`) for browser hosts.
 use crate::project::error;
 use orcaxr_contracts::project_intent_types as wire;
-use orcaxr_printer::status::JobStatus;
+use orcaxr_contracts::project_intents::InvalidIntent;
+use orcaxr_printer::{control, status::JobStatus, summary};
 use wasm_bindgen::prelude::*;
 
 fn encoded(snapshot: &wire::PrintJobSnapshot) -> Result<String, JsValue> {
@@ -46,4 +47,107 @@ impl PrintJobStatus {
     pub fn snapshot(&self) -> Result<String, JsValue> {
         encoded(self.inner.snapshot())
     }
+}
+
+fn exchange<T, R>(
+    request: &str,
+    decode: fn(&str) -> Result<T, InvalidIntent>,
+    answer: impl FnOnce(&T) -> R,
+    encode: fn(&R) -> Result<String, InvalidIntent>,
+) -> Result<String, JsValue> {
+    if request.len() > wire::MAX_BYTES {
+        return Err(error("input_limit"));
+    }
+    let request = decode(request).map_err(|_| error("invalid_request"))?;
+    encode(&answer(&request)).map_err(|_| error("output_limit"))
+}
+/// A `PrintJobAvailabilityRequest`; the `PrintJobCommandDescriptors` the
+/// observed state allows.
+#[wasm_bindgen]
+pub fn print_job_availability(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_print_job_availability_request,
+        |r| {
+            control::availability(match &r.observed {
+                wire::OptionalPrintJobSnapshot::Value(s) => Some(s),
+                wire::OptionalPrintJobSnapshot::Absent(_) => None,
+            })
+        },
+        wire::encode_print_job_command_descriptors,
+    )
+}
+/// A `PrintJobCommandCheckRequest`; the `PrintJobCommandPlan`.
+#[wasm_bindgen]
+pub fn print_job_command_plan(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_print_job_command_check_request,
+        control::plan,
+        wire::encode_print_job_command_plan,
+    )
+}
+/// A `PrintJobCommandFailureRequest`; the `PrintJobCommandRefusal` it reports.
+#[wasm_bindgen]
+pub fn print_job_command_failure(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_print_job_command_failure_request,
+        control::failure,
+        wire::encode_print_job_command_refusal,
+    )
+}
+/// A `PrinterStatusRequest`; the `PrinterStatusSummary` compact surfaces show.
+#[wasm_bindgen]
+pub fn printer_status_summary(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_printer_status_request,
+        summary::summarize,
+        wire::encode_printer_status_summary,
+    )
+}
+/// A `GuardedPrinterActionsRequest`; the `GuardedPrinterActions` to offer.
+#[wasm_bindgen]
+pub fn guarded_printer_actions(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_guarded_printer_actions_request,
+        control::guarded,
+        wire::encode_guarded_printer_actions,
+    )
+}
+
+/// The hold-to-confirm gesture; each call takes the host's clock.
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct HoldToConfirm {
+    inner: control::HoldToConfirm,
+}
+#[wasm_bindgen]
+impl HoldToConfirm {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// A `GuardedPrinterAction`; the `HoldToConfirmState`.
+    pub fn press(&mut self, action: &str, now_ms: f64) -> Result<String, JsValue> {
+        let action =
+            wire::decode_guarded_printer_action(action).map_err(|_| error("invalid_request"))?;
+        state(&self.inner.press(&action, now_ms))
+    }
+    pub fn poll(&self, now_ms: f64) -> Result<String, JsValue> {
+        state(&self.inner.poll(now_ms))
+    }
+    /// The `HoldToConfirmRelease`: the command to run, if the hold was long enough.
+    pub fn release(&mut self, now_ms: f64) -> Result<String, JsValue> {
+        wire::encode_hold_to_confirm_release(&self.inner.release(now_ms))
+            .map_err(|_| error("output_limit"))
+    }
+    pub fn cancel(&mut self) -> Result<String, JsValue> {
+        state(&self.inner.cancel())
+    }
+}
+fn state(state: &wire::HoldToConfirmState) -> Result<String, JsValue> {
+    wire::encode_hold_to_confirm_state(state).map_err(|_| error("output_limit"))
 }

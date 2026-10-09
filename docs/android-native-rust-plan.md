@@ -1877,8 +1877,13 @@ credential storage, and explicit permission/error flows.
   browser traces (873 steps) agree in Rust, WASM (Node and Chrome) and JNI,
   with 1,747 Kotlin checks. Porting fixed two browser defects: a patch keyed
   only by an `Object.prototype` name refreshed the snapshot, and a `__proto__`
-  patch key supplied `print_stats` fields by inheritance. Session, submission
-  and transport policies remain.
+  patch key supplied `print_stats` fields by inheritance. `control` and
+  `summary` now port the lifecycle-command policy (availability from the
+  reported state, send plans with expected-file guards, failure sentences,
+  guarded actions with their holds, the hold-to-confirm gesture) and the
+  compact status surfaces render; 2,983 browser answers and 35 hold steps
+  agree in every binding, with 3,019 Kotlin checks. Session, submission and
+  transport policies remain.
 - [ ] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
   credential entry, and optional discovery. Discovery proposes verified endpoints
   and cannot overwrite preferences while a stale probe completes.
