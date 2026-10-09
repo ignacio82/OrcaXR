@@ -8,11 +8,13 @@
     <string name="nav_project">Project</string>
     <string name="project_saved">No unsaved changes</string>
     <string name="project_unsaved">Unsaved changes</string>
-    <string name="project_new">New project</string>
-    <string name="project_open">Open</string>
-    <string name="project_save">Save</string>
-    <string name="project_save_as">Save as</string>
-    <string name="project_import">Import model</string>
+    <!-- The browser's action names (web/src/actions/groups/file.ts). -->
+    <string name="project_new">New Project</string>
+    <string name="project_open">Open Project…</string>
+    <string name="project_save">Save Project</string>
+    <string name="project_save_as">Save Project As…</string>
+    <string name="project_import">Import Model…</string>
+    <string name="project_guard_save">Save</string>
     <string name="project_share">Share</string>
     <string name="project_recovered_title">Unsaved work: %1$s</string>
     <string name="project_recovered_detail">Kept on %1$s when OrcaXR last closed without saving it.</string>

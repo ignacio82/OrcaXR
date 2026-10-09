@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -77,6 +78,23 @@ class MainActivity : ComponentActivity() {
         // The system may end the app once it is out of sight, and a window closed or swiped
         // away finishes it without asking: keep unsaved work now (not what was just discarded).
         project.captureNow()
+    }
+
+    /**
+     * The browser's edit shortcuts (web/src/actions/groups/edit.ts): Ctrl/Meta+Z undoes,
+     * Ctrl/Meta+Shift+Z and Ctrl+Y redo — only when nothing focused took the key, as the
+     * browser leaves a text field its own editing keys.
+     */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        // Reached only by keys no focused view consumed.
+        val command = event.isCtrlPressed || event.isMetaPressed
+        val handled = event.repeatCount == 0 && when {
+            command && keyCode == KeyEvent.KEYCODE_Z && !event.isShiftPressed -> project.undoShortcut()
+            command && keyCode == KeyEvent.KEYCODE_Z && event.isShiftPressed -> project.redoShortcut()
+            event.isCtrlPressed && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_Y -> project.redoShortcut()
+            else -> false
+        }
+        return handled || super.onKeyDown(keyCode, event)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

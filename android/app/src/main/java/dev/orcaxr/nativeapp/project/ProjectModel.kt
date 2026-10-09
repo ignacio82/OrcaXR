@@ -456,6 +456,12 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     fun undo() = work { workspace.undo().await() }
     fun redo() = work { workspace.redo().await() }
 
+    /** Undo from the keyboard; answers whether there was a step to undo. */
+    fun undoShortcut(): Boolean = (view.undo != null && !busy).also { if (it) undo() }
+
+    /** Redo from the keyboard; answers whether there was a step to redo. */
+    fun redoShortcut(): Boolean = (view.redo != null && !busy).also { if (it) redo() }
+
     override fun onCleared() {
         worker.execute {
             owners.releaseAll(owner)

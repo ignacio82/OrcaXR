@@ -3,7 +3,7 @@
 
 The app's data is cleared and a binary STL is placed in Downloads. The run
 imports it (previewed, then committed as one undoable step), undoes and redoes
-it, saves the project as a 3MF with "Save as", starts a new project, reopens
+it with the buttons and with the browser's keyboard shortcuts, saves the project as a 3MF with "Save as", starts a new project, reopens
 the saved one from the recent documents, keeps unsaved changes on Cancel,
 saves them first on Save and drops them only on Discard, brings the window
 holding a document forward rather than opening it twice, asks before saving
@@ -50,7 +50,7 @@ def launch():
 
 
 def import_cube(objects):
-    tap("Import model")
+    tap("Import Model…")
     tap("cube.stl", timeout=30)
     find("Import cube.stl?", timeout=30)
     find(f"The project will then have {objects} object(s). Importing is one step you can undo.")
@@ -82,15 +82,24 @@ tap("Undo Import cube.stl")
 find("0 objects", timeout=30)
 tap("Redo Import cube.stl")
 find("1 object", timeout=30)
+# The browser's shortcuts from a hardware keyboard: Ctrl+Z undoes, Ctrl+Shift+Z and Ctrl+Y redo.
+adb("shell", "input", "keycombination", "113", "54")
+find("0 objects", timeout=30)
+adb("shell", "input", "keycombination", "113", "59", "54")
+find("1 object", timeout=30)
+adb("shell", "input", "keycombination", "113", "54")
+find("0 objects", timeout=30)
+adb("shell", "input", "keycombination", "113", "53")
+find("1 object", timeout=30)
 # Save as: the system's picker creates the document; the project is then clean.
-tap("Save as")
+tap("Save Project As…")
 find(SAVED, timeout=30)
 tap("SAVE")
 find(f"Saved {SAVED}.", timeout=30)
 find(f"{SAVED} · No unsaved changes")
 assert adb("shell", f"head -c 2 '/sdcard/Download/{SAVED}'") == "PK", "The saved project is not a ZIP package"
 # New project, then the saved one again from the recent documents.
-tap("New project")
+tap("New Project")
 find("0 objects", timeout=30)
 tap(SAVED)
 find("1 object", timeout=30)
@@ -99,11 +108,11 @@ find(f"{SAVED} · No unsaved changes")
 # created before the new project replaces them; dropped only on Discard.
 import_cube(2)
 find("2 objects", timeout=30)
-tap("New project")
+tap("New Project")
 find("Save changes to Untitled project?")
 tap("Cancel")
 find("2 objects")
-tap("New project")
+tap("New Project")
 find("Save changes to Untitled project?")
 tap("Save")
 find("0 objects", timeout=30)
@@ -132,18 +141,18 @@ find(f"{SAVED} · No unsaved changes")
 # A change made outside OrcaXR is not overwritten unnoticed: Save asks first.
 before = int(adb("shell", f"stat -c %s '/sdcard/Download/{SAVED}'"))
 adb("shell", f"printf x >> '/sdcard/Download/{SAVED}'")
-tap("Save")
+tap("Save Project")
 find(f"{SAVED} changed outside OrcaXR", timeout=20)
 tap("Cancel")
 time.sleep(1)
 assert int(adb("shell", f"stat -c %s '/sdcard/Download/{SAVED}'")) == before + 1, "Cancel wrote the document"
-tap("Save")
+tap("Save Project")
 tap("Overwrite", timeout=20)
 find(f"Saved {SAVED}.", timeout=30)
 assert adb("shell", f"head -c 2 '/sdcard/Download/{SAVED}'") == "PK", "Overwrite did not write a package"
 import_cube(3)
 find("3 objects", timeout=30)
-tap("New project")
+tap("New Project")
 tap("Discard")
 find("0 objects", timeout=30)
 # A document handed over outside the system's sharing is refused.
@@ -209,7 +218,7 @@ while any((node.get("text") or "") == "Unsaved work: Untitled project" for node 
 # unsaved work is kept as it leaves and offered by the next session.
 task = re.search(r"taskId=(\d+): " + re.escape(PACKAGE), adb("shell", "am", "stack", "list")).group(1)
 screen.to_top()
-tap("Import model")
+tap("Import Model…")
 tap("cube.stl", timeout=30)
 find("Import cube.stl?", timeout=30)
 tap("Import")
@@ -233,7 +242,7 @@ while any((node.get("text") or "") == "Unsaved work: Untitled project" for node 
 # An update replaces the app while it runs: the system ends it without asking.
 # Work older than the timed capture's 5 s is offered by the updated app.
 screen.to_top()
-tap("Import model")
+tap("Import Model…")
 tap("cube.stl", timeout=30)
 find("Import cube.stl?", timeout=30)
 tap("Import")

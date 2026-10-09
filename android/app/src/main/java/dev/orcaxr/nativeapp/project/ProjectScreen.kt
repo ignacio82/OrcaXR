@@ -121,7 +121,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
             confirmButton = {
                 Row {
                     TextButton(onClick = { model.answerDiscard(DiscardAnswer.Discard) }) { Text(stringResource(R.string.project_discard)) }
-                    TextButton(onClick = { model.answerDiscard(DiscardAnswer.Save) }) { Text(stringResource(R.string.project_save)) }
+                    TextButton(onClick = { model.answerDiscard(DiscardAnswer.Save) }) { Text(stringResource(R.string.project_guard_save)) }
                 }
             },
             dismissButton = { TextButton(onClick = { model.answerDiscard(DiscardAnswer.Cancel) }) { Text(stringResource(R.string.device_cancel)) } },

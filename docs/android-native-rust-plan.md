@@ -1817,12 +1817,21 @@ storage journeys on phone, tablet, and desktop-sized windows.
   The shell navigates between the workspace preview, the Project area
   (`ProjectModel` over `ProjectWorkspace` and the `ProjectActor`) and the
   Device area, whose `DeviceModel` ViewModel is the host adapter over
-  `DeviceWorkspace`; each publishes projections to Compose. Prepare and
-  Preview wait for their complete shared workflows.
+  `DeviceWorkspace`; each publishes projections to Compose. The Project
+  area's actions carry the browser's action names (New Project, Open
+  Project…, Save Project, Save Project As…, Import Model…, Undo, Redo).
+  Prepare and Preview wait for their complete shared workflows.
 - [ ] Adapt inspector/object tree, toolbars, menus, command palette, dialogs,
   settings, and progress states to narrow, medium, and wide windows. Support
   keyboard traversal, shortcuts, hover, context menus, trackpad navigation,
   touch gestures, stylus input when supported, and file drag/drop.
+  The Project area answers the browser's edit shortcuts from a hardware
+  keyboard (Ctrl/Meta+Z undo; Ctrl/Meta+Shift+Z and Ctrl+Y redo — only keys
+  no focused view consumed, as the browser leaves a text field its own),
+  verified on the emulator; its buttons carry the browser's action names.
+  Window-size adaptation, hover, context menus, stylus and drag/drop remain
+  (a dropped 3MF could only open as the project: geometry-only 3MF import is
+  still browser-only).
 - [ ] Integrate the flat renderer with panel resizing, visibility, lifecycle,
   selection, painting, model tools, and preview controls. Keep CPU work and
   loading off the UI thread; avoid per-frame Compose recomposition for meshes.

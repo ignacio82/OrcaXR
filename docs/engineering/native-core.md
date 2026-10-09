@@ -4262,7 +4262,12 @@ with plates expanded) is rebuilt from the session's own effects and
 history, never kept as a second project. `ProjectModel` is its host
 adapter (a ViewModel, provider work on one worker thread) and
 `ProjectScreen` its Compose surface; the shell's navigation is now
-Workspace, Project and Device.
+Workspace, Project and Device. Its actions carry the browser's action names
+(`web/src/actions/groups/file.ts`), and a hardware keyboard has the
+browser's edit shortcuts: Ctrl/Meta+Z undoes, Ctrl/Meta+Shift+Z and Ctrl+Y
+redo, handled in `Activity.onKeyDown` so only keys no focused view consumed
+reach them (a text field keeps its own); the emulator smoke drives them with
+`input keycombination`.
 
 New projects are shared: `orcaxr_project::model::fresh_project` is the
 browser's "New project" (`freshProjectState`, extracted from
