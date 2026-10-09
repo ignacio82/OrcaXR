@@ -1939,8 +1939,12 @@ credential storage, and explicit permission/error flows.
   OkHttp: HTTP without followed redirects or retries, bounded body reads, a
   WebSocket, timers and random draws, every core call on one thread. It passes
   21 end-to-end checks on the host JVM against the Moonraker simulator's real
-  HTTP and WebSocket server. Endpoint management, credential entry and
-  discovery, which need the application shell, remain.
+  HTTP and WebSocket server. `PrinterSessionClient` hosts the shared session
+  machine over those clients and passes 17 more: a job identified from the
+  printer's history, pause, resume, confirmed cancel and a dialog-confirmed
+  emergency stop, with the printer receiving exactly those commands. Endpoint
+  management, credential entry and discovery, which need the application
+  shell, remain.
 - [ ] Support intentional HTTP LAN connections through an explicit transport
   policy. Android configuration must allow the intended user-entered endpoints;
   application routing restricts cleartext requests to those selected local

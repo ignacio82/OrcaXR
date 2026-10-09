@@ -3848,6 +3848,16 @@ credentials, queries, a held upload cancelled in flight, upload and download
 byte for byte, refusals before anything is sent, the printer's status
 notification after a start, heartbeats, a 404 with the server's own detail,
 recovery and a disconnect — 21 Kotlin checks, then what the printer received.
+`PrinterSessionClient` hosts the session machine over those clients the same
+way: it opens a client when the core asks (subscribing it to
+`status::OBJECTS` and answering the opening with its first state), feeds its
+states and notifications in, runs connects, requests and recovery commands on
+each epoch (cancelling what an ended epoch carried) and the dialogs commands
+bring, and rejects a failed connect with the client's own fault. Against a
+fresh simulator its 17 checks select, connect, identify a started job from
+the printer's history, pause and resume it, spend an unconfirmed cancel, send
+a confirmed one, stop with a dialog, and end a lease with a clear; the printer
+receives exactly `start, pause, resume, cancel, emergency-stop`.
 
 It runs on the printer core, a package of its own (`core/browser/printer`,
 `web/public/core-printer/<manifest-sha256>`, the `printer` feature; 1,495,957

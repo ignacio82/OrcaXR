@@ -1,6 +1,6 @@
 // The Moonraker simulator on a thread of its own: the JNI bridge blocks the
 // main thread while the JVM runs, and the simulator must keep serving.
-import { parentPort } from "node:worker_threads";
+import { parentPort, workerData } from "node:worker_threads";
 import { startMoonrakerSimulator } from "../../web/scripts/moonraker-simulator.mjs";
 
 const simulator = await startMoonrakerSimulator();

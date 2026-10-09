@@ -95,6 +95,9 @@ public final class ProjectJniHarness {
     public static long moonrakerClientChecks(String endpoint) {
         return ProjectMoonrakerClientChecks.run(endpoint);
     }
+    public static long printerSessionClientChecks(String endpoint) {
+        return ProjectPrinterSessionClientChecks.run(endpoint);
+    }
     /** [assets] concatenated, split at the comma-separated [lengths]. */
     public static long meshPacketChecks(String source, byte[] assets, String lengths, String script) {
         java.util.List<byte[]> split = new java.util.ArrayList<>();
@@ -284,6 +287,7 @@ public final class ProjectJniHarness {
             if (name.equals("moonrakerPolicyChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("moonrakerTransportChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("moonrakerClientChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("printerSessionClientChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("meshPacketChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorPreflightChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorClipboardChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class);
