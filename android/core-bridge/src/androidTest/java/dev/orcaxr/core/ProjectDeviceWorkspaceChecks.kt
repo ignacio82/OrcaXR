@@ -100,6 +100,14 @@ object ProjectDeviceWorkspaceChecks {
             check(refusal { device.addPrinter("Bad", "printer local") } != null, "unusable_address_refused")
             check(device.directory.printers.size == 1, "refusals_store_nothing")
 
+            // Recovery is reachable before any status has been read, and reaches
+            // the printer without a connection.
+            val recovery = device.session.view.availability.filter { it.allowed }.map { it.command }
+            check(ProjectIntents.PrintJobCommand.EmergencyStop in recovery && ProjectIntents.PrintJobCommand.FirmwareRestart in recovery,
+                "recovery_without_status $recovery")
+            val restart = device.session.captureIntent(ProjectIntents.PrintJobCommand.FirmwareRestart)
+            device.session.execute(restart) { _, _ -> java.util.concurrent.CompletableFuture.completedFuture(true) }.get(WAIT_S, TimeUnit.SECONDS)
+            check(device.session.state !is ProjectIntents.MoonrakerConnectionState.Connected, "restart_without_connection")
             device.setApiKey(simulator, "sim-key-1234")
             check(blob.blob != null && !blob.blob!!.holds("sim-key-1234"), "key_sealed")
             device.connect().get(WAIT_S, TimeUnit.SECONDS)
@@ -136,7 +144,7 @@ object ProjectDeviceWorkspaceChecks {
             // Another printer: switching clears the session, and no key follows.
             val other = device.addPrinter("Other", "localhost", port)
             check(device.active?.let { text(it.id) } == other, "switched")
-            check(device.session.state == null, "switch_clears_session")
+            check(device.session.state !is ProjectIntents.MoonrakerConnectionState.Connected, "switch_clears_session")
             check(device.apiKey(other) == "" && device.apiKey(simulator) == "sim-key-1234", "keys_stay_with_printers")
         }
 

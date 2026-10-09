@@ -38,7 +38,10 @@ object ProjectMoonrakerClientChecks {
             ProjectIntents.MoonrakerReconnectPolicyInput(absentFinite(), absentFinite(), absentFinite(), absentFinite()),
         )
         val logs = Collections.synchronizedList(ArrayList<ProjectIntents.MoonrakerLog>())
+        val lingering = ArrayList<AutoCloseable>()
         MoonrakerClient(config, logger = { logs += it }).use { client ->
+            lingering += client.subscribeState {}
+            lingering += client.subscribeNotifications {}
             val notifications = LinkedBlockingQueue<MoonrakerClientNotification>()
             client.subscribeNotifications { notifications += it }
             val first = LinkedBlockingQueue<ProjectIntents.MoonrakerConnectionState>()
@@ -129,6 +132,9 @@ object ProjectMoonrakerClientChecks {
             check(failure(client.request("/server/info"))?.code == ProjectIntents.MoonrakerErrorCode.InvalidState) { "after_disconnect" }
             checks++
         }
+        // A subscription closed after its client is a no-op, not a failure.
+        for (subscription in lingering) subscription.close()
+        checks++
         val events = logs.map { it.event }
         check(ProjectIntents.MoonrakerDiagnosticEvent.ConnectionAttempt in events && ProjectIntents.MoonrakerDiagnosticEvent.Connected in events) {
             "diagnostics"

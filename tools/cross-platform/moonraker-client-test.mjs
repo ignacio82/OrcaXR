@@ -37,7 +37,7 @@ const printers = [];
 try {
   const transport = await simulator({ holdFirstUpload: true });
   printers.push(transport);
-  assert.equal(jvm.call("moonrakerClientChecks", transport.url), 22);
+  assert.equal(jvm.call("moonrakerClientChecks", transport.url), 23);
   const received = await transport.summary();
   assert.deepEqual(received.stored, ["android.gcode", "held.gcode"]);
   assert.equal(received.started, "android.gcode");
@@ -95,10 +95,13 @@ try {
   ]);
   const workshop = await simulator();
   printers.push(workshop);
-  assert.equal(jvm.call("deviceWorkspaceChecks", workshop.url), 28);
+  assert.equal(jvm.call("deviceWorkspaceChecks", workshop.url), 30);
+  const worked = await workshop.summary();
   // The simulator printer's own key reached it and no other key ever did;
   // the printer without one sent none.
-  assert.deepEqual([...new Set((await workshop.summary()).apiKeys.filter(Boolean))], ["sim-key-1234"]);
+  assert.deepEqual([...new Set(worked.apiKeys.filter(Boolean))], ["sim-key-1234"]);
+  // The firmware restart reached it before any connection; then the cancel.
+  assert.deepEqual(worked.commands, ["firmware-restart", "start", "cancel"]);
   const shop = await simulator({
     cameras: true,
     options: {
@@ -130,10 +133,10 @@ try {
   console.log(
     JSON.stringify({
       printerExchangesChecks: 20,
-      deviceWorkspaceChecks: 28,
+      deviceWorkspaceChecks: 30,
       lanPolicyChecks: 21,
       localNetworkChecks: 28,
-      moonrakerClientChecks: 22,
+      moonrakerClientChecks: 23,
       printerSessionClientChecks: 17,
       printWorkflowClientChecks: 12,
       requests:

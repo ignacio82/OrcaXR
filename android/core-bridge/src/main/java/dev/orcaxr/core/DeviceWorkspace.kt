@@ -41,8 +41,17 @@ class DeviceWorkspace(
     private var directoryValue = PrinterDirectory.load(directoryStore.read())
     private var credentialsValue = vault.load()
 
-    /** The printer session; it opens a client for the active printer when asked to connect. */
+    /**
+     * The printer session. The active printer is selected as soon as it is
+     * chosen, so its recovery commands (emergency stop, firmware restart),
+     * which need neither a status reading nor the socket, are reachable
+     * before and without a connection.
+     */
     val session = PrinterSessionClient(::openClient, clock)
+
+    init {
+        selectActive()
+    }
 
     val directory: ProjectIntents.PrinterDirectory get() = synchronized(lock) { directoryValue }
     val credentials: ProjectIntents.RememberedCredentials get() = synchronized(lock) { credentialsValue }
@@ -50,6 +59,24 @@ class DeviceWorkspace(
     /** The printer connections go to: the directory's default. */
     val active: ProjectIntents.PrinterEntry? get() = synchronized(lock) {
         directoryValue.printers.firstOrNull { it.id == directoryValue.defaultId }
+    }
+
+    /** Selects the active printer with its key, after whatever was selected before was cleared. */
+    private fun selectActive() {
+        val printer = active ?: return
+        val key = apiKey(text(printer.id))
+        session.select(
+            ProjectIntents.PrinterSelection(
+                printer.id, ProjectIntents.OptionalText.Value(printer.name), printer.host, printer.port.toLong(),
+                if (key.isEmpty()) ProjectIntents.OptionalText.Absent(ProjectIntents.Empty) else ProjectIntents.OptionalText.Value(units(key)),
+            ),
+        )
+    }
+
+    /** Clears the session (nothing crosses from what was selected) and selects the active printer anew. */
+    private fun reselect() {
+        session.clear()
+        selectActive()
     }
 
     fun subscribe(listener: () -> Unit): AutoCloseable {
@@ -112,7 +139,7 @@ class DeviceWorkspace(
                 ProjectIntents.OptionalTextList.Absent(ProjectIntents.Empty), ProjectIntents.OptionalFinite.Absent(ProjectIntents.Empty),
             ))))
         }
-        if (id == active?.let { text(it.id) }) session.clear()
+        if (id == active?.let { text(it.id) }) reselect()
         changed()
     }
 
@@ -124,7 +151,7 @@ class DeviceWorkspace(
         synchronized(lock) {
             store(applied(PrinterDirectory.setDefault(ProjectIntents.PrinterDirectorySelect(directoryValue, units(id)))))
         }
-        session.clear()
+        reselect()
         changed()
     }
 
@@ -140,7 +167,7 @@ class DeviceWorkspace(
             val record = credentialsValue
             remember(record.copy(printerApiKeys = record.printerApiKeys.filter { text(it.key) != id }))
         }
-        if (wasActive) session.clear()
+        if (wasActive) reselect()
         changed()
     }
 
@@ -160,7 +187,7 @@ class DeviceWorkspace(
             val keys = if (trimmed.isEmpty()) others else others + ProjectIntents.RememberedSecret(units(id), units(trimmed))
             remember(record.copy(printerApiKeys = keys))
         }
-        if (id == active?.let { text(it.id) }) session.clear()
+        if (id == active?.let { text(it.id) }) reselect()
         changed()
     }
 
@@ -176,7 +203,7 @@ class DeviceWorkspace(
             vault.forget()
             credentialsValue = vault.load()
         }
-        session.clear()
+        reselect()
         changed()
     }
 
@@ -187,15 +214,7 @@ class DeviceWorkspace(
      */
     fun localNetworkBlocked(): Boolean {
         if (localNetwork.granted()) return false
-        val printer = active ?: return false
-        val reply = MoonrakerPolicy.endpoint(
-            ProjectIntents.MoonrakerEndpointRequest(
-                printer.host, ProjectIntents.OptionalFinite.Value(printer.port),
-                ProjectIntents.OptionalText.Absent(ProjectIntents.Empty), ProjectIntents.OptionalText.Absent(ProjectIntents.Empty),
-            ),
-        )
-        val endpoint = (reply as? ProjectIntents.MoonrakerEndpointReply.Endpoint)?.value ?: return false
-        val host = text(endpoint.directHttpUrl).toHttpUrlOrNull()?.host ?: return false
+        val host = activeEndpoint()?.toHttpUrlOrNull()?.host ?: return false
         if (LocalNetworkAccess.multicastName(host)) return true
         return try {
             http.dns.lookup(host).any(LocalNetworkAccess::requiresPermission)
@@ -204,21 +223,34 @@ class DeviceWorkspace(
         }
     }
 
-    /** Connects to the active printer with its own key. */
-    fun connect(): CompletableFuture<ProjectIntents.MoonrakerHandshake> {
-        val printer = active ?: return CompletableFuture.failedFuture(DeviceRefusal("Add a printer first."))
-        val id = text(printer.id)
-        val key = apiKey(id)
-        session.select(
-            ProjectIntents.PrinterSelection(
-                printer.id, ProjectIntents.OptionalText.Value(printer.name), printer.host, printer.port.toLong(),
-                if (key.isEmpty()) ProjectIntents.OptionalText.Absent(ProjectIntents.Empty) else ProjectIntents.OptionalText.Value(units(key)),
+    /** The URL the active printer's address names (the shared endpoint normalization), or null. */
+    fun activeEndpoint(): String? {
+        val printer = active ?: return null
+        val reply = MoonrakerPolicy.endpoint(
+            ProjectIntents.MoonrakerEndpointRequest(
+                printer.host, ProjectIntents.OptionalFinite.Value(printer.port),
+                ProjectIntents.OptionalText.Absent(ProjectIntents.Empty), ProjectIntents.OptionalText.Absent(ProjectIntents.Empty),
             ),
         )
+        return (reply as? ProjectIntents.MoonrakerEndpointReply.Endpoint)?.let { text(it.value.directHttpUrl) }
+    }
+
+    /** The printer's files, history, console and cameras over the current connection, or null without one. */
+    fun exchanges(): PrinterExchanges? {
+        val client = session.client ?: return null
+        return PrinterExchanges(client, activeEndpoint(), localNetwork, http)
+    }
+
+    /** Connects to the active printer with its own key. */
+    fun connect(): CompletableFuture<ProjectIntents.MoonrakerHandshake> {
+        if (active == null) return CompletableFuture.failedFuture(DeviceRefusal("Add a printer first."))
+        // The same selection reuses its client.
+        selectActive()
         return session.connect()
     }
 
-    fun disconnect() = session.clear()
+    /** Ends the connection; the printer stays selected, so recovery stays reachable. */
+    fun disconnect() = reselect()
 
     /** The status surfaces' summary of the session, as the browser renders it. */
     fun summary(): ProjectIntents.PrinterStatusSummary {

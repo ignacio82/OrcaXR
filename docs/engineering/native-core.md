@@ -4219,6 +4219,9 @@ as the browser stores it (a private preferences file, no secret in it), each
 printer's API key its own in the `CredentialVault` (kept in memory for the
 run while remembering is off, removed with its printer), the active printer
 switched by clearing the session so nothing crosses from the printer before,
+the active printer selected as soon as it is chosen (so its recovery
+commands, which need neither a status reading nor the socket, are reachable
+before and without a connection),
 a `PrinterSessionClient` connecting with the active printer's key, the
 status summary the browser renders, and the local-network permission judged
 before any exchange. `DeviceModel` is its host adapter: a ViewModel running
@@ -4234,8 +4237,9 @@ disconnects, shows the connection, the status headline, detail, progress and
 facts, and offers every job command with the reason one is not available,
 confirming a destructive one in a dialog the core asks for.
 
-`ProjectDeviceWorkspaceChecks` (28 host checks against the simulator) adds,
-refuses, switches and removes printers, keeps keys with their printers across
+`ProjectDeviceWorkspaceChecks` (30 host checks against the simulator) offers
+recovery and sends a firmware restart before any connection, adds, refuses,
+switches and removes printers, keeps keys with their printers across
 reloads, honours the remember switch and forgetting, reads an idle printer's
 status, pauses a job another client started once the session identifies it,
 cancels it through the dialog, and refuses a printer behind a denied
@@ -4260,6 +4264,29 @@ send a script and refuse an empty one, read macros with their parameters,
 list cameras against the endpoint and fetch a frame both through Moonraker
 and directly; the simulator receives the script, no traversal, and only
 that client's key.
+
+Once connected, the Device area offers Status, Files, History, Console and
+Camera tabs over `PrinterExchanges`. Files browses the printer's folders,
+reads a file's metadata and prints or deletes it once confirmed. History
+pages the printer's records with the browser's job descriptions, pager and
+totals line. Console sends scripts after the shared assessment (anything not
+report-only is confirmed first, with its reasons), keeps a bounded
+transcript of the socket's `notify_gcode_response` lines redacted on the way
+in, and runs macros with their parameters spelled by the shared invocation.
+Camera lists the printer's cameras and polls frames only while the tab is
+shown and the app is in front, at the camera's bounded rate, rotated and
+flipped as mounted, trying its routes in order — an app has no page that
+loads an image itself, so the browser's image route is a direct fetch — and
+moving to the next when one fails; bytes that do not decode as an image
+fail the route, as a browser's image would (the smoke found a web server
+answering a missing snapshot with a 200 HTML page). The emulator smoke now
+also deletes the job's file, reads three history records, sends `M105`
+(its answer arriving over the socket), a confirmed `G28` and
+`LOAD_FILAMENT TEMP=220`, and shows a camera frame fetched through Moonraker
+after its web-origin URL fails. It also found that closing a subscription
+after its client had closed threw; `MoonrakerClient` and
+`PrinterSessionClient` subscriptions now close as a no-op then, and a client
+check closes two after the client.
 
 That run found a defect the host checks could not: `MoonrakerClient`
 reused pooled HTTP connections with retries off, so the first request after

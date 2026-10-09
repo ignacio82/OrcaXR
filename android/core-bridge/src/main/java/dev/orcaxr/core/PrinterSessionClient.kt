@@ -81,6 +81,15 @@ class PrinterSessionClient(
     private fun <T> onThread(work: () -> T): T =
         if (Thread.currentThread() === thread) work() else executor.submit<T> { work() }.get().also { }
 
+    /** Runs [work] on the session's thread, or not at all once the session is closed. */
+    private fun unlessClosed(work: () -> Unit) {
+        try {
+            onThread(work)
+        } catch (_: RejectedExecutionException) {
+            // Closed: its listeners are gone with it.
+        }
+    }
+
     private fun post(work: () -> Unit) {
         try {
             executor.execute { if (!closed) work() }
@@ -98,7 +107,7 @@ class PrinterSessionClient(
 
     fun subscribe(listener: () -> Unit): AutoCloseable = onThread {
         listeners += listener
-        AutoCloseable { onThread { listeners -= listener } }
+        AutoCloseable { unlessClosed { listeners -= listener } }
     }
 
     fun select(selection: ProjectIntents.PrinterSelection): MoonrakerClient = onThread {

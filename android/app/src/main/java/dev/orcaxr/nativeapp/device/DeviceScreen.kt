@@ -24,7 +24,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -68,6 +70,7 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
         model.refresh()
     }
     var adding by rememberSaveable { mutableStateOf(false) }
+    var tab by rememberSaveable { mutableStateOf(DeviceTab.Status) }
     var removing by rememberSaveable { mutableStateOf(false) }
 
     LazyColumn(
@@ -122,7 +125,24 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
                 }
             }
             item { CredentialFields(state, model) }
-            item { Connection(state, model) }
+            if (state.connected) {
+                item {
+                    PrimaryTabRow(selectedTabIndex = tab.ordinal) {
+                        for (each in DeviceTab.entries) {
+                            Tab(selected = tab == each, onClick = { tab = each }, text = { Text(each.label) })
+                        }
+                    }
+                }
+            }
+            item {
+                when (if (state.connected) tab else DeviceTab.Status) {
+                    DeviceTab.Status -> Connection(state, model)
+                    DeviceTab.Files -> FilesTab(model)
+                    DeviceTab.History -> HistoryTab(model)
+                    DeviceTab.Console -> ConsoleTab(model)
+                    DeviceTab.Camera -> CameraTab(model)
+                }
+            }
             item {
                 TextButton(onClick = { removing = true }) { Text(stringResource(R.string.device_remove_printer)) }
             }
@@ -151,6 +171,15 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
             text = { Text(stringResource(R.string.device_remove_detail)) },
             confirmButton = { TextButton(onClick = { removing = false; model.removeActive() }) { Text(stringResource(R.string.device_remove)) } },
             dismissButton = { TextButton(onClick = { removing = false }) { Text(stringResource(R.string.device_keep)) } },
+        )
+    }
+    model.ask?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { model.answerAsk(false) },
+            title = { Text(pending.title) },
+            text = { Text(pending.detail) },
+            confirmButton = { TextButton(onClick = { model.answerAsk(true) }) { Text(pending.confirm) } },
+            dismissButton = { TextButton(onClick = { model.answerAsk(false) }) { Text(stringResource(R.string.device_cancel)) } },
         )
     }
     model.confirmation?.let { pending ->

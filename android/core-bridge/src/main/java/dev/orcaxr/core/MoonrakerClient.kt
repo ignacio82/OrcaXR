@@ -161,6 +161,15 @@ class MoonrakerClient(
     private fun <T> onThread(work: () -> T): T =
         if (Thread.currentThread() === thread) work() else executor.submit<T> { work() }.get()
 
+    /** Runs [work] on the client's thread, or not at all once the client is closed, when nothing is delivered anyway. */
+    private fun unlessClosed(work: () -> Unit) {
+        try {
+            onThread(work)
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            // Closed: its listeners are gone with it.
+        }
+    }
+
     /** Runs [work] later on the client's thread; nothing runs once the client is closed. */
     private fun post(work: () -> Unit) {
         try {
@@ -176,12 +185,12 @@ class MoonrakerClient(
     fun subscribeState(listener: (ProjectIntents.MoonrakerConnectionState) -> Unit): AutoCloseable = onThread {
         stateListeners.add(listener)
         listener(current)
-        AutoCloseable { onThread { stateListeners.remove(listener) } }
+        AutoCloseable { unlessClosed { stateListeners.remove(listener) } }
     }
 
     fun subscribeNotifications(listener: (MoonrakerClientNotification) -> Unit): AutoCloseable = onThread {
         notificationListeners.add(listener)
-        AutoCloseable { onThread { notificationListeners.remove(listener) } }
+        AutoCloseable { unlessClosed { notificationListeners.remove(listener) } }
     }
 
     /** Session-only credentials; the fault when they are refused (nothing changed). */

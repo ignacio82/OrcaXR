@@ -13,7 +13,12 @@ import dev.orcaxr.core.AppCredentialVault
 import dev.orcaxr.core.DeviceRefusal
 import dev.orcaxr.core.DeviceTextStore
 import dev.orcaxr.core.DeviceWorkspace
+import dev.orcaxr.core.CameraFrameException
+import dev.orcaxr.core.PrintHistory
 import dev.orcaxr.core.PrintJobCommandException
+import dev.orcaxr.core.PrinterCamera
+import dev.orcaxr.core.PrinterConsole
+import dev.orcaxr.core.PrinterExchanges
 import dev.orcaxr.core.ProjectIntents
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
@@ -34,6 +39,40 @@ data class PrinterRow(val id: String, val name: String, val address: String)
 /** A command the operator must confirm, and how to answer. */
 class PendingConfirmation(val intent: ProjectIntents.PrintJobCommandIntent, val answer: CompletableFuture<Boolean>)
 
+/** Something the operator must confirm before it is done. */
+class PendingAsk(val title: String, val detail: String, val confirm: String, val action: () -> Unit)
+
+/** The active printer's files: the folder shown, its listing, and the file chosen. */
+data class FilesView(
+    val path: String = "",
+    val listing: ProjectIntents.PrinterStorageListing? = null,
+    val selected: ProjectIntents.PrinterStorageMetadata? = null,
+    val loading: Boolean = false,
+)
+
+/** A page of the printer's history, each job described as the browser's panel does. */
+data class HistoryView(
+    val jobs: List<Pair<ProjectIntents.PrintHistoryJob, ProjectIntents.PrintHistoryJobView>> = emptyList(),
+    val pager: ProjectIntents.PrintHistoryPageView? = null,
+    val totals: String = "",
+    val loading: Boolean = false,
+)
+
+/** The console's transcript (bounded, redacted on the way in) and the printer's macros. */
+data class ConsoleView(
+    val lines: List<ProjectIntents.ConsoleLine> = emptyList(),
+    val macros: List<ProjectIntents.PrinterMacro> = emptyList(),
+)
+
+/** The printer's cameras, the one shown and its latest frame. */
+data class CameraView(
+    val cameras: List<ProjectIntents.PrinterCamera> = emptyList(),
+    val selected: Int = 0,
+    val frame: ByteArray? = null,
+    val failure: String? = null,
+    val description: String = "",
+)
+
 /** What the Device screen shows: a projection of the workspace, never a second copy of it. */
 data class DeviceState(
     val printers: List<PrinterRow> = emptyList(),
@@ -48,6 +87,9 @@ data class DeviceState(
     val summary: ProjectIntents.PrinterStatusSummary? = null,
     val commands: List<ProjectIntents.PrintJobCommandDescriptor> = emptyList(),
 )
+
+private const val TRANSCRIPT_LINES = 200
+private const val HISTORY_PAGE = 20.0
 
 /**
  * The Device area's host adapter: it owns the [DeviceWorkspace], runs every
@@ -67,6 +109,24 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         private set
     var confirmation by mutableStateOf<PendingConfirmation?>(null)
         private set
+    var ask by mutableStateOf<PendingAsk?>(null)
+        private set
+    var files by mutableStateOf(FilesView())
+        private set
+    var history by mutableStateOf(HistoryView())
+        private set
+    var console by mutableStateOf(ConsoleView())
+        private set
+    var cameras by mutableStateOf(CameraView())
+        private set
+
+    // Worker-thread state: the client the transcript listens to, and the camera's routes.
+    private var listened: dev.orcaxr.core.MoonrakerClient? = null
+    private var listening: AutoCloseable? = null
+    private val transcript = ArrayDeque<ProjectIntents.ConsoleLine>()
+    private var routes: List<ProjectIntents.CameraMechanism> = emptyList()
+    private var route = 0
+    @Volatile private var fetching = false
 
     init {
         work {
@@ -104,8 +164,50 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun units(text: String) = text.map { it.code }
+    private val absent = ProjectIntents.Empty
+
+    /** The secrets the transcript strikes out: the active printer's key. */
+    private fun secrets(): List<List<Int>> =
+        workspace.active?.let { workspace.apiKey(text(it.id)) }?.takeIf { it.isNotEmpty() }?.let { listOf(units(it)) } ?: emptyList()
+
+    private fun appendLine(line: ProjectIntents.ConsoleLine) {
+        transcript.addLast(line)
+        while (transcript.size > TRANSCRIPT_LINES) transcript.removeFirst()
+        val lines = transcript.toList()
+        main.post { console = console.copy(lines = lines) }
+    }
+
+    /** Listens to the current connection's console responses; a new connection replaces the old. */
+    private fun listen() {
+        val client = workspace.session.client
+        if (client === listened) return
+        listening?.close()
+        listened = client
+        listening = client?.subscribeNotifications { notification ->
+            work {
+                PrinterConsole.notification(
+                    ProjectIntents.ConsoleNotificationRequest(units(notification.method), secrets()),
+                    notification.params,
+                ).let { it as? ProjectIntents.OptionalConsoleLine.Value }?.let { appendLine(it.value) }
+            }
+        }
+    }
+
+    private fun exchanges(): PrinterExchanges =
+        workspace.exchanges() ?: throw IllegalStateException("Connect to the printer first.")
+
+    private fun failure(result: Any?): String? = when (result) {
+        is ProjectIntents.PrinterStorageResult.Failed -> text(result.value.message)
+        is ProjectIntents.PrintHistoryResult.Failed -> text(result.value.message)
+        is ProjectIntents.ConsoleResult.Failed -> text(result.value.message)
+        is ProjectIntents.CameraListResult.Failed -> text(result.value.message)
+        else -> null
+    }
+
     /** Recomputes the projection on the worker and publishes it. */
     private fun publish() {
+        listen()
         val directory = workspace.directory
         val active = workspace.active
         val activeId = active?.let { text(it.id) }
@@ -210,8 +312,207 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         confirmation?.answer?.complete(confirmed)
     }
 
+    fun answerAsk(confirmed: Boolean) {
+        val pending = ask ?: return
+        ask = null
+        if (confirmed) work { pending.action() }
+    }
+
+    private fun askFirst(title: String, detail: String, confirm: String, action: () -> Unit) {
+        main.post { ask = PendingAsk(title, detail, confirm, action) }
+    }
+
+    private fun printerName(): String = workspace.active?.let { text(it.name) } ?: "the printer"
+
+    // --- Files -------------------------------------------------------------------------------
+
+    fun openFolder(path: String) = work {
+        main.post { files = files.copy(loading = true) }
+        val result = exchanges().storage(ProjectIntents.PrinterStorageOperation.List(ProjectIntents.PrinterText(units(path)))).get().result
+        failure(result)?.let { failed -> main.post { message = failed; files = files.copy(loading = false) } }
+        (result as? ProjectIntents.PrinterStorageResult.Listing)?.let { listing ->
+            main.post { files = FilesView(path, listing.value) }
+        }
+    }
+
+    fun selectFile(path: String) = work {
+        val result = exchanges().storage(ProjectIntents.PrinterStorageOperation.Metadata(ProjectIntents.PrinterText(units(path)))).get().result
+        failure(result)?.let { failed -> main.post { message = failed } }
+        (result as? ProjectIntents.PrinterStorageResult.Metadata)?.let { metadata ->
+            main.post { files = files.copy(selected = metadata.value) }
+        }
+    }
+
+    fun printFile(path: String) = askFirst("Print ${path.substringAfterLast('/')} on ${printerName()}?", "The printer starts this file now.", "Print") {
+        val result = exchanges().storage(ProjectIntents.PrinterStorageOperation.Start(ProjectIntents.PrinterText(units(path)))).get().result
+        main.post { message = failure(result) ?: "Started ${path.substringAfterLast('/')}." }
+    }
+
+    fun deleteFile(path: String) = askFirst("Delete ${path.substringAfterLast('/')}?", "It is removed from the printer's storage.", "Delete") {
+        val result = exchanges().storage(ProjectIntents.PrinterStorageOperation.Delete(ProjectIntents.PrinterText(units(path)))).get().result
+        failure(result)?.let { failed -> main.post { message = failed } }
+        main.post { files = files.copy(selected = null) }
+        openFolder(files.path)
+    }
+
+    // --- History -----------------------------------------------------------------------------
+
+    fun loadHistory(start: Double = 0.0) = work {
+        main.post { history = history.copy(loading = true) }
+        val exchanges = exchanges()
+        val page = exchanges.history(
+            ProjectIntents.PrintHistoryOperation.Page(
+                ProjectIntents.PrintHistoryPageRequest(ProjectIntents.OptionalFinite.Value(start), ProjectIntents.OptionalFinite.Value(HISTORY_PAGE)),
+            ),
+        ).get()
+        val totals = exchanges.history(ProjectIntents.PrintHistoryOperation.Totals(absent)).get()
+        val read = (page as? ProjectIntents.PrintHistoryResult.Page)?.value
+        val totalsText = text(
+            PrintHistory.totalsText(
+                (totals as? ProjectIntents.PrintHistoryResult.Totals)?.let { ProjectIntents.OptionalPrintHistoryTotals.Value(it.value) }
+                    ?: ProjectIntents.OptionalPrintHistoryTotals.Absent(absent),
+            ).text,
+        )
+        failure(page)?.let { failed -> main.post { message = failed } }
+        val next = HistoryView(
+            jobs = read?.jobs.orEmpty().map { it to PrintHistory.jobView(it) },
+            pager = read?.let { PrintHistory.pageView(ProjectIntents.PrintHistoryPageShape(it.jobs.size.toDouble(), it.total, it.start, it.limit)) },
+            totals = totalsText,
+        )
+        main.post { history = next }
+    }
+
+    // --- Console -----------------------------------------------------------------------------
+
+    /** Sends [script] once its assessment allows: anything that is not report-only is confirmed first. */
+    fun sendScript(script: String) = work {
+        val job = (workspace.session.view.snapshot as? ProjectIntents.OptionalPrintJobSnapshot.Value)?.value?.state
+        val assessment = PrinterConsole.assess(
+            ProjectIntents.GcodeAssessRequest(
+                units(script),
+                job?.let { ProjectIntents.OptionalPrintJobState.Value(it) } ?: ProjectIntents.OptionalPrintJobState.Absent(absent),
+            ),
+        )
+        val send = {
+            val result = exchanges().console(ProjectIntents.ConsoleOperation.Send(ProjectIntents.PrinterText(units(script)))).get()
+            val failed = failure(result)
+            val line = ProjectIntents.ConsoleLine(
+                if (failed == null) ProjectIntents.ConsoleLineKind.Sent else ProjectIntents.ConsoleLineKind.Error,
+                units(failed ?: script.trim()),
+            )
+            appendLine(PrinterConsole.line(ProjectIntents.ConsoleLineRequest(line, secrets())))
+        }
+        if (assessment.level == ProjectIntents.GcodeRiskLevel.Safe) {
+            send()
+        } else {
+            val command = text(assessment.command)
+            askFirst(
+                if (assessment.level == ProjectIntents.GcodeRiskLevel.Dangerous) "Run $command anyway?" else "Run $command?",
+                assessment.reasons.joinToString("\n") { text(it) },
+                "Run $command",
+                send,
+            )
+        }
+    }
+
+    fun loadMacros() = work {
+        val result = exchanges().console(ProjectIntents.ConsoleOperation.Macros(absent)).get()
+        failure(result)?.let { failed -> main.post { message = failed } }
+        (result as? ProjectIntents.ConsoleResult.Macros)?.let { macros -> main.post { console = console.copy(macros = macros.value) } }
+    }
+
+    /** Spells a macro with its values (or refuses them) and sends it as a script. */
+    fun runMacro(macro: ProjectIntents.PrinterMacro, values: Map<String, String>) = work {
+        when (val invocation = PrinterConsole.invocation(
+            ProjectIntents.MacroInvocationRequest(macro.name, values.map { (key, value) -> ProjectIntents.MacroValue(units(key), units(value)) }),
+        )) {
+            is ProjectIntents.MacroInvocation.Refused -> main.post { message = text(invocation.value.message) }
+            is ProjectIntents.MacroInvocation.Script -> sendScript(text(invocation.value))
+        }
+    }
+
+    // --- Cameras -----------------------------------------------------------------------------
+
+    fun loadCameras() = work {
+        val result = exchanges().cameras().get()
+        failure(result)?.let { failed -> main.post { message = failed } }
+        val list = (result as? ProjectIntents.CameraListResult.Cameras)?.value.orEmpty()
+        val selected = list.indexOfFirst { it.enabled && PrinterCamera.mechanisms(mechanismsRequest(it)).isNotEmpty() }.coerceAtLeast(0)
+        chooseRoutes(list.getOrNull(selected))
+        main.post { cameras = CameraView(list, selected, description = describe(list.getOrNull(selected))) }
+    }
+
+    fun selectCamera(index: Int) = work {
+        val camera = cameras.cameras.getOrNull(index)
+        chooseRoutes(camera)
+        main.post { cameras = cameras.copy(selected = index, frame = null, failure = null, description = describe(camera)) }
+    }
+
+    private fun mechanismsRequest(camera: ProjectIntents.PrinterCamera) =
+        ProjectIntents.CameraMechanismsRequest(camera, ProjectIntents.OptionalText.Absent(absent))
+
+    /** The routes worth trying, in order. An app has no page that loads an image itself, so that route is a direct fetch. */
+    private fun chooseRoutes(camera: ProjectIntents.PrinterCamera?) {
+        routes = camera?.let { PrinterCamera.mechanisms(mechanismsRequest(it)) }.orEmpty()
+            .map { if (it == ProjectIntents.CameraMechanism.Image) ProjectIntents.CameraMechanism.Direct else it }
+            .distinct()
+        route = 0
+    }
+
+    private fun describe(camera: ProjectIntents.PrinterCamera?): String = camera?.let {
+        text(
+            PrinterCamera.describe(
+                ProjectIntents.CameraDescribeRequest(
+                    it,
+                    routes.getOrNull(route)?.let { r -> ProjectIntents.OptionalCameraMechanism.Value(r) } ?: ProjectIntents.OptionalCameraMechanism.Absent(absent),
+                    ProjectIntents.OptionalText.Absent(absent),
+                ),
+            ).text,
+        )
+    }.orEmpty()
+
+    /** The milliseconds between frames of the camera shown. */
+    fun pollIntervalMs(): Long = cameras.cameras.getOrNull(cameras.selected)?.let { PrinterCamera.pollIntervalMs(it).toLong() } ?: 1000L
+
+    /**
+     * Fetches one frame along the current route; a failed route gives way to
+     * the next, and once every route has failed the last failure stands.
+     */
+    fun fetchFrame() {
+        if (fetching) return
+        fetching = true
+        work {
+            try {
+                val camera = cameras.cameras.getOrNull(cameras.selected) ?: return@work
+                val mechanism = routes.getOrNull(route) ?: return@work
+                val frame = exchanges().snapshot(camera, mechanism).get().mapCatching { bytes ->
+                    // Bytes that are not an image (a web server's page in place of a frame)
+                    // fail the route as a browser's image would, and the next is tried.
+                    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                    if (bounds.outWidth <= 0) {
+                        val where = if (mechanism == ProjectIntents.CameraMechanism.Transport) camera.snapshotPath else camera.snapshotUrl
+                        val named = (where as? ProjectIntents.OptionalPrinterReplyText.Value)?.let { text(it.value) } ?: "the camera"
+                        throw IllegalStateException("OrcaXR could not show a frame from $named.")
+                    }
+                    bytes
+                }
+                frame.onSuccess { bytes -> main.post { cameras = cameras.copy(frame = bytes, failure = null) } }
+                frame.onFailure { failed ->
+                    route++
+                    val text = (failed as? CameraFrameException)?.message ?: failed.message
+                    val described = describe(camera)
+                    main.post { cameras = cameras.copy(failure = text, description = described) }
+                }
+            } finally {
+                fetching = false
+            }
+        }
+    }
+
     override fun onCleared() {
         worker.execute {
+            listening?.close()
             subscription?.close()
             if (::workspace.isInitialized) workspace.close()
         }

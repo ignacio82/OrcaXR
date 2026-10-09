@@ -1957,7 +1957,7 @@ credential storage, and explicit permission/error flows.
   stored id removing two printers, a tool count a reload drops). The
   directory's screens and credential entry now exist in the app's Device area
   (`DeviceWorkspace`, `DeviceScreen`): saved printers added, chosen and
-  removed, each with its own key, remember switch and forget, verified by 28
+  removed, each with its own key, remember switch and forget, verified by 30
   host checks and an owned-emulator smoke against the simulator. Discovery
   remains.
 - [x] Support intentional HTTP LAN connections through an explicit transport
@@ -2014,7 +2014,7 @@ credential storage, and explicit permission/error flows.
   the simulator upload under a unique name, overwrite by choice, decline,
   reprint and refuse a busy printer. The operator's UI for it belongs to the
   application shell.
-- [ ] Implement status/history/storage/console/camera features matching current
+- [x] Implement status/history/storage/console/camera features matching current
   scope. Camera subscriptions stop when hidden/disposed; emergency stop and the
   distinct firmware-restart action remain reachable without successful status
   queries. Preserve existing operator confirmations and supervised print gates.
@@ -2054,8 +2054,16 @@ credential storage, and explicit permission/error flows.
   restart stayed offered while the status was stale (seen on the emulator),
   as the core's availability keeps them. `PrinterExchanges` carries out the
   shared storage, history, console and camera operations over the session's
-  client (20 host checks against the simulator). History, storage,
-  console and camera screens, and the camera's polling lifecycle, remain.
+  client (20 host checks against the simulator), and the Device area's
+  Files, History, Console and Camera tabs use it: files read, printed or
+  deleted once confirmed; history pages described as the browser does;
+  console scripts assessed and confirmed when not report-only, with a
+  redacted transcript and macros; camera frames polled only while shown and
+  the app is in front, each route tried in order. The owned-emulator smoke
+  exercises every tab against the simulator. The active printer is selected
+  as soon as it is chosen, so emergency stop and firmware restart are offered
+  before any status reading or connection; a firmware restart reaches the
+  simulator with no connection at all.
 - [ ] Test with the existing printer simulator before qualified, supervised U1
   and CC trials. Automated tests do not issue commands to real printers.
 
