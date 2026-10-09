@@ -9,10 +9,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import dev.orcaxr.core.AndroidLocalNetwork
+import dev.orcaxr.core.AndroidPrinterDiscovery
 import dev.orcaxr.core.AppCredentialVault
 import dev.orcaxr.core.DeviceRefusal
 import dev.orcaxr.core.DeviceTextStore
 import dev.orcaxr.core.DeviceWorkspace
+import dev.orcaxr.core.DiscoveryProbe
+import dev.orcaxr.core.DiscoveryProposal
 import dev.orcaxr.core.CameraFrameException
 import dev.orcaxr.core.PrintHistory
 import dev.orcaxr.core.PrintJobCommandException
@@ -73,6 +76,12 @@ data class CameraView(
     val description: String = "",
 )
 
+/** A printer discovery found and verified, as the list shows it; [savedAs] names the saved printer at that machine. */
+data class ProposalRow(val key: String, val name: String, val address: String, val needsKey: Boolean, val savedAs: String?)
+
+/** Discovery: whether it is looking, whether it has looked, and what it proposes. */
+data class DiscoveryView(val searching: Boolean = false, val searched: Boolean = false, val proposals: List<ProposalRow> = emptyList())
+
 /** What the Device screen shows: a projection of the workspace, never a second copy of it. */
 data class DeviceState(
     val printers: List<PrinterRow> = emptyList(),
@@ -80,6 +89,8 @@ data class DeviceState(
     val apiKey: String = "",
     val remember: Boolean = true,
     val localNetworkBlocked: Boolean = false,
+    val localNetworkGranted: Boolean = true,
+    val discovery: DiscoveryView = DiscoveryView(),
     val connected: Boolean = false,
     val connecting: Boolean = false,
     /** The connection in a few words, with the transport's own code when it failed. */
@@ -101,6 +112,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "device-model") }
     private lateinit var workspace: DeviceWorkspace
+    private lateinit var finder: AndroidPrinterDiscovery
     private var subscription: AutoCloseable? = null
 
     var state by mutableStateOf(DeviceState())
@@ -127,6 +139,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
     private var routes: List<ProjectIntents.CameraMechanism> = emptyList()
     private var route = 0
     @Volatile private var fetching = false
+    private var searched = false
 
     init {
         work {
@@ -141,6 +154,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
                     null
                 },
             )
+            finder = AndroidPrinterDiscovery(application, workspace.discovery) { work { publish() } }
             subscription = workspace.subscribe { work { publish() } }
             publish()
         }
@@ -205,9 +219,22 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         else -> null
     }
 
+    private fun key(proposal: DiscoveryProposal) = "${proposal.candidate.host}:${proposal.candidate.port}"
+
     /** Recomputes the projection on the worker and publishes it. */
     private fun publish() {
         listen()
+        val found = workspace.discovery
+        val discovery = DiscoveryView(
+            searching = finder.browsing || found.probing > 0,
+            searched = searched,
+            proposals = found.proposals.map { proposal ->
+                ProposalRow(
+                    key(proposal), proposal.name, "${proposal.candidate.host} · port ${proposal.candidate.port}",
+                    proposal.probe == DiscoveryProbe.NeedsKey, workspace.savedAs(proposal.candidate)?.let { text(it.name) },
+                )
+            },
+        )
         val directory = workspace.directory
         val active = workspace.active
         val activeId = active?.let { text(it.id) }
@@ -221,6 +248,8 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
             apiKey = activeId?.let(workspace::apiKey) ?: "",
             remember = workspace.credentials.remember,
             localNetworkBlocked = workspace.localNetworkBlocked(),
+            localNetworkGranted = workspace.localNetworkGranted(),
+            discovery = discovery,
             connected = connection is ProjectIntents.MoonrakerConnectionState.Connected,
             connecting = connection is ProjectIntents.MoonrakerConnectionState.Connecting ||
                 connection is ProjectIntents.MoonrakerConnectionState.Reconnecting,
@@ -249,6 +278,25 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
     fun addPrinter(name: String, address: String, port: Int?) = work {
         workspace.addPrinter(name, address, port)
         main.post { message = "Saved ${name.trim()}." }
+    }
+
+    /** Looks for printers that announce themselves on this network; nothing is saved until one is added. */
+    fun findPrinters() = work {
+        searched = true
+        finder.start()
+    }
+
+    /** Saves a printer discovery proposed, under the name it gives itself, and makes it the active one. */
+    fun addDiscovered(key: String) = work {
+        val proposal = workspace.discovery.proposals.firstOrNull { key(it) == key } ?: return@work
+        workspace.addDiscovered(proposal)
+        val needsKey = proposal.probe == DiscoveryProbe.NeedsKey
+        main.post { message = if (needsKey) "Saved ${proposal.name}. It asks for an API key: enter it to connect." else "Saved ${proposal.name}." }
+    }
+
+    /** Shows a notice the screen itself decided on. */
+    fun notify(text: String) {
+        message = text
     }
 
     fun activate(id: String) = work { workspace.activate(id) }
@@ -514,6 +562,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         worker.execute {
             listening?.close()
             subscription?.close()
+            if (::finder.isInitialized) finder.close()
             if (::workspace.isInitialized) workspace.close()
         }
         worker.shutdown()

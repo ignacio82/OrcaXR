@@ -70,6 +70,8 @@ export async function startMoonrakerSimulator(options = {}) {
     snapshotPath: options.snapshotPath ?? '/webcam/snapshot',
     /** Whether that path refuses a request with no API key, as a secured Moonraker does. */
     requireSnapshotKey: options.requireSnapshotKey ?? false,
+    /** A key every request must carry, as a Moonraker that trusts no client asks for one. */
+    requiredApiKey: options.requiredApiKey ?? null,
   };
   let snapshotRequests = 0;
   let unauthenticatedSnapshots = 0;
@@ -160,6 +162,11 @@ export async function startMoonrakerSimulator(options = {}) {
     }
     requests.push(`${request.method} ${url.pathname}`);
     apiKeys.push(request.headers['x-api-key']);
+    if (state.requiredApiKey !== null && request.headers['x-api-key'] !== state.requiredApiKey) {
+      response.writeHead(401, { ...cors, 'content-type': 'application/json' });
+      response.end(JSON.stringify({ error: { code: 401, message: 'Unauthorized' } }));
+      return;
+    }
     const json = (payload, bare = false) => {
       response.writeHead(200, { ...cors, 'content-type': 'application/json' });
       response.end(JSON.stringify(bare ? payload : { result: payload }));

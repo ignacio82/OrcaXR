@@ -24,7 +24,9 @@ class DeviceRefusal(message: String) : Exception(message)
  * this run when not), and removed with its printer. Switching printers
  * rebuilds the connection, so no socket, credential or capability crosses
  * from the printer selected before. Every exchange is judged by the
- * local-network permission first. Listeners hear every change.
+ * local-network permission first. Discovery ([discovery]) only proposes
+ * printers it verified; one is saved only when the operator adds it.
+ * Listeners hear every change.
  */
 class DeviceWorkspace(
     private val directoryStore: DeviceTextStore,
@@ -48,6 +50,9 @@ class DeviceWorkspace(
      * before and without a connection.
      */
     val session = PrinterSessionClient(::openClient, clock)
+
+    /** Printers the platform's discovery found and verified, offered for the operator to add. */
+    val discovery = PrinterDiscovery(MoonrakerProbe(http, localNetwork, clock))
 
     init {
         selectActive()
@@ -82,9 +87,11 @@ class DeviceWorkspace(
     fun subscribe(listener: () -> Unit): AutoCloseable {
         synchronized(lock) { listeners += listener }
         val session = session.subscribe(listener)
+        val discovery = discovery.subscribe(listener)
         return AutoCloseable {
             synchronized(lock) { listeners -= listener }
             session.close()
+            discovery.close()
         }
     }
 
@@ -127,6 +134,16 @@ class DeviceWorkspace(
         }
         activate(id)
         return id
+    }
+
+    /** Adds a printer discovery proposed, under the name it gives itself; returns its id. */
+    fun addDiscovered(proposal: DiscoveryProposal): String =
+        addPrinter(proposal.name, proposal.candidate.host, proposal.candidate.port)
+
+    /** The saved printer at the machine [candidate] names, if any. */
+    fun savedAs(candidate: DiscoveryCandidate): ProjectIntents.PrinterEntry? {
+        val machine = endpoint(units(candidate.host), candidate.port.toDouble()) ?: return null
+        return directory.printers.firstOrNull { endpoint(it.host, it.port) == machine }
     }
 
     /** Renames a printer or changes its address. */
@@ -223,12 +240,16 @@ class DeviceWorkspace(
         }
     }
 
+    /** Whether the app may use the local network now: discovery needs it before it looks. */
+    fun localNetworkGranted(): Boolean = localNetwork.granted()
+
     /** The URL the active printer's address names (the shared endpoint normalization), or null. */
-    fun activeEndpoint(): String? {
-        val printer = active ?: return null
+    fun activeEndpoint(): String? = active?.let { endpoint(it.host, it.port) }
+
+    private fun endpoint(host: List<Int>, port: Double): String? {
         val reply = MoonrakerPolicy.endpoint(
             ProjectIntents.MoonrakerEndpointRequest(
-                printer.host, ProjectIntents.OptionalFinite.Value(printer.port),
+                host, ProjectIntents.OptionalFinite.Value(port),
                 ProjectIntents.OptionalText.Absent(ProjectIntents.Empty), ProjectIntents.OptionalText.Absent(ProjectIntents.Empty),
             ),
         )
@@ -292,6 +313,7 @@ class DeviceWorkspace(
     }
 
     override fun close() {
+        discovery.stop()
         session.close()
         synchronized(lock) { listeners.clear() }
     }

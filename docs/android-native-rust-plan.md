@@ -1936,7 +1936,7 @@ credential storage, and explicit permission/error flows.
   between sends. Porting the hosts fixed their own ordering: a synchronous
   answer's step ran ahead of a cancel the question itself caused. Each host
   keeps the TypeScript controller as its rollback.
-- [ ] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
+- [x] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
   credential entry, and optional discovery. Discovery proposes verified endpoints
   and cannot overwrite preferences while a stale probe completes.
   `MoonrakerClient` (core-bridge) hosts the shared transport machine over
@@ -1959,7 +1959,16 @@ credential storage, and explicit permission/error flows.
   (`DeviceWorkspace`, `DeviceScreen`): saved printers added, chosen and
   removed, each with its own key, remember switch and forget, verified by 30
   host checks and an owned-emulator smoke against the simulator. Discovery
-  remains.
+  (`PrinterDiscovery`, `MoonrakerProbe`, `AndroidPrinterDiscovery`) only
+  proposes: the platform's DNS-SD browse for `_moonraker._tcp` finds
+  candidates, each is verified by the keyless Moonraker handshake, a probe
+  for an earlier or stopped run is dropped, and a printer is saved only when
+  the operator adds a proposal. 27 host checks cover verification (open,
+  key-requiring, not Moonraker, nothing there, local network denied) and
+  stale, duplicate and bounded runs, including a probe completing after the
+  operator added another printer; an instrumented test finds a service
+  advertised on the emulator, and the emulator smoke finds, adds and
+  connects to the simulator through an advertised port.
 - [x] Support intentional HTTP LAN connections through an explicit transport
   policy. Android configuration must allow the intended user-entered endpoints;
   application routing restricts cleartext requests to those selected local
@@ -1984,8 +1993,10 @@ credential storage, and explicit permission/error flows.
   out like a switched-off printer — and the permission is asked afresh for
   each exchange, so denial, revocation and a later grant take effect on the
   next one. 28 host checks cover them against the simulator. Requesting the
-  permission and explaining a refusal belong to the application shell; no
-  discovery or subnet scanning exists. The Device area asks for the
+  permission and explaining a refusal belong to the application shell. Manual
+  entry and discovery stay distinct: discovery uses only the platform's
+  DNS-SD browse (no subnet scanning), never saves on its own, and on
+  Android 17 asks for the permission before it searches. The Device area asks for the
   permission when the active printer needs it, offers the app's settings once
   it is refused for good, and reads it again on every resume; API 34
   emulators cannot show Android 17's prompt, so the prompt itself is

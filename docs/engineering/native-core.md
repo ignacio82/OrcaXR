@@ -257,11 +257,13 @@ run and preserves the original failure if log capture fails.
 
 ### Emulator evidence on 2026-10-09
 
-All 45 `core-bridge` real-JNI instrumentation tests — now including
-`CredentialVaultTest` over the real Android Keystore — three shell cold
-starts and the Device area smoke (`android-device-smoke.py`, against the
-Moonraker simulator on the host) pass on a freshly owned API 34 x86_64
-emulator through `emulator-smoke.py`. The host's `/tmp` is a tmpfs and its
+All 48 `core-bridge` real-JNI instrumentation tests — now including
+`CredentialVaultTest` over the real Android Keystore, the two
+`AndroidPrinterDiscoveryTest` cases and the `MoonrakerAdvertiser` helper
+(skipped without its arguments) — three shell cold starts and the Device
+area smoke (`android-device-smoke.py`, against the Moonraker simulator on
+the host, ending with a DNS-SD search that finds, adds and connects to it)
+pass on a freshly owned API 34 x86_64 emulator through `emulator-smoke.py`. The host's `/tmp` is a tmpfs and its
 disk was nearly full: give `TMPDIR` a disk-backed directory with at least
 8 GB free before running it. API 34 cannot exercise Android 17's
 local-network permission prompt; no API 37 image was available.
@@ -4147,7 +4149,8 @@ whatever edits built the entry, so both hosts store the same text. Every
 edit is a pure step: add (under an id the host draws), update, remove
 (promoting the first remaining printer when the default goes), choose the
 default, adopt a legacy single endpoint. Discovery is not ported: the
-browser reports it unavailable, while Android can offer the platform's own.
+browser reports it unavailable, while Android offers the platform's own
+(DNS-SD, under Android Device area).
 
 Porting fixed five browser defects, each with a regression test: another
 spelling of a saved address was saved as a second printer, each with its
@@ -4296,6 +4299,48 @@ the server had closed — the job identity query, then every reconnect. Its
 pool now lets an idle connection go after 2 s, and a client check idles past
 the server's keep-alive before its next request. Retrying instead could
 repeat a print start the printer had already received.
+
+Discovery proposes and never saves. `PrinterDiscovery` (core-bridge,
+host-testable) runs one generation at a time: a candidate is probed once per
+run (by host and port), at most 32 per run, and a probe's answer for an
+earlier run, or for a run that was stopped, is dropped when it arrives — so a
+late probe can neither propose into a newer search nor touch anything the
+operator chose meanwhile. `MoonrakerProbe` verifies a candidate by the
+Moonraker handshake a connection makes, with no credential (a key is never
+sent to a machine the operator has not added), each request and the socket's
+opening bounded at 5 s, the local-network permission and cleartext policy
+applied as for a connection. Only a machine that completes the handshake, or
+answers that it needs a key, is proposed; a web page, a closed port or an
+unusable version is not. `DeviceWorkspace.addDiscovered` saves a proposal as
+any typed-in printer (under the hostname the printer gives itself, else its
+advertised name), and `savedAs` recognises a proposal already saved under
+another spelling of its address. `AndroidPrinterDiscovery` feeds a run from
+the platform's DNS-SD browse for `_moonraker._tcp` (what Moonraker's
+zeroconf component advertises) for 15 s — Android 14+ resolving each service
+with a `ServiceInfoCallback`, earlier releases one `resolveService` at a
+time — preferring an IPv4 address and never a link-local IPv6 one; no
+address range is ever scanned. On Android 17 the Device screen asks for the
+local-network permission before it searches (the system picker of
+`DiscoveryRequest` is not used: verifying and connecting need the permission
+anyway). The screen's "Find printers" lists each proposal with whether it
+asks for a key and offers "Add", or names the saved printer at that machine.
+
+`ProjectPrinterDiscoveryChecks` (27 host checks) probes an open simulator
+(verified, named `orcaxr-simulator`), one requiring a key (proposed as
+needing one; it receives no key until the operator enters it, then connects),
+a web server and a closed port (neither proposed), a printer behind a denied
+local-network permission (refused promptly, then probed once granted), and
+drives runs with probes under the test's control: duplicates, an earlier
+run's and a stopped run's answers, the 32-candidate bound, and a probe that
+completes after the operator added another printer leaving the stored
+directory untouched. `AndroidPrinterDiscoveryTest` (instrumented) advertises
+`_moonraker._tcp` on the emulator and finds it offered at its port and an
+IPv4 address; it caught the platform delivering callbacks after the finder
+closed into its shut-down executor, which crashed the process — they are now
+dropped. The emulator smoke ends by searching: a helper in the core's test
+APK (`MoonrakerAdvertiser`, skipped without its arguments) advertises the
+service on a port forwarded to the simulator, and the app finds it, shows it
+verified, adds it, connects through the advertised port and removes it.
 
 ### Action capabilities
 

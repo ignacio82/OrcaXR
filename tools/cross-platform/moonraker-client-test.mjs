@@ -130,8 +130,17 @@ try {
   assert.ok(exchanged.commands.includes("gcode:M105"));
   assert.ok(!exchanged.requests.some((request) => request.includes("..") || request.includes("printer.cfg")));
   assert.deepEqual([...new Set(exchanged.apiKeys.filter(Boolean))], ["exchange-key"]);
+  // Discovery: an open printer and one asking for a key, probed with no key.
+  const found = await simulator();
+  const locked = await simulator({ options: { requiredApiKey: "locked-key" } });
+  printers.push(found, locked);
+  assert.equal(jvm.call("printerDiscoveryChecks", found.url, locked.url), 27);
+  // The probes sent no key; the locked printer saw its key only once the operator entered it.
+  assert.deepEqual((await found.summary()).apiKeys.filter(Boolean), []);
+  assert.deepEqual([...new Set((await locked.summary()).apiKeys.filter(Boolean))], ["locked-key"]);
   console.log(
     JSON.stringify({
+      printerDiscoveryChecks: 27,
       printerExchangesChecks: 20,
       deviceWorkspaceChecks: 30,
       lanPolicyChecks: 21,

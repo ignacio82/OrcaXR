@@ -65,9 +65,24 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
         onDispose { lifecycle.removeObserver(observer) }
     }
     var askedOnce by rememberSaveable { mutableStateOf(false) }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+    // Set while the permission is asked for so a search can follow.
+    var finding by rememberSaveable { mutableStateOf(false) }
+    val findNeedsPermission = stringResource(R.string.device_find_needs_permission)
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         askedOnce = true
         model.refresh()
+        if (finding) {
+            finding = false
+            if (granted) model.findPrinters() else model.notify(findNeedsPermission)
+        }
+    }
+    val find = {
+        if (Build.VERSION.SDK_INT >= ANDROID_17 && !state.localNetworkGranted) {
+            finding = true
+            permission.launch(LOCAL_NETWORK)
+        } else {
+            model.findPrinters()
+        }
     }
     var adding by rememberSaveable { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf(DeviceTab.Status) }
@@ -98,8 +113,17 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
             }
         }
         item {
-            OutlinedButton(onClick = { adding = true }) { Text(stringResource(R.string.device_add_printer)) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { adding = true }) { Text(stringResource(R.string.device_add_printer)) }
+                OutlinedButton(onClick = find, enabled = !state.discovery.searching) { Text(stringResource(R.string.device_find_printers)) }
+            }
         }
+        if (state.discovery.searching) {
+            item { Text(stringResource(R.string.device_finding), style = MaterialTheme.typography.bodySmall) }
+        } else if (state.discovery.searched && state.discovery.proposals.isEmpty()) {
+            item { Text(stringResource(R.string.device_found_none), style = MaterialTheme.typography.bodySmall) }
+        }
+        items(state.discovery.proposals, key = { "found:${it.key}" }) { proposal -> Proposal(proposal, model) }
         if (state.activeId != null) {
             if (state.localNetworkBlocked) {
                 item {
@@ -191,6 +215,25 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
             confirmButton = { TextButton(onClick = { model.answer(true) }) { Text(stringResource(R.string.device_confirm)) } },
             dismissButton = { TextButton(onClick = { model.answer(false) }) { Text(stringResource(R.string.device_do_not)) } },
         )
+    }
+}
+
+@Composable
+private fun Proposal(proposal: ProposalRow, model: DeviceModel) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(proposal.name, style = MaterialTheme.typography.titleSmall)
+            Text(proposal.address, style = MaterialTheme.typography.bodySmall)
+            Text(
+                stringResource(if (proposal.needsKey) R.string.device_found_needs_key else R.string.device_found_verified),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (proposal.savedAs != null) {
+                Text(stringResource(R.string.device_found_saved, proposal.savedAs), style = MaterialTheme.typography.labelMedium)
+            } else {
+                TextButton(onClick = { model.addDiscovered(proposal.key) }) { Text(stringResource(R.string.device_found_add, proposal.name)) }
+            }
+        }
     }
 }
 

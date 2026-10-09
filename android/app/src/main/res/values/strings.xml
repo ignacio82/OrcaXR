@@ -8,6 +8,14 @@
     <string name="device_printers">Printers</string>
     <string name="device_no_printers">No printer saved yet. Add one by its address on your network.</string>
     <string name="device_add_printer">Add printer</string>
+    <string name="device_find_printers">Find printers</string>
+    <string name="device_finding">Looking for printers that announce themselves on this network…</string>
+    <string name="device_found_none">No printer answered. Moonraker announces itself only when its zeroconf component is enabled; add the printer by its address instead.</string>
+    <string name="device_found_verified">Moonraker answered</string>
+    <string name="device_found_needs_key">Moonraker answered and asks for an API key</string>
+    <string name="device_found_saved">Saved as %1$s</string>
+    <string name="device_found_add">Add %1$s</string>
+    <string name="device_find_needs_permission">OrcaXR can look for printers only with permission to reach devices on your local network.</string>
     <string name="device_printer_name">Name</string>
     <string name="device_printer_address">Address</string>
     <string name="device_printer_port">Port (7125 if empty)</string>
