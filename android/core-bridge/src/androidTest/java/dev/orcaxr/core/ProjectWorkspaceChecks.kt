@@ -92,6 +92,12 @@ object ProjectWorkspaceChecks {
             val both = until(workspace) { labels(it).size == 3 }
             check(both.totalRows == 3L, "two_objects")
 
+            // A shared copy is a complete package and leaves the project unsaved.
+            val copy = Memory()
+            done(workspace.export(copy))
+            check(copy.bytes.size > 100 && copy.bytes[0] == 'P'.code.toByte(), "exported_a_zip")
+            check(workspace.view.dirty && workspace.view.document == null, "export_is_not_a_save")
+
             // Save through a provider: a failing one leaves the project dirty with its code.
             val broken = Memory(failWrite = true)
             check(failure(workspace.save(broken, "broken.3mf"))?.contains("document_write_failed") == true, "write_failure_reported")

@@ -134,7 +134,8 @@ Detailed evidence and reproducible commands live in
   imports (previewed, acknowledged, one undoable entry), undoes, redoes and
   starts new projects (the shared `fresh_project`, replayed against the
   browser), keeps recent documents with persisted grants and accepts incoming
-  VIEW/SEND only as `content:` URIs; 25 host checks over JNI and an
+  VIEW/SEND only as `content:` URIs, and shares a copy through the system's
+share sheet without saving; 27 host checks over JNI and an
   owned-emulator smoke through the system picker pass.
 - [x] Share bounded G-code text windows and case-insensitive line search through
   Rust, WASM and JNI (Phase 3). Browser, host and Chrome WASM replays agree on
@@ -1830,8 +1831,9 @@ storage journeys on phone, tablet, and desktop-sized windows.
   Save to the document it created), New, model import, recent documents with
   persisted grants (a revoked or missing one is forgotten when it fails) and
   incoming VIEW/SEND validated as `content:` input; an owned-emulator smoke
-  drives them through the system picker. Sharing a project out, a disk-full
-  or revoked grant on a device, and large-file timing remain unverified.
+  drives them through the system picker; Share offers a 3MF copy through a
+  read-only provider. A disk-full or revoked grant on a device and
+  large-file timing remain unverified.
 - [ ] Implement recovery storage and Save/Discard/Cancel guards for back,
   navigation, new/open/replace, window close where observable, and app updates.
   Test process death during capture, write, commit, and restore.

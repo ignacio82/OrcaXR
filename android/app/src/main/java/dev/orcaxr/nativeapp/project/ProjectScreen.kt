@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.core.ProjectIntents
@@ -41,6 +42,10 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     val suggested = "${view.name.ifBlank { "Untitled project" }}.3mf"
     // "Save" in the unsaved-changes dialog with nowhere to save yet: ask where, then go on.
     val saveBeforeGoingOn = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(MIME_3MF), model::saveAsAnswered)
+    val context = LocalContext.current
+    LaunchedEffect(model.shareRequest) {
+        model.shareRequest?.let { context.startActivity(it); model.shareShown() }
+    }
     LaunchedEffect(model.saveAsRequested) { if (model.saveAsRequested) saveBeforeGoingOn.launch(suggested) }
 
     LazyColumn(
@@ -63,6 +68,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 Button(onClick = { if (!model.save()) saveAs.launch(suggested) }, enabled = enabled) { Text(stringResource(R.string.project_save)) }
                 OutlinedButton(onClick = { saveAs.launch(suggested) }, enabled = enabled) { Text(stringResource(R.string.project_save_as)) }
                 OutlinedButton(onClick = { import.launch(arrayOf("*/*")) }, enabled = enabled) { Text(stringResource(R.string.project_import)) }
+                OutlinedButton(onClick = model::share, enabled = enabled) { Text(stringResource(R.string.project_share)) }
             }
         }
         item {

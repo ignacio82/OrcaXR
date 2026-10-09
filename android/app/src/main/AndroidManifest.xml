@@ -31,5 +31,8 @@
                 <data android:mimeType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml" />
             </intent-filter>
         </activity>
+        <!-- Copies of projects the operator shares, read-only, granted once to the receiving app. -->
+        <provider android:name=".project.SharedProjects" android:authorities="${applicationId}.shared"
+            android:exported="false" android:grantUriPermissions="true" />
     </application>
 </manifest>

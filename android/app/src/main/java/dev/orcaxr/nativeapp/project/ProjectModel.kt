@@ -1,6 +1,7 @@
 package dev.orcaxr.nativeapp.project
 
 import android.app.Application
+import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import android.os.Handler
@@ -13,6 +14,7 @@ import androidx.lifecycle.AndroidViewModel
 import dev.orcaxr.core.ContentProjectDocument
 import dev.orcaxr.core.ProjectActorImport
 import dev.orcaxr.core.ProjectArchiveFormat
+import dev.orcaxr.core.ProjectDocumentOutput
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.core.RecentDocuments
@@ -20,6 +22,7 @@ import dev.orcaxr.nativeapp.device.PreferencesTextStore
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutionException
+import java.io.File
 import java.util.concurrent.Executors
 import org.json.JSONObject
 
@@ -73,6 +76,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     var saveAsRequested by mutableStateOf(false)
         private set
     private var afterSave: (() -> Unit)? = null
+    /** The system's share sheet for a copy of the project, for the screen to show once. */
+    var shareRequest by mutableStateOf<Intent?>(null)
+        private set
 
     init {
         work {
@@ -250,6 +256,33 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
         main.post { message = "Saved $name." }
     }
 
+    /**
+     * Shares a copy of the project as a 3MF: written to the app's shared cache
+     * (replacing the copy shared before) and offered through the system's
+     * share sheet with a one-time read grant. The project's saved state is
+     * untouched.
+     */
+    fun share() = work {
+        val context = getApplication<Application>()
+        val folder = SharedProjects.folder(context).apply { mkdirs() }
+        folder.listFiles()?.forEach { it.delete() }
+        val name = workspace.view.name.ifBlank { "Untitled project" }.replace(UNSAFE_NAME, "_").take(100) + ".3mf"
+        val file = File(folder, name)
+        workspace.export(object : ProjectDocumentOutput {
+            override fun openOutput() = file.outputStream()
+        }).await()
+        val uri = SharedProjects.uri(context, file)
+        val send = Intent(Intent.ACTION_SEND).setType("model/3mf").putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // The grant travels with the clip, so the chosen app may read the copy once.
+        send.clipData = ClipData.newRawUri(name, uri)
+        main.post { shareRequest = Intent.createChooser(send, null) }
+    }
+
+    fun shareShown() {
+        shareRequest = null
+    }
+
     /** Prepares a model import and shows its preview; nothing changes until it is accepted. */
     fun importModel(uri: Uri) = work {
         val filename = displayName(uri)
@@ -293,3 +326,6 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
         worker.shutdown()
     }
 }
+
+/** Characters a file name on a receiving device may not hold. */
+private val UNSAFE_NAME = Regex("[\\\\/:*?\"<>|\\u0000-\\u001f]")

@@ -7,7 +7,8 @@ it, saves the project as a 3MF with "Save as", starts a new project, reopens
 the saved one from the recent documents, keeps unsaved changes on Cancel,
 saves them first on Save and drops them only on Discard, refuses a document handed over outside the system's
 document sharing, and after a restart reopens the recent document through its
-persisted grant; Back with unsaved changes asks first, from any area. The
+persisted grant; a shared copy reaches the share sheet without saving; Back
+with unsaved changes asks first, from any area. The
 saved file is checked to be a ZIP package.
 """
 import argparse
@@ -73,6 +74,13 @@ def find(text, timeout=20):
 def tap(text, **kwargs):
     x, y = center(find(text, **kwargs))
     adb("shell", "input", "tap", str(x), str(y))
+
+
+def focused():
+    """The window that has focus, as the window manager reports it."""
+    lines = [line for line in adb("shell", "dumpsys", "window").splitlines() if "mCurrentFocus=" in line]
+    assert lines, "The window manager reported no focus"
+    return lines[0]
 
 
 def launch():
@@ -157,9 +165,19 @@ find("OrcaXR opens only documents shared through the system.", timeout=30)
 launch()
 tap(SAVED)
 find("2 objects", timeout=30)
-# Back with unsaved changes asks first; Cancel stays, Discard leaves.
+# Back with unsaved changes asks first; Cancel stays, Discard leaves. First,
+# a copy shared through the system's share sheet leaves the project unsaved.
 import_cube(3)
 find("3 objects", timeout=30)
+tap("Share")
+deadline = time.monotonic() + 20
+while "Chooser" not in focused():
+    assert time.monotonic() < deadline, f"No share sheet: {focused()}"
+    time.sleep(0.5)
+adb("shell", "input", "keyevent", "4")
+find(f"{SAVED} · Unsaved changes")
+assert adb("shell", f"run-as {PACKAGE} ls cache/shared") == SAVED, "The shared copy is missing"
+assert adb("shell", f"run-as {PACKAGE} head -c 2 'cache/shared/{SAVED}'") == "PK", "The shared copy is not a ZIP package"
 tap("Device")
 adb("shell", "input", "keyevent", "4")
 find("Save changes to Untitled project?")
@@ -167,13 +185,6 @@ tap("Cancel")
 find("3 objects")
 adb("shell", "input", "keyevent", "4")
 tap("Discard")
-
-
-def focused():
-    """The window that has focus, as the window manager reports it."""
-    lines = [line for line in adb("shell", "dumpsys", "window").splitlines() if "mCurrentFocus=" in line]
-    assert lines, "The window manager reported no focus"
-    return lines[0]
 
 
 deadline = time.monotonic() + 20

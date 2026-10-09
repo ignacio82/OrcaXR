@@ -211,6 +211,11 @@ class ProjectWorkspace(
         if (result is ProjectOutcome.Exported) update { it.copy(document = name) } else null
     }
 
+    /** Writes a copy of the project as a 3MF document (to share it); the project's saved state is untouched. */
+    fun export(output: ProjectDocumentOutput): CompletableFuture<Unit> = run({ guard, record ->
+        actor.exportDocument(guard, EXPORT) { _, source -> capturing(record) { ProjectDocuments.save(source, output, ARCHIVE) } }
+    }) { result -> if (result is ProjectOutcome.Exported) Unit else null }
+
     /** Prepares a model import (STL/OBJ/AMF/ZIP) against the current project; nothing changes until it is committed. */
     fun prepareImport(input: ProjectDocumentInput, filename: String): CompletableFuture<ProjectActorImport> = run({ guard, record ->
         actor.prepareImport(guard) { scope, base ->

@@ -13,6 +13,7 @@
     <string name="project_save">Save</string>
     <string name="project_save_as">Save as</string>
     <string name="project_import">Import model</string>
+    <string name="project_share">Share</string>
     <string name="project_undo">Undo</string>
     <string name="project_redo">Redo</string>
     <string name="project_undo_named">Undo %1$s</string>

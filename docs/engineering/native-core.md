@@ -4247,11 +4247,12 @@ snapshot being replaced. The browser's opt-in auto-pair generation, which
 "New project" applies when enabled, has no preference on Android and is not
 applied there.
 
-`ProjectWorkspaceChecks` (25 checks over real JNI) start with the browser's
+`ProjectWorkspaceChecks` (27 checks over real JNI) start with the browser's
 empty project; preview an STL import without changing the project, commit it
 as one undoable entry, undo and redo it; refuse a lossy OBJ import until its
-listed changes are acknowledged; report a provider's write failure with its
-code while the project stays dirty; save a 3MF, start a new project and open
+listed changes are acknowledged; write a shared copy (`export`, a complete
+package) while the project stays unsaved; report a provider's write failure
+with its code while the project stays dirty; save a 3MF, start a new project and open
 the saved one back — in the canonical format — with the same tree; refuse a document that is not one
 while keeping the project; and keep recent documents newest first, one per
 document, at most eight. The screen previews an import with the notices the
@@ -4268,13 +4269,18 @@ without keeping its grant. `android-project-smoke.py` drives it on an owned
 emulator through the system document picker: import, undo, redo, Save as
 (a ZIP package in Downloads), New, reopen from recents, the unsaved-changes
 dialog (Cancel keeps them, Save writes them before New goes on, Discard drops
-them), Back asking from the Device area (Cancel stays, Discard leaves),
+them), Share reaching the system's share sheet with a ZIP copy while the
+project stays unsaved, Back asking from the Device area (Cancel stays,
+Discard leaves),
 a `file:` handover refused, and the recent document reopened after a
 restart through its persisted grant. A model lands on the browser's
 200 mm plate until printer profiles reach Android. The smoke saves first only
 to a document already saved; choosing a destination from that dialog is
-unexercised. Recovery storage, the window-close and update guards, sharing a
-project out and multi-window ownership remain.
+unexercised. Share writes the copy to the app's cache (replacing the one shared before)
+and offers it through `SharedProjects`, a read-only, unexported provider
+serving only files directly in that folder by exact name, with a one-time
+read grant. Recovery storage, the window-close and update guards and
+multi-window ownership remain.
 
 ### Android Device area
 
