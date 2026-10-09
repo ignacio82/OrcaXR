@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { sharedPreviewWorker } from './tools/shared-preview-worker';
 import { CORE_BROWSER_ASSET } from '../core/browser/asset';
+import { CORE_PRINTER_ASSET } from '../core/browser/printer/asset';
 
 // GitHub Pages deploy (ORCAXR_DEPLOY=1): serve under /slicer/ and drop the
 // VitePWA service worker — the coi-serviceworker shim owns the SW scope there
@@ -51,7 +52,14 @@ export default defineConfig({
             registerType: 'prompt',
             includeAssets: ['icon.svg', 'icons/material/*.svg', 'profiles/catalog.json'],
             workbox: {
-              additionalManifestEntries: [CORE_BROWSER_ASSET.manifest, CORE_BROWSER_ASSET.wasm].map((asset) => ({
+              // The preview core and the printer core: a printer on the LAN
+              // must stay reachable with the application offline.
+              additionalManifestEntries: [
+                CORE_BROWSER_ASSET.manifest,
+                CORE_BROWSER_ASSET.wasm,
+                CORE_PRINTER_ASSET.manifest,
+                CORE_PRINTER_ASSET.wasm,
+              ].map((asset) => ({
                 url: asset.path,
                 revision: asset.sha256,
               })),
@@ -69,6 +77,7 @@ export default defineConfig({
                 // The pair above already has exact SHA-256 revisions. A glob
                 // entry would register each WASM URL again with another hash.
                 '**/core/**',
+                '**/core-printer/**',
                 // Project editing has its own optional WASM package. Preview
                 // startup must not download an unused editor implementation.
                 '**/core-project/**',

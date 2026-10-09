@@ -13,9 +13,10 @@ import * as uikit from '@pmndrs/uikit';
 
 import { OrcaWorkspace, type WorkspacePresetOption } from './workspace/OrcaWorkspace';
 import { SlicerClient } from './slicer/SlicerClient';
+import { PRINTER_TRANSPORT_PREFERENCE, PrinterConnections, printerTransportChoice } from './printer/PrinterConnections';
+import type { MoonrakerConnection } from './printer/MoonrakerTransport';
 import {
   loadPrinterEndpointPreferences,
-  MoonrakerTransport,
   MoonrakerTransportError,
   PrintJobCommandError,
   PrintHistoryError,
@@ -392,8 +393,16 @@ function setupDomUI(
   const btnPrinterTest = document.getElementById('btn-printer-test') as HTMLButtonElement;
   const btnPrinterSend = document.getElementById('btn-printer-send') as HTMLButtonElement;
   const printerCfg = loadPrinterEndpointPreferences();
-  const printerSession = new PrinterSessionController((selection) => {
-    const transport = new MoonrakerTransport({
+  // Printer connections run on the shared core's transport, loaded on demand;
+  // the browser transport is the rollback (`?printer-transport=typescript`).
+  const printerConnections = new PrinterConnections(
+    printerTransportChoice(window.location.search, safeLocalStorage()?.getItem(PRINTER_TRANSPORT_PREFERENCE) ?? null),
+    () => import('./printer/SharedPrinterCore').then((module) => module.loadPrinterCore()),
+  );
+  // A configured printer is likely to be used: have its core ready first.
+  if (printerCfg.host.trim()) void printerConnections.prepare();
+  const printerSession = new PrinterSessionController<MoonrakerConnection>((selection) => {
+    const transport = printerConnections.create({
       endpoint: selection.endpoint,
       defaultPort: selection.port,
       clientName: 'OrcaXR Web',
@@ -468,7 +477,7 @@ function setupDomUI(
     btnPrinterSend.dataset.sendBusy = String(busy);
   };
 
-  const configuredPrinterTransport = (): MoonrakerTransport => {
+  const configuredPrinterTransport = (): MoonrakerConnection => {
     const endpoint = printerCfg.host.trim();
     if (!endpoint) throw new MoonrakerTransportError('invalid_endpoint', 'connect');
     return printerSession.select({
@@ -483,9 +492,10 @@ function setupDomUI(
   const connectConfiguredPrinter = async (
     signal?: AbortSignal,
   ): Promise<{
-    transport: MoonrakerTransport;
+    transport: MoonrakerConnection;
     handshake: MoonrakerHandshake;
   }> => {
+    await printerConnections.prepare();
     configuredPrinterTransport();
     return printerSession.connect(signal);
   };
@@ -753,7 +763,7 @@ function setupDomUI(
    * A file the printer has never scanned simply has none; that is reported as
    * absent rather than retried, because the retry would return the same nothing.
    */
-  const loadStorageSelection = async (transport: MoonrakerTransport, path: string): Promise<void> => {
+  const loadStorageSelection = async (transport: MoonrakerConnection, path: string): Promise<void> => {
     releaseThumbnail();
     delete storageState.metadata;
     try {
@@ -937,13 +947,13 @@ function setupDomUI(
     for (const listener of consoleListeners) listener();
   };
   let unsubscribeConsole: (() => void) | undefined;
-  let consoleTransport: MoonrakerTransport | undefined;
+  let consoleTransport: MoonrakerConnection | undefined;
   surfaces.defer(() => {
     unsubscribeConsole?.();
     unsubscribeConsole = undefined;
     consoleTransport = undefined;
   });
-  const trackConsoleResponses = (transport: MoonrakerTransport) => {
+  const trackConsoleResponses = (transport: MoonrakerConnection) => {
     if (surfaces.signal.aborted || (consoleTransport === transport && unsubscribeConsole)) return;
     unsubscribeConsole?.();
     consoleTransport = transport;

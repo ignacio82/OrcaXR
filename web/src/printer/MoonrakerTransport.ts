@@ -183,7 +183,32 @@ export function calculateMoonrakerReconnectDelay(
   return Math.round(Math.min(policy.maximumDelayMs, Math.max(0, jittered)));
 }
 
-export class MoonrakerTransport {
+/**
+ * A Moonraker connection as the application uses it. Two implementations
+ * provide it: this browser transport, and the shared core's
+ * (`SharedMoonrakerTransport`), which runs the same policy in Rust — the one
+ * the Android app runs — and is what production selects. This one stays as the
+ * reference the core is replayed against and as the rollback adapter.
+ */
+export interface MoonrakerConnection {
+  readonly endpoint: NormalizedMoonrakerEndpoint;
+  readonly state: MoonrakerConnectionState;
+  readonly credentialMetadata: MoonrakerCredentialMetadata;
+  setSessionCredentials(credentials: MoonrakerSessionCredentials): void;
+  clearSessionCredentials(): void;
+  subscribeState(listener: MoonrakerStateListener): () => void;
+  subscribeNotifications(listener: MoonrakerNotificationListener): () => void;
+  setObjectSubscription(subscription: MoonrakerObjectSubscription | null): void;
+  connect(options?: { readonly signal?: AbortSignal }): Promise<MoonrakerHandshake>;
+  disconnect(reason?: Exclude<MoonrakerDisconnectReason, 'initial'>): void;
+  dispose(): void;
+  request<T>(path: string, options?: MoonrakerRequestOptions): Promise<T>;
+  requestRecoveryCommand(command: 'emergency-stop' | 'firmware-restart', signal?: AbortSignal): Promise<unknown>;
+  upload<T>(path: string, body: FormData, options?: MoonrakerRequestOptions): Promise<T>;
+  download(path: string, options?: MoonrakerRequestOptions): Promise<Uint8Array>;
+}
+
+export class MoonrakerTransport implements MoonrakerConnection {
   readonly endpoint: NormalizedMoonrakerEndpoint;
 
   private readonly fetcher: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;

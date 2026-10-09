@@ -76,19 +76,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wasm", action="store_true")
     parser.add_argument("--project-wasm", action="store_true")
+    parser.add_argument("--printer-wasm", action="store_true")
     parser.add_argument("--apk", type=Path)
     parser.add_argument("--ndk", type=Path)
     args = parser.parse_args()
-    assert args.wasm or args.project_wasm or args.apk, "Choose --wasm, --project-wasm and/or --apk"
-    for selected, project in [(args.wasm, False), (args.project_wasm, True)]:
+    assert args.wasm or args.project_wasm or args.printer_wasm or args.apk, (
+        "Choose --wasm, --project-wasm, --printer-wasm and/or --apk")
+    for selected, kind in [(args.wasm, None), (args.project_wasm, "project"), (args.printer_wasm, "printer")]:
         if not selected:
             continue
-        directory = ROOT / ("core/dist/project-wasm" if project else "core/dist/wasm")
-        value = verify_manifest(directory / "core-wasm-manifest.json", directory, "browser-project-wasm" if project else "browser-wasm")
-        assert value["features"] == (["project"] if project else ["gcode"])
-        assert value["defaultFeatures"] == (not project)
+        directory = ROOT / (f"core/dist/{kind}-wasm" if kind else "core/dist/wasm")
+        value = verify_manifest(directory / "core-wasm-manifest.json", directory,
+                                f"browser-{kind}-wasm" if kind else "browser-wasm")
+        assert value["features"] == ([kind] if kind else ["gcode"])
+        assert value["defaultFeatures"] == (kind is None)
         assert set(value["outputs"]) == {"orcaxr_core.js", "orcaxr_core.d.ts", "orcaxr_core_bg.wasm", "orcaxr_core_bg.wasm.d.ts"}
-        print(f"Verified {'project' if project else 'computation'} WASM/glue/source identity")
+        print(f"Verified {kind or 'computation'} WASM/glue/source identity")
     if args.apk:
         sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
         ndk = args.ndk or (Path(sdk) / "ndk/29.0.14206865" if sdk else None)

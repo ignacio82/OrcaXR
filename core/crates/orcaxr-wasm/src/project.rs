@@ -49,9 +49,7 @@ pub(crate) fn timestamps(units: &[u16]) -> Result<bool, ()> {
     }
     parse_date(&text).map(|v| v.is_finite()).map_err(|_| ())
 }
-pub(crate) fn error(code: &str) -> JsValue {
-    JsValue::from_str(code)
-}
+pub(crate) use crate::error;
 pub(crate) fn index(value: f64) -> Result<usize, JsValue> {
     if value.is_finite()
         && value.fract() == 0.0

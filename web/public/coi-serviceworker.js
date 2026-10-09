@@ -88,7 +88,8 @@ if (typeof module !== 'undefined' && module.exports) {
       for (const file of icons) resources.add(new URL(`icons/material/${file}`, scope).href);
     }
     // The first offline preview needs the owned worker, its dependency graph,
-    // and the exact Rust asset pair even if no preview was opened online.
+    // and the exact Rust asset pair even if no preview was opened online; the
+    // printer core and its host chunk likewise, for a printer on the LAN.
     const previewManifestUrl = new URL('core-preview-assets.json', scope);
     const previewResponse = await fetch(previewManifestUrl, { cache: 'no-cache' });
     if (!previewResponse.ok) throw new Error('Preview asset inventory is unavailable');
@@ -97,7 +98,7 @@ if (typeof module !== 'undefined' && module.exports) {
       throw new Error('Preview asset inventory is incompatible');
     resources.add(previewManifestUrl.href);
     for (const file of preview.assets) {
-      if (typeof file !== 'string' || file.length > 512 || !/^(assets|core)\/[A-Za-z0-9_./-]+$/.test(file))
+      if (typeof file !== 'string' || file.length > 512 || !/^(assets|core|core-printer)\/[A-Za-z0-9_./-]+$/.test(file))
         throw new Error('Invalid preview asset path');
       const url = new URL(file, scope);
       if (!url.href.startsWith(scope.href)) throw new Error('Preview asset is outside the application');

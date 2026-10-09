@@ -1921,8 +1921,12 @@ credential storage, and explicit permission/error flows.
   start the printer may have accepted (now only a session that cannot come
   back ends that work), and a request refused for its deadline stayed
   counted as in flight; requests in flight (512) and a server's components
-  (256) are now bounded. Running the browser's controllers and transport
-  through these shared machines remains.
+  (256) are now bounded. The browser runs its printer connections on this
+  transport through a printer-only core package (1.5 MB, precached for
+  offline LAN printing); the host passes the browser transport's own tests
+  and both Moonraker simulators, and the TypeScript transport remains the
+  rollback adapter (`?printer-transport=typescript`). Running the session and
+  submission controllers on their shared machines remains.
 - [ ] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
   credential entry, and optional discovery. Discovery proposes verified endpoints
   and cannot overwrite preferences while a stale probe completes.

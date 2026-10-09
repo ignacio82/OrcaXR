@@ -45,6 +45,10 @@ The experimental project executor has a separate `core-project/**` package;
 Workbox excludes it from glob discovery and the preview/static-shell inventory
 does not include it. Its presence in public assets must not increase preview
 startup or offline-install downloads before a project host is integrated.
+Printer connections run on the printer core (`core-printer/**`, about 1.5 MB),
+which both workers precache with its on-demand host chunk so a LAN printer
+stays reachable offline; `?printer-transport=typescript` selects the browser
+transport instead.
 See [native-core packaging](native-core.md#production-browser-adapter-and-packaging).
 
 A camera Moonraker reports is almost never served by Moonraker.

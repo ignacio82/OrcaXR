@@ -9,10 +9,16 @@ mod editor;
 mod library;
 #[cfg(feature = "project")]
 mod model;
-#[cfg(feature = "project")]
+#[cfg(feature = "printer")]
 mod printer;
 #[cfg(feature = "project")]
 mod project;
+
+/// A refusal code, as every binding of this module throws it.
+#[cfg(feature = "printer")]
+pub(crate) fn error(code: &str) -> JsValue {
+    JsValue::from_str(code)
+}
 
 #[wasm_bindgen]
 pub fn core_info() -> String {

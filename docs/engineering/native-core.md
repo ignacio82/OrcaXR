@@ -3789,6 +3789,32 @@ seeded interleavings) of 2,533 steps, each with the state after it and the
 Rust, WASM in Node and Chrome, JNI and 2,648 Kotlin checks reproduce every
 one.
 
+The browser runs its printer connections on this machine.
+`SharedMoonrakerTransport` hosts it with the browser transport's public
+surface (`MoonrakerConnection`, which both implement): it fetches, reads
+bodies, opens and writes sockets, keeps timers and draws random numbers, and
+translates between the contract and the browser's types. Steps apply strictly
+in the order the core produced them; a synchronous effect (a socket's
+construction, a random draw) is answered before any listener runs, so nothing
+else reaches the core in between; a trap in the core is never swallowed, only
+`not_pending` and `mismatch`. The host passes the browser transport's own tests
+and both Moonraker simulators (a real HTTP server: uploads, storage, prints),
+29 transports in all, with the same fakes
+(`moonraker-transport-shared.test.ts`).
+
+It runs on the printer core, a package of its own (`core/browser/printer`,
+`web/public/core-printer/<manifest-sha256>`, the `printer` feature; 1,495,957
+WASM bytes against the project core's 8.8 MB, bounded at 3 MiB), loaded on
+demand in its own chunk by `SharedPrinterCore`, verified like the preview core
+(length, SHA-256, handshake) and precached by both service workers with its
+host chunk, so a printer on the LAN stays reachable offline.
+`printer-wasm-test.mjs` replays every printer corpus on the packaged bytes.
+`PrinterConnections` selects the implementation: the shared core by default,
+the browser transport as the rollback (`?printer-transport=typescript` or the
+stored `orcaxr.printerTransport`), which also serves a connection made while
+the core cannot load. A configured printer starts the load at startup, and
+connecting waits for it.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its
@@ -4594,8 +4620,11 @@ Both service workers cache these bytes without instantiation. Workbox excludes
 The experimental project package uses `core/browser/project` and
 `web/public/core-project/<manifest-sha256>`. It is excluded from precache and
 preview inventory, keeping editor code out of the existing preview download.
-The default WASM feature is `gcode`; the project build disables defaults and
-selects only `project`. Verify each package against its feature-bound manifest.
+The printer package (`core/browser/printer`, `web/public/core-printer/`) is a
+production asset: both workers precache it and its host chunk, listed in the
+offline inventory beside the preview's. The default WASM feature is `gcode`;
+the project and printer builds disable defaults and select only `project` or
+`printer` (`project` includes the printer bindings). Verify each package against its feature-bound manifest.
 Static-host updates wait for the existing unsaved-work guard's `SKIP_WAITING`.
 
 Vite warns about wasm-bindgen's unused default sibling WASM URL. The loader always

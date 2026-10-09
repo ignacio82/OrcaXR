@@ -1,5 +1,5 @@
 //! Printer workflow policy (`orcaxr_printer`) for browser hosts.
-use crate::project::error;
+use crate::error;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{

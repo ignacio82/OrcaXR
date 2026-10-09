@@ -41,6 +41,11 @@ assert.ok(preview.assets.some((asset) => /gcodePreview\.worker-.*\.js$/.test(ass
 assert.ok(preview.assets.some((asset) => /WorkerGcodePreviewSession-.*\.js$/.test(asset)));
 assert.ok(preview.assets.includes(`core/${preview.coreSet}/orcaxr_core_bg.wasm`));
 assert.ok(preview.assets.includes(`core/${preview.coreSet}/core-wasm-manifest.json`));
+// A printer on the LAN stays reachable offline: the printer core pair and its
+// on-demand host chunk are precached by both workers.
+assert.ok(preview.assets.includes(`core-printer/${preview.printerSet}/orcaxr_core_bg.wasm`));
+assert.ok(preview.assets.includes(`core-printer/${preview.printerSet}/core-wasm-manifest.json`));
+assert.ok(preview.assets.some((asset) => /SharedPrinterCore-.*\.js$/.test(asset)));
 for (const asset of preview.assets) {
   await readFile(join(root, 'dist', asset));
   assert.ok(generated.includes(asset), `${asset} must be precached for the first offline preview`);

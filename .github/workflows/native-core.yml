@@ -124,6 +124,7 @@ jobs:
           node tools/cross-platform/project-intent-vectors.mjs
           node tools/cross-platform/package-browser-core.mjs
           node tools/cross-platform/package-browser-core.mjs --project
+          node tools/cross-platform/package-browser-core.mjs --printer
           node web/scripts/run-tests.mjs gcode-packets.test.ts core-gcode-source.test.ts gcode-requests.test.ts project-intents.test.ts project-session-transport.test.ts staged-session.test.ts GcodeDocument.test.ts GcodePanel.test.ts
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/bindings-test.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/canonical-vectors.mjs
@@ -261,8 +262,10 @@ jobs:
         run: |
           python3 tools/cross-platform/build-wasm.py
           python3 tools/cross-platform/build-wasm.py --project
-          python3 tools/cross-platform/verify-artifacts.py --wasm --project-wasm
+          python3 tools/cross-platform/build-wasm.py --printer
+          python3 tools/cross-platform/verify-artifacts.py --wasm --project-wasm --printer-wasm
           node tools/cross-platform/project-wasm-test.mjs
+          node tools/cross-platform/printer-wasm-test.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/differential-replay.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/session-worker-recovery.mjs
           node tools/cross-platform/project-wasm-browser.mjs

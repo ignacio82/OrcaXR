@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import type { Plugin } from 'vite';
 import { CORE_BROWSER_ASSET } from '../../core/browser/asset';
+import { CORE_PRINTER_ASSET } from '../../core/browser/printer/asset';
 
 /** Emit preview and archive workers as entries in the application graph. Vite's
  * separate worker graph duplicates codecs and contract helpers already used by
@@ -67,6 +68,27 @@ export function sharedPreviewWorker(): Plugin {
       visit(host.fileName);
       assets.add(CORE_BROWSER_ASSET.manifest.path);
       assets.add(CORE_BROWSER_ASSET.wasm.path);
+      // The printer core and its on-demand host chunk: a printer on the LAN
+      // stays reachable offline, even if no printer was opened online.
+      const printer = Object.values(bundle).find(
+        (chunk) =>
+          chunk.type === 'chunk' &&
+          chunk.isDynamicEntry &&
+          resolve(root, 'src/printer/SharedPrinterCore.ts') in chunk.modules,
+      );
+      if (!printer) this.error('Printer core host chunk was not emitted');
+      // Its static graph only: it shares modules with the application entry,
+      // whose on-demand features are not part of an offline install.
+      const visitStatic = (name: string) => {
+        if (assets.has(name)) return;
+        const chunk = bundle[name];
+        if (!chunk || chunk.type !== 'chunk') this.error('Missing printer dependency: ' + name);
+        assets.add(name);
+        for (const dependency of chunk.imports) visitStatic(dependency);
+      };
+      visitStatic(printer.fileName);
+      assets.add(CORE_PRINTER_ASSET.manifest.path);
+      assets.add(CORE_PRINTER_ASSET.wasm.path);
       this.emitFile({
         type: 'asset',
         fileName: 'core-preview-assets.json',
@@ -75,6 +97,7 @@ export function sharedPreviewWorker(): Plugin {
             schemaVersion: 1,
             workerProtocol: 2,
             coreSet: CORE_BROWSER_ASSET.setId,
+            printerSet: CORE_PRINTER_ASSET.setId,
             assets: [...assets].sort(),
           }) + '\n',
       });
