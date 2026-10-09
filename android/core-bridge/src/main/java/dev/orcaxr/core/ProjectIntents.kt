@@ -8615,6 +8615,430 @@ object ProjectIntents {
             w.field("availability") { writePrintJobCommandDescriptors(w, v.availability) }
         }
     }
+    data class MoonrakerTransportFault(val code: MoonrakerErrorCode, val operation: List<Int>, val recoverable: Boolean, val httpStatus: OptionalFinite, val detail: OptionalText)
+    private fun readMoonrakerTransportFault(v: Any): MoonrakerTransportFault {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "operation", "recoverable", "httpStatus", "detail"), false)
+        return MoonrakerTransportFault(readMoonrakerErrorCode(obj.get("code")), readEditText(obj.get("operation")), readFlag(obj.get("recoverable")), readOptionalFinite(obj.get("httpStatus")), readOptionalText(obj.get("detail")))
+    }
+    private fun writeMoonrakerTransportFault(w: ProjectIntentWriter, v: MoonrakerTransportFault) {
+        w.obj {
+            w.field("code") { writeMoonrakerErrorCode(w, v.code) }
+            w.field("operation") { writeEditText(w, v.operation) }
+            w.field("recoverable") { writeFlag(w, v.recoverable) }
+            w.field("httpStatus") { writeOptionalFinite(w, v.httpStatus) }
+            w.field("detail") { writeOptionalText(w, v.detail) }
+        }
+    }
+    data class MoonrakerEndpointRequest(val input: List<Int>, val defaultPort: OptionalFinite, val sameOriginProxy: OptionalText, val pageOrigin: OptionalText)
+    private fun readMoonrakerEndpointRequest(v: Any): MoonrakerEndpointRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("input", "defaultPort", "sameOriginProxy", "pageOrigin"), false)
+        return MoonrakerEndpointRequest(readEditText(obj.get("input")), readOptionalFinite(obj.get("defaultPort")), readOptionalText(obj.get("sameOriginProxy")), readOptionalText(obj.get("pageOrigin")))
+    }
+    private fun writeMoonrakerEndpointRequest(w: ProjectIntentWriter, v: MoonrakerEndpointRequest) {
+        w.obj {
+            w.field("input") { writeEditText(w, v.input) }
+            w.field("defaultPort") { writeOptionalFinite(w, v.defaultPort) }
+            w.field("sameOriginProxy") { writeOptionalText(w, v.sameOriginProxy) }
+            w.field("pageOrigin") { writeOptionalText(w, v.pageOrigin) }
+        }
+    }
+    data class NormalizedMoonrakerEndpoint(val directHttpUrl: List<Int>, val transportHttpUrl: List<Int>, val webSocketUrl: List<Int>, val usesSameOriginProxy: Boolean)
+    private fun readNormalizedMoonrakerEndpoint(v: Any): NormalizedMoonrakerEndpoint {
+        val obj = ProjectIntentJson.fields(v, setOf("directHttpUrl", "transportHttpUrl", "webSocketUrl", "usesSameOriginProxy"), false)
+        return NormalizedMoonrakerEndpoint(readEditText(obj.get("directHttpUrl")), readEditText(obj.get("transportHttpUrl")), readEditText(obj.get("webSocketUrl")), readFlag(obj.get("usesSameOriginProxy")))
+    }
+    private fun writeNormalizedMoonrakerEndpoint(w: ProjectIntentWriter, v: NormalizedMoonrakerEndpoint) {
+        w.obj {
+            w.field("directHttpUrl") { writeEditText(w, v.directHttpUrl) }
+            w.field("transportHttpUrl") { writeEditText(w, v.transportHttpUrl) }
+            w.field("webSocketUrl") { writeEditText(w, v.webSocketUrl) }
+            w.field("usesSameOriginProxy") { writeFlag(w, v.usesSameOriginProxy) }
+        }
+    }
+    sealed interface MoonrakerEndpointReply {
+        data class Endpoint(val value: ProjectIntents.NormalizedMoonrakerEndpoint) : MoonrakerEndpointReply
+        data class Refused(val value: ProjectIntents.MoonrakerTransportFault) : MoonrakerEndpointReply
+    }
+    private fun readMoonrakerEndpointReply(v: Any): MoonrakerEndpointReply {
+        val obj = ProjectIntentJson.fields(v, setOf("endpoint", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "endpoint" -> MoonrakerEndpointReply.Endpoint(readNormalizedMoonrakerEndpoint(obj.get(key)))
+            "refused" -> MoonrakerEndpointReply.Refused(readMoonrakerTransportFault(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMoonrakerEndpointReply(w: ProjectIntentWriter, v: MoonrakerEndpointReply) {
+        w.obj { when(v) {
+            is MoonrakerEndpointReply.Endpoint -> w.field("endpoint") { writeNormalizedMoonrakerEndpoint(w, v.value) }
+            is MoonrakerEndpointReply.Refused -> w.field("refused") { writeMoonrakerTransportFault(w, v.value) }
+        } }
+    }
+    data class MoonrakerPathRequest(val base: List<Int>, val path: List<Int>)
+    private fun readMoonrakerPathRequest(v: Any): MoonrakerPathRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("base", "path"), false)
+        return MoonrakerPathRequest(readEditText(obj.get("base")), readEditText(obj.get("path")))
+    }
+    private fun writeMoonrakerPathRequest(w: ProjectIntentWriter, v: MoonrakerPathRequest) {
+        w.obj {
+            w.field("base") { writeEditText(w, v.base) }
+            w.field("path") { writeEditText(w, v.path) }
+        }
+    }
+    sealed interface MoonrakerPathReply {
+        data class Url(val value: ProjectIntents.PrinterText) : MoonrakerPathReply
+        data class Refused(val value: ProjectIntents.MoonrakerTransportFault) : MoonrakerPathReply
+    }
+    private fun readMoonrakerPathReply(v: Any): MoonrakerPathReply {
+        val obj = ProjectIntentJson.fields(v, setOf("url", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "url" -> MoonrakerPathReply.Url(readPrinterText(obj.get(key)))
+            "refused" -> MoonrakerPathReply.Refused(readMoonrakerTransportFault(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMoonrakerPathReply(w: ProjectIntentWriter, v: MoonrakerPathReply) {
+        w.obj { when(v) {
+            is MoonrakerPathReply.Url -> w.field("url") { writePrinterText(w, v.value) }
+            is MoonrakerPathReply.Refused -> w.field("refused") { writeMoonrakerTransportFault(w, v.value) }
+        } }
+    }
+    data class MoonrakerCredentials(val apiKey: OptionalText, val bearerToken: OptionalText)
+    private fun readMoonrakerCredentials(v: Any): MoonrakerCredentials {
+        val obj = ProjectIntentJson.fields(v, setOf("apiKey", "bearerToken"), false)
+        return MoonrakerCredentials(readOptionalText(obj.get("apiKey")), readOptionalText(obj.get("bearerToken")))
+    }
+    private fun writeMoonrakerCredentials(w: ProjectIntentWriter, v: MoonrakerCredentials) {
+        w.obj {
+            w.field("apiKey") { writeOptionalText(w, v.apiKey) }
+            w.field("bearerToken") { writeOptionalText(w, v.bearerToken) }
+        }
+    }
+    data class MoonrakerHeader(val name: List<Int>, val value: List<Int>)
+    private fun readMoonrakerHeader(v: Any): MoonrakerHeader {
+        val obj = ProjectIntentJson.fields(v, setOf("name", "value"), false)
+        return MoonrakerHeader(readEditText(obj.get("name")), readEditText(obj.get("value")))
+    }
+    private fun writeMoonrakerHeader(w: ProjectIntentWriter, v: MoonrakerHeader) {
+        w.obj {
+            w.field("name") { writeEditText(w, v.name) }
+            w.field("value") { writeEditText(w, v.value) }
+        }
+    }
+    private fun readMoonrakerHeaders(v: Any): List<MoonrakerHeader> {
+        val array = ProjectIntentJson.list(v, 0, 16)
+        return List(array.length()) { readMoonrakerHeader(array.get(it)) }
+    }
+    private fun writeMoonrakerHeaders(w: ProjectIntentWriter, v: List<MoonrakerHeader>) {
+        w.array(v, 0, 16) { writeMoonrakerHeader(w, it) }
+    }
+    data class MoonrakerCredentialCheck(val credentials: MoonrakerCredentials, val probes: List<List<Int>>)
+    private fun readMoonrakerCredentialCheck(v: Any): MoonrakerCredentialCheck {
+        val obj = ProjectIntentJson.fields(v, setOf("credentials", "probes"), false)
+        return MoonrakerCredentialCheck(readMoonrakerCredentials(obj.get("credentials")), readTextList(obj.get("probes")))
+    }
+    private fun writeMoonrakerCredentialCheck(w: ProjectIntentWriter, v: MoonrakerCredentialCheck) {
+        w.obj {
+            w.field("credentials") { writeMoonrakerCredentials(w, v.credentials) }
+            w.field("probes") { writeTextList(w, v.probes) }
+        }
+    }
+    private fun readMoonrakerMatches(v: Any): List<Boolean> {
+        val array = ProjectIntentJson.list(v, 0, 4096)
+        return List(array.length()) { readFlag(array.get(it)) }
+    }
+    private fun writeMoonrakerMatches(w: ProjectIntentWriter, v: List<Boolean>) {
+        w.array(v, 0, 4096) { writeFlag(w, it) }
+    }
+    data class MoonrakerCredentialAnswer(val headers: List<MoonrakerHeader>, val hasApiKey: Boolean, val hasBearerToken: Boolean, val matches: List<Boolean>)
+    private fun readMoonrakerCredentialAnswer(v: Any): MoonrakerCredentialAnswer {
+        val obj = ProjectIntentJson.fields(v, setOf("headers", "hasApiKey", "hasBearerToken", "matches"), false)
+        return MoonrakerCredentialAnswer(readMoonrakerHeaders(obj.get("headers")), readFlag(obj.get("hasApiKey")), readFlag(obj.get("hasBearerToken")), readMoonrakerMatches(obj.get("matches")))
+    }
+    private fun writeMoonrakerCredentialAnswer(w: ProjectIntentWriter, v: MoonrakerCredentialAnswer) {
+        w.obj {
+            w.field("headers") { writeMoonrakerHeaders(w, v.headers) }
+            w.field("hasApiKey") { writeFlag(w, v.hasApiKey) }
+            w.field("hasBearerToken") { writeFlag(w, v.hasBearerToken) }
+            w.field("matches") { writeMoonrakerMatches(w, v.matches) }
+        }
+    }
+    sealed interface MoonrakerCredentialReply {
+        data class Accepted(val value: ProjectIntents.MoonrakerCredentialAnswer) : MoonrakerCredentialReply
+        data class Refused(val value: ProjectIntents.MoonrakerTransportFault) : MoonrakerCredentialReply
+    }
+    private fun readMoonrakerCredentialReply(v: Any): MoonrakerCredentialReply {
+        val obj = ProjectIntentJson.fields(v, setOf("accepted", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "accepted" -> MoonrakerCredentialReply.Accepted(readMoonrakerCredentialAnswer(obj.get(key)))
+            "refused" -> MoonrakerCredentialReply.Refused(readMoonrakerTransportFault(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMoonrakerCredentialReply(w: ProjectIntentWriter, v: MoonrakerCredentialReply) {
+        w.obj { when(v) {
+            is MoonrakerCredentialReply.Accepted -> w.field("accepted") { writeMoonrakerCredentialAnswer(w, v.value) }
+            is MoonrakerCredentialReply.Refused -> w.field("refused") { writeMoonrakerTransportFault(w, v.value) }
+        } }
+    }
+    data class MoonrakerErrorResponse(val status: Double, val body: OptionalText, val credentials: MoonrakerCredentials, val operation: List<Int>)
+    private fun readMoonrakerErrorResponse(v: Any): MoonrakerErrorResponse {
+        val obj = ProjectIntentJson.fields(v, setOf("status", "body", "credentials", "operation"), false)
+        return MoonrakerErrorResponse(readFinite(obj.get("status")), readOptionalText(obj.get("body")), readMoonrakerCredentials(obj.get("credentials")), readEditText(obj.get("operation")))
+    }
+    private fun writeMoonrakerErrorResponse(w: ProjectIntentWriter, v: MoonrakerErrorResponse) {
+        w.obj {
+            w.field("status") { writeFinite(w, v.status) }
+            w.field("body") { writeOptionalText(w, v.body) }
+            w.field("credentials") { writeMoonrakerCredentials(w, v.credentials) }
+            w.field("operation") { writeEditText(w, v.operation) }
+        }
+    }
+    private fun readMoonrakerApiVersionInput(v: Any): List<Double> {
+        val array = ProjectIntentJson.list(v, 0, 8)
+        return List(array.length()) { readFinite(array.get(it)) }
+    }
+    private fun writeMoonrakerApiVersionInput(w: ProjectIntentWriter, v: List<Double>) {
+        w.array(v, 0, 8) { writeFinite(w, it) }
+    }
+    sealed interface OptionalMoonrakerApiVersionInput {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalMoonrakerApiVersionInput
+        data class Value(val value: List<Double>) : OptionalMoonrakerApiVersionInput
+    }
+    private fun readOptionalMoonrakerApiVersionInput(v: Any): OptionalMoonrakerApiVersionInput {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalMoonrakerApiVersionInput.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalMoonrakerApiVersionInput.Value(readMoonrakerApiVersionInput(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalMoonrakerApiVersionInput(w: ProjectIntentWriter, v: OptionalMoonrakerApiVersionInput) {
+        w.obj { when(v) {
+            is OptionalMoonrakerApiVersionInput.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalMoonrakerApiVersionInput.Value -> w.field("value") { writeMoonrakerApiVersionInput(w, v.value) }
+        } }
+    }
+    data class MoonrakerVersionPolicyInput(val minimum: OptionalMoonrakerApiVersionInput, val maximumMajor: OptionalFinite)
+    private fun readMoonrakerVersionPolicyInput(v: Any): MoonrakerVersionPolicyInput {
+        val obj = ProjectIntentJson.fields(v, setOf("minimum", "maximumMajor"), false)
+        return MoonrakerVersionPolicyInput(readOptionalMoonrakerApiVersionInput(obj.get("minimum")), readOptionalFinite(obj.get("maximumMajor")))
+    }
+    private fun writeMoonrakerVersionPolicyInput(w: ProjectIntentWriter, v: MoonrakerVersionPolicyInput) {
+        w.obj {
+            w.field("minimum") { writeOptionalMoonrakerApiVersionInput(w, v.minimum) }
+            w.field("maximumMajor") { writeOptionalFinite(w, v.maximumMajor) }
+        }
+    }
+    data class MoonrakerHandshakeRequest(val server: List<Int>, val printer: List<Int>, val policy: MoonrakerVersionPolicyInput)
+    private fun readMoonrakerHandshakeRequest(v: Any): MoonrakerHandshakeRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("server", "printer", "policy"), false)
+        return MoonrakerHandshakeRequest(readEditText(obj.get("server")), readEditText(obj.get("printer")), readMoonrakerVersionPolicyInput(obj.get("policy")))
+    }
+    private fun writeMoonrakerHandshakeRequest(w: ProjectIntentWriter, v: MoonrakerHandshakeRequest) {
+        w.obj {
+            w.field("server") { writeEditText(w, v.server) }
+            w.field("printer") { writeEditText(w, v.printer) }
+            w.field("policy") { writeMoonrakerVersionPolicyInput(w, v.policy) }
+        }
+    }
+    data class MoonrakerServerHandshake(val apiVersion: List<Double>, val apiVersionString: List<Int>, val moonrakerVersion: List<Int>, val components: List<List<Int>>, val warnings: List<List<Int>>)
+    private fun readMoonrakerServerHandshake(v: Any): MoonrakerServerHandshake {
+        val obj = ProjectIntentJson.fields(v, setOf("apiVersion", "apiVersionString", "moonrakerVersion", "components", "warnings"), false)
+        return MoonrakerServerHandshake(readMoonrakerApiVersionInput(obj.get("apiVersion")), readEditText(obj.get("apiVersionString")), readEditText(obj.get("moonrakerVersion")), readTextList(obj.get("components")), readTextList(obj.get("warnings")))
+    }
+    private fun writeMoonrakerServerHandshake(w: ProjectIntentWriter, v: MoonrakerServerHandshake) {
+        w.obj {
+            w.field("apiVersion") { writeMoonrakerApiVersionInput(w, v.apiVersion) }
+            w.field("apiVersionString") { writeEditText(w, v.apiVersionString) }
+            w.field("moonrakerVersion") { writeEditText(w, v.moonrakerVersion) }
+            w.field("components") { writeTextList(w, v.components) }
+            w.field("warnings") { writeTextList(w, v.warnings) }
+        }
+    }
+    data class MoonrakerPrinterHandshake(val state: List<Int>, val hostname: List<Int>, val softwareVersion: List<Int>)
+    private fun readMoonrakerPrinterHandshake(v: Any): MoonrakerPrinterHandshake {
+        val obj = ProjectIntentJson.fields(v, setOf("state", "hostname", "softwareVersion"), false)
+        return MoonrakerPrinterHandshake(readEditText(obj.get("state")), readEditText(obj.get("hostname")), readEditText(obj.get("softwareVersion")))
+    }
+    private fun writeMoonrakerPrinterHandshake(w: ProjectIntentWriter, v: MoonrakerPrinterHandshake) {
+        w.obj {
+            w.field("state") { writeEditText(w, v.state) }
+            w.field("hostname") { writeEditText(w, v.hostname) }
+            w.field("softwareVersion") { writeEditText(w, v.softwareVersion) }
+        }
+    }
+    data class MoonrakerCapabilityManifest(val authorization: Boolean, val fileManagement: Boolean, val jobQueue: Boolean, val history: Boolean, val webcams: Boolean, val powerDevices: Boolean, val updateManager: Boolean, val announcements: Boolean, val database: Boolean, val klippyConnected: Boolean, val extensionComponents: List<List<Int>>)
+    private fun readMoonrakerCapabilityManifest(v: Any): MoonrakerCapabilityManifest {
+        val obj = ProjectIntentJson.fields(v, setOf("authorization", "fileManagement", "jobQueue", "history", "webcams", "powerDevices", "updateManager", "announcements", "database", "klippyConnected", "extensionComponents"), false)
+        return MoonrakerCapabilityManifest(readFlag(obj.get("authorization")), readFlag(obj.get("fileManagement")), readFlag(obj.get("jobQueue")), readFlag(obj.get("history")), readFlag(obj.get("webcams")), readFlag(obj.get("powerDevices")), readFlag(obj.get("updateManager")), readFlag(obj.get("announcements")), readFlag(obj.get("database")), readFlag(obj.get("klippyConnected")), readTextList(obj.get("extensionComponents")))
+    }
+    private fun writeMoonrakerCapabilityManifest(w: ProjectIntentWriter, v: MoonrakerCapabilityManifest) {
+        w.obj {
+            w.field("authorization") { writeFlag(w, v.authorization) }
+            w.field("fileManagement") { writeFlag(w, v.fileManagement) }
+            w.field("jobQueue") { writeFlag(w, v.jobQueue) }
+            w.field("history") { writeFlag(w, v.history) }
+            w.field("webcams") { writeFlag(w, v.webcams) }
+            w.field("powerDevices") { writeFlag(w, v.powerDevices) }
+            w.field("updateManager") { writeFlag(w, v.updateManager) }
+            w.field("announcements") { writeFlag(w, v.announcements) }
+            w.field("database") { writeFlag(w, v.database) }
+            w.field("klippyConnected") { writeFlag(w, v.klippyConnected) }
+            w.field("extensionComponents") { writeTextList(w, v.extensionComponents) }
+        }
+    }
+    data class MoonrakerHandshake(val server: MoonrakerServerHandshake, val printer: MoonrakerPrinterHandshake, val capabilities: MoonrakerCapabilityManifest)
+    private fun readMoonrakerHandshake(v: Any): MoonrakerHandshake {
+        val obj = ProjectIntentJson.fields(v, setOf("server", "printer", "capabilities"), false)
+        return MoonrakerHandshake(readMoonrakerServerHandshake(obj.get("server")), readMoonrakerPrinterHandshake(obj.get("printer")), readMoonrakerCapabilityManifest(obj.get("capabilities")))
+    }
+    private fun writeMoonrakerHandshake(w: ProjectIntentWriter, v: MoonrakerHandshake) {
+        w.obj {
+            w.field("server") { writeMoonrakerServerHandshake(w, v.server) }
+            w.field("printer") { writeMoonrakerPrinterHandshake(w, v.printer) }
+            w.field("capabilities") { writeMoonrakerCapabilityManifest(w, v.capabilities) }
+        }
+    }
+    sealed interface MoonrakerHandshakeReply {
+        data class Handshake(val value: ProjectIntents.MoonrakerHandshake) : MoonrakerHandshakeReply
+        data class Refused(val value: ProjectIntents.MoonrakerTransportFault) : MoonrakerHandshakeReply
+    }
+    private fun readMoonrakerHandshakeReply(v: Any): MoonrakerHandshakeReply {
+        val obj = ProjectIntentJson.fields(v, setOf("handshake", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "handshake" -> MoonrakerHandshakeReply.Handshake(readMoonrakerHandshake(obj.get(key)))
+            "refused" -> MoonrakerHandshakeReply.Refused(readMoonrakerTransportFault(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMoonrakerHandshakeReply(w: ProjectIntentWriter, v: MoonrakerHandshakeReply) {
+        w.obj { when(v) {
+            is MoonrakerHandshakeReply.Handshake -> w.field("handshake") { writeMoonrakerHandshake(w, v.value) }
+            is MoonrakerHandshakeReply.Refused -> w.field("refused") { writeMoonrakerTransportFault(w, v.value) }
+        } }
+    }
+    data class MoonrakerReconnectPolicyInput(val initialDelayMs: OptionalFinite, val maximumDelayMs: OptionalFinite, val maximumAttempts: OptionalFinite, val jitterRatio: OptionalFinite)
+    private fun readMoonrakerReconnectPolicyInput(v: Any): MoonrakerReconnectPolicyInput {
+        val obj = ProjectIntentJson.fields(v, setOf("initialDelayMs", "maximumDelayMs", "maximumAttempts", "jitterRatio"), false)
+        return MoonrakerReconnectPolicyInput(readOptionalFinite(obj.get("initialDelayMs")), readOptionalFinite(obj.get("maximumDelayMs")), readOptionalFinite(obj.get("maximumAttempts")), readOptionalFinite(obj.get("jitterRatio")))
+    }
+    private fun writeMoonrakerReconnectPolicyInput(w: ProjectIntentWriter, v: MoonrakerReconnectPolicyInput) {
+        w.obj {
+            w.field("initialDelayMs") { writeOptionalFinite(w, v.initialDelayMs) }
+            w.field("maximumDelayMs") { writeOptionalFinite(w, v.maximumDelayMs) }
+            w.field("maximumAttempts") { writeOptionalFinite(w, v.maximumAttempts) }
+            w.field("jitterRatio") { writeOptionalFinite(w, v.jitterRatio) }
+        }
+    }
+    data class MoonrakerReconnectPolicy(val initialDelayMs: Double, val maximumDelayMs: Double, val maximumAttempts: Double, val jitterRatio: Double)
+    private fun readMoonrakerReconnectPolicy(v: Any): MoonrakerReconnectPolicy {
+        val obj = ProjectIntentJson.fields(v, setOf("initialDelayMs", "maximumDelayMs", "maximumAttempts", "jitterRatio"), false)
+        return MoonrakerReconnectPolicy(readFinite(obj.get("initialDelayMs")), readFinite(obj.get("maximumDelayMs")), readFinite(obj.get("maximumAttempts")), readFinite(obj.get("jitterRatio")))
+    }
+    private fun writeMoonrakerReconnectPolicy(w: ProjectIntentWriter, v: MoonrakerReconnectPolicy) {
+        w.obj {
+            w.field("initialDelayMs") { writeFinite(w, v.initialDelayMs) }
+            w.field("maximumDelayMs") { writeFinite(w, v.maximumDelayMs) }
+            w.field("maximumAttempts") { writeFinite(w, v.maximumAttempts) }
+            w.field("jitterRatio") { writeFinite(w, v.jitterRatio) }
+        }
+    }
+    sealed interface MoonrakerReconnectPolicyReply {
+        data class Policy(val value: ProjectIntents.MoonrakerReconnectPolicy) : MoonrakerReconnectPolicyReply
+        data class Refused(val value: ProjectIntents.MoonrakerTransportFault) : MoonrakerReconnectPolicyReply
+    }
+    private fun readMoonrakerReconnectPolicyReply(v: Any): MoonrakerReconnectPolicyReply {
+        val obj = ProjectIntentJson.fields(v, setOf("policy", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "policy" -> MoonrakerReconnectPolicyReply.Policy(readMoonrakerReconnectPolicy(obj.get(key)))
+            "refused" -> MoonrakerReconnectPolicyReply.Refused(readMoonrakerTransportFault(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMoonrakerReconnectPolicyReply(w: ProjectIntentWriter, v: MoonrakerReconnectPolicyReply) {
+        w.obj { when(v) {
+            is MoonrakerReconnectPolicyReply.Policy -> w.field("policy") { writeMoonrakerReconnectPolicy(w, v.value) }
+            is MoonrakerReconnectPolicyReply.Refused -> w.field("refused") { writeMoonrakerTransportFault(w, v.value) }
+        } }
+    }
+    data class MoonrakerReconnectDelayRequest(val attempt: Double, val policy: MoonrakerReconnectPolicy, val random: Double)
+    private fun readMoonrakerReconnectDelayRequest(v: Any): MoonrakerReconnectDelayRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("attempt", "policy", "random"), false)
+        return MoonrakerReconnectDelayRequest(readFinite(obj.get("attempt")), readMoonrakerReconnectPolicy(obj.get("policy")), readFinite(obj.get("random")))
+    }
+    private fun writeMoonrakerReconnectDelayRequest(w: ProjectIntentWriter, v: MoonrakerReconnectDelayRequest) {
+        w.obj {
+            w.field("attempt") { writeFinite(w, v.attempt) }
+            w.field("policy") { writeMoonrakerReconnectPolicy(w, v.policy) }
+            w.field("random") { writeFinite(w, v.random) }
+        }
+    }
+    data class MoonrakerSubscriptionEntry(val name: List<Int>, val fields: OptionalTextList)
+    private fun readMoonrakerSubscriptionEntry(v: Any): MoonrakerSubscriptionEntry {
+        val obj = ProjectIntentJson.fields(v, setOf("name", "fields"), false)
+        return MoonrakerSubscriptionEntry(readEditText(obj.get("name")), readOptionalTextList(obj.get("fields")))
+    }
+    private fun writeMoonrakerSubscriptionEntry(w: ProjectIntentWriter, v: MoonrakerSubscriptionEntry) {
+        w.obj {
+            w.field("name") { writeEditText(w, v.name) }
+            w.field("fields") { writeOptionalTextList(w, v.fields) }
+        }
+    }
+    private fun readMoonrakerObjectSubscription(v: Any): List<MoonrakerSubscriptionEntry> {
+        val array = ProjectIntentJson.list(v, 0, 256)
+        return List(array.length()) { readMoonrakerSubscriptionEntry(array.get(it)) }
+    }
+    private fun writeMoonrakerObjectSubscription(w: ProjectIntentWriter, v: List<MoonrakerSubscriptionEntry>) {
+        w.array(v, 0, 256) { writeMoonrakerSubscriptionEntry(w, it) }
+    }
+    sealed interface MoonrakerSubscriptionReply {
+        data class Subscription(val value: List<ProjectIntents.MoonrakerSubscriptionEntry>) : MoonrakerSubscriptionReply
+        data class Refused(val value: ProjectIntents.MoonrakerTransportFault) : MoonrakerSubscriptionReply
+    }
+    private fun readMoonrakerSubscriptionReply(v: Any): MoonrakerSubscriptionReply {
+        val obj = ProjectIntentJson.fields(v, setOf("subscription", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "subscription" -> MoonrakerSubscriptionReply.Subscription(readMoonrakerObjectSubscription(obj.get(key)))
+            "refused" -> MoonrakerSubscriptionReply.Refused(readMoonrakerTransportFault(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMoonrakerSubscriptionReply(w: ProjectIntentWriter, v: MoonrakerSubscriptionReply) {
+        w.obj { when(v) {
+            is MoonrakerSubscriptionReply.Subscription -> w.field("subscription") { writeMoonrakerObjectSubscription(w, v.value) }
+            is MoonrakerSubscriptionReply.Refused -> w.field("refused") { writeMoonrakerTransportFault(w, v.value) }
+        } }
+    }
+    data class MoonrakerMethodCheck(val url: List<Int>, val method: OptionalText, val operation: List<Int>)
+    private fun readMoonrakerMethodCheck(v: Any): MoonrakerMethodCheck {
+        val obj = ProjectIntentJson.fields(v, setOf("url", "method", "operation"), false)
+        return MoonrakerMethodCheck(readEditText(obj.get("url")), readOptionalText(obj.get("method")), readEditText(obj.get("operation")))
+    }
+    private fun writeMoonrakerMethodCheck(w: ProjectIntentWriter, v: MoonrakerMethodCheck) {
+        w.obj {
+            w.field("url") { writeEditText(w, v.url) }
+            w.field("method") { writeOptionalText(w, v.method) }
+            w.field("operation") { writeEditText(w, v.operation) }
+        }
+    }
+    sealed interface MoonrakerCheckReply {
+        data class Allowed(val value: ProjectIntents.Empty) : MoonrakerCheckReply
+        data class Refused(val value: ProjectIntents.MoonrakerTransportFault) : MoonrakerCheckReply
+    }
+    private fun readMoonrakerCheckReply(v: Any): MoonrakerCheckReply {
+        val obj = ProjectIntentJson.fields(v, setOf("allowed", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "allowed" -> MoonrakerCheckReply.Allowed(readEmpty(obj.get(key)))
+            "refused" -> MoonrakerCheckReply.Refused(readMoonrakerTransportFault(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeMoonrakerCheckReply(w: ProjectIntentWriter, v: MoonrakerCheckReply) {
+        w.obj { when(v) {
+            is MoonrakerCheckReply.Allowed -> w.field("allowed") { writeEmpty(w, v.value) }
+            is MoonrakerCheckReply.Refused -> w.field("refused") { writeMoonrakerTransportFault(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -8925,4 +9349,38 @@ object ProjectIntents {
     fun encodePrinterSessionView(value: PrinterSessionView): String = ProjectIntentWriter().also { writePrinterSessionView(it, value) }.finish()
     fun decodePrinterSessionEffect(text: String): PrinterSessionEffect = readPrinterSessionEffect(ProjectIntentJson.parse(text))
     fun encodePrinterSessionEffect(value: PrinterSessionEffect): String = ProjectIntentWriter().also { writePrinterSessionEffect(it, value) }.finish()
+    fun decodeMoonrakerEndpointRequest(text: String): MoonrakerEndpointRequest = readMoonrakerEndpointRequest(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerEndpointRequest(value: MoonrakerEndpointRequest): String = ProjectIntentWriter().also { writeMoonrakerEndpointRequest(it, value) }.finish()
+    fun decodeMoonrakerEndpointReply(text: String): MoonrakerEndpointReply = readMoonrakerEndpointReply(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerEndpointReply(value: MoonrakerEndpointReply): String = ProjectIntentWriter().also { writeMoonrakerEndpointReply(it, value) }.finish()
+    fun decodeMoonrakerPathRequest(text: String): MoonrakerPathRequest = readMoonrakerPathRequest(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerPathRequest(value: MoonrakerPathRequest): String = ProjectIntentWriter().also { writeMoonrakerPathRequest(it, value) }.finish()
+    fun decodeMoonrakerPathReply(text: String): MoonrakerPathReply = readMoonrakerPathReply(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerPathReply(value: MoonrakerPathReply): String = ProjectIntentWriter().also { writeMoonrakerPathReply(it, value) }.finish()
+    fun decodeMoonrakerCredentialCheck(text: String): MoonrakerCredentialCheck = readMoonrakerCredentialCheck(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerCredentialCheck(value: MoonrakerCredentialCheck): String = ProjectIntentWriter().also { writeMoonrakerCredentialCheck(it, value) }.finish()
+    fun decodeMoonrakerCredentialReply(text: String): MoonrakerCredentialReply = readMoonrakerCredentialReply(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerCredentialReply(value: MoonrakerCredentialReply): String = ProjectIntentWriter().also { writeMoonrakerCredentialReply(it, value) }.finish()
+    fun decodeMoonrakerErrorResponse(text: String): MoonrakerErrorResponse = readMoonrakerErrorResponse(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerErrorResponse(value: MoonrakerErrorResponse): String = ProjectIntentWriter().also { writeMoonrakerErrorResponse(it, value) }.finish()
+    fun decodeMoonrakerTransportFault(text: String): MoonrakerTransportFault = readMoonrakerTransportFault(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerTransportFault(value: MoonrakerTransportFault): String = ProjectIntentWriter().also { writeMoonrakerTransportFault(it, value) }.finish()
+    fun decodeMoonrakerHandshakeRequest(text: String): MoonrakerHandshakeRequest = readMoonrakerHandshakeRequest(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerHandshakeRequest(value: MoonrakerHandshakeRequest): String = ProjectIntentWriter().also { writeMoonrakerHandshakeRequest(it, value) }.finish()
+    fun decodeMoonrakerHandshakeReply(text: String): MoonrakerHandshakeReply = readMoonrakerHandshakeReply(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerHandshakeReply(value: MoonrakerHandshakeReply): String = ProjectIntentWriter().also { writeMoonrakerHandshakeReply(it, value) }.finish()
+    fun decodeMoonrakerReconnectPolicyInput(text: String): MoonrakerReconnectPolicyInput = readMoonrakerReconnectPolicyInput(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerReconnectPolicyInput(value: MoonrakerReconnectPolicyInput): String = ProjectIntentWriter().also { writeMoonrakerReconnectPolicyInput(it, value) }.finish()
+    fun decodeMoonrakerReconnectPolicyReply(text: String): MoonrakerReconnectPolicyReply = readMoonrakerReconnectPolicyReply(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerReconnectPolicyReply(value: MoonrakerReconnectPolicyReply): String = ProjectIntentWriter().also { writeMoonrakerReconnectPolicyReply(it, value) }.finish()
+    fun decodeMoonrakerReconnectDelayRequest(text: String): MoonrakerReconnectDelayRequest = readMoonrakerReconnectDelayRequest(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerReconnectDelayRequest(value: MoonrakerReconnectDelayRequest): String = ProjectIntentWriter().also { writeMoonrakerReconnectDelayRequest(it, value) }.finish()
+    fun decodeMoonrakerObjectSubscription(text: String): List<MoonrakerSubscriptionEntry> = readMoonrakerObjectSubscription(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerObjectSubscription(value: List<MoonrakerSubscriptionEntry>): String = ProjectIntentWriter().also { writeMoonrakerObjectSubscription(it, value) }.finish()
+    fun decodeMoonrakerSubscriptionReply(text: String): MoonrakerSubscriptionReply = readMoonrakerSubscriptionReply(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerSubscriptionReply(value: MoonrakerSubscriptionReply): String = ProjectIntentWriter().also { writeMoonrakerSubscriptionReply(it, value) }.finish()
+    fun decodeMoonrakerMethodCheck(text: String): MoonrakerMethodCheck = readMoonrakerMethodCheck(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerMethodCheck(value: MoonrakerMethodCheck): String = ProjectIntentWriter().also { writeMoonrakerMethodCheck(it, value) }.finish()
+    fun decodeMoonrakerCheckReply(text: String): MoonrakerCheckReply = readMoonrakerCheckReply(ProjectIntentJson.parse(text))
+    fun encodeMoonrakerCheckReply(value: MoonrakerCheckReply): String = ProjectIntentWriter().also { writeMoonrakerCheckReply(it, value) }.finish()
 }

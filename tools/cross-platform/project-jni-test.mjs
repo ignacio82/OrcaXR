@@ -40,6 +40,7 @@ import { replayPrinterTools } from "./printer-tools-replay.mjs";
 import { replayPrinterPreparation } from "./printer-preparation-replay.mjs";
 import { replayPrinterWorkflow } from "./printer-workflow-replay.mjs";
 import { replayPrinterSession } from "./printer-session-replay.mjs";
+import { replayMoonrakerPolicy } from "./moonraker-policy-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -1073,6 +1074,19 @@ try {
     }),
   ]);
   assert.equal(jvm.call("printerSessionChecks", sessionScript.join("\n")), 3820);
+  // The Moonraker transport policy through the real JNI exports, then the
+  // Kotlin wrapper.
+  const policyFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/moonraker-policy-vectors.json", root)),
+  );
+  assert.equal(replayMoonrakerPolicy(projectJniCore(jvm.call), policyFixture).moonrakerPolicyAnswers, 803);
+  const policyScript = [
+    ...["endpoints", "paths", "credentials", "errors", "handshakes", "policies", "subscriptions", "methods"].flatMap(
+      (section) => policyFixture[section].map((c) => [section, c.requestJson, c.replyJson].join("\t")),
+    ),
+    ...policyFixture.delays.map((c) => ["delays", c.requestJson, String(c.delayMs)].join("\t")),
+  ];
+  assert.equal(jvm.call("moonrakerPolicyChecks", policyScript.join("\n")), 803);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

@@ -466,11 +466,7 @@ export class MoonrakerTransport {
       this.fetchResult<unknown>(session, '/server/info', {}, 'handshake_server'),
       this.fetchResult<unknown>(session, '/printer/info', {}, 'handshake_printer'),
     ]);
-    const server = parseServerHandshake(serverResult);
-    assertSupportedVersion(server.apiVersion, this.versionPolicy);
-    const printer = parsePrinterHandshake(printerResult);
-    const capabilities = buildCapabilityManifest(server.components, server, printer);
-    return Object.freeze({ server, printer, capabilities });
+    return readMoonrakerHandshake(serverResult, printerResult, this.versionPolicy);
   }
 
   /**
@@ -1003,7 +999,22 @@ function requestDeadline(value: number | undefined | null, fallback: number): nu
   return Math.floor(value);
 }
 
-function normalizeReconnectPolicy(input: Partial<MoonrakerReconnectPolicy> | undefined): MoonrakerReconnectPolicy {
+/** The handshake `/server/info` and `/printer/info` describe, within the supported API range. */
+export function readMoonrakerHandshake(
+  serverResult: unknown,
+  printerResult: unknown,
+  policy: MoonrakerVersionPolicy,
+): MoonrakerHandshake {
+  const server = parseServerHandshake(serverResult);
+  assertSupportedVersion(server.apiVersion, policy);
+  const printer = parsePrinterHandshake(printerResult);
+  const capabilities = buildCapabilityManifest(server.components, server, printer);
+  return Object.freeze({ server, printer, capabilities });
+}
+
+export function normalizeReconnectPolicy(
+  input: Partial<MoonrakerReconnectPolicy> | undefined,
+): MoonrakerReconnectPolicy {
   const policy = {
     ...DEFAULT_MOONRAKER_RECONNECT_POLICY,
     ...input,
@@ -1025,7 +1036,7 @@ function normalizeReconnectPolicy(input: Partial<MoonrakerReconnectPolicy> | und
   return Object.freeze({ ...policy });
 }
 
-function normalizeVersionPolicy(input: Partial<MoonrakerVersionPolicy> | undefined): MoonrakerVersionPolicy {
+export function normalizeVersionPolicy(input: Partial<MoonrakerVersionPolicy> | undefined): MoonrakerVersionPolicy {
   const minimum = input?.minimum ?? DEFAULT_VERSION_POLICY.minimum;
   const maximumMajor = input?.maximumMajor ?? DEFAULT_VERSION_POLICY.maximumMajor;
   if (!isApiVersion(minimum) || !Number.isInteger(maximumMajor) || maximumMajor < minimum[0]) {
@@ -1142,7 +1153,7 @@ function safeClientField(value: string, fallback: string): string {
   return /^[a-z0-9 ._-]{1,64}$/i.test(value) ? value : fallback;
 }
 
-function cloneObjectSubscription(subscription: MoonrakerObjectSubscription): MoonrakerObjectSubscription {
+export function cloneObjectSubscription(subscription: MoonrakerObjectSubscription): MoonrakerObjectSubscription {
   const result = Object.create(null) as Record<string, readonly string[] | null>;
   for (const [objectName, fields] of Object.entries(subscription)) {
     if (
@@ -1189,7 +1200,7 @@ const METHOD_ONLY_ENDPOINTS: ReadonlyMap<string, string> = new Map([
   ['/server/files/copy', 'POST'],
 ]);
 
-function assertMethodSuitsEndpoint(pathname: string, method: string | undefined, operation: string): void {
+export function assertMethodSuitsEndpoint(pathname: string, method: string | undefined, operation: string): void {
   const normalizedPath = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
   const required = METHOD_ONLY_ENDPOINTS.get(normalizedPath);
   if (required === undefined) return;
@@ -1205,27 +1216,34 @@ function assertMethodSuitsEndpoint(pathname: string, method: string | undefined,
  * `http_error` into the server's own account of what was wrong.
  */
 async function readErrorDetail(response: Response): Promise<string | undefined> {
+  let body: string;
   try {
-    const text = (await response.text()).slice(0, MAX_ERROR_DETAIL_CHARS);
-    if (text.trim() === '') return undefined;
-    try {
-      const parsed: unknown = JSON.parse(text);
-      const error = isRecord(parsed) ? parsed.error : undefined;
-      if (typeof error === 'string') return error;
-      if (isRecord(error) && typeof error.message === 'string') return error.message;
-      const message = isRecord(parsed) ? parsed.message : undefined;
-      if (typeof message === 'string') return message;
-    } catch {
-      // Not JSON: the raw text is still the server's own explanation.
-    }
-    return text;
+    body = await response.text();
   } catch {
     // A body that cannot be read must not replace the status we already have.
     return undefined;
   }
+  return moonrakerErrorDetail(body);
 }
 
-function httpStatusError(status: number, operation: string, detail?: string): MoonrakerTransportError {
+/** What a refused response's body says went wrong: Moonraker's own message, or the text. */
+export function moonrakerErrorDetail(body: string): string | undefined {
+  const text = body.slice(0, MAX_ERROR_DETAIL_CHARS);
+  if (text.trim() === '') return undefined;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    const error = isRecord(parsed) ? parsed.error : undefined;
+    if (typeof error === 'string') return error;
+    if (isRecord(error) && typeof error.message === 'string') return error.message;
+    const message = isRecord(parsed) ? parsed.message : undefined;
+    if (typeof message === 'string') return message;
+  } catch {
+    // Not JSON: the raw text is still the server's own explanation.
+  }
+  return text;
+}
+
+export function httpStatusError(status: number, operation: string, detail?: string): MoonrakerTransportError {
   const options = { httpStatus: status, ...(detail === undefined ? {} : { detail }) };
   if (status === 401) return new MoonrakerTransportError('auth_required', operation, options);
   if (status === 403) return new MoonrakerTransportError('forbidden', operation, options);

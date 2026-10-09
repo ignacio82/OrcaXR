@@ -11917,6 +11917,580 @@ fn read_printer_session_view(v: &Value) -> Result<PrinterSessionView, InvalidInt
         availability: read_print_job_command_descriptors(&object["availability"])?,
     })
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerTransportFault {
+    pub code: MoonrakerErrorCode,
+    pub operation: EditText,
+    pub recoverable: Flag,
+    pub http_status: OptionalFinite,
+    pub detail: OptionalText,
+}
+fn read_moonraker_transport_fault(v: &Value) -> Result<MoonrakerTransportFault, InvalidIntent> {
+    let object = fields(
+        v,
+        &["code", "operation", "recoverable", "httpStatus", "detail"],
+        false,
+    )?;
+    Ok(MoonrakerTransportFault {
+        code: read_moonraker_error_code(&object["code"])?,
+        operation: read_edit_text(&object["operation"])?,
+        recoverable: read_flag(&object["recoverable"])?,
+        http_status: read_optional_finite(&object["httpStatus"])?,
+        detail: read_optional_text(&object["detail"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerEndpointRequest {
+    pub input: EditText,
+    pub default_port: OptionalFinite,
+    pub same_origin_proxy: OptionalText,
+    pub page_origin: OptionalText,
+}
+fn read_moonraker_endpoint_request(v: &Value) -> Result<MoonrakerEndpointRequest, InvalidIntent> {
+    let object = fields(
+        v,
+        &["input", "defaultPort", "sameOriginProxy", "pageOrigin"],
+        false,
+    )?;
+    Ok(MoonrakerEndpointRequest {
+        input: read_edit_text(&object["input"])?,
+        default_port: read_optional_finite(&object["defaultPort"])?,
+        same_origin_proxy: read_optional_text(&object["sameOriginProxy"])?,
+        page_origin: read_optional_text(&object["pageOrigin"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NormalizedMoonrakerEndpoint {
+    pub direct_http_url: EditText,
+    pub transport_http_url: EditText,
+    pub web_socket_url: EditText,
+    pub uses_same_origin_proxy: Flag,
+}
+fn read_normalized_moonraker_endpoint(
+    v: &Value,
+) -> Result<NormalizedMoonrakerEndpoint, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "directHttpUrl",
+            "transportHttpUrl",
+            "webSocketUrl",
+            "usesSameOriginProxy",
+        ],
+        false,
+    )?;
+    Ok(NormalizedMoonrakerEndpoint {
+        direct_http_url: read_edit_text(&object["directHttpUrl"])?,
+        transport_http_url: read_edit_text(&object["transportHttpUrl"])?,
+        web_socket_url: read_edit_text(&object["webSocketUrl"])?,
+        uses_same_origin_proxy: read_flag(&object["usesSameOriginProxy"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MoonrakerEndpointReply {
+    Endpoint(NormalizedMoonrakerEndpoint),
+    Refused(MoonrakerTransportFault),
+}
+fn read_moonraker_endpoint_reply(v: &Value) -> Result<MoonrakerEndpointReply, InvalidIntent> {
+    let object = fields(v, &["endpoint", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "endpoint" => Ok(MoonrakerEndpointReply::Endpoint(
+            read_normalized_moonraker_endpoint(value)?,
+        )),
+        "refused" => Ok(MoonrakerEndpointReply::Refused(
+            read_moonraker_transport_fault(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerPathRequest {
+    pub base: EditText,
+    pub path: EditText,
+}
+fn read_moonraker_path_request(v: &Value) -> Result<MoonrakerPathRequest, InvalidIntent> {
+    let object = fields(v, &["base", "path"], false)?;
+    Ok(MoonrakerPathRequest {
+        base: read_edit_text(&object["base"])?,
+        path: read_edit_text(&object["path"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MoonrakerPathReply {
+    Url(PrinterText),
+    Refused(MoonrakerTransportFault),
+}
+fn read_moonraker_path_reply(v: &Value) -> Result<MoonrakerPathReply, InvalidIntent> {
+    let object = fields(v, &["url", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "url" => Ok(MoonrakerPathReply::Url(read_printer_text(value)?)),
+        "refused" => Ok(MoonrakerPathReply::Refused(read_moonraker_transport_fault(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerCredentials {
+    pub api_key: OptionalText,
+    pub bearer_token: OptionalText,
+}
+fn read_moonraker_credentials(v: &Value) -> Result<MoonrakerCredentials, InvalidIntent> {
+    let object = fields(v, &["apiKey", "bearerToken"], false)?;
+    Ok(MoonrakerCredentials {
+        api_key: read_optional_text(&object["apiKey"])?,
+        bearer_token: read_optional_text(&object["bearerToken"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerHeader {
+    pub name: EditText,
+    pub value: EditText,
+}
+fn read_moonraker_header(v: &Value) -> Result<MoonrakerHeader, InvalidIntent> {
+    let object = fields(v, &["name", "value"], false)?;
+    Ok(MoonrakerHeader {
+        name: read_edit_text(&object["name"])?,
+        value: read_edit_text(&object["value"])?,
+    })
+}
+pub type MoonrakerHeaders = Vec<MoonrakerHeader>;
+fn read_moonraker_headers(v: &Value) -> Result<MoonrakerHeaders, InvalidIntent> {
+    list(v, 0, 16)?.iter().map(read_moonraker_header).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerCredentialCheck {
+    pub credentials: MoonrakerCredentials,
+    pub probes: TextList,
+}
+fn read_moonraker_credential_check(v: &Value) -> Result<MoonrakerCredentialCheck, InvalidIntent> {
+    let object = fields(v, &["credentials", "probes"], false)?;
+    Ok(MoonrakerCredentialCheck {
+        credentials: read_moonraker_credentials(&object["credentials"])?,
+        probes: read_text_list(&object["probes"])?,
+    })
+}
+pub type MoonrakerMatches = Vec<Flag>;
+fn read_moonraker_matches(v: &Value) -> Result<MoonrakerMatches, InvalidIntent> {
+    list(v, 0, 4096)?.iter().map(read_flag).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerCredentialAnswer {
+    pub headers: MoonrakerHeaders,
+    pub has_api_key: Flag,
+    pub has_bearer_token: Flag,
+    pub matches: MoonrakerMatches,
+}
+fn read_moonraker_credential_answer(v: &Value) -> Result<MoonrakerCredentialAnswer, InvalidIntent> {
+    let object = fields(
+        v,
+        &["headers", "hasApiKey", "hasBearerToken", "matches"],
+        false,
+    )?;
+    Ok(MoonrakerCredentialAnswer {
+        headers: read_moonraker_headers(&object["headers"])?,
+        has_api_key: read_flag(&object["hasApiKey"])?,
+        has_bearer_token: read_flag(&object["hasBearerToken"])?,
+        matches: read_moonraker_matches(&object["matches"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MoonrakerCredentialReply {
+    Accepted(MoonrakerCredentialAnswer),
+    Refused(MoonrakerTransportFault),
+}
+fn read_moonraker_credential_reply(v: &Value) -> Result<MoonrakerCredentialReply, InvalidIntent> {
+    let object = fields(v, &["accepted", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "accepted" => Ok(MoonrakerCredentialReply::Accepted(
+            read_moonraker_credential_answer(value)?,
+        )),
+        "refused" => Ok(MoonrakerCredentialReply::Refused(
+            read_moonraker_transport_fault(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerErrorResponse {
+    pub status: Finite,
+    pub body: OptionalText,
+    pub credentials: MoonrakerCredentials,
+    pub operation: EditText,
+}
+fn read_moonraker_error_response(v: &Value) -> Result<MoonrakerErrorResponse, InvalidIntent> {
+    let object = fields(v, &["status", "body", "credentials", "operation"], false)?;
+    Ok(MoonrakerErrorResponse {
+        status: read_finite(&object["status"])?,
+        body: read_optional_text(&object["body"])?,
+        credentials: read_moonraker_credentials(&object["credentials"])?,
+        operation: read_edit_text(&object["operation"])?,
+    })
+}
+pub type MoonrakerApiVersionInput = Vec<Finite>;
+fn read_moonraker_api_version_input(v: &Value) -> Result<MoonrakerApiVersionInput, InvalidIntent> {
+    list(v, 0, 8)?.iter().map(read_finite).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalMoonrakerApiVersionInput {
+    Absent(Empty),
+    Value(MoonrakerApiVersionInput),
+}
+fn read_optional_moonraker_api_version_input(
+    v: &Value,
+) -> Result<OptionalMoonrakerApiVersionInput, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalMoonrakerApiVersionInput::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalMoonrakerApiVersionInput::Value(
+            read_moonraker_api_version_input(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerVersionPolicyInput {
+    pub minimum: OptionalMoonrakerApiVersionInput,
+    pub maximum_major: OptionalFinite,
+}
+fn read_moonraker_version_policy_input(
+    v: &Value,
+) -> Result<MoonrakerVersionPolicyInput, InvalidIntent> {
+    let object = fields(v, &["minimum", "maximumMajor"], false)?;
+    Ok(MoonrakerVersionPolicyInput {
+        minimum: read_optional_moonraker_api_version_input(&object["minimum"])?,
+        maximum_major: read_optional_finite(&object["maximumMajor"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerHandshakeRequest {
+    pub server: EditText,
+    pub printer: EditText,
+    pub policy: MoonrakerVersionPolicyInput,
+}
+fn read_moonraker_handshake_request(v: &Value) -> Result<MoonrakerHandshakeRequest, InvalidIntent> {
+    let object = fields(v, &["server", "printer", "policy"], false)?;
+    Ok(MoonrakerHandshakeRequest {
+        server: read_edit_text(&object["server"])?,
+        printer: read_edit_text(&object["printer"])?,
+        policy: read_moonraker_version_policy_input(&object["policy"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerServerHandshake {
+    pub api_version: MoonrakerApiVersionInput,
+    pub api_version_string: EditText,
+    pub moonraker_version: EditText,
+    pub components: TextList,
+    pub warnings: TextList,
+}
+fn read_moonraker_server_handshake(v: &Value) -> Result<MoonrakerServerHandshake, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "apiVersion",
+            "apiVersionString",
+            "moonrakerVersion",
+            "components",
+            "warnings",
+        ],
+        false,
+    )?;
+    Ok(MoonrakerServerHandshake {
+        api_version: read_moonraker_api_version_input(&object["apiVersion"])?,
+        api_version_string: read_edit_text(&object["apiVersionString"])?,
+        moonraker_version: read_edit_text(&object["moonrakerVersion"])?,
+        components: read_text_list(&object["components"])?,
+        warnings: read_text_list(&object["warnings"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerPrinterHandshake {
+    pub state: EditText,
+    pub hostname: EditText,
+    pub software_version: EditText,
+}
+fn read_moonraker_printer_handshake(v: &Value) -> Result<MoonrakerPrinterHandshake, InvalidIntent> {
+    let object = fields(v, &["state", "hostname", "softwareVersion"], false)?;
+    Ok(MoonrakerPrinterHandshake {
+        state: read_edit_text(&object["state"])?,
+        hostname: read_edit_text(&object["hostname"])?,
+        software_version: read_edit_text(&object["softwareVersion"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerCapabilityManifest {
+    pub authorization: Flag,
+    pub file_management: Flag,
+    pub job_queue: Flag,
+    pub history: Flag,
+    pub webcams: Flag,
+    pub power_devices: Flag,
+    pub update_manager: Flag,
+    pub announcements: Flag,
+    pub database: Flag,
+    pub klippy_connected: Flag,
+    pub extension_components: TextList,
+}
+fn read_moonraker_capability_manifest(
+    v: &Value,
+) -> Result<MoonrakerCapabilityManifest, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "authorization",
+            "fileManagement",
+            "jobQueue",
+            "history",
+            "webcams",
+            "powerDevices",
+            "updateManager",
+            "announcements",
+            "database",
+            "klippyConnected",
+            "extensionComponents",
+        ],
+        false,
+    )?;
+    Ok(MoonrakerCapabilityManifest {
+        authorization: read_flag(&object["authorization"])?,
+        file_management: read_flag(&object["fileManagement"])?,
+        job_queue: read_flag(&object["jobQueue"])?,
+        history: read_flag(&object["history"])?,
+        webcams: read_flag(&object["webcams"])?,
+        power_devices: read_flag(&object["powerDevices"])?,
+        update_manager: read_flag(&object["updateManager"])?,
+        announcements: read_flag(&object["announcements"])?,
+        database: read_flag(&object["database"])?,
+        klippy_connected: read_flag(&object["klippyConnected"])?,
+        extension_components: read_text_list(&object["extensionComponents"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerHandshake {
+    pub server: MoonrakerServerHandshake,
+    pub printer: MoonrakerPrinterHandshake,
+    pub capabilities: MoonrakerCapabilityManifest,
+}
+fn read_moonraker_handshake(v: &Value) -> Result<MoonrakerHandshake, InvalidIntent> {
+    let object = fields(v, &["server", "printer", "capabilities"], false)?;
+    Ok(MoonrakerHandshake {
+        server: read_moonraker_server_handshake(&object["server"])?,
+        printer: read_moonraker_printer_handshake(&object["printer"])?,
+        capabilities: read_moonraker_capability_manifest(&object["capabilities"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MoonrakerHandshakeReply {
+    Handshake(MoonrakerHandshake),
+    Refused(MoonrakerTransportFault),
+}
+fn read_moonraker_handshake_reply(v: &Value) -> Result<MoonrakerHandshakeReply, InvalidIntent> {
+    let object = fields(v, &["handshake", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "handshake" => Ok(MoonrakerHandshakeReply::Handshake(
+            read_moonraker_handshake(value)?,
+        )),
+        "refused" => Ok(MoonrakerHandshakeReply::Refused(
+            read_moonraker_transport_fault(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerReconnectPolicyInput {
+    pub initial_delay_ms: OptionalFinite,
+    pub maximum_delay_ms: OptionalFinite,
+    pub maximum_attempts: OptionalFinite,
+    pub jitter_ratio: OptionalFinite,
+}
+fn read_moonraker_reconnect_policy_input(
+    v: &Value,
+) -> Result<MoonrakerReconnectPolicyInput, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "initialDelayMs",
+            "maximumDelayMs",
+            "maximumAttempts",
+            "jitterRatio",
+        ],
+        false,
+    )?;
+    Ok(MoonrakerReconnectPolicyInput {
+        initial_delay_ms: read_optional_finite(&object["initialDelayMs"])?,
+        maximum_delay_ms: read_optional_finite(&object["maximumDelayMs"])?,
+        maximum_attempts: read_optional_finite(&object["maximumAttempts"])?,
+        jitter_ratio: read_optional_finite(&object["jitterRatio"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerReconnectPolicy {
+    pub initial_delay_ms: Finite,
+    pub maximum_delay_ms: Finite,
+    pub maximum_attempts: Finite,
+    pub jitter_ratio: Finite,
+}
+fn read_moonraker_reconnect_policy(v: &Value) -> Result<MoonrakerReconnectPolicy, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "initialDelayMs",
+            "maximumDelayMs",
+            "maximumAttempts",
+            "jitterRatio",
+        ],
+        false,
+    )?;
+    Ok(MoonrakerReconnectPolicy {
+        initial_delay_ms: read_finite(&object["initialDelayMs"])?,
+        maximum_delay_ms: read_finite(&object["maximumDelayMs"])?,
+        maximum_attempts: read_finite(&object["maximumAttempts"])?,
+        jitter_ratio: read_finite(&object["jitterRatio"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MoonrakerReconnectPolicyReply {
+    Policy(MoonrakerReconnectPolicy),
+    Refused(MoonrakerTransportFault),
+}
+fn read_moonraker_reconnect_policy_reply(
+    v: &Value,
+) -> Result<MoonrakerReconnectPolicyReply, InvalidIntent> {
+    let object = fields(v, &["policy", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "policy" => Ok(MoonrakerReconnectPolicyReply::Policy(
+            read_moonraker_reconnect_policy(value)?,
+        )),
+        "refused" => Ok(MoonrakerReconnectPolicyReply::Refused(
+            read_moonraker_transport_fault(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerReconnectDelayRequest {
+    pub attempt: Finite,
+    pub policy: MoonrakerReconnectPolicy,
+    pub random: Finite,
+}
+fn read_moonraker_reconnect_delay_request(
+    v: &Value,
+) -> Result<MoonrakerReconnectDelayRequest, InvalidIntent> {
+    let object = fields(v, &["attempt", "policy", "random"], false)?;
+    Ok(MoonrakerReconnectDelayRequest {
+        attempt: read_finite(&object["attempt"])?,
+        policy: read_moonraker_reconnect_policy(&object["policy"])?,
+        random: read_finite(&object["random"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerSubscriptionEntry {
+    pub name: EditText,
+    pub fields: OptionalTextList,
+}
+fn read_moonraker_subscription_entry(
+    v: &Value,
+) -> Result<MoonrakerSubscriptionEntry, InvalidIntent> {
+    let object = fields(v, &["name", "fields"], false)?;
+    Ok(MoonrakerSubscriptionEntry {
+        name: read_edit_text(&object["name"])?,
+        fields: read_optional_text_list(&object["fields"])?,
+    })
+}
+pub type MoonrakerObjectSubscription = Vec<MoonrakerSubscriptionEntry>;
+fn read_moonraker_object_subscription(
+    v: &Value,
+) -> Result<MoonrakerObjectSubscription, InvalidIntent> {
+    list(v, 0, 256)?
+        .iter()
+        .map(read_moonraker_subscription_entry)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MoonrakerSubscriptionReply {
+    Subscription(MoonrakerObjectSubscription),
+    Refused(MoonrakerTransportFault),
+}
+fn read_moonraker_subscription_reply(
+    v: &Value,
+) -> Result<MoonrakerSubscriptionReply, InvalidIntent> {
+    let object = fields(v, &["subscription", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "subscription" => Ok(MoonrakerSubscriptionReply::Subscription(
+            read_moonraker_object_subscription(value)?,
+        )),
+        "refused" => Ok(MoonrakerSubscriptionReply::Refused(
+            read_moonraker_transport_fault(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerMethodCheck {
+    pub url: EditText,
+    pub method: OptionalText,
+    pub operation: EditText,
+}
+fn read_moonraker_method_check(v: &Value) -> Result<MoonrakerMethodCheck, InvalidIntent> {
+    let object = fields(v, &["url", "method", "operation"], false)?;
+    Ok(MoonrakerMethodCheck {
+        url: read_edit_text(&object["url"])?,
+        method: read_optional_text(&object["method"])?,
+        operation: read_edit_text(&object["operation"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MoonrakerCheckReply {
+    Allowed(Empty),
+    Refused(MoonrakerTransportFault),
+}
+fn read_moonraker_check_reply(v: &Value) -> Result<MoonrakerCheckReply, InvalidIntent> {
+    let object = fields(v, &["allowed", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "allowed" => Ok(MoonrakerCheckReply::Allowed(read_empty(value)?)),
+        "refused" => Ok(MoonrakerCheckReply::Refused(
+            read_moonraker_transport_fault(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -13293,5 +13867,197 @@ pub fn encode_printer_session_effect(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_printer_session_effect(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_endpoint_request(
+    text: &str,
+) -> Result<MoonrakerEndpointRequest, InvalidIntent> {
+    read_moonraker_endpoint_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_endpoint_request(
+    value: &MoonrakerEndpointRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_endpoint_request(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_endpoint_reply(
+    text: &str,
+) -> Result<MoonrakerEndpointReply, InvalidIntent> {
+    read_moonraker_endpoint_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_endpoint_reply(
+    value: &MoonrakerEndpointReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_endpoint_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_path_request(text: &str) -> Result<MoonrakerPathRequest, InvalidIntent> {
+    read_moonraker_path_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_path_request(
+    value: &MoonrakerPathRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_path_request(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_path_reply(text: &str) -> Result<MoonrakerPathReply, InvalidIntent> {
+    read_moonraker_path_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_path_reply(value: &MoonrakerPathReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_path_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_credential_check(
+    text: &str,
+) -> Result<MoonrakerCredentialCheck, InvalidIntent> {
+    read_moonraker_credential_check(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_credential_check(
+    value: &MoonrakerCredentialCheck,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_credential_check(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_credential_reply(
+    text: &str,
+) -> Result<MoonrakerCredentialReply, InvalidIntent> {
+    read_moonraker_credential_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_credential_reply(
+    value: &MoonrakerCredentialReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_credential_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_error_response(
+    text: &str,
+) -> Result<MoonrakerErrorResponse, InvalidIntent> {
+    read_moonraker_error_response(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_error_response(
+    value: &MoonrakerErrorResponse,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_error_response(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_transport_fault(
+    text: &str,
+) -> Result<MoonrakerTransportFault, InvalidIntent> {
+    read_moonraker_transport_fault(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_transport_fault(
+    value: &MoonrakerTransportFault,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_transport_fault(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_handshake_request(
+    text: &str,
+) -> Result<MoonrakerHandshakeRequest, InvalidIntent> {
+    read_moonraker_handshake_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_handshake_request(
+    value: &MoonrakerHandshakeRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_handshake_request(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_handshake_reply(
+    text: &str,
+) -> Result<MoonrakerHandshakeReply, InvalidIntent> {
+    read_moonraker_handshake_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_handshake_reply(
+    value: &MoonrakerHandshakeReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_handshake_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_reconnect_policy_input(
+    text: &str,
+) -> Result<MoonrakerReconnectPolicyInput, InvalidIntent> {
+    read_moonraker_reconnect_policy_input(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_reconnect_policy_input(
+    value: &MoonrakerReconnectPolicyInput,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_reconnect_policy_input(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_reconnect_policy_reply(
+    text: &str,
+) -> Result<MoonrakerReconnectPolicyReply, InvalidIntent> {
+    read_moonraker_reconnect_policy_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_reconnect_policy_reply(
+    value: &MoonrakerReconnectPolicyReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_reconnect_policy_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_reconnect_delay_request(
+    text: &str,
+) -> Result<MoonrakerReconnectDelayRequest, InvalidIntent> {
+    read_moonraker_reconnect_delay_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_reconnect_delay_request(
+    value: &MoonrakerReconnectDelayRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_reconnect_delay_request(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_object_subscription(
+    text: &str,
+) -> Result<MoonrakerObjectSubscription, InvalidIntent> {
+    read_moonraker_object_subscription(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_object_subscription(
+    value: &MoonrakerObjectSubscription,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_object_subscription(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_subscription_reply(
+    text: &str,
+) -> Result<MoonrakerSubscriptionReply, InvalidIntent> {
+    read_moonraker_subscription_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_subscription_reply(
+    value: &MoonrakerSubscriptionReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_subscription_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_method_check(text: &str) -> Result<MoonrakerMethodCheck, InvalidIntent> {
+    read_moonraker_method_check(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_method_check(
+    value: &MoonrakerMethodCheck,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_method_check(&text)?;
+    Ok(text)
+}
+pub fn decode_moonraker_check_reply(text: &str) -> Result<MoonrakerCheckReply, InvalidIntent> {
+    read_moonraker_check_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_moonraker_check_reply(value: &MoonrakerCheckReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_moonraker_check_reply(&text)?;
     Ok(text)
 }

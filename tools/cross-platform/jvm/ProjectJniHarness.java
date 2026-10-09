@@ -86,6 +86,9 @@ public final class ProjectJniHarness {
     public static long printerSessionChecks(String script) {
         return ProjectPrinterSessionChecks.run(script);
     }
+    public static long moonrakerPolicyChecks(String script) {
+        return ProjectMoonrakerPolicyChecks.run(script);
+    }
     /** [assets] concatenated, split at the comma-separated [lengths]. */
     public static long meshPacketChecks(String source, byte[] assets, String lengths, String script) {
         java.util.List<byte[]> split = new java.util.ArrayList<>();
@@ -234,6 +237,7 @@ public final class ProjectJniHarness {
         if (result == null) out.writeByte(0);
         else if (result instanceof Number n) { out.writeByte(1); out.writeLong(n.longValue()); }
         else if (result instanceof Boolean b) { out.writeByte(2); out.writeBoolean(b); }
+        else if (result instanceof Double d) { out.writeByte(7); out.writeDouble(d); }
         else if (result instanceof String s) { out.writeByte(3); string(s); }
         else if (result instanceof byte[] bytes) { out.writeByte(4); out.writeInt(bytes.length); out.write(bytes); }
         else if (result instanceof char[] chars) { out.writeByte(5); out.writeInt(chars.length); for (char c : chars) out.writeChar(c); }
@@ -271,6 +275,7 @@ public final class ProjectJniHarness {
             if (name.equals("printPreparationChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("printWorkflowChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("printerSessionChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("moonrakerPolicyChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("meshPacketChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorPreflightChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorClipboardChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class);

@@ -2,7 +2,9 @@
 use crate::project::error;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
-use orcaxr_printer::{control, preparation, session, status::JobStatus, summary, tools, workflow};
+use orcaxr_printer::{
+    control, moonraker, preparation, session, status::JobStatus, summary, tools, workflow,
+};
 use wasm_bindgen::prelude::*;
 
 fn encoded(snapshot: &wire::PrintJobSnapshot) -> Result<String, JsValue> {
@@ -488,4 +490,95 @@ impl PrinterSession {
             .map_err(|_| error("invalid_request"))?;
         Ok(self.inner.lease_current(&lease))
     }
+}
+
+/// A `MoonrakerEndpointRequest`; the `MoonrakerEndpointReply`.
+#[wasm_bindgen]
+pub fn moonraker_endpoint(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_moonraker_endpoint_request,
+        moonraker::normalize_endpoint,
+        wire::encode_moonraker_endpoint_reply,
+    )
+}
+/// A `MoonrakerPathRequest`; the `MoonrakerPathReply`.
+#[wasm_bindgen]
+pub fn moonraker_path(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_moonraker_path_request,
+        moonraker::join_path,
+        wire::encode_moonraker_path_reply,
+    )
+}
+/// A `MoonrakerCredentialCheck`; the `MoonrakerCredentialReply`.
+#[wasm_bindgen]
+pub fn moonraker_credentials(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_moonraker_credential_check,
+        moonraker::credential_check,
+        wire::encode_moonraker_credential_reply,
+    )
+}
+/// A `MoonrakerErrorResponse`; the `MoonrakerTransportFault` it is reported as.
+#[wasm_bindgen]
+pub fn moonraker_error_response(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_moonraker_error_response,
+        moonraker::error_response,
+        wire::encode_moonraker_transport_fault,
+    )
+}
+/// A `MoonrakerHandshakeRequest`; the `MoonrakerHandshakeReply`.
+#[wasm_bindgen]
+pub fn moonraker_handshake(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_moonraker_handshake_request,
+        moonraker::handshake,
+        wire::encode_moonraker_handshake_reply,
+    )
+}
+/// A `MoonrakerReconnectPolicyInput`; the `MoonrakerReconnectPolicyReply`.
+#[wasm_bindgen]
+pub fn moonraker_reconnect_policy(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_moonraker_reconnect_policy_input,
+        moonraker::reconnect_policy,
+        wire::encode_moonraker_reconnect_policy_reply,
+    )
+}
+/// A `MoonrakerReconnectDelayRequest`; the delay in milliseconds.
+#[wasm_bindgen]
+pub fn moonraker_reconnect_delay(request: &str) -> Result<f64, JsValue> {
+    if request.len() > wire::MAX_BYTES {
+        return Err(error("input_limit"));
+    }
+    let request = wire::decode_moonraker_reconnect_delay_request(request)
+        .map_err(|_| error("invalid_request"))?;
+    Ok(moonraker::reconnect_delay(&request))
+}
+/// A `MoonrakerObjectSubscription`; the `MoonrakerSubscriptionReply`.
+#[wasm_bindgen]
+pub fn moonraker_subscription(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_moonraker_object_subscription,
+        |entries| moonraker::subscription_reply(entries),
+        wire::encode_moonraker_subscription_reply,
+    )
+}
+/// A `MoonrakerMethodCheck`; the `MoonrakerCheckReply`.
+#[wasm_bindgen]
+pub fn moonraker_method_check(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_moonraker_method_check,
+        moonraker::method_check,
+        wire::encode_moonraker_check_reply,
+    )
 }

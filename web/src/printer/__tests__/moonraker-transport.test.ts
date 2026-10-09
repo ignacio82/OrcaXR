@@ -172,6 +172,21 @@ async function connectHarness(harness: ReturnType<typeof createHarness>): Promis
     webSocketUrl: 'ws://printer.local:7125/websocket',
     usesSameOriginProxy: false,
   });
+  // A typed port 80 is the operator's choice, not "no port": the parser
+  // drops a scheme-default port, and this used to become :7125.
+  assert.equal(normalizeMoonrakerEndpoint('192.168.1.20:80').directHttpUrl, 'http://192.168.1.20');
+  assert.equal(normalizeMoonrakerEndpoint('[::1]:80').directHttpUrl, 'http://[::1]');
+  assert.equal(normalizeMoonrakerEndpoint('printer.local:').directHttpUrl, 'http://printer.local:7125');
+  // An empty query or fragment carries nothing and used to reach the socket
+  // URL, which a WebSocket refuses outright when it has a fragment.
+  for (const input of ['http://printer.local/?', 'http://printer.local/#', 'printer.local/?#']) {
+    assert.deepEqual(normalizeMoonrakerEndpoint(input).webSocketUrl.match(/[?#]/), null, input);
+  }
+  assert.equal(
+    normalizeMoonrakerEndpoint('printer.local', { sameOriginProxy: '/moonraker?', pageOrigin: 'https://app.example' })
+      .webSocketUrl,
+    'wss://app.example/moonraker/websocket',
+  );
   assert.deepEqual(normalizeMoonrakerEndpoint('https://printer.example/moonraker/'), {
     directHttpUrl: 'https://printer.example/moonraker',
     transportHttpUrl: 'https://printer.example/moonraker',

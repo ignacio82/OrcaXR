@@ -192,6 +192,23 @@ assert.deepEqual(schema.roots, [
   "PrintJobExecuteRequest",
   "PrinterSessionView",
   "PrinterSessionEffect",
+  "MoonrakerEndpointRequest",
+  "MoonrakerEndpointReply",
+  "MoonrakerPathRequest",
+  "MoonrakerPathReply",
+  "MoonrakerCredentialCheck",
+  "MoonrakerCredentialReply",
+  "MoonrakerErrorResponse",
+  "MoonrakerTransportFault",
+  "MoonrakerHandshakeRequest",
+  "MoonrakerHandshakeReply",
+  "MoonrakerReconnectPolicyInput",
+  "MoonrakerReconnectPolicyReply",
+  "MoonrakerReconnectDelayRequest",
+  "MoonrakerObjectSubscription",
+  "MoonrakerSubscriptionReply",
+  "MoonrakerMethodCheck",
+  "MoonrakerCheckReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

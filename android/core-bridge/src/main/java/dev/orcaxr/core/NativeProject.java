@@ -158,6 +158,16 @@ final class NativeProject {
     static native String printerSessionConfirm(long handle, long intent);
     static native String printerSessionCaptureLease(long handle);
     static native boolean printerSessionLeaseCurrent(long handle, String lease);
+    // Moonraker transport policy: each request answers its reply.
+    static native String moonrakerEndpoint(String request);
+    static native String moonrakerPath(String request);
+    static native String moonrakerCredentials(String request);
+    static native String moonrakerErrorResponse(String request);
+    static native String moonrakerHandshake(String request);
+    static native String moonrakerReconnectPolicy(String request);
+    static native double moonrakerReconnectDelay(String request);
+    static native String moonrakerSubscription(String request);
+    static native String moonrakerMethodCheck(String request);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

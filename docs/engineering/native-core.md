@@ -3717,6 +3717,30 @@ refused identities and 40 seeded interleavings) of 3,254 steps, each with
 the view after it, and 557 query replies. Rust, WASM in Node and Chrome, JNI
 and 3,820 Kotlin checks reproduce every one.
 
+`moonraker` ports the transport's pure policy (`MoonrakerEndpoint.ts`,
+`SessionCredentials.ts` and the helpers of `MoonrakerTransport.ts`). URLs
+follow the WHATWG URL Standard through the `url` crate, with ICU4X IDNA, so
+an entered endpoint normalizes exactly as `new URL` does: hosts, IPv4 in
+every spelling, bracketed and bare IPv6, internationalized names, default
+ports, dot segments and backslashes. A request path must be rooted, free of
+traversal (also percent-encoded) and of credential-named query keys.
+Credentials are one API key or one bearer token, never in a URL; a refused
+response reports Moonraker's own message, with control runs, URLs, secrets
+and credential-shaped assignments redacted and the text summarized. The
+handshake reads the API version (array or string), components, warnings
+and printer state into a capability manifest within the supported range;
+reconnects back off exponentially with jitter. Porting fixed two endpoint
+defects with regressions: the URL parser forgets a port equal to the
+scheme's default, so `printer:80` became `printer:7125`, and an empty `?` or
+`#` passed the query and fragment checks and stayed in the WebSocket URL,
+which a WebSocket refuses. Bindings: WASM and JNI `moonraker_*` functions
+and Kotlin `MoonrakerPolicy`; `moonraker-policy-vectors.mjs` records 803
+answers (85 endpoints, 180 paths, 14 credential sets, 144 refused responses,
+42 handshakes, 11 policies, 264 delays, 14 subscriptions, 49 method checks),
+reproduced by Rust, WASM in Node and Chrome, JNI and Kotlin. The project
+core's package bound rose from 8 to 10 MiB for this (the measurements are in
+`package-browser-core.mjs`); JNI exports may now return a `double`.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

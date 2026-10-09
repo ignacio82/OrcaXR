@@ -5,7 +5,7 @@ use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
     control::{self, HoldToConfirm},
-    preparation,
+    moonraker, preparation,
     session::{self, PrinterSession},
     status::{JobStatus, LIMITS},
     summary, tools,
@@ -592,4 +592,97 @@ pub(super) fn printer_session_lease_current(
     let lease = wire::decode_printer_session_lease(&intent_text(env, &lease)?)
         .map_err(|_| "invalid_request")?;
     with_session(handle, |s| Ok(u8::from(s.lease_current(&lease))))
+}
+
+pub(super) fn moonraker_endpoint(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_moonraker_endpoint_request,
+        moonraker::normalize_endpoint,
+        wire::encode_moonraker_endpoint_reply,
+    )
+}
+pub(super) fn moonraker_path(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_moonraker_path_request,
+        moonraker::join_path,
+        wire::encode_moonraker_path_reply,
+    )
+}
+pub(super) fn moonraker_credentials(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_moonraker_credential_check,
+        moonraker::credential_check,
+        wire::encode_moonraker_credential_reply,
+    )
+}
+pub(super) fn moonraker_error_response(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_moonraker_error_response,
+        moonraker::error_response,
+        wire::encode_moonraker_transport_fault,
+    )
+}
+pub(super) fn moonraker_handshake(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_moonraker_handshake_request,
+        moonraker::handshake,
+        wire::encode_moonraker_handshake_reply,
+    )
+}
+pub(super) fn moonraker_reconnect_policy(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_moonraker_reconnect_policy_input,
+        moonraker::reconnect_policy,
+        wire::encode_moonraker_reconnect_policy_reply,
+    )
+}
+pub(super) fn moonraker_reconnect_delay(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jdouble> {
+    let request = wire::decode_moonraker_reconnect_delay_request(&intent_text(env, &request)?)
+        .map_err(|_| "invalid_request")?;
+    Ok(moonraker::reconnect_delay(&request))
+}
+pub(super) fn moonraker_subscription(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_moonraker_object_subscription,
+        |entries| moonraker::subscription_reply(entries),
+        wire::encode_moonraker_subscription_reply,
+    )
+}
+pub(super) fn moonraker_method_check(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_moonraker_method_check,
+        moonraker::method_check,
+        wire::encode_moonraker_check_reply,
+    )
 }

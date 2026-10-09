@@ -5664,6 +5664,258 @@ const shapes = {
       "snapshot": "OptionalPrintJobSnapshot",
       "availability": "PrintJobCommandDescriptors"
     }
+  },
+  "MoonrakerTransportFault": {
+    "kind": "object",
+    "fields": {
+      "code": "MoonrakerErrorCode",
+      "operation": "EditText",
+      "recoverable": "Flag",
+      "httpStatus": "OptionalFinite",
+      "detail": "OptionalText"
+    }
+  },
+  "MoonrakerEndpointRequest": {
+    "kind": "object",
+    "fields": {
+      "input": "EditText",
+      "defaultPort": "OptionalFinite",
+      "sameOriginProxy": "OptionalText",
+      "pageOrigin": "OptionalText"
+    }
+  },
+  "NormalizedMoonrakerEndpoint": {
+    "kind": "object",
+    "fields": {
+      "directHttpUrl": "EditText",
+      "transportHttpUrl": "EditText",
+      "webSocketUrl": "EditText",
+      "usesSameOriginProxy": "Flag"
+    }
+  },
+  "MoonrakerEndpointReply": {
+    "kind": "union",
+    "variants": {
+      "endpoint": "NormalizedMoonrakerEndpoint",
+      "refused": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerPathRequest": {
+    "kind": "object",
+    "fields": {
+      "base": "EditText",
+      "path": "EditText"
+    }
+  },
+  "MoonrakerPathReply": {
+    "kind": "union",
+    "variants": {
+      "url": "PrinterText",
+      "refused": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerCredentials": {
+    "kind": "object",
+    "fields": {
+      "apiKey": "OptionalText",
+      "bearerToken": "OptionalText"
+    }
+  },
+  "MoonrakerHeader": {
+    "kind": "object",
+    "fields": {
+      "name": "EditText",
+      "value": "EditText"
+    }
+  },
+  "MoonrakerHeaders": {
+    "kind": "array",
+    "items": "MoonrakerHeader",
+    "min": 0,
+    "max": 16
+  },
+  "MoonrakerCredentialCheck": {
+    "kind": "object",
+    "fields": {
+      "credentials": "MoonrakerCredentials",
+      "probes": "TextList"
+    }
+  },
+  "MoonrakerMatches": {
+    "kind": "array",
+    "items": "Flag",
+    "min": 0,
+    "max": 4096
+  },
+  "MoonrakerCredentialAnswer": {
+    "kind": "object",
+    "fields": {
+      "headers": "MoonrakerHeaders",
+      "hasApiKey": "Flag",
+      "hasBearerToken": "Flag",
+      "matches": "MoonrakerMatches"
+    }
+  },
+  "MoonrakerCredentialReply": {
+    "kind": "union",
+    "variants": {
+      "accepted": "MoonrakerCredentialAnswer",
+      "refused": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerErrorResponse": {
+    "kind": "object",
+    "fields": {
+      "status": "Finite",
+      "body": "OptionalText",
+      "credentials": "MoonrakerCredentials",
+      "operation": "EditText"
+    }
+  },
+  "MoonrakerApiVersionInput": {
+    "kind": "array",
+    "items": "Finite",
+    "min": 0,
+    "max": 8
+  },
+  "OptionalMoonrakerApiVersionInput": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "MoonrakerApiVersionInput"
+    }
+  },
+  "MoonrakerVersionPolicyInput": {
+    "kind": "object",
+    "fields": {
+      "minimum": "OptionalMoonrakerApiVersionInput",
+      "maximumMajor": "OptionalFinite"
+    }
+  },
+  "MoonrakerHandshakeRequest": {
+    "kind": "object",
+    "fields": {
+      "server": "EditText",
+      "printer": "EditText",
+      "policy": "MoonrakerVersionPolicyInput"
+    }
+  },
+  "MoonrakerServerHandshake": {
+    "kind": "object",
+    "fields": {
+      "apiVersion": "MoonrakerApiVersionInput",
+      "apiVersionString": "EditText",
+      "moonrakerVersion": "EditText",
+      "components": "TextList",
+      "warnings": "TextList"
+    }
+  },
+  "MoonrakerPrinterHandshake": {
+    "kind": "object",
+    "fields": {
+      "state": "EditText",
+      "hostname": "EditText",
+      "softwareVersion": "EditText"
+    }
+  },
+  "MoonrakerCapabilityManifest": {
+    "kind": "object",
+    "fields": {
+      "authorization": "Flag",
+      "fileManagement": "Flag",
+      "jobQueue": "Flag",
+      "history": "Flag",
+      "webcams": "Flag",
+      "powerDevices": "Flag",
+      "updateManager": "Flag",
+      "announcements": "Flag",
+      "database": "Flag",
+      "klippyConnected": "Flag",
+      "extensionComponents": "TextList"
+    }
+  },
+  "MoonrakerHandshake": {
+    "kind": "object",
+    "fields": {
+      "server": "MoonrakerServerHandshake",
+      "printer": "MoonrakerPrinterHandshake",
+      "capabilities": "MoonrakerCapabilityManifest"
+    }
+  },
+  "MoonrakerHandshakeReply": {
+    "kind": "union",
+    "variants": {
+      "handshake": "MoonrakerHandshake",
+      "refused": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerReconnectPolicyInput": {
+    "kind": "object",
+    "fields": {
+      "initialDelayMs": "OptionalFinite",
+      "maximumDelayMs": "OptionalFinite",
+      "maximumAttempts": "OptionalFinite",
+      "jitterRatio": "OptionalFinite"
+    }
+  },
+  "MoonrakerReconnectPolicy": {
+    "kind": "object",
+    "fields": {
+      "initialDelayMs": "Finite",
+      "maximumDelayMs": "Finite",
+      "maximumAttempts": "Finite",
+      "jitterRatio": "Finite"
+    }
+  },
+  "MoonrakerReconnectPolicyReply": {
+    "kind": "union",
+    "variants": {
+      "policy": "MoonrakerReconnectPolicy",
+      "refused": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerReconnectDelayRequest": {
+    "kind": "object",
+    "fields": {
+      "attempt": "Finite",
+      "policy": "MoonrakerReconnectPolicy",
+      "random": "Finite"
+    }
+  },
+  "MoonrakerSubscriptionEntry": {
+    "kind": "object",
+    "fields": {
+      "name": "EditText",
+      "fields": "OptionalTextList"
+    }
+  },
+  "MoonrakerObjectSubscription": {
+    "kind": "array",
+    "items": "MoonrakerSubscriptionEntry",
+    "min": 0,
+    "max": 256
+  },
+  "MoonrakerSubscriptionReply": {
+    "kind": "union",
+    "variants": {
+      "subscription": "MoonrakerObjectSubscription",
+      "refused": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerMethodCheck": {
+    "kind": "object",
+    "fields": {
+      "url": "EditText",
+      "method": "OptionalText",
+      "operation": "EditText"
+    }
+  },
+  "MoonrakerCheckReply": {
+    "kind": "union",
+    "variants": {
+      "allowed": "Empty",
+      "refused": "MoonrakerTransportFault"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -6346,6 +6598,38 @@ export interface ProjectPrinterSessionStepWire {readonly changed: ProjectCounter
 export type ProjectPrintJobExecuteConfirmationWire = {readonly none:ProjectEmptyWire} | {readonly token:ProjectCounterWire} | {readonly dialog:ProjectEmptyWire};
 export interface ProjectPrintJobExecuteRequestWire {readonly intent: ProjectCounterWire;readonly confirmation: ProjectPrintJobExecuteConfirmationWire;}
 export interface ProjectPrinterSessionViewWire {readonly generation: ProjectCounterWire;readonly snapshot: ProjectOptionalPrintJobSnapshotWire;readonly availability: ProjectPrintJobCommandDescriptorsWire;}
+export interface ProjectMoonrakerTransportFaultWire {readonly code: ProjectMoonrakerErrorCodeWire;readonly operation: ProjectEditTextWire;readonly recoverable: ProjectFlagWire;readonly httpStatus: ProjectOptionalFiniteWire;readonly detail: ProjectOptionalTextWire;}
+export interface ProjectMoonrakerEndpointRequestWire {readonly input: ProjectEditTextWire;readonly defaultPort: ProjectOptionalFiniteWire;readonly sameOriginProxy: ProjectOptionalTextWire;readonly pageOrigin: ProjectOptionalTextWire;}
+export interface ProjectNormalizedMoonrakerEndpointWire {readonly directHttpUrl: ProjectEditTextWire;readonly transportHttpUrl: ProjectEditTextWire;readonly webSocketUrl: ProjectEditTextWire;readonly usesSameOriginProxy: ProjectFlagWire;}
+export type ProjectMoonrakerEndpointReplyWire = {readonly endpoint:ProjectNormalizedMoonrakerEndpointWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
+export interface ProjectMoonrakerPathRequestWire {readonly base: ProjectEditTextWire;readonly path: ProjectEditTextWire;}
+export type ProjectMoonrakerPathReplyWire = {readonly url:ProjectPrinterTextWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
+export interface ProjectMoonrakerCredentialsWire {readonly apiKey: ProjectOptionalTextWire;readonly bearerToken: ProjectOptionalTextWire;}
+export interface ProjectMoonrakerHeaderWire {readonly name: ProjectEditTextWire;readonly value: ProjectEditTextWire;}
+export type ProjectMoonrakerHeadersWire = readonly ProjectMoonrakerHeaderWire[];
+export interface ProjectMoonrakerCredentialCheckWire {readonly credentials: ProjectMoonrakerCredentialsWire;readonly probes: ProjectTextListWire;}
+export type ProjectMoonrakerMatchesWire = readonly ProjectFlagWire[];
+export interface ProjectMoonrakerCredentialAnswerWire {readonly headers: ProjectMoonrakerHeadersWire;readonly hasApiKey: ProjectFlagWire;readonly hasBearerToken: ProjectFlagWire;readonly matches: ProjectMoonrakerMatchesWire;}
+export type ProjectMoonrakerCredentialReplyWire = {readonly accepted:ProjectMoonrakerCredentialAnswerWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
+export interface ProjectMoonrakerErrorResponseWire {readonly status: ProjectFiniteWire;readonly body: ProjectOptionalTextWire;readonly credentials: ProjectMoonrakerCredentialsWire;readonly operation: ProjectEditTextWire;}
+export type ProjectMoonrakerApiVersionInputWire = readonly ProjectFiniteWire[];
+export type ProjectOptionalMoonrakerApiVersionInputWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectMoonrakerApiVersionInputWire};
+export interface ProjectMoonrakerVersionPolicyInputWire {readonly minimum: ProjectOptionalMoonrakerApiVersionInputWire;readonly maximumMajor: ProjectOptionalFiniteWire;}
+export interface ProjectMoonrakerHandshakeRequestWire {readonly server: ProjectEditTextWire;readonly printer: ProjectEditTextWire;readonly policy: ProjectMoonrakerVersionPolicyInputWire;}
+export interface ProjectMoonrakerServerHandshakeWire {readonly apiVersion: ProjectMoonrakerApiVersionInputWire;readonly apiVersionString: ProjectEditTextWire;readonly moonrakerVersion: ProjectEditTextWire;readonly components: ProjectTextListWire;readonly warnings: ProjectTextListWire;}
+export interface ProjectMoonrakerPrinterHandshakeWire {readonly state: ProjectEditTextWire;readonly hostname: ProjectEditTextWire;readonly softwareVersion: ProjectEditTextWire;}
+export interface ProjectMoonrakerCapabilityManifestWire {readonly authorization: ProjectFlagWire;readonly fileManagement: ProjectFlagWire;readonly jobQueue: ProjectFlagWire;readonly history: ProjectFlagWire;readonly webcams: ProjectFlagWire;readonly powerDevices: ProjectFlagWire;readonly updateManager: ProjectFlagWire;readonly announcements: ProjectFlagWire;readonly database: ProjectFlagWire;readonly klippyConnected: ProjectFlagWire;readonly extensionComponents: ProjectTextListWire;}
+export interface ProjectMoonrakerHandshakeWire {readonly server: ProjectMoonrakerServerHandshakeWire;readonly printer: ProjectMoonrakerPrinterHandshakeWire;readonly capabilities: ProjectMoonrakerCapabilityManifestWire;}
+export type ProjectMoonrakerHandshakeReplyWire = {readonly handshake:ProjectMoonrakerHandshakeWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
+export interface ProjectMoonrakerReconnectPolicyInputWire {readonly initialDelayMs: ProjectOptionalFiniteWire;readonly maximumDelayMs: ProjectOptionalFiniteWire;readonly maximumAttempts: ProjectOptionalFiniteWire;readonly jitterRatio: ProjectOptionalFiniteWire;}
+export interface ProjectMoonrakerReconnectPolicyWire {readonly initialDelayMs: ProjectFiniteWire;readonly maximumDelayMs: ProjectFiniteWire;readonly maximumAttempts: ProjectFiniteWire;readonly jitterRatio: ProjectFiniteWire;}
+export type ProjectMoonrakerReconnectPolicyReplyWire = {readonly policy:ProjectMoonrakerReconnectPolicyWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
+export interface ProjectMoonrakerReconnectDelayRequestWire {readonly attempt: ProjectFiniteWire;readonly policy: ProjectMoonrakerReconnectPolicyWire;readonly random: ProjectFiniteWire;}
+export interface ProjectMoonrakerSubscriptionEntryWire {readonly name: ProjectEditTextWire;readonly fields: ProjectOptionalTextListWire;}
+export type ProjectMoonrakerObjectSubscriptionWire = readonly ProjectMoonrakerSubscriptionEntryWire[];
+export type ProjectMoonrakerSubscriptionReplyWire = {readonly subscription:ProjectMoonrakerObjectSubscriptionWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
+export interface ProjectMoonrakerMethodCheckWire {readonly url: ProjectEditTextWire;readonly method: ProjectOptionalTextWire;readonly operation: ProjectEditTextWire;}
+export type ProjectMoonrakerCheckReplyWire = {readonly allowed:ProjectEmptyWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -6811,3 +7095,54 @@ export function encodeProjectPrinterSessionView(value:ProjectPrinterSessionViewW
 export function captureProjectPrinterSessionEffect(value:unknown):ProjectPrinterSessionEffectWire { return captureIntent("PrinterSessionEffect",value,shapes,limits) as ProjectPrinterSessionEffectWire; }
 export function decodeProjectPrinterSessionEffect(text:string):ProjectPrinterSessionEffectWire { return captureProjectPrinterSessionEffect(parseIntentJson(text,limits)); }
 export function encodeProjectPrinterSessionEffect(value:ProjectPrinterSessionEffectWire):string { return JSON.stringify(captureProjectPrinterSessionEffect(value)); }
+export function captureProjectMoonrakerEndpointRequest(value:unknown):ProjectMoonrakerEndpointRequestWire { return captureIntent("MoonrakerEndpointRequest",value,shapes,limits) as ProjectMoonrakerEndpointRequestWire; }
+export function decodeProjectMoonrakerEndpointRequest(text:string):ProjectMoonrakerEndpointRequestWire { return captureProjectMoonrakerEndpointRequest(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerEndpointRequest(value:ProjectMoonrakerEndpointRequestWire):string { return JSON.stringify(captureProjectMoonrakerEndpointRequest(value)); }
+export function captureProjectMoonrakerEndpointReply(value:unknown):ProjectMoonrakerEndpointReplyWire { return captureIntent("MoonrakerEndpointReply",value,shapes,limits) as ProjectMoonrakerEndpointReplyWire; }
+export function decodeProjectMoonrakerEndpointReply(text:string):ProjectMoonrakerEndpointReplyWire { return captureProjectMoonrakerEndpointReply(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerEndpointReply(value:ProjectMoonrakerEndpointReplyWire):string { return JSON.stringify(captureProjectMoonrakerEndpointReply(value)); }
+export function captureProjectMoonrakerPathRequest(value:unknown):ProjectMoonrakerPathRequestWire { return captureIntent("MoonrakerPathRequest",value,shapes,limits) as ProjectMoonrakerPathRequestWire; }
+export function decodeProjectMoonrakerPathRequest(text:string):ProjectMoonrakerPathRequestWire { return captureProjectMoonrakerPathRequest(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerPathRequest(value:ProjectMoonrakerPathRequestWire):string { return JSON.stringify(captureProjectMoonrakerPathRequest(value)); }
+export function captureProjectMoonrakerPathReply(value:unknown):ProjectMoonrakerPathReplyWire { return captureIntent("MoonrakerPathReply",value,shapes,limits) as ProjectMoonrakerPathReplyWire; }
+export function decodeProjectMoonrakerPathReply(text:string):ProjectMoonrakerPathReplyWire { return captureProjectMoonrakerPathReply(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerPathReply(value:ProjectMoonrakerPathReplyWire):string { return JSON.stringify(captureProjectMoonrakerPathReply(value)); }
+export function captureProjectMoonrakerCredentialCheck(value:unknown):ProjectMoonrakerCredentialCheckWire { return captureIntent("MoonrakerCredentialCheck",value,shapes,limits) as ProjectMoonrakerCredentialCheckWire; }
+export function decodeProjectMoonrakerCredentialCheck(text:string):ProjectMoonrakerCredentialCheckWire { return captureProjectMoonrakerCredentialCheck(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerCredentialCheck(value:ProjectMoonrakerCredentialCheckWire):string { return JSON.stringify(captureProjectMoonrakerCredentialCheck(value)); }
+export function captureProjectMoonrakerCredentialReply(value:unknown):ProjectMoonrakerCredentialReplyWire { return captureIntent("MoonrakerCredentialReply",value,shapes,limits) as ProjectMoonrakerCredentialReplyWire; }
+export function decodeProjectMoonrakerCredentialReply(text:string):ProjectMoonrakerCredentialReplyWire { return captureProjectMoonrakerCredentialReply(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerCredentialReply(value:ProjectMoonrakerCredentialReplyWire):string { return JSON.stringify(captureProjectMoonrakerCredentialReply(value)); }
+export function captureProjectMoonrakerErrorResponse(value:unknown):ProjectMoonrakerErrorResponseWire { return captureIntent("MoonrakerErrorResponse",value,shapes,limits) as ProjectMoonrakerErrorResponseWire; }
+export function decodeProjectMoonrakerErrorResponse(text:string):ProjectMoonrakerErrorResponseWire { return captureProjectMoonrakerErrorResponse(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerErrorResponse(value:ProjectMoonrakerErrorResponseWire):string { return JSON.stringify(captureProjectMoonrakerErrorResponse(value)); }
+export function captureProjectMoonrakerTransportFault(value:unknown):ProjectMoonrakerTransportFaultWire { return captureIntent("MoonrakerTransportFault",value,shapes,limits) as ProjectMoonrakerTransportFaultWire; }
+export function decodeProjectMoonrakerTransportFault(text:string):ProjectMoonrakerTransportFaultWire { return captureProjectMoonrakerTransportFault(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerTransportFault(value:ProjectMoonrakerTransportFaultWire):string { return JSON.stringify(captureProjectMoonrakerTransportFault(value)); }
+export function captureProjectMoonrakerHandshakeRequest(value:unknown):ProjectMoonrakerHandshakeRequestWire { return captureIntent("MoonrakerHandshakeRequest",value,shapes,limits) as ProjectMoonrakerHandshakeRequestWire; }
+export function decodeProjectMoonrakerHandshakeRequest(text:string):ProjectMoonrakerHandshakeRequestWire { return captureProjectMoonrakerHandshakeRequest(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerHandshakeRequest(value:ProjectMoonrakerHandshakeRequestWire):string { return JSON.stringify(captureProjectMoonrakerHandshakeRequest(value)); }
+export function captureProjectMoonrakerHandshakeReply(value:unknown):ProjectMoonrakerHandshakeReplyWire { return captureIntent("MoonrakerHandshakeReply",value,shapes,limits) as ProjectMoonrakerHandshakeReplyWire; }
+export function decodeProjectMoonrakerHandshakeReply(text:string):ProjectMoonrakerHandshakeReplyWire { return captureProjectMoonrakerHandshakeReply(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerHandshakeReply(value:ProjectMoonrakerHandshakeReplyWire):string { return JSON.stringify(captureProjectMoonrakerHandshakeReply(value)); }
+export function captureProjectMoonrakerReconnectPolicyInput(value:unknown):ProjectMoonrakerReconnectPolicyInputWire { return captureIntent("MoonrakerReconnectPolicyInput",value,shapes,limits) as ProjectMoonrakerReconnectPolicyInputWire; }
+export function decodeProjectMoonrakerReconnectPolicyInput(text:string):ProjectMoonrakerReconnectPolicyInputWire { return captureProjectMoonrakerReconnectPolicyInput(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerReconnectPolicyInput(value:ProjectMoonrakerReconnectPolicyInputWire):string { return JSON.stringify(captureProjectMoonrakerReconnectPolicyInput(value)); }
+export function captureProjectMoonrakerReconnectPolicyReply(value:unknown):ProjectMoonrakerReconnectPolicyReplyWire { return captureIntent("MoonrakerReconnectPolicyReply",value,shapes,limits) as ProjectMoonrakerReconnectPolicyReplyWire; }
+export function decodeProjectMoonrakerReconnectPolicyReply(text:string):ProjectMoonrakerReconnectPolicyReplyWire { return captureProjectMoonrakerReconnectPolicyReply(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerReconnectPolicyReply(value:ProjectMoonrakerReconnectPolicyReplyWire):string { return JSON.stringify(captureProjectMoonrakerReconnectPolicyReply(value)); }
+export function captureProjectMoonrakerReconnectDelayRequest(value:unknown):ProjectMoonrakerReconnectDelayRequestWire { return captureIntent("MoonrakerReconnectDelayRequest",value,shapes,limits) as ProjectMoonrakerReconnectDelayRequestWire; }
+export function decodeProjectMoonrakerReconnectDelayRequest(text:string):ProjectMoonrakerReconnectDelayRequestWire { return captureProjectMoonrakerReconnectDelayRequest(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerReconnectDelayRequest(value:ProjectMoonrakerReconnectDelayRequestWire):string { return JSON.stringify(captureProjectMoonrakerReconnectDelayRequest(value)); }
+export function captureProjectMoonrakerObjectSubscription(value:unknown):ProjectMoonrakerObjectSubscriptionWire { return captureIntent("MoonrakerObjectSubscription",value,shapes,limits) as ProjectMoonrakerObjectSubscriptionWire; }
+export function decodeProjectMoonrakerObjectSubscription(text:string):ProjectMoonrakerObjectSubscriptionWire { return captureProjectMoonrakerObjectSubscription(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerObjectSubscription(value:ProjectMoonrakerObjectSubscriptionWire):string { return JSON.stringify(captureProjectMoonrakerObjectSubscription(value)); }
+export function captureProjectMoonrakerSubscriptionReply(value:unknown):ProjectMoonrakerSubscriptionReplyWire { return captureIntent("MoonrakerSubscriptionReply",value,shapes,limits) as ProjectMoonrakerSubscriptionReplyWire; }
+export function decodeProjectMoonrakerSubscriptionReply(text:string):ProjectMoonrakerSubscriptionReplyWire { return captureProjectMoonrakerSubscriptionReply(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerSubscriptionReply(value:ProjectMoonrakerSubscriptionReplyWire):string { return JSON.stringify(captureProjectMoonrakerSubscriptionReply(value)); }
+export function captureProjectMoonrakerMethodCheck(value:unknown):ProjectMoonrakerMethodCheckWire { return captureIntent("MoonrakerMethodCheck",value,shapes,limits) as ProjectMoonrakerMethodCheckWire; }
+export function decodeProjectMoonrakerMethodCheck(text:string):ProjectMoonrakerMethodCheckWire { return captureProjectMoonrakerMethodCheck(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerMethodCheck(value:ProjectMoonrakerMethodCheckWire):string { return JSON.stringify(captureProjectMoonrakerMethodCheck(value)); }
+export function captureProjectMoonrakerCheckReply(value:unknown):ProjectMoonrakerCheckReplyWire { return captureIntent("MoonrakerCheckReply",value,shapes,limits) as ProjectMoonrakerCheckReplyWire; }
+export function decodeProjectMoonrakerCheckReply(text:string):ProjectMoonrakerCheckReplyWire { return captureProjectMoonrakerCheckReply(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerCheckReply(value:ProjectMoonrakerCheckReplyWire):string { return JSON.stringify(captureProjectMoonrakerCheckReply(value)); }

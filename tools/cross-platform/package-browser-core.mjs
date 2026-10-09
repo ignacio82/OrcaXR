@@ -71,8 +71,14 @@ const bytes = Object.fromEntries(
     return [name, data];
   }),
 );
+// 2026-10-09: raised from 8 MiB. The project core now carries the printer
+// policy too, including WHATWG URL parsing (`url`, with ICU4X IDNA, so an
+// internationalized printer hostname normalizes as the browser's does). The
+// set measured 8,029,290 bytes before the printer workflow port and 8,544,870
+// with the transport policy; the unicode-rs IDNA backend measured larger
+// (8,672,103) and an ASCII-only one still exceeded the old bound (8,412,458).
 assert.ok(
-  bytes["orcaxr_core_bg.wasm"].length < 8 * 1024 * 1024,
+  bytes["orcaxr_core_bg.wasm"].length < 10 * 1024 * 1024,
   "Core executable exceeds its package bound",
 );
 const asset = {

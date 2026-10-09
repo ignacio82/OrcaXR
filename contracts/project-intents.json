@@ -5663,6 +5663,258 @@
         "snapshot": "OptionalPrintJobSnapshot",
         "availability": "PrintJobCommandDescriptors"
       }
+    },
+    "MoonrakerTransportFault": {
+      "kind": "object",
+      "fields": {
+        "code": "MoonrakerErrorCode",
+        "operation": "EditText",
+        "recoverable": "Flag",
+        "httpStatus": "OptionalFinite",
+        "detail": "OptionalText"
+      }
+    },
+    "MoonrakerEndpointRequest": {
+      "kind": "object",
+      "fields": {
+        "input": "EditText",
+        "defaultPort": "OptionalFinite",
+        "sameOriginProxy": "OptionalText",
+        "pageOrigin": "OptionalText"
+      }
+    },
+    "NormalizedMoonrakerEndpoint": {
+      "kind": "object",
+      "fields": {
+        "directHttpUrl": "EditText",
+        "transportHttpUrl": "EditText",
+        "webSocketUrl": "EditText",
+        "usesSameOriginProxy": "Flag"
+      }
+    },
+    "MoonrakerEndpointReply": {
+      "kind": "union",
+      "variants": {
+        "endpoint": "NormalizedMoonrakerEndpoint",
+        "refused": "MoonrakerTransportFault"
+      }
+    },
+    "MoonrakerPathRequest": {
+      "kind": "object",
+      "fields": {
+        "base": "EditText",
+        "path": "EditText"
+      }
+    },
+    "MoonrakerPathReply": {
+      "kind": "union",
+      "variants": {
+        "url": "PrinterText",
+        "refused": "MoonrakerTransportFault"
+      }
+    },
+    "MoonrakerCredentials": {
+      "kind": "object",
+      "fields": {
+        "apiKey": "OptionalText",
+        "bearerToken": "OptionalText"
+      }
+    },
+    "MoonrakerHeader": {
+      "kind": "object",
+      "fields": {
+        "name": "EditText",
+        "value": "EditText"
+      }
+    },
+    "MoonrakerHeaders": {
+      "kind": "array",
+      "items": "MoonrakerHeader",
+      "min": 0,
+      "max": 16
+    },
+    "MoonrakerCredentialCheck": {
+      "kind": "object",
+      "fields": {
+        "credentials": "MoonrakerCredentials",
+        "probes": "TextList"
+      }
+    },
+    "MoonrakerMatches": {
+      "kind": "array",
+      "items": "Flag",
+      "min": 0,
+      "max": 4096
+    },
+    "MoonrakerCredentialAnswer": {
+      "kind": "object",
+      "fields": {
+        "headers": "MoonrakerHeaders",
+        "hasApiKey": "Flag",
+        "hasBearerToken": "Flag",
+        "matches": "MoonrakerMatches"
+      }
+    },
+    "MoonrakerCredentialReply": {
+      "kind": "union",
+      "variants": {
+        "accepted": "MoonrakerCredentialAnswer",
+        "refused": "MoonrakerTransportFault"
+      }
+    },
+    "MoonrakerErrorResponse": {
+      "kind": "object",
+      "fields": {
+        "status": "Finite",
+        "body": "OptionalText",
+        "credentials": "MoonrakerCredentials",
+        "operation": "EditText"
+      }
+    },
+    "MoonrakerApiVersionInput": {
+      "kind": "array",
+      "items": "Finite",
+      "min": 0,
+      "max": 8
+    },
+    "OptionalMoonrakerApiVersionInput": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "MoonrakerApiVersionInput"
+      }
+    },
+    "MoonrakerVersionPolicyInput": {
+      "kind": "object",
+      "fields": {
+        "minimum": "OptionalMoonrakerApiVersionInput",
+        "maximumMajor": "OptionalFinite"
+      }
+    },
+    "MoonrakerHandshakeRequest": {
+      "kind": "object",
+      "fields": {
+        "server": "EditText",
+        "printer": "EditText",
+        "policy": "MoonrakerVersionPolicyInput"
+      }
+    },
+    "MoonrakerServerHandshake": {
+      "kind": "object",
+      "fields": {
+        "apiVersion": "MoonrakerApiVersionInput",
+        "apiVersionString": "EditText",
+        "moonrakerVersion": "EditText",
+        "components": "TextList",
+        "warnings": "TextList"
+      }
+    },
+    "MoonrakerPrinterHandshake": {
+      "kind": "object",
+      "fields": {
+        "state": "EditText",
+        "hostname": "EditText",
+        "softwareVersion": "EditText"
+      }
+    },
+    "MoonrakerCapabilityManifest": {
+      "kind": "object",
+      "fields": {
+        "authorization": "Flag",
+        "fileManagement": "Flag",
+        "jobQueue": "Flag",
+        "history": "Flag",
+        "webcams": "Flag",
+        "powerDevices": "Flag",
+        "updateManager": "Flag",
+        "announcements": "Flag",
+        "database": "Flag",
+        "klippyConnected": "Flag",
+        "extensionComponents": "TextList"
+      }
+    },
+    "MoonrakerHandshake": {
+      "kind": "object",
+      "fields": {
+        "server": "MoonrakerServerHandshake",
+        "printer": "MoonrakerPrinterHandshake",
+        "capabilities": "MoonrakerCapabilityManifest"
+      }
+    },
+    "MoonrakerHandshakeReply": {
+      "kind": "union",
+      "variants": {
+        "handshake": "MoonrakerHandshake",
+        "refused": "MoonrakerTransportFault"
+      }
+    },
+    "MoonrakerReconnectPolicyInput": {
+      "kind": "object",
+      "fields": {
+        "initialDelayMs": "OptionalFinite",
+        "maximumDelayMs": "OptionalFinite",
+        "maximumAttempts": "OptionalFinite",
+        "jitterRatio": "OptionalFinite"
+      }
+    },
+    "MoonrakerReconnectPolicy": {
+      "kind": "object",
+      "fields": {
+        "initialDelayMs": "Finite",
+        "maximumDelayMs": "Finite",
+        "maximumAttempts": "Finite",
+        "jitterRatio": "Finite"
+      }
+    },
+    "MoonrakerReconnectPolicyReply": {
+      "kind": "union",
+      "variants": {
+        "policy": "MoonrakerReconnectPolicy",
+        "refused": "MoonrakerTransportFault"
+      }
+    },
+    "MoonrakerReconnectDelayRequest": {
+      "kind": "object",
+      "fields": {
+        "attempt": "Finite",
+        "policy": "MoonrakerReconnectPolicy",
+        "random": "Finite"
+      }
+    },
+    "MoonrakerSubscriptionEntry": {
+      "kind": "object",
+      "fields": {
+        "name": "EditText",
+        "fields": "OptionalTextList"
+      }
+    },
+    "MoonrakerObjectSubscription": {
+      "kind": "array",
+      "items": "MoonrakerSubscriptionEntry",
+      "min": 0,
+      "max": 256
+    },
+    "MoonrakerSubscriptionReply": {
+      "kind": "union",
+      "variants": {
+        "subscription": "MoonrakerObjectSubscription",
+        "refused": "MoonrakerTransportFault"
+      }
+    },
+    "MoonrakerMethodCheck": {
+      "kind": "object",
+      "fields": {
+        "url": "EditText",
+        "method": "OptionalText",
+        "operation": "EditText"
+      }
+    },
+    "MoonrakerCheckReply": {
+      "kind": "union",
+      "variants": {
+        "allowed": "Empty",
+        "refused": "MoonrakerTransportFault"
+      }
     }
   },
   "roots": [
@@ -5820,7 +6072,24 @@
     "PrinterSessionStep",
     "PrintJobExecuteRequest",
     "PrinterSessionView",
-    "PrinterSessionEffect"
+    "PrinterSessionEffect",
+    "MoonrakerEndpointRequest",
+    "MoonrakerEndpointReply",
+    "MoonrakerPathRequest",
+    "MoonrakerPathReply",
+    "MoonrakerCredentialCheck",
+    "MoonrakerCredentialReply",
+    "MoonrakerErrorResponse",
+    "MoonrakerTransportFault",
+    "MoonrakerHandshakeRequest",
+    "MoonrakerHandshakeReply",
+    "MoonrakerReconnectPolicyInput",
+    "MoonrakerReconnectPolicyReply",
+    "MoonrakerReconnectDelayRequest",
+    "MoonrakerObjectSubscription",
+    "MoonrakerSubscriptionReply",
+    "MoonrakerMethodCheck",
+    "MoonrakerCheckReply"
   ],
   "sessionVersion": 1
 }

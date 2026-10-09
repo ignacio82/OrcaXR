@@ -1018,6 +1018,51 @@ export function guarded_printer_actions(request: string): string;
 export function measure_features(request: string): string;
 
 /**
+ * A `MoonrakerCredentialCheck`; the `MoonrakerCredentialReply`.
+ */
+export function moonraker_credentials(request: string): string;
+
+/**
+ * A `MoonrakerEndpointRequest`; the `MoonrakerEndpointReply`.
+ */
+export function moonraker_endpoint(request: string): string;
+
+/**
+ * A `MoonrakerErrorResponse`; the `MoonrakerTransportFault` it is reported as.
+ */
+export function moonraker_error_response(request: string): string;
+
+/**
+ * A `MoonrakerHandshakeRequest`; the `MoonrakerHandshakeReply`.
+ */
+export function moonraker_handshake(request: string): string;
+
+/**
+ * A `MoonrakerMethodCheck`; the `MoonrakerCheckReply`.
+ */
+export function moonraker_method_check(request: string): string;
+
+/**
+ * A `MoonrakerPathRequest`; the `MoonrakerPathReply`.
+ */
+export function moonraker_path(request: string): string;
+
+/**
+ * A `MoonrakerReconnectDelayRequest`; the delay in milliseconds.
+ */
+export function moonraker_reconnect_delay(request: string): number;
+
+/**
+ * A `MoonrakerReconnectPolicyInput`; the `MoonrakerReconnectPolicyReply`.
+ */
+export function moonraker_reconnect_policy(request: string): string;
+
+/**
+ * A `MoonrakerObjectSubscription`; the `MoonrakerSubscriptionReply`.
+ */
+export function moonraker_subscription(request: string): string;
+
+/**
  * Cut a recipe with the host's glyph outlines: an `EmbossRequest`.
  */
 export function prepare_emboss(request: string): ProjectEmboss;
@@ -1196,6 +1241,15 @@ export interface InitOutput {
     readonly holdtoconfirm_press: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly holdtoconfirm_release: (a: number, b: number) => [number, number, number, number];
     readonly measure_features: (a: number, b: number) => [number, number, number, number];
+    readonly moonraker_credentials: (a: number, b: number) => [number, number, number, number];
+    readonly moonraker_endpoint: (a: number, b: number) => [number, number, number, number];
+    readonly moonraker_error_response: (a: number, b: number) => [number, number, number, number];
+    readonly moonraker_handshake: (a: number, b: number) => [number, number, number, number];
+    readonly moonraker_method_check: (a: number, b: number) => [number, number, number, number];
+    readonly moonraker_path: (a: number, b: number) => [number, number, number, number];
+    readonly moonraker_reconnect_delay: (a: number, b: number) => [number, number, number];
+    readonly moonraker_reconnect_policy: (a: number, b: number) => [number, number, number, number];
+    readonly moonraker_subscription: (a: number, b: number) => [number, number, number, number];
     readonly prepare_emboss: (a: number, b: number) => [number, number, number];
     readonly prepare_svg_part: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly presetlibrary_apply: (a: number, b: number, c: number) => [number, number, number, number];

@@ -823,6 +823,51 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerEndpoint, moonraker_endpoint, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerPath, moonraker_path, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerCredentials, moonraker_credentials, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerErrorResponse, moonraker_error_response, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerHandshake, moonraker_handshake, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerReconnectPolicy, moonraker_reconnect_policy, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerReconnectDelay, moonraker_reconnect_delay, jdouble,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerSubscription, moonraker_subscription, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerMethodCheck, moonraker_method_check, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,

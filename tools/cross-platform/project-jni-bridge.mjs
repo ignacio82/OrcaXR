@@ -50,6 +50,7 @@ export function startProjectJni(profile = "debug") {
   signatures.printPreparationChecks = ["String"];
   signatures.printWorkflowChecks = ["String"];
   signatures.printerSessionChecks = ["String"];
+  signatures.moonrakerPolicyChecks = ["String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -156,6 +157,7 @@ export function startProjectJni(profile = "debug") {
     if (kind === 0) return undefined;
     if (kind === 1) return Number(read(8).readBigInt64BE());
     if (kind === 2) return read(1)[0] !== 0;
+    if (kind === 7) return read(8).readDoubleBE();
     const length = read(4).readInt32BE();
     if (length < 0 || length > 16 * 1024 * 1024)
       throw Error("JNI test response limit");
@@ -1187,6 +1189,15 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     server_components: (text) => call("serverComponents", text),
     gcode_commands: (text) => call("gcodeCommands", text),
     print_start_options: (request) => call("printStartOptions", request),
+    moonraker_endpoint: (request) => call("moonrakerEndpoint", request),
+    moonraker_path: (request) => call("moonrakerPath", request),
+    moonraker_credentials: (request) => call("moonrakerCredentials", request),
+    moonraker_error_response: (request) => call("moonrakerErrorResponse", request),
+    moonraker_handshake: (request) => call("moonrakerHandshake", request),
+    moonraker_reconnect_policy: (request) => call("moonrakerReconnectPolicy", request),
+    moonraker_reconnect_delay: (request) => call("moonrakerReconnectDelay", request),
+    moonraker_subscription: (request) => call("moonrakerSubscription", request),
+    moonraker_method_check: (request) => call("moonrakerMethodCheck", request),
     print_preparation_plan: (request) => call("printPreparationPlan", request),
     print_preparation_send: (request) => call("printPreparationSend", request),
     print_readiness: (text) => call("printReadiness", text),

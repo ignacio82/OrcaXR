@@ -1902,7 +1902,14 @@ credential storage, and explicit permission/error flows.
   connects and commands in flight together, epochs that withdraw what they
   carried, leases for sends): 80 browser scenarios (3,254 steps with the
   view after each, 557 query replies), including 40 seeded interleavings,
-  agree in every binding. The transport state machine remains.
+  agree in every binding. `moonraker` ports the transport's pure policy:
+  endpoint normalization and request paths by the WHATWG URL Standard (the
+  `url` crate), session credentials and their redaction, refused responses,
+  the handshake, reconnect policy and backoff, object subscriptions and
+  single-method endpoints; 803 browser answers agree in every binding.
+  Porting fixed two endpoint defects: a typed port 80 was replaced by 7125,
+  and an empty `?` or `#` survived into the WebSocket URL, which a WebSocket
+  refuses. The transport state machine remains.
 - [ ] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
   credential entry, and optional discovery. Discovery proposes verified endpoints
   and cannot overwrite preferences while a stale probe completes.

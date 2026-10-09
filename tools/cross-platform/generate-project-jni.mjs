@@ -28,6 +28,7 @@ const input = {
 const output = {
   int: "jint",
   long: "jlong",
+  double: "jdouble",
   boolean: "jboolean",
   void: "()",
   String: "jstring",

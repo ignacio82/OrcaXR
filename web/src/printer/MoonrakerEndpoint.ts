@@ -87,7 +87,13 @@ function parseDirectEndpoint(input: string, defaultPort: number): string {
   if (parsed.username || parsed.password || parsed.search || parsed.hash || !parsed.hostname) {
     throw new MoonrakerTransportError('invalid_endpoint', 'normalize_endpoint');
   }
-  if (!hasScheme && !parsed.port) parsed.port = String(defaultPort);
+  // An empty `?` or `#` passes the checks above but stays in the URL, and a
+  // WebSocket refuses any URL with a fragment.
+  parsed.search = '';
+  parsed.hash = '';
+  // The parser forgets a port equal to the scheme's default, so ask the text:
+  // `printer:80` (Moonraker behind a proxy) must not become `printer:7125`.
+  if (!hasScheme && !parsed.port && !typedPort(candidate)) parsed.port = String(defaultPort);
   parsed.pathname = normalizeBasePath(parsed.pathname);
   return stripTrailingSlash(parsed.toString());
 }
@@ -114,8 +120,18 @@ function parseSameOriginProxy(input: string, pageOrigin: string): string {
   ) {
     throw new MoonrakerTransportError('invalid_endpoint', 'normalize_proxy');
   }
+  proxy.search = '';
+  proxy.hash = '';
   proxy.pathname = normalizeBasePath(proxy.pathname);
   return stripTrailingSlash(proxy.toString());
+}
+
+/** Whether the authority of `candidate` (`http://…`) names a port. */
+function typedPort(candidate: string): boolean {
+  const authority = candidate.slice('http://'.length).split(/[/\\?#]/, 1)[0] ?? '';
+  const host = authority.startsWith('[') ? authority.slice(authority.indexOf(']') + 1) : authority;
+  const colon = host.lastIndexOf(':');
+  return colon !== -1 && colon < host.length - 1;
 }
 
 function normalizeBasePath(pathname: string): string {
