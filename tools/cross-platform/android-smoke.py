@@ -39,7 +39,7 @@ for cycle in range(3):
         encoded_layout = adb("shell", "cat", "/data/local/tmp/orcaxr-core-smoke.xml")
         layout = ET.fromstring(encoded_layout)
         texts = {node.get("text") for node in layout.iter("node")}
-        if "Workspace preview — editing is not available yet." in texts:
+        if "Import a model in the Project area to see it here." in texts:
             break
         time.sleep(0.5)
     else:

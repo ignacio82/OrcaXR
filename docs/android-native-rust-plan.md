@@ -846,6 +846,9 @@ Snapmaker NDK build proof, and an explicit renderer decision.
   The slicing engine is not packaged yet (Phase 6), so its part remains.
 - [ ] Record the flat/spatial renderer selection and any required alternative
   prototype. Resolve blockers before building the full XR interface.
+  The Workspace now uses the Filament candidate in release builds too; the
+  formal selection (lighting, colour management, transparency, devices) is
+  still to be recorded.
 
 **Exit gate:** real-device proof of usable mesh/toolpath updates and a valid slice
 from the current engine. A cube render or successful linker invocation alone is
@@ -1711,6 +1714,9 @@ painting, and FullSpectrum operations that can support real native projects.
     every binding.
   - [ ] Wire mesh packets into the flat and spatial renderers and qualify
     them on devices.
+    The flat renderer reads them (`PacketMeshes`, `SceneSync`,
+    `FilamentScene`), checked over JNI and on the emulator; the spatial
+    renderer and physical devices remain.
 - [x] Preserve topology-change remap/rejection rules for every paint channel,
   stable filament assignments, one transaction per stroke, stale-preview guards,
   mirrored/instance transforms, and bounded overlay memory. Audited against the
@@ -1835,6 +1841,12 @@ storage journeys on phone, tablet, and desktop-sized windows.
 - [ ] Integrate the flat renderer with panel resizing, visibility, lifecycle,
   selection, painting, model tools, and preview controls. Keep CPU work and
   loading off the UI thread; avoid per-frame Compose recomposition for meshes.
+  The Workspace area now draws the project with `FilamentScene` from the
+  session's render deltas and mesh packets (`SceneSync`, off the UI thread;
+  the renderer exists only while resumed), with orbit, zoom and a picked
+  instance highlighted; a JNI check syncs a real session and the emulator
+  smoke compares screenshots. Session selection, painting, model tools,
+  lighting and preview controls remain.
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.

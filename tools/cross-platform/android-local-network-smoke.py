@@ -65,7 +65,7 @@ try:
     adb("shell", "pm", "revoke", PACKAGE, PERMISSION)
     adb("shell", "pm", "clear-permission-flags", PACKAGE, PERMISSION, "user-set", "user-fixed")
     screen.launch(PACKAGE)
-    find("Workspace preview — editing is not available yet.")
+    find("Import a model in the Project area to see it here.")
     tap("Device")
     tap("Add printer")
     type_into("Name", "Simulator")

@@ -1,5 +1,6 @@
 package dev.orcaxr.renderer
 
+import dev.orcaxr.core.ProjectIntents
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.*
@@ -51,6 +52,16 @@ class ModelTransform private constructor(private val m: DoubleArray) {
             inv[4]*n.x+inv[5]*n.y+inv[6]*n.z, inv[8]*n.x+inv[9]*n.y+inv[10]*n.z).normalized()
     }
     fun localRay(worldMm: PickRay) = inverse().let { PickRay(it.point(worldMm.origin),it.vector(worldMm.direction)) }
+    /** This transform after [other]: `(a * b).point(p) == a.point(b.point(p))`. */
+    operator fun times(other: ModelTransform): ModelTransform {
+        val b=other.m; val result=DoubleArray(16)
+        for (column in 0..3) for (row in 0..3) {
+            var sum=0.0
+            for (k in 0..3) sum+=m[k*4+row]*b[column*4+k]
+            result[column*4+row]=sum
+        }
+        return of(result)
+    }
     fun renderMatrix(): FloatArray {
         // B M B^-1, including the one mm -> metre translation conversion.
         val columns = listOf(Point3(1.0,0.0,0.0),Point3(0.0,0.0,1.0),Point3(0.0,-1.0,0.0))
@@ -67,6 +78,25 @@ class ModelTransform private constructor(private val m: DoubleArray) {
             require(values.size==16 && values.all { it.isFinite() && abs(it)<=1e9 })
             require(values[3]==0.0 && values[7]==0.0 && values[11]==0.0 && values[15]==1.0)
             return ModelTransform(values.copyOf()).also { it.inverse() }
+        }
+        /**
+         * The project's canonical transform in millimetres, `T * R * S`, as the
+         * browser applies it (`applyCanonicalTransform`: position, the unit
+         * quaternion `[x, y, z, w]` normalized — a zero one is the identity, as
+         * three.js normalizes it — then scale).
+         */
+        fun fromCanonical(t: ProjectIntents.Transform): ModelTransform {
+            require(t.translationMm.size==3 && t.rotation.size==4 && t.scale.size==3) { "Invalid canonical transform" }
+            var (x,y,z,w)=t.rotation
+            val length=sqrt(x*x+y*y+z*z+w*w)
+            require(length.isFinite()) { "Invalid canonical rotation" }
+            if (length==0.0) { x=0.0; y=0.0; z=0.0; w=1.0 } else { x/=length; y/=length; z/=length; w/=length }
+            val (sx,sy,sz)=t.scale; val (tx,ty,tz)=t.translationMm
+            return of(doubleArrayOf(
+                (1-2*(y*y+z*z))*sx, 2*(x*y+z*w)*sx, 2*(x*z-y*w)*sx, 0.0,
+                2*(x*y-z*w)*sy, (1-2*(x*x+z*z))*sy, 2*(y*z+x*w)*sy, 0.0,
+                2*(x*z+y*w)*sz, 2*(y*z-x*w)*sz, (1-2*(x*x+y*y))*sz, 0.0,
+                tx, ty, tz, 1.0))
         }
         fun scaledTranslated(x: Double=1.0,y: Double=1.0,z: Double=1.0,tx: Double=0.0,ty: Double=0.0,tz: Double=0.0) =
             of(doubleArrayOf(x,0.0,0.0,0.0,0.0,y,0.0,0.0,0.0,0.0,z,0.0,tx,ty,tz,1.0))
@@ -85,6 +115,10 @@ class TriangleMesh private constructor(val topologyId: String, internal val xyz:
         const val MAX_FACETS = 2_100_000
         fun copyOf(id: String, xyz: FloatArray, indices: IntArray, colors: IntArray): TriangleMesh {
             validate(id,xyz,indices,colors); return TriangleMesh(id,xyz.copyOf(),indices.copyOf(),colors.copyOf())
+        }
+        /** Takes arrays this module built and never shares, without a second copy. */
+        internal fun owning(id: String, xyz: FloatArray, indices: IntArray, colors: IntArray): TriangleMesh {
+            validate(id,xyz,indices,colors); return TriangleMesh(id,xyz,indices,colors)
         }
         private fun validate(id: String, xyz: FloatArray, indices: IntArray, colors: IntArray) {
             require(id.isNotBlank() && id.length<=128 && xyz.size%3==0 && xyz.size in 9..(MAX_FACETS*9))

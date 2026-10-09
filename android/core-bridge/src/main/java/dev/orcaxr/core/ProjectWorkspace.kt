@@ -49,6 +49,8 @@ class ProjectWorkspace(
         /** Where an imported model lands without a printer profile: the browser's 200 mm plate. */
         val PLACEMENT = ProjectModelPlacement(200.0, 200.0, dropToBed = true)
         /** The tree's largest page (the browser renders it in windows of this size). */
+        /** Vertices per mesh-packet chunk: small enough for 16-bit indices. */
+        const val MESH_CHUNK_VERTICES = 65_535L
         private const val TREE_PAGE = 64L
         private const val MAX_NAME_UNITS = 256L
         /** The browser's capture timing: 5 s after the latest edit, at most 30 s after the first unsaved one. */
@@ -243,6 +245,24 @@ class ProjectWorkspace(
             if (result is ProjectOutcome.Opened || result is ProjectOutcome.OpenedWithoutSummary) update { it.copy(document = null) } else null
         }
     }
+
+    /** Reads the session on the actor's authority, between operations; the read's failure is its answer. */
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> inspect(read: (ProjectSession) -> T): CompletableFuture<T> =
+        outcome(actor.inspect(read)).thenApply { result ->
+            (result as? ProjectOutcome.Inspected)?.result?.getOrThrow() as T? ?: throw failure(result, null)
+        }
+
+    /**
+     * One page of the renderer's deltas (`ProjectSession.render`): the
+     * changes from the snapshot a renderer shows to the session's current
+     * one (or the request's target), at most 64 at a time.
+     */
+    fun render(request: ProjectIntents.RenderRequest): CompletableFuture<ProjectIntents.RenderPage> = inspect { it.render(request) }
+
+    /** One mesh asset's renderer packet, read off the authority by the caller, who closes it. */
+    fun meshPacket(assetId: String, maxChunkVertices: Long = MESH_CHUNK_VERTICES): CompletableFuture<ProjectMeshPacket> =
+        inspect { it.meshPacket(ProjectIntents.MeshPacketRequest(units(assetId), maxChunkVertices)) }
 
     /** Waits for the session to start and reads its first view. */
     fun ready(): CompletableFuture<ProjectView> = outcome(actor.ready).thenCompose { query() }.thenApply { view }

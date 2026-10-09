@@ -9,6 +9,7 @@ android {
     }
 }
 dependencies {
-    implementation(project(":core-bridge"))
+    // Public API (ProjectScene, PacketMeshes, ToolpathGeometry) speaks core-bridge's types.
+    api(project(":core-bridge"))
     testImplementation(libs.junit)
 }

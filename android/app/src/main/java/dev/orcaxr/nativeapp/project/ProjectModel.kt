@@ -23,6 +23,7 @@ import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.core.RecentDocuments
 import dev.orcaxr.nativeapp.device.PreferencesTextStore
+import dev.orcaxr.renderer.SceneSync
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutionException
@@ -82,6 +83,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     }
     private val owners = DocumentOwners.process
     private var held: String? = null
+    /** The renderer's view of the session, kept in step with it; its listeners live on the main thread. */
+    @Volatile private var sceneSync: SceneSync? = null
+    private val sceneListeners = LinkedHashSet<(SceneSync.Update) -> Unit>()
 
     var view by mutableStateOf(ProjectView())
         private set
@@ -113,7 +117,13 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     init {
         work {
             workspace = ProjectWorkspace(recovery = recovery)
-            subscription = workspace.subscribe { main.post { view = workspace.view } }
+            val sync = SceneSync(workspace) { update -> main.post { sceneListeners.toList().forEach { it(update) } } }
+            sceneSync = sync
+            subscription = workspace.subscribe {
+                main.post { view = workspace.view }
+                sync.request()
+            }
+            sync.request()
             workspace.ready().get()
             publishRecoveries()
             main.post { view = workspace.view }
@@ -462,7 +472,18 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     /** Redo from the keyboard; answers whether there was a step to redo. */
     fun redoShortcut(): Boolean = (view.redo != null && !busy).also { if (it) redo() }
 
+    /**
+     * Listens to the renderer's view of the project on the main thread: first
+     * everything known (once the session started), then each change.
+     */
+    fun listenScene(listener: (SceneSync.Update) -> Unit): AutoCloseable {
+        sceneListeners += listener
+        sceneSync?.snapshot { everything -> main.post { if (listener in sceneListeners) listener(everything) } }
+        return AutoCloseable { sceneListeners -= listener }
+    }
+
     override fun onCleared() {
+        sceneSync?.close()
         worker.execute {
             owners.releaseAll(owner)
             subscription?.close()

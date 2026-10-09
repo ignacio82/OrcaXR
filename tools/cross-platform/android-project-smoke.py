@@ -2,7 +2,9 @@
 """Drive the Project area on an explicitly selected emulator through the system's document picker.
 
 The app's data is cleared and a binary STL is placed in Downloads. The run
-imports it (previewed, then committed as one undoable step), undoes and redoes
+sees the Workspace draw an imported model on the bed, highlight it when
+tapped and drop it on undo (screenshot against screenshot); it then imports
+it (previewed, then committed as one undoable step), undoes and redoes
 it with the buttons and with the browser's keyboard shortcuts, saves the project as a 3MF with "Save as", starts a new project, reopens
 the saved one from the recent documents, keeps unsaved changes on Cancel,
 saves them first on Save and drops them only on Discard, brings the window
@@ -25,7 +27,7 @@ from pathlib import Path
 import subprocess
 import time
 from artifacts import ROOT, sha256
-from smoke_ui import Screen
+from smoke_ui import Screen, changed_pixels
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--serial", required=True)
@@ -44,7 +46,7 @@ to_top, hide_keyboard, type_into, focused = screen.to_top, screen.hide_keyboard,
 
 def launch():
     screen.launch(PACKAGE)
-    find("Workspace preview — editing is not available yet.")
+    find("Import a model in the Project area to see it here.")
     tap("Project")
     find("Untitled project", timeout=30)
 
@@ -73,6 +75,39 @@ adb("shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_
 launch()
 find("No unsaved changes")
 find("0 objects")
+# The Workspace draws the project: an imported model appears on the bed, a tap
+# highlights it, and undo takes it away again (compared screenshot to screenshot
+# below the overlay text, so the bed grid and labels never count).
+width, height = screen.screenshot()[:2]
+box = (0, 260, width, height - 220)
+
+
+def workspace():
+    tap("Workspace")
+    time.sleep(4)
+    return screen.screenshot()
+
+
+empty = workspace()
+tap("Project")
+import_cube(1)
+find("1 object", timeout=30)
+drawn = workspace()
+model = changed_pixels(empty, drawn, *box)
+# The 20 mm test cube covers about 1,500 pixels of the framed 200 mm bed at this resolution.
+assert len(model) > 800, f"The imported model was not drawn ({len(model)} pixels changed)"
+x = sum(p[0] for p in model) // len(model)
+y = sum(p[1] for p in model) // len(model)
+adb("shell", "input", "tap", str(x), str(y))
+time.sleep(2)
+highlighted = screen.screenshot()
+assert len(changed_pixels(drawn, highlighted, *box)) > 600, "A tap on the model did not highlight it"
+adb("shell", "input", "keycombination", "113", "54")
+time.sleep(4)
+undone = screen.screenshot()
+assert len(changed_pixels(empty, undone, *box)) < 200, "Undo left the model drawn"
+tap("Project")
+find("0 objects", timeout=30)
 # Import: previewed, committed as one undoable step, undone and redone.
 import_cube(1)
 find("Undo Import cube.stl", timeout=30)

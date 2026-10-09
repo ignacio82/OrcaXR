@@ -2,6 +2,7 @@
     <string name="app_name">OrcaXR</string>
     <string name="workspace_loading">Opening workspace…</string>
     <string name="workspace_development">Workspace preview — editing is not available yet.</string>
+    <string name="workspace_empty">Import a model in the Project area to see it here.</string>
     <string name="workspace_unavailable">Unable to open this workspace. Please reinstall the application.</string>
     <string name="nav_workspace">Workspace</string>
     <string name="nav_device">Device</string>

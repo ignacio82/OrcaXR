@@ -307,6 +307,9 @@ try {
   // One writer per document, and changes made outside detected by digest.
   const documentOwnersChecks = jvm.call("documentOwnersChecks", decodeBytes("stl-binary/cube"));
   assert.equal(documentOwnersChecks, 14);
+  // The renderer's view of a real session: render deltas and mesh packets into the scene.
+  const projectSceneChecks = jvm.call("projectSceneChecks", decodeBytes("stl-binary/cube"));
+  assert.equal(projectSceneChecks, 13);
   const archiveCase = JSON.parse(
     await readFile(new URL("testdata/cross-platform/foreign-import-vectors.json", root)),
   ).cases.find((c) => c.name === ACTOR_ARCHIVE_CASE);
@@ -1291,6 +1294,7 @@ try {
     projectWorkspaceChecks,
     projectRecoveryChecks,
     documentOwnersChecks,
+    projectSceneChecks,
     actorArchiveChecks,
     providerDocumentChecks,
     ...preflights,

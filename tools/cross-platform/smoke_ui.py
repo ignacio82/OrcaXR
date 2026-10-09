@@ -6,9 +6,11 @@ scrolling the screen's list on to its end and back, and what was seen is
 written next to the results when it never shows.
 """
 import re
+import struct
 import subprocess
 import time
 import xml.etree.ElementTree as ET
+import zlib
 
 
 class Screen:
@@ -151,3 +153,78 @@ class Screen:
                 self.adb("shell", "cmd", "statusbar", "collapse")
                 time.sleep(0.5)
         raise AssertionError(f"{package} never came to the front")
+
+    def screenshot(self):
+        """The screen as (width, height, rows of RGBA bytes), from `screencap`'s PNG."""
+        png = subprocess.check_output(["adb", "-s", self.serial, "exec-out", "screencap", "-p"], timeout=60)
+        return decode_png(png)
+
+
+def decode_png(png):
+    """A non-interlaced 8-bit RGB or RGBA PNG as (width, height, rows of RGBA bytes): enough for
+    `screencap`, without an imaging library on the host."""
+    assert png[:8] == b"\x89PNG\r\n\x1a\n", "Not a PNG"
+    at, data, width, height, channels = 8, b"", 0, 0, 4
+    while at < len(png):
+        length, kind = struct.unpack(">I4s", png[at:at + 8])
+        body = png[at + 8:at + 8 + length]
+        if kind == b"IHDR":
+            width, height, depth, color, _, _, interlace = struct.unpack(">IIBBBBB", body)
+            assert depth == 8 and color in (2, 6) and interlace == 0, "Unsupported PNG layout"
+            channels = 4 if color == 6 else 3
+        elif kind == b"IDAT":
+            data += body
+        at += 12 + length
+    raw = zlib.decompress(data)
+    stride = width * channels
+    rows, previous = [], bytearray(stride)
+    for y in range(height):
+        kind = raw[y * (stride + 1)]
+        line = bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+        for x in range(stride):
+            left = line[x - channels] if x >= channels else 0
+            up = previous[x]
+            corner = previous[x - channels] if x >= channels else 0
+            if kind == 1:
+                line[x] = (line[x] + left) & 0xFF
+            elif kind == 2:
+                line[x] = (line[x] + up) & 0xFF
+            elif kind == 3:
+                line[x] = (line[x] + ((left + up) >> 1)) & 0xFF
+            elif kind == 4:
+                estimate = left + up - corner
+                pa, pb, pc = abs(estimate - left), abs(estimate - up), abs(estimate - corner)
+                line[x] = (line[x] + (left if pa <= pb and pa <= pc else up if pb <= pc else corner)) & 0xFF
+        rows.append(bytes(line) if channels == 4 else bytes(b for i in range(width) for b in (*line[i * 3:i * 3 + 3], 255)))
+        previous = line
+    return width, height, rows
+
+
+def bright_pixels(image, left, top, right, bottom, threshold=60):
+    """How many pixels in the box are brighter than [threshold] in every channel's mean."""
+    _, _, rows = image
+    count = 0
+    for y in range(top, bottom):
+        row = rows[y]
+        for x in range(left, right):
+            r, g, b = row[x * 4], row[x * 4 + 1], row[x * 4 + 2]
+            if (r + g + b) / 3 > threshold:
+                count += 1
+    return count
+
+
+def changed_pixels(first, second, left, top, right, bottom, delta=40):
+    """The pixels in the box whose colour differs by more than [delta] in some channel between two
+    screenshots, as a list of (x, y)."""
+    _, _, a = first
+    _, _, b = second
+    changed = []
+    for y in range(top, bottom):
+        row_a, row_b = a[y], b[y]
+        for x in range(left, right):
+            at = x * 4
+            if (abs(row_a[at] - row_b[at]) > delta or abs(row_a[at + 1] - row_b[at + 1]) > delta
+                    or abs(row_a[at + 2] - row_b[at + 2]) > delta):
+                changed.append((x, y))
+    return changed
+

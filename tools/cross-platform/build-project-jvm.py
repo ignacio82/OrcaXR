@@ -70,7 +70,10 @@ subprocess.run(["java", "-cp", compiler, "org.jetbrains.kotlin.cli.jvm.K2JVMComp
                 "-no-stdlib", "-no-reflect", "-jvm-target", "17", "-classpath",
                 os.pathsep.join([str(output), stdlib, network, annotations, str(android)]), "-d", str(output),
                 *map(str, sorted(main.rglob("*.kt"))),
-                *map(str, sorted((ROOT / "android/core-bridge/src/androidTest/java/dev/orcaxr/core").glob("*Checks.kt")))], check=True)
+                *map(str, sorted((ROOT / "android/core-bridge/src/androidTest/java/dev/orcaxr/core").glob("*Checks.kt"))),
+                # The renderer's platform-free model (scene deltas, mesh packets), checked against real sessions.
+                *map(str, sorted((ROOT / "android/renderer-api/src/main/java").rglob("*.kt"))),
+                *map(str, sorted((ROOT / "android/renderer-api/src/androidTest/java").rglob("*Checks.kt")))], check=True)
 subprocess.run(["javac", "--release", "17", "-cp", os.pathsep.join([str(output), stdlib, network]),
                 "-d", str(output), str(ROOT / "tools/cross-platform/jvm/ProjectJniHarness.java")], check=True)
 (output / "classpath.txt").write_text(os.pathsep.join([str(output), stdlib, network]))

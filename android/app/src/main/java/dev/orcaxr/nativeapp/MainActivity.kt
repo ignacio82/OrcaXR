@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -36,6 +37,7 @@ import dev.orcaxr.nativeapp.device.DeviceModel
 import dev.orcaxr.nativeapp.device.DeviceScreen
 import dev.orcaxr.nativeapp.project.ProjectModel
 import dev.orcaxr.nativeapp.project.ProjectScreen
+import dev.orcaxr.nativeapp.workspace.WorkspaceScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -156,17 +158,22 @@ class MainActivity : ComponentActivity() {
                         DeviceScreen(device, Modifier.fillMaxSize().padding(padding))
                     } else if (area == R.string.nav_project && state == R.string.workspace_development) {
                         ProjectScreen(project, Modifier.fillMaxSize().padding(padding))
+                    } else if (state == R.string.workspace_development) {
+                        Box(Modifier.fillMaxSize().padding(padding)) {
+                            WorkspaceScreen(project, Modifier.fillMaxSize())
+                            if (resources.getBoolean(R.bool.viewport_experiment_enabled)) {
+                                TextButton(
+                                    onClick = { startActivity(Intent().setClassName(this@MainActivity, "$packageName.ViewportExperimentActivity")) },
+                                    modifier = Modifier.align(Alignment.BottomEnd),
+                                ) { Text(stringResource(R.string.open_viewport_experiment)) }
+                            }
+                        }
                     } else {
                         Column(Modifier.fillMaxSize().padding(padding),
                             verticalArrangement = Arrangement.Center,
                             horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
                             Text(stringResource(state), style = MaterialTheme.typography.bodyLarge)
-                            if (state == R.string.workspace_development && resources.getBoolean(R.bool.viewport_experiment_enabled)) {
-                                TextButton(onClick = {
-                                    startActivity(Intent().setClassName(this@MainActivity, "$packageName.ViewportExperimentActivity"))
-                                }) { Text(stringResource(R.string.open_viewport_experiment)) }
-                            }
                         }
                     }
                 }

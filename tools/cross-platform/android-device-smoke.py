@@ -53,7 +53,7 @@ def start_print(url, filename):
 
 def launch():
     screen.launch(PACKAGE)
-    find("Workspace preview — editing is not available yet.")
+    find("Import a model in the Project area to see it here.")
     tap("Device")
 
 

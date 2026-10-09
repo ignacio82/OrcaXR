@@ -95,6 +95,9 @@ public final class ProjectJniHarness {
     public static long newProjectCase(String now, double[] words, String source, String expected) {
         return ProjectNewChecks.replay(now, words, source, expected);
     }
+    public static long projectSceneChecks(byte[] cube) {
+        return dev.orcaxr.renderer.ProjectSceneChecks.run(cube);
+    }
     public static long documentOwnersChecks(byte[] cube) {
         return DocumentOwnersChecks.run(cube);
     }
@@ -341,6 +344,7 @@ public final class ProjectJniHarness {
             if (name.equals("moonrakerPolicyChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("printerExchangesChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("newProjectCase")) method = ProjectJniHarness.class.getMethod(name, String.class, double[].class, String.class, String.class);
+            if (name.equals("projectSceneChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);
             if (name.equals("documentOwnersChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);
             if (name.equals("projectRecoveryChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);
             if (name.equals("projectWorkspaceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);

@@ -4381,6 +4381,49 @@ the new window closes) and appends a byte to the saved file from the shell
 (Save asks; Cancel leaves the file as it is; Overwrite writes a package
 again).
 
+### Android Workspace renderer
+
+The Workspace area draws the project with the flat renderer, from the
+session's own render deltas and mesh packets — never a second copy of the
+project. The actor gained `inspect`, a read-only call run on its authority
+between operations whose failure is its answer (never the connection's), and
+`ProjectWorkspace` reads through it: `render` (a page of renderer deltas) and
+`meshPacket` (one asset's packet, closed by the caller). In `renderer-api`,
+platform-free and host-tested: `ProjectScene` applies render pages from the
+snapshot it shows toward the session's (restarting from empty when the
+session no longer holds its base, or when pages of one target arrive on
+different bases) and lists the draws of the active plate — every instance
+times every volume of its object, placed by `ModelTransform.fromCanonical`
+(T·R·S, quaternion `[x, y, z, w]`, as the browser's `applyCanonicalTransform`)
+and tinted with the volume's resolved display colour, or the browser
+surface's default grey `#b8bec8`; `PacketMeshes` decodes a packet (chunk
+table, float32 positions and normals, 16- or 32-bit indices, as
+`mesh_packet.rs` writes them) into one mesh with baked flat shading; and
+`SceneSync` pages the deltas on a thread of its own, fetches each newly
+needed mesh once (a duplicate shares its source's), drops unused ones and
+hands each change — or, to a renderer made afresh, everything known — to
+its listener. `FilamentScene` (`renderer-filament`) uploads meshes in bounded
+chunks as the viewport experiment does, shares each mesh among its draws
+(one entity per chunk and draw, each with its own tinted material instance),
+draws the bed's outline and 10 mm grid, frames the bed, picks the nearest
+draw through each mesh's BVH and highlights a picked instance;
+non-printable instances are translucent. `WorkspaceScreen` hosts it on a
+`SurfaceView` that exists only while the app is resumed (drag orbits, pinch
+zooms, a tap highlights), and the app now carries the renderer in every
+build: both APKs pass `verify-artifacts.py` with six native libraries,
+Filament's included, 16 KB aligned.
+
+12 `renderer-api` JVM tests cover transforms, colours, delta paging and
+packet decoding, and `ProjectSceneChecks` (13 checks over JNI) sync a real
+session: the imported cube drawn once on the active plate, resting on the
+bed inside the 200 mm plate, undo and redo as deltas, a duplicate sharing
+its mesh, a full snapshot for a new renderer, "New project" emptying the
+bed. The Project smoke compares Workspace screenshots on the emulator: an
+imported model changes about 1,500 pixels of the framed bed, a tap on it
+re-tints it, and undo restores the empty bed. Shading is baked flat (the
+browser lights its surface); paint colours, the session's selection, the
+printer profile's bed size and toolpaths are not drawn yet.
+
 ### Android Device area
 
 The app's Device area is the first product area on Android, built only from

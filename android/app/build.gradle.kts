@@ -31,7 +31,8 @@ android {
 }
 dependencies {
     implementation(project(":core-bridge"))
-    debugImplementation(project(":renderer-filament"))
+    // The Workspace draws the project with the flat renderer in every build.
+    implementation(project(":renderer-filament"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
