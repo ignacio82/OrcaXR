@@ -2052,7 +2052,9 @@ credential storage, and explicit permission/error flows.
   destructive one in a dialog; pause, resume and a confirmed cancel pass on
   an owned emulator against the simulator. Emergency stop and firmware
   restart stayed offered while the status was stale (seen on the emulator),
-  as the core's availability keeps them. History, storage,
+  as the core's availability keeps them. `PrinterExchanges` carries out the
+  shared storage, history, console and camera operations over the session's
+  client (20 host checks against the simulator). History, storage,
   console and camera screens, and the camera's polling lifecycle, remain.
 - [ ] Test with the existing printer simulator before qualified, supervised U1
   and CC trials. Automated tests do not issue commands to real printers.

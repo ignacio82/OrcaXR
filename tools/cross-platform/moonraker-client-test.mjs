@@ -99,8 +99,37 @@ try {
   // The simulator printer's own key reached it and no other key ever did;
   // the printer without one sent none.
   assert.deepEqual([...new Set((await workshop.summary()).apiKeys.filter(Boolean))], ["sim-key-1234"]);
+  const shop = await simulator({
+    cameras: true,
+    options: {
+      history: [1, 2, 3].map((n) => ({
+        job_id: `00000${n}`,
+        filename: `job-${n}.gcode`,
+        status: "completed",
+        start_time: 1_800_000_000 + n * 4000,
+        end_time: 1_800_003_600 + n * 4000,
+        print_duration: 3500,
+        total_duration: 3600,
+        filament_used: 1234.5,
+        exists: n !== 3,
+        metadata: { estimated_time: 3400 },
+      })),
+      historyTotals: { total_jobs: 3, total_time: 10_800, total_print_time: 10_500, total_filament_used: 3703.5 },
+      configSettings: {
+        "gcode_macro load_filament": { gcode: "M109 S{params.TEMP}\nG1 E50", description: "Loads filament" },
+      },
+    },
+  });
+  printers.push(shop);
+  assert.equal(jvm.call("printerExchangesChecks", shop.url), 20);
+  const exchanged = await shop.summary();
+  // The script reached the printer; the refused traversal and empty script did not.
+  assert.ok(exchanged.commands.includes("gcode:M105"));
+  assert.ok(!exchanged.requests.some((request) => request.includes("..") || request.includes("printer.cfg")));
+  assert.deepEqual([...new Set(exchanged.apiKeys.filter(Boolean))], ["exchange-key"]);
   console.log(
     JSON.stringify({
+      printerExchangesChecks: 20,
       deviceWorkspaceChecks: 28,
       lanPolicyChecks: 21,
       localNetworkChecks: 28,

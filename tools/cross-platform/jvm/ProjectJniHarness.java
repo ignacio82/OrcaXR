@@ -89,6 +89,9 @@ public final class ProjectJniHarness {
     public static long moonrakerPolicyChecks(String script) {
         return ProjectMoonrakerPolicyChecks.run(script);
     }
+    public static long printerExchangesChecks(String endpoint) {
+        return ProjectPrinterExchangesChecks.run(endpoint);
+    }
     public static long deviceWorkspaceChecks(String endpoint) {
         return ProjectDeviceWorkspaceChecks.run(endpoint);
     }
@@ -318,6 +321,7 @@ public final class ProjectJniHarness {
             if (name.equals("printWorkflowChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("printerSessionChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("moonrakerPolicyChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("printerExchangesChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("deviceWorkspaceChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("localNetworkChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("credentialsChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);

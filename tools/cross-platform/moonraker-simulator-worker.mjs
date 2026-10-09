@@ -3,7 +3,21 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { startMoonrakerSimulator } from "../../web/scripts/moonraker-simulator.mjs";
 
-const simulator = await startMoonrakerSimulator();
+const simulator = await startMoonrakerSimulator(workerData?.options ?? {});
+// A camera on the simulator's own origin (known only once it listens), and
+// one that offers only a stream.
+if (workerData?.cameras) {
+  simulator.state.webcams = [
+    {
+      name: "Nozzle",
+      service: "mjpegstreamer-adaptive",
+      snapshot_url: `${simulator.url}/webcam/snapshot`,
+      stream_url: "/webcam/?action=stream",
+      target_fps: 15,
+    },
+    { name: "Bed", service: "webrtc-camerastreamer", stream_url: "/webcam2/webrtc" },
+  ];
+}
 // The first upload is held, so a client's cancel lands while it is in flight.
 simulator.afterNextUpload(
   () => new Promise((resolve) => setTimeout(resolve, 3000)),

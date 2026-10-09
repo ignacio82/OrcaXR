@@ -4247,6 +4247,20 @@ key remembered, reconnect, pause, resume and — confirmed — cancel a job
 started elsewhere, disconnect and remove the printer; the printer receives
 exactly `start, pause, resume, cancel`, every request with that key.
 
+`PrinterExchanges` (core-bridge) carries out the shared storage, history,
+console and camera operations over the session's client: the policy plans
+each one, finishes it and reads its reply, and the class only performs the
+exchange the plan names — a request or download through the client with the
+credential, or a camera's own URL fetched directly without it (no redirect,
+plain HTTP only to the local network, the local-network permission first, a
+frame read whole up to 16 MiB and never past it). 20 host checks against the
+simulator list, read, download byte for byte, rename and delete files and
+refuse a traversal before anything is sent, page history and read totals,
+send a script and refuse an empty one, read macros with their parameters,
+list cameras against the endpoint and fetch a frame both through Moonraker
+and directly; the simulator receives the script, no traversal, and only
+that client's key.
+
 That run found a defect the host checks could not: `MoonrakerClient`
 reused pooled HTTP connections with retries off, so the first request after
 any idle gap longer than the server's keep-alive (the simulator's Node server
