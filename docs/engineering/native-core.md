@@ -3717,6 +3717,21 @@ refused identities and 40 seeded interleavings) of 3,254 steps, each with
 the view after it, and 557 query replies. Rust, WASM in Node and Chrome, JNI
 and 3,820 Kotlin checks reproduce every one.
 
+The browser's printer session runs on this machine. `SharedPrinterSession`
+hosts it with `PrinterSessionController`'s public surface (`PrinterSession`,
+which both implement): it opens transports (subscribing them to the job
+objects and answering the opening with their first state before any listener
+runs), feeds their states and notifications in, carries out connects,
+requests and recovery commands on each epoch's signal, and runs confirmation
+dialogs; an epoch the core ends aborts that signal, and a failed exchange's
+own error object is what the call rejects with. Intents and confirmations
+are the core's ids behind frozen browser objects. It passes the browser
+session's own tests (`printer-session-shared.test.ts`, 21 sessions). The
+session exists from startup but the core loads on demand, so
+`PrinterSessionSwitch` serves the browser controller until the core has
+loaded and adopts the shared session while no printer is selected
+(connecting waits for the core); a session in use keeps its implementation.
+
 `moonraker` ports the transport's pure policy (`MoonrakerEndpoint.ts`,
 `SessionCredentials.ts` and the helpers of `MoonrakerTransport.ts`). URLs
 follow the WHATWG URL Standard through the `url` crate, with ICU4X IDNA, so

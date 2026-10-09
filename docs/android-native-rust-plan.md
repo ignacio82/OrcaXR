@@ -1925,8 +1925,10 @@ credential storage, and explicit permission/error flows.
   transport through a printer-only core package (1.5 MB, precached for
   offline LAN printing); the host passes the browser transport's own tests
   and both Moonraker simulators, and the TypeScript transport remains the
-  rollback adapter (`?printer-transport=typescript`). Running the session and
-  submission controllers on their shared machines remains.
+  rollback adapter (`?printer-transport=typescript`). The browser's printer
+  session runs on the shared session machine too, passing its own tests, and
+  moves onto it before a printer is selected. Running the submission
+  controller on its shared machine remains.
 - [ ] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
   credential entry, and optional discovery. Discovery proposes verified endpoints
   and cannot overwrite preferences while a stale probe completes.

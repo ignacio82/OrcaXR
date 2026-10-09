@@ -19,12 +19,9 @@ import type {
   ProjectPrintJobAvailabilityRequestWire,
   ProjectPrintJobCommandCheckRequestWire,
   ProjectPrintJobCommandDescriptorWire,
-  ProjectPrintJobCommandErrorCodeWire,
   ProjectPrintJobCommandFailureRequestWire,
   ProjectPrintJobCommandPlanWire,
   ProjectPrintJobCommandRefusalWire,
-  ProjectPrintJobCommandWire,
-  ProjectPrintJobSnapshotWire,
   ProjectPrinterStatusRequestWire,
   ProjectPrinterStatusSummaryWire,
 } from '../../../contracts/generated/project-intents';
@@ -34,10 +31,16 @@ import {
   PrintJobCommandError,
   printJobCommandAvailability,
   type PrintJobCommand,
-  type PrintJobCommandDescriptor,
-  type PrintJobCommandErrorCode,
 } from './PrintJobControl';
 import type { PrintJobSnapshot } from './PrintJobStatus';
+import {
+  PRINT_JOB_COMMAND_ERRORS,
+  printJobCommandDescriptorFromWire,
+  printJobCommandDescriptorWire,
+  printJobCommandFromWire,
+  printJobCommandWire,
+  printJobSnapshotFromWire,
+} from './PrinterWire';
 import {
   guardedPrinterActions,
   summarizePrinterStatus,
@@ -53,58 +56,11 @@ const text = (value: string | undefined): ProjectOptionalTextWire =>
 const optionalText = (value: ProjectOptionalTextWire): string | undefined =>
   'value' in value ? fromUnits(value.value) : undefined;
 
-const COMMANDS: Readonly<Record<PrintJobCommand, ProjectPrintJobCommandWire>> = {
-  pause: 'pause',
-  resume: 'resume',
-  cancel: 'cancel',
-  'emergency-stop': 'emergencyStop',
-  'firmware-restart': 'firmwareRestart',
-};
-const command = (wire: ProjectPrintJobCommandWire): PrintJobCommand =>
-  (Object.keys(COMMANDS) as PrintJobCommand[]).find((key) => COMMANDS[key] === wire)!;
-export const printJobCommandWire = (value: PrintJobCommand): ProjectPrintJobCommandWire => COMMANDS[value];
-export const printJobCommandFromWire = command;
-const ERRORS: Readonly<Record<PrintJobCommandErrorCode, ProjectPrintJobCommandErrorCodeWire>> = {
-  'not-allowed': 'notAllowed',
-  'job-changed': 'jobChanged',
-  'request-failed': 'requestFailed',
-  cancelled: 'cancelled',
-  'session-changed': 'sessionChanged',
-  'confirmation-required': 'confirmationRequired',
-  busy: 'busy',
-  'identity-unavailable': 'identityUnavailable',
-};
+const command = printJobCommandFromWire;
+export { printJobCommandDescriptorWire, printJobCommandFromWire, printJobCommandWire, printJobSnapshotFromWire };
 const moonrakerCode = (wire: ProjectMoonrakerErrorCodeWire): MoonrakerErrorCode =>
   wire.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`) as MoonrakerErrorCode;
 
-/** The browser snapshot a wire snapshot stands for. */
-export function printJobSnapshotFromWire(wire: ProjectPrintJobSnapshotWire): PrintJobSnapshot {
-  const snapshot: Record<string, unknown> = { state: wire.state, updatedAtMs: wire.updatedAtMs };
-  const put = (key: string, value: unknown) => {
-    if (value !== undefined) snapshot[key] = value;
-  };
-  put('klippyState', optionalText(wire.klippyState));
-  put('filename', optionalText(wire.filename));
-  put('virtualSdActive', 'value' in wire.virtualSdActive ? wire.virtualSdActive.value : undefined);
-  put('message', optionalText(wire.message));
-  for (const key of [
-    'progress',
-    'currentLayer',
-    'totalLayers',
-    'printDurationS',
-    'totalDurationS',
-    'filamentUsedMm',
-    'estimatedRemainingS',
-  ] as const) {
-    const field = wire[key];
-    put(key, 'value' in field ? field.value : undefined);
-  }
-  for (const key of ['extruder', 'bed'] as const) {
-    const field = wire[key];
-    put(key, 'value' in field ? { actualC: field.value.actualC, targetC: field.value.targetC } : undefined);
-  }
-  return snapshot as unknown as PrintJobSnapshot;
-}
 const observed = (wire: ProjectOptionalPrintJobSnapshotWire): PrintJobSnapshot | null =>
   'value' in wire ? printJobSnapshotFromWire(wire.value) : null;
 
@@ -118,28 +74,6 @@ function connection(wire: ProjectMoonrakerConnectionViewWire): MoonrakerConnecti
   return { status } as unknown as MoonrakerConnectionState;
 }
 
-export function printJobCommandDescriptorWire(
-  descriptor: PrintJobCommandDescriptor,
-): ProjectPrintJobCommandDescriptorWire {
-  return {
-    command: COMMANDS[descriptor.command],
-    label: units(descriptor.label),
-    destructive: descriptor.destructive,
-    allowed: descriptor.allowed,
-    reason: text(descriptor.reason),
-  };
-}
-function descriptorFromWire(wire: ProjectPrintJobCommandDescriptorWire): PrintJobCommandDescriptor {
-  const reason = optionalText(wire.reason);
-  return {
-    command: command(wire.command),
-    label: fromUnits(wire.label),
-    destructive: wire.destructive,
-    allowed: wire.allowed,
-    ...(reason === undefined ? {} : { reason }),
-  };
-}
-
 export function answerPrintJobAvailability(
   request: ProjectPrintJobAvailabilityRequestWire,
 ): ProjectPrintJobCommandDescriptorWire[] {
@@ -148,7 +82,7 @@ export function answerPrintJobAvailability(
 
 export function printJobCommandRefusalWire(error: unknown): ProjectPrintJobCommandRefusalWire {
   if (!(error instanceof PrintJobCommandError)) throw error;
-  return { code: ERRORS[error.code], message: units(error.message) };
+  return { code: PRINT_JOB_COMMAND_ERRORS[error.code], message: units(error.message) };
 }
 
 /** What sending a command would do, or why `executePrintJobCommand` refuses it. */
@@ -239,7 +173,7 @@ export function answerPrinterStatus(request: ProjectPrinterStatusRequestWire): P
 
 export function guardedActionWire(action: GuardedPrinterAction): ProjectGuardedPrinterActionWire {
   return {
-    command: COMMANDS[action.command],
+    command: printJobCommandWire(action.command),
     label: units(action.label),
     enabled: action.enabled,
     reason: text(action.reason),
@@ -266,7 +200,7 @@ export function answerGuardedPrinterActions(
   request: ProjectGuardedPrinterActionsRequestWire,
 ): ProjectGuardedPrinterActionWire[] {
   const staleReason = optionalText(request.staleReason);
-  return guardedPrinterActions(request.descriptors.map(descriptorFromWire), {
+  return guardedPrinterActions(request.descriptors.map(printJobCommandDescriptorFromWire), {
     stale: request.stale,
     ...(staleReason === undefined ? {} : { staleReason }),
   }).map(guardedActionWire);
@@ -276,7 +210,7 @@ export function holdStateWire(state: HoldToConfirmState): ProjectHoldToConfirmSt
   return {
     phase: state.phase,
     progress: state.progress,
-    command: state.command ? { value: COMMANDS[state.command] } : absent,
+    command: state.command ? { value: printJobCommandWire(state.command) } : absent,
   };
 }
 export function holdReleaseWire(release: {
@@ -284,7 +218,7 @@ export function holdReleaseWire(release: {
   readonly state: HoldToConfirmState;
 }): ProjectHoldToConfirmReleaseWire {
   return {
-    command: release.command ? { value: COMMANDS[release.command] } : absent,
+    command: release.command ? { value: printJobCommandWire(release.command) } : absent,
     state: holdStateWire(release.state),
   };
 }

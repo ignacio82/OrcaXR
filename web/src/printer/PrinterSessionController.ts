@@ -72,8 +72,37 @@ const IDENTITY_HELP =
 export const isPrinterRecoveryCommand = (command: PrintJobCommand): command is 'emergency-stop' | 'firmware-restart' =>
   command === 'emergency-stop' || command === 'firmware-restart';
 
+/**
+ * A printer session as the application uses it. Two implementations provide
+ * it: this browser controller, and the shared core's (`SharedPrinterSession`),
+ * which runs the same policy in Rust — the one the Android app runs. This one
+ * stays as the reference the core is replayed against and as the rollback.
+ */
+export interface PrinterSession<T extends PrinterSessionTransport = MoonrakerTransport> {
+  readonly transport: T | null;
+  readonly snapshot: PrintJobSnapshot | null;
+  readonly state: MoonrakerConnectionState | null;
+  readonly generation: number;
+  subscribe(listener: () => void): () => void;
+  select(selection: PrinterSelection): T;
+  connect(signal?: AbortSignal): Promise<{ transport: T; handshake: MoonrakerHandshake }>;
+  captureLease(): PrinterSessionLease<T>;
+  clear(): void;
+  dispose(): void;
+  availability(): readonly PrintJobCommandDescriptor[];
+  captureIntent(command: PrintJobCommand): PrintJobCommandIntent;
+  confirm(intent: PrintJobCommandIntent): PrintJobConfirmation;
+  execute(
+    intent: PrintJobCommandIntent,
+    confirmation?: PrintJobConfirmation | ((intent: PrintJobCommandIntent, signal: AbortSignal) => Promise<boolean>),
+  ): Promise<void>;
+  refresh(): Promise<void>;
+}
+
 /** Owns one selected printer and every query, subscription, and command in its session. */
-export class PrinterSessionController<T extends PrinterSessionTransport = MoonrakerTransport> {
+export class PrinterSessionController<
+  T extends PrinterSessionTransport = MoonrakerTransport,
+> implements PrinterSession<T> {
   private selected: PrinterSelection | null = null;
   private transportValue: T | null = null;
   private generationValue = 0;

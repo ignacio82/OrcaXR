@@ -9,6 +9,7 @@ import initialize, {
   core_info,
   moonraker_endpoint,
   MoonrakerTransport,
+  PrinterSession,
 } from '../../../core/browser/printer/orcaxr_core.js';
 import { CORE_PRINTER_ASSET } from '../../../core/browser/printer/asset';
 import { checkCoreHandshake, fetchCoreAsset } from '../slicer/core/CoreAsset';
@@ -18,6 +19,12 @@ import type {
   MoonrakerTransportDependencies,
 } from './MoonrakerTransport';
 import { SharedMoonrakerTransport } from './SharedMoonrakerTransport';
+import type {
+  PrinterSelection,
+  PrinterSession as PrinterSessionApi,
+  PrinterSessionTransport,
+} from './PrinterSessionController';
+import { SharedPrinterSession } from './SharedPrinterSession';
 
 /** Makes connections that run on the loaded core. */
 export type SharedConnectionFactory = (
@@ -25,16 +32,25 @@ export type SharedConnectionFactory = (
   dependencies?: MoonrakerTransportDependencies,
 ) => MoonrakerConnection;
 
+/** What runs on the loaded printer core: connections and sessions. */
+export interface SharedPrinterRuntime {
+  readonly connection: SharedConnectionFactory;
+  session<T extends PrinterSessionTransport>(createTransport: (selection: PrinterSelection) => T): PrinterSessionApi<T>;
+}
+
 const PRINTER = { maxBytes: 3 * 1024 * 1024, component: 'printer' } as const;
 
 export async function loadPrinterCore(
   base = new URL(import.meta.env.BASE_URL, globalThis.location.origin),
   fetcher: typeof fetch = fetch,
-): Promise<SharedConnectionFactory> {
+): Promise<SharedPrinterRuntime> {
   await fetchCoreAsset(CORE_PRINTER_ASSET.manifest, base, fetcher, PRINTER);
   const bytes = await fetchCoreAsset(CORE_PRINTER_ASSET.wasm, base, fetcher, PRINTER);
   await initialize({ module_or_path: bytes });
   checkCoreHandshake(core_info(), 'printer');
-  const core = { MoonrakerTransport, moonraker_endpoint };
-  return (config, dependencies) => new SharedMoonrakerTransport(core, config, dependencies);
+  const core = { MoonrakerTransport, moonraker_endpoint, PrinterSession };
+  return {
+    connection: (config, dependencies) => new SharedMoonrakerTransport(core, config, dependencies),
+    session: (createTransport) => new SharedPrinterSession(core, createTransport),
+  };
 }

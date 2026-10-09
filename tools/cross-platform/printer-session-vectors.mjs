@@ -993,6 +993,8 @@ const sources = [
   "tools/cross-platform/printer-session-vectors.mjs",
   "web/src/printer/PrinterSessionExchange.ts",
   "web/src/printer/PrinterSessionController.ts",
+  "web/src/printer/PrinterControlExchange.ts",
+  "web/src/printer/PrinterWire.ts",
   "web/src/printer/PrintJobControl.ts",
   "web/src/printer/PrintJobStatus.ts",
   "web/src/printer/MoonrakerTypes.ts",

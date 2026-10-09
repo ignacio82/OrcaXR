@@ -15,6 +15,8 @@ import { OrcaWorkspace, type WorkspacePresetOption } from './workspace/OrcaWorks
 import { SlicerClient } from './slicer/SlicerClient';
 import { PRINTER_TRANSPORT_PREFERENCE, PrinterConnections, printerTransportChoice } from './printer/PrinterConnections';
 import type { MoonrakerConnection } from './printer/MoonrakerTransport';
+import type { PrinterSelection } from './printer/PrinterSessionController';
+import { PrinterSessionSwitch } from './printer/PrinterSessionSwitch';
 import {
   loadPrinterEndpointPreferences,
   MoonrakerTransportError,
@@ -401,7 +403,7 @@ function setupDomUI(
   );
   // A configured printer is likely to be used: have its core ready first.
   if (printerCfg.host.trim()) void printerConnections.prepare();
-  const printerSession = new PrinterSessionController<MoonrakerConnection>((selection) => {
+  const openPrinterTransport = (selection: PrinterSelection): MoonrakerConnection => {
     const transport = printerConnections.create({
       endpoint: selection.endpoint,
       defaultPort: selection.port,
@@ -410,7 +412,10 @@ function setupDomUI(
     });
     transport.setSessionCredentials({ apiKey: selection.apiKey });
     return transport;
-  });
+  };
+  // The session moves onto the shared core when it loads, before a printer is selected.
+  const printerSession = new PrinterSessionSwitch(new PrinterSessionController(openPrinterTransport));
+  printerConnections.whenReady((runtime) => printerSession.adopt(runtime.session(openPrinterTransport)));
   surfaces.own(printerSession);
   let printJobSnapshot: PrintJobSnapshot | null = null;
   let printerConnectionState: MoonrakerConnectionState | null = null;

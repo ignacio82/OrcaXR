@@ -14,7 +14,7 @@ import {
   type MoonrakerTransportConfig,
   type MoonrakerTransportDependencies,
 } from './MoonrakerTransport';
-import type { SharedConnectionFactory } from './SharedPrinterCore';
+import type { SharedPrinterRuntime } from './SharedPrinterCore';
 
 export type PrinterTransportChoice = 'shared' | 'typescript';
 
@@ -27,13 +27,14 @@ export function printerTransportChoice(search: string, stored: string | null): P
 }
 
 export class PrinterConnections {
-  private factory: SharedConnectionFactory | null = null;
+  private runtime: SharedPrinterRuntime | null = null;
   private loading: Promise<void> | null = null;
   private failure: unknown = null;
+  private readonly ready: ((runtime: SharedPrinterRuntime) => void)[] = [];
 
   constructor(
     readonly choice: PrinterTransportChoice,
-    private readonly load: () => Promise<SharedConnectionFactory>,
+    private readonly load: () => Promise<SharedPrinterRuntime>,
     private readonly warn: (message: string, error: unknown) => void = (message, error) => console.warn(message, error),
   ) {}
 
@@ -41,8 +42,9 @@ export class PrinterConnections {
   prepare(): Promise<void> {
     if (this.choice === 'typescript') return Promise.resolve();
     this.loading ??= this.load().then(
-      (factory) => {
-        this.factory = factory;
+      (runtime) => {
+        this.runtime = runtime;
+        for (const use of this.ready.splice(0)) use(runtime);
       },
       (error: unknown) => {
         this.failure = error;
@@ -54,7 +56,13 @@ export class PrinterConnections {
 
   /** Which implementation the next connection runs on. */
   get implementation(): PrinterTransportChoice {
-    return this.factory ? 'shared' : 'typescript';
+    return this.runtime ? 'shared' : 'typescript';
+  }
+
+  /** Runs `use` once the shared core has loaded: never for the rollback, or a core that cannot load. */
+  whenReady(use: (runtime: SharedPrinterRuntime) => void): void {
+    if (this.runtime) use(this.runtime);
+    else if (this.choice === 'shared') this.ready.push(use);
   }
 
   /** Why the shared core is not running, if it failed to load. */
@@ -63,6 +71,6 @@ export class PrinterConnections {
   }
 
   create(config: MoonrakerTransportConfig, dependencies?: MoonrakerTransportDependencies): MoonrakerConnection {
-    return this.factory ? this.factory(config, dependencies) : new MoonrakerTransport(config, dependencies);
+    return this.runtime ? this.runtime.connection(config, dependencies) : new MoonrakerTransport(config, dependencies);
   }
 }

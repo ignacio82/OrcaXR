@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { PrinterSessionController, type PrinterSessionTransport } from '../PrinterSessionController';
+import type { PrinterSessionTransport } from '../PrinterSessionController';
+import { createPrinterSession } from './printer-session.factory';
 import type { MoonrakerConnectionState, MoonrakerHandshake, MoonrakerNotification } from '../MoonrakerTypes';
 import { PRINT_JOB_QUERY_PATH } from '../PrintJobStatus';
 
@@ -99,7 +100,7 @@ class FakeTransport implements PrinterSessionTransport {
 const selection = { id: 'printer-a', endpoint: 'http://printer-a', port: 7125 };
 async function fixture() {
   const transport = new FakeTransport();
-  const controller = new PrinterSessionController(() => transport);
+  const controller = createPrinterSession(() => transport);
   controller.select(selection);
   await controller.connect();
   await controller.refresh();
@@ -252,7 +253,7 @@ await test('serializes commands across an open dialog and keeps emergency stop r
 await test('recovery needs the exact confirmation but no connection, readiness, or history query', async () => {
   const transport = new FakeTransport();
   transport.failQuery = true;
-  const controller = new PrinterSessionController(() => transport);
+  const controller = createPrinterSession(() => transport);
   controller.select(selection);
   for (const command of ['emergency-stop', 'firmware-restart'] as const) {
     const intent = controller.captureIntent(command);

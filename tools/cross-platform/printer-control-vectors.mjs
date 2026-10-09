@@ -457,6 +457,7 @@ const holds = [
 const sources = [
   "tools/cross-platform/printer-control-vectors.mjs",
   "web/src/printer/PrinterControlExchange.ts",
+  "web/src/printer/PrinterWire.ts",
   "web/src/printer/PrintJobControl.ts",
   "web/src/printer/PrinterStatusSummary.ts",
   "web/src/printer/PrintJobStatus.ts",
