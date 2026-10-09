@@ -6403,6 +6403,147 @@ const shapes = {
       "thumbnails": "PrinterStorageThumbnails"
     }
   },
+  "PrintHistoryPageRequest": {
+    "kind": "object",
+    "fields": {
+      "start": "OptionalFinite",
+      "limit": "OptionalFinite"
+    }
+  },
+  "PrintHistoryOperation": {
+    "kind": "union",
+    "variants": {
+      "page": "PrintHistoryPageRequest",
+      "totals": "Empty"
+    }
+  },
+  "PrintHistoryErrorCode": {
+    "kind": "enum",
+    "values": [
+      "unavailable",
+      "invalidPage",
+      "cancelled"
+    ]
+  },
+  "PrintHistoryFailure": {
+    "kind": "object",
+    "fields": {
+      "code": "PrintHistoryErrorCode",
+      "message": "EditText"
+    }
+  },
+  "PrintHistoryPlan": {
+    "kind": "union",
+    "variants": {
+      "request": "PrinterSend",
+      "refused": "PrintHistoryFailure"
+    }
+  },
+  "PrintHistoryFinish": {
+    "kind": "object",
+    "fields": {
+      "operation": "PrintHistoryOperation",
+      "outcome": "PrinterExchangeOutcome"
+    }
+  },
+  "PrintHistoryStatus": {
+    "kind": "enum",
+    "values": [
+      "completed",
+      "cancelled",
+      "error",
+      "klippyShutdown",
+      "klippyDisconnect",
+      "inProgress",
+      "interrupted"
+    ]
+  },
+  "PrintHistoryJob": {
+    "kind": "object",
+    "fields": {
+      "jobId": "OptionalPrinterReplyText",
+      "filename": "PrinterReplyText",
+      "status": "PrintHistoryStatus",
+      "rawStatus": "OptionalPrinterReplyText",
+      "startedAtMs": "OptionalFinite",
+      "endedAtMs": "OptionalFinite",
+      "printSeconds": "OptionalFinite",
+      "totalSeconds": "OptionalFinite",
+      "filamentUsedMm": "OptionalFinite",
+      "fileExists": "Flag",
+      "estimatedSeconds": "OptionalFinite"
+    }
+  },
+  "PrintHistoryJobs": {
+    "kind": "array",
+    "items": "PrintHistoryJob",
+    "min": 0,
+    "max": 100
+  },
+  "PrintHistoryPage": {
+    "kind": "object",
+    "fields": {
+      "jobs": "PrintHistoryJobs",
+      "total": "Finite",
+      "start": "Finite",
+      "limit": "Finite"
+    }
+  },
+  "PrintHistoryTotals": {
+    "kind": "object",
+    "fields": {
+      "jobs": "OptionalFinite",
+      "totalSeconds": "OptionalFinite",
+      "printSeconds": "OptionalFinite",
+      "filamentUsedMm": "OptionalFinite",
+      "longestJobSeconds": "OptionalFinite",
+      "longestPrintSeconds": "OptionalFinite"
+    }
+  },
+  "OptionalPrintHistoryTotals": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "PrintHistoryTotals"
+    }
+  },
+  "PrintHistoryResult": {
+    "kind": "union",
+    "variants": {
+      "page": "PrintHistoryPage",
+      "totals": "PrintHistoryTotals",
+      "failed": "PrintHistoryFailure"
+    }
+  },
+  "PrintHistoryJobView": {
+    "kind": "object",
+    "fields": {
+      "status": "PrinterReplyText",
+      "facts": "EditText",
+      "estimateDelta": "OptionalFinite"
+    }
+  },
+  "PrintHistoryPageShape": {
+    "kind": "object",
+    "fields": {
+      "jobCount": "Finite",
+      "total": "Finite",
+      "start": "Finite",
+      "limit": "Finite"
+    }
+  },
+  "PrintHistoryPageView": {
+    "kind": "object",
+    "fields": {
+      "pageIndex": "Finite",
+      "pageCount": "Finite",
+      "hasPrevious": "Flag",
+      "hasNext": "Flag",
+      "previousStart": "Finite",
+      "nextStart": "Finite",
+      "label": "EditText"
+    }
+  },
   "PrinterStorageResult": {
     "kind": "union",
     "variants": {
@@ -7184,6 +7325,22 @@ export interface ProjectPrinterStorageListingWire {readonly path: ProjectEditTex
 export interface ProjectPrinterStorageThumbnailWire {readonly width: ProjectFiniteWire;readonly height: ProjectFiniteWire;readonly relativePath: ProjectPrinterReplyTextWire;readonly sizeBytes: ProjectOptionalFiniteWire;}
 export type ProjectPrinterStorageThumbnailsWire = readonly ProjectPrinterStorageThumbnailWire[];
 export interface ProjectPrinterStorageMetadataWire {readonly path: ProjectEditTextWire;readonly sizeBytes: ProjectOptionalFiniteWire;readonly modifiedMs: ProjectOptionalFiniteWire;readonly slicer: ProjectOptionalPrinterReplyTextWire;readonly slicerVersion: ProjectOptionalPrinterReplyTextWire;readonly layerHeightMm: ProjectOptionalFiniteWire;readonly objectHeightMm: ProjectOptionalFiniteWire;readonly filamentTotalMm: ProjectOptionalFiniteWire;readonly filamentWeightG: ProjectOptionalFiniteWire;readonly estimatedSeconds: ProjectOptionalFiniteWire;readonly firstLayerBedTempC: ProjectOptionalFiniteWire;readonly firstLayerNozzleTempC: ProjectOptionalFiniteWire;readonly thumbnails: ProjectPrinterStorageThumbnailsWire;}
+export interface ProjectPrintHistoryPageRequestWire {readonly start: ProjectOptionalFiniteWire;readonly limit: ProjectOptionalFiniteWire;}
+export type ProjectPrintHistoryOperationWire = {readonly page:ProjectPrintHistoryPageRequestWire} | {readonly totals:ProjectEmptyWire};
+export type ProjectPrintHistoryErrorCodeWire = "unavailable" | "invalidPage" | "cancelled";
+export interface ProjectPrintHistoryFailureWire {readonly code: ProjectPrintHistoryErrorCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectPrintHistoryPlanWire = {readonly request:ProjectPrinterSendWire} | {readonly refused:ProjectPrintHistoryFailureWire};
+export interface ProjectPrintHistoryFinishWire {readonly operation: ProjectPrintHistoryOperationWire;readonly outcome: ProjectPrinterExchangeOutcomeWire;}
+export type ProjectPrintHistoryStatusWire = "completed" | "cancelled" | "error" | "klippyShutdown" | "klippyDisconnect" | "inProgress" | "interrupted";
+export interface ProjectPrintHistoryJobWire {readonly jobId: ProjectOptionalPrinterReplyTextWire;readonly filename: ProjectPrinterReplyTextWire;readonly status: ProjectPrintHistoryStatusWire;readonly rawStatus: ProjectOptionalPrinterReplyTextWire;readonly startedAtMs: ProjectOptionalFiniteWire;readonly endedAtMs: ProjectOptionalFiniteWire;readonly printSeconds: ProjectOptionalFiniteWire;readonly totalSeconds: ProjectOptionalFiniteWire;readonly filamentUsedMm: ProjectOptionalFiniteWire;readonly fileExists: ProjectFlagWire;readonly estimatedSeconds: ProjectOptionalFiniteWire;}
+export type ProjectPrintHistoryJobsWire = readonly ProjectPrintHistoryJobWire[];
+export interface ProjectPrintHistoryPageWire {readonly jobs: ProjectPrintHistoryJobsWire;readonly total: ProjectFiniteWire;readonly start: ProjectFiniteWire;readonly limit: ProjectFiniteWire;}
+export interface ProjectPrintHistoryTotalsWire {readonly jobs: ProjectOptionalFiniteWire;readonly totalSeconds: ProjectOptionalFiniteWire;readonly printSeconds: ProjectOptionalFiniteWire;readonly filamentUsedMm: ProjectOptionalFiniteWire;readonly longestJobSeconds: ProjectOptionalFiniteWire;readonly longestPrintSeconds: ProjectOptionalFiniteWire;}
+export type ProjectOptionalPrintHistoryTotalsWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectPrintHistoryTotalsWire};
+export type ProjectPrintHistoryResultWire = {readonly page:ProjectPrintHistoryPageWire} | {readonly totals:ProjectPrintHistoryTotalsWire} | {readonly failed:ProjectPrintHistoryFailureWire};
+export interface ProjectPrintHistoryJobViewWire {readonly status: ProjectPrinterReplyTextWire;readonly facts: ProjectEditTextWire;readonly estimateDelta: ProjectOptionalFiniteWire;}
+export interface ProjectPrintHistoryPageShapeWire {readonly jobCount: ProjectFiniteWire;readonly total: ProjectFiniteWire;readonly start: ProjectFiniteWire;readonly limit: ProjectFiniteWire;}
+export interface ProjectPrintHistoryPageViewWire {readonly pageIndex: ProjectFiniteWire;readonly pageCount: ProjectFiniteWire;readonly hasPrevious: ProjectFlagWire;readonly hasNext: ProjectFlagWire;readonly previousStart: ProjectFiniteWire;readonly nextStart: ProjectFiniteWire;readonly label: ProjectEditTextWire;}
 export type ProjectPrinterStorageResultWire = {readonly listing:ProjectPrinterStorageListingWire} | {readonly metadata:ProjectPrinterStorageMetadataWire} | {readonly done:ProjectEmptyWire} | {readonly moved:ProjectPrinterTextWire} | {readonly started:ProjectPrinterTextWire} | {readonly failed:ProjectPrinterStorageFailureWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
@@ -7755,3 +7912,30 @@ export function encodeProjectPrinterStorageResult(value:ProjectPrinterStorageRes
 export function captureProjectOptionalText(value:unknown):ProjectOptionalTextWire { return captureIntent("OptionalText",value,shapes,limits) as ProjectOptionalTextWire; }
 export function decodeProjectOptionalText(text:string):ProjectOptionalTextWire { return captureProjectOptionalText(parseIntentJson(text,limits)); }
 export function encodeProjectOptionalText(value:ProjectOptionalTextWire):string { return JSON.stringify(captureProjectOptionalText(value)); }
+export function captureProjectPrintHistoryOperation(value:unknown):ProjectPrintHistoryOperationWire { return captureIntent("PrintHistoryOperation",value,shapes,limits) as ProjectPrintHistoryOperationWire; }
+export function decodeProjectPrintHistoryOperation(text:string):ProjectPrintHistoryOperationWire { return captureProjectPrintHistoryOperation(parseIntentJson(text,limits)); }
+export function encodeProjectPrintHistoryOperation(value:ProjectPrintHistoryOperationWire):string { return JSON.stringify(captureProjectPrintHistoryOperation(value)); }
+export function captureProjectPrintHistoryPlan(value:unknown):ProjectPrintHistoryPlanWire { return captureIntent("PrintHistoryPlan",value,shapes,limits) as ProjectPrintHistoryPlanWire; }
+export function decodeProjectPrintHistoryPlan(text:string):ProjectPrintHistoryPlanWire { return captureProjectPrintHistoryPlan(parseIntentJson(text,limits)); }
+export function encodeProjectPrintHistoryPlan(value:ProjectPrintHistoryPlanWire):string { return JSON.stringify(captureProjectPrintHistoryPlan(value)); }
+export function captureProjectPrintHistoryFinish(value:unknown):ProjectPrintHistoryFinishWire { return captureIntent("PrintHistoryFinish",value,shapes,limits) as ProjectPrintHistoryFinishWire; }
+export function decodeProjectPrintHistoryFinish(text:string):ProjectPrintHistoryFinishWire { return captureProjectPrintHistoryFinish(parseIntentJson(text,limits)); }
+export function encodeProjectPrintHistoryFinish(value:ProjectPrintHistoryFinishWire):string { return JSON.stringify(captureProjectPrintHistoryFinish(value)); }
+export function captureProjectPrintHistoryResult(value:unknown):ProjectPrintHistoryResultWire { return captureIntent("PrintHistoryResult",value,shapes,bulkLimits) as ProjectPrintHistoryResultWire; }
+export function decodeProjectPrintHistoryResult(text:string):ProjectPrintHistoryResultWire { return captureProjectPrintHistoryResult(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectPrintHistoryResult(value:ProjectPrintHistoryResultWire):string { return JSON.stringify(captureProjectPrintHistoryResult(value)); }
+export function captureProjectPrintHistoryJob(value:unknown):ProjectPrintHistoryJobWire { return captureIntent("PrintHistoryJob",value,shapes,bulkLimits) as ProjectPrintHistoryJobWire; }
+export function decodeProjectPrintHistoryJob(text:string):ProjectPrintHistoryJobWire { return captureProjectPrintHistoryJob(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectPrintHistoryJob(value:ProjectPrintHistoryJobWire):string { return JSON.stringify(captureProjectPrintHistoryJob(value)); }
+export function captureProjectPrintHistoryJobView(value:unknown):ProjectPrintHistoryJobViewWire { return captureIntent("PrintHistoryJobView",value,shapes,bulkLimits) as ProjectPrintHistoryJobViewWire; }
+export function decodeProjectPrintHistoryJobView(text:string):ProjectPrintHistoryJobViewWire { return captureProjectPrintHistoryJobView(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectPrintHistoryJobView(value:ProjectPrintHistoryJobViewWire):string { return JSON.stringify(captureProjectPrintHistoryJobView(value)); }
+export function captureProjectOptionalPrintHistoryTotals(value:unknown):ProjectOptionalPrintHistoryTotalsWire { return captureIntent("OptionalPrintHistoryTotals",value,shapes,limits) as ProjectOptionalPrintHistoryTotalsWire; }
+export function decodeProjectOptionalPrintHistoryTotals(text:string):ProjectOptionalPrintHistoryTotalsWire { return captureProjectOptionalPrintHistoryTotals(parseIntentJson(text,limits)); }
+export function encodeProjectOptionalPrintHistoryTotals(value:ProjectOptionalPrintHistoryTotalsWire):string { return JSON.stringify(captureProjectOptionalPrintHistoryTotals(value)); }
+export function captureProjectPrintHistoryPageShape(value:unknown):ProjectPrintHistoryPageShapeWire { return captureIntent("PrintHistoryPageShape",value,shapes,limits) as ProjectPrintHistoryPageShapeWire; }
+export function decodeProjectPrintHistoryPageShape(text:string):ProjectPrintHistoryPageShapeWire { return captureProjectPrintHistoryPageShape(parseIntentJson(text,limits)); }
+export function encodeProjectPrintHistoryPageShape(value:ProjectPrintHistoryPageShapeWire):string { return JSON.stringify(captureProjectPrintHistoryPageShape(value)); }
+export function captureProjectPrintHistoryPageView(value:unknown):ProjectPrintHistoryPageViewWire { return captureIntent("PrintHistoryPageView",value,shapes,limits) as ProjectPrintHistoryPageViewWire; }
+export function decodeProjectPrintHistoryPageView(text:string):ProjectPrintHistoryPageViewWire { return captureProjectPrintHistoryPageView(parseIntentJson(text,limits)); }
+export function encodeProjectPrintHistoryPageView(value:ProjectPrintHistoryPageViewWire):string { return JSON.stringify(captureProjectPrintHistoryPageView(value)); }

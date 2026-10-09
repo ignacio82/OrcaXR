@@ -1063,6 +1063,47 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_printHistoryPlan, print_history_plan, jstring,
+    operation: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printHistoryFinish, print_history_finish, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printHistoryRead, print_history_read, jstring,
+    operation: JString<'local>,
+    reply: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printHistoryDuration, print_history_duration, jstring,
+    seconds: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printHistoryFilament, print_history_filament, jstring,
+    millimetres: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printHistoryJobView, print_history_job_view, jstring,
+    job: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printHistoryTotalsText, print_history_totals_text, jstring,
+    totals: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printHistoryPageView, print_history_page_view, jstring,
+    shape: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,

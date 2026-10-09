@@ -3922,9 +3922,9 @@ modification time and no thumbnail, never a zero. Failure messages are the
 browser's sentences, the transport's code or `cancelled` appended. Folders
 list by name and files newest first (by UTF-16 code units, as JavaScript
 compares strings), thumbnails largest first. Replies are parsed as
-`JSON.parse` reads them (`canonical::parse_javascript`) under the module's
-own 8 MiB bound, so any reply the transport admits (2 Mi UTF-16 units) is
-read whole.
+`JSON.parse` reads them (`canonical::parse_javascript`) under the 8 MiB
+bound every printer reply shares (`reply::LIMITS`), so any reply the
+transport admits (2 Mi UTF-16 units) is read whole.
 
 Any such reply also crosses a binding. Results travel under the intent
 contract's bulk tier, and the wire is linear in the reply: a listing carries
@@ -3958,6 +3958,51 @@ and a listing of 3,000 files), each with the paths the browser joined, and
 64 sizes. Rust, WASM in Node and Chrome, the printer core, JNI and 2,068
 Kotlin checks reproduce every one, and Rust and Kotlin join the browser's
 paths.
+
+### Print history
+
+`orcaxr_printer::history` ports `PrinterHistory.ts`: what a printer has
+already printed. A page of job records or the printer's totals is planned
+(the request, or why the page is refused: a limit outside 1–100 or a start
+that is not a safe whole number), its exchange finished, and its reply read
+as the browser reads it, through the same reply helpers and transport
+endings as storage (`reply`). A page is a page: it holds no more rows than
+it asked for and pages by the printer's own count. Reported or absent,
+never zero: a job Klipper never finished has no end time, an outcome this
+Moonraker build does not know reads as interrupted with its own word kept,
+and a count that is not a whole number of jobs reads as unreported. The
+module also ports how the history panel describes what it read — durations,
+filament lengths, the gap against the slicer's estimate, a job's outcome
+and facts, the totals line, and the pager's bounds and label — so a host
+shows the browser's words (the job's start time aside, which each host
+formats in its own locale).
+
+The wire is linear in the reply, as storage's is: a page holds at most 100
+jobs, a job carries the printer's own id only where it differs from the
+filename the id falls back to (`job_id`), and printer-reported text is
+`PrinterReplyText`. A test fills replies to the transport's bound — one job,
+and a full page — with the widest ids, names and outcomes, and every result
+and job view encodes.
+
+Porting fixed five browser defects, each with a regression test: a start
+time too large to be a time read as `Infinity`; a reply with more rows than
+the page asked for showed the extra rows again on the next page; a count
+that was negative, fractional or past the safe integers paged by it (a
+`1e300`-job history); a start past the safe integers was sent as
+`start=1e+21`, which the printer cannot read; and a gap against an estimate
+too large to be a number read "+Infinity% vs estimate".
+
+Bindings: WASM `print_history_plan`, `print_history_finish`,
+`print_history_read`, `print_history_duration`, `print_history_filament`,
+`print_history_job_view` (a bulk-tier input), `print_history_totals_text`
+and `print_history_page_view`, the matching JNI `printHistory*` exports and
+Kotlin `PrintHistory` (with `id`). `printer-history-vectors.mjs` drives the
+production functions through `PrintHistoryExchange.ts`: 290 plans (every
+start and limit edge), 1,363 finished exchanges, 258 replies read (each
+with the ids the browser gave its jobs), 55 durations, 55 lengths, 76 job
+views, 23 totals lines and 39 pager views. Rust, WASM in Node and Chrome,
+the printer core, JNI and 2,159 Kotlin checks reproduce every one, and Rust
+and Kotlin give every job the browser's id.
 
 ### Action capabilities
 

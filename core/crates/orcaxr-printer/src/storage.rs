@@ -10,10 +10,11 @@
 //! An operation is planned ([`plan`]: the request or download to send, or why
 //! it is refused), its transport outcome finished ([`finish`]), and a listing
 //! or metadata reply read ([`read`]) — the host carries the exchange out.
-use orcaxr_contracts::{
-    canonical::{JsonLimits, Value, parse_javascript},
-    project_intent_types as wire,
+use crate::reply::{
+    Ending, LIMITS, Value, array, ending, field, joined, known, optional, optional_reply_text,
+    optional_text, read_number, read_string, record, units,
 };
+use orcaxr_contracts::{canonical::parse_javascript, project_intent_types as wire};
 use orcaxr_project::js_math::{
     convert::{encode_uri_component, number_to_string, to_fixed, trim_utf16},
     round,
@@ -28,25 +29,12 @@ pub const GCODE_ROOT: &str = "gcodes";
 /// stores is longer. It bounds every request and sentence a path is written
 /// into.
 pub const MAX_PATH_UNITS: usize = 4096;
-/// A reply is read whole whenever the transport admits it (2 Mi UTF-16
-/// units): a long listing is a long listing, not an unreadable one.
-pub const LIMITS: JsonLimits = JsonLimits {
-    bytes: 8 * 1024 * 1024,
-    nodes: 4_000_000,
-    depth: 512,
-};
 
-fn units(text: &str) -> Vec<u16> {
-    text.encode_utf16().collect()
-}
 fn failure(code: Code, message: &[u16]) -> wire::PrinterStorageFailure {
     wire::PrinterStorageFailure {
         code,
         message: message.to_vec(),
     }
-}
-fn joined(parts: &[&[u16]]) -> Vec<u16> {
-    parts.concat()
 }
 fn is_surrogate(unit: u16) -> bool {
     (0xd800..=0xdfff).contains(&unit)
@@ -354,15 +342,14 @@ fn prefix(
 /// move landed on, the file a start started), or the failure it reads as. A
 /// listing or metadata reply is read with [`read`] instead.
 pub fn finish(request: &wire::PrinterStorageFinish) -> wire::PrinterStorageResult {
-    use wire::PrinterExchangeOutcome as Outcome;
     use wire::PrinterStorageOperation as Op;
     let failed = wire::PrinterStorageResult::Failed;
     let (lead, code) = match prefix(&request.operation) {
         Ok(prefix) => prefix,
         Err(f) => return failed(f),
     };
-    match &request.outcome {
-        Outcome::Done(_) => match &request.operation {
+    match ending(&request.outcome) {
+        Ending::Done => match &request.operation {
             Op::Move(_) | Op::Rename(_) => match move_operation(&request.operation).unwrap() {
                 Ok((_, to)) => wire::PrinterStorageResult::Moved(wire::PrinterText { text: to }),
                 Err(f) => failed(f),
@@ -376,84 +363,22 @@ pub fn finish(request: &wire::PrinterStorageFinish) -> wire::PrinterStorageResul
             _ => wire::PrinterStorageResult::Done(wire::Empty {}),
         },
         // `storageFailure`: a cancel (the caller's, or the transport's) reads as one.
-        Outcome::Cancelled(_)
-        | Outcome::Failed(wire::TransportFailure {
-            code: wire::OptionalMoonrakerErrorCode::Value(wire::MoonrakerErrorCode::Cancelled),
-            ..
-        }) => failed(failure(
+        Ending::Cancelled => failed(failure(
             Code::Cancelled,
             &joined(&[&lead, &units(": cancelled.")]),
         )),
-        Outcome::Failed(transport) => {
-            let detail = match &transport.code {
-                wire::OptionalMoonrakerErrorCode::Value(code) => {
-                    crate::control::moonraker_code(*code)
-                }
-                wire::OptionalMoonrakerErrorCode::Absent(_) => "request failed",
-            };
-            failed(failure(
-                code,
-                &joined(&[&lead, &units(&format!(" ({detail})."))]),
-            ))
-        }
+        Ending::Failed(detail) => failed(failure(
+            code,
+            &joined(&[&lead, &units(&format!(" ({detail})."))]),
+        )),
     }
 }
 
-fn field<'a>(value: &'a Value, name: &str) -> Option<&'a Value> {
-    match value {
-        Value::Object(fields) => fields.get(&units(name)),
-        _ => None,
-    }
-}
-fn record(value: Option<&Value>) -> Option<&Value> {
-    value.filter(|v| matches!(v, Value::Object(_)))
-}
-fn array(value: Option<&Value>) -> &[Value] {
-    match value {
-        Some(Value::Array(items)) => items,
-        _ => &[],
-    }
-}
-/// `readString`: text that is not blank, trimmed.
-fn read_string(value: Option<&Value>) -> Option<Vec<u16>> {
-    match value {
-        Some(Value::String(s)) => {
-            let trimmed = trim_utf16(s);
-            (!trimmed.is_empty()).then(|| trimmed.to_vec())
-        }
-        _ => None,
-    }
-}
-/// `readNumber`: a finite number.
-fn read_number(value: Option<&Value>) -> Option<f64> {
-    match value {
-        Some(Value::Number(n)) if n.is_finite() => Some(*n),
-        _ => None,
-    }
-}
 /// `readTimestampMs`: seconds since the epoch, in milliseconds while finite.
 fn read_timestamp_ms(value: Option<&Value>) -> Option<f64> {
     read_number(value)
         .map(|seconds| round(seconds * 1000.0))
         .filter(|ms| ms.is_finite())
-}
-fn optional(value: Option<f64>) -> wire::OptionalFinite {
-    match value {
-        Some(v) => wire::OptionalFinite::Value(v),
-        None => wire::OptionalFinite::Absent(wire::Empty {}),
-    }
-}
-fn optional_text(value: Option<Vec<u16>>) -> wire::OptionalText {
-    match value {
-        Some(v) => wire::OptionalText::Value(v),
-        None => wire::OptionalText::Absent(wire::Empty {}),
-    }
-}
-fn known(value: &wire::OptionalFinite) -> Option<f64> {
-    match value {
-        wire::OptionalFinite::Value(v) => Some(*v),
-        wire::OptionalFinite::Absent(_) => None,
-    }
 }
 /// `byNameAscending`: by UTF-16 code units.
 fn by_name(left: &wire::PrinterStorageEntry, right: &wire::PrinterStorageEntry) -> Ordering {
@@ -608,10 +533,7 @@ fn metadata(relative: &[u16], payload: &Value) -> wire::PrinterStorageMetadata {
             difference.partial_cmp(&0.0).unwrap()
         }
     });
-    let text_of = |name: &str| match read_string(field(payload, name)) {
-        Some(text) => wire::OptionalPrinterReplyText::Value(text),
-        None => wire::OptionalPrinterReplyText::Absent(wire::Empty {}),
-    };
+    let text_of = |name: &str| optional_reply_text(read_string(field(payload, name)));
     let number_of = |name: &str| optional(read_number(field(payload, name)));
     wire::PrinterStorageMetadata {
         path: relative.to_vec(),
@@ -654,5 +576,5 @@ pub fn size_text(bytes: f64) -> Option<String> {
 }
 /// [`size_text`] on the wire, as the hosts carry it.
 pub fn size(bytes: f64) -> wire::OptionalText {
-    optional_text(size_text(bytes).map(|text| text.encode_utf16().collect()))
+    optional_text(size_text(bytes))
 }

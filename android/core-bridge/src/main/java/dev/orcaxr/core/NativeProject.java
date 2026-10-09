@@ -202,6 +202,16 @@ final class NativeProject {
     static native String printerStorageFinish(String request);
     static native String printerStorageRead(String operation, String reply);
     static native String printerStorageSize(double bytes);
+    // Print history: a page's or the totals' request or refusal, the result
+    // its exchange reads as, a reply read, and what a panel shows.
+    static native String printHistoryPlan(String operation);
+    static native String printHistoryFinish(String request);
+    static native String printHistoryRead(String operation, String reply);
+    static native String printHistoryDuration(double seconds);
+    static native String printHistoryFilament(double millimetres);
+    static native String printHistoryJobView(String job);
+    static native String printHistoryTotalsText(String totals);
+    static native String printHistoryPageView(String shape);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

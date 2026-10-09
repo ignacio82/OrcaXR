@@ -111,7 +111,7 @@ export async function listPrintHistory(
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_HISTORY_PAGE) {
     throw new PrintHistoryError(`A history page must hold between 1 and ${MAX_HISTORY_PAGE} jobs.`, 'invalid-page');
   }
-  if (!Number.isInteger(start) || start < 0) {
+  if (!Number.isSafeInteger(start) || start < 0) {
     throw new PrintHistoryError('A history page cannot start before the first job.', 'invalid-page');
   }
 
@@ -128,13 +128,16 @@ export async function listPrintHistory(
     throw new PrintHistoryError("The printer's print history was not readable.", 'unavailable');
   }
 
+  // A page is a page: rows past the ones asked for belong to the next page,
+  // which would show them again.
   const jobs: PrintHistoryJob[] = [];
   for (const entry of asArray(payload.jobs)) {
+    if (jobs.length === limit) break;
     const job = readJob(entry);
     if (job) jobs.push(job);
   }
   // A build that omits the count still pages correctly from what it returned.
-  const total = readNumber(payload.count) ?? start + jobs.length;
+  const total = readCount(payload.count) ?? start + jobs.length;
   return Object.freeze({ jobs: Object.freeze(jobs), total, start, limit });
 }
 
@@ -154,7 +157,7 @@ export async function readPrintHistoryTotals(
   const totals = isRecord(payload) && isRecord(payload.job_totals) ? payload.job_totals : undefined;
   if (!totals) throw new PrintHistoryError("The printer's print totals were not readable.", 'unavailable');
   return Object.freeze({
-    ...optional('jobs', readNumber(totals.total_jobs)),
+    ...optional('jobs', readCount(totals.total_jobs)),
     ...optional('totalSeconds', readNumber(totals.total_time)),
     ...optional('printSeconds', readNumber(totals.total_print_time)),
     ...optional('filamentUsedMm', readNumber(totals.total_filament_used)),
@@ -207,13 +210,15 @@ export function formatFilamentLength(millimetres: number | undefined): string | 
 /**
  * How the actual print compared with the slicer's estimate, as a signed
  * percentage. Undefined unless both numbers exist and the estimate is positive,
- * because a ratio against a missing or zero estimate says nothing.
+ * because a ratio against a missing or zero estimate says nothing — nor does
+ * one too large to be a number, which used to read "+Infinity% vs estimate".
  */
 export function estimateDelta(job: PrintHistoryJob): number | undefined {
   const actual = job.printSeconds;
   const estimated = job.estimatedSeconds;
   if (actual === undefined || estimated === undefined || estimated <= 0) return undefined;
-  return ((actual - estimated) / estimated) * 100;
+  const delta = ((actual - estimated) / estimated) * 100;
+  return Number.isFinite(delta) ? delta : undefined;
 }
 
 export function describeHistoryStatus(job: PrintHistoryJob): string {
@@ -256,6 +261,41 @@ export function historyPageBounds(page: PrintHistoryPage): {
   };
 }
 
+/** The pager's label: `Page 2 of 3 — 57 jobs`. */
+export function describeHistoryPage(page: PrintHistoryPage): string {
+  const bounds = historyPageBounds(page);
+  return `Page ${bounds.pageIndex + 1} of ${bounds.pageCount} — ${page.total} job${page.total === 1 ? '' : 's'}`;
+}
+
+/**
+ * One line of facts per job, the time it started aside (the host shows that
+ * in its own locale); anything unreported is an em dash.
+ */
+export function describeJobFacts(job: PrintHistoryJob): string {
+  const missing = '—';
+  const parts = [`Printed ${formatHistoryDuration(job.printSeconds) ?? missing}`];
+  const delta = estimateDelta(job);
+  if (delta !== undefined) {
+    const rounded = Math.round(delta);
+    parts.push(rounded === 0 ? 'exactly as estimated' : `${rounded > 0 ? '+' : ''}${rounded}% vs estimate`);
+  }
+  parts.push(`${formatFilamentLength(job.filamentUsedMm) ?? missing} filament`);
+  return parts.join(' · ');
+}
+
+export function describeHistoryTotals(totals: PrintHistoryTotals | undefined): string {
+  if (!totals) return 'Totals not read yet';
+  const parts: string[] = [];
+  if (totals.jobs !== undefined) parts.push(`${totals.jobs} job${totals.jobs === 1 ? '' : 's'}`);
+  const printed = formatHistoryDuration(totals.printSeconds);
+  if (printed) parts.push(`${printed} printing`);
+  const filament = formatFilamentLength(totals.filamentUsedMm);
+  if (filament) parts.push(`${filament} filament`);
+  const longest = formatHistoryDuration(totals.longestPrintSeconds);
+  if (longest) parts.push(`longest ${longest}`);
+  return parts.length > 0 ? parts.join(' · ') : 'The printer reported no totals';
+}
+
 function historyFailure(error: unknown, prefix: string, signal?: AbortSignal): PrintHistoryError {
   if (error instanceof PrintHistoryError) return error;
   if (signal?.aborted || (error instanceof MoonrakerTransportError && error.code === 'cancelled')) {
@@ -265,8 +305,16 @@ function historyFailure(error: unknown, prefix: string, signal?: AbortSignal): P
   return new PrintHistoryError(`${prefix} (${detail}).`, 'unavailable');
 }
 
+/** One too large to be a time in milliseconds reads as unreported, as a missing one does. */
 function secondsToMs(seconds: number | undefined): number | undefined {
-  return seconds === undefined || seconds <= 0 ? undefined : Math.round(seconds * 1000);
+  if (seconds === undefined || seconds <= 0) return undefined;
+  const ms = Math.round(seconds * 1000);
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
+/** A count is a whole number of jobs; anything else was not one. */
+function readCount(value: unknown): number | undefined {
+  return Number.isSafeInteger(value) && (value as number) >= 0 ? (value as number) : undefined;
 }
 
 function asArray(value: unknown): readonly unknown[] {

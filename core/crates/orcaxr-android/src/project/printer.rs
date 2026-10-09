@@ -5,7 +5,7 @@ use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
     control::{self, HoldToConfirm},
-    moonraker, preparation,
+    history, moonraker, preparation, reply,
     session::{self, PrinterSession},
     status::{JobStatus, LIMITS},
     storage, summary, tools,
@@ -725,7 +725,7 @@ pub(super) fn printer_storage_read(
 ) -> Result<jstring> {
     let operation = wire::decode_printer_storage_operation(&intent_text(env, &operation)?)
         .map_err(|_| "invalid_request")?;
-    let reply = bounded_text(env, &reply, storage::LIMITS.bytes)?;
+    let reply = bounded_text(env, &reply, reply::LIMITS.bytes)?;
     let json = wire::encode_printer_storage_result(&storage::read(&operation, &reply))
         .map_err(|_| "output_limit")?;
     string(env, json)
@@ -733,6 +733,78 @@ pub(super) fn printer_storage_read(
 pub(super) fn printer_storage_size(env: &mut JNIEnv<'_>, bytes: f64) -> Result<jstring> {
     let json = wire::encode_optional_text(&storage::size(bytes)).map_err(|_| "output_limit")?;
     string(env, json)
+}
+
+pub(super) fn print_history_plan(env: &mut JNIEnv<'_>, operation: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        operation,
+        wire::decode_print_history_operation,
+        history::plan,
+        wire::encode_print_history_plan,
+    )
+}
+pub(super) fn print_history_finish(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_print_history_finish,
+        history::finish,
+        wire::encode_print_history_result,
+    )
+}
+pub(super) fn print_history_read(
+    env: &mut JNIEnv<'_>,
+    operation: JString<'_>,
+    reply: JString<'_>,
+) -> Result<jstring> {
+    let operation = wire::decode_print_history_operation(&intent_text(env, &operation)?)
+        .map_err(|_| "invalid_request")?;
+    let reply = bounded_text(env, &reply, reply::LIMITS.bytes)?;
+    let json = wire::encode_print_history_result(&history::read(&operation, &reply))
+        .map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn print_history_duration(env: &mut JNIEnv<'_>, seconds: f64) -> Result<jstring> {
+    let json = wire::encode_optional_text(&reply::optional_text(history::duration_text(seconds)))
+        .map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn print_history_filament(env: &mut JNIEnv<'_>, millimetres: f64) -> Result<jstring> {
+    let json =
+        wire::encode_optional_text(&reply::optional_text(history::filament_text(millimetres)))
+            .map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn print_history_job_view(env: &mut JNIEnv<'_>, job: JString<'_>) -> Result<jstring> {
+    let job = wire::decode_print_history_job(&bounded_text(env, &job, wire::BULK.bytes)?)
+        .map_err(|_| "invalid_request")?;
+    let json = wire::encode_print_history_job_view(&history::job_view(&job))
+        .map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn print_history_totals_text(
+    env: &mut JNIEnv<'_>,
+    totals: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        totals,
+        wire::decode_optional_print_history_totals,
+        |t| wire::PrinterText {
+            text: history::totals_text(t).encode_utf16().collect(),
+        },
+        wire::encode_printer_text,
+    )
+}
+pub(super) fn print_history_page_view(env: &mut JNIEnv<'_>, shape: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        shape,
+        wire::decode_print_history_page_shape,
+        history::page_view,
+        wire::encode_print_history_page_view,
+    )
 }
 
 fn with_transport<R>(

@@ -13594,6 +13594,327 @@ fn read_printer_storage_metadata(v: &Value) -> Result<PrinterStorageMetadata, In
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PrintHistoryPageRequest {
+    pub start: OptionalFinite,
+    pub limit: OptionalFinite,
+}
+fn read_print_history_page_request(v: &Value) -> Result<PrintHistoryPageRequest, InvalidIntent> {
+    let object = fields(v, &["start", "limit"], false)?;
+    Ok(PrintHistoryPageRequest {
+        start: read_optional_finite(&object["start"])?,
+        limit: read_optional_finite(&object["limit"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintHistoryOperation {
+    Page(PrintHistoryPageRequest),
+    Totals(Empty),
+}
+fn read_print_history_operation(v: &Value) -> Result<PrintHistoryOperation, InvalidIntent> {
+    let object = fields(v, &["page", "totals"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "page" => Ok(PrintHistoryOperation::Page(
+            read_print_history_page_request(value)?,
+        )),
+        "totals" => Ok(PrintHistoryOperation::Totals(read_empty(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintHistoryErrorCode {
+    Unavailable,
+    InvalidPage,
+    Cancelled,
+}
+fn read_print_history_error_code(v: &Value) -> Result<PrintHistoryErrorCode, InvalidIntent> {
+    match v.as_str() {
+        Some("unavailable") => Ok(PrintHistoryErrorCode::Unavailable),
+        Some("invalidPage") => Ok(PrintHistoryErrorCode::InvalidPage),
+        Some("cancelled") => Ok(PrintHistoryErrorCode::Cancelled),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintHistoryFailure {
+    pub code: PrintHistoryErrorCode,
+    pub message: EditText,
+}
+fn read_print_history_failure(v: &Value) -> Result<PrintHistoryFailure, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(PrintHistoryFailure {
+        code: read_print_history_error_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintHistoryPlan {
+    Request(PrinterSend),
+    Refused(PrintHistoryFailure),
+}
+fn read_print_history_plan(v: &Value) -> Result<PrintHistoryPlan, InvalidIntent> {
+    let object = fields(v, &["request", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "request" => Ok(PrintHistoryPlan::Request(read_printer_send(value)?)),
+        "refused" => Ok(PrintHistoryPlan::Refused(read_print_history_failure(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintHistoryFinish {
+    pub operation: PrintHistoryOperation,
+    pub outcome: PrinterExchangeOutcome,
+}
+fn read_print_history_finish(v: &Value) -> Result<PrintHistoryFinish, InvalidIntent> {
+    let object = fields(v, &["operation", "outcome"], false)?;
+    Ok(PrintHistoryFinish {
+        operation: read_print_history_operation(&object["operation"])?,
+        outcome: read_printer_exchange_outcome(&object["outcome"])?,
+    })
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintHistoryStatus {
+    Completed,
+    Cancelled,
+    Error,
+    KlippyShutdown,
+    KlippyDisconnect,
+    InProgress,
+    Interrupted,
+}
+fn read_print_history_status(v: &Value) -> Result<PrintHistoryStatus, InvalidIntent> {
+    match v.as_str() {
+        Some("completed") => Ok(PrintHistoryStatus::Completed),
+        Some("cancelled") => Ok(PrintHistoryStatus::Cancelled),
+        Some("error") => Ok(PrintHistoryStatus::Error),
+        Some("klippyShutdown") => Ok(PrintHistoryStatus::KlippyShutdown),
+        Some("klippyDisconnect") => Ok(PrintHistoryStatus::KlippyDisconnect),
+        Some("inProgress") => Ok(PrintHistoryStatus::InProgress),
+        Some("interrupted") => Ok(PrintHistoryStatus::Interrupted),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintHistoryJob {
+    pub job_id: OptionalPrinterReplyText,
+    pub filename: PrinterReplyText,
+    pub status: PrintHistoryStatus,
+    pub raw_status: OptionalPrinterReplyText,
+    pub started_at_ms: OptionalFinite,
+    pub ended_at_ms: OptionalFinite,
+    pub print_seconds: OptionalFinite,
+    pub total_seconds: OptionalFinite,
+    pub filament_used_mm: OptionalFinite,
+    pub file_exists: Flag,
+    pub estimated_seconds: OptionalFinite,
+}
+fn read_print_history_job(v: &Value) -> Result<PrintHistoryJob, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "jobId",
+            "filename",
+            "status",
+            "rawStatus",
+            "startedAtMs",
+            "endedAtMs",
+            "printSeconds",
+            "totalSeconds",
+            "filamentUsedMm",
+            "fileExists",
+            "estimatedSeconds",
+        ],
+        false,
+    )?;
+    Ok(PrintHistoryJob {
+        job_id: read_optional_printer_reply_text(&object["jobId"])?,
+        filename: read_printer_reply_text(&object["filename"])?,
+        status: read_print_history_status(&object["status"])?,
+        raw_status: read_optional_printer_reply_text(&object["rawStatus"])?,
+        started_at_ms: read_optional_finite(&object["startedAtMs"])?,
+        ended_at_ms: read_optional_finite(&object["endedAtMs"])?,
+        print_seconds: read_optional_finite(&object["printSeconds"])?,
+        total_seconds: read_optional_finite(&object["totalSeconds"])?,
+        filament_used_mm: read_optional_finite(&object["filamentUsedMm"])?,
+        file_exists: read_flag(&object["fileExists"])?,
+        estimated_seconds: read_optional_finite(&object["estimatedSeconds"])?,
+    })
+}
+pub type PrintHistoryJobs = Vec<PrintHistoryJob>;
+fn read_print_history_jobs(v: &Value) -> Result<PrintHistoryJobs, InvalidIntent> {
+    list(v, 0, 100)?
+        .iter()
+        .map(read_print_history_job)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintHistoryPage {
+    pub jobs: PrintHistoryJobs,
+    pub total: Finite,
+    pub start: Finite,
+    pub limit: Finite,
+}
+fn read_print_history_page(v: &Value) -> Result<PrintHistoryPage, InvalidIntent> {
+    let object = fields(v, &["jobs", "total", "start", "limit"], false)?;
+    Ok(PrintHistoryPage {
+        jobs: read_print_history_jobs(&object["jobs"])?,
+        total: read_finite(&object["total"])?,
+        start: read_finite(&object["start"])?,
+        limit: read_finite(&object["limit"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintHistoryTotals {
+    pub jobs: OptionalFinite,
+    pub total_seconds: OptionalFinite,
+    pub print_seconds: OptionalFinite,
+    pub filament_used_mm: OptionalFinite,
+    pub longest_job_seconds: OptionalFinite,
+    pub longest_print_seconds: OptionalFinite,
+}
+fn read_print_history_totals(v: &Value) -> Result<PrintHistoryTotals, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "jobs",
+            "totalSeconds",
+            "printSeconds",
+            "filamentUsedMm",
+            "longestJobSeconds",
+            "longestPrintSeconds",
+        ],
+        false,
+    )?;
+    Ok(PrintHistoryTotals {
+        jobs: read_optional_finite(&object["jobs"])?,
+        total_seconds: read_optional_finite(&object["totalSeconds"])?,
+        print_seconds: read_optional_finite(&object["printSeconds"])?,
+        filament_used_mm: read_optional_finite(&object["filamentUsedMm"])?,
+        longest_job_seconds: read_optional_finite(&object["longestJobSeconds"])?,
+        longest_print_seconds: read_optional_finite(&object["longestPrintSeconds"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalPrintHistoryTotals {
+    Absent(Empty),
+    Value(PrintHistoryTotals),
+}
+fn read_optional_print_history_totals(
+    v: &Value,
+) -> Result<OptionalPrintHistoryTotals, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPrintHistoryTotals::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPrintHistoryTotals::Value(
+            read_print_history_totals(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintHistoryResult {
+    Page(PrintHistoryPage),
+    Totals(PrintHistoryTotals),
+    Failed(PrintHistoryFailure),
+}
+fn read_print_history_result(v: &Value) -> Result<PrintHistoryResult, InvalidIntent> {
+    let object = fields(v, &["page", "totals", "failed"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "page" => Ok(PrintHistoryResult::Page(read_print_history_page(value)?)),
+        "totals" => Ok(PrintHistoryResult::Totals(read_print_history_totals(
+            value,
+        )?)),
+        "failed" => Ok(PrintHistoryResult::Failed(read_print_history_failure(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintHistoryJobView {
+    pub status: PrinterReplyText,
+    pub facts: EditText,
+    pub estimate_delta: OptionalFinite,
+}
+fn read_print_history_job_view(v: &Value) -> Result<PrintHistoryJobView, InvalidIntent> {
+    let object = fields(v, &["status", "facts", "estimateDelta"], false)?;
+    Ok(PrintHistoryJobView {
+        status: read_printer_reply_text(&object["status"])?,
+        facts: read_edit_text(&object["facts"])?,
+        estimate_delta: read_optional_finite(&object["estimateDelta"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintHistoryPageShape {
+    pub job_count: Finite,
+    pub total: Finite,
+    pub start: Finite,
+    pub limit: Finite,
+}
+fn read_print_history_page_shape(v: &Value) -> Result<PrintHistoryPageShape, InvalidIntent> {
+    let object = fields(v, &["jobCount", "total", "start", "limit"], false)?;
+    Ok(PrintHistoryPageShape {
+        job_count: read_finite(&object["jobCount"])?,
+        total: read_finite(&object["total"])?,
+        start: read_finite(&object["start"])?,
+        limit: read_finite(&object["limit"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintHistoryPageView {
+    pub page_index: Finite,
+    pub page_count: Finite,
+    pub has_previous: Flag,
+    pub has_next: Flag,
+    pub previous_start: Finite,
+    pub next_start: Finite,
+    pub label: EditText,
+}
+fn read_print_history_page_view(v: &Value) -> Result<PrintHistoryPageView, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "pageIndex",
+            "pageCount",
+            "hasPrevious",
+            "hasNext",
+            "previousStart",
+            "nextStart",
+            "label",
+        ],
+        false,
+    )?;
+    Ok(PrintHistoryPageView {
+        page_index: read_finite(&object["pageIndex"])?,
+        page_count: read_finite(&object["pageCount"])?,
+        has_previous: read_flag(&object["hasPrevious"])?,
+        has_next: read_flag(&object["hasNext"])?,
+        previous_start: read_finite(&object["previousStart"])?,
+        next_start: read_finite(&object["nextStart"])?,
+        label: read_edit_text(&object["label"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PrinterStorageResult {
     Listing(PrinterStorageListing),
     Metadata(PrinterStorageMetadata),
@@ -15381,5 +15702,87 @@ pub fn decode_optional_text(text: &str) -> Result<OptionalText, InvalidIntent> {
 pub fn encode_optional_text(value: &OptionalText) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_optional_text(&text)?;
+    Ok(text)
+}
+pub fn decode_print_history_operation(text: &str) -> Result<PrintHistoryOperation, InvalidIntent> {
+    read_print_history_operation(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_history_operation(
+    value: &PrintHistoryOperation,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_history_operation(&text)?;
+    Ok(text)
+}
+pub fn decode_print_history_plan(text: &str) -> Result<PrintHistoryPlan, InvalidIntent> {
+    read_print_history_plan(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_history_plan(value: &PrintHistoryPlan) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_history_plan(&text)?;
+    Ok(text)
+}
+pub fn decode_print_history_finish(text: &str) -> Result<PrintHistoryFinish, InvalidIntent> {
+    read_print_history_finish(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_history_finish(value: &PrintHistoryFinish) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_history_finish(&text)?;
+    Ok(text)
+}
+pub fn decode_print_history_result(text: &str) -> Result<PrintHistoryResult, InvalidIntent> {
+    read_print_history_result(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_print_history_result(value: &PrintHistoryResult) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_print_history_result(&text)?;
+    Ok(text)
+}
+pub fn decode_print_history_job(text: &str) -> Result<PrintHistoryJob, InvalidIntent> {
+    read_print_history_job(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_print_history_job(value: &PrintHistoryJob) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_print_history_job(&text)?;
+    Ok(text)
+}
+pub fn decode_print_history_job_view(text: &str) -> Result<PrintHistoryJobView, InvalidIntent> {
+    read_print_history_job_view(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_print_history_job_view(value: &PrintHistoryJobView) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_print_history_job_view(&text)?;
+    Ok(text)
+}
+pub fn decode_optional_print_history_totals(
+    text: &str,
+) -> Result<OptionalPrintHistoryTotals, InvalidIntent> {
+    read_optional_print_history_totals(&super::project_intents::parse(text)?)
+}
+pub fn encode_optional_print_history_totals(
+    value: &OptionalPrintHistoryTotals,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_optional_print_history_totals(&text)?;
+    Ok(text)
+}
+pub fn decode_print_history_page_shape(text: &str) -> Result<PrintHistoryPageShape, InvalidIntent> {
+    read_print_history_page_shape(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_history_page_shape(
+    value: &PrintHistoryPageShape,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_history_page_shape(&text)?;
+    Ok(text)
+}
+pub fn decode_print_history_page_view(text: &str) -> Result<PrintHistoryPageView, InvalidIntent> {
+    read_print_history_page_view(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_history_page_view(
+    value: &PrintHistoryPageView,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_history_page_view(&text)?;
     Ok(text)
 }

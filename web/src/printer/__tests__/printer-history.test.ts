@@ -13,7 +13,10 @@ import { MoonrakerTransportError } from '../MoonrakerTypes';
 import {
   MAX_HISTORY_PAGE,
   PrintHistoryError,
+  describeHistoryPage,
   describeHistoryStatus,
+  describeHistoryTotals,
+  describeJobFacts,
   estimateDelta,
   formatFilamentLength,
   formatHistoryDuration,
@@ -181,6 +184,70 @@ await test('formats durations, lengths, and the gap against the estimate', () =>
   // No estimate, or a zero one, is not a 100 % overrun — it is no answer.
   assert.equal(estimateDelta({ printSeconds: 5100 } as never), undefined);
   assert.equal(estimateDelta({ printSeconds: 5100, estimatedSeconds: 0 } as never), undefined);
+  // Nor is a gap too large to be a number: it read "+Infinity% vs estimate".
+  assert.equal(estimateDelta({ printSeconds: 1e300, estimatedSeconds: 1e-300 } as never), undefined);
+});
+
+await test('a time too large to be a time reads as unreported', async () => {
+  const transport = new FakeTransport({
+    count: 1,
+    jobs: [{ filename: 'far.gcode', status: 'completed', start_time: 1e306, end_time: 1_800_000_000 }],
+  });
+  const page = await listPrintHistory(transport);
+  // It used to become Infinity, which no date can show.
+  assert.equal(page.jobs[0]!.startedAtMs, undefined);
+  assert.equal(page.jobs[0]!.endedAtMs, 1_800_000_000_000);
+});
+
+await test('a page holds only the jobs asked for', async () => {
+  const job = (n: number) => ({ job_id: `${n}`, filename: `${n}.gcode`, status: 'completed' });
+  const transport = new FakeTransport({ count: 5, jobs: [job(1), job(2), job(3)] });
+  const page = await listPrintHistory(transport, { start: 0, limit: 2 });
+  // The third row is the next page's first; showing it here showed it twice.
+  assert.deepEqual(
+    page.jobs.map((entry) => entry.id),
+    ['1', '2'],
+  );
+  assert.equal(historyPageBounds(page).nextStart, 2);
+});
+
+await test('a count that is not a whole number of jobs reads as unreported', async () => {
+  for (const count of [-5, 2.5, 1e300, '57']) {
+    const page = await listPrintHistory(new FakeTransport({ count, jobs: JOBS.jobs }), { start: 40, limit: 20 });
+    assert.equal(page.total, 43, String(count));
+  }
+  const totals = await readPrintHistoryTotals(new FakeTransport({ job_totals: { total_jobs: 2.5, total_time: 60 } }));
+  assert.deepEqual(totals, { totalSeconds: 60 });
+});
+
+await test('a page cannot start where no request can say', async () => {
+  const transport = new FakeTransport(JOBS);
+  // It used to be sent as `start=1e+21`, which the printer cannot read.
+  await assert.rejects(
+    listPrintHistory(transport, { start: 1e21 }),
+    (error: unknown) => error instanceof PrintHistoryError && error.code === 'invalid-page',
+  );
+  assert.deepEqual(transport.calls, []);
+});
+
+await test('describes a job, the totals and the page as the panel shows them', () => {
+  assert.equal(
+    describeJobFacts({ printSeconds: 5100, estimatedSeconds: 4800, filamentUsedMm: 4210.5 } as never),
+    'Printed 1 h 25 min · +6% vs estimate · 4.21 m filament',
+  );
+  assert.equal(
+    describeJobFacts({ printSeconds: 60, estimatedSeconds: 60 } as never),
+    'Printed 1 min · exactly as estimated · — filament',
+  );
+  assert.equal(describeJobFacts({} as never), 'Printed — · — filament');
+  assert.equal(describeHistoryTotals(undefined), 'Totals not read yet');
+  assert.equal(describeHistoryTotals({}), 'The printer reported no totals');
+  assert.equal(
+    describeHistoryTotals({ jobs: 1, printSeconds: 7200, filamentUsedMm: 900, longestPrintSeconds: 30 }),
+    '1 job · 2 h 0 min printing · 900 mm filament · longest 30 s',
+  );
+  assert.equal(describeHistoryPage({ jobs: [], total: 57, start: 20, limit: 20 }), 'Page 2 of 3 — 57 jobs');
+  assert.equal(describeHistoryPage({ jobs: [], total: 1, start: 0, limit: 20 }), 'Page 1 of 1 — 1 job');
 });
 
 console.log(`\nPrint history: ${passed} tests passed.`);

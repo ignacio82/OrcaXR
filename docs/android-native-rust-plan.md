@@ -1987,8 +1987,14 @@ credential storage, and explicit permission/error flows.
   intent contract's new bulk tier in a wire linear in the reply, so any reply
   the transport admits crosses. Porting fixed two browser defects: a
   modification time too large to be a time read as `Infinity`, and a path
-  longer than any a printer holds was sent anyway. History, console, camera
-  and the operator surfaces remain.
+  longer than any a printer holds was sent anyway. History policy is shared
+  too: `orcaxr_printer::history` plans and reads pages of the printer's job
+  records and its totals and describes them as the browser's panel does;
+  2,159 browser answers agree in every binding, and Kotlin `PrintHistory`
+  exposes it. Porting fixed five browser defects (an infinite start time,
+  rows past the page repeated on the next, counts that were not counts, an
+  unspellable start, an infinite estimate gap). Console, camera and the
+  operator surfaces remain.
 - [ ] Test with the existing printer simulator before qualified, supervised U1
   and CC trials. Automated tests do not issue commands to real printers.
 

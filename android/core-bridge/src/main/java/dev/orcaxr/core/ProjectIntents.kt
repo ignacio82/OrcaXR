@@ -9823,6 +9823,224 @@ object ProjectIntents {
             w.field("thumbnails") { writePrinterStorageThumbnails(w, v.thumbnails) }
         }
     }
+    data class PrintHistoryPageRequest(val start: OptionalFinite, val limit: OptionalFinite)
+    private fun readPrintHistoryPageRequest(v: Any): PrintHistoryPageRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("start", "limit"), false)
+        return PrintHistoryPageRequest(readOptionalFinite(obj.get("start")), readOptionalFinite(obj.get("limit")))
+    }
+    private fun writePrintHistoryPageRequest(w: ProjectIntentWriter, v: PrintHistoryPageRequest) {
+        w.obj {
+            w.field("start") { writeOptionalFinite(w, v.start) }
+            w.field("limit") { writeOptionalFinite(w, v.limit) }
+        }
+    }
+    sealed interface PrintHistoryOperation {
+        data class Page(val value: ProjectIntents.PrintHistoryPageRequest) : PrintHistoryOperation
+        data class Totals(val value: ProjectIntents.Empty) : PrintHistoryOperation
+    }
+    private fun readPrintHistoryOperation(v: Any): PrintHistoryOperation {
+        val obj = ProjectIntentJson.fields(v, setOf("page", "totals"), true)
+        return when(val key = obj.keys().next()) {
+            "page" -> PrintHistoryOperation.Page(readPrintHistoryPageRequest(obj.get(key)))
+            "totals" -> PrintHistoryOperation.Totals(readEmpty(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrintHistoryOperation(w: ProjectIntentWriter, v: PrintHistoryOperation) {
+        w.obj { when(v) {
+            is PrintHistoryOperation.Page -> w.field("page") { writePrintHistoryPageRequest(w, v.value) }
+            is PrintHistoryOperation.Totals -> w.field("totals") { writeEmpty(w, v.value) }
+        } }
+    }
+    enum class PrintHistoryErrorCode {Unavailable,InvalidPage,Cancelled}
+    private fun readPrintHistoryErrorCode(v: Any): PrintHistoryErrorCode {
+        return when(v) {"unavailable" -> PrintHistoryErrorCode.Unavailable;"invalidPage" -> PrintHistoryErrorCode.InvalidPage;"cancelled" -> PrintHistoryErrorCode.Cancelled; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrintHistoryErrorCode(w: ProjectIntentWriter, v: PrintHistoryErrorCode) {
+        w.literal(when(v) {PrintHistoryErrorCode.Unavailable -> "unavailable";PrintHistoryErrorCode.InvalidPage -> "invalidPage";PrintHistoryErrorCode.Cancelled -> "cancelled";})
+    }
+    data class PrintHistoryFailure(val code: PrintHistoryErrorCode, val message: List<Int>)
+    private fun readPrintHistoryFailure(v: Any): PrintHistoryFailure {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return PrintHistoryFailure(readPrintHistoryErrorCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writePrintHistoryFailure(w: ProjectIntentWriter, v: PrintHistoryFailure) {
+        w.obj {
+            w.field("code") { writePrintHistoryErrorCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface PrintHistoryPlan {
+        data class Request(val value: ProjectIntents.PrinterSend) : PrintHistoryPlan
+        data class Refused(val value: ProjectIntents.PrintHistoryFailure) : PrintHistoryPlan
+    }
+    private fun readPrintHistoryPlan(v: Any): PrintHistoryPlan {
+        val obj = ProjectIntentJson.fields(v, setOf("request", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "request" -> PrintHistoryPlan.Request(readPrinterSend(obj.get(key)))
+            "refused" -> PrintHistoryPlan.Refused(readPrintHistoryFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrintHistoryPlan(w: ProjectIntentWriter, v: PrintHistoryPlan) {
+        w.obj { when(v) {
+            is PrintHistoryPlan.Request -> w.field("request") { writePrinterSend(w, v.value) }
+            is PrintHistoryPlan.Refused -> w.field("refused") { writePrintHistoryFailure(w, v.value) }
+        } }
+    }
+    data class PrintHistoryFinish(val operation: PrintHistoryOperation, val outcome: PrinterExchangeOutcome)
+    private fun readPrintHistoryFinish(v: Any): PrintHistoryFinish {
+        val obj = ProjectIntentJson.fields(v, setOf("operation", "outcome"), false)
+        return PrintHistoryFinish(readPrintHistoryOperation(obj.get("operation")), readPrinterExchangeOutcome(obj.get("outcome")))
+    }
+    private fun writePrintHistoryFinish(w: ProjectIntentWriter, v: PrintHistoryFinish) {
+        w.obj {
+            w.field("operation") { writePrintHistoryOperation(w, v.operation) }
+            w.field("outcome") { writePrinterExchangeOutcome(w, v.outcome) }
+        }
+    }
+    enum class PrintHistoryStatus {Completed,Cancelled,Error,KlippyShutdown,KlippyDisconnect,InProgress,Interrupted}
+    private fun readPrintHistoryStatus(v: Any): PrintHistoryStatus {
+        return when(v) {"completed" -> PrintHistoryStatus.Completed;"cancelled" -> PrintHistoryStatus.Cancelled;"error" -> PrintHistoryStatus.Error;"klippyShutdown" -> PrintHistoryStatus.KlippyShutdown;"klippyDisconnect" -> PrintHistoryStatus.KlippyDisconnect;"inProgress" -> PrintHistoryStatus.InProgress;"interrupted" -> PrintHistoryStatus.Interrupted; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrintHistoryStatus(w: ProjectIntentWriter, v: PrintHistoryStatus) {
+        w.literal(when(v) {PrintHistoryStatus.Completed -> "completed";PrintHistoryStatus.Cancelled -> "cancelled";PrintHistoryStatus.Error -> "error";PrintHistoryStatus.KlippyShutdown -> "klippyShutdown";PrintHistoryStatus.KlippyDisconnect -> "klippyDisconnect";PrintHistoryStatus.InProgress -> "inProgress";PrintHistoryStatus.Interrupted -> "interrupted";})
+    }
+    data class PrintHistoryJob(val jobId: OptionalPrinterReplyText, val filename: List<Int>, val status: PrintHistoryStatus, val rawStatus: OptionalPrinterReplyText, val startedAtMs: OptionalFinite, val endedAtMs: OptionalFinite, val printSeconds: OptionalFinite, val totalSeconds: OptionalFinite, val filamentUsedMm: OptionalFinite, val fileExists: Boolean, val estimatedSeconds: OptionalFinite)
+    private fun readPrintHistoryJob(v: Any): PrintHistoryJob {
+        val obj = ProjectIntentJson.fields(v, setOf("jobId", "filename", "status", "rawStatus", "startedAtMs", "endedAtMs", "printSeconds", "totalSeconds", "filamentUsedMm", "fileExists", "estimatedSeconds"), false)
+        return PrintHistoryJob(readOptionalPrinterReplyText(obj.get("jobId")), readPrinterReplyText(obj.get("filename")), readPrintHistoryStatus(obj.get("status")), readOptionalPrinterReplyText(obj.get("rawStatus")), readOptionalFinite(obj.get("startedAtMs")), readOptionalFinite(obj.get("endedAtMs")), readOptionalFinite(obj.get("printSeconds")), readOptionalFinite(obj.get("totalSeconds")), readOptionalFinite(obj.get("filamentUsedMm")), readFlag(obj.get("fileExists")), readOptionalFinite(obj.get("estimatedSeconds")))
+    }
+    private fun writePrintHistoryJob(w: ProjectIntentWriter, v: PrintHistoryJob) {
+        w.obj {
+            w.field("jobId") { writeOptionalPrinterReplyText(w, v.jobId) }
+            w.field("filename") { writePrinterReplyText(w, v.filename) }
+            w.field("status") { writePrintHistoryStatus(w, v.status) }
+            w.field("rawStatus") { writeOptionalPrinterReplyText(w, v.rawStatus) }
+            w.field("startedAtMs") { writeOptionalFinite(w, v.startedAtMs) }
+            w.field("endedAtMs") { writeOptionalFinite(w, v.endedAtMs) }
+            w.field("printSeconds") { writeOptionalFinite(w, v.printSeconds) }
+            w.field("totalSeconds") { writeOptionalFinite(w, v.totalSeconds) }
+            w.field("filamentUsedMm") { writeOptionalFinite(w, v.filamentUsedMm) }
+            w.field("fileExists") { writeFlag(w, v.fileExists) }
+            w.field("estimatedSeconds") { writeOptionalFinite(w, v.estimatedSeconds) }
+        }
+    }
+    private fun readPrintHistoryJobs(v: Any): List<PrintHistoryJob> {
+        val array = ProjectIntentJson.list(v, 0, 100)
+        return List(array.length()) { readPrintHistoryJob(array.get(it)) }
+    }
+    private fun writePrintHistoryJobs(w: ProjectIntentWriter, v: List<PrintHistoryJob>) {
+        w.array(v, 0, 100) { writePrintHistoryJob(w, it) }
+    }
+    data class PrintHistoryPage(val jobs: List<PrintHistoryJob>, val total: Double, val start: Double, val limit: Double)
+    private fun readPrintHistoryPage(v: Any): PrintHistoryPage {
+        val obj = ProjectIntentJson.fields(v, setOf("jobs", "total", "start", "limit"), false)
+        return PrintHistoryPage(readPrintHistoryJobs(obj.get("jobs")), readFinite(obj.get("total")), readFinite(obj.get("start")), readFinite(obj.get("limit")))
+    }
+    private fun writePrintHistoryPage(w: ProjectIntentWriter, v: PrintHistoryPage) {
+        w.obj {
+            w.field("jobs") { writePrintHistoryJobs(w, v.jobs) }
+            w.field("total") { writeFinite(w, v.total) }
+            w.field("start") { writeFinite(w, v.start) }
+            w.field("limit") { writeFinite(w, v.limit) }
+        }
+    }
+    data class PrintHistoryTotals(val jobs: OptionalFinite, val totalSeconds: OptionalFinite, val printSeconds: OptionalFinite, val filamentUsedMm: OptionalFinite, val longestJobSeconds: OptionalFinite, val longestPrintSeconds: OptionalFinite)
+    private fun readPrintHistoryTotals(v: Any): PrintHistoryTotals {
+        val obj = ProjectIntentJson.fields(v, setOf("jobs", "totalSeconds", "printSeconds", "filamentUsedMm", "longestJobSeconds", "longestPrintSeconds"), false)
+        return PrintHistoryTotals(readOptionalFinite(obj.get("jobs")), readOptionalFinite(obj.get("totalSeconds")), readOptionalFinite(obj.get("printSeconds")), readOptionalFinite(obj.get("filamentUsedMm")), readOptionalFinite(obj.get("longestJobSeconds")), readOptionalFinite(obj.get("longestPrintSeconds")))
+    }
+    private fun writePrintHistoryTotals(w: ProjectIntentWriter, v: PrintHistoryTotals) {
+        w.obj {
+            w.field("jobs") { writeOptionalFinite(w, v.jobs) }
+            w.field("totalSeconds") { writeOptionalFinite(w, v.totalSeconds) }
+            w.field("printSeconds") { writeOptionalFinite(w, v.printSeconds) }
+            w.field("filamentUsedMm") { writeOptionalFinite(w, v.filamentUsedMm) }
+            w.field("longestJobSeconds") { writeOptionalFinite(w, v.longestJobSeconds) }
+            w.field("longestPrintSeconds") { writeOptionalFinite(w, v.longestPrintSeconds) }
+        }
+    }
+    sealed interface OptionalPrintHistoryTotals {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalPrintHistoryTotals
+        data class Value(val value: ProjectIntents.PrintHistoryTotals) : OptionalPrintHistoryTotals
+    }
+    private fun readOptionalPrintHistoryTotals(v: Any): OptionalPrintHistoryTotals {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalPrintHistoryTotals.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalPrintHistoryTotals.Value(readPrintHistoryTotals(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalPrintHistoryTotals(w: ProjectIntentWriter, v: OptionalPrintHistoryTotals) {
+        w.obj { when(v) {
+            is OptionalPrintHistoryTotals.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalPrintHistoryTotals.Value -> w.field("value") { writePrintHistoryTotals(w, v.value) }
+        } }
+    }
+    sealed interface PrintHistoryResult {
+        data class Page(val value: ProjectIntents.PrintHistoryPage) : PrintHistoryResult
+        data class Totals(val value: ProjectIntents.PrintHistoryTotals) : PrintHistoryResult
+        data class Failed(val value: ProjectIntents.PrintHistoryFailure) : PrintHistoryResult
+    }
+    private fun readPrintHistoryResult(v: Any): PrintHistoryResult {
+        val obj = ProjectIntentJson.fields(v, setOf("page", "totals", "failed"), true)
+        return when(val key = obj.keys().next()) {
+            "page" -> PrintHistoryResult.Page(readPrintHistoryPage(obj.get(key)))
+            "totals" -> PrintHistoryResult.Totals(readPrintHistoryTotals(obj.get(key)))
+            "failed" -> PrintHistoryResult.Failed(readPrintHistoryFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrintHistoryResult(w: ProjectIntentWriter, v: PrintHistoryResult) {
+        w.obj { when(v) {
+            is PrintHistoryResult.Page -> w.field("page") { writePrintHistoryPage(w, v.value) }
+            is PrintHistoryResult.Totals -> w.field("totals") { writePrintHistoryTotals(w, v.value) }
+            is PrintHistoryResult.Failed -> w.field("failed") { writePrintHistoryFailure(w, v.value) }
+        } }
+    }
+    data class PrintHistoryJobView(val status: List<Int>, val facts: List<Int>, val estimateDelta: OptionalFinite)
+    private fun readPrintHistoryJobView(v: Any): PrintHistoryJobView {
+        val obj = ProjectIntentJson.fields(v, setOf("status", "facts", "estimateDelta"), false)
+        return PrintHistoryJobView(readPrinterReplyText(obj.get("status")), readEditText(obj.get("facts")), readOptionalFinite(obj.get("estimateDelta")))
+    }
+    private fun writePrintHistoryJobView(w: ProjectIntentWriter, v: PrintHistoryJobView) {
+        w.obj {
+            w.field("status") { writePrinterReplyText(w, v.status) }
+            w.field("facts") { writeEditText(w, v.facts) }
+            w.field("estimateDelta") { writeOptionalFinite(w, v.estimateDelta) }
+        }
+    }
+    data class PrintHistoryPageShape(val jobCount: Double, val total: Double, val start: Double, val limit: Double)
+    private fun readPrintHistoryPageShape(v: Any): PrintHistoryPageShape {
+        val obj = ProjectIntentJson.fields(v, setOf("jobCount", "total", "start", "limit"), false)
+        return PrintHistoryPageShape(readFinite(obj.get("jobCount")), readFinite(obj.get("total")), readFinite(obj.get("start")), readFinite(obj.get("limit")))
+    }
+    private fun writePrintHistoryPageShape(w: ProjectIntentWriter, v: PrintHistoryPageShape) {
+        w.obj {
+            w.field("jobCount") { writeFinite(w, v.jobCount) }
+            w.field("total") { writeFinite(w, v.total) }
+            w.field("start") { writeFinite(w, v.start) }
+            w.field("limit") { writeFinite(w, v.limit) }
+        }
+    }
+    data class PrintHistoryPageView(val pageIndex: Double, val pageCount: Double, val hasPrevious: Boolean, val hasNext: Boolean, val previousStart: Double, val nextStart: Double, val label: List<Int>)
+    private fun readPrintHistoryPageView(v: Any): PrintHistoryPageView {
+        val obj = ProjectIntentJson.fields(v, setOf("pageIndex", "pageCount", "hasPrevious", "hasNext", "previousStart", "nextStart", "label"), false)
+        return PrintHistoryPageView(readFinite(obj.get("pageIndex")), readFinite(obj.get("pageCount")), readFlag(obj.get("hasPrevious")), readFlag(obj.get("hasNext")), readFinite(obj.get("previousStart")), readFinite(obj.get("nextStart")), readEditText(obj.get("label")))
+    }
+    private fun writePrintHistoryPageView(w: ProjectIntentWriter, v: PrintHistoryPageView) {
+        w.obj {
+            w.field("pageIndex") { writeFinite(w, v.pageIndex) }
+            w.field("pageCount") { writeFinite(w, v.pageCount) }
+            w.field("hasPrevious") { writeFlag(w, v.hasPrevious) }
+            w.field("hasNext") { writeFlag(w, v.hasNext) }
+            w.field("previousStart") { writeFinite(w, v.previousStart) }
+            w.field("nextStart") { writeFinite(w, v.nextStart) }
+            w.field("label") { writeEditText(w, v.label) }
+        }
+    }
     sealed interface PrinterStorageResult {
         data class Listing(val value: ProjectIntents.PrinterStorageListing) : PrinterStorageResult
         data class Metadata(val value: ProjectIntents.PrinterStorageMetadata) : PrinterStorageResult
@@ -10233,4 +10451,22 @@ object ProjectIntents {
     fun encodePrinterStorageResult(value: PrinterStorageResult): String = ProjectIntentWriter(BULK).also { writePrinterStorageResult(it, value) }.finish()
     fun decodeOptionalText(text: String): OptionalText = readOptionalText(ProjectIntentJson.parse(text))
     fun encodeOptionalText(value: OptionalText): String = ProjectIntentWriter().also { writeOptionalText(it, value) }.finish()
+    fun decodePrintHistoryOperation(text: String): PrintHistoryOperation = readPrintHistoryOperation(ProjectIntentJson.parse(text))
+    fun encodePrintHistoryOperation(value: PrintHistoryOperation): String = ProjectIntentWriter().also { writePrintHistoryOperation(it, value) }.finish()
+    fun decodePrintHistoryPlan(text: String): PrintHistoryPlan = readPrintHistoryPlan(ProjectIntentJson.parse(text))
+    fun encodePrintHistoryPlan(value: PrintHistoryPlan): String = ProjectIntentWriter().also { writePrintHistoryPlan(it, value) }.finish()
+    fun decodePrintHistoryFinish(text: String): PrintHistoryFinish = readPrintHistoryFinish(ProjectIntentJson.parse(text))
+    fun encodePrintHistoryFinish(value: PrintHistoryFinish): String = ProjectIntentWriter().also { writePrintHistoryFinish(it, value) }.finish()
+    fun decodePrintHistoryResult(text: String): PrintHistoryResult = readPrintHistoryResult(ProjectIntentJson.parse(text, BULK))
+    fun encodePrintHistoryResult(value: PrintHistoryResult): String = ProjectIntentWriter(BULK).also { writePrintHistoryResult(it, value) }.finish()
+    fun decodePrintHistoryJob(text: String): PrintHistoryJob = readPrintHistoryJob(ProjectIntentJson.parse(text, BULK))
+    fun encodePrintHistoryJob(value: PrintHistoryJob): String = ProjectIntentWriter(BULK).also { writePrintHistoryJob(it, value) }.finish()
+    fun decodePrintHistoryJobView(text: String): PrintHistoryJobView = readPrintHistoryJobView(ProjectIntentJson.parse(text, BULK))
+    fun encodePrintHistoryJobView(value: PrintHistoryJobView): String = ProjectIntentWriter(BULK).also { writePrintHistoryJobView(it, value) }.finish()
+    fun decodeOptionalPrintHistoryTotals(text: String): OptionalPrintHistoryTotals = readOptionalPrintHistoryTotals(ProjectIntentJson.parse(text))
+    fun encodeOptionalPrintHistoryTotals(value: OptionalPrintHistoryTotals): String = ProjectIntentWriter().also { writeOptionalPrintHistoryTotals(it, value) }.finish()
+    fun decodePrintHistoryPageShape(text: String): PrintHistoryPageShape = readPrintHistoryPageShape(ProjectIntentJson.parse(text))
+    fun encodePrintHistoryPageShape(value: PrintHistoryPageShape): String = ProjectIntentWriter().also { writePrintHistoryPageShape(it, value) }.finish()
+    fun decodePrintHistoryPageView(text: String): PrintHistoryPageView = readPrintHistoryPageView(ProjectIntentJson.parse(text))
+    fun encodePrintHistoryPageView(value: PrintHistoryPageView): String = ProjectIntentWriter().also { writePrintHistoryPageView(it, value) }.finish()
 }

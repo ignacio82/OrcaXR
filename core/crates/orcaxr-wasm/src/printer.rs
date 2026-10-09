@@ -3,8 +3,8 @@ use crate::error;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
-    control, moonraker, preparation, session, status::JobStatus, storage, summary, tools,
-    transport, workflow,
+    control, history, moonraker, preparation, reply, session, status::JobStatus, storage, summary,
+    tools, transport, workflow,
 };
 use wasm_bindgen::prelude::*;
 
@@ -794,7 +794,7 @@ pub fn printer_storage_finish(request: &str) -> Result<String, JsValue> {
 /// `result`, as JSON); the `PrinterStorageResult`.
 #[wasm_bindgen]
 pub fn printer_storage_read(operation: &str, reply: &str) -> Result<String, JsValue> {
-    if operation.len() > wire::MAX_BYTES || reply.len() > storage::LIMITS.bytes {
+    if operation.len() > wire::MAX_BYTES || reply.len() > reply::LIMITS.bytes {
         return Err(error("input_limit"));
     }
     let operation =
@@ -806,4 +806,81 @@ pub fn printer_storage_read(operation: &str, reply: &str) -> Result<String, JsVa
 #[wasm_bindgen]
 pub fn printer_storage_size(bytes: f64) -> Result<String, JsValue> {
     wire::encode_optional_text(&storage::size(bytes)).map_err(|_| error("output_limit"))
+}
+/// A `PrintHistoryOperation`; the `PrintHistoryPlan`: the request it sends,
+/// or why it is refused before anything leaves.
+#[wasm_bindgen]
+pub fn print_history_plan(operation: &str) -> Result<String, JsValue> {
+    exchange(
+        operation,
+        wire::decode_print_history_operation,
+        history::plan,
+        wire::encode_print_history_plan,
+    )
+}
+/// A `PrintHistoryFinish`; the `PrintHistoryResult` an exchange that ended
+/// without a reply to read reads as.
+#[wasm_bindgen]
+pub fn print_history_finish(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_print_history_finish,
+        history::finish,
+        wire::encode_print_history_result,
+    )
+}
+/// A `PrintHistoryOperation` and its reply (Moonraker's `result`, as JSON);
+/// the `PrintHistoryResult`.
+#[wasm_bindgen]
+pub fn print_history_read(operation: &str, reply: &str) -> Result<String, JsValue> {
+    if operation.len() > wire::MAX_BYTES || reply.len() > reply::LIMITS.bytes {
+        return Err(error("input_limit"));
+    }
+    let operation =
+        wire::decode_print_history_operation(operation).map_err(|_| error("invalid_request"))?;
+    wire::encode_print_history_result(&history::read(&operation, reply))
+        .map_err(|_| error("output_limit"))
+}
+/// A duration in seconds; the `OptionalText` an operator reads it as.
+#[wasm_bindgen]
+pub fn print_history_duration(seconds: f64) -> Result<String, JsValue> {
+    wire::encode_optional_text(&reply::optional_text(history::duration_text(seconds)))
+        .map_err(|_| error("output_limit"))
+}
+/// A filament length in millimetres; the `OptionalText` an operator reads it as.
+#[wasm_bindgen]
+pub fn print_history_filament(millimetres: f64) -> Result<String, JsValue> {
+    wire::encode_optional_text(&reply::optional_text(history::filament_text(millimetres)))
+        .map_err(|_| error("output_limit"))
+}
+/// A `PrintHistoryJob` (on the bulk tier); its `PrintHistoryJobView`.
+#[wasm_bindgen]
+pub fn print_history_job_view(job: &str) -> Result<String, JsValue> {
+    if job.len() > wire::BULK.bytes {
+        return Err(error("input_limit"));
+    }
+    let job = wire::decode_print_history_job(job).map_err(|_| error("invalid_request"))?;
+    wire::encode_print_history_job_view(&history::job_view(&job)).map_err(|_| error("output_limit"))
+}
+/// An `OptionalPrintHistoryTotals`; the `PrinterText` a panel shows.
+#[wasm_bindgen]
+pub fn print_history_totals_text(totals: &str) -> Result<String, JsValue> {
+    exchange(
+        totals,
+        wire::decode_optional_print_history_totals,
+        |t| wire::PrinterText {
+            text: history::totals_text(t).encode_utf16().collect(),
+        },
+        wire::encode_printer_text,
+    )
+}
+/// A `PrintHistoryPageShape`; the `PrintHistoryPageView` a pager shows.
+#[wasm_bindgen]
+pub fn print_history_page_view(shape: &str) -> Result<String, JsValue> {
+    exchange(
+        shape,
+        wire::decode_print_history_page_shape,
+        history::page_view,
+        wire::encode_print_history_page_view,
+    )
 }

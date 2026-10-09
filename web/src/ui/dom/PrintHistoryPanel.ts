@@ -14,10 +14,10 @@
 import type { PrintHistoryJob, PrintHistoryPage, PrintHistoryTotals } from '../../printer/PrinterHistory';
 import { t } from '../../l10n/t';
 import {
+  describeHistoryPage,
   describeHistoryStatus,
-  estimateDelta,
-  formatFilamentLength,
-  formatHistoryDuration,
+  describeHistoryTotals,
+  describeJobFacts,
   historyPageBounds,
 } from '../../printer/PrinterHistory';
 
@@ -110,7 +110,7 @@ export class PrintHistoryPanel {
     const page = this.port.getPage();
     const state = this.port.getStatus();
     if (this.status) this.status.textContent = state.message ?? '';
-    if (this.totalsLine) this.totalsLine.textContent = describeTotals(this.port.getTotals());
+    if (this.totalsLine) this.totalsLine.textContent = describeHistoryTotals(this.port.getTotals());
 
     const list = this.list;
     if (list) {
@@ -159,9 +159,7 @@ export class PrintHistoryPanel {
       const label = doc.createElement('span');
       label.dataset.printHistoryPageLabel = 'true';
       label.style.cssText = 'flex:1;text-align:center;opacity:0.75;';
-      label.textContent = `Page ${bounds.pageIndex + 1} of ${bounds.pageCount} — ${page.total} job${
-        page.total === 1 ? '' : 's'
-      }`;
+      label.textContent = describeHistoryPage(page);
       pager.append(previous, label, next);
     }
   }
@@ -210,29 +208,8 @@ export class PrintHistoryPanel {
   }
 }
 
-/** One line of facts per job; anything unreported is an em dash. */
+/** One line of facts per job, then when it started in this browser's locale. */
 export function describeJob(job: PrintHistoryJob): string {
-  const missing = '—';
-  const parts = [`Printed ${formatHistoryDuration(job.printSeconds) ?? missing}`];
-  const delta = estimateDelta(job);
-  if (delta !== undefined) {
-    const rounded = Math.round(delta);
-    parts.push(rounded === 0 ? 'exactly as estimated' : `${rounded > 0 ? '+' : ''}${rounded}% vs estimate`);
-  }
-  parts.push(`${formatFilamentLength(job.filamentUsedMm) ?? missing} filament`);
-  if (job.startedAtMs !== undefined) parts.push(new Date(job.startedAtMs).toLocaleString());
-  return parts.join(' · ');
-}
-
-export function describeTotals(totals: PrintHistoryTotals | undefined): string {
-  if (!totals) return 'Totals not read yet';
-  const parts: string[] = [];
-  if (totals.jobs !== undefined) parts.push(`${totals.jobs} job${totals.jobs === 1 ? '' : 's'}`);
-  const printed = formatHistoryDuration(totals.printSeconds);
-  if (printed) parts.push(`${printed} printing`);
-  const filament = formatFilamentLength(totals.filamentUsedMm);
-  if (filament) parts.push(`${filament} filament`);
-  const longest = formatHistoryDuration(totals.longestPrintSeconds);
-  if (longest) parts.push(`longest ${longest}`);
-  return parts.length > 0 ? parts.join(' · ') : 'The printer reported no totals';
+  const facts = describeJobFacts(job);
+  return job.startedAtMs === undefined ? facts : `${facts} · ${new Date(job.startedAtMs).toLocaleString()}`;
 }

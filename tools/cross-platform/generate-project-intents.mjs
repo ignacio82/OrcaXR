@@ -242,6 +242,15 @@ assert.deepEqual(schema.roots, [
   "PrinterStorageFinish",
   "PrinterStorageResult",
   "OptionalText",
+  "PrintHistoryOperation",
+  "PrintHistoryPlan",
+  "PrintHistoryFinish",
+  "PrintHistoryResult",
+  "PrintHistoryJob",
+  "PrintHistoryJobView",
+  "OptionalPrintHistoryTotals",
+  "PrintHistoryPageShape",
+  "PrintHistoryPageView",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

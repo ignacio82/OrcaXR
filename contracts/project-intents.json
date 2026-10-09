@@ -9,7 +9,7 @@
     "maxNodes": 4194304,
     "maxDepth": 12
   },
-  "bulkRoots": ["PrinterStorageResult"],
+  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView"],
   "description": "Prepared project commands, session messages and slice preflight exchanges. Text is lossless UTF-16 units. Project transport, command format and persisted schema versions are distinct.",
   "definitions": {
     "Unit": {
@@ -6407,6 +6407,135 @@
         "thumbnails": "PrinterStorageThumbnails"
       }
     },
+    "PrintHistoryPageRequest": {
+      "kind": "object",
+      "fields": {
+        "start": "OptionalFinite",
+        "limit": "OptionalFinite"
+      }
+    },
+    "PrintHistoryOperation": {
+      "kind": "union",
+      "variants": {
+        "page": "PrintHistoryPageRequest",
+        "totals": "Empty"
+      }
+    },
+    "PrintHistoryErrorCode": {
+      "kind": "enum",
+      "values": ["unavailable", "invalidPage", "cancelled"]
+    },
+    "PrintHistoryFailure": {
+      "kind": "object",
+      "fields": {
+        "code": "PrintHistoryErrorCode",
+        "message": "EditText"
+      }
+    },
+    "PrintHistoryPlan": {
+      "kind": "union",
+      "variants": {
+        "request": "PrinterSend",
+        "refused": "PrintHistoryFailure"
+      }
+    },
+    "PrintHistoryFinish": {
+      "kind": "object",
+      "fields": {
+        "operation": "PrintHistoryOperation",
+        "outcome": "PrinterExchangeOutcome"
+      }
+    },
+    "PrintHistoryStatus": {
+      "kind": "enum",
+      "values": ["completed", "cancelled", "error", "klippyShutdown", "klippyDisconnect", "inProgress", "interrupted"]
+    },
+    "PrintHistoryJob": {
+      "kind": "object",
+      "fields": {
+        "jobId": "OptionalPrinterReplyText",
+        "filename": "PrinterReplyText",
+        "status": "PrintHistoryStatus",
+        "rawStatus": "OptionalPrinterReplyText",
+        "startedAtMs": "OptionalFinite",
+        "endedAtMs": "OptionalFinite",
+        "printSeconds": "OptionalFinite",
+        "totalSeconds": "OptionalFinite",
+        "filamentUsedMm": "OptionalFinite",
+        "fileExists": "Flag",
+        "estimatedSeconds": "OptionalFinite"
+      }
+    },
+    "PrintHistoryJobs": {
+      "kind": "array",
+      "items": "PrintHistoryJob",
+      "min": 0,
+      "max": 100
+    },
+    "PrintHistoryPage": {
+      "kind": "object",
+      "fields": {
+        "jobs": "PrintHistoryJobs",
+        "total": "Finite",
+        "start": "Finite",
+        "limit": "Finite"
+      }
+    },
+    "PrintHistoryTotals": {
+      "kind": "object",
+      "fields": {
+        "jobs": "OptionalFinite",
+        "totalSeconds": "OptionalFinite",
+        "printSeconds": "OptionalFinite",
+        "filamentUsedMm": "OptionalFinite",
+        "longestJobSeconds": "OptionalFinite",
+        "longestPrintSeconds": "OptionalFinite"
+      }
+    },
+    "OptionalPrintHistoryTotals": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "PrintHistoryTotals"
+      }
+    },
+    "PrintHistoryResult": {
+      "kind": "union",
+      "variants": {
+        "page": "PrintHistoryPage",
+        "totals": "PrintHistoryTotals",
+        "failed": "PrintHistoryFailure"
+      }
+    },
+    "PrintHistoryJobView": {
+      "kind": "object",
+      "fields": {
+        "status": "PrinterReplyText",
+        "facts": "EditText",
+        "estimateDelta": "OptionalFinite"
+      }
+    },
+    "PrintHistoryPageShape": {
+      "kind": "object",
+      "fields": {
+        "jobCount": "Finite",
+        "total": "Finite",
+        "start": "Finite",
+        "limit": "Finite"
+      }
+    },
+    "PrintHistoryPageView": {
+      "kind": "object",
+      "fields": {
+        "pageIndex": "Finite",
+        "pageCount": "Finite",
+        "hasPrevious": "Flag",
+        "hasNext": "Flag",
+        "previousStart": "Finite",
+        "nextStart": "Finite",
+        "label": "EditText"
+      }
+    },
     "PrinterStorageResult": {
       "kind": "union",
       "variants": {
@@ -6609,7 +6738,16 @@
     "PrinterStoragePlan",
     "PrinterStorageFinish",
     "PrinterStorageResult",
-    "OptionalText"
+    "OptionalText",
+    "PrintHistoryOperation",
+    "PrintHistoryPlan",
+    "PrintHistoryFinish",
+    "PrintHistoryResult",
+    "PrintHistoryJob",
+    "PrintHistoryJobView",
+    "OptionalPrintHistoryTotals",
+    "PrintHistoryPageShape",
+    "PrintHistoryPageView"
   ],
   "sessionVersion": 1
 }

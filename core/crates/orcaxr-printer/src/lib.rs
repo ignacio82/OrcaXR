@@ -3,8 +3,10 @@
 //! moves them. This crate performs no I/O; hosts own transports, clocks and
 //! credentials, and feed it the text they received.
 pub mod control;
+pub mod history;
 pub mod moonraker;
 pub mod preparation;
+pub mod reply;
 pub mod session;
 pub mod status;
 pub mod storage;

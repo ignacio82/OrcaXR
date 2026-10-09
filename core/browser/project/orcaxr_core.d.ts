@@ -1177,6 +1177,49 @@ export function prepare_svg_part(request: string, drawing: Uint8Array): ProjectS
 export function print_file_identity(text: string, filename: string): string;
 
 /**
+ * A duration in seconds; the `OptionalText` an operator reads it as.
+ */
+export function print_history_duration(seconds: number): string;
+
+/**
+ * A filament length in millimetres; the `OptionalText` an operator reads it as.
+ */
+export function print_history_filament(millimetres: number): string;
+
+/**
+ * A `PrintHistoryFinish`; the `PrintHistoryResult` an exchange that ended
+ * without a reply to read reads as.
+ */
+export function print_history_finish(request: string): string;
+
+/**
+ * A `PrintHistoryJob` (on the bulk tier); its `PrintHistoryJobView`.
+ */
+export function print_history_job_view(job: string): string;
+
+/**
+ * A `PrintHistoryPageShape`; the `PrintHistoryPageView` a pager shows.
+ */
+export function print_history_page_view(shape: string): string;
+
+/**
+ * A `PrintHistoryOperation`; the `PrintHistoryPlan`: the request it sends,
+ * or why it is refused before anything leaves.
+ */
+export function print_history_plan(operation: string): string;
+
+/**
+ * A `PrintHistoryOperation` and its reply (Moonraker's `result`, as JSON);
+ * the `PrintHistoryResult`.
+ */
+export function print_history_read(operation: string, reply: string): string;
+
+/**
+ * An `OptionalPrintHistoryTotals`; the `PrinterText` a panel shows.
+ */
+export function print_history_totals_text(totals: string): string;
+
+/**
  * A `PrintJobAvailabilityRequest`; the `PrintJobCommandDescriptors` the
  * observed state allows.
  */
@@ -1416,6 +1459,14 @@ export interface InitOutput {
     readonly presetlibrary_state: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_view: (a: number) => [number, number, number, number];
     readonly print_file_identity: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly print_history_duration: (a: number) => [number, number, number, number];
+    readonly print_history_filament: (a: number) => [number, number, number, number];
+    readonly print_history_finish: (a: number, b: number) => [number, number, number, number];
+    readonly print_history_job_view: (a: number, b: number) => [number, number, number, number];
+    readonly print_history_page_view: (a: number, b: number) => [number, number, number, number];
+    readonly print_history_plan: (a: number, b: number) => [number, number, number, number];
+    readonly print_history_read: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly print_history_totals_text: (a: number, b: number) => [number, number, number, number];
     readonly print_job_availability: (a: number, b: number) => [number, number, number, number];
     readonly print_job_command_failure: (a: number, b: number) => [number, number, number, number];
     readonly print_job_command_plan: (a: number, b: number) => [number, number, number, number];
