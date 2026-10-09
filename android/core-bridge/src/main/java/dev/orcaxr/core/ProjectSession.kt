@@ -570,6 +570,10 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
     fun query(): ProjectQueryNode = read { own(NativeProject.queryRoot(it, ProjectQuery.VERSION), ::ProjectQueryNode) }
     fun revision(): Long = read { NativeProject.projectRevision(it) }
     fun hash(): String = read { NativeProject.projectHash(it) }
+    /** "New project" from this one (the browser's `freshProjectState`): the
+     * canonical document of a clean project keeping its printer, base profile
+     * and physical tools. See [NewProjects] for the words and timestamp. */
+    fun fresh(words: DoubleArray, now: String): ByteArray = read { NativeProject.projectFresh(it, words, now) }
     /** The filament library as the painting palette, with stable IDs. */
     fun paintPalette(request: ProjectIntents.PaintPaletteRequest): ProjectIntents.PaintPalette = read {
         ProjectIntents.decodePaintPalette(NativeProject.projectPaintPalette(it, ProjectIntents.encodePaintPaletteRequest(request)))

@@ -263,7 +263,9 @@ All 48 `core-bridge` real-JNI instrumentation tests — now including
 (skipped without its arguments) — three shell cold starts and the Device
 area smoke (`android-device-smoke.py`, against the Moonraker simulator on
 the host, ending with a DNS-SD search that finds, adds and connects to it)
-pass on a freshly owned API 34 x86_64 emulator through `emulator-smoke.py`. The host's `/tmp` is a tmpfs and its
+and the Project area smoke (`android-project-smoke.py`, through the system
+document picker) pass on a freshly owned API 34 x86_64 emulator through
+`emulator-smoke.py`. The host's `/tmp` is a tmpfs and its
 disk was nearly full: give `TMPDIR` a disk-backed directory with at least
 8 GB free before running it. API 34 cannot exercise Android 17's
 local-network permission prompt; no API 37 image was available.
@@ -4212,6 +4214,62 @@ hostile, oversized secrets, many keys in any order, ids past their length,
 the switch, and every saved record) and 63 records saved; Rust, WASM in
 Node and Chrome, the printer core, JNI and 142 Kotlin checks reproduce
 every one.
+
+### Android Project area
+
+The app's Project area runs the project session as the browser's workspace
+does, over the shared core and the `ProjectActor`. `ProjectWorkspace`
+(core-bridge, host-testable) starts the actor with the browser's empty
+project and carries out "New project", Open and Save through document
+providers, model import, undo and redo; its `ProjectView` (name, plates,
+dirty state, the next undo and redo labels, the object tree's first page
+with plates expanded) is rebuilt from the session's own effects and
+history, never kept as a second project. `ProjectModel` is its host
+adapter (a ViewModel, provider work on one worker thread) and
+`ProjectScreen` its Compose surface; the shell's navigation is now
+Workspace, Project and Device.
+
+New projects are shared: `orcaxr_project::model::fresh_project` is the
+browser's "New project" (`freshProjectState`, extracted from
+`CanonicalWorkspaceController.resetProject`), keeping the printer (unknown
+fields included), the base profile — or the current configuration when none
+was recorded — and the physical tools, and dropping mixed filaments, plates
+and objects; `empty_project` is the project a session starts with.
+`project-fresh-vectors.mjs` records both from the production browser over
+the corpus's states, with identifiers drawn by the browser's UUID source
+from recorded random words: 3 empty and 17 fresh cases (two of them rich
+states made asset-free, so a host can open them from their document alone)
+agree in Rust and through JNI (`NativeProject.projectEmpty`,
+`ProjectSnapshot.fresh`, 27 Kotlin checks including refused word counts and
+timestamps, and `NewProjects.timestamp` writing `toISOString`'s form). The
+actor gained `resetFromSnapshot`, a guarded reset whose producer borrows the
+snapshot being replaced. The browser's opt-in auto-pair generation, which
+"New project" applies when enabled, has no preference on Android and is not
+applied there.
+
+`ProjectWorkspaceChecks` (24 checks over real JNI) start with the browser's
+empty project; preview an STL import without changing the project, commit it
+as one undoable entry, undo and redo it; refuse a lossy OBJ import until its
+listed changes are acknowledged; report a provider's write failure with its
+code while the project stays dirty; save a 3MF, start a new project and open
+the saved one back with the same tree; refuse a document that is not one
+while keeping the project; and keep recent documents newest first, one per
+document, at most eight. The screen previews an import with the notices the
+operator accepts by importing (the preview counts the resulting project's
+objects, not the additions), asks before discarding unsaved changes for New
+and Open, saves to the document "Save as" created (an opened foreign file is
+never overwritten by "Save"), keeps recent documents with persisted
+read/write grants (released when an entry falls off; an entry whose grant or
+document is gone is forgotten when it fails), and accepts a 3MF another app
+opens or shares only as a `content:` URI, read through the same bounded Open
+without keeping its grant. `android-project-smoke.py` drives it on an owned
+emulator through the system document picker: import, undo, redo, Save as
+(a ZIP package in Downloads), New, reopen from recents, the discard dialog,
+a `file:` handover refused, and the recent document reopened after a
+restart through its persisted grant. A model lands on the browser's
+200 mm plate until printer profiles reach Android; Save/Discard/Cancel with
+saving first, recovery storage, sharing a project out and multi-window
+ownership remain.
 
 ### Android Device area
 

@@ -162,6 +162,24 @@ try {
   assert.equal(documentOwnerChecks, 7);
   const actorChecks = jvm.call("actorChecks", JSON.parse(await readFile(new URL("testdata/cross-platform/project-model-vectors.json",root))).factories[0].stateJson);
   assert.equal(actorChecks, 12);
+  // New projects: the browser's empty project and "New project" from every model state.
+  const fresh = JSON.parse(await readFile(new URL("testdata/cross-platform/project-fresh-vectors.json", root)));
+  const states = new Map([
+    ...model.factories.map((each) => [`factory:${each.seed}`, each.stateJson]),
+    ...model.cases.map((each) => [`case:${each.name}`, each.stateJson]),
+  ]);
+  let newProjectChecks = jvm.call("newProjectChecks");
+  assert.equal(newProjectChecks, 8);
+  for (const { words, now, stateJson } of fresh.empty) newProjectChecks += jvm.call("newProjectCase", now, words, null, stateJson);
+  // A source opens as a session from its document alone when it references no asset.
+  const openable = fresh.fresh
+    .map((each) => ({ ...each, sourceJson: each.sourceJson ?? states.get(each.source) }))
+    .filter(({ sourceJson }) => JSON.parse(sourceJson).sourceAssets.length === 0);
+  assert.equal(openable.length, 8);
+  for (const { sourceJson, words, now, stateJson } of openable) {
+    newProjectChecks += jvm.call("newProjectCase", now, words, sourceJson, stateJson);
+  }
+  assert.equal(newProjectChecks, 8 + fresh.empty.length + 2 * openable.length);
   const actorPreparationChecks = jvm.call("actorPreparationChecks", model.factories[0].stateJson);
   assert.equal(actorPreparationChecks, 17);
   const exportFixture = JSON.parse(await readFile(new URL("testdata/cross-platform/project-export-vectors.json", root)));
@@ -203,7 +221,7 @@ try {
       ),
       layout,
     ),
-    { clipboardOwnerChecks, actorClipboardChecks, actorClipboardReplays, documentOwnerChecks, actorChecks, actorPreparationChecks, actorExportChecks, actorCapturedChecks },
+    { clipboardOwnerChecks, actorClipboardChecks, actorClipboardReplays, documentOwnerChecks, actorChecks, actorPreparationChecks, newProjectChecks, actorExportChecks, actorCapturedChecks },
     projectClipboardBoundaries(
       projectJniCore(jvm.call),
       stagedFixture,
@@ -280,6 +298,9 @@ try {
     decodeBytes("detect/step"),
   );
   assert.equal(actorImportChecks, 7);
+  // The Project area's session: start, import, undo/redo, Save/Open, New project, recent documents.
+  const projectWorkspaceChecks = jvm.call("projectWorkspaceChecks", decodeBytes("stl-binary/cube"), decodeBytes("obj/mtllib-unresolved"));
+  assert.equal(projectWorkspaceChecks, 24);
   const archiveCase = JSON.parse(
     await readFile(new URL("testdata/cross-platform/foreign-import-vectors.json", root)),
   ).cases.find((c) => c.name === ACTOR_ARCHIVE_CASE);
@@ -1261,6 +1282,7 @@ try {
     archives,
     models,
     actorImportChecks,
+    projectWorkspaceChecks,
     actorArchiveChecks,
     providerDocumentChecks,
     ...preflights,

@@ -127,8 +127,14 @@ Detailed evidence and reproducible commands live in
   (`prepareImport`/`commitImport`): the 21 browser transactions replay in Node,
   Chrome 150 and host JNI; seven actor journeys pass. Instrumented tests compile
   but have not run on a device.
-- [ ] Wire provider Open/Save and model import into the application UI
+- [x] Wire provider Open/Save and model import into the application UI
   (pickers, persisted grants, recent files, share intents) in Phase 7.
+  The app's Project area (`ProjectWorkspace`/`ProjectModel`) opens, saves as,
+  imports (previewed, acknowledged, one undoable entry), undoes, redoes and
+  starts new projects (the shared `fresh_project`, replayed against the
+  browser), keeps recent documents with persisted grants and accepts incoming
+  VIEW/SEND only as `content:` URIs; 24 host checks over JNI and an
+  owned-emulator smoke through the system picker pass.
 - [x] Share bounded G-code text windows and case-insensitive line search through
   Rust, WASM and JNI (Phase 3). Browser, host and Chrome WASM replays agree on
   18,710 searches; the Android instrumented replay has not run on a device yet.
@@ -1799,10 +1805,11 @@ storage journeys on phone, tablet, and desktop-sized windows.
 - [ ] Implement Prepare, Preview, Device, and Project navigation with the existing
   action names and semantics. Use ViewModels/coroutines as host adapters to the
   core; Compose state contains projections and drafts, never a second project.
-  The shell navigates between the workspace preview and the Device area,
-  whose `DeviceModel` ViewModel is the host adapter over `DeviceWorkspace`
-  and publishes projections to Compose. Prepare, Preview and Project wait for
-  their complete shared workflows.
+  The shell navigates between the workspace preview, the Project area
+  (`ProjectModel` over `ProjectWorkspace` and the `ProjectActor`) and the
+  Device area, whose `DeviceModel` ViewModel is the host adapter over
+  `DeviceWorkspace`; each publishes projections to Compose. Prepare and
+  Preview wait for their complete shared workflows.
 - [ ] Adapt inspector/object tree, toolbars, menus, command palette, dialogs,
   settings, and progress states to narrow, medium, and wide windows. Support
   keyboard traversal, shortcuts, hover, context menus, trackpad navigation,
@@ -1815,7 +1822,12 @@ storage journeys on phone, tablet, and desktop-sized windows.
   large-file streaming. Validate incoming open/share intents as untrusted input.
   `ProjectDocuments`/`ContentProjectDocument` in core-bridge already handle
   unsized/nonseekable input, stale sizes, revoked grants, disk-full codes and
-  package-before-truncate Save; pickers, grants, recent files and intents remain.
+  package-before-truncate Save. The Project area now has Open, Save as (and
+  Save to the document it created), New, model import, recent documents with
+  persisted grants (a revoked or missing one is forgotten when it fails) and
+  incoming VIEW/SEND validated as `content:` input; an owned-emulator smoke
+  drives them through the system picker. Sharing a project out, a disk-full
+  or revoked grant on a device, and large-file timing remain unverified.
 - [ ] Implement recovery storage and Save/Discard/Cancel guards for back,
   navigation, new/open/replace, window close where observable, and app updates.
   Test process death during capture, write, commit, and restore.

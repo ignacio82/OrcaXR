@@ -123,7 +123,8 @@ class ProjectActor private constructor(
         data object ClearClipboard : Work
         data class Copy(val expected: ProjectActorGuard, val epoch: Any, val options: ProjectStagingClipboardOptions,
             val select: (ProjectPreparation, ProjectSnapshot) -> ProjectQueryNode) : Work
-        data class Document(val mode: DocumentMode, val expected: ProjectActorGuard?, val produce: (ProjectPreparation) -> ProjectDocument) : Work
+        data class Document(val mode: DocumentMode, val expected: ProjectActorGuard?,
+            val produce: (ProjectPreparation, ProjectSnapshot?) -> ProjectDocument) : Work
         data class Commands(val expected: ProjectActorGuard, val clipboard: ProjectActorClipboard?, val bytes: Long, val options: ProjectStagingInputOptions,
             val write: (ProjectPreparation, ProjectSnapshot, ProjectCommandWriter) -> Unit,
             val assets: ((ProjectPreparation, ProjectAssetWriter) -> Unit)? = null) : Work
@@ -223,7 +224,7 @@ class ProjectActor private constructor(
      * the authority; newer Opens, edits and disposal invalidate its final commit. */
     fun openDocument(prepare: (ProjectPreparation) -> ProjectDocument): ProjectRequest = synchronized(gate) {
         refusal()?.let { return refused(it) }
-        enqueue(Work.Document(DocumentMode.OPEN, null, prepare))
+        enqueue(Work.Document(DocumentMode.OPEN, null) { scope, _ -> prepare(scope) })
     }
 
     /** Select from the borrowed immutable source on a preparation worker. The
@@ -273,7 +274,16 @@ class ProjectActor private constructor(
     fun resetDocument(expected: ProjectActorGuard, prepare: (ProjectPreparation) -> ProjectDocument): ProjectRequest = synchronized(gate) {
         refusal()?.let { return refused(it) }
         if (expected.owner !== guardOwner) return refused(ProjectRefusal.STALE)
-        enqueue(Work.Document(DocumentMode.RESET, expected, prepare))
+        enqueue(Work.Document(DocumentMode.RESET, expected) { scope, _ -> prepare(scope) })
+    }
+
+    /** "New project": a reset whose producer borrows a snapshot matching
+     * [expected] — the project being replaced — and derives the new document
+     * from it ([ProjectSnapshot.fresh]). Guarded and committed as [resetDocument]. */
+    fun resetFromSnapshot(expected: ProjectActorGuard, prepare: (ProjectPreparation, ProjectSnapshot) -> ProjectDocument): ProjectRequest = synchronized(gate) {
+        refusal()?.let { return refused(it) }
+        if (expected.owner !== guardOwner) return refused(ProjectRefusal.STALE)
+        enqueue(Work.Document(DocumentMode.RESET, expected) { scope, snapshot -> prepare(scope, checkNotNull(snapshot)) })
     }
 
     /** Prepare a single command or atomic batch through the separate bulk contract.
@@ -455,9 +465,10 @@ class ProjectActor private constructor(
                 if (work.expected != null) checkGuard(value, work.expected, true)
                 val ticket = if (work.mode == DocumentMode.OPEN) task.scope.own(value.beginOpen()) else null
                 val guard = if (work.mode == DocumentMode.RESET) task.scope.own(value.captureGuard()) else null
+                val snapshot = if (work.mode == DocumentMode.RESET) task.scope.own(value.snapshot()) else null
                 ({
                     task.scope.checkActive()
-                    Prepared.Document(work.mode, task.scope.own(work.produce(task.scope)), ticket, guard)
+                    Prepared.Document(work.mode, task.scope.own(work.produce(task.scope, snapshot)), ticket, guard)
                 })
             }
             is Work.Commands -> {

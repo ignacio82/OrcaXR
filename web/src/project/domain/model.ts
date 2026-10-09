@@ -1,4 +1,5 @@
 import type { EmbossTextConfiguration } from '../objects/emboss';
+import { cloneJson } from './canonical';
 import type {
   AssetId,
   CustomGcodeId,
@@ -508,6 +509,29 @@ export function createEmptyProject(options: EmptyProjectOptions): ProjectState {
     thumbnails: [],
     extensionBlobs: [],
   };
+}
+
+/**
+ * "New project": a clean project that keeps the printer, its base profile
+ * (the current configuration when none was recorded) and the physical tools
+ * of `current`; mixed filaments, plates and objects are not carried over.
+ */
+export function freshProjectState(current: ProjectState, idSource: IdSource, now: string): ProjectState {
+  const baseConfig = cloneJson(current.settingsBaseConfig ?? current.config);
+  const next = createEmptyProject({
+    idSource,
+    now,
+    name: 'Untitled project',
+    firstPlateName: 'Plate 1',
+    toolCount: current.printer.toolCount,
+  });
+  next.printer = cloneJson(current.printer);
+  next.settingsBaseConfig = baseConfig;
+  next.settingsOverrides = {};
+  next.config = cloneJson(baseConfig);
+  next.filaments.physical = cloneJson(current.filaments.physical);
+  next.filaments.mixed = [];
+  return next;
 }
 
 export function emptyFacetAnnotations(topologyRevision = 0): FacetAnnotations {

@@ -270,7 +270,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   members a Save regenerates (to a sink), so values XML 1.0 cannot carry refuse as in the browser. Canonical admission
   checks schema-1 shapes generated from the core's `record!` declarations (`project-shape.ts`). `bbs::foreign` matches browser
   foreign import; `models` matches its STL/OBJ/AMF/ZIP decode/stage/preview/undoable commit (WASM/JNI/actor). Archive Open/Save are owned WASM/JNI tasks; all limits derive from
-  `contracts/project-archive.json`; Kotlin `ProjectDocuments` adapts provider streams (truncates only after packaging). Project WASM exposes immutable effects/captures; Node-worker replay agrees.
+  `contracts/project-archive.json`; Kotlin `ProjectDocuments` adapts provider streams (truncates only after packaging); the app's Project area (`ProjectWorkspace`/`ProjectModel`: new/open/save-as/import/undo, recents with persisted grants, incoming VIEW/SEND as untrusted) runs on the actor, "New project" = shared `fresh_project`. Project WASM exposes immutable effects/captures; Node-worker replay agrees.
   Browser timestamps use the host's Date.parse with lossless UTF-16 conversion. Hosts must bound inputs before wasm-bindgen copies them and
   dispatch effects before acknowledgement. Explicit JSON export allocates the
   whole serialized capture; chunk reads do not make it a live projection or

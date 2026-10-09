@@ -3,7 +3,7 @@
   "sources": [
     {
       "path": "web/src/project/domain/model.ts",
-      "sha256": "1ea97f8215d31b3c80fa713df24201acebab6d0480d7695976e4c5e83ff5d98e"
+      "sha256": "5f1111fbc29eced4af7a21fc6d51b4d1de2ed9f08f550efce2a2b8ffc5b741d7"
     },
     {
       "path": "web/src/project/domain/ids.ts",

@@ -283,6 +283,27 @@ pub fn identity_transform() -> Transform {
         extra: ExtraFields::default(),
     }
 }
+/// "New project" (the browser's `freshProjectState`): a clean project that
+/// keeps the printer, its base profile (the current configuration when none
+/// was recorded) and the physical tools of `current`; mixed filaments, plates
+/// and objects are not carried over. Identifiers are drawn as `empty_project`
+/// draws them.
+pub fn fresh_project(current: &ProjectState, ids: &mut impl IdSource, now: Text) -> ProjectState {
+    let base = current
+        .settings_base_config
+        .clone()
+        .unwrap_or_else(|| current.config.clone());
+    let mut next = empty_project(ids, now, None, None, Some(current.printer.tool_count));
+    next.printer = current.printer.clone();
+    next.settings_base_config = Some(base.clone());
+    next.settings_overrides =
+        Some(JsonObject::new(Value::Object(BTreeMap::new())).expect("empty configuration"));
+    next.config = base;
+    next.filaments.physical = current.filaments.physical.clone();
+    next.filaments.mixed = Arc::from([]);
+    next
+}
+
 /// The host injects its timestamp; UUID allocation order matches the browser.
 pub fn empty_project(
     ids: &mut impl IdSource,

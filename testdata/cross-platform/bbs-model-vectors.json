@@ -9,7 +9,7 @@
     "web/src/project/serialization/embossTextConfig.ts": "daadc9748cc9dc7e852af3f1d6079ae9fa5b110173398ceb18dedc538833df71",
     "web/src/project/serialization/bbsFacetCodec.ts": "3ba3023537f080b8f385f4b9e1058707b3867e091a1be58b492196a77250109f",
     "web/src/project/meshCodec.ts": "8b60584a77dbd88455e58e832633935b98787f765dd680aefdd897cfc845b6cc",
-    "web/src/project/domain/model.ts": "1ea97f8215d31b3c80fa713df24201acebab6d0480d7695976e4c5e83ff5d98e",
+    "web/src/project/domain/model.ts": "5f1111fbc29eced4af7a21fc6d51b4d1de2ed9f08f550efce2a2b8ffc5b741d7",
     "web/src/project/domain/canonical.ts": "af4d5f18228dcc903a54d9fa56f187bf7f928a0ad69becfc305248c181218922",
     "web/src/project/domain/validation.ts": "4b9efafe6c58e752814722ceacb710fdc79f0896f00c1f9215b5991c41df6fae"
   },

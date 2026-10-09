@@ -3,7 +3,7 @@
   "sources": {
     "web/src/project/serialization/bbsCore.ts": "c51122f801dcb71fa079c033d9400293774420ef6e24592f54c0931228a115dd",
     "web/src/project/serialization/bbsXml.ts": "783335f452cc1336444fef7545aa7564bd1ec0679ccbf91d251e6a64b628aac4",
-    "testdata/cross-platform/bbs-model-vectors.json": "bdf8083e9f076ab670b99ae581f63e936ba97c203a4d2e2a9c04e8963b866cfb"
+    "testdata/cross-platform/bbs-model-vectors.json": "f548e91f502de522c0321fac6951c34c73d11817197c7517976a0822104545d9"
   },
   "cases": [
     {

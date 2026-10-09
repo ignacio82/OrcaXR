@@ -16,7 +16,7 @@
     },
     {
       "path": "web/src/project/domain/model.ts",
-      "sha256": "1ea97f8215d31b3c80fa713df24201acebab6d0480d7695976e4c5e83ff5d98e"
+      "sha256": "5f1111fbc29eced4af7a21fc6d51b4d1de2ed9f08f550efce2a2b8ffc5b741d7"
     },
     {
       "path": "web/src/project/domain/facetRefinement.ts",
@@ -28,11 +28,11 @@
     },
     {
       "path": "testdata/cross-platform/project-model-vectors.json",
-      "sha256": "7c8510f7a0b3009f17baa7c74ffb1c11ca83d5ed279a8b6c9a369ff775027f51"
+      "sha256": "d53cb7e5f88efd73d594af87e6b4abbb848696297acd0d124eb450663c060c63"
     },
     {
       "path": "testdata/cross-platform/facet-refinement-vectors.json",
-      "sha256": "637858a9da0f6b80e7a4dbf90f875452930ebea440de2db6bdeb20a6660159a4"
+      "sha256": "b56b6f353d61c456a3b2841f1b11a18a30185e14544e507205bb27dd1026516c"
     }
   ],
   "sourceCodes": [

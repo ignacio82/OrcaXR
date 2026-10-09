@@ -82,6 +82,7 @@ import type {
 import { entityId } from '../project/domain/ids';
 import {
   createEmptyProject,
+  freshProjectState,
   emptyFacetAnnotations,
   identityTransform,
   type ConfigMap,
@@ -2140,20 +2141,7 @@ export class CanonicalWorkspaceController {
   resetProject(): void {
     this.assertActive();
     const current = this.session.project.getSnapshot().state;
-    const baseConfig = cloneJson(current.settingsBaseConfig ?? current.config);
-    const next = createEmptyProject({
-      idSource: this.options.idSource,
-      now: readClock(this.options.clock),
-      name: 'Untitled project',
-      firstPlateName: 'Plate 1',
-      toolCount: current.printer.toolCount,
-    });
-    next.printer = cloneJson(current.printer);
-    next.settingsBaseConfig = baseConfig;
-    next.settingsOverrides = {};
-    next.config = cloneJson(baseConfig);
-    next.filaments.physical = cloneJson(current.filaments.physical);
-    next.filaments.mixed = [];
+    const next = freshProjectState(current, this.options.idSource, readClock(this.options.clock));
     this.session.reset(this.withReconciledAutoPairs(next));
   }
 

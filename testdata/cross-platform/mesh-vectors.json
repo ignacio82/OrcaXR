@@ -6,7 +6,7 @@
     "web/src/project/objects/bounds.ts": "688c6ea16a0b88e3a9ebbed9b661c0791e8992df584326e9888cedd8d7f3b4ce",
     "web/src/project/assets.ts": "a3fa56557a1447e70cf2121828915360b7d93a2a575433a9d15889561beacbdc",
     "web/src/project/domain/canonical.ts": "af4d5f18228dcc903a54d9fa56f187bf7f928a0ad69becfc305248c181218922",
-    "web/src/project/domain/model.ts": "1ea97f8215d31b3c80fa713df24201acebab6d0480d7695976e4c5e83ff5d98e",
+    "web/src/project/domain/model.ts": "5f1111fbc29eced4af7a21fc6d51b4d1de2ed9f08f550efce2a2b8ffc5b741d7",
     "web/src/project/domain/selectors.ts": "b91b551fd5509bd7c858d0b654d73d8b21cd4ec719be84fae8b4bf034e925341",
     "web/src/project/__tests__/fixtures.ts": "ed0ced7a9c80be9e872988f5d2352176d814d59eae9ee94263f2fc8984a143ba"
   },

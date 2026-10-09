@@ -2,7 +2,7 @@
   "version": 1,
   "sources": {
     "web/src/project/serialization/bbsNumbers.ts": "21673b9e047996636e248c8b5907b42c641a3c1f668299ef2e06d59d0e0f5111",
-    "web/src/project/domain/model.ts": "1ea97f8215d31b3c80fa713df24201acebab6d0480d7695976e4c5e83ff5d98e"
+    "web/src/project/domain/model.ts": "5f1111fbc29eced4af7a21fc6d51b4d1de2ed9f08f550efce2a2b8ffc5b741d7"
   },
   "mesh": [
     {

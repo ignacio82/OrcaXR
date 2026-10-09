@@ -10,9 +10,9 @@
     "web/src/project/serialization/opcPackage.ts": "7f39787564713dff268e9ff78b5ce2c0726cfb990500866dc7328ef6b7e15677",
     "web/src/project/serialization/deterministicZip.ts": "795c5d7ff767ebb8e2097d9181adc7b66fea988d1fe3540f16618934f82b188e",
     "web/src/project/domain/canonical.ts": "af4d5f18228dcc903a54d9fa56f187bf7f928a0ad69becfc305248c181218922",
-    "testdata/cross-platform/bbs-model-vectors.json": "bdf8083e9f076ab670b99ae581f63e936ba97c203a4d2e2a9c04e8963b866cfb",
-    "testdata/cross-platform/bbs-metadata-vectors.json": "83c62340c29c223c24a8f1fd6170bdd8b8cc1381591c4cf179a682240a133a40",
-    "testdata/cross-platform/bbs-settings-vectors.json": "037804c7b4d99a8775f541a2e004b79a02a2089719e74e13ec81f4790e6fe7f8",
+    "testdata/cross-platform/bbs-model-vectors.json": "f548e91f502de522c0321fac6951c34c73d11817197c7517976a0822104545d9",
+    "testdata/cross-platform/bbs-metadata-vectors.json": "68ff29050d7dcb63cedc9c47bdea0f1b434d1dfaabb379913b6c5a2e5382154e",
+    "testdata/cross-platform/bbs-settings-vectors.json": "97baf1ba2a5a7929df1e44f2f75a56a4a41296f7c6374693b547eccad57456e8",
     "testdata/cross-platform/package-input-vectors.json": "4aeed42afac079c1fdcd7a81f2d4e9c291d2f69f0b5fc8fae1fc1bc5bb5aa20d"
   },
   "cases": [

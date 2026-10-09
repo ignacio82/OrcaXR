@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Own a temporary API 34 AVD/process for the JNI and app-startup smoke test."""
+"""Own a temporary API 34 AVD/process for the JNI, app-startup, Device and Project smoke tests."""
 import os
 from pathlib import Path
 import subprocess
@@ -37,6 +37,7 @@ with tempfile.TemporaryDirectory(prefix="orcaxr-avd-") as directory:
                 raise RuntimeError("Owned emulator did not boot before the deadline")
             subprocess.run(["python3", "tools/cross-platform/android-smoke.py", "--serial", serial], cwd=ROOT, check=True)
             subprocess.run(["python3", "tools/cross-platform/android-device-smoke.py", "--serial", serial], cwd=ROOT, check=True)
+            subprocess.run(["python3", "tools/cross-platform/android-project-smoke.py", "--serial", serial], cwd=ROOT, check=True)
         finally:
             process.terminate()
             try:

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "sources": {
     "contracts/project-query.json": "4c7815313b0f774e0d3ade3f5073290e64b1c6d4701cc8812fd24f29e1ad7079",
-    "web/src/project/domain/model.ts": "1ea97f8215d31b3c80fa713df24201acebab6d0480d7695976e4c5e83ff5d98e",
+    "web/src/project/domain/model.ts": "5f1111fbc29eced4af7a21fc6d51b4d1de2ed9f08f550efce2a2b8ffc5b741d7",
     "web/src/project/domain/selectors.ts": "b91b551fd5509bd7c858d0b654d73d8b21cd4ec719be84fae8b4bf034e925341",
     "web/src/project/domain/canonical.ts": "af4d5f18228dcc903a54d9fa56f187bf7f928a0ad69becfc305248c181218922",
     "web/src/project/domain/validation.ts": "4b9efafe6c58e752814722ceacb710fdc79f0896f00c1f9215b5991c41df6fae",
     "web/src/project/objects/projection.ts": "70aeb79e325d31f7ff6b328bac52d42f55d600cbc959ed95b40aa44827cc9890",
-    "testdata/cross-platform/project-model-vectors.json": "7c8510f7a0b3009f17baa7c74ffb1c11ca83d5ed279a8b6c9a369ff775027f51",
-    "testdata/cross-platform/project-session-vectors.json": "6a36e83675ed28a2bd2aeeecd16d0cfa29042e481d58a87ae84c9b692bfcb83a",
-    "testdata/cross-platform/project-validation-vectors.json": "6950306199f9543c0a770d685d13e9e93a2e965725df096e6fbf84b0a59f7518",
+    "testdata/cross-platform/project-model-vectors.json": "d53cb7e5f88efd73d594af87e6b4abbb848696297acd0d124eb450663c060c63",
+    "testdata/cross-platform/project-session-vectors.json": "fc850325dd09c19a726f2abdfb471b6f948061b7783092d33a9245587d6750ae",
+    "testdata/cross-platform/project-validation-vectors.json": "6eeab4b67201a0ba8932a18a998c6a64b6b672d9fd4ce5b9da80b97510cb25d1",
     "tools/cross-platform/project-query-vectors.mjs": "da14daed687342c789794607ccad0df9eb921b240ea879a6b160a9ab23160a4d"
   },
   "texts": [

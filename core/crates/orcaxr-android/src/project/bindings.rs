@@ -1823,6 +1823,19 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_projectFresh, project_fresh, jbyteArray,
+    handle: jlong,
+    words: JDoubleArray<'local>,
+    now: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectEmpty, project_empty, jbyteArray,
+    words: JDoubleArray<'local>,
+    now: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_projectIdLength, project_id_length, jlong,
     handle: jlong,
 }

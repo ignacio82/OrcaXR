@@ -16,6 +16,7 @@ mod archive;
 mod bindings;
 mod catalog;
 mod editor;
+mod fresh;
 mod json_sink;
 mod library;
 mod model;
@@ -26,6 +27,7 @@ mod timestamps;
 use archive::*;
 use catalog::*;
 use editor::*;
+use fresh::*;
 use jni::{
     JNIEnv,
     objects::{JByteArray, JCharArray, JClass, JDoubleArray, JLongArray, JObject, JString},

@@ -92,6 +92,15 @@ public final class ProjectJniHarness {
     public static long printerExchangesChecks(String endpoint) {
         return ProjectPrinterExchangesChecks.run(endpoint);
     }
+    public static long newProjectCase(String now, double[] words, String source, String expected) {
+        return ProjectNewChecks.replay(now, words, source, expected);
+    }
+    public static long projectWorkspaceChecks(byte[] cube, byte[] lossy) {
+        return ProjectWorkspaceChecks.run(cube, lossy);
+    }
+    public static long newProjectChecks() {
+        return ProjectNewChecks.run();
+    }
     public static long deviceWorkspaceChecks(String endpoint) {
         return ProjectDeviceWorkspaceChecks.run(endpoint);
     }
@@ -325,6 +334,9 @@ public final class ProjectJniHarness {
             if (name.equals("printerSessionChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("moonrakerPolicyChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("printerExchangesChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("newProjectCase")) method = ProjectJniHarness.class.getMethod(name, String.class, double[].class, String.class, String.class);
+            if (name.equals("projectWorkspaceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);
+            if (name.equals("newProjectChecks")) method = ProjectJniHarness.class.getMethod(name);
             if (name.equals("deviceWorkspaceChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("printerDiscoveryChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class);
             if (name.equals("localNetworkChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
