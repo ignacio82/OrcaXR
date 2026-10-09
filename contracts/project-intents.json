@@ -4,6 +4,12 @@
   "maxBytes": 1048576,
   "maxNodes": 131072,
   "maxDepth": 12,
+  "bulk": {
+    "maxBytes": 16777216,
+    "maxNodes": 4194304,
+    "maxDepth": 12
+  },
+  "bulkRoots": ["PrinterStorageResult"],
   "description": "Prepared project commands, session messages and slice preflight exchanges. Text is lossless UTF-16 units. Project transport, command format and persisted schema versions are distinct.",
   "definitions": {
     "Unit": {
@@ -6254,6 +6260,163 @@
         "broken": "Empty",
         "random": "Finite"
       }
+    },
+    "PrinterStorageMove": {
+      "kind": "object",
+      "fields": {
+        "source": "EditText",
+        "destination": "EditText"
+      }
+    },
+    "PrinterStorageRename": {
+      "kind": "object",
+      "fields": {
+        "path": "EditText",
+        "name": "EditText"
+      }
+    },
+    "PrinterStorageOperation": {
+      "kind": "union",
+      "variants": {
+        "list": "PrinterText",
+        "metadata": "PrinterText",
+        "download": "PrinterText",
+        "delete": "PrinterText",
+        "move": "PrinterStorageMove",
+        "rename": "PrinterStorageRename",
+        "start": "PrinterText"
+      }
+    },
+    "PrinterStorageErrorCode": {
+      "kind": "enum",
+      "values": [
+        "listingFailed",
+        "metadataUnavailable",
+        "deleteFailed",
+        "moveFailed",
+        "downloadFailed",
+        "startFailed",
+        "invalidTarget",
+        "cancelled"
+      ]
+    },
+    "PrinterStorageFailure": {
+      "kind": "object",
+      "fields": {
+        "code": "PrinterStorageErrorCode",
+        "message": "EditText"
+      }
+    },
+    "PrinterStorageDownload": {
+      "kind": "object",
+      "fields": {
+        "path": "EditText",
+        "operation": "EditText"
+      }
+    },
+    "PrinterStoragePlan": {
+      "kind": "union",
+      "variants": {
+        "request": "PrinterSend",
+        "download": "PrinterStorageDownload",
+        "refused": "PrinterStorageFailure"
+      }
+    },
+    "PrinterExchangeOutcome": {
+      "kind": "union",
+      "variants": {
+        "done": "Empty",
+        "failed": "TransportFailure",
+        "cancelled": "Empty"
+      }
+    },
+    "PrinterStorageFinish": {
+      "kind": "object",
+      "fields": {
+        "operation": "PrinterStorageOperation",
+        "outcome": "PrinterExchangeOutcome"
+      }
+    },
+    "PrinterReplyText": {
+      "kind": "array",
+      "items": "Unit",
+      "min": 0,
+      "max": 2097152
+    },
+    "OptionalPrinterReplyText": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "PrinterReplyText"
+      }
+    },
+    "PrinterStorageEntry": {
+      "kind": "object",
+      "fields": {
+        "name": "PrinterReplyText",
+        "modifiedMs": "OptionalFinite",
+        "sizeBytes": "OptionalFinite"
+      }
+    },
+    "PrinterStorageEntries": {
+      "kind": "array",
+      "items": "PrinterStorageEntry",
+      "min": 0,
+      "max": 262144
+    },
+    "PrinterStorageListing": {
+      "kind": "object",
+      "fields": {
+        "path": "EditText",
+        "directories": "PrinterStorageEntries",
+        "files": "PrinterStorageEntries",
+        "freeBytes": "OptionalFinite",
+        "totalBytes": "OptionalFinite"
+      }
+    },
+    "PrinterStorageThumbnail": {
+      "kind": "object",
+      "fields": {
+        "width": "Finite",
+        "height": "Finite",
+        "relativePath": "PrinterReplyText",
+        "sizeBytes": "OptionalFinite"
+      }
+    },
+    "PrinterStorageThumbnails": {
+      "kind": "array",
+      "items": "PrinterStorageThumbnail",
+      "min": 0,
+      "max": 65536
+    },
+    "PrinterStorageMetadata": {
+      "kind": "object",
+      "fields": {
+        "path": "EditText",
+        "sizeBytes": "OptionalFinite",
+        "modifiedMs": "OptionalFinite",
+        "slicer": "OptionalPrinterReplyText",
+        "slicerVersion": "OptionalPrinterReplyText",
+        "layerHeightMm": "OptionalFinite",
+        "objectHeightMm": "OptionalFinite",
+        "filamentTotalMm": "OptionalFinite",
+        "filamentWeightG": "OptionalFinite",
+        "estimatedSeconds": "OptionalFinite",
+        "firstLayerBedTempC": "OptionalFinite",
+        "firstLayerNozzleTempC": "OptionalFinite",
+        "thumbnails": "PrinterStorageThumbnails"
+      }
+    },
+    "PrinterStorageResult": {
+      "kind": "union",
+      "variants": {
+        "listing": "PrinterStorageListing",
+        "metadata": "PrinterStorageMetadata",
+        "done": "Empty",
+        "moved": "PrinterText",
+        "started": "PrinterText",
+        "failed": "PrinterStorageFailure"
+      }
     }
   },
   "roots": [
@@ -6441,7 +6604,12 @@
     "MoonrakerCredentials",
     "MoonrakerLog",
     "OptionalMoonrakerTransportFault",
-    "MoonrakerTransportStepReply"
+    "MoonrakerTransportStepReply",
+    "PrinterStorageOperation",
+    "PrinterStoragePlan",
+    "PrinterStorageFinish",
+    "PrinterStorageResult",
+    "OptionalText"
   ],
   "sessionVersion": 1
 }

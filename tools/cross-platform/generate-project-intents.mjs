@@ -20,6 +20,8 @@ exact(schema, [
   "description",
   "definitions",
   "roots",
+  "bulk",
+  "bulkRoots",
 ]);
 assert.equal(schema.schemaVersion, 1);
 assert.equal(typeof schema.description, "string");
@@ -36,6 +38,19 @@ for (const key of [
       schema[key] <= 0x7fffffff,
   );
 assert.ok(schema.maxDepth <= 32);
+// The bulk tier: roots that carry a printer's replies decoded (listings,
+// metadata, pages) validate under larger bounds than commands do.
+exact(schema.bulk, ["maxBytes", "maxNodes", "maxDepth"]);
+for (const key of ["maxBytes", "maxNodes", "maxDepth"])
+  assert.ok(
+    Number.isSafeInteger(schema.bulk[key]) &&
+      schema.bulk[key] >= schema[key] &&
+      schema.bulk[key] <= 0x7fffffff,
+  );
+assert.ok(schema.bulk.maxDepth <= 32);
+assert.ok(Array.isArray(schema.bulkRoots));
+assert.equal(new Set(schema.bulkRoots).size, schema.bulkRoots.length);
+for (const name of schema.bulkRoots) assert.ok(schema.roots.includes(name), name);
 assert.deepEqual(schema.roots, [
   "Intent",
   "Batch",
@@ -222,6 +237,11 @@ assert.deepEqual(schema.roots, [
   "MoonrakerLog",
   "OptionalMoonrakerTransportFault",
   "MoonrakerTransportStepReply",
+  "PrinterStorageOperation",
+  "PrinterStoragePlan",
+  "PrinterStorageFinish",
+  "PrinterStorageResult",
+  "OptionalText",
 ]);
 const definitions = schema.definitions;
 const known = new Set();
@@ -251,7 +271,8 @@ for (const [name, shape] of Object.entries(definitions)) {
     );
     if (shape.kind === "array") {
       assert.ok(known.has(shape.items));
-      assert.ok(shape.max <= schema.maxNodes);
+      // Past the default node budget only where bulk roots alone reach it.
+      assert.ok(shape.max <= schema.bulk.maxNodes);
     }
   } else if (shape.kind === "object" || shape.kind === "union") {
     const key = shape.kind === "object" ? "fields" : "variants";
@@ -278,6 +299,23 @@ for (const [name, shape] of Object.entries(definitions)) {
   known.add(name);
 }
 for (const name of schema.roots) assert.ok(known.has(name));
+{
+  // A root decoded under the default bounds reaches no array larger than
+  // they admit.
+  const seen = new Set();
+  const visit = (name) => {
+    if (seen.has(name)) return;
+    seen.add(name);
+    const shape = schema.definitions[name];
+    if (!shape) return;
+    if (shape.kind === "array") {
+      assert.ok(shape.max <= schema.maxNodes, `${name} exceeds the default tier`);
+      visit(shape.items);
+    } else if (shape.kind === "object") Object.values(shape.fields).forEach(visit);
+    else if (shape.kind === "union") Object.values(shape.variants).forEach(visit);
+  };
+  for (const name of schema.roots) if (!schema.bulkRoots.includes(name)) visit(name);
+}
 assert.deepEqual(definitions.Version, {
   kind: "integer",
   min: schema.version,
@@ -308,6 +346,7 @@ let ts =
 for (const [key, value] of Object.entries(constants))
   ts += `export const PROJECT_INTENT_${key} = ${value};\n`;
 ts += `const limits = ${JSON.stringify({ maxBytes: schema.maxBytes, maxNodes: schema.maxNodes, maxDepth: schema.maxDepth })};\n`;
+ts += `const bulkLimits = ${JSON.stringify(schema.bulk)};\n`;
 ts += `const shapes = ${JSON.stringify(definitions, null, 2)} as const satisfies Readonly<Record<string,IntentShape>>;\n`;
 let rust =
   header +
@@ -319,6 +358,8 @@ for (const [key, value] of Object.entries(constants)) {
   rust += `pub const ${key}: usize = ${value};\n`;
   kt += `    const val ${key} = ${value}\n`;
 }
+rust += `/// The bulk tier's bounds, for roots carrying a printer's replies decoded.\npub const BULK: super::project_intents::Limits = super::project_intents::Limits { bytes: ${schema.bulk.maxBytes}, nodes: ${schema.bulk.maxNodes}, depth: ${schema.bulk.maxDepth} };\n`;
+kt += `    /** The bulk tier's bounds, for roots carrying a printer's replies decoded. */\n    internal val BULK = ProjectIntentLimits(${schema.bulk.maxBytes}, ${schema.bulk.maxNodes}, ${schema.bulk.maxDepth})\n`;
 const ktType = (name, qualified = false) => {
   const s = definitions[name];
   if (s.kind === "wholeNumber" || s.kind === "number") return "Double";
@@ -446,13 +487,22 @@ for (const [name, shape] of Object.entries(definitions)) {
   kt += "    }\n";
 }
 for (const name of schema.roots) {
-  ts += `export function captureProject${name}(value:unknown):Project${name}Wire { return captureIntent(${JSON.stringify(name)},value,shapes,limits) as Project${name}Wire; }\n`;
-  ts += `export function decodeProject${name}(text:string):Project${name}Wire { return captureProject${name}(parseIntentJson(text,limits)); }\n`;
+  const bulk = schema.bulkRoots.includes(name);
+  const tsLimits = bulk ? "bulkLimits" : "limits";
+  ts += `export function captureProject${name}(value:unknown):Project${name}Wire { return captureIntent(${JSON.stringify(name)},value,shapes,${tsLimits}) as Project${name}Wire; }\n`;
+  ts += `export function decodeProject${name}(text:string):Project${name}Wire { return captureProject${name}(parseIntentJson(text,${tsLimits})); }\n`;
   ts += `export function encodeProject${name}(value:Project${name}Wire):string { return JSON.stringify(captureProject${name}(value)); }\n`;
-  rust += `pub fn decode_${snake(name)}(text:&str)->Result<${name},InvalidIntent> {read_${snake(name)}(&super::project_intents::parse(text)?)}\n`;
-  rust += `pub fn encode_${snake(name)}(value:&${name})->Result<String,InvalidIntent> {let text=super::project_intents::encode(value)?; decode_${snake(name)}(&text)?; Ok(text)}\n`;
-  kt += `    fun decode${name}(text: String): ${ktType(name)} = read${name}(ProjectIntentJson.parse(text))\n`;
-  kt += `    fun encode${name}(value: ${ktType(name)}): String = ProjectIntentWriter().also { write${name}(it, value) }.finish()\n`;
+  if (bulk) {
+    rust += `pub fn decode_${snake(name)}(text:&str)->Result<${name},InvalidIntent> {read_${snake(name)}(&super::project_intents::parse_bounded(text,&BULK)?)}\n`;
+    rust += `pub fn encode_${snake(name)}(value:&${name})->Result<String,InvalidIntent> {let text=super::project_intents::encode_bounded(value,&BULK)?; decode_${snake(name)}(&text)?; Ok(text)}\n`;
+    kt += `    fun decode${name}(text: String): ${ktType(name)} = read${name}(ProjectIntentJson.parse(text, BULK))\n`;
+    kt += `    fun encode${name}(value: ${ktType(name)}): String = ProjectIntentWriter(BULK).also { write${name}(it, value) }.finish()\n`;
+  } else {
+    rust += `pub fn decode_${snake(name)}(text:&str)->Result<${name},InvalidIntent> {read_${snake(name)}(&super::project_intents::parse(text)?)}\n`;
+    rust += `pub fn encode_${snake(name)}(value:&${name})->Result<String,InvalidIntent> {let text=super::project_intents::encode(value)?; decode_${snake(name)}(&text)?; Ok(text)}\n`;
+    kt += `    fun decode${name}(text: String): ${ktType(name)} = read${name}(ProjectIntentJson.parse(text))\n`;
+    kt += `    fun encode${name}(value: ${ktType(name)}): String = ProjectIntentWriter().also { write${name}(it, value) }.finish()\n`;
+  }
 }
 kt += "}\n";
 // Every helper must be used. Unreachable definitions indicate schema drift.

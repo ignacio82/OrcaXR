@@ -3,8 +3,8 @@ use crate::error;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
-    control, moonraker, preparation, session, status::JobStatus, summary, tools, transport,
-    workflow,
+    control, moonraker, preparation, session, status::JobStatus, storage, summary, tools,
+    transport, workflow,
 };
 use wasm_bindgen::prelude::*;
 
@@ -767,4 +767,43 @@ pub fn moonraker_method_check(request: &str) -> Result<String, JsValue> {
         moonraker::method_check,
         wire::encode_moonraker_check_reply,
     )
+}
+/// A `PrinterStorageOperation`; the `PrinterStoragePlan`: the request or
+/// download it sends, or why it is refused before anything leaves.
+#[wasm_bindgen]
+pub fn printer_storage_plan(operation: &str) -> Result<String, JsValue> {
+    exchange(
+        operation,
+        wire::decode_printer_storage_operation,
+        storage::plan,
+        wire::encode_printer_storage_plan,
+    )
+}
+/// A `PrinterStorageFinish`; the `PrinterStorageResult` an exchange that
+/// ended without a reply to read reads as.
+#[wasm_bindgen]
+pub fn printer_storage_finish(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_printer_storage_finish,
+        storage::finish,
+        wire::encode_printer_storage_result,
+    )
+}
+/// A `PrinterStorageOperation` and its listing or metadata reply (Moonraker's
+/// `result`, as JSON); the `PrinterStorageResult`.
+#[wasm_bindgen]
+pub fn printer_storage_read(operation: &str, reply: &str) -> Result<String, JsValue> {
+    if operation.len() > wire::MAX_BYTES || reply.len() > storage::LIMITS.bytes {
+        return Err(error("input_limit"));
+    }
+    let operation =
+        wire::decode_printer_storage_operation(operation).map_err(|_| error("invalid_request"))?;
+    wire::encode_printer_storage_result(&storage::read(&operation, reply))
+        .map_err(|_| error("output_limit"))
+}
+/// A size in bytes; the `OptionalText` an operator reads it as.
+#[wasm_bindgen]
+pub fn printer_storage_size(bytes: f64) -> Result<String, JsValue> {
+    wire::encode_optional_text(&storage::size(bytes)).map_err(|_| error("output_limit"))
 }

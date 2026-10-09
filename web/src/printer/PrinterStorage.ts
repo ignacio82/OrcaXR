@@ -28,6 +28,13 @@ import { MoonrakerTransportError } from './MoonrakerTypes';
 /** The Moonraker file root this module browses. */
 export const GCODE_ROOT = 'gcodes';
 
+/**
+ * The longest path a printer can hold, in UTF-16 units: Linux paths are at
+ * most 4,096 bytes and no unit takes less than one, so nothing a printer
+ * stores is longer.
+ */
+export const MAX_STORAGE_PATH_UNITS = 4096;
+
 export interface PrinterStorageTransport {
   request<T>(
     path: string,
@@ -131,11 +138,16 @@ export class PrinterStorageError extends Error {
  * message names the real problem instead of surfacing a 404. A name holding a
  * lone surrogate (Moonraker reports undecodable bytes that way) has no URL
  * spelling at all, and `encodeURIComponent` throwing "URI malformed" named
- * nothing an operator could act on.
+ * nothing an operator could act on. A path longer than any a printer holds
+ * names nothing either; it used to be sent whole, percent-encoded into a URL
+ * no server accepts.
  */
 export function assertStoragePath(path: string, what: string): string {
   const trimmed = path.trim().replace(/^\/+|\/+$/g, '');
   if (trimmed.length === 0) throw new PrinterStorageError(`${what} is empty.`, 'invalid-target');
+  if (trimmed.length > MAX_STORAGE_PATH_UNITS) {
+    throw new PrinterStorageError(`${what} is longer than any path the printer can store.`, 'invalid-target');
+  }
   if (trimmed.split('/').some((segment) => segment === '.' || segment === '..')) {
     throw new PrinterStorageError(`${what} may not step outside the printer's ${GCODE_ROOT} folder.`, 'invalid-target');
   }
@@ -449,10 +461,16 @@ function readNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-/** Moonraker reports modification times in seconds since the epoch. */
+/**
+ * Moonraker reports modification times in seconds since the epoch. One too
+ * large to be a time in milliseconds reads as absent, as a missing one does:
+ * it used to become `Infinity`, which sorted and printed as nonsense.
+ */
 function readTimestampMs(value: unknown): number | undefined {
   const seconds = readNumber(value);
-  return seconds === undefined ? undefined : Math.round(seconds * 1000);
+  if (seconds === undefined) return undefined;
+  const ms = Math.round(seconds * 1000);
+  return Number.isFinite(ms) ? ms : undefined;
 }
 
 function optionalNumber<K extends string>(key: K, value: number | undefined): Partial<Record<K, number>> {

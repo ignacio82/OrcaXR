@@ -8,21 +8,28 @@ use orcaxr_printer::{
     moonraker, preparation,
     session::{self, PrinterSession},
     status::{JobStatus, LIMITS},
-    summary, tools,
+    storage, summary, tools,
     transport::{self, MoonrakerTransport},
     workflow::{PrintWorkflow, Refusal},
 };
 
 /// Text a printer sent, within the model's bounds.
 fn printer_text(env: &mut JNIEnv<'_>, text: &JString<'_>) -> Result<String> {
+    bounded_text(env, text, LIMITS.bytes)
+}
+fn bounded_text(env: &mut JNIEnv<'_>, text: &JString<'_>, bytes: usize) -> Result<String> {
     let length = env
         .call_method(text, "length", "()I", &[])
         .and_then(|v| v.i())
         .map_err(|_| "invalid_request")?;
-    if length < 0 || length as usize > LIMITS.bytes {
+    if length < 0 || length as usize > bytes {
         return Err("input_limit");
     }
-    Ok(env.get_string(text).map_err(|_| "invalid_request")?.into())
+    let text: String = env.get_string(text).map_err(|_| "invalid_request")?.into();
+    if text.len() > bytes {
+        return Err("input_limit");
+    }
+    Ok(text)
 }
 fn with_status<R>(handle: jlong, call: impl FnOnce(&mut JobStatus) -> Result<R>) -> Result<R> {
     registry().slot(handle)?.with(|record| match record {
@@ -686,6 +693,46 @@ pub(super) fn moonraker_method_check(
         moonraker::method_check,
         wire::encode_moonraker_check_reply,
     )
+}
+pub(super) fn printer_storage_plan(
+    env: &mut JNIEnv<'_>,
+    operation: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        operation,
+        wire::decode_printer_storage_operation,
+        storage::plan,
+        wire::encode_printer_storage_plan,
+    )
+}
+pub(super) fn printer_storage_finish(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_printer_storage_finish,
+        storage::finish,
+        wire::encode_printer_storage_result,
+    )
+}
+pub(super) fn printer_storage_read(
+    env: &mut JNIEnv<'_>,
+    operation: JString<'_>,
+    reply: JString<'_>,
+) -> Result<jstring> {
+    let operation = wire::decode_printer_storage_operation(&intent_text(env, &operation)?)
+        .map_err(|_| "invalid_request")?;
+    let reply = bounded_text(env, &reply, storage::LIMITS.bytes)?;
+    let json = wire::encode_printer_storage_result(&storage::read(&operation, &reply))
+        .map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn printer_storage_size(env: &mut JNIEnv<'_>, bytes: f64) -> Result<jstring> {
+    let json = wire::encode_optional_text(&storage::size(bytes)).map_err(|_| "output_limit")?;
+    string(env, json)
 }
 
 fn with_transport<R>(

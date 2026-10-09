@@ -7,6 +7,7 @@ pub mod moonraker;
 pub mod preparation;
 pub mod session;
 pub mod status;
+pub mod storage;
 pub mod summary;
 pub mod tools;
 pub mod transport;

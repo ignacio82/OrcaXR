@@ -7,6 +7,8 @@ object ProjectIntents {
     const val MAX_BYTES = 1048576
     const val MAX_NODES = 131072
     const val MAX_DEPTH = 12
+    /** The bulk tier's bounds, for roots carrying a printer's replies decoded. */
+    internal val BULK = ProjectIntentLimits(16777216, 4194304, 12)
     private fun readUnit(v: Any): Int {
         return ProjectIntentJson.integer(v, 0L, 65535L).toInt()
     }
@@ -9584,6 +9586,273 @@ object ProjectIntents {
             is MoonrakerTransportOutcome.Random -> w.field("random") { writeFinite(w, v.value) }
         } }
     }
+    data class PrinterStorageMove(val source: List<Int>, val destination: List<Int>)
+    private fun readPrinterStorageMove(v: Any): PrinterStorageMove {
+        val obj = ProjectIntentJson.fields(v, setOf("source", "destination"), false)
+        return PrinterStorageMove(readEditText(obj.get("source")), readEditText(obj.get("destination")))
+    }
+    private fun writePrinterStorageMove(w: ProjectIntentWriter, v: PrinterStorageMove) {
+        w.obj {
+            w.field("source") { writeEditText(w, v.source) }
+            w.field("destination") { writeEditText(w, v.destination) }
+        }
+    }
+    data class PrinterStorageRename(val path: List<Int>, val name: List<Int>)
+    private fun readPrinterStorageRename(v: Any): PrinterStorageRename {
+        val obj = ProjectIntentJson.fields(v, setOf("path", "name"), false)
+        return PrinterStorageRename(readEditText(obj.get("path")), readEditText(obj.get("name")))
+    }
+    private fun writePrinterStorageRename(w: ProjectIntentWriter, v: PrinterStorageRename) {
+        w.obj {
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("name") { writeEditText(w, v.name) }
+        }
+    }
+    sealed interface PrinterStorageOperation {
+        data class List(val value: ProjectIntents.PrinterText) : PrinterStorageOperation
+        data class Metadata(val value: ProjectIntents.PrinterText) : PrinterStorageOperation
+        data class Download(val value: ProjectIntents.PrinterText) : PrinterStorageOperation
+        data class Delete(val value: ProjectIntents.PrinterText) : PrinterStorageOperation
+        data class Move(val value: ProjectIntents.PrinterStorageMove) : PrinterStorageOperation
+        data class Rename(val value: ProjectIntents.PrinterStorageRename) : PrinterStorageOperation
+        data class Start(val value: ProjectIntents.PrinterText) : PrinterStorageOperation
+    }
+    private fun readPrinterStorageOperation(v: Any): PrinterStorageOperation {
+        val obj = ProjectIntentJson.fields(v, setOf("list", "metadata", "download", "delete", "move", "rename", "start"), true)
+        return when(val key = obj.keys().next()) {
+            "list" -> PrinterStorageOperation.List(readPrinterText(obj.get(key)))
+            "metadata" -> PrinterStorageOperation.Metadata(readPrinterText(obj.get(key)))
+            "download" -> PrinterStorageOperation.Download(readPrinterText(obj.get(key)))
+            "delete" -> PrinterStorageOperation.Delete(readPrinterText(obj.get(key)))
+            "move" -> PrinterStorageOperation.Move(readPrinterStorageMove(obj.get(key)))
+            "rename" -> PrinterStorageOperation.Rename(readPrinterStorageRename(obj.get(key)))
+            "start" -> PrinterStorageOperation.Start(readPrinterText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrinterStorageOperation(w: ProjectIntentWriter, v: PrinterStorageOperation) {
+        w.obj { when(v) {
+            is PrinterStorageOperation.List -> w.field("list") { writePrinterText(w, v.value) }
+            is PrinterStorageOperation.Metadata -> w.field("metadata") { writePrinterText(w, v.value) }
+            is PrinterStorageOperation.Download -> w.field("download") { writePrinterText(w, v.value) }
+            is PrinterStorageOperation.Delete -> w.field("delete") { writePrinterText(w, v.value) }
+            is PrinterStorageOperation.Move -> w.field("move") { writePrinterStorageMove(w, v.value) }
+            is PrinterStorageOperation.Rename -> w.field("rename") { writePrinterStorageRename(w, v.value) }
+            is PrinterStorageOperation.Start -> w.field("start") { writePrinterText(w, v.value) }
+        } }
+    }
+    enum class PrinterStorageErrorCode {ListingFailed,MetadataUnavailable,DeleteFailed,MoveFailed,DownloadFailed,StartFailed,InvalidTarget,Cancelled}
+    private fun readPrinterStorageErrorCode(v: Any): PrinterStorageErrorCode {
+        return when(v) {"listingFailed" -> PrinterStorageErrorCode.ListingFailed;"metadataUnavailable" -> PrinterStorageErrorCode.MetadataUnavailable;"deleteFailed" -> PrinterStorageErrorCode.DeleteFailed;"moveFailed" -> PrinterStorageErrorCode.MoveFailed;"downloadFailed" -> PrinterStorageErrorCode.DownloadFailed;"startFailed" -> PrinterStorageErrorCode.StartFailed;"invalidTarget" -> PrinterStorageErrorCode.InvalidTarget;"cancelled" -> PrinterStorageErrorCode.Cancelled; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrinterStorageErrorCode(w: ProjectIntentWriter, v: PrinterStorageErrorCode) {
+        w.literal(when(v) {PrinterStorageErrorCode.ListingFailed -> "listingFailed";PrinterStorageErrorCode.MetadataUnavailable -> "metadataUnavailable";PrinterStorageErrorCode.DeleteFailed -> "deleteFailed";PrinterStorageErrorCode.MoveFailed -> "moveFailed";PrinterStorageErrorCode.DownloadFailed -> "downloadFailed";PrinterStorageErrorCode.StartFailed -> "startFailed";PrinterStorageErrorCode.InvalidTarget -> "invalidTarget";PrinterStorageErrorCode.Cancelled -> "cancelled";})
+    }
+    data class PrinterStorageFailure(val code: PrinterStorageErrorCode, val message: List<Int>)
+    private fun readPrinterStorageFailure(v: Any): PrinterStorageFailure {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return PrinterStorageFailure(readPrinterStorageErrorCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writePrinterStorageFailure(w: ProjectIntentWriter, v: PrinterStorageFailure) {
+        w.obj {
+            w.field("code") { writePrinterStorageErrorCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    data class PrinterStorageDownload(val path: List<Int>, val operation: List<Int>)
+    private fun readPrinterStorageDownload(v: Any): PrinterStorageDownload {
+        val obj = ProjectIntentJson.fields(v, setOf("path", "operation"), false)
+        return PrinterStorageDownload(readEditText(obj.get("path")), readEditText(obj.get("operation")))
+    }
+    private fun writePrinterStorageDownload(w: ProjectIntentWriter, v: PrinterStorageDownload) {
+        w.obj {
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("operation") { writeEditText(w, v.operation) }
+        }
+    }
+    sealed interface PrinterStoragePlan {
+        data class Request(val value: ProjectIntents.PrinterSend) : PrinterStoragePlan
+        data class Download(val value: ProjectIntents.PrinterStorageDownload) : PrinterStoragePlan
+        data class Refused(val value: ProjectIntents.PrinterStorageFailure) : PrinterStoragePlan
+    }
+    private fun readPrinterStoragePlan(v: Any): PrinterStoragePlan {
+        val obj = ProjectIntentJson.fields(v, setOf("request", "download", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "request" -> PrinterStoragePlan.Request(readPrinterSend(obj.get(key)))
+            "download" -> PrinterStoragePlan.Download(readPrinterStorageDownload(obj.get(key)))
+            "refused" -> PrinterStoragePlan.Refused(readPrinterStorageFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrinterStoragePlan(w: ProjectIntentWriter, v: PrinterStoragePlan) {
+        w.obj { when(v) {
+            is PrinterStoragePlan.Request -> w.field("request") { writePrinterSend(w, v.value) }
+            is PrinterStoragePlan.Download -> w.field("download") { writePrinterStorageDownload(w, v.value) }
+            is PrinterStoragePlan.Refused -> w.field("refused") { writePrinterStorageFailure(w, v.value) }
+        } }
+    }
+    sealed interface PrinterExchangeOutcome {
+        data class Done(val value: ProjectIntents.Empty) : PrinterExchangeOutcome
+        data class Failed(val value: ProjectIntents.TransportFailure) : PrinterExchangeOutcome
+        data class Cancelled(val value: ProjectIntents.Empty) : PrinterExchangeOutcome
+    }
+    private fun readPrinterExchangeOutcome(v: Any): PrinterExchangeOutcome {
+        val obj = ProjectIntentJson.fields(v, setOf("done", "failed", "cancelled"), true)
+        return when(val key = obj.keys().next()) {
+            "done" -> PrinterExchangeOutcome.Done(readEmpty(obj.get(key)))
+            "failed" -> PrinterExchangeOutcome.Failed(readTransportFailure(obj.get(key)))
+            "cancelled" -> PrinterExchangeOutcome.Cancelled(readEmpty(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrinterExchangeOutcome(w: ProjectIntentWriter, v: PrinterExchangeOutcome) {
+        w.obj { when(v) {
+            is PrinterExchangeOutcome.Done -> w.field("done") { writeEmpty(w, v.value) }
+            is PrinterExchangeOutcome.Failed -> w.field("failed") { writeTransportFailure(w, v.value) }
+            is PrinterExchangeOutcome.Cancelled -> w.field("cancelled") { writeEmpty(w, v.value) }
+        } }
+    }
+    data class PrinterStorageFinish(val operation: PrinterStorageOperation, val outcome: PrinterExchangeOutcome)
+    private fun readPrinterStorageFinish(v: Any): PrinterStorageFinish {
+        val obj = ProjectIntentJson.fields(v, setOf("operation", "outcome"), false)
+        return PrinterStorageFinish(readPrinterStorageOperation(obj.get("operation")), readPrinterExchangeOutcome(obj.get("outcome")))
+    }
+    private fun writePrinterStorageFinish(w: ProjectIntentWriter, v: PrinterStorageFinish) {
+        w.obj {
+            w.field("operation") { writePrinterStorageOperation(w, v.operation) }
+            w.field("outcome") { writePrinterExchangeOutcome(w, v.outcome) }
+        }
+    }
+    private fun readPrinterReplyText(v: Any): List<Int> {
+        val array = ProjectIntentJson.list(v, 0, 2097152)
+        return List(array.length()) { readUnit(array.get(it)) }
+    }
+    private fun writePrinterReplyText(w: ProjectIntentWriter, v: List<Int>) {
+        w.array(v, 0, 2097152) { writeUnit(w, it) }
+    }
+    sealed interface OptionalPrinterReplyText {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalPrinterReplyText
+        data class Value(val value: List<Int>) : OptionalPrinterReplyText
+    }
+    private fun readOptionalPrinterReplyText(v: Any): OptionalPrinterReplyText {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalPrinterReplyText.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalPrinterReplyText.Value(readPrinterReplyText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalPrinterReplyText(w: ProjectIntentWriter, v: OptionalPrinterReplyText) {
+        w.obj { when(v) {
+            is OptionalPrinterReplyText.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalPrinterReplyText.Value -> w.field("value") { writePrinterReplyText(w, v.value) }
+        } }
+    }
+    data class PrinterStorageEntry(val name: List<Int>, val modifiedMs: OptionalFinite, val sizeBytes: OptionalFinite)
+    private fun readPrinterStorageEntry(v: Any): PrinterStorageEntry {
+        val obj = ProjectIntentJson.fields(v, setOf("name", "modifiedMs", "sizeBytes"), false)
+        return PrinterStorageEntry(readPrinterReplyText(obj.get("name")), readOptionalFinite(obj.get("modifiedMs")), readOptionalFinite(obj.get("sizeBytes")))
+    }
+    private fun writePrinterStorageEntry(w: ProjectIntentWriter, v: PrinterStorageEntry) {
+        w.obj {
+            w.field("name") { writePrinterReplyText(w, v.name) }
+            w.field("modifiedMs") { writeOptionalFinite(w, v.modifiedMs) }
+            w.field("sizeBytes") { writeOptionalFinite(w, v.sizeBytes) }
+        }
+    }
+    private fun readPrinterStorageEntries(v: Any): List<PrinterStorageEntry> {
+        val array = ProjectIntentJson.list(v, 0, 262144)
+        return List(array.length()) { readPrinterStorageEntry(array.get(it)) }
+    }
+    private fun writePrinterStorageEntries(w: ProjectIntentWriter, v: List<PrinterStorageEntry>) {
+        w.array(v, 0, 262144) { writePrinterStorageEntry(w, it) }
+    }
+    data class PrinterStorageListing(val path: List<Int>, val directories: List<PrinterStorageEntry>, val files: List<PrinterStorageEntry>, val freeBytes: OptionalFinite, val totalBytes: OptionalFinite)
+    private fun readPrinterStorageListing(v: Any): PrinterStorageListing {
+        val obj = ProjectIntentJson.fields(v, setOf("path", "directories", "files", "freeBytes", "totalBytes"), false)
+        return PrinterStorageListing(readEditText(obj.get("path")), readPrinterStorageEntries(obj.get("directories")), readPrinterStorageEntries(obj.get("files")), readOptionalFinite(obj.get("freeBytes")), readOptionalFinite(obj.get("totalBytes")))
+    }
+    private fun writePrinterStorageListing(w: ProjectIntentWriter, v: PrinterStorageListing) {
+        w.obj {
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("directories") { writePrinterStorageEntries(w, v.directories) }
+            w.field("files") { writePrinterStorageEntries(w, v.files) }
+            w.field("freeBytes") { writeOptionalFinite(w, v.freeBytes) }
+            w.field("totalBytes") { writeOptionalFinite(w, v.totalBytes) }
+        }
+    }
+    data class PrinterStorageThumbnail(val width: Double, val height: Double, val relativePath: List<Int>, val sizeBytes: OptionalFinite)
+    private fun readPrinterStorageThumbnail(v: Any): PrinterStorageThumbnail {
+        val obj = ProjectIntentJson.fields(v, setOf("width", "height", "relativePath", "sizeBytes"), false)
+        return PrinterStorageThumbnail(readFinite(obj.get("width")), readFinite(obj.get("height")), readPrinterReplyText(obj.get("relativePath")), readOptionalFinite(obj.get("sizeBytes")))
+    }
+    private fun writePrinterStorageThumbnail(w: ProjectIntentWriter, v: PrinterStorageThumbnail) {
+        w.obj {
+            w.field("width") { writeFinite(w, v.width) }
+            w.field("height") { writeFinite(w, v.height) }
+            w.field("relativePath") { writePrinterReplyText(w, v.relativePath) }
+            w.field("sizeBytes") { writeOptionalFinite(w, v.sizeBytes) }
+        }
+    }
+    private fun readPrinterStorageThumbnails(v: Any): List<PrinterStorageThumbnail> {
+        val array = ProjectIntentJson.list(v, 0, 65536)
+        return List(array.length()) { readPrinterStorageThumbnail(array.get(it)) }
+    }
+    private fun writePrinterStorageThumbnails(w: ProjectIntentWriter, v: List<PrinterStorageThumbnail>) {
+        w.array(v, 0, 65536) { writePrinterStorageThumbnail(w, it) }
+    }
+    data class PrinterStorageMetadata(val path: List<Int>, val sizeBytes: OptionalFinite, val modifiedMs: OptionalFinite, val slicer: OptionalPrinterReplyText, val slicerVersion: OptionalPrinterReplyText, val layerHeightMm: OptionalFinite, val objectHeightMm: OptionalFinite, val filamentTotalMm: OptionalFinite, val filamentWeightG: OptionalFinite, val estimatedSeconds: OptionalFinite, val firstLayerBedTempC: OptionalFinite, val firstLayerNozzleTempC: OptionalFinite, val thumbnails: List<PrinterStorageThumbnail>)
+    private fun readPrinterStorageMetadata(v: Any): PrinterStorageMetadata {
+        val obj = ProjectIntentJson.fields(v, setOf("path", "sizeBytes", "modifiedMs", "slicer", "slicerVersion", "layerHeightMm", "objectHeightMm", "filamentTotalMm", "filamentWeightG", "estimatedSeconds", "firstLayerBedTempC", "firstLayerNozzleTempC", "thumbnails"), false)
+        return PrinterStorageMetadata(readEditText(obj.get("path")), readOptionalFinite(obj.get("sizeBytes")), readOptionalFinite(obj.get("modifiedMs")), readOptionalPrinterReplyText(obj.get("slicer")), readOptionalPrinterReplyText(obj.get("slicerVersion")), readOptionalFinite(obj.get("layerHeightMm")), readOptionalFinite(obj.get("objectHeightMm")), readOptionalFinite(obj.get("filamentTotalMm")), readOptionalFinite(obj.get("filamentWeightG")), readOptionalFinite(obj.get("estimatedSeconds")), readOptionalFinite(obj.get("firstLayerBedTempC")), readOptionalFinite(obj.get("firstLayerNozzleTempC")), readPrinterStorageThumbnails(obj.get("thumbnails")))
+    }
+    private fun writePrinterStorageMetadata(w: ProjectIntentWriter, v: PrinterStorageMetadata) {
+        w.obj {
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("sizeBytes") { writeOptionalFinite(w, v.sizeBytes) }
+            w.field("modifiedMs") { writeOptionalFinite(w, v.modifiedMs) }
+            w.field("slicer") { writeOptionalPrinterReplyText(w, v.slicer) }
+            w.field("slicerVersion") { writeOptionalPrinterReplyText(w, v.slicerVersion) }
+            w.field("layerHeightMm") { writeOptionalFinite(w, v.layerHeightMm) }
+            w.field("objectHeightMm") { writeOptionalFinite(w, v.objectHeightMm) }
+            w.field("filamentTotalMm") { writeOptionalFinite(w, v.filamentTotalMm) }
+            w.field("filamentWeightG") { writeOptionalFinite(w, v.filamentWeightG) }
+            w.field("estimatedSeconds") { writeOptionalFinite(w, v.estimatedSeconds) }
+            w.field("firstLayerBedTempC") { writeOptionalFinite(w, v.firstLayerBedTempC) }
+            w.field("firstLayerNozzleTempC") { writeOptionalFinite(w, v.firstLayerNozzleTempC) }
+            w.field("thumbnails") { writePrinterStorageThumbnails(w, v.thumbnails) }
+        }
+    }
+    sealed interface PrinterStorageResult {
+        data class Listing(val value: ProjectIntents.PrinterStorageListing) : PrinterStorageResult
+        data class Metadata(val value: ProjectIntents.PrinterStorageMetadata) : PrinterStorageResult
+        data class Done(val value: ProjectIntents.Empty) : PrinterStorageResult
+        data class Moved(val value: ProjectIntents.PrinterText) : PrinterStorageResult
+        data class Started(val value: ProjectIntents.PrinterText) : PrinterStorageResult
+        data class Failed(val value: ProjectIntents.PrinterStorageFailure) : PrinterStorageResult
+    }
+    private fun readPrinterStorageResult(v: Any): PrinterStorageResult {
+        val obj = ProjectIntentJson.fields(v, setOf("listing", "metadata", "done", "moved", "started", "failed"), true)
+        return when(val key = obj.keys().next()) {
+            "listing" -> PrinterStorageResult.Listing(readPrinterStorageListing(obj.get(key)))
+            "metadata" -> PrinterStorageResult.Metadata(readPrinterStorageMetadata(obj.get(key)))
+            "done" -> PrinterStorageResult.Done(readEmpty(obj.get(key)))
+            "moved" -> PrinterStorageResult.Moved(readPrinterText(obj.get(key)))
+            "started" -> PrinterStorageResult.Started(readPrinterText(obj.get(key)))
+            "failed" -> PrinterStorageResult.Failed(readPrinterStorageFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrinterStorageResult(w: ProjectIntentWriter, v: PrinterStorageResult) {
+        w.obj { when(v) {
+            is PrinterStorageResult.Listing -> w.field("listing") { writePrinterStorageListing(w, v.value) }
+            is PrinterStorageResult.Metadata -> w.field("metadata") { writePrinterStorageMetadata(w, v.value) }
+            is PrinterStorageResult.Done -> w.field("done") { writeEmpty(w, v.value) }
+            is PrinterStorageResult.Moved -> w.field("moved") { writePrinterText(w, v.value) }
+            is PrinterStorageResult.Started -> w.field("started") { writePrinterText(w, v.value) }
+            is PrinterStorageResult.Failed -> w.field("failed") { writePrinterStorageFailure(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -9954,4 +10223,14 @@ object ProjectIntents {
     fun encodeOptionalMoonrakerTransportFault(value: OptionalMoonrakerTransportFault): String = ProjectIntentWriter().also { writeOptionalMoonrakerTransportFault(it, value) }.finish()
     fun decodeMoonrakerTransportStepReply(text: String): MoonrakerTransportStepReply = readMoonrakerTransportStepReply(ProjectIntentJson.parse(text))
     fun encodeMoonrakerTransportStepReply(value: MoonrakerTransportStepReply): String = ProjectIntentWriter().also { writeMoonrakerTransportStepReply(it, value) }.finish()
+    fun decodePrinterStorageOperation(text: String): PrinterStorageOperation = readPrinterStorageOperation(ProjectIntentJson.parse(text))
+    fun encodePrinterStorageOperation(value: PrinterStorageOperation): String = ProjectIntentWriter().also { writePrinterStorageOperation(it, value) }.finish()
+    fun decodePrinterStoragePlan(text: String): PrinterStoragePlan = readPrinterStoragePlan(ProjectIntentJson.parse(text))
+    fun encodePrinterStoragePlan(value: PrinterStoragePlan): String = ProjectIntentWriter().also { writePrinterStoragePlan(it, value) }.finish()
+    fun decodePrinterStorageFinish(text: String): PrinterStorageFinish = readPrinterStorageFinish(ProjectIntentJson.parse(text))
+    fun encodePrinterStorageFinish(value: PrinterStorageFinish): String = ProjectIntentWriter().also { writePrinterStorageFinish(it, value) }.finish()
+    fun decodePrinterStorageResult(text: String): PrinterStorageResult = readPrinterStorageResult(ProjectIntentJson.parse(text, BULK))
+    fun encodePrinterStorageResult(value: PrinterStorageResult): String = ProjectIntentWriter(BULK).also { writePrinterStorageResult(it, value) }.finish()
+    fun decodeOptionalText(text: String): OptionalText = readOptionalText(ProjectIntentJson.parse(text))
+    fun encodeOptionalText(value: OptionalText): String = ProjectIntentWriter().also { writeOptionalText(it, value) }.finish()
 }

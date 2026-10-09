@@ -364,6 +364,29 @@ export function printer_objects(text: string): string;
 export function printer_status_summary(request: string): string;
 
 /**
+ * A `PrinterStorageFinish`; the `PrinterStorageResult` an exchange that
+ * ended without a reply to read reads as.
+ */
+export function printer_storage_finish(request: string): string;
+
+/**
+ * A `PrinterStorageOperation`; the `PrinterStoragePlan`: the request or
+ * download it sends, or why it is refused before anything leaves.
+ */
+export function printer_storage_plan(operation: string): string;
+
+/**
+ * A `PrinterStorageOperation` and its listing or metadata reply (Moonraker's
+ * `result`, as JSON); the `PrinterStorageResult`.
+ */
+export function printer_storage_read(operation: string, reply: string): string;
+
+/**
+ * A size in bytes; the `OptionalText` an operator reads it as.
+ */
+export function printer_storage_size(bytes: number): string;
+
+/**
  * A `PrinterText` filename; the sanitized upload name.
  */
 export function sanitize_gcode_filename(request: string): string;
@@ -446,6 +469,10 @@ export interface InitOutput {
     readonly print_start_options: (a: number, b: number) => [number, number, number, number];
     readonly printer_objects: (a: number, b: number) => [number, number, number, number];
     readonly printer_status_summary: (a: number, b: number) => [number, number, number, number];
+    readonly printer_storage_finish: (a: number, b: number) => [number, number, number, number];
+    readonly printer_storage_plan: (a: number, b: number) => [number, number, number, number];
+    readonly printer_storage_read: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly printer_storage_size: (a: number) => [number, number, number, number];
     readonly printersession_capture_intent: (a: number, b: number, c: number) => [number, number, number, number];
     readonly printersession_capture_lease: (a: number) => [number, number, number, number];
     readonly printersession_clear: (a: number) => [number, number, number, number];

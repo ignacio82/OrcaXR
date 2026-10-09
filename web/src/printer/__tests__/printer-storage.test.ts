@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 
 import { MoonrakerTransportError } from '../MoonrakerTypes';
 import {
+  MAX_STORAGE_PATH_UNITS,
   PrinterStorageError,
   assertStorageName,
   assertStoragePath,
@@ -192,6 +193,50 @@ await test('sizes read as sizes, and a size nobody reported stays unreported', (
   assert.equal(formatStorageSize(150 * 1024 * 1024), '150 MB');
   assert.equal(formatStorageSize(undefined), undefined);
   assert.equal(formatStorageSize(Number.NaN), undefined);
+});
+
+await test('a modification time too large to be a time reads as unreported', async () => {
+  const transport = new FakeTransport({
+    '/server/files/directory': {
+      files: [
+        { filename: 'far.gcode', modified: 1e306 },
+        { filename: 'near.gcode', modified: 1_700_000_000 },
+      ],
+    },
+  });
+  const listing = await listPrinterDirectory(transport);
+  // It used to become Infinity, which sorted ahead of every real time.
+  assert.deepEqual(
+    listing.files.map((file) => [file.name, file.modifiedMs]),
+    [
+      ['near.gcode', 1_700_000_000_000],
+      ['far.gcode', undefined],
+    ],
+  );
+});
+
+await test('a path longer than any the printer holds is refused before anything is sent', async () => {
+  const longest = `${'a/'.repeat(MAX_STORAGE_PATH_UNITS / 2 - 1)}ab`;
+  assert.equal(assertStoragePath(longest, 'That file'), longest);
+  const transport = new FakeTransport();
+  // It used to be sent whole, percent-encoded into a URL no server accepts.
+  await assert.rejects(
+    deletePrinterFile(transport, `${longest}c`),
+    (error: unknown) =>
+      error instanceof PrinterStorageError &&
+      error.code === 'invalid-target' &&
+      error.message === 'That file is longer than any path the printer can store.',
+  );
+  await assert.rejects(
+    movePrinterFile(transport, 'part.gcode', `${longest}c`),
+    (error: unknown) => error instanceof PrinterStorageError && error.code === 'invalid-target',
+  );
+  // A rename whose new name carries it past the bound lands nowhere either.
+  await assert.rejects(
+    movePrinterFile(transport, longest, renamedStoragePath(longest, 'renamed.gcode')),
+    (error: unknown) => error instanceof PrinterStorageError && error.code === 'invalid-target',
+  );
+  assert.deepEqual(transport.calls, []);
 });
 
 console.log(`\nPrinter storage: ${passed} tests passed.`);

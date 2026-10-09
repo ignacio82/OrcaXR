@@ -2,19 +2,27 @@ package dev.orcaxr.core
 
 class InvalidProjectIntent : IllegalArgumentException("Invalid project command intent")
 
+/** The bounds one root's wire text is held to: commands use the schema's, and
+ * the bulk tier ([ProjectIntents.BULK]) carries a printer's replies decoded. */
+internal class ProjectIntentLimits(val bytes: Int, val nodes: Int, val depth: Int) {
+    companion object {
+        val DEFAULT = ProjectIntentLimits(ProjectIntents.MAX_BYTES, ProjectIntents.MAX_NODES, ProjectIntents.MAX_DEPTH)
+    }
+}
+
 /** Strict, bounded ASCII JSON. User text is carried as UTF-16 integer units. */
 internal object ProjectIntentJson {
     // Protocol parsing must behave identically on Android and the host JVM.
     // This is deliberately separate from persisted-document last-key-wins JSON.
-    fun parse(text: String): Any {
-        if (text.length > ProjectIntents.MAX_BYTES || text.any { it.code > 127 } || !StrictJsonTokens.valid(text)) throw InvalidProjectIntent()
-        return Parser(text).parse()
+    fun parse(text: String, limits: ProjectIntentLimits = ProjectIntentLimits.DEFAULT): Any {
+        if (text.length > limits.bytes || text.any { it.code > 127 } || !StrictJsonTokens.valid(text)) throw InvalidProjectIntent()
+        return Parser(text, limits).parse()
     }
 
     private object JsonNull
-    private class Parser(private val text: String) {
+    private class Parser(private val text: String, private val limits: ProjectIntentLimits) {
         private var offset = 0
-        private var remaining = ProjectIntents.MAX_NODES
+        private var remaining = limits.nodes
         private fun peek(): Char = text.getOrNull(offset) ?: '\u0000'
         private fun whitespace() { while (peek() in " \t\r\n") offset++ }
         private fun take(character: Char): Boolean {
@@ -52,7 +60,7 @@ internal object ProjectIntentJson {
             throw InvalidProjectIntent()
         }
         private fun read(depth: Int): Any {
-            if (--remaining < 0 || depth > ProjectIntents.MAX_DEPTH) throw InvalidProjectIntent()
+            if (--remaining < 0 || depth > limits.depth) throw InvalidProjectIntent()
             whitespace()
             return when (peek()) {
                 '{' -> {
@@ -132,14 +140,14 @@ internal class ProjectJsonArray(private val entries: List<Any>) {
 }
 
 /** Bounded writer for generated types; no user strings or raw JSON fragments. */
-internal class ProjectIntentWriter {
+internal class ProjectIntentWriter(private val limits: ProjectIntentLimits = ProjectIntentLimits.DEFAULT) {
     private val output = StringBuilder()
-    private var remaining = ProjectIntents.MAX_NODES
+    private var remaining = limits.nodes
     private var depth = 0
     private var firstField = true
-    private fun node() { if (--remaining < 0 || depth > ProjectIntents.MAX_DEPTH) throw InvalidProjectIntent() }
+    private fun node() { if (--remaining < 0 || depth > limits.depth) throw InvalidProjectIntent() }
     private fun add(text: String) {
-        if (text.length > ProjectIntents.MAX_BYTES - output.length) throw InvalidProjectIntent()
+        if (text.length > limits.bytes - output.length) throw InvalidProjectIntent()
         output.append(text)
     }
     fun finish(): String = output.toString()

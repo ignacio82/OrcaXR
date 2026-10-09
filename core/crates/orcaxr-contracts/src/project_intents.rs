@@ -13,15 +13,33 @@ impl fmt::Display for InvalidIntent {
 }
 impl std::error::Error for InvalidIntent {}
 
+/// The bounds one root's wire text is held to: commands use the schema's,
+/// and the bulk tier (`BULK`) carries a printer's replies decoded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Limits {
+    pub bytes: usize,
+    pub nodes: usize,
+    pub depth: usize,
+}
+const DEFAULT: Limits = Limits {
+    bytes: MAX_BYTES,
+    nodes: MAX_NODES,
+    depth: MAX_DEPTH,
+};
+
 pub(crate) fn parse(text: &str) -> Result<Value, InvalidIntent> {
-    if text.len() > MAX_BYTES || !text.is_ascii() {
+    parse_bounded(text, &DEFAULT)
+}
+pub(crate) fn parse_bounded(text: &str, limits: &Limits) -> Result<Value, InvalidIntent> {
+    if text.len() > limits.bytes || !text.is_ascii() {
         return Err(InvalidIntent);
     }
-    let mut remaining = MAX_NODES;
+    let mut remaining = limits.nodes;
     let mut decoder = serde_json::Deserializer::from_str(text);
     let result = Node {
         remaining: &mut remaining,
         depth: 0,
+        max_depth: limits.depth,
     }
     .deserialize(&mut decoder)
     .map_err(|_| InvalidIntent)?;
@@ -32,11 +50,12 @@ pub(crate) fn parse(text: &str) -> Result<Value, InvalidIntent> {
 struct Node<'a> {
     remaining: &'a mut usize,
     depth: usize,
+    max_depth: usize,
 }
 impl<'de> DeserializeSeed<'de> for Node<'_> {
     type Value = Value;
     fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<Value, D::Error> {
-        if *self.remaining == 0 || self.depth > MAX_DEPTH {
+        if *self.remaining == 0 || self.depth > self.max_depth {
             return Err(serde::de::Error::custom("invalid intent"));
         }
         *self.remaining -= 1;
@@ -76,6 +95,7 @@ impl<'de> Visitor<'de> for Node<'_> {
         while let Some(value) = seq.next_element_seed(Node {
             remaining: self.remaining,
             depth: self.depth + 1,
+            max_depth: self.max_depth,
         })? {
             values.push(value);
         }
@@ -90,6 +110,7 @@ impl<'de> Visitor<'de> for Node<'_> {
             let value = map.next_value_seed(Node {
                 remaining: self.remaining,
                 depth: self.depth + 1,
+                max_depth: self.max_depth,
             })?;
             values.insert(key, value);
         }
@@ -138,10 +159,10 @@ pub(crate) fn list(value: &Value, min: usize, max: usize) -> Result<&[Value], In
     Ok(list)
 }
 
-struct Output(Vec<u8>);
+struct Output(Vec<u8>, usize);
 impl Write for Output {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        if bytes.len() > MAX_BYTES - self.0.len() {
+        if bytes.len() > self.1 - self.0.len() {
             return Err(std::io::Error::other("invalid intent"));
         }
         self.0.extend_from_slice(bytes);
@@ -175,7 +196,13 @@ pub fn write_unbounded(
     value.serialize(&mut serializer).map_err(|_| InvalidIntent)
 }
 pub(crate) fn encode(value: &impl serde::Serialize) -> Result<String, InvalidIntent> {
-    let mut output = Output(Vec::new());
+    encode_bounded(value, &DEFAULT)
+}
+pub(crate) fn encode_bounded(
+    value: &impl serde::Serialize,
+    limits: &Limits,
+) -> Result<String, InvalidIntent> {
+    let mut output = Output(Vec::new(), limits.bytes);
     let mut serializer = serde_json::Serializer::with_formatter(&mut output, JsNumbers);
     value
         .serialize(&mut serializer)

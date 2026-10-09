@@ -42,6 +42,7 @@ import { replayPrinterWorkflow } from "./printer-workflow-replay.mjs";
 import { replayPrinterSession } from "./printer-session-replay.mjs";
 import { replayMoonrakerTransport } from "./moonraker-transport-replay.mjs";
 import { replayMoonrakerPolicy } from "./moonraker-policy-replay.mjs";
+import { replayPrinterStorage, storageBytes } from "./printer-storage-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -1088,6 +1089,24 @@ try {
     ...policyFixture.delays.map((c) => ["delays", c.requestJson, String(c.delayMs)].join("\t")),
   ];
   assert.equal(jvm.call("moonrakerPolicyChecks", policyScript.join("\n")), 805);
+  // Printer storage through the real JNI exports, then the Kotlin wrapper.
+  const storageFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/printer-storage-vectors.json", root)),
+  );
+  assert.deepEqual(
+    replayPrinterStorage(projectJniCore(jvm.call), storageFixture).printerStorageAnswers,
+    [218, 1460, 326, 64],
+  );
+  const storageScript = [
+    ...["plans", "finishes"].flatMap((section) =>
+      storageFixture[section].map((c) => [section, c.requestJson, c.replyJson].join("\t")),
+    ),
+    ...storageFixture.reads.map((c) =>
+      ["reads", c.operationJson, c.reply, c.replyJson, c.paths ?? "-"].join("\t"),
+    ),
+    ...storageFixture.sizes.map((c) => ["sizes", String(storageBytes(c.bytes)), c.replyJson].join("\t")),
+  ];
+  assert.equal(jvm.call("printerStorageChecks", storageScript.join("\n")), 2068);
   // The Moonraker transport through the real JNI exports, then the Kotlin
   // wrapper: step and state, or reply, for each input.
   const transportFixture = JSON.parse(

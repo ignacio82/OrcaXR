@@ -1551,6 +1551,17 @@ parser preserves escaped UTF-16 keys, rejects decoded duplicate keys and require
 exact JSON structure under the existing byte/node/depth limits. It is not a persisted
 document parser. Metadata strings and cancellation retain their existing behavior.
 
+A root the contract lists under `bulkRoots` decodes and encodes under its
+`bulk` tier instead (16 MiB, 4,194,304 nodes, 12 levels): a printer's own
+replies decoded, such as a storage listing of a folder of thousands of files,
+which no edit intent ever approaches. The tier is a parameter of the same
+three parsers and writers (`parse_bounded`/`encode_bounded`,
+`ProjectIntentJson.parse(text, BULK)`/`ProjectIntentWriter(BULK)`,
+`bulkLimits`), so a bulk root is no less strict, only larger. An array may
+exceed the default node bound only where bulk roots alone reach it; the
+generator checks every other root's reach and its mutation test covers both
+rules.
+
 The command/session corpus contains **969 independently authored raw cases**,
 replayed by TypeScript and host Rust. The earlier 673-case corpus ran through
 compiled Kotlin on API 34; the expanded decoder corpus has not run on Android.
@@ -3891,6 +3902,62 @@ the browser transport as the rollback (`?printer-transport=typescript` or the
 stored `orcaxr.printerTransport`), which also serves a connection made while
 the core cannot load. A configured printer starts the load at startup, and
 connecting waits for it.
+
+### Printer storage
+
+`orcaxr_printer::storage` ports `PrinterStorage.ts`: what is already on the
+printer and what may be done with it. An operation (list a folder, read a
+file's metadata, download, delete, move, rename, start a stored file) is
+planned — the request or download it sends, or why it is refused before
+anything leaves — and the host carries the exchange out; an exchange that
+ended without a reply to read (done, failed with the transport's fault, or
+cancelled: `PrinterExchangeOutcome`) is finished into its result, and a
+listing or metadata reply is read as the browser reads it. Every operation
+names its exact target: a path checked before anything is sent (not empty,
+at most 4,096 UTF-16 units, no `.` or `..` segment to step outside the
+`gcodes` root, no lone surrogate a URL cannot spell), a rename landing in
+the file's own folder under a new name that may carry no separator. A
+missing fact stays missing: a file Moonraker never scanned has no
+modification time and no thumbnail, never a zero. Failure messages are the
+browser's sentences, the transport's code or `cancelled` appended. Folders
+list by name and files newest first (by UTF-16 code units, as JavaScript
+compares strings), thumbnails largest first. Replies are parsed as
+`JSON.parse` reads them (`canonical::parse_javascript`) under the module's
+own 8 MiB bound, so any reply the transport admits (2 Mi UTF-16 units) is
+read whole.
+
+Any such reply also crosses a binding. Results travel under the intent
+contract's bulk tier, and the wire is linear in the reply: a listing carries
+its path once and each entry's name (an entry's path is the two joined,
+`entry_path`), metadata each thumbnail's path as the printer reported it
+relative to the file's folder (`thumbnail_path`), and text a printer
+reported is `PrinterReplyText` (up to 2 Mi units) rather than the edit
+contract's 131,072. Operation text is bounded by the path rule, so every
+request, destination and sentence fits. A test fills replies to the
+transport's bound with the widest units — over 160,000 entries in the
+longest folder, one name as long as a reply, over 40,000 thumbnails — and
+each result encodes and decodes.
+
+Porting fixed two browser defects: a modification time too large to be a
+time in milliseconds became `Infinity`, which sorted and printed as
+nonsense, and now reads as unreported, as a missing one does; and a path
+longer than any a printer holds was sent whole, percent-encoded into a URL
+no server accepts, and is now refused before anything is sent.
+
+Bindings: WASM `printer_storage_plan`, `printer_storage_finish`,
+`printer_storage_read` and `printer_storage_size`, the matching JNI
+`printerStorage*` exports and Kotlin `PrinterStorage` (with `entryPath` and
+`thumbnailPath`). `printer-storage-vectors.mjs` drives the production
+functions through `PrinterStorageExchange.ts` over a scripted transport,
+which checks each entry and thumbnail path the browser built is the joined
+one: 218 plans (every operation over valid, hostile, edge-case and
+bound-length paths and names), 1,460 finished exchanges (every operation
+against every outcome and transport fault), 326 replies read (well-formed,
+partial, mistyped and hostile listings and metadata, seeded random replies
+and a listing of 3,000 files), each with the paths the browser joined, and
+64 sizes. Rust, WASM in Node and Chrome, the printer core, JNI and 2,068
+Kotlin checks reproduce every one, and Rust and Kotlin join the browser's
+paths.
 
 ### Action capabilities
 

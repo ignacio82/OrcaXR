@@ -196,6 +196,12 @@ final class NativeProject {
     static native double moonrakerReconnectDelay(String request);
     static native String moonrakerSubscription(String request);
     static native String moonrakerMethodCheck(String request);
+    // Printer storage: an operation's request or refusal, the result its
+    // exchange reads as, a listing or metadata reply read, and a size shown.
+    static native String printerStoragePlan(String operation);
+    static native String printerStorageFinish(String request);
+    static native String printerStorageRead(String operation, String reply);
+    static native String printerStorageSize(double bytes);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

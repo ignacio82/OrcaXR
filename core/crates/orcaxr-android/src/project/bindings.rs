@@ -1042,6 +1042,27 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_printerStoragePlan, printer_storage_plan, jstring,
+    operation: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerStorageFinish, printer_storage_finish, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerStorageRead, printer_storage_read, jstring,
+    operation: JString<'local>,
+    reply: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerStorageSize, printer_storage_size, jstring,
+    bytes: jdouble,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,

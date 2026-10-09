@@ -6,6 +6,7 @@ export const PROJECT_INTENT_MAX_BYTES = 1048576;
 export const PROJECT_INTENT_MAX_NODES = 131072;
 export const PROJECT_INTENT_MAX_DEPTH = 12;
 const limits = {"maxBytes":1048576,"maxNodes":131072,"maxDepth":12};
+const bulkLimits = {"maxBytes":16777216,"maxNodes":4194304,"maxDepth":12};
 const shapes = {
   "Unit": {
     "kind": "integer",
@@ -6255,6 +6256,163 @@ const shapes = {
       "broken": "Empty",
       "random": "Finite"
     }
+  },
+  "PrinterStorageMove": {
+    "kind": "object",
+    "fields": {
+      "source": "EditText",
+      "destination": "EditText"
+    }
+  },
+  "PrinterStorageRename": {
+    "kind": "object",
+    "fields": {
+      "path": "EditText",
+      "name": "EditText"
+    }
+  },
+  "PrinterStorageOperation": {
+    "kind": "union",
+    "variants": {
+      "list": "PrinterText",
+      "metadata": "PrinterText",
+      "download": "PrinterText",
+      "delete": "PrinterText",
+      "move": "PrinterStorageMove",
+      "rename": "PrinterStorageRename",
+      "start": "PrinterText"
+    }
+  },
+  "PrinterStorageErrorCode": {
+    "kind": "enum",
+    "values": [
+      "listingFailed",
+      "metadataUnavailable",
+      "deleteFailed",
+      "moveFailed",
+      "downloadFailed",
+      "startFailed",
+      "invalidTarget",
+      "cancelled"
+    ]
+  },
+  "PrinterStorageFailure": {
+    "kind": "object",
+    "fields": {
+      "code": "PrinterStorageErrorCode",
+      "message": "EditText"
+    }
+  },
+  "PrinterStorageDownload": {
+    "kind": "object",
+    "fields": {
+      "path": "EditText",
+      "operation": "EditText"
+    }
+  },
+  "PrinterStoragePlan": {
+    "kind": "union",
+    "variants": {
+      "request": "PrinterSend",
+      "download": "PrinterStorageDownload",
+      "refused": "PrinterStorageFailure"
+    }
+  },
+  "PrinterExchangeOutcome": {
+    "kind": "union",
+    "variants": {
+      "done": "Empty",
+      "failed": "TransportFailure",
+      "cancelled": "Empty"
+    }
+  },
+  "PrinterStorageFinish": {
+    "kind": "object",
+    "fields": {
+      "operation": "PrinterStorageOperation",
+      "outcome": "PrinterExchangeOutcome"
+    }
+  },
+  "PrinterReplyText": {
+    "kind": "array",
+    "items": "Unit",
+    "min": 0,
+    "max": 2097152
+  },
+  "OptionalPrinterReplyText": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "PrinterReplyText"
+    }
+  },
+  "PrinterStorageEntry": {
+    "kind": "object",
+    "fields": {
+      "name": "PrinterReplyText",
+      "modifiedMs": "OptionalFinite",
+      "sizeBytes": "OptionalFinite"
+    }
+  },
+  "PrinterStorageEntries": {
+    "kind": "array",
+    "items": "PrinterStorageEntry",
+    "min": 0,
+    "max": 262144
+  },
+  "PrinterStorageListing": {
+    "kind": "object",
+    "fields": {
+      "path": "EditText",
+      "directories": "PrinterStorageEntries",
+      "files": "PrinterStorageEntries",
+      "freeBytes": "OptionalFinite",
+      "totalBytes": "OptionalFinite"
+    }
+  },
+  "PrinterStorageThumbnail": {
+    "kind": "object",
+    "fields": {
+      "width": "Finite",
+      "height": "Finite",
+      "relativePath": "PrinterReplyText",
+      "sizeBytes": "OptionalFinite"
+    }
+  },
+  "PrinterStorageThumbnails": {
+    "kind": "array",
+    "items": "PrinterStorageThumbnail",
+    "min": 0,
+    "max": 65536
+  },
+  "PrinterStorageMetadata": {
+    "kind": "object",
+    "fields": {
+      "path": "EditText",
+      "sizeBytes": "OptionalFinite",
+      "modifiedMs": "OptionalFinite",
+      "slicer": "OptionalPrinterReplyText",
+      "slicerVersion": "OptionalPrinterReplyText",
+      "layerHeightMm": "OptionalFinite",
+      "objectHeightMm": "OptionalFinite",
+      "filamentTotalMm": "OptionalFinite",
+      "filamentWeightG": "OptionalFinite",
+      "estimatedSeconds": "OptionalFinite",
+      "firstLayerBedTempC": "OptionalFinite",
+      "firstLayerNozzleTempC": "OptionalFinite",
+      "thumbnails": "PrinterStorageThumbnails"
+    }
+  },
+  "PrinterStorageResult": {
+    "kind": "union",
+    "variants": {
+      "listing": "PrinterStorageListing",
+      "metadata": "PrinterStorageMetadata",
+      "done": "Empty",
+      "moved": "PrinterText",
+      "started": "PrinterText",
+      "failed": "PrinterStorageFailure"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -7009,6 +7167,24 @@ export interface ProjectMoonrakerTransportStepWire {readonly outputs: ProjectMoo
 export type ProjectMoonrakerTransportStepReplyWire = {readonly step:ProjectMoonrakerTransportStepWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
 export interface ProjectMoonrakerResponseHeadersWire {readonly status: ProjectFiniteWire;readonly contentLength: ProjectOptionalTextWire;}
 export type ProjectMoonrakerTransportOutcomeWire = {readonly headers:ProjectMoonrakerResponseHeadersWire} | {readonly failed:ProjectEmptyWire} | {readonly bytes:ProjectCounterWire} | {readonly created:ProjectEmptyWire} | {readonly unavailable:ProjectEmptyWire} | {readonly broken:ProjectEmptyWire} | {readonly random:ProjectFiniteWire};
+export interface ProjectPrinterStorageMoveWire {readonly source: ProjectEditTextWire;readonly destination: ProjectEditTextWire;}
+export interface ProjectPrinterStorageRenameWire {readonly path: ProjectEditTextWire;readonly name: ProjectEditTextWire;}
+export type ProjectPrinterStorageOperationWire = {readonly list:ProjectPrinterTextWire} | {readonly metadata:ProjectPrinterTextWire} | {readonly download:ProjectPrinterTextWire} | {readonly delete:ProjectPrinterTextWire} | {readonly move:ProjectPrinterStorageMoveWire} | {readonly rename:ProjectPrinterStorageRenameWire} | {readonly start:ProjectPrinterTextWire};
+export type ProjectPrinterStorageErrorCodeWire = "listingFailed" | "metadataUnavailable" | "deleteFailed" | "moveFailed" | "downloadFailed" | "startFailed" | "invalidTarget" | "cancelled";
+export interface ProjectPrinterStorageFailureWire {readonly code: ProjectPrinterStorageErrorCodeWire;readonly message: ProjectEditTextWire;}
+export interface ProjectPrinterStorageDownloadWire {readonly path: ProjectEditTextWire;readonly operation: ProjectEditTextWire;}
+export type ProjectPrinterStoragePlanWire = {readonly request:ProjectPrinterSendWire} | {readonly download:ProjectPrinterStorageDownloadWire} | {readonly refused:ProjectPrinterStorageFailureWire};
+export type ProjectPrinterExchangeOutcomeWire = {readonly done:ProjectEmptyWire} | {readonly failed:ProjectTransportFailureWire} | {readonly cancelled:ProjectEmptyWire};
+export interface ProjectPrinterStorageFinishWire {readonly operation: ProjectPrinterStorageOperationWire;readonly outcome: ProjectPrinterExchangeOutcomeWire;}
+export type ProjectPrinterReplyTextWire = readonly ProjectUnitWire[];
+export type ProjectOptionalPrinterReplyTextWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectPrinterReplyTextWire};
+export interface ProjectPrinterStorageEntryWire {readonly name: ProjectPrinterReplyTextWire;readonly modifiedMs: ProjectOptionalFiniteWire;readonly sizeBytes: ProjectOptionalFiniteWire;}
+export type ProjectPrinterStorageEntriesWire = readonly ProjectPrinterStorageEntryWire[];
+export interface ProjectPrinterStorageListingWire {readonly path: ProjectEditTextWire;readonly directories: ProjectPrinterStorageEntriesWire;readonly files: ProjectPrinterStorageEntriesWire;readonly freeBytes: ProjectOptionalFiniteWire;readonly totalBytes: ProjectOptionalFiniteWire;}
+export interface ProjectPrinterStorageThumbnailWire {readonly width: ProjectFiniteWire;readonly height: ProjectFiniteWire;readonly relativePath: ProjectPrinterReplyTextWire;readonly sizeBytes: ProjectOptionalFiniteWire;}
+export type ProjectPrinterStorageThumbnailsWire = readonly ProjectPrinterStorageThumbnailWire[];
+export interface ProjectPrinterStorageMetadataWire {readonly path: ProjectEditTextWire;readonly sizeBytes: ProjectOptionalFiniteWire;readonly modifiedMs: ProjectOptionalFiniteWire;readonly slicer: ProjectOptionalPrinterReplyTextWire;readonly slicerVersion: ProjectOptionalPrinterReplyTextWire;readonly layerHeightMm: ProjectOptionalFiniteWire;readonly objectHeightMm: ProjectOptionalFiniteWire;readonly filamentTotalMm: ProjectOptionalFiniteWire;readonly filamentWeightG: ProjectOptionalFiniteWire;readonly estimatedSeconds: ProjectOptionalFiniteWire;readonly firstLayerBedTempC: ProjectOptionalFiniteWire;readonly firstLayerNozzleTempC: ProjectOptionalFiniteWire;readonly thumbnails: ProjectPrinterStorageThumbnailsWire;}
+export type ProjectPrinterStorageResultWire = {readonly listing:ProjectPrinterStorageListingWire} | {readonly metadata:ProjectPrinterStorageMetadataWire} | {readonly done:ProjectEmptyWire} | {readonly moved:ProjectPrinterTextWire} | {readonly started:ProjectPrinterTextWire} | {readonly failed:ProjectPrinterStorageFailureWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -7564,3 +7740,18 @@ export function encodeProjectOptionalMoonrakerTransportFault(value:ProjectOption
 export function captureProjectMoonrakerTransportStepReply(value:unknown):ProjectMoonrakerTransportStepReplyWire { return captureIntent("MoonrakerTransportStepReply",value,shapes,limits) as ProjectMoonrakerTransportStepReplyWire; }
 export function decodeProjectMoonrakerTransportStepReply(text:string):ProjectMoonrakerTransportStepReplyWire { return captureProjectMoonrakerTransportStepReply(parseIntentJson(text,limits)); }
 export function encodeProjectMoonrakerTransportStepReply(value:ProjectMoonrakerTransportStepReplyWire):string { return JSON.stringify(captureProjectMoonrakerTransportStepReply(value)); }
+export function captureProjectPrinterStorageOperation(value:unknown):ProjectPrinterStorageOperationWire { return captureIntent("PrinterStorageOperation",value,shapes,limits) as ProjectPrinterStorageOperationWire; }
+export function decodeProjectPrinterStorageOperation(text:string):ProjectPrinterStorageOperationWire { return captureProjectPrinterStorageOperation(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterStorageOperation(value:ProjectPrinterStorageOperationWire):string { return JSON.stringify(captureProjectPrinterStorageOperation(value)); }
+export function captureProjectPrinterStoragePlan(value:unknown):ProjectPrinterStoragePlanWire { return captureIntent("PrinterStoragePlan",value,shapes,limits) as ProjectPrinterStoragePlanWire; }
+export function decodeProjectPrinterStoragePlan(text:string):ProjectPrinterStoragePlanWire { return captureProjectPrinterStoragePlan(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterStoragePlan(value:ProjectPrinterStoragePlanWire):string { return JSON.stringify(captureProjectPrinterStoragePlan(value)); }
+export function captureProjectPrinterStorageFinish(value:unknown):ProjectPrinterStorageFinishWire { return captureIntent("PrinterStorageFinish",value,shapes,limits) as ProjectPrinterStorageFinishWire; }
+export function decodeProjectPrinterStorageFinish(text:string):ProjectPrinterStorageFinishWire { return captureProjectPrinterStorageFinish(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterStorageFinish(value:ProjectPrinterStorageFinishWire):string { return JSON.stringify(captureProjectPrinterStorageFinish(value)); }
+export function captureProjectPrinterStorageResult(value:unknown):ProjectPrinterStorageResultWire { return captureIntent("PrinterStorageResult",value,shapes,bulkLimits) as ProjectPrinterStorageResultWire; }
+export function decodeProjectPrinterStorageResult(text:string):ProjectPrinterStorageResultWire { return captureProjectPrinterStorageResult(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectPrinterStorageResult(value:ProjectPrinterStorageResultWire):string { return JSON.stringify(captureProjectPrinterStorageResult(value)); }
+export function captureProjectOptionalText(value:unknown):ProjectOptionalTextWire { return captureIntent("OptionalText",value,shapes,limits) as ProjectOptionalTextWire; }
+export function decodeProjectOptionalText(text:string):ProjectOptionalTextWire { return captureProjectOptionalText(parseIntentJson(text,limits)); }
+export function encodeProjectOptionalText(value:ProjectOptionalTextWire):string { return JSON.stringify(captureProjectOptionalText(value)); }

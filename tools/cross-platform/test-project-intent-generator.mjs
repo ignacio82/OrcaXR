@@ -114,6 +114,34 @@ changes.push(
     s.definitions.SessionError.optional = true;
   },
 );
+// The bulk tier: its bounds, its roots, and arrays past the default bounds.
+changes.push(
+  (s) => {
+    delete s.bulk;
+  },
+  (s) => {
+    s.bulk.maxBytes = s.maxBytes - 1;
+  },
+  (s) => {
+    s.bulk.maxDepth = 33;
+  },
+  (s) => {
+    s.bulk.extra = 1;
+  },
+  (s) => {
+    s.bulkRoots.push("PrinterStorageEntry");
+  },
+  (s) => {
+    s.bulkRoots.push(s.bulkRoots[0]);
+  },
+  (s) => {
+    s.definitions.PrinterReplyText.max = s.bulk.maxNodes + 1;
+  },
+  (s) => {
+    // A root under the default bounds reaching a bulk-sized array.
+    s.definitions.PrinterText.fields.text = "PrinterReplyText";
+  },
+);
 const directory = mkdtempSync(join(tmpdir(), "orcaxr-intent-generator-"));
 try {
   mkdirSync(join(directory, "tools/cross-platform"), { recursive: true });

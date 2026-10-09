@@ -15,6 +15,7 @@ import { replayPrinterWorkflow } from "./printer-workflow-replay.mjs";
 import { replayPrinterSession } from "./printer-session-replay.mjs";
 import { replayMoonrakerPolicy } from "./moonraker-policy-replay.mjs";
 import { replayMoonrakerTransport } from "./moonraker-transport-replay.mjs";
+import { replayPrinterStorage } from "./printer-storage-replay.mjs";
 
 const root = new URL("../../", import.meta.url);
 const asset = await readFile(
@@ -50,6 +51,7 @@ const result = {
     core,
     await fixture("moonraker-transport-vectors"),
   ),
+  ...replayPrinterStorage(core, await fixture("printer-storage-vectors")),
 };
 assert.deepEqual(
   [result.printJobSnapshots, result.printJobIgnored, result.printJobRefusals],
@@ -99,6 +101,7 @@ assert.deepEqual(
   ],
   [88, 2533, 94, 20, 64],
 );
+assert.deepEqual(result.printerStorageAnswers, [218, 1460, 326, 64]);
 console.log(
   JSON.stringify({ ...result, wasmBytes: bytes.length, wasmSha256: sha256 }),
 );

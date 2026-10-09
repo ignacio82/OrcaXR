@@ -1979,6 +1979,16 @@ credential storage, and explicit permission/error flows.
   scope. Camera subscriptions stop when hidden/disposed; emergency stop and the
   distinct firmware-restart action remain reachable without successful status
   queries. Preserve existing operator confirmations and supervised print gates.
+  Storage policy is shared: `orcaxr_printer::storage` plans every operation
+  (list, metadata, download, delete, move, rename, start a stored file) with
+  its target checked before anything is sent, finishes each exchange and reads
+  listings and metadata as the browser does; 2,068 browser answers agree in
+  every binding, and Kotlin `PrinterStorage` exposes it. Results cross on the
+  intent contract's new bulk tier in a wire linear in the reply, so any reply
+  the transport admits crosses. Porting fixed two browser defects: a
+  modification time too large to be a time read as `Infinity`, and a path
+  longer than any a printer holds was sent anyway. History, console, camera
+  and the operator surfaces remain.
 - [ ] Test with the existing printer simulator before qualified, supervised U1
   and CC trials. Automated tests do not issue commands to real printers.
 

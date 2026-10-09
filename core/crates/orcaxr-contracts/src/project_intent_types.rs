@@ -7,6 +7,12 @@ pub const SESSION_VERSION: usize = 1;
 pub const MAX_BYTES: usize = 1048576;
 pub const MAX_NODES: usize = 131072;
 pub const MAX_DEPTH: usize = 12;
+/// The bulk tier's bounds, for roots carrying a printer's replies decoded.
+pub const BULK: super::project_intents::Limits = super::project_intents::Limits {
+    bytes: 16777216,
+    nodes: 4194304,
+    depth: 12,
+};
 pub type Unit = u16;
 fn read_unit(v: &Value) -> Result<Unit, InvalidIntent> {
     Ok(integer(v, 0, 65535)? as Unit)
@@ -13278,6 +13284,347 @@ fn read_moonraker_transport_outcome(v: &Value) -> Result<MoonrakerTransportOutco
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStorageMove {
+    pub source: EditText,
+    pub destination: EditText,
+}
+fn read_printer_storage_move(v: &Value) -> Result<PrinterStorageMove, InvalidIntent> {
+    let object = fields(v, &["source", "destination"], false)?;
+    Ok(PrinterStorageMove {
+        source: read_edit_text(&object["source"])?,
+        destination: read_edit_text(&object["destination"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStorageRename {
+    pub path: EditText,
+    pub name: EditText,
+}
+fn read_printer_storage_rename(v: &Value) -> Result<PrinterStorageRename, InvalidIntent> {
+    let object = fields(v, &["path", "name"], false)?;
+    Ok(PrinterStorageRename {
+        path: read_edit_text(&object["path"])?,
+        name: read_edit_text(&object["name"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterStorageOperation {
+    List(PrinterText),
+    Metadata(PrinterText),
+    Download(PrinterText),
+    Delete(PrinterText),
+    Move(PrinterStorageMove),
+    Rename(PrinterStorageRename),
+    Start(PrinterText),
+}
+fn read_printer_storage_operation(v: &Value) -> Result<PrinterStorageOperation, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "list", "metadata", "download", "delete", "move", "rename", "start",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "list" => Ok(PrinterStorageOperation::List(read_printer_text(value)?)),
+        "metadata" => Ok(PrinterStorageOperation::Metadata(read_printer_text(value)?)),
+        "download" => Ok(PrinterStorageOperation::Download(read_printer_text(value)?)),
+        "delete" => Ok(PrinterStorageOperation::Delete(read_printer_text(value)?)),
+        "move" => Ok(PrinterStorageOperation::Move(read_printer_storage_move(
+            value,
+        )?)),
+        "rename" => Ok(PrinterStorageOperation::Rename(
+            read_printer_storage_rename(value)?,
+        )),
+        "start" => Ok(PrinterStorageOperation::Start(read_printer_text(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterStorageErrorCode {
+    ListingFailed,
+    MetadataUnavailable,
+    DeleteFailed,
+    MoveFailed,
+    DownloadFailed,
+    StartFailed,
+    InvalidTarget,
+    Cancelled,
+}
+fn read_printer_storage_error_code(v: &Value) -> Result<PrinterStorageErrorCode, InvalidIntent> {
+    match v.as_str() {
+        Some("listingFailed") => Ok(PrinterStorageErrorCode::ListingFailed),
+        Some("metadataUnavailable") => Ok(PrinterStorageErrorCode::MetadataUnavailable),
+        Some("deleteFailed") => Ok(PrinterStorageErrorCode::DeleteFailed),
+        Some("moveFailed") => Ok(PrinterStorageErrorCode::MoveFailed),
+        Some("downloadFailed") => Ok(PrinterStorageErrorCode::DownloadFailed),
+        Some("startFailed") => Ok(PrinterStorageErrorCode::StartFailed),
+        Some("invalidTarget") => Ok(PrinterStorageErrorCode::InvalidTarget),
+        Some("cancelled") => Ok(PrinterStorageErrorCode::Cancelled),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStorageFailure {
+    pub code: PrinterStorageErrorCode,
+    pub message: EditText,
+}
+fn read_printer_storage_failure(v: &Value) -> Result<PrinterStorageFailure, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(PrinterStorageFailure {
+        code: read_printer_storage_error_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStorageDownload {
+    pub path: EditText,
+    pub operation: EditText,
+}
+fn read_printer_storage_download(v: &Value) -> Result<PrinterStorageDownload, InvalidIntent> {
+    let object = fields(v, &["path", "operation"], false)?;
+    Ok(PrinterStorageDownload {
+        path: read_edit_text(&object["path"])?,
+        operation: read_edit_text(&object["operation"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterStoragePlan {
+    Request(PrinterSend),
+    Download(PrinterStorageDownload),
+    Refused(PrinterStorageFailure),
+}
+fn read_printer_storage_plan(v: &Value) -> Result<PrinterStoragePlan, InvalidIntent> {
+    let object = fields(v, &["request", "download", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "request" => Ok(PrinterStoragePlan::Request(read_printer_send(value)?)),
+        "download" => Ok(PrinterStoragePlan::Download(read_printer_storage_download(
+            value,
+        )?)),
+        "refused" => Ok(PrinterStoragePlan::Refused(read_printer_storage_failure(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterExchangeOutcome {
+    Done(Empty),
+    Failed(TransportFailure),
+    Cancelled(Empty),
+}
+fn read_printer_exchange_outcome(v: &Value) -> Result<PrinterExchangeOutcome, InvalidIntent> {
+    let object = fields(v, &["done", "failed", "cancelled"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "done" => Ok(PrinterExchangeOutcome::Done(read_empty(value)?)),
+        "failed" => Ok(PrinterExchangeOutcome::Failed(read_transport_failure(
+            value,
+        )?)),
+        "cancelled" => Ok(PrinterExchangeOutcome::Cancelled(read_empty(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStorageFinish {
+    pub operation: PrinterStorageOperation,
+    pub outcome: PrinterExchangeOutcome,
+}
+fn read_printer_storage_finish(v: &Value) -> Result<PrinterStorageFinish, InvalidIntent> {
+    let object = fields(v, &["operation", "outcome"], false)?;
+    Ok(PrinterStorageFinish {
+        operation: read_printer_storage_operation(&object["operation"])?,
+        outcome: read_printer_exchange_outcome(&object["outcome"])?,
+    })
+}
+pub type PrinterReplyText = Vec<Unit>;
+fn read_printer_reply_text(v: &Value) -> Result<PrinterReplyText, InvalidIntent> {
+    list(v, 0, 2097152)?.iter().map(read_unit).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalPrinterReplyText {
+    Absent(Empty),
+    Value(PrinterReplyText),
+}
+fn read_optional_printer_reply_text(v: &Value) -> Result<OptionalPrinterReplyText, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPrinterReplyText::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPrinterReplyText::Value(read_printer_reply_text(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStorageEntry {
+    pub name: PrinterReplyText,
+    pub modified_ms: OptionalFinite,
+    pub size_bytes: OptionalFinite,
+}
+fn read_printer_storage_entry(v: &Value) -> Result<PrinterStorageEntry, InvalidIntent> {
+    let object = fields(v, &["name", "modifiedMs", "sizeBytes"], false)?;
+    Ok(PrinterStorageEntry {
+        name: read_printer_reply_text(&object["name"])?,
+        modified_ms: read_optional_finite(&object["modifiedMs"])?,
+        size_bytes: read_optional_finite(&object["sizeBytes"])?,
+    })
+}
+pub type PrinterStorageEntries = Vec<PrinterStorageEntry>;
+fn read_printer_storage_entries(v: &Value) -> Result<PrinterStorageEntries, InvalidIntent> {
+    list(v, 0, 262144)?
+        .iter()
+        .map(read_printer_storage_entry)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStorageListing {
+    pub path: EditText,
+    pub directories: PrinterStorageEntries,
+    pub files: PrinterStorageEntries,
+    pub free_bytes: OptionalFinite,
+    pub total_bytes: OptionalFinite,
+}
+fn read_printer_storage_listing(v: &Value) -> Result<PrinterStorageListing, InvalidIntent> {
+    let object = fields(
+        v,
+        &["path", "directories", "files", "freeBytes", "totalBytes"],
+        false,
+    )?;
+    Ok(PrinterStorageListing {
+        path: read_edit_text(&object["path"])?,
+        directories: read_printer_storage_entries(&object["directories"])?,
+        files: read_printer_storage_entries(&object["files"])?,
+        free_bytes: read_optional_finite(&object["freeBytes"])?,
+        total_bytes: read_optional_finite(&object["totalBytes"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStorageThumbnail {
+    pub width: Finite,
+    pub height: Finite,
+    pub relative_path: PrinterReplyText,
+    pub size_bytes: OptionalFinite,
+}
+fn read_printer_storage_thumbnail(v: &Value) -> Result<PrinterStorageThumbnail, InvalidIntent> {
+    let object = fields(v, &["width", "height", "relativePath", "sizeBytes"], false)?;
+    Ok(PrinterStorageThumbnail {
+        width: read_finite(&object["width"])?,
+        height: read_finite(&object["height"])?,
+        relative_path: read_printer_reply_text(&object["relativePath"])?,
+        size_bytes: read_optional_finite(&object["sizeBytes"])?,
+    })
+}
+pub type PrinterStorageThumbnails = Vec<PrinterStorageThumbnail>;
+fn read_printer_storage_thumbnails(v: &Value) -> Result<PrinterStorageThumbnails, InvalidIntent> {
+    list(v, 0, 65536)?
+        .iter()
+        .map(read_printer_storage_thumbnail)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterStorageMetadata {
+    pub path: EditText,
+    pub size_bytes: OptionalFinite,
+    pub modified_ms: OptionalFinite,
+    pub slicer: OptionalPrinterReplyText,
+    pub slicer_version: OptionalPrinterReplyText,
+    pub layer_height_mm: OptionalFinite,
+    pub object_height_mm: OptionalFinite,
+    pub filament_total_mm: OptionalFinite,
+    pub filament_weight_g: OptionalFinite,
+    pub estimated_seconds: OptionalFinite,
+    pub first_layer_bed_temp_c: OptionalFinite,
+    pub first_layer_nozzle_temp_c: OptionalFinite,
+    pub thumbnails: PrinterStorageThumbnails,
+}
+fn read_printer_storage_metadata(v: &Value) -> Result<PrinterStorageMetadata, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "path",
+            "sizeBytes",
+            "modifiedMs",
+            "slicer",
+            "slicerVersion",
+            "layerHeightMm",
+            "objectHeightMm",
+            "filamentTotalMm",
+            "filamentWeightG",
+            "estimatedSeconds",
+            "firstLayerBedTempC",
+            "firstLayerNozzleTempC",
+            "thumbnails",
+        ],
+        false,
+    )?;
+    Ok(PrinterStorageMetadata {
+        path: read_edit_text(&object["path"])?,
+        size_bytes: read_optional_finite(&object["sizeBytes"])?,
+        modified_ms: read_optional_finite(&object["modifiedMs"])?,
+        slicer: read_optional_printer_reply_text(&object["slicer"])?,
+        slicer_version: read_optional_printer_reply_text(&object["slicerVersion"])?,
+        layer_height_mm: read_optional_finite(&object["layerHeightMm"])?,
+        object_height_mm: read_optional_finite(&object["objectHeightMm"])?,
+        filament_total_mm: read_optional_finite(&object["filamentTotalMm"])?,
+        filament_weight_g: read_optional_finite(&object["filamentWeightG"])?,
+        estimated_seconds: read_optional_finite(&object["estimatedSeconds"])?,
+        first_layer_bed_temp_c: read_optional_finite(&object["firstLayerBedTempC"])?,
+        first_layer_nozzle_temp_c: read_optional_finite(&object["firstLayerNozzleTempC"])?,
+        thumbnails: read_printer_storage_thumbnails(&object["thumbnails"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterStorageResult {
+    Listing(PrinterStorageListing),
+    Metadata(PrinterStorageMetadata),
+    Done(Empty),
+    Moved(PrinterText),
+    Started(PrinterText),
+    Failed(PrinterStorageFailure),
+}
+fn read_printer_storage_result(v: &Value) -> Result<PrinterStorageResult, InvalidIntent> {
+    let object = fields(
+        v,
+        &["listing", "metadata", "done", "moved", "started", "failed"],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "listing" => Ok(PrinterStorageResult::Listing(read_printer_storage_listing(
+            value,
+        )?)),
+        "metadata" => Ok(PrinterStorageResult::Metadata(
+            read_printer_storage_metadata(value)?,
+        )),
+        "done" => Ok(PrinterStorageResult::Done(read_empty(value)?)),
+        "moved" => Ok(PrinterStorageResult::Moved(read_printer_text(value)?)),
+        "started" => Ok(PrinterStorageResult::Started(read_printer_text(value)?)),
+        "failed" => Ok(PrinterStorageResult::Failed(read_printer_storage_failure(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -14986,5 +15333,53 @@ pub fn encode_moonraker_transport_step_reply(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_moonraker_transport_step_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_storage_operation(
+    text: &str,
+) -> Result<PrinterStorageOperation, InvalidIntent> {
+    read_printer_storage_operation(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_storage_operation(
+    value: &PrinterStorageOperation,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_storage_operation(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_storage_plan(text: &str) -> Result<PrinterStoragePlan, InvalidIntent> {
+    read_printer_storage_plan(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_storage_plan(value: &PrinterStoragePlan) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_storage_plan(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_storage_finish(text: &str) -> Result<PrinterStorageFinish, InvalidIntent> {
+    read_printer_storage_finish(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_storage_finish(
+    value: &PrinterStorageFinish,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_storage_finish(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_storage_result(text: &str) -> Result<PrinterStorageResult, InvalidIntent> {
+    read_printer_storage_result(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_printer_storage_result(
+    value: &PrinterStorageResult,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_printer_storage_result(&text)?;
+    Ok(text)
+}
+pub fn decode_optional_text(text: &str) -> Result<OptionalText, InvalidIntent> {
+    read_optional_text(&super::project_intents::parse(text)?)
+}
+pub fn encode_optional_text(value: &OptionalText) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_optional_text(&text)?;
     Ok(text)
 }
