@@ -1957,9 +1957,15 @@ credential storage, and explicit permission/error flows.
   encryption and clear them on explicit forget. Keep AI credentials memory-only
   unless a separate preference is deliberately introduced. Exclude secrets and
   private model contents from logs, backups, crash attachments, and test fixtures.
-- [ ] Implement upload/prepare/start with digest and artifact checks, random
+- [x] Implement upload/prepare/start with digest and artifact checks, random
   non-overwriting names, post-upload revalidation, explicit overwrite handling,
   and unknown-outcome recovery. Never blindly retry an uncertain print start.
+  The shared submission machine (`orcaxr_printer::workflow`, replayed against
+  402 browser scenarios) carries the policy; `PrintWorkflowClient` runs it on
+  Android over a `PrinterSessionClient` lease, and 12 end-to-end checks against
+  the simulator upload under a unique name, overwrite by choice, decline,
+  reprint and refuse a busy printer. The operator's UI for it belongs to the
+  application shell.
 - [ ] Implement status/history/storage/console/camera features matching current
   scope. Camera subscriptions stop when hidden/disposed; emergency stop and the
   distinct firmware-restart action remain reachable without successful status

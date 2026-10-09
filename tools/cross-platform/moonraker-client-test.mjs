@@ -1,6 +1,7 @@
 // The Android Moonraker hosts end to end on this machine's JVM: the shared
-// core's transport and session (JNI) driven by `MoonrakerClient` (OkHttp) and
-// `PrinterSessionClient`, each against a fresh Moonraker simulator (a real
+// core's transport, session and send workflow (JNI) driven by `MoonrakerClient`
+// (OkHttp), `PrinterSessionClient` and `PrintWorkflowClient`, each against a
+// fresh Moonraker simulator (a real
 // HTTP and WebSocket server). The Kotlin checks assert what the client sees;
 // this asserts what the printer received.
 import assert from "node:assert/strict";
@@ -59,11 +60,28 @@ try {
     "emergency-stop",
   ]);
   assert.deepEqual(commanded.apiKeys, ["android-key"]);
+  const sends = await simulator();
+  printers.push(sends);
+  assert.equal(jvm.call("printWorkflowClientChecks", sends.url), 12);
+  const sent = await sends.summary();
+  // The unique-name upload, then the overwrite; the declined and refused sends left nothing.
+  assert.equal(sent.stored.length, 2);
+  assert.ok(sent.stored.includes("part.gcode"));
+  assert.match(
+    sent.stored.find((path) => path !== "part.gcode"),
+    /^part_[0-9a-f]{32}\.gcode$/,
+  );
+  assert.equal(sent.started, "part.gcode");
+  assert.deepEqual(sent.commands, ["start"]);
   console.log(
     JSON.stringify({
       moonrakerClientChecks: 21,
       printerSessionClientChecks: 17,
-      requests: received.requests.length + commanded.requests.length,
+      printWorkflowClientChecks: 12,
+      requests:
+        received.requests.length +
+        commanded.requests.length +
+        sent.requests.length,
     }),
   );
 } finally {

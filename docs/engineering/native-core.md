@@ -3858,6 +3858,16 @@ fresh simulator its 17 checks select, connect, identify a started job from
 the printer's history, pause and resume it, spend an unconfirmed cancel, send
 a confirmed one, stop with a dialog, and end a lease with a clear; the printer
 receives exactly `start, pause, resume, cancel, emergency-stop`.
+`PrintWorkflowClient` hosts the submission machine over a session lease:
+it captures the session (one that ends reaches the core as a cancel), asks
+the operator, sends requests and the multipart upload over the lease's
+client, answers random bytes and currency at once, and stops what a cancelled
+operation started while the reconciling query runs on. Its 12 checks upload
+under a fresh `part_<128-bit hex>.gcode` name and verify it, take the
+requested name on an overwrite, offer the existing file's identity when the
+operator then declines, reprint the stored file, and refuse a send to the busy
+printer after a confirmation that names why; the printer holds exactly the
+two uploads and one start.
 
 It runs on the printer core, a package of its own (`core/browser/printer`,
 `web/public/core-printer/<manifest-sha256>`, the `printer` feature; 1,495,957
