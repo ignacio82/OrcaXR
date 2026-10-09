@@ -5085,6 +5085,166 @@ const shapes = {
       "blockers": "ToolMappingNotices",
       "warnings": "ToolMappingNotices"
     }
+  },
+  "PrintStartOptionId": {
+    "kind": "enum",
+    "values": [
+      "bedLeveling",
+      "timelapse"
+    ]
+  },
+  "PrintStartOptionIds": {
+    "kind": "array",
+    "items": "PrintStartOptionId",
+    "min": 0,
+    "max": 16
+  },
+  "PrinterCapabilityReport": {
+    "kind": "object",
+    "fields": {
+      "objects": "OptionalTextList",
+      "commands": "OptionalTextList",
+      "components": "OptionalTextList"
+    }
+  },
+  "PrintStartOption": {
+    "kind": "object",
+    "fields": {
+      "id": "PrintStartOptionId",
+      "label": "EditText",
+      "detail": "EditText",
+      "available": "Flag",
+      "reason": "EditText",
+      "defaultEnabled": "Flag",
+      "command": "OptionalText"
+    }
+  },
+  "PrintStartOptions": {
+    "kind": "array",
+    "items": "PrintStartOption",
+    "min": 0,
+    "max": 8
+  },
+  "PrintPreparationPlanRequest": {
+    "kind": "object",
+    "fields": {
+      "options": "PrintStartOptions",
+      "enabled": "PrintStartOptionIds"
+    }
+  },
+  "PrintPreparationStepKind": {
+    "kind": "enum",
+    "values": [
+      "timelapse",
+      "leveling"
+    ]
+  },
+  "PrintPreparationStep": {
+    "kind": "object",
+    "fields": {
+      "id": "PrintStartOptionId",
+      "label": "EditText",
+      "kind": "PrintPreparationStepKind",
+      "command": "OptionalText"
+    }
+  },
+  "PrintPreparationSteps": {
+    "kind": "array",
+    "items": "PrintPreparationStep",
+    "min": 0,
+    "max": 8
+  },
+  "PrintStartOptionRefusal": {
+    "kind": "object",
+    "fields": {
+      "optionId": "PrintStartOptionId",
+      "message": "EditText"
+    }
+  },
+  "PrintPreparationPlan": {
+    "kind": "union",
+    "variants": {
+      "steps": "PrintPreparationSteps",
+      "refused": "PrintStartOptionRefusal"
+    }
+  },
+  "PrinterSend": {
+    "kind": "object",
+    "fields": {
+      "path": "EditText",
+      "method": "EditText",
+      "operation": "EditText",
+      "timeoutMs": "OptionalFinite"
+    }
+  },
+  "PrintReadinessBlockerCode": {
+    "kind": "enum",
+    "values": [
+      "klippyNotReady",
+      "printerBusy",
+      "stateUnavailable",
+      "fileRootUnavailable"
+    ]
+  },
+  "PrintReadinessBlocker": {
+    "kind": "object",
+    "fields": {
+      "code": "PrintReadinessBlockerCode",
+      "message": "EditText"
+    }
+  },
+  "PrintReadinessBlockers": {
+    "kind": "array",
+    "items": "PrintReadinessBlocker",
+    "min": 0,
+    "max": 8
+  },
+  "PrintReadiness": {
+    "kind": "object",
+    "fields": {
+      "known": "Flag",
+      "ready": "Flag",
+      "blockers": "PrintReadinessBlockers",
+      "klippyState": "OptionalText",
+      "printState": "OptionalText",
+      "currentFilename": "OptionalText",
+      "virtualSdActive": "OptionalFlag"
+    }
+  },
+  "PrintReadinessFailure": {
+    "kind": "object",
+    "fields": {
+      "transportCode": "OptionalMoonrakerErrorCode"
+    }
+  },
+  "PrinterText": {
+    "kind": "object",
+    "fields": {
+      "text": "EditText"
+    }
+  },
+  "TransportFailure": {
+    "kind": "object",
+    "fields": {
+      "code": "OptionalMoonrakerErrorCode",
+      "httpStatus": "OptionalFinite",
+      "detail": "OptionalText"
+    }
+  },
+  "PrintFileIdentity": {
+    "kind": "object",
+    "fields": {
+      "filename": "EditText",
+      "size": "Finite",
+      "modified": "Finite"
+    }
+  },
+  "PrintFileIdentityReply": {
+    "kind": "union",
+    "variants": {
+      "identity": "PrintFileIdentity",
+      "unreliable": "PrinterText"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -5699,6 +5859,27 @@ export interface ProjectToolMappingNoticeWire {readonly code: ProjectToolMapping
 export type ProjectToolMappingNoticesWire = readonly ProjectToolMappingNoticeWire[];
 export interface ProjectToolMappingRequestWire {readonly usage: ProjectGcodeToolUsageWire;readonly slots: ProjectOptionalMoonrakerFilamentSlotsWire;}
 export interface ProjectToolMappingReportWire {readonly blockers: ProjectToolMappingNoticesWire;readonly warnings: ProjectToolMappingNoticesWire;}
+export type ProjectPrintStartOptionIdWire = "bedLeveling" | "timelapse";
+export type ProjectPrintStartOptionIdsWire = readonly ProjectPrintStartOptionIdWire[];
+export interface ProjectPrinterCapabilityReportWire {readonly objects: ProjectOptionalTextListWire;readonly commands: ProjectOptionalTextListWire;readonly components: ProjectOptionalTextListWire;}
+export interface ProjectPrintStartOptionWire {readonly id: ProjectPrintStartOptionIdWire;readonly label: ProjectEditTextWire;readonly detail: ProjectEditTextWire;readonly available: ProjectFlagWire;readonly reason: ProjectEditTextWire;readonly defaultEnabled: ProjectFlagWire;readonly command: ProjectOptionalTextWire;}
+export type ProjectPrintStartOptionsWire = readonly ProjectPrintStartOptionWire[];
+export interface ProjectPrintPreparationPlanRequestWire {readonly options: ProjectPrintStartOptionsWire;readonly enabled: ProjectPrintStartOptionIdsWire;}
+export type ProjectPrintPreparationStepKindWire = "timelapse" | "leveling";
+export interface ProjectPrintPreparationStepWire {readonly id: ProjectPrintStartOptionIdWire;readonly label: ProjectEditTextWire;readonly kind: ProjectPrintPreparationStepKindWire;readonly command: ProjectOptionalTextWire;}
+export type ProjectPrintPreparationStepsWire = readonly ProjectPrintPreparationStepWire[];
+export interface ProjectPrintStartOptionRefusalWire {readonly optionId: ProjectPrintStartOptionIdWire;readonly message: ProjectEditTextWire;}
+export type ProjectPrintPreparationPlanWire = {readonly steps:ProjectPrintPreparationStepsWire} | {readonly refused:ProjectPrintStartOptionRefusalWire};
+export interface ProjectPrinterSendWire {readonly path: ProjectEditTextWire;readonly method: ProjectEditTextWire;readonly operation: ProjectEditTextWire;readonly timeoutMs: ProjectOptionalFiniteWire;}
+export type ProjectPrintReadinessBlockerCodeWire = "klippyNotReady" | "printerBusy" | "stateUnavailable" | "fileRootUnavailable";
+export interface ProjectPrintReadinessBlockerWire {readonly code: ProjectPrintReadinessBlockerCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectPrintReadinessBlockersWire = readonly ProjectPrintReadinessBlockerWire[];
+export interface ProjectPrintReadinessWire {readonly known: ProjectFlagWire;readonly ready: ProjectFlagWire;readonly blockers: ProjectPrintReadinessBlockersWire;readonly klippyState: ProjectOptionalTextWire;readonly printState: ProjectOptionalTextWire;readonly currentFilename: ProjectOptionalTextWire;readonly virtualSdActive: ProjectOptionalFlagWire;}
+export interface ProjectPrintReadinessFailureWire {readonly transportCode: ProjectOptionalMoonrakerErrorCodeWire;}
+export interface ProjectPrinterTextWire {readonly text: ProjectEditTextWire;}
+export interface ProjectTransportFailureWire {readonly code: ProjectOptionalMoonrakerErrorCodeWire;readonly httpStatus: ProjectOptionalFiniteWire;readonly detail: ProjectOptionalTextWire;}
+export interface ProjectPrintFileIdentityWire {readonly filename: ProjectEditTextWire;readonly size: ProjectFiniteWire;readonly modified: ProjectFiniteWire;}
+export type ProjectPrintFileIdentityReplyWire = {readonly identity:ProjectPrintFileIdentityWire} | {readonly unreliable:ProjectPrinterTextWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -6083,3 +6264,39 @@ export function encodeProjectToolMappingRequest(value:ProjectToolMappingRequestW
 export function captureProjectToolMappingReport(value:unknown):ProjectToolMappingReportWire { return captureIntent("ToolMappingReport",value,shapes,limits) as ProjectToolMappingReportWire; }
 export function decodeProjectToolMappingReport(text:string):ProjectToolMappingReportWire { return captureProjectToolMappingReport(parseIntentJson(text,limits)); }
 export function encodeProjectToolMappingReport(value:ProjectToolMappingReportWire):string { return JSON.stringify(captureProjectToolMappingReport(value)); }
+export function captureProjectPrinterCapabilityReport(value:unknown):ProjectPrinterCapabilityReportWire { return captureIntent("PrinterCapabilityReport",value,shapes,limits) as ProjectPrinterCapabilityReportWire; }
+export function decodeProjectPrinterCapabilityReport(text:string):ProjectPrinterCapabilityReportWire { return captureProjectPrinterCapabilityReport(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterCapabilityReport(value:ProjectPrinterCapabilityReportWire):string { return JSON.stringify(captureProjectPrinterCapabilityReport(value)); }
+export function captureProjectOptionalTextList(value:unknown):ProjectOptionalTextListWire { return captureIntent("OptionalTextList",value,shapes,limits) as ProjectOptionalTextListWire; }
+export function decodeProjectOptionalTextList(text:string):ProjectOptionalTextListWire { return captureProjectOptionalTextList(parseIntentJson(text,limits)); }
+export function encodeProjectOptionalTextList(value:ProjectOptionalTextListWire):string { return JSON.stringify(captureProjectOptionalTextList(value)); }
+export function captureProjectPrintStartOptions(value:unknown):ProjectPrintStartOptionsWire { return captureIntent("PrintStartOptions",value,shapes,limits) as ProjectPrintStartOptionsWire; }
+export function decodeProjectPrintStartOptions(text:string):ProjectPrintStartOptionsWire { return captureProjectPrintStartOptions(parseIntentJson(text,limits)); }
+export function encodeProjectPrintStartOptions(value:ProjectPrintStartOptionsWire):string { return JSON.stringify(captureProjectPrintStartOptions(value)); }
+export function captureProjectPrintPreparationPlanRequest(value:unknown):ProjectPrintPreparationPlanRequestWire { return captureIntent("PrintPreparationPlanRequest",value,shapes,limits) as ProjectPrintPreparationPlanRequestWire; }
+export function decodeProjectPrintPreparationPlanRequest(text:string):ProjectPrintPreparationPlanRequestWire { return captureProjectPrintPreparationPlanRequest(parseIntentJson(text,limits)); }
+export function encodeProjectPrintPreparationPlanRequest(value:ProjectPrintPreparationPlanRequestWire):string { return JSON.stringify(captureProjectPrintPreparationPlanRequest(value)); }
+export function captureProjectPrintPreparationPlan(value:unknown):ProjectPrintPreparationPlanWire { return captureIntent("PrintPreparationPlan",value,shapes,limits) as ProjectPrintPreparationPlanWire; }
+export function decodeProjectPrintPreparationPlan(text:string):ProjectPrintPreparationPlanWire { return captureProjectPrintPreparationPlan(parseIntentJson(text,limits)); }
+export function encodeProjectPrintPreparationPlan(value:ProjectPrintPreparationPlanWire):string { return JSON.stringify(captureProjectPrintPreparationPlan(value)); }
+export function captureProjectPrintPreparationStep(value:unknown):ProjectPrintPreparationStepWire { return captureIntent("PrintPreparationStep",value,shapes,limits) as ProjectPrintPreparationStepWire; }
+export function decodeProjectPrintPreparationStep(text:string):ProjectPrintPreparationStepWire { return captureProjectPrintPreparationStep(parseIntentJson(text,limits)); }
+export function encodeProjectPrintPreparationStep(value:ProjectPrintPreparationStepWire):string { return JSON.stringify(captureProjectPrintPreparationStep(value)); }
+export function captureProjectPrinterSend(value:unknown):ProjectPrinterSendWire { return captureIntent("PrinterSend",value,shapes,limits) as ProjectPrinterSendWire; }
+export function decodeProjectPrinterSend(text:string):ProjectPrinterSendWire { return captureProjectPrinterSend(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterSend(value:ProjectPrinterSendWire):string { return JSON.stringify(captureProjectPrinterSend(value)); }
+export function captureProjectPrintReadiness(value:unknown):ProjectPrintReadinessWire { return captureIntent("PrintReadiness",value,shapes,limits) as ProjectPrintReadinessWire; }
+export function decodeProjectPrintReadiness(text:string):ProjectPrintReadinessWire { return captureProjectPrintReadiness(parseIntentJson(text,limits)); }
+export function encodeProjectPrintReadiness(value:ProjectPrintReadinessWire):string { return JSON.stringify(captureProjectPrintReadiness(value)); }
+export function captureProjectPrintReadinessFailure(value:unknown):ProjectPrintReadinessFailureWire { return captureIntent("PrintReadinessFailure",value,shapes,limits) as ProjectPrintReadinessFailureWire; }
+export function decodeProjectPrintReadinessFailure(text:string):ProjectPrintReadinessFailureWire { return captureProjectPrintReadinessFailure(parseIntentJson(text,limits)); }
+export function encodeProjectPrintReadinessFailure(value:ProjectPrintReadinessFailureWire):string { return JSON.stringify(captureProjectPrintReadinessFailure(value)); }
+export function captureProjectPrinterText(value:unknown):ProjectPrinterTextWire { return captureIntent("PrinterText",value,shapes,limits) as ProjectPrinterTextWire; }
+export function decodeProjectPrinterText(text:string):ProjectPrinterTextWire { return captureProjectPrinterText(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterText(value:ProjectPrinterTextWire):string { return JSON.stringify(captureProjectPrinterText(value)); }
+export function captureProjectTransportFailure(value:unknown):ProjectTransportFailureWire { return captureIntent("TransportFailure",value,shapes,limits) as ProjectTransportFailureWire; }
+export function decodeProjectTransportFailure(text:string):ProjectTransportFailureWire { return captureProjectTransportFailure(parseIntentJson(text,limits)); }
+export function encodeProjectTransportFailure(value:ProjectTransportFailureWire):string { return JSON.stringify(captureProjectTransportFailure(value)); }
+export function captureProjectPrintFileIdentityReply(value:unknown):ProjectPrintFileIdentityReplyWire { return captureIntent("PrintFileIdentityReply",value,shapes,limits) as ProjectPrintFileIdentityReplyWire; }
+export function decodeProjectPrintFileIdentityReply(text:string):ProjectPrintFileIdentityReplyWire { return captureProjectPrintFileIdentityReply(parseIntentJson(text,limits)); }
+export function encodeProjectPrintFileIdentityReply(value:ProjectPrintFileIdentityReplyWire):string { return JSON.stringify(captureProjectPrintFileIdentityReply(value)); }

@@ -165,6 +165,18 @@ assert.deepEqual(schema.roots, [
   "FilamentSlotsReply",
   "ToolMappingRequest",
   "ToolMappingReport",
+  "PrinterCapabilityReport",
+  "OptionalTextList",
+  "PrintStartOptions",
+  "PrintPreparationPlanRequest",
+  "PrintPreparationPlan",
+  "PrintPreparationStep",
+  "PrinterSend",
+  "PrintReadiness",
+  "PrintReadinessFailure",
+  "PrinterText",
+  "TransportFailure",
+  "PrintFileIdentityReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

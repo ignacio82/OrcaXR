@@ -2,7 +2,7 @@
 use crate::project::error;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
-use orcaxr_printer::{control, status::JobStatus, summary, tools};
+use orcaxr_printer::{control, preparation, status::JobStatus, summary, tools};
 use wasm_bindgen::prelude::*;
 
 fn encoded(snapshot: &wire::PrintJobSnapshot) -> Result<String, JsValue> {
@@ -197,4 +197,111 @@ impl ToolUsageScanner {
         let usage = self.inner.take().ok_or_else(|| error("finished"))?.finish();
         wire::encode_gcode_tool_usage(&usage).map_err(|_| error("output_limit"))
     }
+}
+
+fn reply_text(text: &str) -> Result<&str, JsValue> {
+    if text.len() > orcaxr_printer::status::LIMITS.bytes {
+        return Err(error("input_limit"));
+    }
+    Ok(text)
+}
+/// `/printer/objects/list` reply text; the objects, or unknown.
+#[wasm_bindgen]
+pub fn printer_objects(text: &str) -> Result<String, JsValue> {
+    wire::encode_optional_text_list(&preparation::printer_objects(reply_text(text)?))
+        .map_err(|_| error("output_limit"))
+}
+/// `/server/info` reply text; the components, or unknown.
+#[wasm_bindgen]
+pub fn server_components(text: &str) -> Result<String, JsValue> {
+    wire::encode_optional_text_list(&preparation::server_components(reply_text(text)?))
+        .map_err(|_| error("output_limit"))
+}
+/// `/printer/gcode/help` reply text; the command names, or unknown.
+#[wasm_bindgen]
+pub fn gcode_commands(text: &str) -> Result<String, JsValue> {
+    wire::encode_optional_text_list(&preparation::gcode_commands(reply_text(text)?))
+        .map_err(|_| error("output_limit"))
+}
+/// A `PrinterCapabilityReport`; the `PrintStartOptions` it supports.
+#[wasm_bindgen]
+pub fn print_start_options(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_printer_capability_report,
+        preparation::start_options,
+        wire::encode_print_start_options,
+    )
+}
+/// A `PrintPreparationPlanRequest`; the `PrintPreparationPlan`.
+#[wasm_bindgen]
+pub fn print_preparation_plan(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_print_preparation_plan_request,
+        preparation::preparation_plan,
+        wire::encode_print_preparation_plan,
+    )
+}
+/// A `PrintPreparationStep`; the `PrinterSend` it posts.
+#[wasm_bindgen]
+pub fn print_preparation_send(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_print_preparation_step,
+        preparation::preparation_send,
+        wire::encode_printer_send,
+    )
+}
+/// The readiness query's reply text; the `PrintReadiness`.
+#[wasm_bindgen]
+pub fn print_readiness(text: &str) -> Result<String, JsValue> {
+    wire::encode_print_readiness(&preparation::readiness(reply_text(text)?))
+        .map_err(|_| error("output_limit"))
+}
+/// A `PrintReadinessFailure`; the `PrintReadiness` of a failed query.
+#[wasm_bindgen]
+pub fn print_readiness_failure(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_print_readiness_failure,
+        preparation::readiness_unavailable,
+        wire::encode_print_readiness,
+    )
+}
+/// A `PrinterText` filename; the sanitized upload name.
+#[wasm_bindgen]
+pub fn sanitize_gcode_filename(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_printer_text,
+        |r| wire::PrinterText {
+            text: preparation::sanitize_filename(&r.text),
+        },
+        wire::encode_printer_text,
+    )
+}
+/// A `TransportFailure`; how it reads, as `PrinterText`.
+#[wasm_bindgen]
+pub fn describe_transport_failure(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_transport_failure,
+        |r| wire::PrinterText {
+            text: preparation::describe_failure(r),
+        },
+        wire::encode_printer_text,
+    )
+}
+/// A metadata reply's text and the `PrinterText` filename asked about; the
+/// `PrintFileIdentityReply`.
+#[wasm_bindgen]
+pub fn print_file_identity(text: &str, filename: &str) -> Result<String, JsValue> {
+    let text = reply_text(text)?;
+    exchange(
+        filename,
+        wire::decode_printer_text,
+        |f| preparation::file_identity(text, &f.text),
+        wire::encode_print_file_identity_reply,
+    )
 }

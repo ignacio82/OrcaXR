@@ -3614,6 +3614,24 @@ with a BOM, malformed bytes and every line terminator), 20 slot replies and
 and 64 bytes, WASM in Node and Chrome and JNI in 4 KiB appends, and 1,672
 Kotlin checks cover the wrappers.
 
+`preparation` ports `PrintStartOptions.ts` and the pure half of
+`PrintJobSubmission.ts`. Capability lists come from `/printer/objects/list`,
+`/printer/gcode/help` and `/server/info` replies (`result` or the payload
+itself; anything malformed is unknown, never empty), and each name counts by
+its first whitespace-separated word, lowercased. Levelling is offered for a
+`bed_mesh` section or a named `BED_MESH_CALIBRATE`/`G29` command, a timelapse
+for Moonraker's component, and an unasked printer is unknown rather than
+unable. Plans check every chosen option against what was offered and order
+the timelapse setting before levelling, whose script is URI-encoded with a
+15-minute deadline. Readiness names the exact reported Klipper and print
+states, refusing anything unrecognized; upload names keep the last path
+segment with `.gcode`, one `_` per run of refused characters, no leading `_`
+or `.`, at most 110 units; a transport failure reads with the server's text
+summarized as the browser's error constructor summarizes it. Help command
+names travel as a set in UTF-16 order, since only membership is ever asked.
+`printer-preparation-vectors.mjs` records 929 answers; Rust, WASM in Node and
+Chrome, JNI and 929 Kotlin checks agree on every one.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

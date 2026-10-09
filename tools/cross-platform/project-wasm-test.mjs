@@ -28,6 +28,7 @@ import { replayObjectTree } from "./object-tree-replay.mjs";
 import { replayPrintJobStatus } from "./print-job-status-replay.mjs";
 import { replayPrinterControl } from "./printer-control-replay.mjs";
 import { replayPrinterTools } from "./printer-tools-replay.mjs";
+import { replayPrinterPreparation } from "./printer-preparation-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -236,6 +237,8 @@ if (isMainThread) {
       [result.printerToolUsages, result.printerSlotReplies, result.printerMappings],
       [100, 20, 1552],
     );
+    // Print preparation and submission checks.
+    assert.equal(result.printerPreparationAnswers, 929);
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -650,6 +653,12 @@ if (isMainThread) {
       await readFile(new URL("testdata/cross-platform/printer-tools-vectors.json", root)),
     ),
   );
+  const printerPreparation = replayPrinterPreparation(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/printer-preparation-vectors.json", root)),
+    ),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -689,6 +698,7 @@ if (isMainThread) {
       ...printJobs,
       ...printerControl,
       ...printerTools,
+      ...printerPreparation,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

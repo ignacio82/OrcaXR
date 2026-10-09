@@ -121,6 +121,17 @@ final class NativeProject {
     static native long toolUsageNew();
     static native void toolUsageAppend(long handle, byte[] bytes);
     static native String toolUsageFinish(long handle);
+    static native String printerObjects(String text);
+    static native String serverComponents(String text);
+    static native String gcodeCommands(String text);
+    static native String printStartOptions(String request);
+    static native String printPreparationPlan(String request);
+    static native String printPreparationSend(String request);
+    static native String printReadiness(String text);
+    static native String printReadinessFailure(String request);
+    static native String sanitizeGcodeFilename(String request);
+    static native String describeTransportFailure(String request);
+    static native String printFileIdentity(String text, String filename);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

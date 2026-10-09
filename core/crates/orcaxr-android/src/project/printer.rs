@@ -5,6 +5,7 @@ use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
     control::{self, HoldToConfirm},
+    preparation,
     status::{JobStatus, LIMITS},
     summary, tools,
 };
@@ -235,4 +236,121 @@ pub(super) fn tool_usage_finish(env: &mut JNIEnv<'_>, handle: jlong) -> Result<j
     registry().close(handle)?;
     let json = wire::encode_gcode_tool_usage(&scanner.finish()).map_err(|_| "output_limit")?;
     string(env, json)
+}
+
+fn printer_reply(
+    env: &mut JNIEnv<'_>,
+    text: JString<'_>,
+    read: impl FnOnce(&str) -> std::result::Result<String, InvalidIntent>,
+) -> Result<jstring> {
+    let text = printer_text(env, &text)?;
+    let json = read(&text).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn printer_objects(env: &mut JNIEnv<'_>, text: JString<'_>) -> Result<jstring> {
+    printer_reply(env, text, |t| {
+        wire::encode_optional_text_list(&preparation::printer_objects(t))
+    })
+}
+pub(super) fn server_components(env: &mut JNIEnv<'_>, text: JString<'_>) -> Result<jstring> {
+    printer_reply(env, text, |t| {
+        wire::encode_optional_text_list(&preparation::server_components(t))
+    })
+}
+pub(super) fn gcode_commands(env: &mut JNIEnv<'_>, text: JString<'_>) -> Result<jstring> {
+    printer_reply(env, text, |t| {
+        wire::encode_optional_text_list(&preparation::gcode_commands(t))
+    })
+}
+pub(super) fn print_start_options(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_printer_capability_report,
+        preparation::start_options,
+        wire::encode_print_start_options,
+    )
+}
+pub(super) fn print_preparation_plan(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_print_preparation_plan_request,
+        preparation::preparation_plan,
+        wire::encode_print_preparation_plan,
+    )
+}
+pub(super) fn print_preparation_send(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_print_preparation_step,
+        preparation::preparation_send,
+        wire::encode_printer_send,
+    )
+}
+pub(super) fn print_readiness(env: &mut JNIEnv<'_>, text: JString<'_>) -> Result<jstring> {
+    printer_reply(env, text, |t| {
+        wire::encode_print_readiness(&preparation::readiness(t))
+    })
+}
+pub(super) fn print_readiness_failure(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_print_readiness_failure,
+        preparation::readiness_unavailable,
+        wire::encode_print_readiness,
+    )
+}
+pub(super) fn sanitize_gcode_filename(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_printer_text,
+        |r| wire::PrinterText {
+            text: preparation::sanitize_filename(&r.text),
+        },
+        wire::encode_printer_text,
+    )
+}
+pub(super) fn describe_transport_failure(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_transport_failure,
+        |r| wire::PrinterText {
+            text: preparation::describe_failure(r),
+        },
+        wire::encode_printer_text,
+    )
+}
+pub(super) fn print_file_identity(
+    env: &mut JNIEnv<'_>,
+    text: JString<'_>,
+    filename: JString<'_>,
+) -> Result<jstring> {
+    let text = printer_text(env, &text)?;
+    exchange(
+        env,
+        filename,
+        wire::decode_printer_text,
+        |f| preparation::file_identity(&text, &f.text),
+        wire::encode_print_file_identity_reply,
+    )
 }

@@ -10649,6 +10649,326 @@ fn read_tool_mapping_report(v: &Value) -> Result<ToolMappingReport, InvalidInten
         warnings: read_tool_mapping_notices(&object["warnings"])?,
     })
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintStartOptionId {
+    BedLeveling,
+    Timelapse,
+}
+fn read_print_start_option_id(v: &Value) -> Result<PrintStartOptionId, InvalidIntent> {
+    match v.as_str() {
+        Some("bedLeveling") => Ok(PrintStartOptionId::BedLeveling),
+        Some("timelapse") => Ok(PrintStartOptionId::Timelapse),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type PrintStartOptionIds = Vec<PrintStartOptionId>;
+fn read_print_start_option_ids(v: &Value) -> Result<PrintStartOptionIds, InvalidIntent> {
+    list(v, 0, 16)?
+        .iter()
+        .map(read_print_start_option_id)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterCapabilityReport {
+    pub objects: OptionalTextList,
+    pub commands: OptionalTextList,
+    pub components: OptionalTextList,
+}
+fn read_printer_capability_report(v: &Value) -> Result<PrinterCapabilityReport, InvalidIntent> {
+    let object = fields(v, &["objects", "commands", "components"], false)?;
+    Ok(PrinterCapabilityReport {
+        objects: read_optional_text_list(&object["objects"])?,
+        commands: read_optional_text_list(&object["commands"])?,
+        components: read_optional_text_list(&object["components"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintStartOption {
+    pub id: PrintStartOptionId,
+    pub label: EditText,
+    pub detail: EditText,
+    pub available: Flag,
+    pub reason: EditText,
+    pub default_enabled: Flag,
+    pub command: OptionalText,
+}
+fn read_print_start_option(v: &Value) -> Result<PrintStartOption, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "id",
+            "label",
+            "detail",
+            "available",
+            "reason",
+            "defaultEnabled",
+            "command",
+        ],
+        false,
+    )?;
+    Ok(PrintStartOption {
+        id: read_print_start_option_id(&object["id"])?,
+        label: read_edit_text(&object["label"])?,
+        detail: read_edit_text(&object["detail"])?,
+        available: read_flag(&object["available"])?,
+        reason: read_edit_text(&object["reason"])?,
+        default_enabled: read_flag(&object["defaultEnabled"])?,
+        command: read_optional_text(&object["command"])?,
+    })
+}
+pub type PrintStartOptions = Vec<PrintStartOption>;
+fn read_print_start_options(v: &Value) -> Result<PrintStartOptions, InvalidIntent> {
+    list(v, 0, 8)?.iter().map(read_print_start_option).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintPreparationPlanRequest {
+    pub options: PrintStartOptions,
+    pub enabled: PrintStartOptionIds,
+}
+fn read_print_preparation_plan_request(
+    v: &Value,
+) -> Result<PrintPreparationPlanRequest, InvalidIntent> {
+    let object = fields(v, &["options", "enabled"], false)?;
+    Ok(PrintPreparationPlanRequest {
+        options: read_print_start_options(&object["options"])?,
+        enabled: read_print_start_option_ids(&object["enabled"])?,
+    })
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintPreparationStepKind {
+    Timelapse,
+    Leveling,
+}
+fn read_print_preparation_step_kind(v: &Value) -> Result<PrintPreparationStepKind, InvalidIntent> {
+    match v.as_str() {
+        Some("timelapse") => Ok(PrintPreparationStepKind::Timelapse),
+        Some("leveling") => Ok(PrintPreparationStepKind::Leveling),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintPreparationStep {
+    pub id: PrintStartOptionId,
+    pub label: EditText,
+    pub kind: PrintPreparationStepKind,
+    pub command: OptionalText,
+}
+fn read_print_preparation_step(v: &Value) -> Result<PrintPreparationStep, InvalidIntent> {
+    let object = fields(v, &["id", "label", "kind", "command"], false)?;
+    Ok(PrintPreparationStep {
+        id: read_print_start_option_id(&object["id"])?,
+        label: read_edit_text(&object["label"])?,
+        kind: read_print_preparation_step_kind(&object["kind"])?,
+        command: read_optional_text(&object["command"])?,
+    })
+}
+pub type PrintPreparationSteps = Vec<PrintPreparationStep>;
+fn read_print_preparation_steps(v: &Value) -> Result<PrintPreparationSteps, InvalidIntent> {
+    list(v, 0, 8)?
+        .iter()
+        .map(read_print_preparation_step)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintStartOptionRefusal {
+    pub option_id: PrintStartOptionId,
+    pub message: EditText,
+}
+fn read_print_start_option_refusal(v: &Value) -> Result<PrintStartOptionRefusal, InvalidIntent> {
+    let object = fields(v, &["optionId", "message"], false)?;
+    Ok(PrintStartOptionRefusal {
+        option_id: read_print_start_option_id(&object["optionId"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintPreparationPlan {
+    Steps(PrintPreparationSteps),
+    Refused(PrintStartOptionRefusal),
+}
+fn read_print_preparation_plan(v: &Value) -> Result<PrintPreparationPlan, InvalidIntent> {
+    let object = fields(v, &["steps", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "steps" => Ok(PrintPreparationPlan::Steps(read_print_preparation_steps(
+            value,
+        )?)),
+        "refused" => Ok(PrintPreparationPlan::Refused(
+            read_print_start_option_refusal(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterSend {
+    pub path: EditText,
+    pub method: EditText,
+    pub operation: EditText,
+    pub timeout_ms: OptionalFinite,
+}
+fn read_printer_send(v: &Value) -> Result<PrinterSend, InvalidIntent> {
+    let object = fields(v, &["path", "method", "operation", "timeoutMs"], false)?;
+    Ok(PrinterSend {
+        path: read_edit_text(&object["path"])?,
+        method: read_edit_text(&object["method"])?,
+        operation: read_edit_text(&object["operation"])?,
+        timeout_ms: read_optional_finite(&object["timeoutMs"])?,
+    })
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintReadinessBlockerCode {
+    KlippyNotReady,
+    PrinterBusy,
+    StateUnavailable,
+    FileRootUnavailable,
+}
+fn read_print_readiness_blocker_code(
+    v: &Value,
+) -> Result<PrintReadinessBlockerCode, InvalidIntent> {
+    match v.as_str() {
+        Some("klippyNotReady") => Ok(PrintReadinessBlockerCode::KlippyNotReady),
+        Some("printerBusy") => Ok(PrintReadinessBlockerCode::PrinterBusy),
+        Some("stateUnavailable") => Ok(PrintReadinessBlockerCode::StateUnavailable),
+        Some("fileRootUnavailable") => Ok(PrintReadinessBlockerCode::FileRootUnavailable),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintReadinessBlocker {
+    pub code: PrintReadinessBlockerCode,
+    pub message: EditText,
+}
+fn read_print_readiness_blocker(v: &Value) -> Result<PrintReadinessBlocker, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(PrintReadinessBlocker {
+        code: read_print_readiness_blocker_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+pub type PrintReadinessBlockers = Vec<PrintReadinessBlocker>;
+fn read_print_readiness_blockers(v: &Value) -> Result<PrintReadinessBlockers, InvalidIntent> {
+    list(v, 0, 8)?
+        .iter()
+        .map(read_print_readiness_blocker)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintReadiness {
+    pub known: Flag,
+    pub ready: Flag,
+    pub blockers: PrintReadinessBlockers,
+    pub klippy_state: OptionalText,
+    pub print_state: OptionalText,
+    pub current_filename: OptionalText,
+    pub virtual_sd_active: OptionalFlag,
+}
+fn read_print_readiness(v: &Value) -> Result<PrintReadiness, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "known",
+            "ready",
+            "blockers",
+            "klippyState",
+            "printState",
+            "currentFilename",
+            "virtualSdActive",
+        ],
+        false,
+    )?;
+    Ok(PrintReadiness {
+        known: read_flag(&object["known"])?,
+        ready: read_flag(&object["ready"])?,
+        blockers: read_print_readiness_blockers(&object["blockers"])?,
+        klippy_state: read_optional_text(&object["klippyState"])?,
+        print_state: read_optional_text(&object["printState"])?,
+        current_filename: read_optional_text(&object["currentFilename"])?,
+        virtual_sd_active: read_optional_flag(&object["virtualSdActive"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintReadinessFailure {
+    pub transport_code: OptionalMoonrakerErrorCode,
+}
+fn read_print_readiness_failure(v: &Value) -> Result<PrintReadinessFailure, InvalidIntent> {
+    let object = fields(v, &["transportCode"], false)?;
+    Ok(PrintReadinessFailure {
+        transport_code: read_optional_moonraker_error_code(&object["transportCode"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterText {
+    pub text: EditText,
+}
+fn read_printer_text(v: &Value) -> Result<PrinterText, InvalidIntent> {
+    let object = fields(v, &["text"], false)?;
+    Ok(PrinterText {
+        text: read_edit_text(&object["text"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransportFailure {
+    pub code: OptionalMoonrakerErrorCode,
+    pub http_status: OptionalFinite,
+    pub detail: OptionalText,
+}
+fn read_transport_failure(v: &Value) -> Result<TransportFailure, InvalidIntent> {
+    let object = fields(v, &["code", "httpStatus", "detail"], false)?;
+    Ok(TransportFailure {
+        code: read_optional_moonraker_error_code(&object["code"])?,
+        http_status: read_optional_finite(&object["httpStatus"])?,
+        detail: read_optional_text(&object["detail"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintFileIdentity {
+    pub filename: EditText,
+    pub size: Finite,
+    pub modified: Finite,
+}
+fn read_print_file_identity(v: &Value) -> Result<PrintFileIdentity, InvalidIntent> {
+    let object = fields(v, &["filename", "size", "modified"], false)?;
+    Ok(PrintFileIdentity {
+        filename: read_edit_text(&object["filename"])?,
+        size: read_finite(&object["size"])?,
+        modified: read_finite(&object["modified"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintFileIdentityReply {
+    Identity(PrintFileIdentity),
+    Unreliable(PrinterText),
+}
+fn read_print_file_identity_reply(v: &Value) -> Result<PrintFileIdentityReply, InvalidIntent> {
+    let object = fields(v, &["identity", "unreliable"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "identity" => Ok(PrintFileIdentityReply::Identity(read_print_file_identity(
+            value,
+        )?)),
+        "unreliable" => Ok(PrintFileIdentityReply::Unreliable(read_printer_text(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -11775,5 +12095,119 @@ pub fn decode_tool_mapping_report(text: &str) -> Result<ToolMappingReport, Inval
 pub fn encode_tool_mapping_report(value: &ToolMappingReport) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_tool_mapping_report(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_capability_report(
+    text: &str,
+) -> Result<PrinterCapabilityReport, InvalidIntent> {
+    read_printer_capability_report(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_capability_report(
+    value: &PrinterCapabilityReport,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_capability_report(&text)?;
+    Ok(text)
+}
+pub fn decode_optional_text_list(text: &str) -> Result<OptionalTextList, InvalidIntent> {
+    read_optional_text_list(&super::project_intents::parse(text)?)
+}
+pub fn encode_optional_text_list(value: &OptionalTextList) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_optional_text_list(&text)?;
+    Ok(text)
+}
+pub fn decode_print_start_options(text: &str) -> Result<PrintStartOptions, InvalidIntent> {
+    read_print_start_options(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_start_options(value: &PrintStartOptions) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_start_options(&text)?;
+    Ok(text)
+}
+pub fn decode_print_preparation_plan_request(
+    text: &str,
+) -> Result<PrintPreparationPlanRequest, InvalidIntent> {
+    read_print_preparation_plan_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_preparation_plan_request(
+    value: &PrintPreparationPlanRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_preparation_plan_request(&text)?;
+    Ok(text)
+}
+pub fn decode_print_preparation_plan(text: &str) -> Result<PrintPreparationPlan, InvalidIntent> {
+    read_print_preparation_plan(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_preparation_plan(
+    value: &PrintPreparationPlan,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_preparation_plan(&text)?;
+    Ok(text)
+}
+pub fn decode_print_preparation_step(text: &str) -> Result<PrintPreparationStep, InvalidIntent> {
+    read_print_preparation_step(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_preparation_step(
+    value: &PrintPreparationStep,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_preparation_step(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_send(text: &str) -> Result<PrinterSend, InvalidIntent> {
+    read_printer_send(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_send(value: &PrinterSend) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_send(&text)?;
+    Ok(text)
+}
+pub fn decode_print_readiness(text: &str) -> Result<PrintReadiness, InvalidIntent> {
+    read_print_readiness(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_readiness(value: &PrintReadiness) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_readiness(&text)?;
+    Ok(text)
+}
+pub fn decode_print_readiness_failure(text: &str) -> Result<PrintReadinessFailure, InvalidIntent> {
+    read_print_readiness_failure(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_readiness_failure(
+    value: &PrintReadinessFailure,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_readiness_failure(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_text(text: &str) -> Result<PrinterText, InvalidIntent> {
+    read_printer_text(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_text(value: &PrinterText) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_text(&text)?;
+    Ok(text)
+}
+pub fn decode_transport_failure(text: &str) -> Result<TransportFailure, InvalidIntent> {
+    read_transport_failure(&super::project_intents::parse(text)?)
+}
+pub fn encode_transport_failure(value: &TransportFailure) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_transport_failure(&text)?;
+    Ok(text)
+}
+pub fn decode_print_file_identity_reply(
+    text: &str,
+) -> Result<PrintFileIdentityReply, InvalidIntent> {
+    read_print_file_identity_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_file_identity_reply(
+    value: &PrintFileIdentityReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_file_identity_reply(&text)?;
     Ok(text)
 }

@@ -627,6 +627,62 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_printerObjects, printer_objects, jstring,
+    text: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_serverComponents, server_components, jstring,
+    text: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_gcodeCommands, gcode_commands, jstring,
+    text: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printStartOptions, print_start_options, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printPreparationPlan, print_preparation_plan, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printPreparationSend, print_preparation_send, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printReadiness, print_readiness, jstring,
+    text: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printReadinessFailure, print_readiness_failure, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_sanitizeGcodeFilename, sanitize_gcode_filename, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_describeTransportFailure, describe_transport_failure, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printFileIdentity, print_file_identity, jstring,
+    text: JString<'local>,
+    filename: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,

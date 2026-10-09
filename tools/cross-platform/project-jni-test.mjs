@@ -37,6 +37,7 @@ import { replayObjectTree } from "./object-tree-replay.mjs";
 import { replayPrintJobStatus } from "./print-job-status-replay.mjs";
 import { replayPrinterControl } from "./printer-control-replay.mjs";
 import { replayPrinterTools } from "./printer-tools-replay.mjs";
+import { replayPrinterPreparation } from "./printer-preparation-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -988,6 +989,27 @@ try {
     ].join("\n"),
   );
   assert.equal(toolsChecks, 1672);
+  // Print preparation and submission checks through the real JNI exports,
+  // then the Kotlin wrapper.
+  const preparationFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/printer-preparation-vectors.json", root)),
+  );
+  assert.equal(
+    replayPrinterPreparation(projectJniCore(jvm.call), preparationFixture).printerPreparationAnswers,
+    929,
+  );
+  const preparationScript = [
+    ...preparationFixture.capabilities.map((c) => [c.kind, c.text, "", c.replyJson]),
+    ...["options", "plans", "sends", "readinessFailures", "filenames", "failures"].flatMap((section) =>
+      preparationFixture[section].map((c) => [section, c.requestJson, "", c.replyJson]),
+    ),
+    ...preparationFixture.readiness.map((c) => ["readiness", c.text, "", c.replyJson]),
+    ...preparationFixture.identities.map((c) => ["identities", c.text, c.requestJson, c.replyJson]),
+  ];
+  assert.equal(
+    jvm.call("printPreparationChecks", preparationScript.map((row) => row.join("\t")).join("\n")),
+    929,
+  );
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

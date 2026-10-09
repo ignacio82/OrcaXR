@@ -7719,6 +7719,238 @@ object ProjectIntents {
             w.field("warnings") { writeToolMappingNotices(w, v.warnings) }
         }
     }
+    enum class PrintStartOptionId {BedLeveling,Timelapse}
+    private fun readPrintStartOptionId(v: Any): PrintStartOptionId {
+        return when(v) {"bedLeveling" -> PrintStartOptionId.BedLeveling;"timelapse" -> PrintStartOptionId.Timelapse; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrintStartOptionId(w: ProjectIntentWriter, v: PrintStartOptionId) {
+        w.literal(when(v) {PrintStartOptionId.BedLeveling -> "bedLeveling";PrintStartOptionId.Timelapse -> "timelapse";})
+    }
+    private fun readPrintStartOptionIds(v: Any): List<PrintStartOptionId> {
+        val array = ProjectIntentJson.list(v, 0, 16)
+        return List(array.length()) { readPrintStartOptionId(array.get(it)) }
+    }
+    private fun writePrintStartOptionIds(w: ProjectIntentWriter, v: List<PrintStartOptionId>) {
+        w.array(v, 0, 16) { writePrintStartOptionId(w, it) }
+    }
+    data class PrinterCapabilityReport(val objects: OptionalTextList, val commands: OptionalTextList, val components: OptionalTextList)
+    private fun readPrinterCapabilityReport(v: Any): PrinterCapabilityReport {
+        val obj = ProjectIntentJson.fields(v, setOf("objects", "commands", "components"), false)
+        return PrinterCapabilityReport(readOptionalTextList(obj.get("objects")), readOptionalTextList(obj.get("commands")), readOptionalTextList(obj.get("components")))
+    }
+    private fun writePrinterCapabilityReport(w: ProjectIntentWriter, v: PrinterCapabilityReport) {
+        w.obj {
+            w.field("objects") { writeOptionalTextList(w, v.objects) }
+            w.field("commands") { writeOptionalTextList(w, v.commands) }
+            w.field("components") { writeOptionalTextList(w, v.components) }
+        }
+    }
+    data class PrintStartOption(val id: PrintStartOptionId, val label: List<Int>, val detail: List<Int>, val available: Boolean, val reason: List<Int>, val defaultEnabled: Boolean, val command: OptionalText)
+    private fun readPrintStartOption(v: Any): PrintStartOption {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "label", "detail", "available", "reason", "defaultEnabled", "command"), false)
+        return PrintStartOption(readPrintStartOptionId(obj.get("id")), readEditText(obj.get("label")), readEditText(obj.get("detail")), readFlag(obj.get("available")), readEditText(obj.get("reason")), readFlag(obj.get("defaultEnabled")), readOptionalText(obj.get("command")))
+    }
+    private fun writePrintStartOption(w: ProjectIntentWriter, v: PrintStartOption) {
+        w.obj {
+            w.field("id") { writePrintStartOptionId(w, v.id) }
+            w.field("label") { writeEditText(w, v.label) }
+            w.field("detail") { writeEditText(w, v.detail) }
+            w.field("available") { writeFlag(w, v.available) }
+            w.field("reason") { writeEditText(w, v.reason) }
+            w.field("defaultEnabled") { writeFlag(w, v.defaultEnabled) }
+            w.field("command") { writeOptionalText(w, v.command) }
+        }
+    }
+    private fun readPrintStartOptions(v: Any): List<PrintStartOption> {
+        val array = ProjectIntentJson.list(v, 0, 8)
+        return List(array.length()) { readPrintStartOption(array.get(it)) }
+    }
+    private fun writePrintStartOptions(w: ProjectIntentWriter, v: List<PrintStartOption>) {
+        w.array(v, 0, 8) { writePrintStartOption(w, it) }
+    }
+    data class PrintPreparationPlanRequest(val options: List<PrintStartOption>, val enabled: List<PrintStartOptionId>)
+    private fun readPrintPreparationPlanRequest(v: Any): PrintPreparationPlanRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("options", "enabled"), false)
+        return PrintPreparationPlanRequest(readPrintStartOptions(obj.get("options")), readPrintStartOptionIds(obj.get("enabled")))
+    }
+    private fun writePrintPreparationPlanRequest(w: ProjectIntentWriter, v: PrintPreparationPlanRequest) {
+        w.obj {
+            w.field("options") { writePrintStartOptions(w, v.options) }
+            w.field("enabled") { writePrintStartOptionIds(w, v.enabled) }
+        }
+    }
+    enum class PrintPreparationStepKind {Timelapse,Leveling}
+    private fun readPrintPreparationStepKind(v: Any): PrintPreparationStepKind {
+        return when(v) {"timelapse" -> PrintPreparationStepKind.Timelapse;"leveling" -> PrintPreparationStepKind.Leveling; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrintPreparationStepKind(w: ProjectIntentWriter, v: PrintPreparationStepKind) {
+        w.literal(when(v) {PrintPreparationStepKind.Timelapse -> "timelapse";PrintPreparationStepKind.Leveling -> "leveling";})
+    }
+    data class PrintPreparationStep(val id: PrintStartOptionId, val label: List<Int>, val kind: PrintPreparationStepKind, val command: OptionalText)
+    private fun readPrintPreparationStep(v: Any): PrintPreparationStep {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "label", "kind", "command"), false)
+        return PrintPreparationStep(readPrintStartOptionId(obj.get("id")), readEditText(obj.get("label")), readPrintPreparationStepKind(obj.get("kind")), readOptionalText(obj.get("command")))
+    }
+    private fun writePrintPreparationStep(w: ProjectIntentWriter, v: PrintPreparationStep) {
+        w.obj {
+            w.field("id") { writePrintStartOptionId(w, v.id) }
+            w.field("label") { writeEditText(w, v.label) }
+            w.field("kind") { writePrintPreparationStepKind(w, v.kind) }
+            w.field("command") { writeOptionalText(w, v.command) }
+        }
+    }
+    private fun readPrintPreparationSteps(v: Any): List<PrintPreparationStep> {
+        val array = ProjectIntentJson.list(v, 0, 8)
+        return List(array.length()) { readPrintPreparationStep(array.get(it)) }
+    }
+    private fun writePrintPreparationSteps(w: ProjectIntentWriter, v: List<PrintPreparationStep>) {
+        w.array(v, 0, 8) { writePrintPreparationStep(w, it) }
+    }
+    data class PrintStartOptionRefusal(val optionId: PrintStartOptionId, val message: List<Int>)
+    private fun readPrintStartOptionRefusal(v: Any): PrintStartOptionRefusal {
+        val obj = ProjectIntentJson.fields(v, setOf("optionId", "message"), false)
+        return PrintStartOptionRefusal(readPrintStartOptionId(obj.get("optionId")), readEditText(obj.get("message")))
+    }
+    private fun writePrintStartOptionRefusal(w: ProjectIntentWriter, v: PrintStartOptionRefusal) {
+        w.obj {
+            w.field("optionId") { writePrintStartOptionId(w, v.optionId) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface PrintPreparationPlan {
+        data class Steps(val value: List<ProjectIntents.PrintPreparationStep>) : PrintPreparationPlan
+        data class Refused(val value: ProjectIntents.PrintStartOptionRefusal) : PrintPreparationPlan
+    }
+    private fun readPrintPreparationPlan(v: Any): PrintPreparationPlan {
+        val obj = ProjectIntentJson.fields(v, setOf("steps", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "steps" -> PrintPreparationPlan.Steps(readPrintPreparationSteps(obj.get(key)))
+            "refused" -> PrintPreparationPlan.Refused(readPrintStartOptionRefusal(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrintPreparationPlan(w: ProjectIntentWriter, v: PrintPreparationPlan) {
+        w.obj { when(v) {
+            is PrintPreparationPlan.Steps -> w.field("steps") { writePrintPreparationSteps(w, v.value) }
+            is PrintPreparationPlan.Refused -> w.field("refused") { writePrintStartOptionRefusal(w, v.value) }
+        } }
+    }
+    data class PrinterSend(val path: List<Int>, val method: List<Int>, val operation: List<Int>, val timeoutMs: OptionalFinite)
+    private fun readPrinterSend(v: Any): PrinterSend {
+        val obj = ProjectIntentJson.fields(v, setOf("path", "method", "operation", "timeoutMs"), false)
+        return PrinterSend(readEditText(obj.get("path")), readEditText(obj.get("method")), readEditText(obj.get("operation")), readOptionalFinite(obj.get("timeoutMs")))
+    }
+    private fun writePrinterSend(w: ProjectIntentWriter, v: PrinterSend) {
+        w.obj {
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("method") { writeEditText(w, v.method) }
+            w.field("operation") { writeEditText(w, v.operation) }
+            w.field("timeoutMs") { writeOptionalFinite(w, v.timeoutMs) }
+        }
+    }
+    enum class PrintReadinessBlockerCode {KlippyNotReady,PrinterBusy,StateUnavailable,FileRootUnavailable}
+    private fun readPrintReadinessBlockerCode(v: Any): PrintReadinessBlockerCode {
+        return when(v) {"klippyNotReady" -> PrintReadinessBlockerCode.KlippyNotReady;"printerBusy" -> PrintReadinessBlockerCode.PrinterBusy;"stateUnavailable" -> PrintReadinessBlockerCode.StateUnavailable;"fileRootUnavailable" -> PrintReadinessBlockerCode.FileRootUnavailable; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrintReadinessBlockerCode(w: ProjectIntentWriter, v: PrintReadinessBlockerCode) {
+        w.literal(when(v) {PrintReadinessBlockerCode.KlippyNotReady -> "klippyNotReady";PrintReadinessBlockerCode.PrinterBusy -> "printerBusy";PrintReadinessBlockerCode.StateUnavailable -> "stateUnavailable";PrintReadinessBlockerCode.FileRootUnavailable -> "fileRootUnavailable";})
+    }
+    data class PrintReadinessBlocker(val code: PrintReadinessBlockerCode, val message: List<Int>)
+    private fun readPrintReadinessBlocker(v: Any): PrintReadinessBlocker {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return PrintReadinessBlocker(readPrintReadinessBlockerCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writePrintReadinessBlocker(w: ProjectIntentWriter, v: PrintReadinessBlocker) {
+        w.obj {
+            w.field("code") { writePrintReadinessBlockerCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    private fun readPrintReadinessBlockers(v: Any): List<PrintReadinessBlocker> {
+        val array = ProjectIntentJson.list(v, 0, 8)
+        return List(array.length()) { readPrintReadinessBlocker(array.get(it)) }
+    }
+    private fun writePrintReadinessBlockers(w: ProjectIntentWriter, v: List<PrintReadinessBlocker>) {
+        w.array(v, 0, 8) { writePrintReadinessBlocker(w, it) }
+    }
+    data class PrintReadiness(val known: Boolean, val ready: Boolean, val blockers: List<PrintReadinessBlocker>, val klippyState: OptionalText, val printState: OptionalText, val currentFilename: OptionalText, val virtualSdActive: OptionalFlag)
+    private fun readPrintReadiness(v: Any): PrintReadiness {
+        val obj = ProjectIntentJson.fields(v, setOf("known", "ready", "blockers", "klippyState", "printState", "currentFilename", "virtualSdActive"), false)
+        return PrintReadiness(readFlag(obj.get("known")), readFlag(obj.get("ready")), readPrintReadinessBlockers(obj.get("blockers")), readOptionalText(obj.get("klippyState")), readOptionalText(obj.get("printState")), readOptionalText(obj.get("currentFilename")), readOptionalFlag(obj.get("virtualSdActive")))
+    }
+    private fun writePrintReadiness(w: ProjectIntentWriter, v: PrintReadiness) {
+        w.obj {
+            w.field("known") { writeFlag(w, v.known) }
+            w.field("ready") { writeFlag(w, v.ready) }
+            w.field("blockers") { writePrintReadinessBlockers(w, v.blockers) }
+            w.field("klippyState") { writeOptionalText(w, v.klippyState) }
+            w.field("printState") { writeOptionalText(w, v.printState) }
+            w.field("currentFilename") { writeOptionalText(w, v.currentFilename) }
+            w.field("virtualSdActive") { writeOptionalFlag(w, v.virtualSdActive) }
+        }
+    }
+    data class PrintReadinessFailure(val transportCode: OptionalMoonrakerErrorCode)
+    private fun readPrintReadinessFailure(v: Any): PrintReadinessFailure {
+        val obj = ProjectIntentJson.fields(v, setOf("transportCode"), false)
+        return PrintReadinessFailure(readOptionalMoonrakerErrorCode(obj.get("transportCode")))
+    }
+    private fun writePrintReadinessFailure(w: ProjectIntentWriter, v: PrintReadinessFailure) {
+        w.obj {
+            w.field("transportCode") { writeOptionalMoonrakerErrorCode(w, v.transportCode) }
+        }
+    }
+    data class PrinterText(val text: List<Int>)
+    private fun readPrinterText(v: Any): PrinterText {
+        val obj = ProjectIntentJson.fields(v, setOf("text"), false)
+        return PrinterText(readEditText(obj.get("text")))
+    }
+    private fun writePrinterText(w: ProjectIntentWriter, v: PrinterText) {
+        w.obj {
+            w.field("text") { writeEditText(w, v.text) }
+        }
+    }
+    data class TransportFailure(val code: OptionalMoonrakerErrorCode, val httpStatus: OptionalFinite, val detail: OptionalText)
+    private fun readTransportFailure(v: Any): TransportFailure {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "httpStatus", "detail"), false)
+        return TransportFailure(readOptionalMoonrakerErrorCode(obj.get("code")), readOptionalFinite(obj.get("httpStatus")), readOptionalText(obj.get("detail")))
+    }
+    private fun writeTransportFailure(w: ProjectIntentWriter, v: TransportFailure) {
+        w.obj {
+            w.field("code") { writeOptionalMoonrakerErrorCode(w, v.code) }
+            w.field("httpStatus") { writeOptionalFinite(w, v.httpStatus) }
+            w.field("detail") { writeOptionalText(w, v.detail) }
+        }
+    }
+    data class PrintFileIdentity(val filename: List<Int>, val size: Double, val modified: Double)
+    private fun readPrintFileIdentity(v: Any): PrintFileIdentity {
+        val obj = ProjectIntentJson.fields(v, setOf("filename", "size", "modified"), false)
+        return PrintFileIdentity(readEditText(obj.get("filename")), readFinite(obj.get("size")), readFinite(obj.get("modified")))
+    }
+    private fun writePrintFileIdentity(w: ProjectIntentWriter, v: PrintFileIdentity) {
+        w.obj {
+            w.field("filename") { writeEditText(w, v.filename) }
+            w.field("size") { writeFinite(w, v.size) }
+            w.field("modified") { writeFinite(w, v.modified) }
+        }
+    }
+    sealed interface PrintFileIdentityReply {
+        data class Identity(val value: ProjectIntents.PrintFileIdentity) : PrintFileIdentityReply
+        data class Unreliable(val value: ProjectIntents.PrinterText) : PrintFileIdentityReply
+    }
+    private fun readPrintFileIdentityReply(v: Any): PrintFileIdentityReply {
+        val obj = ProjectIntentJson.fields(v, setOf("identity", "unreliable"), true)
+        return when(val key = obj.keys().next()) {
+            "identity" -> PrintFileIdentityReply.Identity(readPrintFileIdentity(obj.get(key)))
+            "unreliable" -> PrintFileIdentityReply.Unreliable(readPrinterText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrintFileIdentityReply(w: ProjectIntentWriter, v: PrintFileIdentityReply) {
+        w.obj { when(v) {
+            is PrintFileIdentityReply.Identity -> w.field("identity") { writePrintFileIdentity(w, v.value) }
+            is PrintFileIdentityReply.Unreliable -> w.field("unreliable") { writePrinterText(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -7975,4 +8207,28 @@ object ProjectIntents {
     fun encodeToolMappingRequest(value: ToolMappingRequest): String = ProjectIntentWriter().also { writeToolMappingRequest(it, value) }.finish()
     fun decodeToolMappingReport(text: String): ToolMappingReport = readToolMappingReport(ProjectIntentJson.parse(text))
     fun encodeToolMappingReport(value: ToolMappingReport): String = ProjectIntentWriter().also { writeToolMappingReport(it, value) }.finish()
+    fun decodePrinterCapabilityReport(text: String): PrinterCapabilityReport = readPrinterCapabilityReport(ProjectIntentJson.parse(text))
+    fun encodePrinterCapabilityReport(value: PrinterCapabilityReport): String = ProjectIntentWriter().also { writePrinterCapabilityReport(it, value) }.finish()
+    fun decodeOptionalTextList(text: String): OptionalTextList = readOptionalTextList(ProjectIntentJson.parse(text))
+    fun encodeOptionalTextList(value: OptionalTextList): String = ProjectIntentWriter().also { writeOptionalTextList(it, value) }.finish()
+    fun decodePrintStartOptions(text: String): List<PrintStartOption> = readPrintStartOptions(ProjectIntentJson.parse(text))
+    fun encodePrintStartOptions(value: List<PrintStartOption>): String = ProjectIntentWriter().also { writePrintStartOptions(it, value) }.finish()
+    fun decodePrintPreparationPlanRequest(text: String): PrintPreparationPlanRequest = readPrintPreparationPlanRequest(ProjectIntentJson.parse(text))
+    fun encodePrintPreparationPlanRequest(value: PrintPreparationPlanRequest): String = ProjectIntentWriter().also { writePrintPreparationPlanRequest(it, value) }.finish()
+    fun decodePrintPreparationPlan(text: String): PrintPreparationPlan = readPrintPreparationPlan(ProjectIntentJson.parse(text))
+    fun encodePrintPreparationPlan(value: PrintPreparationPlan): String = ProjectIntentWriter().also { writePrintPreparationPlan(it, value) }.finish()
+    fun decodePrintPreparationStep(text: String): PrintPreparationStep = readPrintPreparationStep(ProjectIntentJson.parse(text))
+    fun encodePrintPreparationStep(value: PrintPreparationStep): String = ProjectIntentWriter().also { writePrintPreparationStep(it, value) }.finish()
+    fun decodePrinterSend(text: String): PrinterSend = readPrinterSend(ProjectIntentJson.parse(text))
+    fun encodePrinterSend(value: PrinterSend): String = ProjectIntentWriter().also { writePrinterSend(it, value) }.finish()
+    fun decodePrintReadiness(text: String): PrintReadiness = readPrintReadiness(ProjectIntentJson.parse(text))
+    fun encodePrintReadiness(value: PrintReadiness): String = ProjectIntentWriter().also { writePrintReadiness(it, value) }.finish()
+    fun decodePrintReadinessFailure(text: String): PrintReadinessFailure = readPrintReadinessFailure(ProjectIntentJson.parse(text))
+    fun encodePrintReadinessFailure(value: PrintReadinessFailure): String = ProjectIntentWriter().also { writePrintReadinessFailure(it, value) }.finish()
+    fun decodePrinterText(text: String): PrinterText = readPrinterText(ProjectIntentJson.parse(text))
+    fun encodePrinterText(value: PrinterText): String = ProjectIntentWriter().also { writePrinterText(it, value) }.finish()
+    fun decodeTransportFailure(text: String): TransportFailure = readTransportFailure(ProjectIntentJson.parse(text))
+    fun encodeTransportFailure(value: TransportFailure): String = ProjectIntentWriter().also { writeTransportFailure(it, value) }.finish()
+    fun decodePrintFileIdentityReply(text: String): PrintFileIdentityReply = readPrintFileIdentityReply(ProjectIntentJson.parse(text))
+    fun encodePrintFileIdentityReply(value: PrintFileIdentityReply): String = ProjectIntentWriter().also { writePrintFileIdentityReply(it, value) }.finish()
 }

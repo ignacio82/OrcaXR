@@ -77,6 +77,9 @@ public final class ProjectJniHarness {
     public static long printerToolsChecks(String script) {
         return ProjectPrinterToolsChecks.run(script);
     }
+    public static long printPreparationChecks(String script) {
+        return ProjectPrintPreparationChecks.run(script);
+    }
     /** [assets] concatenated, split at the comma-separated [lengths]. */
     public static long meshPacketChecks(String source, byte[] assets, String lengths, String script) {
         java.util.List<byte[]> split = new java.util.ArrayList<>();
@@ -259,6 +262,7 @@ public final class ProjectJniHarness {
             if (name.equals("printJobStatusChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("printerControlChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("printerToolsChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("printPreparationChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("meshPacketChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorPreflightChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class, String.class, String.class);
             if (name.equals("actorClipboardChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, byte[].class);

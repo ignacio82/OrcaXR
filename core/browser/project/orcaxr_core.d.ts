@@ -894,6 +894,11 @@ export function coerce_override_value(request: string): string;
 
 export function core_info(): string;
 
+/**
+ * A `TransportFailure`; how it reads, as `PrinterText`.
+ */
+export function describe_transport_failure(request: string): string;
+
 export function evaluate(request: string): string;
 
 /**
@@ -905,6 +910,11 @@ export function filament_slots(text: string): string;
  * `formatOverrideValue`: a `LibraryFormatRequest` to a `LibraryFormattedValue`.
  */
 export function format_override_value(request: string): string;
+
+/**
+ * `/printer/gcode/help` reply text; the command names, or unknown.
+ */
+export function gcode_commands(text: string): string;
 
 /**
  * A `GuardedPrinterActionsRequest`; the `GuardedPrinterActions` to offer.
@@ -928,6 +938,12 @@ export function prepare_emboss(request: string): ProjectEmboss;
 export function prepare_svg_part(request: string, drawing: Uint8Array): ProjectSvgPart;
 
 /**
+ * A metadata reply's text and the `PrinterText` filename asked about; the
+ * `PrintFileIdentityReply`.
+ */
+export function print_file_identity(text: string, filename: string): string;
+
+/**
  * A `PrintJobAvailabilityRequest`; the `PrintJobCommandDescriptors` the
  * observed state allows.
  */
@@ -944,9 +960,49 @@ export function print_job_command_failure(request: string): string;
 export function print_job_command_plan(request: string): string;
 
 /**
+ * A `PrintPreparationPlanRequest`; the `PrintPreparationPlan`.
+ */
+export function print_preparation_plan(request: string): string;
+
+/**
+ * A `PrintPreparationStep`; the `PrinterSend` it posts.
+ */
+export function print_preparation_send(request: string): string;
+
+/**
+ * The readiness query's reply text; the `PrintReadiness`.
+ */
+export function print_readiness(text: string): string;
+
+/**
+ * A `PrintReadinessFailure`; the `PrintReadiness` of a failed query.
+ */
+export function print_readiness_failure(request: string): string;
+
+/**
+ * A `PrinterCapabilityReport`; the `PrintStartOptions` it supports.
+ */
+export function print_start_options(request: string): string;
+
+/**
+ * `/printer/objects/list` reply text; the objects, or unknown.
+ */
+export function printer_objects(text: string): string;
+
+/**
  * A `PrinterStatusRequest`; the `PrinterStatusSummary` compact surfaces show.
  */
 export function printer_status_summary(request: string): string;
+
+/**
+ * A `PrinterText` filename; the sanitized upload name.
+ */
+export function sanitize_gcode_filename(request: string): string;
+
+/**
+ * `/server/info` reply text; the components, or unknown.
+ */
+export function server_components(text: string): string;
 
 /**
  * The Full Spectrum rules: an `EditorRuleRequest` to `EditorRules`.
@@ -1036,9 +1092,11 @@ export interface InitOutput {
     readonly capturedselection_primary_index: (a: number) => number;
     readonly coerce_override_value: (a: number, b: number) => [number, number, number, number];
     readonly core_info: () => [number, number];
+    readonly describe_transport_failure: (a: number, b: number) => [number, number, number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
     readonly filament_slots: (a: number, b: number) => [number, number, number, number];
     readonly format_override_value: (a: number, b: number) => [number, number, number, number];
+    readonly gcode_commands: (a: number, b: number) => [number, number, number, number];
     readonly guarded_printer_actions: (a: number, b: number) => [number, number, number, number];
     readonly holdtoconfirm_cancel: (a: number) => [number, number, number, number];
     readonly holdtoconfirm_new: () => number;
@@ -1062,9 +1120,16 @@ export interface InitOutput {
     readonly presetlibrary_plan_update: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_state: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_view: (a: number) => [number, number, number, number];
+    readonly print_file_identity: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly print_job_availability: (a: number, b: number) => [number, number, number, number];
     readonly print_job_command_failure: (a: number, b: number) => [number, number, number, number];
     readonly print_job_command_plan: (a: number, b: number) => [number, number, number, number];
+    readonly print_preparation_plan: (a: number, b: number) => [number, number, number, number];
+    readonly print_preparation_send: (a: number, b: number) => [number, number, number, number];
+    readonly print_readiness: (a: number, b: number) => [number, number, number, number];
+    readonly print_readiness_failure: (a: number, b: number) => [number, number, number, number];
+    readonly print_start_options: (a: number, b: number) => [number, number, number, number];
+    readonly printer_objects: (a: number, b: number) => [number, number, number, number];
     readonly printer_status_summary: (a: number, b: number) => [number, number, number, number];
     readonly printjobstatus_apply_notification: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly printjobstatus_apply_query: (a: number, b: number, c: number, d: number) => [number, number, number, number];
@@ -1228,6 +1293,8 @@ export interface InitOutput {
     readonly projectvolumesimplify_mesh: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectvolumesimplify_reply: (a: number) => [number, number, number, number];
     readonly projectvolumesplit_reply: (a: number) => [number, number, number, number];
+    readonly sanitize_gcode_filename: (a: number, b: number) => [number, number, number, number];
+    readonly server_components: (a: number, b: number) => [number, number, number, number];
     readonly settings_rules: (a: number, b: number) => [number, number, number, number];
     readonly settings_step: (a: number, b: number) => [number, number, number, number];
     readonly settingseditor_commit: (a: number) => [number, number, number, number];

@@ -47,6 +47,7 @@ export function startProjectJni(profile = "debug") {
   signatures.printJobStatusChecks = ["String"];
   signatures.printerControlChecks = ["String"];
   signatures.printerToolsChecks = ["String"];
+  signatures.printPreparationChecks = ["String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -1102,6 +1103,17 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     HoldToConfirm,
     ToolUsageScanner,
     filament_slots: (text) => call("filamentSlots", text),
+    printer_objects: (text) => call("printerObjects", text),
+    server_components: (text) => call("serverComponents", text),
+    gcode_commands: (text) => call("gcodeCommands", text),
+    print_start_options: (request) => call("printStartOptions", request),
+    print_preparation_plan: (request) => call("printPreparationPlan", request),
+    print_preparation_send: (request) => call("printPreparationSend", request),
+    print_readiness: (text) => call("printReadiness", text),
+    print_readiness_failure: (request) => call("printReadinessFailure", request),
+    sanitize_gcode_filename: (request) => call("sanitizeGcodeFilename", request),
+    describe_transport_failure: (request) => call("describeTransportFailure", request),
+    print_file_identity: (text, filename) => call("printFileIdentity", text, filename),
     tool_mapping: (request) => call("toolMapping", request),
     print_job_availability: (request) => call("printJobAvailability", request),
     print_job_command_plan: (request) => call("printJobCommandPlan", request),

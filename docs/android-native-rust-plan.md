@@ -1886,8 +1886,11 @@ credential storage, and explicit permission/error flows.
   artifact's tool usage (streamed over its bytes), the printer's loaded
   filament slots and the tool-mapping check that blocks a send with an empty
   slot; 100 artifacts at every chunk split, 20 slot replies and 1,552
-  mappings agree in every binding. Readiness, upload naming, start options,
-  and the session, submission and transport state machines remain.
+  mappings agree in every binding. `preparation` ports the start options a
+  printer's own replies support and their preparation plan, readiness,
+  sanitized upload names, stored-file identity and how a transport failure
+  reads; 929 browser answers agree in every binding. The session,
+  submission and transport state machines remain.
 - [ ] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
   credential entry, and optional discovery. Discovery proposes verified endpoints
   and cannot overwrite preferences while a stale probe completes.

@@ -5084,6 +5084,166 @@
         "blockers": "ToolMappingNotices",
         "warnings": "ToolMappingNotices"
       }
+    },
+    "PrintStartOptionId": {
+      "kind": "enum",
+      "values": [
+        "bedLeveling",
+        "timelapse"
+      ]
+    },
+    "PrintStartOptionIds": {
+      "kind": "array",
+      "items": "PrintStartOptionId",
+      "min": 0,
+      "max": 16
+    },
+    "PrinterCapabilityReport": {
+      "kind": "object",
+      "fields": {
+        "objects": "OptionalTextList",
+        "commands": "OptionalTextList",
+        "components": "OptionalTextList"
+      }
+    },
+    "PrintStartOption": {
+      "kind": "object",
+      "fields": {
+        "id": "PrintStartOptionId",
+        "label": "EditText",
+        "detail": "EditText",
+        "available": "Flag",
+        "reason": "EditText",
+        "defaultEnabled": "Flag",
+        "command": "OptionalText"
+      }
+    },
+    "PrintStartOptions": {
+      "kind": "array",
+      "items": "PrintStartOption",
+      "min": 0,
+      "max": 8
+    },
+    "PrintPreparationPlanRequest": {
+      "kind": "object",
+      "fields": {
+        "options": "PrintStartOptions",
+        "enabled": "PrintStartOptionIds"
+      }
+    },
+    "PrintPreparationStepKind": {
+      "kind": "enum",
+      "values": [
+        "timelapse",
+        "leveling"
+      ]
+    },
+    "PrintPreparationStep": {
+      "kind": "object",
+      "fields": {
+        "id": "PrintStartOptionId",
+        "label": "EditText",
+        "kind": "PrintPreparationStepKind",
+        "command": "OptionalText"
+      }
+    },
+    "PrintPreparationSteps": {
+      "kind": "array",
+      "items": "PrintPreparationStep",
+      "min": 0,
+      "max": 8
+    },
+    "PrintStartOptionRefusal": {
+      "kind": "object",
+      "fields": {
+        "optionId": "PrintStartOptionId",
+        "message": "EditText"
+      }
+    },
+    "PrintPreparationPlan": {
+      "kind": "union",
+      "variants": {
+        "steps": "PrintPreparationSteps",
+        "refused": "PrintStartOptionRefusal"
+      }
+    },
+    "PrinterSend": {
+      "kind": "object",
+      "fields": {
+        "path": "EditText",
+        "method": "EditText",
+        "operation": "EditText",
+        "timeoutMs": "OptionalFinite"
+      }
+    },
+    "PrintReadinessBlockerCode": {
+      "kind": "enum",
+      "values": [
+        "klippyNotReady",
+        "printerBusy",
+        "stateUnavailable",
+        "fileRootUnavailable"
+      ]
+    },
+    "PrintReadinessBlocker": {
+      "kind": "object",
+      "fields": {
+        "code": "PrintReadinessBlockerCode",
+        "message": "EditText"
+      }
+    },
+    "PrintReadinessBlockers": {
+      "kind": "array",
+      "items": "PrintReadinessBlocker",
+      "min": 0,
+      "max": 8
+    },
+    "PrintReadiness": {
+      "kind": "object",
+      "fields": {
+        "known": "Flag",
+        "ready": "Flag",
+        "blockers": "PrintReadinessBlockers",
+        "klippyState": "OptionalText",
+        "printState": "OptionalText",
+        "currentFilename": "OptionalText",
+        "virtualSdActive": "OptionalFlag"
+      }
+    },
+    "PrintReadinessFailure": {
+      "kind": "object",
+      "fields": {
+        "transportCode": "OptionalMoonrakerErrorCode"
+      }
+    },
+    "PrinterText": {
+      "kind": "object",
+      "fields": {
+        "text": "EditText"
+      }
+    },
+    "TransportFailure": {
+      "kind": "object",
+      "fields": {
+        "code": "OptionalMoonrakerErrorCode",
+        "httpStatus": "OptionalFinite",
+        "detail": "OptionalText"
+      }
+    },
+    "PrintFileIdentity": {
+      "kind": "object",
+      "fields": {
+        "filename": "EditText",
+        "size": "Finite",
+        "modified": "Finite"
+      }
+    },
+    "PrintFileIdentityReply": {
+      "kind": "union",
+      "variants": {
+        "identity": "PrintFileIdentity",
+        "unreliable": "PrinterText"
+      }
     }
   },
   "roots": [
@@ -5214,7 +5374,19 @@
     "GcodeToolUsage",
     "FilamentSlotsReply",
     "ToolMappingRequest",
-    "ToolMappingReport"
+    "ToolMappingReport",
+    "PrinterCapabilityReport",
+    "OptionalTextList",
+    "PrintStartOptions",
+    "PrintPreparationPlanRequest",
+    "PrintPreparationPlan",
+    "PrintPreparationStep",
+    "PrinterSend",
+    "PrintReadiness",
+    "PrintReadinessFailure",
+    "PrinterText",
+    "TransportFailure",
+    "PrintFileIdentityReply"
   ],
   "sessionVersion": 1
 }
