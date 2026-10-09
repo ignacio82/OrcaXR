@@ -1882,8 +1882,12 @@ credential storage, and explicit permission/error flows.
   reported state, send plans with expected-file guards, failure sentences,
   guarded actions with their holds, the hold-to-confirm gesture) and the
   compact status surfaces render; 2,983 browser answers and 35 hold steps
-  agree in every binding, with 3,019 Kotlin checks. Session, submission and
-  transport policies remain.
+  agree in every binding, with 3,019 Kotlin checks. `tools` ports the
+  artifact's tool usage (streamed over its bytes), the printer's loaded
+  filament slots and the tool-mapping check that blocks a send with an empty
+  slot; 100 artifacts at every chunk split, 20 slot replies and 1,552
+  mappings agree in every binding. Readiness, upload naming, start options,
+  and the session, submission and transport state machines remain.
 - [ ] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
   credential entry, and optional discovery. Discovery proposes verified endpoints
   and cannot overwrite preferences while a stale probe completes.

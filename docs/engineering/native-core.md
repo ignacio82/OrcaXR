@@ -3593,6 +3593,27 @@ Node and Chrome and JNI answer all of them, and 3,019 Kotlin checks cover
 the wrappers. Generated wire enums now derive `Copy`, and Kotlin codecs for
 array roots use their list types.
 
+`tools` ports `PrintToolMapping.ts` and `MoonrakerFilamentSlots.ts`. The
+browser runs `/^T(\d+)\b/gm` and `^;\s*key\s*=\s*(.*)$` over the whole
+G-code string; `ToolUsageScanner` runs the same patterns over the artifact's
+bytes as they arrive (decoded as `TextDecoder` decodes them), keeping at most
+one live attempt per declaration, since a line-start `;` either fails it or,
+after `=`, begins its capture. A tool counts at a line start (after `\n`,
+`\r`, U+2028 or U+2029) when its digits end at a non-word character, below
+the sentinel 64; `\s` crosses line ends, so a declaration may span lines,
+and `filament_colour` wins over `filament_color`. Slot replies keep the
+browser's quirks: loaded flags `true`, `1`, `"1"`, `"true"`; labels lose
+control characters by code point, are trimmed, then cut to 128 UTF-16 units;
+materials uppercase with full case mapping before collapsing to a family; a
+mapping colour uppercases before its hex test (so `ﬀﬀﬀ` reads as white).
+Bindings: WASM and JNI `ToolUsageScanner`, `filament_slots` and
+`tool_mapping`; Kotlin `ToolUsageScanner` and `PrinterTools`.
+`printer-tools-vectors.mjs` records 100 artifacts (hand-written and seeded,
+with a BOM, malformed bytes and every line terminator), 20 slot replies and
+1,552 mappings; Rust scans each artifact whole and in chunks of 1, 2, 3, 5
+and 64 bytes, WASM in Node and Chrome and JNI in 4 KiB appends, and 1,672
+Kotlin checks cover the wrappers.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

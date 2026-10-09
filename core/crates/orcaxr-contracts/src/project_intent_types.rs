@@ -10488,6 +10488,167 @@ fn read_hold_to_confirm_release(v: &Value) -> Result<HoldToConfirmRelease, Inval
         state: read_hold_to_confirm_state(&object["state"])?,
     })
 }
+pub type ToolIndices = Vec<Counter>;
+fn read_tool_indices(v: &Value) -> Result<ToolIndices, InvalidIntent> {
+    list(v, 0, 64)?.iter().map(read_counter).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GcodeToolUsage {
+    pub tools: ToolIndices,
+    pub multi_material: Flag,
+    pub declared_colors: TextList,
+    pub declared_materials: TextList,
+}
+fn read_gcode_tool_usage(v: &Value) -> Result<GcodeToolUsage, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "tools",
+            "multiMaterial",
+            "declaredColors",
+            "declaredMaterials",
+        ],
+        false,
+    )?;
+    Ok(GcodeToolUsage {
+        tools: read_tool_indices(&object["tools"])?,
+        multi_material: read_flag(&object["multiMaterial"])?,
+        declared_colors: read_text_list(&object["declaredColors"])?,
+        declared_materials: read_text_list(&object["declaredMaterials"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoonrakerFilamentSlot {
+    pub slot_index: Counter,
+    pub color_hex: EditText,
+    pub material: EditText,
+    pub sub_type: OptionalText,
+    pub vendor: EditText,
+}
+fn read_moonraker_filament_slot(v: &Value) -> Result<MoonrakerFilamentSlot, InvalidIntent> {
+    let object = fields(
+        v,
+        &["slotIndex", "colorHex", "material", "subType", "vendor"],
+        false,
+    )?;
+    Ok(MoonrakerFilamentSlot {
+        slot_index: read_counter(&object["slotIndex"])?,
+        color_hex: read_edit_text(&object["colorHex"])?,
+        material: read_edit_text(&object["material"])?,
+        sub_type: read_optional_text(&object["subType"])?,
+        vendor: read_edit_text(&object["vendor"])?,
+    })
+}
+pub type MoonrakerFilamentSlots = Vec<MoonrakerFilamentSlot>;
+fn read_moonraker_filament_slots(v: &Value) -> Result<MoonrakerFilamentSlots, InvalidIntent> {
+    list(v, 0, 32)?
+        .iter()
+        .map(read_moonraker_filament_slot)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalMoonrakerFilamentSlots {
+    Absent(Empty),
+    Value(MoonrakerFilamentSlots),
+}
+fn read_optional_moonraker_filament_slots(
+    v: &Value,
+) -> Result<OptionalMoonrakerFilamentSlots, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalMoonrakerFilamentSlots::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalMoonrakerFilamentSlots::Value(
+            read_moonraker_filament_slots(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FilamentSlotsReply {
+    Slots(MoonrakerFilamentSlots),
+    InvalidResponse(Empty),
+}
+fn read_filament_slots_reply(v: &Value) -> Result<FilamentSlotsReply, InvalidIntent> {
+    let object = fields(v, &["slots", "invalidResponse"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "slots" => Ok(FilamentSlotsReply::Slots(read_moonraker_filament_slots(
+            value,
+        )?)),
+        "invalidResponse" => Ok(FilamentSlotsReply::InvalidResponse(read_empty(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ToolMappingNoticeCode {
+    MissingSlot,
+    MaterialMismatch,
+    ColorMismatch,
+    SlotsUnknown,
+}
+fn read_tool_mapping_notice_code(v: &Value) -> Result<ToolMappingNoticeCode, InvalidIntent> {
+    match v.as_str() {
+        Some("missingSlot") => Ok(ToolMappingNoticeCode::MissingSlot),
+        Some("materialMismatch") => Ok(ToolMappingNoticeCode::MaterialMismatch),
+        Some("colorMismatch") => Ok(ToolMappingNoticeCode::ColorMismatch),
+        Some("slotsUnknown") => Ok(ToolMappingNoticeCode::SlotsUnknown),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolMappingNotice {
+    pub code: ToolMappingNoticeCode,
+    pub message: EditText,
+    pub tool_index: OptionalCounter,
+}
+fn read_tool_mapping_notice(v: &Value) -> Result<ToolMappingNotice, InvalidIntent> {
+    let object = fields(v, &["code", "message", "toolIndex"], false)?;
+    Ok(ToolMappingNotice {
+        code: read_tool_mapping_notice_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+        tool_index: read_optional_counter(&object["toolIndex"])?,
+    })
+}
+pub type ToolMappingNotices = Vec<ToolMappingNotice>;
+fn read_tool_mapping_notices(v: &Value) -> Result<ToolMappingNotices, InvalidIntent> {
+    list(v, 0, 128)?
+        .iter()
+        .map(read_tool_mapping_notice)
+        .collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolMappingRequest {
+    pub usage: GcodeToolUsage,
+    pub slots: OptionalMoonrakerFilamentSlots,
+}
+fn read_tool_mapping_request(v: &Value) -> Result<ToolMappingRequest, InvalidIntent> {
+    let object = fields(v, &["usage", "slots"], false)?;
+    Ok(ToolMappingRequest {
+        usage: read_gcode_tool_usage(&object["usage"])?,
+        slots: read_optional_moonraker_filament_slots(&object["slots"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolMappingReport {
+    pub blockers: ToolMappingNotices,
+    pub warnings: ToolMappingNotices,
+}
+fn read_tool_mapping_report(v: &Value) -> Result<ToolMappingReport, InvalidIntent> {
+    let object = fields(v, &["blockers", "warnings"], false)?;
+    Ok(ToolMappingReport {
+        blockers: read_tool_mapping_notices(&object["blockers"])?,
+        warnings: read_tool_mapping_notices(&object["warnings"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -11582,5 +11743,37 @@ pub fn encode_hold_to_confirm_release(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_hold_to_confirm_release(&text)?;
+    Ok(text)
+}
+pub fn decode_gcode_tool_usage(text: &str) -> Result<GcodeToolUsage, InvalidIntent> {
+    read_gcode_tool_usage(&super::project_intents::parse(text)?)
+}
+pub fn encode_gcode_tool_usage(value: &GcodeToolUsage) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_gcode_tool_usage(&text)?;
+    Ok(text)
+}
+pub fn decode_filament_slots_reply(text: &str) -> Result<FilamentSlotsReply, InvalidIntent> {
+    read_filament_slots_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_filament_slots_reply(value: &FilamentSlotsReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_filament_slots_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_tool_mapping_request(text: &str) -> Result<ToolMappingRequest, InvalidIntent> {
+    read_tool_mapping_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_tool_mapping_request(value: &ToolMappingRequest) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_tool_mapping_request(&text)?;
+    Ok(text)
+}
+pub fn decode_tool_mapping_report(text: &str) -> Result<ToolMappingReport, InvalidIntent> {
+    read_tool_mapping_report(&super::project_intents::parse(text)?)
+}
+pub fn encode_tool_mapping_report(value: &ToolMappingReport) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_tool_mapping_report(&text)?;
     Ok(text)
 }

@@ -13,7 +13,7 @@
     },
     {
       "path": "testdata/cross-platform/project-command-vectors.json",
-      "sha256": "7326f1513825fbf91551972b93ffb76421919e084d8aef913db1fbfea3415cab"
+      "sha256": "20739b64835b8428a2eeff08e7e45b705eea8ca9e7f5e0e42be6fd9d0c228b6a"
     },
     {
       "path": "web/src/project/session.ts",
@@ -69,7 +69,7 @@
     },
     {
       "path": "contracts/generated/project-intents.ts",
-      "sha256": "e7280fbe8ed7d0a455c7c7340f465462e0906a16c9e59b27a705a4049edb52d2"
+      "sha256": "821bbb36b4232f917c0c3911144f39364d6d248e9e27f40609680059f3ae26d7"
     },
     {
       "path": "contracts/runtime/project-intents.ts",
@@ -77,7 +77,7 @@
     },
     {
       "path": "contracts/project-intents.json",
-      "sha256": "c364b9fb4b02b5a8f48f9070d373030f862120bb235cd737df716b18ff01b0e0"
+      "sha256": "163ebf1169554216c0ded16e615576dfce7cbd2e654539828ea16c0d5df708d9"
     }
   ],
   "contents": [

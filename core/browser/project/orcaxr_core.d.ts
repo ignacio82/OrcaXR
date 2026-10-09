@@ -858,6 +858,18 @@ export class SettingsEditor {
 }
 
 /**
+ * Which tools an artifact selects and the filament it declares, from its
+ * bytes in order; `finish` answers the `GcodeToolUsage` and ends the scan.
+ */
+export class ToolUsageScanner {
+    free(): void;
+    [Symbol.dispose](): void;
+    append(bytes: Uint8Array): void;
+    finish(): string;
+    constructor();
+}
+
+/**
  * The instance transform one pinned alignment produces: an
  * `AssemblyAlignmentRequest`; returns an `AssemblyAlignmentReply`.
  */
@@ -883,6 +895,11 @@ export function coerce_override_value(request: string): string;
 export function core_info(): string;
 
 export function evaluate(request: string): string;
+
+/**
+ * A Snapmaker filament query reply as received; the `FilamentSlotsReply`.
+ */
+export function filament_slots(text: string): string;
 
 /**
  * `formatOverrideValue`: a `LibraryFormatRequest` to a `LibraryFormattedValue`.
@@ -941,6 +958,11 @@ export function settings_rules(rules: string): string;
  */
 export function settings_step(step: string): string;
 
+/**
+ * A `ToolMappingRequest`; the `ToolMappingReport`.
+ */
+export function tool_mapping(request: string): string;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -985,6 +1007,7 @@ export interface InitOutput {
     readonly __wbg_projectvolumesimplify_free: (a: number, b: number) => void;
     readonly __wbg_projectvolumesplit_free: (a: number, b: number) => void;
     readonly __wbg_settingseditor_free: (a: number, b: number) => void;
+    readonly __wbg_toolusagescanner_free: (a: number, b: number) => void;
     readonly assembly_alignment: (a: number, b: number) => [number, number, number, number];
     readonly assembly_availability: (a: number, b: number) => [number, number, number, number];
     readonly assembly_explosion: (a: number, b: number) => [number, number, number, number];
@@ -1014,6 +1037,7 @@ export interface InitOutput {
     readonly coerce_override_value: (a: number, b: number) => [number, number, number, number];
     readonly core_info: () => [number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
+    readonly filament_slots: (a: number, b: number) => [number, number, number, number];
     readonly format_override_value: (a: number, b: number) => [number, number, number, number];
     readonly guarded_printer_actions: (a: number, b: number) => [number, number, number, number];
     readonly holdtoconfirm_cancel: (a: number) => [number, number, number, number];
@@ -1219,6 +1243,10 @@ export interface InitOutput {
     readonly settingseditor_rows: (a: number, b: number, c: number) => [number, number, number];
     readonly settingseditor_state: (a: number, b: number, c: number) => [number, number, number, number];
     readonly settingseditor_unavailable: (a: number) => number;
+    readonly tool_mapping: (a: number, b: number) => [number, number, number, number];
+    readonly toolusagescanner_append: (a: number, b: number, c: number) => [number, number];
+    readonly toolusagescanner_finish: (a: number) => [number, number, number, number];
+    readonly toolusagescanner_new: () => number;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

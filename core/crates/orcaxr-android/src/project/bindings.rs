@@ -602,6 +602,31 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_filamentSlots, filament_slots, jstring,
+    text: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_toolMapping, tool_mapping, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_toolUsageNew, tool_usage_new, jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_toolUsageAppend, tool_usage_append, (),
+    handle: jlong,
+    bytes: JByteArray<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_toolUsageFinish, tool_usage_finish, jstring,
+    handle: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,

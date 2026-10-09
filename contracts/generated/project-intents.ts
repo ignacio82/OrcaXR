@@ -5003,6 +5003,88 @@ const shapes = {
       "command": "OptionalPrintJobCommand",
       "state": "HoldToConfirmState"
     }
+  },
+  "ToolIndices": {
+    "kind": "array",
+    "items": "Counter",
+    "min": 0,
+    "max": 64
+  },
+  "GcodeToolUsage": {
+    "kind": "object",
+    "fields": {
+      "tools": "ToolIndices",
+      "multiMaterial": "Flag",
+      "declaredColors": "TextList",
+      "declaredMaterials": "TextList"
+    }
+  },
+  "MoonrakerFilamentSlot": {
+    "kind": "object",
+    "fields": {
+      "slotIndex": "Counter",
+      "colorHex": "EditText",
+      "material": "EditText",
+      "subType": "OptionalText",
+      "vendor": "EditText"
+    }
+  },
+  "MoonrakerFilamentSlots": {
+    "kind": "array",
+    "items": "MoonrakerFilamentSlot",
+    "min": 0,
+    "max": 32
+  },
+  "OptionalMoonrakerFilamentSlots": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "MoonrakerFilamentSlots"
+    }
+  },
+  "FilamentSlotsReply": {
+    "kind": "union",
+    "variants": {
+      "slots": "MoonrakerFilamentSlots",
+      "invalidResponse": "Empty"
+    }
+  },
+  "ToolMappingNoticeCode": {
+    "kind": "enum",
+    "values": [
+      "missingSlot",
+      "materialMismatch",
+      "colorMismatch",
+      "slotsUnknown"
+    ]
+  },
+  "ToolMappingNotice": {
+    "kind": "object",
+    "fields": {
+      "code": "ToolMappingNoticeCode",
+      "message": "EditText",
+      "toolIndex": "OptionalCounter"
+    }
+  },
+  "ToolMappingNotices": {
+    "kind": "array",
+    "items": "ToolMappingNotice",
+    "min": 0,
+    "max": 128
+  },
+  "ToolMappingRequest": {
+    "kind": "object",
+    "fields": {
+      "usage": "GcodeToolUsage",
+      "slots": "OptionalMoonrakerFilamentSlots"
+    }
+  },
+  "ToolMappingReport": {
+    "kind": "object",
+    "fields": {
+      "blockers": "ToolMappingNotices",
+      "warnings": "ToolMappingNotices"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -5606,6 +5688,17 @@ export type ProjectGuardedPrinterActionsWire = readonly ProjectGuardedPrinterAct
 export type ProjectHoldToConfirmPhaseWire = "idle" | "holding" | "fired";
 export interface ProjectHoldToConfirmStateWire {readonly phase: ProjectHoldToConfirmPhaseWire;readonly progress: ProjectFiniteWire;readonly command: ProjectOptionalPrintJobCommandWire;}
 export interface ProjectHoldToConfirmReleaseWire {readonly command: ProjectOptionalPrintJobCommandWire;readonly state: ProjectHoldToConfirmStateWire;}
+export type ProjectToolIndicesWire = readonly ProjectCounterWire[];
+export interface ProjectGcodeToolUsageWire {readonly tools: ProjectToolIndicesWire;readonly multiMaterial: ProjectFlagWire;readonly declaredColors: ProjectTextListWire;readonly declaredMaterials: ProjectTextListWire;}
+export interface ProjectMoonrakerFilamentSlotWire {readonly slotIndex: ProjectCounterWire;readonly colorHex: ProjectEditTextWire;readonly material: ProjectEditTextWire;readonly subType: ProjectOptionalTextWire;readonly vendor: ProjectEditTextWire;}
+export type ProjectMoonrakerFilamentSlotsWire = readonly ProjectMoonrakerFilamentSlotWire[];
+export type ProjectOptionalMoonrakerFilamentSlotsWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectMoonrakerFilamentSlotsWire};
+export type ProjectFilamentSlotsReplyWire = {readonly slots:ProjectMoonrakerFilamentSlotsWire} | {readonly invalidResponse:ProjectEmptyWire};
+export type ProjectToolMappingNoticeCodeWire = "missingSlot" | "materialMismatch" | "colorMismatch" | "slotsUnknown";
+export interface ProjectToolMappingNoticeWire {readonly code: ProjectToolMappingNoticeCodeWire;readonly message: ProjectEditTextWire;readonly toolIndex: ProjectOptionalCounterWire;}
+export type ProjectToolMappingNoticesWire = readonly ProjectToolMappingNoticeWire[];
+export interface ProjectToolMappingRequestWire {readonly usage: ProjectGcodeToolUsageWire;readonly slots: ProjectOptionalMoonrakerFilamentSlotsWire;}
+export interface ProjectToolMappingReportWire {readonly blockers: ProjectToolMappingNoticesWire;readonly warnings: ProjectToolMappingNoticesWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -5978,3 +6071,15 @@ export function encodeProjectHoldToConfirmState(value:ProjectHoldToConfirmStateW
 export function captureProjectHoldToConfirmRelease(value:unknown):ProjectHoldToConfirmReleaseWire { return captureIntent("HoldToConfirmRelease",value,shapes,limits) as ProjectHoldToConfirmReleaseWire; }
 export function decodeProjectHoldToConfirmRelease(text:string):ProjectHoldToConfirmReleaseWire { return captureProjectHoldToConfirmRelease(parseIntentJson(text,limits)); }
 export function encodeProjectHoldToConfirmRelease(value:ProjectHoldToConfirmReleaseWire):string { return JSON.stringify(captureProjectHoldToConfirmRelease(value)); }
+export function captureProjectGcodeToolUsage(value:unknown):ProjectGcodeToolUsageWire { return captureIntent("GcodeToolUsage",value,shapes,limits) as ProjectGcodeToolUsageWire; }
+export function decodeProjectGcodeToolUsage(text:string):ProjectGcodeToolUsageWire { return captureProjectGcodeToolUsage(parseIntentJson(text,limits)); }
+export function encodeProjectGcodeToolUsage(value:ProjectGcodeToolUsageWire):string { return JSON.stringify(captureProjectGcodeToolUsage(value)); }
+export function captureProjectFilamentSlotsReply(value:unknown):ProjectFilamentSlotsReplyWire { return captureIntent("FilamentSlotsReply",value,shapes,limits) as ProjectFilamentSlotsReplyWire; }
+export function decodeProjectFilamentSlotsReply(text:string):ProjectFilamentSlotsReplyWire { return captureProjectFilamentSlotsReply(parseIntentJson(text,limits)); }
+export function encodeProjectFilamentSlotsReply(value:ProjectFilamentSlotsReplyWire):string { return JSON.stringify(captureProjectFilamentSlotsReply(value)); }
+export function captureProjectToolMappingRequest(value:unknown):ProjectToolMappingRequestWire { return captureIntent("ToolMappingRequest",value,shapes,limits) as ProjectToolMappingRequestWire; }
+export function decodeProjectToolMappingRequest(text:string):ProjectToolMappingRequestWire { return captureProjectToolMappingRequest(parseIntentJson(text,limits)); }
+export function encodeProjectToolMappingRequest(value:ProjectToolMappingRequestWire):string { return JSON.stringify(captureProjectToolMappingRequest(value)); }
+export function captureProjectToolMappingReport(value:unknown):ProjectToolMappingReportWire { return captureIntent("ToolMappingReport",value,shapes,limits) as ProjectToolMappingReportWire; }
+export function decodeProjectToolMappingReport(text:string):ProjectToolMappingReportWire { return captureProjectToolMappingReport(parseIntentJson(text,limits)); }
+export function encodeProjectToolMappingReport(value:ProjectToolMappingReportWire):string { return JSON.stringify(captureProjectToolMappingReport(value)); }

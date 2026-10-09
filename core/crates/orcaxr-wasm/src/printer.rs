@@ -2,7 +2,7 @@
 use crate::project::error;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
-use orcaxr_printer::{control, status::JobStatus, summary};
+use orcaxr_printer::{control, status::JobStatus, summary, tools};
 use wasm_bindgen::prelude::*;
 
 fn encoded(snapshot: &wire::PrintJobSnapshot) -> Result<String, JsValue> {
@@ -150,4 +150,51 @@ impl HoldToConfirm {
 }
 fn state(state: &wire::HoldToConfirmState) -> Result<String, JsValue> {
     wire::encode_hold_to_confirm_state(state).map_err(|_| error("output_limit"))
+}
+
+/// A Snapmaker filament query reply as received; the `FilamentSlotsReply`.
+#[wasm_bindgen]
+pub fn filament_slots(text: &str) -> Result<String, JsValue> {
+    if text.len() > orcaxr_printer::status::LIMITS.bytes {
+        return Err(error("input_limit"));
+    }
+    wire::encode_filament_slots_reply(&tools::filament_slots(text))
+        .map_err(|_| error("output_limit"))
+}
+/// A `ToolMappingRequest`; the `ToolMappingReport`.
+#[wasm_bindgen]
+pub fn tool_mapping(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_tool_mapping_request,
+        tools::mapping,
+        wire::encode_tool_mapping_report,
+    )
+}
+/// Which tools an artifact selects and the filament it declares, from its
+/// bytes in order; `finish` answers the `GcodeToolUsage` and ends the scan.
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct ToolUsageScanner {
+    inner: Option<tools::ToolUsageScanner>,
+}
+#[wasm_bindgen]
+impl ToolUsageScanner {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self {
+            inner: Some(tools::ToolUsageScanner::new()),
+        }
+    }
+    pub fn append(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
+        self.inner
+            .as_mut()
+            .ok_or_else(|| error("finished"))?
+            .append(bytes);
+        Ok(())
+    }
+    pub fn finish(&mut self) -> Result<String, JsValue> {
+        let usage = self.inner.take().ok_or_else(|| error("finished"))?.finish();
+        wire::encode_gcode_tool_usage(&usage).map_err(|_| error("output_limit"))
+    }
 }

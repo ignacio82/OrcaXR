@@ -161,6 +161,10 @@ assert.deepEqual(schema.roots, [
   "GuardedPrinterAction",
   "HoldToConfirmState",
   "HoldToConfirmRelease",
+  "GcodeToolUsage",
+  "FilamentSlotsReply",
+  "ToolMappingRequest",
+  "ToolMappingReport",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

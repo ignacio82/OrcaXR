@@ -249,6 +249,7 @@ name = "orcaxr-printer"
 version = "0.1.0"
 dependencies = [
  "orcaxr-contracts",
+ "orcaxr-gcode",
  "orcaxr-project",
  "serde_json",
 ]

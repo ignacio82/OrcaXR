@@ -6,7 +6,7 @@ use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
     control::{self, HoldToConfirm},
     status::{JobStatus, LIMITS},
-    summary,
+    summary, tools,
 };
 
 /// Text a printer sent, within the model's bounds.
@@ -191,4 +191,48 @@ pub(super) fn hold_release(env: &mut JNIEnv<'_>, handle: jlong, now_ms: f64) -> 
 pub(super) fn hold_cancel(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
     let state = with_hold(handle, |h| Ok(h.cancel()))?;
     hold_state(env, &state)
+}
+
+pub(super) fn filament_slots(env: &mut JNIEnv<'_>, text: JString<'_>) -> Result<jstring> {
+    let text = printer_text(env, &text)?;
+    let json = wire::encode_filament_slots_reply(&tools::filament_slots(&text))
+        .map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn tool_mapping(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_tool_mapping_request,
+        tools::mapping,
+        wire::encode_tool_mapping_report,
+    )
+}
+pub(super) fn tool_usage_new(_: &mut JNIEnv<'_>) -> Result<jlong> {
+    let reserved = registry().reserve(false)?;
+    reserved.insert(Record::ToolUsage(Box::default()))
+}
+pub(super) fn tool_usage_append(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    bytes: JByteArray<'_>,
+) -> Result<()> {
+    let bytes = input_bytes(env, &bytes)?;
+    registry().slot(handle)?.with(|record| match record {
+        Some(Record::ToolUsage(scanner)) => {
+            scanner.append(&bytes);
+            Ok(())
+        }
+        _ => Err("invalid_handle_kind"),
+    })
+}
+/// The usage; the scanner is spent and its handle released.
+pub(super) fn tool_usage_finish(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let scanner = registry().slot(handle)?.with(|record| match record {
+        Some(Record::ToolUsage(scanner)) => Ok(std::mem::take(&mut **scanner)),
+        _ => Err("invalid_handle_kind"),
+    })?;
+    registry().close(handle)?;
+    let json = wire::encode_gcode_tool_usage(&scanner.finish()).map_err(|_| "output_limit")?;
+    string(env, json)
 }

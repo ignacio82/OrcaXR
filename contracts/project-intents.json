@@ -5002,6 +5002,88 @@
         "command": "OptionalPrintJobCommand",
         "state": "HoldToConfirmState"
       }
+    },
+    "ToolIndices": {
+      "kind": "array",
+      "items": "Counter",
+      "min": 0,
+      "max": 64
+    },
+    "GcodeToolUsage": {
+      "kind": "object",
+      "fields": {
+        "tools": "ToolIndices",
+        "multiMaterial": "Flag",
+        "declaredColors": "TextList",
+        "declaredMaterials": "TextList"
+      }
+    },
+    "MoonrakerFilamentSlot": {
+      "kind": "object",
+      "fields": {
+        "slotIndex": "Counter",
+        "colorHex": "EditText",
+        "material": "EditText",
+        "subType": "OptionalText",
+        "vendor": "EditText"
+      }
+    },
+    "MoonrakerFilamentSlots": {
+      "kind": "array",
+      "items": "MoonrakerFilamentSlot",
+      "min": 0,
+      "max": 32
+    },
+    "OptionalMoonrakerFilamentSlots": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "MoonrakerFilamentSlots"
+      }
+    },
+    "FilamentSlotsReply": {
+      "kind": "union",
+      "variants": {
+        "slots": "MoonrakerFilamentSlots",
+        "invalidResponse": "Empty"
+      }
+    },
+    "ToolMappingNoticeCode": {
+      "kind": "enum",
+      "values": [
+        "missingSlot",
+        "materialMismatch",
+        "colorMismatch",
+        "slotsUnknown"
+      ]
+    },
+    "ToolMappingNotice": {
+      "kind": "object",
+      "fields": {
+        "code": "ToolMappingNoticeCode",
+        "message": "EditText",
+        "toolIndex": "OptionalCounter"
+      }
+    },
+    "ToolMappingNotices": {
+      "kind": "array",
+      "items": "ToolMappingNotice",
+      "min": 0,
+      "max": 128
+    },
+    "ToolMappingRequest": {
+      "kind": "object",
+      "fields": {
+        "usage": "GcodeToolUsage",
+        "slots": "OptionalMoonrakerFilamentSlots"
+      }
+    },
+    "ToolMappingReport": {
+      "kind": "object",
+      "fields": {
+        "blockers": "ToolMappingNotices",
+        "warnings": "ToolMappingNotices"
+      }
     }
   },
   "roots": [
@@ -5128,7 +5210,11 @@
     "GuardedPrinterActions",
     "GuardedPrinterAction",
     "HoldToConfirmState",
-    "HoldToConfirmRelease"
+    "HoldToConfirmRelease",
+    "GcodeToolUsage",
+    "FilamentSlotsReply",
+    "ToolMappingRequest",
+    "ToolMappingReport"
   ],
   "sessionVersion": 1
 }

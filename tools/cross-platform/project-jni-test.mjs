@@ -36,6 +36,7 @@ import { replayModelImports } from "./model-import-replay.mjs";
 import { replayObjectTree } from "./object-tree-replay.mjs";
 import { replayPrintJobStatus } from "./print-job-status-replay.mjs";
 import { replayPrinterControl } from "./printer-control-replay.mjs";
+import { replayPrinterTools } from "./printer-tools-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -968,6 +969,25 @@ try {
     ].join("\n"),
   );
   assert.equal(controlChecks, 3019);
+  // Tool usage, filament slots and tool mapping through the real JNI exports,
+  // then the Kotlin wrappers.
+  const toolsFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/printer-tools-vectors.json", root)),
+  );
+  const tools = replayPrinterTools(projectJniCore(jvm.call), toolsFixture);
+  assert.deepEqual(
+    [tools.printerToolUsages, tools.printerSlotReplies, tools.printerMappings],
+    [100, 20, 1552],
+  );
+  const toolsChecks = jvm.call(
+    "printerToolsChecks",
+    [
+      ...toolsFixture.usage.map((c) => `U\t${c.bytesBase64}\t${c.usageJson}`),
+      ...toolsFixture.slots.map((c) => `S\t${c.text}\t${c.replyJson}`),
+      ...toolsFixture.mapping.map((c) => `M\t${c.requestJson}\t${c.replyJson}`),
+    ].join("\n"),
+  );
+  assert.equal(toolsChecks, 1672);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

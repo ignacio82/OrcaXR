@@ -27,6 +27,7 @@ import { replayMeshPackets } from "./mesh-packet-replay.mjs";
 import { replayObjectTree } from "./object-tree-replay.mjs";
 import { replayPrintJobStatus } from "./print-job-status-replay.mjs";
 import { replayPrinterControl } from "./printer-control-replay.mjs";
+import { replayPrinterTools } from "./printer-tools-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -229,6 +230,11 @@ if (isMainThread) {
         result.printerHoldSteps,
       ],
       [45, 1125, 100, 1173, 540, 35],
+    );
+    // Tool usage scanned in appends, filament slots and tool mapping.
+    assert.deepEqual(
+      [result.printerToolUsages, result.printerSlotReplies, result.printerMappings],
+      [100, 20, 1552],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -638,6 +644,12 @@ if (isMainThread) {
       await readFile(new URL("testdata/cross-platform/printer-control-vectors.json", root)),
     ),
   );
+  const printerTools = replayPrinterTools(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/printer-tools-vectors.json", root)),
+    ),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -676,6 +688,7 @@ if (isMainThread) {
       ...trees,
       ...printJobs,
       ...printerControl,
+      ...printerTools,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

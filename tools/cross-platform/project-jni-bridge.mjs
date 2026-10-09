@@ -46,6 +46,7 @@ export function startProjectJni(profile = "debug") {
   signatures.objectTreeChecks = ["String", "byte[]", "String"];
   signatures.printJobStatusChecks = ["String"];
   signatures.printerControlChecks = ["String"];
+  signatures.printerToolsChecks = ["String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -1083,9 +1084,25 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return call("holdCancel", this.handle);
     }
   }
+  class ToolUsageScanner extends Handle {
+    constructor() {
+      super(call("toolUsageNew"));
+    }
+    append(bytes) {
+      call("toolUsageAppend", this.handle, bytes);
+    }
+    finish() {
+      const id = this.handle;
+      this.handle = 0;
+      return call("toolUsageFinish", id);
+    }
+  }
   return {
     PrintJobStatus,
     HoldToConfirm,
+    ToolUsageScanner,
+    filament_slots: (text) => call("filamentSlots", text),
+    tool_mapping: (request) => call("toolMapping", request),
     print_job_availability: (request) => call("printJobAvailability", request),
     print_job_command_plan: (request) => call("printJobCommandPlan", request),
     print_job_command_failure: (request) => call("printJobCommandFailure", request),

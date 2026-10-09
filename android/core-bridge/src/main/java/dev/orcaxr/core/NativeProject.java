@@ -116,6 +116,11 @@ final class NativeProject {
     static native String holdPoll(long handle, double nowMs);
     static native String holdRelease(long handle, double nowMs);
     static native String holdCancel(long handle);
+    static native String filamentSlots(String text);
+    static native String toolMapping(String request);
+    static native long toolUsageNew();
+    static native void toolUsageAppend(long handle, byte[] bytes);
+    static native String toolUsageFinish(long handle);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

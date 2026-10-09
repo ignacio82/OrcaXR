@@ -7594,6 +7594,131 @@ object ProjectIntents {
             w.field("state") { writeHoldToConfirmState(w, v.state) }
         }
     }
+    private fun readToolIndices(v: Any): List<Long> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readCounter(array.get(it)) }
+    }
+    private fun writeToolIndices(w: ProjectIntentWriter, v: List<Long>) {
+        w.array(v, 0, 64) { writeCounter(w, it) }
+    }
+    data class GcodeToolUsage(val tools: List<Long>, val multiMaterial: Boolean, val declaredColors: List<List<Int>>, val declaredMaterials: List<List<Int>>)
+    private fun readGcodeToolUsage(v: Any): GcodeToolUsage {
+        val obj = ProjectIntentJson.fields(v, setOf("tools", "multiMaterial", "declaredColors", "declaredMaterials"), false)
+        return GcodeToolUsage(readToolIndices(obj.get("tools")), readFlag(obj.get("multiMaterial")), readTextList(obj.get("declaredColors")), readTextList(obj.get("declaredMaterials")))
+    }
+    private fun writeGcodeToolUsage(w: ProjectIntentWriter, v: GcodeToolUsage) {
+        w.obj {
+            w.field("tools") { writeToolIndices(w, v.tools) }
+            w.field("multiMaterial") { writeFlag(w, v.multiMaterial) }
+            w.field("declaredColors") { writeTextList(w, v.declaredColors) }
+            w.field("declaredMaterials") { writeTextList(w, v.declaredMaterials) }
+        }
+    }
+    data class MoonrakerFilamentSlot(val slotIndex: Long, val colorHex: List<Int>, val material: List<Int>, val subType: OptionalText, val vendor: List<Int>)
+    private fun readMoonrakerFilamentSlot(v: Any): MoonrakerFilamentSlot {
+        val obj = ProjectIntentJson.fields(v, setOf("slotIndex", "colorHex", "material", "subType", "vendor"), false)
+        return MoonrakerFilamentSlot(readCounter(obj.get("slotIndex")), readEditText(obj.get("colorHex")), readEditText(obj.get("material")), readOptionalText(obj.get("subType")), readEditText(obj.get("vendor")))
+    }
+    private fun writeMoonrakerFilamentSlot(w: ProjectIntentWriter, v: MoonrakerFilamentSlot) {
+        w.obj {
+            w.field("slotIndex") { writeCounter(w, v.slotIndex) }
+            w.field("colorHex") { writeEditText(w, v.colorHex) }
+            w.field("material") { writeEditText(w, v.material) }
+            w.field("subType") { writeOptionalText(w, v.subType) }
+            w.field("vendor") { writeEditText(w, v.vendor) }
+        }
+    }
+    private fun readMoonrakerFilamentSlots(v: Any): List<MoonrakerFilamentSlot> {
+        val array = ProjectIntentJson.list(v, 0, 32)
+        return List(array.length()) { readMoonrakerFilamentSlot(array.get(it)) }
+    }
+    private fun writeMoonrakerFilamentSlots(w: ProjectIntentWriter, v: List<MoonrakerFilamentSlot>) {
+        w.array(v, 0, 32) { writeMoonrakerFilamentSlot(w, it) }
+    }
+    sealed interface OptionalMoonrakerFilamentSlots {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalMoonrakerFilamentSlots
+        data class Value(val value: List<ProjectIntents.MoonrakerFilamentSlot>) : OptionalMoonrakerFilamentSlots
+    }
+    private fun readOptionalMoonrakerFilamentSlots(v: Any): OptionalMoonrakerFilamentSlots {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalMoonrakerFilamentSlots.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalMoonrakerFilamentSlots.Value(readMoonrakerFilamentSlots(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalMoonrakerFilamentSlots(w: ProjectIntentWriter, v: OptionalMoonrakerFilamentSlots) {
+        w.obj { when(v) {
+            is OptionalMoonrakerFilamentSlots.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalMoonrakerFilamentSlots.Value -> w.field("value") { writeMoonrakerFilamentSlots(w, v.value) }
+        } }
+    }
+    sealed interface FilamentSlotsReply {
+        data class Slots(val value: List<ProjectIntents.MoonrakerFilamentSlot>) : FilamentSlotsReply
+        data class InvalidResponse(val value: ProjectIntents.Empty) : FilamentSlotsReply
+    }
+    private fun readFilamentSlotsReply(v: Any): FilamentSlotsReply {
+        val obj = ProjectIntentJson.fields(v, setOf("slots", "invalidResponse"), true)
+        return when(val key = obj.keys().next()) {
+            "slots" -> FilamentSlotsReply.Slots(readMoonrakerFilamentSlots(obj.get(key)))
+            "invalidResponse" -> FilamentSlotsReply.InvalidResponse(readEmpty(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeFilamentSlotsReply(w: ProjectIntentWriter, v: FilamentSlotsReply) {
+        w.obj { when(v) {
+            is FilamentSlotsReply.Slots -> w.field("slots") { writeMoonrakerFilamentSlots(w, v.value) }
+            is FilamentSlotsReply.InvalidResponse -> w.field("invalidResponse") { writeEmpty(w, v.value) }
+        } }
+    }
+    enum class ToolMappingNoticeCode {MissingSlot,MaterialMismatch,ColorMismatch,SlotsUnknown}
+    private fun readToolMappingNoticeCode(v: Any): ToolMappingNoticeCode {
+        return when(v) {"missingSlot" -> ToolMappingNoticeCode.MissingSlot;"materialMismatch" -> ToolMappingNoticeCode.MaterialMismatch;"colorMismatch" -> ToolMappingNoticeCode.ColorMismatch;"slotsUnknown" -> ToolMappingNoticeCode.SlotsUnknown; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeToolMappingNoticeCode(w: ProjectIntentWriter, v: ToolMappingNoticeCode) {
+        w.literal(when(v) {ToolMappingNoticeCode.MissingSlot -> "missingSlot";ToolMappingNoticeCode.MaterialMismatch -> "materialMismatch";ToolMappingNoticeCode.ColorMismatch -> "colorMismatch";ToolMappingNoticeCode.SlotsUnknown -> "slotsUnknown";})
+    }
+    data class ToolMappingNotice(val code: ToolMappingNoticeCode, val message: List<Int>, val toolIndex: OptionalCounter)
+    private fun readToolMappingNotice(v: Any): ToolMappingNotice {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message", "toolIndex"), false)
+        return ToolMappingNotice(readToolMappingNoticeCode(obj.get("code")), readEditText(obj.get("message")), readOptionalCounter(obj.get("toolIndex")))
+    }
+    private fun writeToolMappingNotice(w: ProjectIntentWriter, v: ToolMappingNotice) {
+        w.obj {
+            w.field("code") { writeToolMappingNoticeCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+            w.field("toolIndex") { writeOptionalCounter(w, v.toolIndex) }
+        }
+    }
+    private fun readToolMappingNotices(v: Any): List<ToolMappingNotice> {
+        val array = ProjectIntentJson.list(v, 0, 128)
+        return List(array.length()) { readToolMappingNotice(array.get(it)) }
+    }
+    private fun writeToolMappingNotices(w: ProjectIntentWriter, v: List<ToolMappingNotice>) {
+        w.array(v, 0, 128) { writeToolMappingNotice(w, it) }
+    }
+    data class ToolMappingRequest(val usage: GcodeToolUsage, val slots: OptionalMoonrakerFilamentSlots)
+    private fun readToolMappingRequest(v: Any): ToolMappingRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("usage", "slots"), false)
+        return ToolMappingRequest(readGcodeToolUsage(obj.get("usage")), readOptionalMoonrakerFilamentSlots(obj.get("slots")))
+    }
+    private fun writeToolMappingRequest(w: ProjectIntentWriter, v: ToolMappingRequest) {
+        w.obj {
+            w.field("usage") { writeGcodeToolUsage(w, v.usage) }
+            w.field("slots") { writeOptionalMoonrakerFilamentSlots(w, v.slots) }
+        }
+    }
+    data class ToolMappingReport(val blockers: List<ToolMappingNotice>, val warnings: List<ToolMappingNotice>)
+    private fun readToolMappingReport(v: Any): ToolMappingReport {
+        val obj = ProjectIntentJson.fields(v, setOf("blockers", "warnings"), false)
+        return ToolMappingReport(readToolMappingNotices(obj.get("blockers")), readToolMappingNotices(obj.get("warnings")))
+    }
+    private fun writeToolMappingReport(w: ProjectIntentWriter, v: ToolMappingReport) {
+        w.obj {
+            w.field("blockers") { writeToolMappingNotices(w, v.blockers) }
+            w.field("warnings") { writeToolMappingNotices(w, v.warnings) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -7842,4 +7967,12 @@ object ProjectIntents {
     fun encodeHoldToConfirmState(value: HoldToConfirmState): String = ProjectIntentWriter().also { writeHoldToConfirmState(it, value) }.finish()
     fun decodeHoldToConfirmRelease(text: String): HoldToConfirmRelease = readHoldToConfirmRelease(ProjectIntentJson.parse(text))
     fun encodeHoldToConfirmRelease(value: HoldToConfirmRelease): String = ProjectIntentWriter().also { writeHoldToConfirmRelease(it, value) }.finish()
+    fun decodeGcodeToolUsage(text: String): GcodeToolUsage = readGcodeToolUsage(ProjectIntentJson.parse(text))
+    fun encodeGcodeToolUsage(value: GcodeToolUsage): String = ProjectIntentWriter().also { writeGcodeToolUsage(it, value) }.finish()
+    fun decodeFilamentSlotsReply(text: String): FilamentSlotsReply = readFilamentSlotsReply(ProjectIntentJson.parse(text))
+    fun encodeFilamentSlotsReply(value: FilamentSlotsReply): String = ProjectIntentWriter().also { writeFilamentSlotsReply(it, value) }.finish()
+    fun decodeToolMappingRequest(text: String): ToolMappingRequest = readToolMappingRequest(ProjectIntentJson.parse(text))
+    fun encodeToolMappingRequest(value: ToolMappingRequest): String = ProjectIntentWriter().also { writeToolMappingRequest(it, value) }.finish()
+    fun decodeToolMappingReport(text: String): ToolMappingReport = readToolMappingReport(ProjectIntentJson.parse(text))
+    fun encodeToolMappingReport(value: ToolMappingReport): String = ProjectIntentWriter().also { writeToolMappingReport(it, value) }.finish()
 }

@@ -5,3 +5,4 @@
 pub mod control;
 pub mod status;
 pub mod summary;
+pub mod tools;

@@ -4112,6 +4112,62 @@ export class SettingsEditor {
 if (Symbol.dispose) SettingsEditor.prototype[Symbol.dispose] = SettingsEditor.prototype.free;
 
 /**
+ * Which tools an artifact selects and the filament it declares, from its
+ * bytes in order; `finish` answers the `GcodeToolUsage` and ends the scan.
+ */
+export class ToolUsageScanner {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ToolUsageScannerFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_toolusagescanner_free(ptr, 0);
+    }
+    /**
+     * @param {Uint8Array} bytes
+     */
+    append(bytes) {
+        const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.toolusagescanner_append(this.__wbg_ptr, ptr0, len0);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    finish() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.toolusagescanner_finish(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    constructor() {
+        const ret = wasm.toolusagescanner_new();
+        this.__wbg_ptr = ret;
+        ToolUsageScannerFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+}
+if (Symbol.dispose) ToolUsageScanner.prototype[Symbol.dispose] = ToolUsageScanner.prototype.free;
+
+/**
  * The instance transform one pinned alignment produces: an
  * `AssemblyAlignmentRequest`; returns an `AssemblyAlignmentReply`.
  * @param {string} request
@@ -4250,6 +4306,32 @@ export function evaluate(request) {
         return getStringFromWasm0(ret[0], ret[1]);
     } finally {
         wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * A Snapmaker filament query reply as received; the `FilamentSlotsReply`.
+ * @param {string} text
+ * @returns {string}
+ */
+export function filament_slots(text) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.filament_slots(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
     }
 }
 
@@ -4521,6 +4603,32 @@ export function settings_step(step) {
         wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
     }
 }
+
+/**
+ * A `ToolMappingRequest`; the `ToolMappingReport`.
+ * @param {string} request
+ * @returns {string}
+ */
+export function tool_mapping(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.tool_mapping(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
@@ -4699,6 +4807,9 @@ const ProjectVolumeSplitFinalization = (typeof FinalizationRegistry === 'undefin
 const SettingsEditorFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_settingseditor_free(ptr, 1));
+const ToolUsageScannerFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_toolusagescanner_free(ptr, 1));
 
 function addToExternrefTable0(obj) {
     const idx = wasm.__externref_table_alloc();
