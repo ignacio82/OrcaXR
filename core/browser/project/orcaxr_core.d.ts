@@ -88,6 +88,104 @@ export class HoldToConfirm {
 }
 
 /**
+ * The Moonraker transport (`MoonrakerTransport`): one printer's connection
+ * and every request on it. Stepping calls answer a `MoonrakerTransportStep`.
+ */
+export class MoonrakerTransport {
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * The live signal of task `task` aborts.
+     */
+    abort(task: number, now_ms: number): string;
+    clear_credentials(now_ms: number): void;
+    /**
+     * No object subscription.
+     */
+    clear_subscription(now_ms: number): string;
+    /**
+     * A `MoonrakerTransportConfig`; the `MoonrakerTransportReply` creating a
+     * transport from it answers: its first state, or why it is refused.
+     */
+    static configure(config: string): string;
+    /**
+     * A signal by name: `none`, `live` or `aborted`.
+     */
+    connect(signal: string, now_ms: number): string;
+    /**
+     * A reason by name: `user`, `cancelled` or `disposed`.
+     */
+    disconnect(reason: string, now_ms: number): string;
+    dispose(now_ms: number): string;
+    /**
+     * A `MoonrakerRequest` read as bytes.
+     */
+    download(request: string, now_ms: number): string;
+    has_api_key(): boolean;
+    has_bearer_token(): boolean;
+    /**
+     * Past this many UTF-16 units, text decides outcomes by its length
+     * alone: pass at most one unit more.
+     */
+    static max_text_units(): number;
+    /**
+     * A `MoonrakerTransportConfig` that `configure` accepts.
+     */
+    constructor(config: string);
+    /**
+     * A `MoonrakerRecoveryRequest`.
+     */
+    recovery(request: string, now_ms: number): string;
+    /**
+     * A `MoonrakerRequest`.
+     */
+    request(request: string, now_ms: number): string;
+    /**
+     * A `MoonrakerTransportOutcome` answering effect `id`.
+     */
+    resolve(id: number, outcome: string, now_ms: number): string;
+    /**
+     * A body read as text, answering effect `id`.
+     */
+    resolve_text(id: number, text: string, now_ms: number): string;
+    /**
+     * `MoonrakerCredentials`; an `OptionalMoonrakerTransportFault`.
+     */
+    set_credentials(credentials: string, now_ms: number): string;
+    /**
+     * A `MoonrakerObjectSubscription`; the `MoonrakerTransportStepReply`.
+     */
+    set_subscription(entries: string, now_ms: number): string;
+    socket_close(socket: number, now_ms: number): string;
+    socket_error(socket: number, now_ms: number): string;
+    /**
+     * A text frame socket `socket` received.
+     */
+    socket_message(socket: number, text: string, now_ms: number): string;
+    socket_open(socket: number, now_ms: number): string;
+    /**
+     * The `MoonrakerConnectionState`.
+     */
+    state(): string;
+    /**
+     * The JSON text of notification `id`'s params, once.
+     */
+    take_params(id: number): string;
+    /**
+     * The JSON text of finished task `task`'s result, once.
+     */
+    take_result(task: number): string;
+    /**
+     * Timer `timer` fired.
+     */
+    timer(timer: number, now_ms: number): string;
+    /**
+     * A `MoonrakerRequest` whose body is the host's file.
+     */
+    upload(request: string, now_ms: number): string;
+}
+
+/**
  * Installed printers and custom presets over a pinned catalog.
  */
 export class PresetLibrary {
@@ -1162,6 +1260,7 @@ export interface InitOutput {
     readonly __wbg_capturedproject_free: (a: number, b: number) => void;
     readonly __wbg_capturedselection_free: (a: number, b: number) => void;
     readonly __wbg_holdtoconfirm_free: (a: number, b: number) => void;
+    readonly __wbg_moonrakertransport_free: (a: number, b: number) => void;
     readonly __wbg_presetlibrary_free: (a: number, b: number) => void;
     readonly __wbg_printersession_free: (a: number, b: number) => void;
     readonly __wbg_printjobstatus_free: (a: number, b: number) => void;
@@ -1250,6 +1349,33 @@ export interface InitOutput {
     readonly moonraker_reconnect_delay: (a: number, b: number) => [number, number, number];
     readonly moonraker_reconnect_policy: (a: number, b: number) => [number, number, number, number];
     readonly moonraker_subscription: (a: number, b: number) => [number, number, number, number];
+    readonly moonrakertransport_abort: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly moonrakertransport_clear_credentials: (a: number, b: number) => void;
+    readonly moonrakertransport_clear_subscription: (a: number, b: number) => [number, number, number, number];
+    readonly moonrakertransport_configure: (a: number, b: number) => [number, number, number, number];
+    readonly moonrakertransport_connect: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly moonrakertransport_disconnect: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly moonrakertransport_dispose: (a: number, b: number) => [number, number, number, number];
+    readonly moonrakertransport_download: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly moonrakertransport_has_api_key: (a: number) => number;
+    readonly moonrakertransport_has_bearer_token: (a: number) => number;
+    readonly moonrakertransport_max_text_units: () => number;
+    readonly moonrakertransport_new: (a: number, b: number) => [number, number, number];
+    readonly moonrakertransport_recovery: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly moonrakertransport_request: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly moonrakertransport_resolve: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly moonrakertransport_resolve_text: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly moonrakertransport_set_credentials: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly moonrakertransport_set_subscription: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly moonrakertransport_socket_close: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly moonrakertransport_socket_error: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly moonrakertransport_socket_message: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly moonrakertransport_socket_open: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly moonrakertransport_state: (a: number) => [number, number, number, number];
+    readonly moonrakertransport_take_params: (a: number, b: number) => [number, number, number, number];
+    readonly moonrakertransport_take_result: (a: number, b: number) => [number, number, number, number];
+    readonly moonrakertransport_timer: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly moonrakertransport_upload: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly prepare_emboss: (a: number, b: number) => [number, number, number];
     readonly prepare_svg_part: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly presetlibrary_apply: (a: number, b: number, c: number) => [number, number, number, number];

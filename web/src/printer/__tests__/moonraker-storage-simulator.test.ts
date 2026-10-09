@@ -23,6 +23,7 @@ import {
   type MoonrakerScheduler,
   type MoonrakerSocket,
 } from '..';
+import { createMoonrakerTransport } from './moonraker-transport.factory';
 
 let passed = 0;
 async function test(name: string, run: () => Promise<void>): Promise<void> {
@@ -78,7 +79,7 @@ async function withPrinter<T>(
   // A file the printer has never scanned: it has bytes and nothing else.
   sim.putFile('unscanned.gcode', Buffer.from('G1 X2\n'), {}, 1_700_000_000);
 
-  const transport = new MoonrakerTransport(
+  const transport = createMoonrakerTransport(
     { endpoint: sim.url, clientName: 'OrcaXR Web', clientVersion: 'test' },
     { socketFactory: (url) => new ImmediateSocket(url), scheduler: realScheduler, heartbeatIntervalMs: 60_000 },
   );

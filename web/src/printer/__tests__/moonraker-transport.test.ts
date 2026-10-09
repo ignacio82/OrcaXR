@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   MoonrakerSessionCredentialStore,
-  MoonrakerTransport,
   MoonrakerTransportError,
   calculateMoonrakerReconnectDelay,
   joinMoonrakerEndpointPath,
@@ -14,6 +13,7 @@ import {
   type MoonrakerScheduler,
   type MoonrakerSocket,
 } from '..';
+import { createMoonrakerTransport } from './moonraker-transport.factory';
 
 const SERVER_INFO = Object.freeze({
   api_version: [1, 0, 5],
@@ -123,7 +123,7 @@ function createHarness(
 ) {
   const scheduler = new ManualScheduler();
   const sockets: FakeSocket[] = [];
-  const transport = new MoonrakerTransport(
+  const transport = createMoonrakerTransport(
     { endpoint: 'printer.local', clientVersion: 'test' },
     {
       fetch: fetcher,
@@ -402,30 +402,75 @@ async function connectHarness(harness: ReturnType<typeof createHarness>): Promis
   harness.transport.dispose();
 }
 
-{
-  let mutationStarted: (() => void) | undefined;
+// A fetcher that holds every request but the handshake until the test answers
+// it, and — like `fetch` — rejects one whose signal aborts.
+function heldFetcher() {
+  const held: { readonly path: string; readonly signal?: AbortSignal; answer(response: Response): void }[] = [];
   const fetcher = async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
     const pathname = new URL(input.toString()).pathname;
     if (pathname.endsWith('/server/info')) return resultResponse(SERVER_INFO);
     if (pathname.endsWith('/printer/info')) return resultResponse(PRINTER_INFO);
-    return new Promise((_resolve, reject) => {
-      mutationStarted?.();
-      init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+    return new Promise((resolve, reject) => {
+      const signal = init.signal ?? undefined;
+      held.push({ path: pathname, signal, answer: resolve });
+      if (signal?.aborted) reject(new DOMException('aborted', 'AbortError'));
+      signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
     });
   };
+  return { fetcher, held };
+}
+
+// A mutation in flight when the socket drops is the printer's to answer: the
+// POST has left, and aborting it here reported `cancelled` for a start the
+// printer may well have accepted.
+{
+  const { fetcher, held } = heldFetcher();
   const harness = createHarness(fetcher);
   await connectHarness(harness);
-  const started = new Promise<void>((resolve) => {
-    mutationStarted = resolve;
-  });
-  const mutation = harness.transport.request('/printer/print/start', {
+  const mutation = harness.transport.request<{ ok: boolean }>('/printer/print/start', {
     method: 'POST',
     operation: 'start_print',
   });
-  await started;
+  await waitFor(() => held.length === 1, 'the start did not reach the fetcher');
   harness.sockets[0].remoteClose();
-  await assert.rejects(mutation, assertErrorCode('cancelled'));
   assert.equal(harness.transport.state.status, 'reconnecting');
+  assert.equal(held[0].signal?.aborted, false, 'a socket blink does not abort HTTP work');
+  held[0].answer(resultResponse({ ok: true }));
+  assert.deepEqual(await mutation, { ok: true });
+  harness.transport.dispose();
+}
+
+// When the session itself cannot come back — reconnects exhausted, or refused
+// outright — the work still in flight on it is cancelled with it, as when the
+// first connect fails.
+for (const failure of ['exhausted', 'refused'] as const) {
+  const { fetcher, held } = heldFetcher();
+  let refuseHandshake = false;
+  const harness = createHarness(async (input, init) => {
+    if (refuseHandshake && new URL(input.toString()).pathname.endsWith('/server/info')) {
+      return new Response('', { status: 403 });
+    }
+    return fetcher(input, init);
+  });
+  await connectHarness(harness);
+  const upload = harness.transport.upload('/server/files/upload', new FormData(), { operation: 'upload_gcode' });
+  upload.catch(() => undefined); // Settles before the assertion below observes it.
+  await waitFor(() => held.length === 1, 'the upload did not reach the fetcher');
+  harness.sockets[0].remoteClose();
+  if (failure === 'refused') {
+    refuseHandshake = true;
+    harness.scheduler.runDelay(10);
+  } else {
+    for (const [index, delayMs] of [10, 20, 25].entries()) {
+      await waitFor(() => harness.scheduler.pendingDelays().includes(delayMs), 'the reconnect was not scheduled');
+      harness.scheduler.runDelay(delayMs);
+      await waitFor(() => harness.sockets.length === index + 2, 'the reconnect socket was not created');
+      assert.equal(held[0].signal?.aborted, false, 'a reconnect still under way keeps the upload');
+      harness.sockets[index + 1].failBeforeOpen();
+    }
+  }
+  await waitFor(() => harness.transport.state.status === 'error', `the ${failure} reconnect did not end the session`);
+  await assert.rejects(upload, assertErrorCode('cancelled'));
   harness.transport.dispose();
 }
 
@@ -481,26 +526,26 @@ async function connectHarness(harness: ReturnType<typeof createHarness>): Promis
 // A websocket that reconnects mid-transfer must not discard a finished upload:
 // the file is already on the printer, so reporting failure is worse than
 // reporting nothing.
+//
+// The fetcher honours its abort signal, as `fetch` does: one that ignored it
+// passed this test while the socket's loss aborted the very transfer.
 {
-  let resolveUpload: ((response: Response) => void) | undefined;
-  const harness = createHarness(async (input) => {
-    if (String(input).includes('/server/files/upload')) {
-      return new Promise<Response>((resolve) => {
-        resolveUpload = resolve;
-      });
-    }
-    return healthyFetcher()(input);
-  });
+  const { fetcher, held } = heldFetcher();
+  const harness = createHarness(fetcher);
   await connectHarness(harness);
   const form = new FormData();
   form.set('file', new Blob(['G28\n'], { type: 'text/plain' }), 'plate.gcode');
   const pending = harness.transport.upload<{ ok: boolean }>('/server/files/upload', form, {
     operation: 'upload_gcode',
   });
-  await waitFor(() => resolveUpload !== undefined, 'upload did not reach the fetcher');
-  // The socket blinks while the bytes are still going out.
+  await waitFor(() => held.length === 1, 'upload did not reach the fetcher');
+  // The socket blinks while the bytes are still going out, and comes back.
   harness.sockets[0].remoteClose();
-  resolveUpload?.(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+  harness.scheduler.runDelay(10);
+  await waitFor(() => harness.sockets.length === 2, 'the reconnect socket was not created');
+  harness.sockets[1].open();
+  await waitFor(() => harness.transport.state.status === 'connected', 'the socket did not come back');
+  held[0].answer(new Response(JSON.stringify({ ok: true }), { status: 200 }));
   assert.deepEqual(await pending, { ok: true }, 'the completed upload is kept, not cancelled');
   harness.transport.dispose();
 }
@@ -642,4 +687,41 @@ console.log('Moonraker transport tests passed');
   await assert.rejects(harness.transport.requestRecoveryCommand('emergency-stop'), assertErrorCode('invalid_state'));
   assert.equal(requests.length, 2);
   console.log('Moonraker HTTP recovery works while disconnected and retains method, auth, abort, and disposal guards.');
+}
+
+// A server listing more components than Moonraker has is not one: its
+// handshake is refused rather than carried into every connection state.
+{
+  const { readMoonrakerHandshake, normalizeVersionPolicy } = await import('../MoonrakerTransport');
+  const listing = (count: number) => ({
+    ...SERVER_INFO,
+    components: Array.from({ length: count }, (_, i) => `component_${i}`),
+  });
+  const policy = normalizeVersionPolicy(undefined);
+  assert.equal(readMoonrakerHandshake(listing(256), PRINTER_INFO, policy).server.components.length, 256);
+  assert.throws(() => readMoonrakerHandshake(listing(257), PRINTER_INFO, policy), assertErrorCode('invalid_response'));
+}
+
+// Requests in flight are bounded. A request refused for its deadline is not
+// counted: it used to stay in the active set for good, so enough refused
+// deadlines would have exhausted the bound.
+{
+  const { fetcher, held } = heldFetcher();
+  const harness = createHarness(fetcher);
+  await connectHarness(harness);
+  for (let i = 0; i < 600; i += 1) {
+    await assert.rejects(
+      harness.transport.request('/server/held', { operation: 'held', timeoutMs: 0 }),
+      assertErrorCode('invalid_request'),
+    );
+  }
+  const pending = Array.from({ length: 512 }, () => harness.transport.request('/server/held', { operation: 'held' }));
+  for (const request of pending) request.catch(() => undefined);
+  await waitFor(() => held.length === 512, 'the bounded requests did not all start');
+  await assert.rejects(
+    harness.transport.request('/server/held', { operation: 'held' }),
+    assertErrorCode('invalid_state'),
+  );
+  harness.transport.dispose();
+  for (const request of pending) await assert.rejects(request, assertErrorCode('cancelled'));
 }

@@ -3733,13 +3733,61 @@ reconnects back off exponentially with jitter. Porting fixed two endpoint
 defects with regressions: the URL parser forgets a port equal to the
 scheme's default, so `printer:80` became `printer:7125`, and an empty `?` or
 `#` passed the query and fragment checks and stayed in the WebSocket URL,
-which a WebSocket refuses. Bindings: WASM and JNI `moonraker_*` functions
-and Kotlin `MoonrakerPolicy`; `moonraker-policy-vectors.mjs` records 803
+which a WebSocket refuses. A server listing more than 256 components is
+refused. Bindings: WASM and JNI `moonraker_*` functions
+and Kotlin `MoonrakerPolicy`; `moonraker-policy-vectors.mjs` records 805
 answers (85 endpoints, 180 paths, 14 credential sets, 144 refused responses,
-42 handshakes, 11 policies, 264 delays, 14 subscriptions, 49 method checks),
+44 handshakes, 11 policies, 264 delays, 14 subscriptions, 49 method checks),
 reproduced by Rust, WASM in Node and Chrome, JNI and Kotlin. The project
 core's package bound rose from 8 to 10 MiB for this (the measurements are in
 `package-browser-core.mjs`); JNI exports may now return a `double`.
+
+`transport` ports `MoonrakerTransport` as an effect machine with several
+tasks in flight: a connect (shared by callers while it runs) with its
+two-request handshake and socket, the identify and subscription frames, the
+heartbeat and its timeout, reconnects with jittered backoff until the policy
+is exhausted, and every request, upload, download and recovery command with
+its deadline, a body deadline sized by the declared length, size bounds and
+the caller's abort. Effects are what the browser awaits or asks
+synchronously: fetch, read a body as text or bytes, open, write or close a
+socket, arm or clear a timer, draw a random number; a step also lists the
+tasks that finished, the effects to fail as aborted, and diagnostics. Hosts
+answer with `resolve` (an outcome of the effect's kind) or `resolve_text`,
+and feed socket events and fired timers in; an answer nothing awaits is
+`not_pending`, one of another kind `mismatch`, and changes nothing. What
+the browser does synchronously (a random draw, a socket's construction)
+resumes before anything else, and woken tasks run in settle order, so
+`Promise.all` and listener order hold. Text past `MAX_TEXT_UNITS` (2 Mi
+UTF-16 units) decides every outcome by its length alone, so a host passes at
+most one unit more. A step never carries a reply or notification params: a
+finished result gives its UTF-16 length and a notification its id, and the
+host takes the JSON text with `take_result(task)` or `take_params(id)`, once.
+Steps are encoded under the intent contract's bounds (1 MiB, 131,072 nodes),
+which a 200 KB `configfile` reply as UTF-16 units would exceed; with the
+texts beside it, and at most 512 requests in flight and 256 server
+components, every step stays within them.
+
+Porting fixed browser defects. A socket blink aborted every HTTP request in
+flight (the transfer the session generation was meant to keep), so an upload
+was cut off mid-transfer and a start the printer may have accepted read
+`cancelled`; a lost socket now leaves HTTP work alone, and a session that
+cannot come back (reconnects exhausted or refused) ends it, as a failed
+first connect does. The browser test that claimed the upload survived passed
+only because its fake fetch ignored the abort signal. A request refused for
+its deadline stayed in the active set for good; the deadline is now checked
+before the request is counted.
+
+Bindings: WASM `MoonrakerTransport`, the JNI `moonrakerTransport*` exports
+and Kotlin `MoonrakerTransport`. `moonraker-transport-vectors.mjs` drives the
+production transport through `MoonrakerTransportExchange.ts` over a scripted
+fetch, socket, scheduler and random source: 84 scenarios (the browser's own
+transport tests, configurations, handshake failures, deadlines, downloads,
+headers, aborts, notifications, heartbeats, reconnects, refused answers,
+text past every bound, a large reply and notification, the bounds and 30
+seeded interleavings) of 2,533 steps, each with the state after it and the
+64 result and params texts beside them, 94 replies and 20 refused answers.
+Rust, WASM in Node and Chrome, JNI and 2,648 Kotlin checks reproduce every
+one.
 
 ### Action capabilities
 

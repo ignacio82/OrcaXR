@@ -62,6 +62,14 @@ function transferDeadlineMs(contentLength: string | null, requestTimeoutMs: numb
   return Math.max(requestTimeoutMs, Math.ceil((declared / MINIMUM_TRANSFER_BYTES_PER_SECOND) * 1000));
 }
 const MAX_SOCKET_MESSAGE_CHARS = 1024 * 1024;
+/**
+ * Requests in flight at once. Far past any interface's need, it bounds what
+ * one transport holds — and so what the shared core reports in one step when
+ * a session ends with all of them.
+ */
+const MAX_ACTIVE_REQUESTS = 512;
+/** Moonraker lists a few dozen components; a server listing more is not one. */
+const MAX_SERVER_COMPONENTS = 256;
 const KNOWN_COMPONENTS = new Set([
   'announcements',
   'authorization',
@@ -551,10 +559,15 @@ export class MoonrakerTransport {
     const credentialsInUrl = [...requestUrl.searchParams.values()].some((value) => this.credentials.matches(value));
     if (credentialsInUrl) throw new MoonrakerTransportError('invalid_endpoint', operation);
     assertMethodSuitsEndpoint(requestUrl.pathname, options.method, operation);
+    // The deadline is checked before the request is counted: refusing it
+    // after used to leave a controller in the active set for good.
+    const timeoutMs = requestDeadline(options.timeoutMs, this.requestTimeoutMs);
+    if (this.activeRequestControllers.size >= MAX_ACTIVE_REQUESTS) {
+      throw new MoonrakerTransportError('invalid_state', operation);
+    }
     const controller = new AbortController();
     this.activeRequestControllers.add(controller);
     let timedOut = false;
-    const timeoutMs = requestDeadline(options.timeoutMs, this.requestTimeoutMs);
     const timeout =
       timeoutMs === null
         ? null
@@ -814,10 +827,23 @@ export class MoonrakerTransport {
     error: MoonrakerTransportError,
   ): void {
     if (!this.isCurrentSocket(session, epoch, socket)) return;
+    // Only the socket is lost. HTTP work in flight belongs to the session, and
+    // aborting it here cut off an upload mid-transfer whenever the websocket
+    // blinked — the very loss `assertSameSession` exists to forgive. The
+    // session's own failure (`failSession`) is what ends that work.
     this.teardownSocket(true);
-    this.abortActiveRequests();
     if (!this.desiredConnected || this.generation !== session) return;
     this.scheduleReconnect(session, error);
+  }
+
+  /**
+   * The session cannot be re-established: it is over, and so is everything in
+   * flight on it — as when the first connect fails.
+   */
+  private failSession(session: number, error: MoonrakerTransportError): void {
+    this.desiredConnected = false;
+    this.teardownConnectionResources(true);
+    this.transition(Object.freeze({ status: 'error', generation: session, error: error.toDiagnostic() }));
   }
 
   private scheduleReconnect(session: number, lastError: MoonrakerTransportError): void {
@@ -825,9 +851,7 @@ export class MoonrakerTransport {
     if (this.reconnectTimer !== null) this.scheduler.clearTimeout(this.reconnectTimer);
     const attempt = this.reconnectAttempt + 1;
     if (attempt > this.reconnectPolicy.maximumAttempts) {
-      this.desiredConnected = false;
-      const exhausted = new MoonrakerTransportError('reconnect_exhausted', 'reconnect');
-      this.transition(Object.freeze({ status: 'error', generation: session, error: exhausted.toDiagnostic() }));
+      this.failSession(session, new MoonrakerTransportError('reconnect_exhausted', 'reconnect'));
       return;
     }
     this.reconnectAttempt = attempt;
@@ -857,8 +881,7 @@ export class MoonrakerTransport {
       const normalized = asTransportError(error, 'reconnect');
       if (!this.desiredConnected || this.generation !== session || normalized.code === 'cancelled') return;
       if (!normalized.recoverable) {
-        this.desiredConnected = false;
-        this.transition(Object.freeze({ status: 'error', generation: session, error: normalized.toDiagnostic() }));
+        this.failSession(session, normalized);
         return;
       }
       this.scheduleReconnect(session, normalized);
@@ -1107,7 +1130,9 @@ function parseApiVersion(value: unknown): MoonrakerApiVersion {
 }
 
 function parseComponents(value: unknown): readonly string[] {
-  if (!Array.isArray(value)) throw new MoonrakerTransportError('invalid_response', 'handshake_server');
+  if (!Array.isArray(value) || value.length > MAX_SERVER_COMPONENTS) {
+    throw new MoonrakerTransportError('invalid_response', 'handshake_server');
+  }
   const result: string[] = [];
   for (const component of value) {
     if (typeof component !== 'string' || !/^[a-z0-9_.-]{1,64}$/i.test(component)) {

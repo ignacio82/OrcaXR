@@ -209,6 +209,19 @@ assert.deepEqual(schema.roots, [
   "MoonrakerSubscriptionReply",
   "MoonrakerMethodCheck",
   "MoonrakerCheckReply",
+  "MoonrakerTransportConfig",
+  "MoonrakerTransportReply",
+  "MoonrakerConnectionState",
+  "MoonrakerRequest",
+  "MoonrakerRecoveryRequest",
+  "MoonrakerTransportStep",
+  "MoonrakerTransportOutcome",
+  "MoonrakerTransportOutput",
+  "MoonrakerTaskResult",
+  "MoonrakerCredentials",
+  "MoonrakerLog",
+  "OptionalMoonrakerTransportFault",
+  "MoonrakerTransportStepReply",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

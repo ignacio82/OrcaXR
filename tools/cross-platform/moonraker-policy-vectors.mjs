@@ -382,6 +382,12 @@ handshake({ ...SERVER, api_version: [0, 9, 0] });
 handshake({ ...SERVER, api_version: "1.0" });
 handshake({ ...SERVER, api_version: "1.0.0\nx" });
 handshake({ ...SERVER, api_version: "1.0.0+build.5" });
+// A server listing more components than Moonraker has is refused.
+for (const count of [256, 257])
+  handshake({
+    ...SERVER,
+    components: Array.from({ length: count }, (_, i) => `component_${i}`),
+  });
 handshake({ ...SERVER, api_version: "1.0.0-rc " });
 handshake({ ...SERVER, api_version: { major: 1 } });
 handshake({ ...SERVER, components: ["file_manager", 7] });

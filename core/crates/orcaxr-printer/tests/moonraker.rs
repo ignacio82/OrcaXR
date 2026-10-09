@@ -97,5 +97,5 @@ fn moonraker_policy_answers_as_the_browser_does() {
         failures.len(),
         failures.join("\n")
     );
-    assert_eq!(counts, [85, 180, 14, 144, 42, 11, 14, 49]);
+    assert_eq!(counts, [85, 180, 14, 144, 44, 11, 14, 49]);
 }

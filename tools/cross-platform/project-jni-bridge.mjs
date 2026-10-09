@@ -51,6 +51,7 @@ export function startProjectJni(profile = "debug") {
   signatures.printWorkflowChecks = ["String"];
   signatures.printerSessionChecks = ["String"];
   signatures.moonrakerPolicyChecks = ["String"];
+  signatures.moonrakerTransportChecks = ["String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -1165,6 +1166,89 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return call("printerSessionLeaseCurrent", this.handle, lease);
     }
   }
+  class MoonrakerTransport extends Handle {
+    static configure(config) {
+      return call("moonrakerTransportConfigure", config);
+    }
+    static max_text_units() {
+      return call("moonrakerTransportTextUnits");
+    }
+    constructor(config) {
+      super(call("moonrakerTransportNew", config));
+    }
+    take_result(task) {
+      return call("moonrakerTransportTakeResult", this.handle, task);
+    }
+    take_params(id) {
+      return call("moonrakerTransportTakeParams", this.handle, id);
+    }
+    state() {
+      return call("moonrakerTransportState", this.handle);
+    }
+    has_api_key() {
+      return call("moonrakerTransportHasApiKey", this.handle);
+    }
+    has_bearer_token() {
+      return call("moonrakerTransportHasBearerToken", this.handle);
+    }
+    set_credentials(credentials, nowMs) {
+      return call("moonrakerTransportCredentials", this.handle, credentials, nowMs);
+    }
+    clear_credentials(nowMs) {
+      call("moonrakerTransportClearCredentials", this.handle, nowMs);
+    }
+    set_subscription(entries, nowMs) {
+      return call("moonrakerTransportSubscription", this.handle, entries, nowMs);
+    }
+    clear_subscription(nowMs) {
+      return call("moonrakerTransportClearSubscription", this.handle, nowMs);
+    }
+    connect(signal, nowMs) {
+      return call("moonrakerTransportConnect", this.handle, signal, nowMs);
+    }
+    disconnect(reason, nowMs) {
+      return call("moonrakerTransportDisconnect", this.handle, reason, nowMs);
+    }
+    dispose(nowMs) {
+      return call("moonrakerTransportDispose", this.handle, nowMs);
+    }
+    request(request, nowMs) {
+      return call("moonrakerTransportRequest", this.handle, request, nowMs);
+    }
+    upload(request, nowMs) {
+      return call("moonrakerTransportUpload", this.handle, request, nowMs);
+    }
+    download(request, nowMs) {
+      return call("moonrakerTransportDownload", this.handle, request, nowMs);
+    }
+    recovery(request, nowMs) {
+      return call("moonrakerTransportRecovery", this.handle, request, nowMs);
+    }
+    abort(task, nowMs) {
+      return call("moonrakerTransportAbort", this.handle, task, nowMs);
+    }
+    resolve(id, outcome, nowMs) {
+      return call("moonrakerTransportResolve", this.handle, id, outcome, nowMs);
+    }
+    resolve_text(id, text, nowMs) {
+      return call("moonrakerTransportText", this.handle, id, text, nowMs);
+    }
+    socket_open(socket, nowMs) {
+      return call("moonrakerTransportSocketOpen", this.handle, socket, nowMs);
+    }
+    socket_error(socket, nowMs) {
+      return call("moonrakerTransportSocketError", this.handle, socket, nowMs);
+    }
+    socket_close(socket, nowMs) {
+      return call("moonrakerTransportSocketClose", this.handle, socket, nowMs);
+    }
+    socket_message(socket, text, nowMs) {
+      return call("moonrakerTransportSocketMessage", this.handle, socket, text, nowMs);
+    }
+    timer(timer, nowMs) {
+      return call("moonrakerTransportTimer", this.handle, timer, nowMs);
+    }
+  }
   class ToolUsageScanner extends Handle {
     constructor() {
       super(call("toolUsageNew"));
@@ -1183,6 +1267,7 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     HoldToConfirm,
     PrintWorkflow,
     PrinterSession,
+    MoonrakerTransport,
     ToolUsageScanner,
     filament_slots: (text) => call("filamentSlots", text),
     printer_objects: (text) => call("printerObjects", text),

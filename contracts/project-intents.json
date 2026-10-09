@@ -5627,7 +5627,7 @@
       "kind": "array",
       "items": "Counter",
       "min": 0,
-      "max": 256
+      "max": 2048
     },
     "PrinterSessionStep": {
       "kind": "object",
@@ -5915,6 +5915,345 @@
         "allowed": "Empty",
         "refused": "MoonrakerTransportFault"
       }
+    },
+    "MoonrakerTransportConfig": {
+      "kind": "object",
+      "fields": {
+        "endpoint": "EditText",
+        "defaultPort": "OptionalFinite",
+        "sameOriginProxy": "OptionalText",
+        "pageOrigin": "OptionalText",
+        "versionPolicy": "MoonrakerVersionPolicyInput",
+        "clientName": "OptionalText",
+        "clientVersion": "OptionalText",
+        "requestTimeoutMs": "OptionalFinite",
+        "socketOpenTimeoutMs": "OptionalFinite",
+        "heartbeatIntervalMs": "OptionalFinite",
+        "heartbeatTimeoutMs": "OptionalFinite",
+        "reconnect": "MoonrakerReconnectPolicyInput"
+      }
+    },
+    "MoonrakerDisconnectReason": {
+      "kind": "enum",
+      "values": [
+        "initial",
+        "user",
+        "cancelled",
+        "disposed"
+      ]
+    },
+    "MoonrakerDisconnected": {
+      "kind": "object",
+      "fields": {
+        "generation": "Counter",
+        "reason": "MoonrakerDisconnectReason"
+      }
+    },
+    "MoonrakerConnecting": {
+      "kind": "object",
+      "fields": {
+        "generation": "Counter",
+        "attempt": "Counter"
+      }
+    },
+    "MoonrakerConnected": {
+      "kind": "object",
+      "fields": {
+        "generation": "Counter",
+        "socketEpoch": "Counter",
+        "connectedAtMs": "Finite",
+        "lastHeartbeatAtMs": "Finite",
+        "handshake": "MoonrakerHandshake"
+      }
+    },
+    "MoonrakerReconnecting": {
+      "kind": "object",
+      "fields": {
+        "generation": "Counter",
+        "attempt": "Counter",
+        "delayMs": "Finite",
+        "lastError": "MoonrakerTransportFault"
+      }
+    },
+    "MoonrakerFailedState": {
+      "kind": "object",
+      "fields": {
+        "generation": "Counter",
+        "error": "MoonrakerTransportFault"
+      }
+    },
+    "MoonrakerConnectionState": {
+      "kind": "union",
+      "variants": {
+        "disconnected": "MoonrakerDisconnected",
+        "connecting": "MoonrakerConnecting",
+        "connected": "MoonrakerConnected",
+        "reconnecting": "MoonrakerReconnecting",
+        "error": "MoonrakerFailedState"
+      }
+    },
+    "MoonrakerTransportReply": {
+      "kind": "union",
+      "variants": {
+        "state": "MoonrakerConnectionState",
+        "refused": "MoonrakerTransportFault"
+      }
+    },
+    "MoonrakerDeadline": {
+      "kind": "union",
+      "variants": {
+        "default": "Empty",
+        "unbounded": "Empty",
+        "ms": "Finite"
+      }
+    },
+    "MoonrakerSignal": {
+      "kind": "enum",
+      "values": [
+        "none",
+        "live",
+        "aborted"
+      ]
+    },
+    "MoonrakerRequestOptions": {
+      "kind": "object",
+      "fields": {
+        "method": "OptionalText",
+        "operation": "OptionalText",
+        "timeoutMs": "MoonrakerDeadline",
+        "headers": "MoonrakerHeaders",
+        "acceptBareEnvelope": "Flag",
+        "signal": "MoonrakerSignal"
+      }
+    },
+    "MoonrakerRequest": {
+      "kind": "object",
+      "fields": {
+        "path": "EditText",
+        "options": "MoonrakerRequestOptions"
+      }
+    },
+    "MoonrakerRecoveryRequest": {
+      "kind": "object",
+      "fields": {
+        "command": "EditText",
+        "signal": "MoonrakerSignal"
+      }
+    },
+    "MoonrakerResultText": {
+      "kind": "object",
+      "fields": {
+        "units": "Counter"
+      }
+    },
+    "MoonrakerTaskResult": {
+      "kind": "union",
+      "variants": {
+        "handshake": "MoonrakerHandshake",
+        "result": "MoonrakerResultText",
+        "bytes": "Counter",
+        "refused": "MoonrakerTransportFault"
+      }
+    },
+    "MoonrakerTaskFinished": {
+      "kind": "object",
+      "fields": {
+        "task": "Counter",
+        "result": "MoonrakerTaskResult"
+      }
+    },
+    "MoonrakerTasksFinished": {
+      "kind": "array",
+      "items": "MoonrakerTaskFinished",
+      "min": 0,
+      "max": 1024
+    },
+    "MoonrakerRequestBody": {
+      "kind": "enum",
+      "values": [
+        "none",
+        "upload"
+      ]
+    },
+    "MoonrakerCredentialsMode": {
+      "kind": "enum",
+      "values": [
+        "omit",
+        "sameOrigin"
+      ]
+    },
+    "MoonrakerFetch": {
+      "kind": "object",
+      "fields": {
+        "id": "Counter",
+        "url": "EditText",
+        "method": "EditText",
+        "headers": "MoonrakerHeaders",
+        "body": "MoonrakerRequestBody",
+        "credentials": "MoonrakerCredentialsMode"
+      }
+    },
+    "MoonrakerBodyKind": {
+      "kind": "enum",
+      "values": [
+        "text",
+        "bytes"
+      ]
+    },
+    "MoonrakerReadBody": {
+      "kind": "object",
+      "fields": {
+        "id": "Counter",
+        "fetch": "Counter",
+        "kind": "MoonrakerBodyKind"
+      }
+    },
+    "MoonrakerSocketOpen": {
+      "kind": "object",
+      "fields": {
+        "id": "Counter",
+        "url": "EditText"
+      }
+    },
+    "MoonrakerRandom": {
+      "kind": "object",
+      "fields": {
+        "id": "Counter"
+      }
+    },
+    "MoonrakerSocketText": {
+      "kind": "object",
+      "fields": {
+        "socket": "Counter",
+        "text": "EditText"
+      }
+    },
+    "MoonrakerSocketClose": {
+      "kind": "object",
+      "fields": {
+        "socket": "Counter",
+        "code": "Counter",
+        "reason": "EditText"
+      }
+    },
+    "MoonrakerTimer": {
+      "kind": "object",
+      "fields": {
+        "timer": "Counter",
+        "delayMs": "Finite"
+      }
+    },
+    "MoonrakerNotification": {
+      "kind": "object",
+      "fields": {
+        "id": "Counter",
+        "method": "EditText",
+        "receivedAtMs": "Finite",
+        "generation": "Counter",
+        "socketEpoch": "Counter"
+      }
+    },
+    "MoonrakerTransportOutput": {
+      "kind": "union",
+      "variants": {
+        "fetch": "MoonrakerFetch",
+        "readBody": "MoonrakerReadBody",
+        "openSocket": "MoonrakerSocketOpen",
+        "random": "MoonrakerRandom",
+        "socketSend": "MoonrakerSocketText",
+        "socketClose": "MoonrakerSocketClose",
+        "setTimer": "MoonrakerTimer",
+        "state": "MoonrakerConnectionState",
+        "notification": "MoonrakerNotification"
+      }
+    },
+    "MoonrakerTransportOutputs": {
+      "kind": "array",
+      "items": "MoonrakerTransportOutput",
+      "min": 0,
+      "max": 1024
+    },
+    "MoonrakerLogLevel": {
+      "kind": "enum",
+      "values": [
+        "info",
+        "warn",
+        "error"
+      ]
+    },
+    "MoonrakerDiagnosticEvent": {
+      "kind": "enum",
+      "values": [
+        "connectionAttempt",
+        "connected",
+        "reconnectScheduled",
+        "disconnected",
+        "requestFailed",
+        "protocolWarning",
+        "heartbeatTimeout"
+      ]
+    },
+    "OptionalMoonrakerTransportFault": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "MoonrakerTransportFault"
+      }
+    },
+    "MoonrakerLog": {
+      "kind": "object",
+      "fields": {
+        "timestampMs": "Finite",
+        "level": "MoonrakerLogLevel",
+        "event": "MoonrakerDiagnosticEvent",
+        "state": "ConnectionStatus",
+        "generation": "Counter",
+        "attempt": "OptionalFinite",
+        "error": "OptionalMoonrakerTransportFault"
+      }
+    },
+    "MoonrakerLogs": {
+      "kind": "array",
+      "items": "MoonrakerLog",
+      "min": 0,
+      "max": 1024
+    },
+    "MoonrakerTransportStep": {
+      "kind": "object",
+      "fields": {
+        "outputs": "MoonrakerTransportOutputs",
+        "cleared": "PrinterSessionIds",
+        "aborted": "PrinterSessionIds",
+        "logs": "MoonrakerLogs",
+        "task": "OptionalCounter",
+        "finished": "MoonrakerTasksFinished"
+      }
+    },
+    "MoonrakerTransportStepReply": {
+      "kind": "union",
+      "variants": {
+        "step": "MoonrakerTransportStep",
+        "refused": "MoonrakerTransportFault"
+      }
+    },
+    "MoonrakerResponseHeaders": {
+      "kind": "object",
+      "fields": {
+        "status": "Finite",
+        "contentLength": "OptionalText"
+      }
+    },
+    "MoonrakerTransportOutcome": {
+      "kind": "union",
+      "variants": {
+        "headers": "MoonrakerResponseHeaders",
+        "failed": "Empty",
+        "bytes": "Counter",
+        "created": "Empty",
+        "unavailable": "Empty",
+        "broken": "Empty",
+        "random": "Finite"
+      }
     }
   },
   "roots": [
@@ -6089,7 +6428,20 @@
     "MoonrakerObjectSubscription",
     "MoonrakerSubscriptionReply",
     "MoonrakerMethodCheck",
-    "MoonrakerCheckReply"
+    "MoonrakerCheckReply",
+    "MoonrakerTransportConfig",
+    "MoonrakerTransportReply",
+    "MoonrakerConnectionState",
+    "MoonrakerRequest",
+    "MoonrakerRecoveryRequest",
+    "MoonrakerTransportStep",
+    "MoonrakerTransportOutcome",
+    "MoonrakerTransportOutput",
+    "MoonrakerTaskResult",
+    "MoonrakerCredentials",
+    "MoonrakerLog",
+    "OptionalMoonrakerTransportFault",
+    "MoonrakerTransportStepReply"
   ],
   "sessionVersion": 1
 }

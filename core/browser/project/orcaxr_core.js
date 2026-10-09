@@ -500,6 +500,613 @@ export class HoldToConfirm {
 if (Symbol.dispose) HoldToConfirm.prototype[Symbol.dispose] = HoldToConfirm.prototype.free;
 
 /**
+ * The Moonraker transport (`MoonrakerTransport`): one printer's connection
+ * and every request on it. Stepping calls answer a `MoonrakerTransportStep`.
+ */
+export class MoonrakerTransport {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        MoonrakerTransportFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_moonrakertransport_free(ptr, 0);
+    }
+    /**
+     * The live signal of task `task` aborts.
+     * @param {number} task
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    abort(task, now_ms) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.moonrakertransport_abort(this.__wbg_ptr, task, now_ms);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @param {number} now_ms
+     */
+    clear_credentials(now_ms) {
+        wasm.moonrakertransport_clear_credentials(this.__wbg_ptr, now_ms);
+    }
+    /**
+     * No object subscription.
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    clear_subscription(now_ms) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.moonrakertransport_clear_subscription(this.__wbg_ptr, now_ms);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * A `MoonrakerTransportConfig`; the `MoonrakerTransportReply` creating a
+     * transport from it answers: its first state, or why it is refused.
+     * @param {string} config
+     * @returns {string}
+     */
+    static configure(config) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(config, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.moonrakertransport_configure(ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * A signal by name: `none`, `live` or `aborted`.
+     * @param {string} signal
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    connect(signal, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(signal, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.moonrakertransport_connect(this.__wbg_ptr, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * A reason by name: `user`, `cancelled` or `disposed`.
+     * @param {string} reason
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    disconnect(reason, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(reason, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.moonrakertransport_disconnect(this.__wbg_ptr, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    dispose(now_ms) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.moonrakertransport_dispose(this.__wbg_ptr, now_ms);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * A `MoonrakerRequest` read as bytes.
+     * @param {string} request
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    download(request, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.moonrakertransport_download(this.__wbg_ptr, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * @returns {boolean}
+     */
+    has_api_key() {
+        const ret = wasm.moonrakertransport_has_api_key(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @returns {boolean}
+     */
+    has_bearer_token() {
+        const ret = wasm.moonrakertransport_has_bearer_token(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * Past this many UTF-16 units, text decides outcomes by its length
+     * alone: pass at most one unit more.
+     * @returns {number}
+     */
+    static max_text_units() {
+        const ret = wasm.moonrakertransport_max_text_units();
+        return ret;
+    }
+    /**
+     * A `MoonrakerTransportConfig` that `configure` accepts.
+     * @param {string} config
+     */
+    constructor(config) {
+        const ptr0 = passStringToWasm0(config, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.moonrakertransport_new(ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0];
+        MoonrakerTransportFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * A `MoonrakerRecoveryRequest`.
+     * @param {string} request
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    recovery(request, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.moonrakertransport_recovery(this.__wbg_ptr, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * A `MoonrakerRequest`.
+     * @param {string} request
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    request(request, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.moonrakertransport_request(this.__wbg_ptr, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * A `MoonrakerTransportOutcome` answering effect `id`.
+     * @param {number} id
+     * @param {string} outcome
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    resolve(id, outcome, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(outcome, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.moonrakertransport_resolve(this.__wbg_ptr, id, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * A body read as text, answering effect `id`.
+     * @param {number} id
+     * @param {string} text
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    resolve_text(id, text, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.moonrakertransport_resolve_text(this.__wbg_ptr, id, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * `MoonrakerCredentials`; an `OptionalMoonrakerTransportFault`.
+     * @param {string} credentials
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    set_credentials(credentials, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(credentials, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.moonrakertransport_set_credentials(this.__wbg_ptr, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * A `MoonrakerObjectSubscription`; the `MoonrakerTransportStepReply`.
+     * @param {string} entries
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    set_subscription(entries, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(entries, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.moonrakertransport_set_subscription(this.__wbg_ptr, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * @param {number} socket
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    socket_close(socket, now_ms) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.moonrakertransport_socket_close(this.__wbg_ptr, socket, now_ms);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @param {number} socket
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    socket_error(socket, now_ms) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.moonrakertransport_socket_error(this.__wbg_ptr, socket, now_ms);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * A text frame socket `socket` received.
+     * @param {number} socket
+     * @param {string} text
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    socket_message(socket, text, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.moonrakertransport_socket_message(this.__wbg_ptr, socket, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * @param {number} socket
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    socket_open(socket, now_ms) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.moonrakertransport_socket_open(this.__wbg_ptr, socket, now_ms);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * The `MoonrakerConnectionState`.
+     * @returns {string}
+     */
+    state() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.moonrakertransport_state(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * The JSON text of notification `id`'s params, once.
+     * @param {number} id
+     * @returns {string}
+     */
+    take_params(id) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.moonrakertransport_take_params(this.__wbg_ptr, id);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * The JSON text of finished task `task`'s result, once.
+     * @param {number} task
+     * @returns {string}
+     */
+    take_result(task) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.moonrakertransport_take_result(this.__wbg_ptr, task);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Timer `timer` fired.
+     * @param {number} timer
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    timer(timer, now_ms) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.moonrakertransport_timer(this.__wbg_ptr, timer, now_ms);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * A `MoonrakerRequest` whose body is the host's file.
+     * @param {string} request
+     * @param {number} now_ms
+     * @returns {string}
+     */
+    upload(request, now_ms) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.moonrakertransport_upload(this.__wbg_ptr, ptr0, len0, now_ms);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) MoonrakerTransport.prototype[Symbol.dispose] = MoonrakerTransport.prototype.free;
+
+/**
  * Installed printers and custom presets over a pinned catalog.
  */
 export class PresetLibrary {
@@ -5763,6 +6370,9 @@ const CapturedSelectionFinalization = (typeof FinalizationRegistry === 'undefine
 const HoldToConfirmFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_holdtoconfirm_free(ptr, 1));
+const MoonrakerTransportFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_moonrakertransport_free(ptr, 1));
 const PresetLibraryFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_presetlibrary_free(ptr, 1));

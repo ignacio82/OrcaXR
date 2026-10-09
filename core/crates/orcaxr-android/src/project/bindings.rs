@@ -823,6 +823,180 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportConfigure, moonraker_transport_configure, jstring,
+    config: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportNew, moonraker_transport_new, jlong,
+    config: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportTextUnits, moonraker_transport_text_units, jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportTakeResult, moonraker_transport_take_result, jstring,
+    handle: jlong,
+    task: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportTakeParams, moonraker_transport_take_params, jstring,
+    handle: jlong,
+    notification: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportState, moonraker_transport_state, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportHasApiKey, moonraker_transport_has_api_key, jboolean,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportHasBearerToken, moonraker_transport_has_bearer_token, jboolean,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportCredentials, moonraker_transport_credentials, jstring,
+    handle: jlong,
+    credentials: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportClearCredentials, moonraker_transport_clear_credentials, (),
+    handle: jlong,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportSubscription, moonraker_transport_subscription, jstring,
+    handle: jlong,
+    entries: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportClearSubscription, moonraker_transport_clear_subscription, jstring,
+    handle: jlong,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportConnect, moonraker_transport_connect, jstring,
+    handle: jlong,
+    signal: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportDisconnect, moonraker_transport_disconnect, jstring,
+    handle: jlong,
+    reason: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportDispose, moonraker_transport_dispose, jstring,
+    handle: jlong,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportRequest, moonraker_transport_request, jstring,
+    handle: jlong,
+    request: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportUpload, moonraker_transport_upload, jstring,
+    handle: jlong,
+    request: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportDownload, moonraker_transport_download, jstring,
+    handle: jlong,
+    request: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportRecovery, moonraker_transport_recovery, jstring,
+    handle: jlong,
+    request: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportAbort, moonraker_transport_abort, jstring,
+    handle: jlong,
+    task: jlong,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportResolve, moonraker_transport_resolve, jstring,
+    handle: jlong,
+    id: jlong,
+    outcome: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportText, moonraker_transport_text, jstring,
+    handle: jlong,
+    id: jlong,
+    text: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportSocketOpen, moonraker_transport_socket_open, jstring,
+    handle: jlong,
+    socket: jlong,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportSocketError, moonraker_transport_socket_error, jstring,
+    handle: jlong,
+    socket: jlong,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportSocketClose, moonraker_transport_socket_close, jstring,
+    handle: jlong,
+    socket: jlong,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportSocketMessage, moonraker_transport_socket_message, jstring,
+    handle: jlong,
+    socket: jlong,
+    text: JString<'local>,
+    now_ms: jdouble,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_moonrakerTransportTimer, moonraker_transport_timer, jstring,
+    handle: jlong,
+    timer: jlong,
+    now_ms: jdouble,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_moonrakerEndpoint, moonraker_endpoint, jstring,
     request: JString<'local>,
 }

@@ -40,6 +40,7 @@ import { replayPrinterTools } from "./printer-tools-replay.mjs";
 import { replayPrinterPreparation } from "./printer-preparation-replay.mjs";
 import { replayPrinterWorkflow } from "./printer-workflow-replay.mjs";
 import { replayPrinterSession } from "./printer-session-replay.mjs";
+import { replayMoonrakerTransport } from "./moonraker-transport-replay.mjs";
 import { replayMoonrakerPolicy } from "./moonraker-policy-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
@@ -1079,14 +1080,61 @@ try {
   const policyFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/moonraker-policy-vectors.json", root)),
   );
-  assert.equal(replayMoonrakerPolicy(projectJniCore(jvm.call), policyFixture).moonrakerPolicyAnswers, 803);
+  assert.equal(replayMoonrakerPolicy(projectJniCore(jvm.call), policyFixture).moonrakerPolicyAnswers, 805);
   const policyScript = [
     ...["endpoints", "paths", "credentials", "errors", "handshakes", "policies", "subscriptions", "methods"].flatMap(
       (section) => policyFixture[section].map((c) => [section, c.requestJson, c.replyJson].join("\t")),
     ),
     ...policyFixture.delays.map((c) => ["delays", c.requestJson, String(c.delayMs)].join("\t")),
   ];
-  assert.equal(jvm.call("moonrakerPolicyChecks", policyScript.join("\n")), 803);
+  assert.equal(jvm.call("moonrakerPolicyChecks", policyScript.join("\n")), 805);
+  // The Moonraker transport through the real JNI exports, then the Kotlin
+  // wrapper: step and state, or reply, for each input.
+  const transportFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/moonraker-transport-vectors.json", root)),
+  );
+  assert.deepEqual(
+    Object.values(replayMoonrakerTransport(projectJniCore(jvm.call), transportFixture)),
+    [88, 2533, 94, 20, 64],
+  );
+  const transportScript = transportFixture.scenarios.flatMap((scenario) =>
+    scenario.records.map((record) => {
+      const [kind, value] = Object.entries(record.input)[0];
+      const columns =
+        kind === "connect"
+          ? ["", value.signal, ""]
+          : kind === "resolve"
+            ? [value.id, value.outcome, ""]
+            : kind === "text"
+              ? [value.id, "", base64(value.text)]
+              : kind === "socketMessage"
+                ? [value.socket, "", base64(value.text)]
+                : typeof value === "number"
+                  ? [value, "", ""]
+                  : typeof value === "string"
+                    ? ["", value, ""]
+                    : value === null
+                      ? ["", "null", ""]
+                      : ["", "", ""];
+      const subscribing = kind === "subscription" && value !== null;
+      const expected =
+        kind === "credentials"
+          ? (record.refused ?? "")
+          : subscribing
+            ? record.refused !== undefined
+              ? `{"refused":${record.refused}}`
+              : `{"step":${record.step}}`
+            : record.refused !== undefined
+              ? `!${record.refused}`
+              : (record.reply ?? record.step ?? "");
+      const state =
+        record.hasApiKey !== undefined ? `${record.hasApiKey},${record.hasBearerToken}` : (record.state ?? "");
+      const results = (record.results ?? []).map(({ task, text }) => `${task}:${base64(text)}`).join(",");
+      const params = (record.params ?? []).map(base64).join(",");
+      return [kind, ...columns, record.now, expected, state, results, params].join("\t");
+    }),
+  );
+  assert.equal(jvm.call("moonrakerTransportChecks", transportScript.join("\n")), 2648);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

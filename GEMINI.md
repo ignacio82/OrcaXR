@@ -385,7 +385,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   Do not misreport a browser block as an offline printer or guess schemes/ports.
 - `web/src/printer/` is the Moonraker boundary. Full authoritative queries replace
   state; partial notifications alone merge. Unknown/missing readiness fails closed. `orcaxr-printer` ports
-  status, control, summary, tool mapping, preparation, send workflow, session (effect machines) and Moonraker URL/credential/handshake policy (WHATWG `url`); merge prototype-free, own keys only.
+  status, control, summary, tool mapping, preparation, send workflow, session, transport (effect machines) and Moonraker URL/credential/handshake policy (WHATWG `url`); merge prototype-free, own keys only. A socket blink never aborts HTTP work; replies/notification params leave steps via `take_*` (contract bounds).
 - Printer commands bind immutable printer session/job identities. Reconfirm changed jobs, reconnects and switches; reject duplicate/stale gestures. Emergency stop
   and distinct firmware restart remain reachable without successful status queries.
 - Submission owns upload, preparation, start, cancellation and uncertain outcomes.

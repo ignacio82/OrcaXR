@@ -9,6 +9,7 @@ use orcaxr_printer::{
     session::{self, PrinterSession},
     status::{JobStatus, LIMITS},
     summary, tools,
+    transport::{self, MoonrakerTransport},
     workflow::{PrintWorkflow, Refusal},
 };
 
@@ -685,4 +686,333 @@ pub(super) fn moonraker_method_check(
         moonraker::method_check,
         wire::encode_moonraker_check_reply,
     )
+}
+
+fn with_transport<R>(
+    handle: jlong,
+    call: impl FnOnce(&mut MoonrakerTransport) -> std::result::Result<R, transport::Refusal>,
+) -> Result<R> {
+    registry().slot(handle)?.with(|record| match record {
+        Some(Record::MoonrakerTransport(transport)) => {
+            call(transport).map_err(transport::Refusal::code)
+        }
+        _ => Err("invalid_handle_kind"),
+    })
+}
+fn transport_step(env: &mut JNIEnv<'_>, step: wire::MoonrakerTransportStep) -> Result<jstring> {
+    let json = wire::encode_moonraker_transport_step(&step).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+/// Text a printer sent: at most `MAX_TEXT_UNITS + 1` UTF-16 units, which is
+/// all that decides any outcome.
+fn received_text(env: &mut JNIEnv<'_>, text: &JString<'_>) -> Result<String> {
+    let length = env
+        .call_method(text, "length", "()I", &[])
+        .and_then(|v| v.i())
+        .map_err(|_| "invalid_request")?;
+    if length < 0 || length as usize > transport::MAX_TEXT_UNITS + 1 {
+        return Err("input_limit");
+    }
+    Ok(env.get_string(text).map_err(|_| "invalid_request")?.into())
+}
+fn transport_config(
+    env: &mut JNIEnv<'_>,
+    config: &JString<'_>,
+) -> Result<wire::MoonrakerTransportConfig> {
+    wire::decode_moonraker_transport_config(&intent_text(env, config)?)
+        .map_err(|_| "invalid_request")
+}
+fn transport_request(
+    env: &mut JNIEnv<'_>,
+    request: &JString<'_>,
+) -> Result<wire::MoonrakerRequest> {
+    wire::decode_moonraker_request(&intent_text(env, request)?).map_err(|_| "invalid_request")
+}
+/// A `MoonrakerTransportConfig`; the `MoonrakerTransportReply` creating a
+/// transport from it answers: its first state, or why it is refused.
+pub(super) fn moonraker_transport_configure(
+    env: &mut JNIEnv<'_>,
+    config: JString<'_>,
+) -> Result<jstring> {
+    let config = transport_config(env, &config)?;
+    let reply = match MoonrakerTransport::new(&config) {
+        Ok((_, state)) => wire::MoonrakerTransportReply::State(state),
+        Err(fault) => wire::MoonrakerTransportReply::Refused(fault),
+    };
+    let json = wire::encode_moonraker_transport_reply(&reply).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+/// A `MoonrakerTransportConfig` that `configure` accepts.
+pub(super) fn moonraker_transport_new(env: &mut JNIEnv<'_>, config: JString<'_>) -> Result<jlong> {
+    let config = transport_config(env, &config)?;
+    let (transport, _) = MoonrakerTransport::new(&config).map_err(|_| "invalid_request")?;
+    let reserved = registry().reserve(false)?;
+    reserved.insert(Record::MoonrakerTransport(Box::new(transport)))
+}
+/// Past this many UTF-16 units, text decides outcomes by its length alone.
+pub(super) fn moonraker_transport_text_units(_: &mut JNIEnv<'_>) -> Result<jlong> {
+    Ok(transport::MAX_TEXT_UNITS as jlong)
+}
+/// The JSON text of finished task `task`'s result, once.
+pub(super) fn moonraker_transport_take_result(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    task: jlong,
+) -> Result<jstring> {
+    let task = effect_id(task)?;
+    let text = with_transport(handle, |t| Ok(t.take_result(task)))?.ok_or("not_pending")?;
+    string(env, text)
+}
+/// The JSON text of notification `notification`'s params, once.
+pub(super) fn moonraker_transport_take_params(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    notification: jlong,
+) -> Result<jstring> {
+    let id = effect_id(notification)?;
+    let text = with_transport(handle, |t| Ok(t.take_params(id)))?.ok_or("not_pending")?;
+    string(env, text)
+}
+pub(super) fn moonraker_transport_state(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let state = with_transport(handle, |t| Ok(t.state()))?;
+    let json = wire::encode_moonraker_connection_state(&state).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn moonraker_transport_has_api_key(
+    _: &mut JNIEnv<'_>,
+    handle: jlong,
+) -> Result<jboolean> {
+    with_transport(handle, |t| Ok(u8::from(t.credential_metadata().0)))
+}
+pub(super) fn moonraker_transport_has_bearer_token(
+    _: &mut JNIEnv<'_>,
+    handle: jlong,
+) -> Result<jboolean> {
+    with_transport(handle, |t| Ok(u8::from(t.credential_metadata().1)))
+}
+/// `MoonrakerCredentials`; an `OptionalMoonrakerTransportFault`.
+pub(super) fn moonraker_transport_credentials(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    credentials: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let credentials = wire::decode_moonraker_credentials(&intent_text(env, &credentials)?)
+        .map_err(|_| "invalid_request")?;
+    let refused = with_transport(handle, |t| {
+        Ok(match t.set_credentials(&credentials, now_ms) {
+            Ok(()) => wire::OptionalMoonrakerTransportFault::Absent(wire::Empty {}),
+            Err(fault) => wire::OptionalMoonrakerTransportFault::Value(fault),
+        })
+    })?;
+    let json =
+        wire::encode_optional_moonraker_transport_fault(&refused).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn moonraker_transport_clear_credentials(
+    _: &mut JNIEnv<'_>,
+    handle: jlong,
+    now_ms: f64,
+) -> Result<()> {
+    with_transport(handle, |t| {
+        t.clear_credentials(now_ms);
+        Ok(())
+    })
+}
+/// A `MoonrakerObjectSubscription`; the `MoonrakerTransportStepReply`.
+pub(super) fn moonraker_transport_subscription(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    entries: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let entries = wire::decode_moonraker_object_subscription(&intent_text(env, &entries)?)
+        .map_err(|_| "invalid_request")?;
+    let reply = with_transport(handle, |t| {
+        Ok(match t.set_subscription(Some(&entries), now_ms) {
+            Ok(step) => wire::MoonrakerTransportStepReply::Step(step),
+            Err(fault) => wire::MoonrakerTransportStepReply::Refused(fault),
+        })
+    })?;
+    let json = wire::encode_moonraker_transport_step_reply(&reply).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+/// No object subscription.
+pub(super) fn moonraker_transport_clear_subscription(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    now_ms: f64,
+) -> Result<jstring> {
+    let step = with_transport(handle, |t| {
+        Ok(t.set_subscription(None, now_ms)
+            .map_err(|_| "invalid_request"))
+    })??;
+    transport_step(env, step)
+}
+/// A signal by name: `none`, `live` or `aborted`.
+pub(super) fn moonraker_transport_connect(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    signal: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let signal = transport::signal_named(&intent_text(env, &signal)?).ok_or("invalid_request")?;
+    let step = with_transport(handle, |t| Ok(t.connect(signal, now_ms)))?;
+    transport_step(env, step)
+}
+/// A reason by name: `user`, `cancelled` or `disposed`.
+pub(super) fn moonraker_transport_disconnect(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    reason: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let reason = transport::reason_named(&intent_text(env, &reason)?).ok_or("invalid_request")?;
+    let step = with_transport(handle, |t| Ok(t.disconnect(reason, now_ms)))?;
+    transport_step(env, step)
+}
+pub(super) fn moonraker_transport_dispose(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    now_ms: f64,
+) -> Result<jstring> {
+    let step = with_transport(handle, |t| Ok(t.dispose(now_ms)))?;
+    transport_step(env, step)
+}
+/// A `MoonrakerRequest`.
+pub(super) fn moonraker_transport_request(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let request = transport_request(env, &request)?;
+    let step = with_transport(handle, |t| Ok(t.request(&request, now_ms)))?;
+    transport_step(env, step)
+}
+/// A `MoonrakerRequest` whose body is the host's file.
+pub(super) fn moonraker_transport_upload(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let request = transport_request(env, &request)?;
+    let step = with_transport(handle, |t| Ok(t.upload(&request, now_ms)))?;
+    transport_step(env, step)
+}
+/// A `MoonrakerRequest` read as bytes.
+pub(super) fn moonraker_transport_download(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let request = transport_request(env, &request)?;
+    let step = with_transport(handle, |t| Ok(t.download(&request, now_ms)))?;
+    transport_step(env, step)
+}
+/// A `MoonrakerRecoveryRequest`.
+pub(super) fn moonraker_transport_recovery(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let request = wire::decode_moonraker_recovery_request(&intent_text(env, &request)?)
+        .map_err(|_| "invalid_request")?;
+    let step = with_transport(handle, |t| Ok(t.recovery(&request, now_ms)))?;
+    transport_step(env, step)
+}
+/// The live signal of task `task` aborts.
+pub(super) fn moonraker_transport_abort(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    task: jlong,
+    now_ms: f64,
+) -> Result<jstring> {
+    let task = effect_id(task)?;
+    let step = with_transport(handle, |t| Ok(t.abort(task, now_ms)))?;
+    transport_step(env, step)
+}
+/// A `MoonrakerTransportOutcome` answering effect `id`.
+pub(super) fn moonraker_transport_resolve(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    id: jlong,
+    outcome: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let id = effect_id(id)?;
+    let outcome = wire::decode_moonraker_transport_outcome(&intent_text(env, &outcome)?)
+        .map_err(|_| "invalid_request")?;
+    let step = with_transport(handle, |t| t.resolve(id, outcome, now_ms))?;
+    transport_step(env, step)
+}
+/// A body read as text, answering effect `id`.
+pub(super) fn moonraker_transport_text(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    id: jlong,
+    text: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let id = effect_id(id)?;
+    let text = received_text(env, &text)?;
+    let step = with_transport(handle, |t| t.resolve_text(id, &text, now_ms))?;
+    transport_step(env, step)
+}
+pub(super) fn moonraker_transport_socket_open(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    socket: jlong,
+    now_ms: f64,
+) -> Result<jstring> {
+    let socket = effect_id(socket)?;
+    let step = with_transport(handle, |t| Ok(t.socket_open(socket, now_ms)))?;
+    transport_step(env, step)
+}
+pub(super) fn moonraker_transport_socket_error(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    socket: jlong,
+    now_ms: f64,
+) -> Result<jstring> {
+    let socket = effect_id(socket)?;
+    let step = with_transport(handle, |t| Ok(t.socket_error(socket, now_ms)))?;
+    transport_step(env, step)
+}
+pub(super) fn moonraker_transport_socket_close(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    socket: jlong,
+    now_ms: f64,
+) -> Result<jstring> {
+    let socket = effect_id(socket)?;
+    let step = with_transport(handle, |t| Ok(t.socket_close(socket, now_ms)))?;
+    transport_step(env, step)
+}
+/// A text frame socket `socket` received.
+pub(super) fn moonraker_transport_socket_message(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    socket: jlong,
+    text: JString<'_>,
+    now_ms: f64,
+) -> Result<jstring> {
+    let socket = effect_id(socket)?;
+    let text = received_text(env, &text)?;
+    let step = with_transport(handle, |t| Ok(t.socket_message(socket, &text, now_ms)))?;
+    transport_step(env, step)
+}
+/// Timer `timer` fired.
+pub(super) fn moonraker_transport_timer(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    timer: jlong,
+    now_ms: f64,
+) -> Result<jstring> {
+    let timer = effect_id(timer)?;
+    let step = with_transport(handle, |t| Ok(t.timer(timer, now_ms)))?;
+    transport_step(env, step)
 }

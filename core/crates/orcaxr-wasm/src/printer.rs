@@ -3,7 +3,8 @@ use crate::project::error;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
-    control, moonraker, preparation, session, status::JobStatus, summary, tools, workflow,
+    control, moonraker, preparation, session, status::JobStatus, summary, tools, transport,
+    workflow,
 };
 use wasm_bindgen::prelude::*;
 
@@ -489,6 +490,191 @@ impl PrinterSession {
         let lease = wire::decode_printer_session_lease(wire_text(lease)?)
             .map_err(|_| error("invalid_request"))?;
         Ok(self.inner.lease_current(&lease))
+    }
+}
+
+/// The Moonraker transport (`MoonrakerTransport`): one printer's connection
+/// and every request on it. Stepping calls answer a `MoonrakerTransportStep`.
+#[wasm_bindgen]
+pub struct MoonrakerTransport {
+    inner: transport::MoonrakerTransport,
+}
+fn transport_step(
+    step: Result<wire::MoonrakerTransportStep, transport::Refusal>,
+) -> Result<String, JsValue> {
+    let step = step.map_err(|refusal| error(refusal.code()))?;
+    wire::encode_moonraker_transport_step(&step).map_err(|_| error("output_limit"))
+}
+/// Text a printer sent: at most `max_text_units() + 1` UTF-16 units, which
+/// is all that decides any outcome.
+fn received_text(text: &str) -> Result<&str, JsValue> {
+    if text.len() > 3 * (transport::MAX_TEXT_UNITS + 1) {
+        Err(error("input_limit"))
+    } else {
+        Ok(text)
+    }
+}
+#[wasm_bindgen]
+impl MoonrakerTransport {
+    /// A `MoonrakerTransportConfig`; the `MoonrakerTransportReply` creating a
+    /// transport from it answers: its first state, or why it is refused.
+    pub fn configure(config: &str) -> Result<String, JsValue> {
+        let config = wire::decode_moonraker_transport_config(wire_text(config)?)
+            .map_err(|_| error("invalid_request"))?;
+        let reply = match transport::MoonrakerTransport::new(&config) {
+            Ok((_, state)) => wire::MoonrakerTransportReply::State(state),
+            Err(fault) => wire::MoonrakerTransportReply::Refused(fault),
+        };
+        wire::encode_moonraker_transport_reply(&reply).map_err(|_| error("output_limit"))
+    }
+    /// A `MoonrakerTransportConfig` that `configure` accepts.
+    #[wasm_bindgen(constructor)]
+    pub fn new(config: &str) -> Result<MoonrakerTransport, JsValue> {
+        let config = wire::decode_moonraker_transport_config(wire_text(config)?)
+            .map_err(|_| error("invalid_request"))?;
+        let (inner, _) =
+            transport::MoonrakerTransport::new(&config).map_err(|_| error("invalid_request"))?;
+        Ok(Self { inner })
+    }
+    /// Past this many UTF-16 units, text decides outcomes by its length
+    /// alone: pass at most one unit more.
+    pub fn max_text_units() -> f64 {
+        transport::MAX_TEXT_UNITS as f64
+    }
+    /// The JSON text of finished task `task`'s result, once.
+    pub fn take_result(&mut self, task: f64) -> Result<String, JsValue> {
+        let task = effect_id(task)?;
+        self.inner
+            .take_result(task)
+            .ok_or_else(|| error("not_pending"))
+    }
+    /// The JSON text of notification `id`'s params, once.
+    pub fn take_params(&mut self, id: f64) -> Result<String, JsValue> {
+        let id = effect_id(id)?;
+        self.inner
+            .take_params(id)
+            .ok_or_else(|| error("not_pending"))
+    }
+    /// The `MoonrakerConnectionState`.
+    pub fn state(&self) -> Result<String, JsValue> {
+        wire::encode_moonraker_connection_state(&self.inner.state())
+            .map_err(|_| error("output_limit"))
+    }
+    pub fn has_api_key(&self) -> bool {
+        self.inner.credential_metadata().0
+    }
+    pub fn has_bearer_token(&self) -> bool {
+        self.inner.credential_metadata().1
+    }
+    /// `MoonrakerCredentials`; an `OptionalMoonrakerTransportFault`.
+    pub fn set_credentials(&mut self, credentials: &str, now_ms: f64) -> Result<String, JsValue> {
+        let credentials = wire::decode_moonraker_credentials(wire_text(credentials)?)
+            .map_err(|_| error("invalid_request"))?;
+        let refused = match self.inner.set_credentials(&credentials, now_ms) {
+            Ok(()) => wire::OptionalMoonrakerTransportFault::Absent(wire::Empty {}),
+            Err(fault) => wire::OptionalMoonrakerTransportFault::Value(fault),
+        };
+        wire::encode_optional_moonraker_transport_fault(&refused).map_err(|_| error("output_limit"))
+    }
+    pub fn clear_credentials(&mut self, now_ms: f64) {
+        self.inner.clear_credentials(now_ms);
+    }
+    /// A `MoonrakerObjectSubscription`; the `MoonrakerTransportStepReply`.
+    pub fn set_subscription(&mut self, entries: &str, now_ms: f64) -> Result<String, JsValue> {
+        let entries = wire::decode_moonraker_object_subscription(wire_text(entries)?)
+            .map_err(|_| error("invalid_request"))?;
+        let reply = match self.inner.set_subscription(Some(&entries), now_ms) {
+            Ok(step) => wire::MoonrakerTransportStepReply::Step(step),
+            Err(fault) => wire::MoonrakerTransportStepReply::Refused(fault),
+        };
+        wire::encode_moonraker_transport_step_reply(&reply).map_err(|_| error("output_limit"))
+    }
+    /// No object subscription.
+    pub fn clear_subscription(&mut self, now_ms: f64) -> Result<String, JsValue> {
+        let step = self
+            .inner
+            .set_subscription(None, now_ms)
+            .map_err(|_| error("invalid_request"))?;
+        transport_step(Ok(step))
+    }
+    /// A signal by name: `none`, `live` or `aborted`.
+    pub fn connect(&mut self, signal: &str, now_ms: f64) -> Result<String, JsValue> {
+        let signal = transport::signal_named(signal).ok_or_else(|| error("invalid_request"))?;
+        transport_step(Ok(self.inner.connect(signal, now_ms)))
+    }
+    /// A reason by name: `user`, `cancelled` or `disposed`.
+    pub fn disconnect(&mut self, reason: &str, now_ms: f64) -> Result<String, JsValue> {
+        let reason = transport::reason_named(reason).ok_or_else(|| error("invalid_request"))?;
+        transport_step(Ok(self.inner.disconnect(reason, now_ms)))
+    }
+    pub fn dispose(&mut self, now_ms: f64) -> Result<String, JsValue> {
+        transport_step(Ok(self.inner.dispose(now_ms)))
+    }
+    /// A `MoonrakerRequest`.
+    pub fn request(&mut self, request: &str, now_ms: f64) -> Result<String, JsValue> {
+        let request = wire::decode_moonraker_request(wire_text(request)?)
+            .map_err(|_| error("invalid_request"))?;
+        transport_step(Ok(self.inner.request(&request, now_ms)))
+    }
+    /// A `MoonrakerRequest` whose body is the host's file.
+    pub fn upload(&mut self, request: &str, now_ms: f64) -> Result<String, JsValue> {
+        let request = wire::decode_moonraker_request(wire_text(request)?)
+            .map_err(|_| error("invalid_request"))?;
+        transport_step(Ok(self.inner.upload(&request, now_ms)))
+    }
+    /// A `MoonrakerRequest` read as bytes.
+    pub fn download(&mut self, request: &str, now_ms: f64) -> Result<String, JsValue> {
+        let request = wire::decode_moonraker_request(wire_text(request)?)
+            .map_err(|_| error("invalid_request"))?;
+        transport_step(Ok(self.inner.download(&request, now_ms)))
+    }
+    /// A `MoonrakerRecoveryRequest`.
+    pub fn recovery(&mut self, request: &str, now_ms: f64) -> Result<String, JsValue> {
+        let request = wire::decode_moonraker_recovery_request(wire_text(request)?)
+            .map_err(|_| error("invalid_request"))?;
+        transport_step(Ok(self.inner.recovery(&request, now_ms)))
+    }
+    /// The live signal of task `task` aborts.
+    pub fn abort(&mut self, task: f64, now_ms: f64) -> Result<String, JsValue> {
+        transport_step(Ok(self.inner.abort(effect_id(task)?, now_ms)))
+    }
+    /// A `MoonrakerTransportOutcome` answering effect `id`.
+    pub fn resolve(&mut self, id: f64, outcome: &str, now_ms: f64) -> Result<String, JsValue> {
+        let outcome = wire::decode_moonraker_transport_outcome(wire_text(outcome)?)
+            .map_err(|_| error("invalid_request"))?;
+        transport_step(self.inner.resolve(effect_id(id)?, outcome, now_ms))
+    }
+    /// A body read as text, answering effect `id`.
+    pub fn resolve_text(&mut self, id: f64, text: &str, now_ms: f64) -> Result<String, JsValue> {
+        let id = effect_id(id)?;
+        transport_step(self.inner.resolve_text(id, received_text(text)?, now_ms))
+    }
+    pub fn socket_open(&mut self, socket: f64, now_ms: f64) -> Result<String, JsValue> {
+        transport_step(Ok(self.inner.socket_open(effect_id(socket)?, now_ms)))
+    }
+    pub fn socket_error(&mut self, socket: f64, now_ms: f64) -> Result<String, JsValue> {
+        transport_step(Ok(self.inner.socket_error(effect_id(socket)?, now_ms)))
+    }
+    pub fn socket_close(&mut self, socket: f64, now_ms: f64) -> Result<String, JsValue> {
+        transport_step(Ok(self.inner.socket_close(effect_id(socket)?, now_ms)))
+    }
+    /// A text frame socket `socket` received.
+    pub fn socket_message(
+        &mut self,
+        socket: f64,
+        text: &str,
+        now_ms: f64,
+    ) -> Result<String, JsValue> {
+        let socket = effect_id(socket)?;
+        transport_step(Ok(self.inner.socket_message(
+            socket,
+            received_text(text)?,
+            now_ms,
+        )))
+    }
+    /// Timer `timer` fired.
+    pub fn timer(&mut self, timer: f64, now_ms: f64) -> Result<String, JsValue> {
+        transport_step(Ok(self.inner.timer(effect_id(timer)?, now_ms)))
     }
 }
 

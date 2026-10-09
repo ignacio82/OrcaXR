@@ -823,7 +823,7 @@ const KNOWN_COMPONENTS: [&str; 15] = [
     "webcam",
 ];
 /// `normalizeVersionPolicy`: the supported API range.
-fn version_policy(
+pub(crate) fn version_policy(
     input: &wire::MoonrakerVersionPolicyInput,
 ) -> Result<([f64; 3], f64), wire::MoonrakerTransportFault> {
     let minimum = match &input.minimum {
@@ -866,6 +866,10 @@ pub fn read_handshake(
     let Some(Value::Array(listed)) = field(server, "components") else {
         return Err(invalid());
     };
+    // Moonraker lists a few dozen; a server listing more is not one.
+    if listed.len() > 256 {
+        return Err(invalid());
+    }
     let mut components: Vec<Vec<u16>> = Vec::new();
     for component in listed {
         let Value::String(name) = component else {

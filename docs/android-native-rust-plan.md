@@ -1906,10 +1906,23 @@ credential storage, and explicit permission/error flows.
   endpoint normalization and request paths by the WHATWG URL Standard (the
   `url` crate), session credentials and their redaction, refused responses,
   the handshake, reconnect policy and backoff, object subscriptions and
-  single-method endpoints; 803 browser answers agree in every binding.
+  single-method endpoints; 805 browser answers agree in every binding.
   Porting fixed two endpoint defects: a typed port 80 was replaced by 7125,
   and an empty `?` or `#` survived into the WebSocket URL, which a WebSocket
-  refuses. The transport state machine remains.
+  refuses. `transport` ports `MoonrakerTransport` itself as an effect
+  machine: the REST handshake, socket, heartbeat and reconnects, and every
+  request, upload, download and recovery command, with their deadlines and
+  bounds; 88 browser scenarios (2,533 steps with the state after each, 94
+  replies, 20 refused answers, 64 result and params texts), including 30
+  seeded interleavings, agree in every binding. Replies and notification
+  params travel beside a step, so no reply is too large to cross a binding.
+  Porting fixed browser defects: a socket blink aborted every HTTP request in
+  flight, cutting off uploads mid-transfer and reporting `cancelled` for a
+  start the printer may have accepted (now only a session that cannot come
+  back ends that work), and a request refused for its deadline stayed
+  counted as in flight; requests in flight (512) and a server's components
+  (256) are now bounded. Running the browser's controllers and transport
+  through these shared machines remains.
 - [ ] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
   credential entry, and optional discovery. Discovery proposes verified endpoints
   and cannot overwrite preferences while a stale probe completes.

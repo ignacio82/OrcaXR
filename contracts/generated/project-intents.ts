@@ -5628,7 +5628,7 @@ const shapes = {
     "kind": "array",
     "items": "Counter",
     "min": 0,
-    "max": 256
+    "max": 2048
   },
   "PrinterSessionStep": {
     "kind": "object",
@@ -5915,6 +5915,345 @@ const shapes = {
     "variants": {
       "allowed": "Empty",
       "refused": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerTransportConfig": {
+    "kind": "object",
+    "fields": {
+      "endpoint": "EditText",
+      "defaultPort": "OptionalFinite",
+      "sameOriginProxy": "OptionalText",
+      "pageOrigin": "OptionalText",
+      "versionPolicy": "MoonrakerVersionPolicyInput",
+      "clientName": "OptionalText",
+      "clientVersion": "OptionalText",
+      "requestTimeoutMs": "OptionalFinite",
+      "socketOpenTimeoutMs": "OptionalFinite",
+      "heartbeatIntervalMs": "OptionalFinite",
+      "heartbeatTimeoutMs": "OptionalFinite",
+      "reconnect": "MoonrakerReconnectPolicyInput"
+    }
+  },
+  "MoonrakerDisconnectReason": {
+    "kind": "enum",
+    "values": [
+      "initial",
+      "user",
+      "cancelled",
+      "disposed"
+    ]
+  },
+  "MoonrakerDisconnected": {
+    "kind": "object",
+    "fields": {
+      "generation": "Counter",
+      "reason": "MoonrakerDisconnectReason"
+    }
+  },
+  "MoonrakerConnecting": {
+    "kind": "object",
+    "fields": {
+      "generation": "Counter",
+      "attempt": "Counter"
+    }
+  },
+  "MoonrakerConnected": {
+    "kind": "object",
+    "fields": {
+      "generation": "Counter",
+      "socketEpoch": "Counter",
+      "connectedAtMs": "Finite",
+      "lastHeartbeatAtMs": "Finite",
+      "handshake": "MoonrakerHandshake"
+    }
+  },
+  "MoonrakerReconnecting": {
+    "kind": "object",
+    "fields": {
+      "generation": "Counter",
+      "attempt": "Counter",
+      "delayMs": "Finite",
+      "lastError": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerFailedState": {
+    "kind": "object",
+    "fields": {
+      "generation": "Counter",
+      "error": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerConnectionState": {
+    "kind": "union",
+    "variants": {
+      "disconnected": "MoonrakerDisconnected",
+      "connecting": "MoonrakerConnecting",
+      "connected": "MoonrakerConnected",
+      "reconnecting": "MoonrakerReconnecting",
+      "error": "MoonrakerFailedState"
+    }
+  },
+  "MoonrakerTransportReply": {
+    "kind": "union",
+    "variants": {
+      "state": "MoonrakerConnectionState",
+      "refused": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerDeadline": {
+    "kind": "union",
+    "variants": {
+      "default": "Empty",
+      "unbounded": "Empty",
+      "ms": "Finite"
+    }
+  },
+  "MoonrakerSignal": {
+    "kind": "enum",
+    "values": [
+      "none",
+      "live",
+      "aborted"
+    ]
+  },
+  "MoonrakerRequestOptions": {
+    "kind": "object",
+    "fields": {
+      "method": "OptionalText",
+      "operation": "OptionalText",
+      "timeoutMs": "MoonrakerDeadline",
+      "headers": "MoonrakerHeaders",
+      "acceptBareEnvelope": "Flag",
+      "signal": "MoonrakerSignal"
+    }
+  },
+  "MoonrakerRequest": {
+    "kind": "object",
+    "fields": {
+      "path": "EditText",
+      "options": "MoonrakerRequestOptions"
+    }
+  },
+  "MoonrakerRecoveryRequest": {
+    "kind": "object",
+    "fields": {
+      "command": "EditText",
+      "signal": "MoonrakerSignal"
+    }
+  },
+  "MoonrakerResultText": {
+    "kind": "object",
+    "fields": {
+      "units": "Counter"
+    }
+  },
+  "MoonrakerTaskResult": {
+    "kind": "union",
+    "variants": {
+      "handshake": "MoonrakerHandshake",
+      "result": "MoonrakerResultText",
+      "bytes": "Counter",
+      "refused": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerTaskFinished": {
+    "kind": "object",
+    "fields": {
+      "task": "Counter",
+      "result": "MoonrakerTaskResult"
+    }
+  },
+  "MoonrakerTasksFinished": {
+    "kind": "array",
+    "items": "MoonrakerTaskFinished",
+    "min": 0,
+    "max": 1024
+  },
+  "MoonrakerRequestBody": {
+    "kind": "enum",
+    "values": [
+      "none",
+      "upload"
+    ]
+  },
+  "MoonrakerCredentialsMode": {
+    "kind": "enum",
+    "values": [
+      "omit",
+      "sameOrigin"
+    ]
+  },
+  "MoonrakerFetch": {
+    "kind": "object",
+    "fields": {
+      "id": "Counter",
+      "url": "EditText",
+      "method": "EditText",
+      "headers": "MoonrakerHeaders",
+      "body": "MoonrakerRequestBody",
+      "credentials": "MoonrakerCredentialsMode"
+    }
+  },
+  "MoonrakerBodyKind": {
+    "kind": "enum",
+    "values": [
+      "text",
+      "bytes"
+    ]
+  },
+  "MoonrakerReadBody": {
+    "kind": "object",
+    "fields": {
+      "id": "Counter",
+      "fetch": "Counter",
+      "kind": "MoonrakerBodyKind"
+    }
+  },
+  "MoonrakerSocketOpen": {
+    "kind": "object",
+    "fields": {
+      "id": "Counter",
+      "url": "EditText"
+    }
+  },
+  "MoonrakerRandom": {
+    "kind": "object",
+    "fields": {
+      "id": "Counter"
+    }
+  },
+  "MoonrakerSocketText": {
+    "kind": "object",
+    "fields": {
+      "socket": "Counter",
+      "text": "EditText"
+    }
+  },
+  "MoonrakerSocketClose": {
+    "kind": "object",
+    "fields": {
+      "socket": "Counter",
+      "code": "Counter",
+      "reason": "EditText"
+    }
+  },
+  "MoonrakerTimer": {
+    "kind": "object",
+    "fields": {
+      "timer": "Counter",
+      "delayMs": "Finite"
+    }
+  },
+  "MoonrakerNotification": {
+    "kind": "object",
+    "fields": {
+      "id": "Counter",
+      "method": "EditText",
+      "receivedAtMs": "Finite",
+      "generation": "Counter",
+      "socketEpoch": "Counter"
+    }
+  },
+  "MoonrakerTransportOutput": {
+    "kind": "union",
+    "variants": {
+      "fetch": "MoonrakerFetch",
+      "readBody": "MoonrakerReadBody",
+      "openSocket": "MoonrakerSocketOpen",
+      "random": "MoonrakerRandom",
+      "socketSend": "MoonrakerSocketText",
+      "socketClose": "MoonrakerSocketClose",
+      "setTimer": "MoonrakerTimer",
+      "state": "MoonrakerConnectionState",
+      "notification": "MoonrakerNotification"
+    }
+  },
+  "MoonrakerTransportOutputs": {
+    "kind": "array",
+    "items": "MoonrakerTransportOutput",
+    "min": 0,
+    "max": 1024
+  },
+  "MoonrakerLogLevel": {
+    "kind": "enum",
+    "values": [
+      "info",
+      "warn",
+      "error"
+    ]
+  },
+  "MoonrakerDiagnosticEvent": {
+    "kind": "enum",
+    "values": [
+      "connectionAttempt",
+      "connected",
+      "reconnectScheduled",
+      "disconnected",
+      "requestFailed",
+      "protocolWarning",
+      "heartbeatTimeout"
+    ]
+  },
+  "OptionalMoonrakerTransportFault": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerLog": {
+    "kind": "object",
+    "fields": {
+      "timestampMs": "Finite",
+      "level": "MoonrakerLogLevel",
+      "event": "MoonrakerDiagnosticEvent",
+      "state": "ConnectionStatus",
+      "generation": "Counter",
+      "attempt": "OptionalFinite",
+      "error": "OptionalMoonrakerTransportFault"
+    }
+  },
+  "MoonrakerLogs": {
+    "kind": "array",
+    "items": "MoonrakerLog",
+    "min": 0,
+    "max": 1024
+  },
+  "MoonrakerTransportStep": {
+    "kind": "object",
+    "fields": {
+      "outputs": "MoonrakerTransportOutputs",
+      "cleared": "PrinterSessionIds",
+      "aborted": "PrinterSessionIds",
+      "logs": "MoonrakerLogs",
+      "task": "OptionalCounter",
+      "finished": "MoonrakerTasksFinished"
+    }
+  },
+  "MoonrakerTransportStepReply": {
+    "kind": "union",
+    "variants": {
+      "step": "MoonrakerTransportStep",
+      "refused": "MoonrakerTransportFault"
+    }
+  },
+  "MoonrakerResponseHeaders": {
+    "kind": "object",
+    "fields": {
+      "status": "Finite",
+      "contentLength": "OptionalText"
+    }
+  },
+  "MoonrakerTransportOutcome": {
+    "kind": "union",
+    "variants": {
+      "headers": "MoonrakerResponseHeaders",
+      "failed": "Empty",
+      "bytes": "Counter",
+      "created": "Empty",
+      "unavailable": "Empty",
+      "broken": "Empty",
+      "random": "Finite"
     }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
@@ -6630,6 +6969,46 @@ export type ProjectMoonrakerObjectSubscriptionWire = readonly ProjectMoonrakerSu
 export type ProjectMoonrakerSubscriptionReplyWire = {readonly subscription:ProjectMoonrakerObjectSubscriptionWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
 export interface ProjectMoonrakerMethodCheckWire {readonly url: ProjectEditTextWire;readonly method: ProjectOptionalTextWire;readonly operation: ProjectEditTextWire;}
 export type ProjectMoonrakerCheckReplyWire = {readonly allowed:ProjectEmptyWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
+export interface ProjectMoonrakerTransportConfigWire {readonly endpoint: ProjectEditTextWire;readonly defaultPort: ProjectOptionalFiniteWire;readonly sameOriginProxy: ProjectOptionalTextWire;readonly pageOrigin: ProjectOptionalTextWire;readonly versionPolicy: ProjectMoonrakerVersionPolicyInputWire;readonly clientName: ProjectOptionalTextWire;readonly clientVersion: ProjectOptionalTextWire;readonly requestTimeoutMs: ProjectOptionalFiniteWire;readonly socketOpenTimeoutMs: ProjectOptionalFiniteWire;readonly heartbeatIntervalMs: ProjectOptionalFiniteWire;readonly heartbeatTimeoutMs: ProjectOptionalFiniteWire;readonly reconnect: ProjectMoonrakerReconnectPolicyInputWire;}
+export type ProjectMoonrakerDisconnectReasonWire = "initial" | "user" | "cancelled" | "disposed";
+export interface ProjectMoonrakerDisconnectedWire {readonly generation: ProjectCounterWire;readonly reason: ProjectMoonrakerDisconnectReasonWire;}
+export interface ProjectMoonrakerConnectingWire {readonly generation: ProjectCounterWire;readonly attempt: ProjectCounterWire;}
+export interface ProjectMoonrakerConnectedWire {readonly generation: ProjectCounterWire;readonly socketEpoch: ProjectCounterWire;readonly connectedAtMs: ProjectFiniteWire;readonly lastHeartbeatAtMs: ProjectFiniteWire;readonly handshake: ProjectMoonrakerHandshakeWire;}
+export interface ProjectMoonrakerReconnectingWire {readonly generation: ProjectCounterWire;readonly attempt: ProjectCounterWire;readonly delayMs: ProjectFiniteWire;readonly lastError: ProjectMoonrakerTransportFaultWire;}
+export interface ProjectMoonrakerFailedStateWire {readonly generation: ProjectCounterWire;readonly error: ProjectMoonrakerTransportFaultWire;}
+export type ProjectMoonrakerConnectionStateWire = {readonly disconnected:ProjectMoonrakerDisconnectedWire} | {readonly connecting:ProjectMoonrakerConnectingWire} | {readonly connected:ProjectMoonrakerConnectedWire} | {readonly reconnecting:ProjectMoonrakerReconnectingWire} | {readonly error:ProjectMoonrakerFailedStateWire};
+export type ProjectMoonrakerTransportReplyWire = {readonly state:ProjectMoonrakerConnectionStateWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
+export type ProjectMoonrakerDeadlineWire = {readonly default:ProjectEmptyWire} | {readonly unbounded:ProjectEmptyWire} | {readonly ms:ProjectFiniteWire};
+export type ProjectMoonrakerSignalWire = "none" | "live" | "aborted";
+export interface ProjectMoonrakerRequestOptionsWire {readonly method: ProjectOptionalTextWire;readonly operation: ProjectOptionalTextWire;readonly timeoutMs: ProjectMoonrakerDeadlineWire;readonly headers: ProjectMoonrakerHeadersWire;readonly acceptBareEnvelope: ProjectFlagWire;readonly signal: ProjectMoonrakerSignalWire;}
+export interface ProjectMoonrakerRequestWire {readonly path: ProjectEditTextWire;readonly options: ProjectMoonrakerRequestOptionsWire;}
+export interface ProjectMoonrakerRecoveryRequestWire {readonly command: ProjectEditTextWire;readonly signal: ProjectMoonrakerSignalWire;}
+export interface ProjectMoonrakerResultTextWire {readonly units: ProjectCounterWire;}
+export type ProjectMoonrakerTaskResultWire = {readonly handshake:ProjectMoonrakerHandshakeWire} | {readonly result:ProjectMoonrakerResultTextWire} | {readonly bytes:ProjectCounterWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
+export interface ProjectMoonrakerTaskFinishedWire {readonly task: ProjectCounterWire;readonly result: ProjectMoonrakerTaskResultWire;}
+export type ProjectMoonrakerTasksFinishedWire = readonly ProjectMoonrakerTaskFinishedWire[];
+export type ProjectMoonrakerRequestBodyWire = "none" | "upload";
+export type ProjectMoonrakerCredentialsModeWire = "omit" | "sameOrigin";
+export interface ProjectMoonrakerFetchWire {readonly id: ProjectCounterWire;readonly url: ProjectEditTextWire;readonly method: ProjectEditTextWire;readonly headers: ProjectMoonrakerHeadersWire;readonly body: ProjectMoonrakerRequestBodyWire;readonly credentials: ProjectMoonrakerCredentialsModeWire;}
+export type ProjectMoonrakerBodyKindWire = "text" | "bytes";
+export interface ProjectMoonrakerReadBodyWire {readonly id: ProjectCounterWire;readonly fetch: ProjectCounterWire;readonly kind: ProjectMoonrakerBodyKindWire;}
+export interface ProjectMoonrakerSocketOpenWire {readonly id: ProjectCounterWire;readonly url: ProjectEditTextWire;}
+export interface ProjectMoonrakerRandomWire {readonly id: ProjectCounterWire;}
+export interface ProjectMoonrakerSocketTextWire {readonly socket: ProjectCounterWire;readonly text: ProjectEditTextWire;}
+export interface ProjectMoonrakerSocketCloseWire {readonly socket: ProjectCounterWire;readonly code: ProjectCounterWire;readonly reason: ProjectEditTextWire;}
+export interface ProjectMoonrakerTimerWire {readonly timer: ProjectCounterWire;readonly delayMs: ProjectFiniteWire;}
+export interface ProjectMoonrakerNotificationWire {readonly id: ProjectCounterWire;readonly method: ProjectEditTextWire;readonly receivedAtMs: ProjectFiniteWire;readonly generation: ProjectCounterWire;readonly socketEpoch: ProjectCounterWire;}
+export type ProjectMoonrakerTransportOutputWire = {readonly fetch:ProjectMoonrakerFetchWire} | {readonly readBody:ProjectMoonrakerReadBodyWire} | {readonly openSocket:ProjectMoonrakerSocketOpenWire} | {readonly random:ProjectMoonrakerRandomWire} | {readonly socketSend:ProjectMoonrakerSocketTextWire} | {readonly socketClose:ProjectMoonrakerSocketCloseWire} | {readonly setTimer:ProjectMoonrakerTimerWire} | {readonly state:ProjectMoonrakerConnectionStateWire} | {readonly notification:ProjectMoonrakerNotificationWire};
+export type ProjectMoonrakerTransportOutputsWire = readonly ProjectMoonrakerTransportOutputWire[];
+export type ProjectMoonrakerLogLevelWire = "info" | "warn" | "error";
+export type ProjectMoonrakerDiagnosticEventWire = "connectionAttempt" | "connected" | "reconnectScheduled" | "disconnected" | "requestFailed" | "protocolWarning" | "heartbeatTimeout";
+export type ProjectOptionalMoonrakerTransportFaultWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectMoonrakerTransportFaultWire};
+export interface ProjectMoonrakerLogWire {readonly timestampMs: ProjectFiniteWire;readonly level: ProjectMoonrakerLogLevelWire;readonly event: ProjectMoonrakerDiagnosticEventWire;readonly state: ProjectConnectionStatusWire;readonly generation: ProjectCounterWire;readonly attempt: ProjectOptionalFiniteWire;readonly error: ProjectOptionalMoonrakerTransportFaultWire;}
+export type ProjectMoonrakerLogsWire = readonly ProjectMoonrakerLogWire[];
+export interface ProjectMoonrakerTransportStepWire {readonly outputs: ProjectMoonrakerTransportOutputsWire;readonly cleared: ProjectPrinterSessionIdsWire;readonly aborted: ProjectPrinterSessionIdsWire;readonly logs: ProjectMoonrakerLogsWire;readonly task: ProjectOptionalCounterWire;readonly finished: ProjectMoonrakerTasksFinishedWire;}
+export type ProjectMoonrakerTransportStepReplyWire = {readonly step:ProjectMoonrakerTransportStepWire} | {readonly refused:ProjectMoonrakerTransportFaultWire};
+export interface ProjectMoonrakerResponseHeadersWire {readonly status: ProjectFiniteWire;readonly contentLength: ProjectOptionalTextWire;}
+export type ProjectMoonrakerTransportOutcomeWire = {readonly headers:ProjectMoonrakerResponseHeadersWire} | {readonly failed:ProjectEmptyWire} | {readonly bytes:ProjectCounterWire} | {readonly created:ProjectEmptyWire} | {readonly unavailable:ProjectEmptyWire} | {readonly broken:ProjectEmptyWire} | {readonly random:ProjectFiniteWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -7146,3 +7525,42 @@ export function encodeProjectMoonrakerMethodCheck(value:ProjectMoonrakerMethodCh
 export function captureProjectMoonrakerCheckReply(value:unknown):ProjectMoonrakerCheckReplyWire { return captureIntent("MoonrakerCheckReply",value,shapes,limits) as ProjectMoonrakerCheckReplyWire; }
 export function decodeProjectMoonrakerCheckReply(text:string):ProjectMoonrakerCheckReplyWire { return captureProjectMoonrakerCheckReply(parseIntentJson(text,limits)); }
 export function encodeProjectMoonrakerCheckReply(value:ProjectMoonrakerCheckReplyWire):string { return JSON.stringify(captureProjectMoonrakerCheckReply(value)); }
+export function captureProjectMoonrakerTransportConfig(value:unknown):ProjectMoonrakerTransportConfigWire { return captureIntent("MoonrakerTransportConfig",value,shapes,limits) as ProjectMoonrakerTransportConfigWire; }
+export function decodeProjectMoonrakerTransportConfig(text:string):ProjectMoonrakerTransportConfigWire { return captureProjectMoonrakerTransportConfig(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerTransportConfig(value:ProjectMoonrakerTransportConfigWire):string { return JSON.stringify(captureProjectMoonrakerTransportConfig(value)); }
+export function captureProjectMoonrakerTransportReply(value:unknown):ProjectMoonrakerTransportReplyWire { return captureIntent("MoonrakerTransportReply",value,shapes,limits) as ProjectMoonrakerTransportReplyWire; }
+export function decodeProjectMoonrakerTransportReply(text:string):ProjectMoonrakerTransportReplyWire { return captureProjectMoonrakerTransportReply(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerTransportReply(value:ProjectMoonrakerTransportReplyWire):string { return JSON.stringify(captureProjectMoonrakerTransportReply(value)); }
+export function captureProjectMoonrakerConnectionState(value:unknown):ProjectMoonrakerConnectionStateWire { return captureIntent("MoonrakerConnectionState",value,shapes,limits) as ProjectMoonrakerConnectionStateWire; }
+export function decodeProjectMoonrakerConnectionState(text:string):ProjectMoonrakerConnectionStateWire { return captureProjectMoonrakerConnectionState(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerConnectionState(value:ProjectMoonrakerConnectionStateWire):string { return JSON.stringify(captureProjectMoonrakerConnectionState(value)); }
+export function captureProjectMoonrakerRequest(value:unknown):ProjectMoonrakerRequestWire { return captureIntent("MoonrakerRequest",value,shapes,limits) as ProjectMoonrakerRequestWire; }
+export function decodeProjectMoonrakerRequest(text:string):ProjectMoonrakerRequestWire { return captureProjectMoonrakerRequest(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerRequest(value:ProjectMoonrakerRequestWire):string { return JSON.stringify(captureProjectMoonrakerRequest(value)); }
+export function captureProjectMoonrakerRecoveryRequest(value:unknown):ProjectMoonrakerRecoveryRequestWire { return captureIntent("MoonrakerRecoveryRequest",value,shapes,limits) as ProjectMoonrakerRecoveryRequestWire; }
+export function decodeProjectMoonrakerRecoveryRequest(text:string):ProjectMoonrakerRecoveryRequestWire { return captureProjectMoonrakerRecoveryRequest(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerRecoveryRequest(value:ProjectMoonrakerRecoveryRequestWire):string { return JSON.stringify(captureProjectMoonrakerRecoveryRequest(value)); }
+export function captureProjectMoonrakerTransportStep(value:unknown):ProjectMoonrakerTransportStepWire { return captureIntent("MoonrakerTransportStep",value,shapes,limits) as ProjectMoonrakerTransportStepWire; }
+export function decodeProjectMoonrakerTransportStep(text:string):ProjectMoonrakerTransportStepWire { return captureProjectMoonrakerTransportStep(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerTransportStep(value:ProjectMoonrakerTransportStepWire):string { return JSON.stringify(captureProjectMoonrakerTransportStep(value)); }
+export function captureProjectMoonrakerTransportOutcome(value:unknown):ProjectMoonrakerTransportOutcomeWire { return captureIntent("MoonrakerTransportOutcome",value,shapes,limits) as ProjectMoonrakerTransportOutcomeWire; }
+export function decodeProjectMoonrakerTransportOutcome(text:string):ProjectMoonrakerTransportOutcomeWire { return captureProjectMoonrakerTransportOutcome(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerTransportOutcome(value:ProjectMoonrakerTransportOutcomeWire):string { return JSON.stringify(captureProjectMoonrakerTransportOutcome(value)); }
+export function captureProjectMoonrakerTransportOutput(value:unknown):ProjectMoonrakerTransportOutputWire { return captureIntent("MoonrakerTransportOutput",value,shapes,limits) as ProjectMoonrakerTransportOutputWire; }
+export function decodeProjectMoonrakerTransportOutput(text:string):ProjectMoonrakerTransportOutputWire { return captureProjectMoonrakerTransportOutput(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerTransportOutput(value:ProjectMoonrakerTransportOutputWire):string { return JSON.stringify(captureProjectMoonrakerTransportOutput(value)); }
+export function captureProjectMoonrakerTaskResult(value:unknown):ProjectMoonrakerTaskResultWire { return captureIntent("MoonrakerTaskResult",value,shapes,limits) as ProjectMoonrakerTaskResultWire; }
+export function decodeProjectMoonrakerTaskResult(text:string):ProjectMoonrakerTaskResultWire { return captureProjectMoonrakerTaskResult(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerTaskResult(value:ProjectMoonrakerTaskResultWire):string { return JSON.stringify(captureProjectMoonrakerTaskResult(value)); }
+export function captureProjectMoonrakerCredentials(value:unknown):ProjectMoonrakerCredentialsWire { return captureIntent("MoonrakerCredentials",value,shapes,limits) as ProjectMoonrakerCredentialsWire; }
+export function decodeProjectMoonrakerCredentials(text:string):ProjectMoonrakerCredentialsWire { return captureProjectMoonrakerCredentials(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerCredentials(value:ProjectMoonrakerCredentialsWire):string { return JSON.stringify(captureProjectMoonrakerCredentials(value)); }
+export function captureProjectMoonrakerLog(value:unknown):ProjectMoonrakerLogWire { return captureIntent("MoonrakerLog",value,shapes,limits) as ProjectMoonrakerLogWire; }
+export function decodeProjectMoonrakerLog(text:string):ProjectMoonrakerLogWire { return captureProjectMoonrakerLog(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerLog(value:ProjectMoonrakerLogWire):string { return JSON.stringify(captureProjectMoonrakerLog(value)); }
+export function captureProjectOptionalMoonrakerTransportFault(value:unknown):ProjectOptionalMoonrakerTransportFaultWire { return captureIntent("OptionalMoonrakerTransportFault",value,shapes,limits) as ProjectOptionalMoonrakerTransportFaultWire; }
+export function decodeProjectOptionalMoonrakerTransportFault(text:string):ProjectOptionalMoonrakerTransportFaultWire { return captureProjectOptionalMoonrakerTransportFault(parseIntentJson(text,limits)); }
+export function encodeProjectOptionalMoonrakerTransportFault(value:ProjectOptionalMoonrakerTransportFaultWire):string { return JSON.stringify(captureProjectOptionalMoonrakerTransportFault(value)); }
+export function captureProjectMoonrakerTransportStepReply(value:unknown):ProjectMoonrakerTransportStepReplyWire { return captureIntent("MoonrakerTransportStepReply",value,shapes,limits) as ProjectMoonrakerTransportStepReplyWire; }
+export function decodeProjectMoonrakerTransportStepReply(text:string):ProjectMoonrakerTransportStepReplyWire { return captureProjectMoonrakerTransportStepReply(parseIntentJson(text,limits)); }
+export function encodeProjectMoonrakerTransportStepReply(value:ProjectMoonrakerTransportStepReplyWire):string { return JSON.stringify(captureProjectMoonrakerTransportStepReply(value)); }

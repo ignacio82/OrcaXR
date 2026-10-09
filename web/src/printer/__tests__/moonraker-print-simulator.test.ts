@@ -17,6 +17,7 @@ import {
   type MoonrakerScheduler,
   type MoonrakerSocket,
 } from '..';
+import { createMoonrakerTransport } from './moonraker-transport.factory';
 
 /**
  * End-to-end print submission against a Moonraker simulator.
@@ -237,7 +238,7 @@ async function withPrinter<T>(
 ): Promise<T> {
   const simulator = new Simulator(options);
   const endpoint = await simulator.listen();
-  const transport = new MoonrakerTransport(
+  const transport = createMoonrakerTransport(
     { endpoint, clientName: 'OrcaXR Web', clientVersion: 'test' },
     { socketFactory: (url) => new ImmediateSocket(url), scheduler: realScheduler, heartbeatIntervalMs: 60_000 },
   );

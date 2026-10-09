@@ -16,6 +16,7 @@ import type {
   ProjectMoonrakerEndpointRequestWire,
   ProjectMoonrakerErrorResponseWire,
   ProjectMoonrakerHandshakeReplyWire,
+  ProjectMoonrakerHandshakeWire,
   ProjectMoonrakerHandshakeRequestWire,
   ProjectMoonrakerMethodCheckWire,
   ProjectMoonrakerPathReplyWire,
@@ -39,7 +40,7 @@ import {
   readMoonrakerHandshake,
   type MoonrakerObjectSubscription,
 } from './MoonrakerTransport';
-import { MoonrakerTransportError, type MoonrakerApiVersion } from './MoonrakerTypes';
+import { MoonrakerTransportError, type MoonrakerApiVersion, type MoonrakerHandshake } from './MoonrakerTypes';
 import { MoonrakerSessionCredentialStore } from './SessionCredentials';
 
 const absent = { absent: {} } as const;
@@ -149,40 +150,41 @@ export function answerHandshake(request: ProjectMoonrakerHandshakeRequestWire): 
       ...(minimum === undefined ? {} : { minimum: [...minimum] as unknown as MoonrakerApiVersion }),
       ...(maximumMajor === undefined ? {} : { maximumMajor }),
     });
-    const handshake = readMoonrakerHandshake(parse(request.server), parse(request.printer), policy);
-    const { server, printer, capabilities } = handshake;
-    return {
-      handshake: {
-        server: {
-          apiVersion: [...server.apiVersion],
-          apiVersionString: units(server.apiVersionString),
-          moonrakerVersion: units(server.moonrakerVersion),
-          components: server.components.map(units),
-          warnings: server.warnings.map(units),
-        },
-        printer: {
-          state: units(printer.state),
-          hostname: units(printer.hostname),
-          softwareVersion: units(printer.softwareVersion),
-        },
-        capabilities: {
-          authorization: capabilities.authorization,
-          fileManagement: capabilities.fileManagement,
-          jobQueue: capabilities.jobQueue,
-          history: capabilities.history,
-          webcams: capabilities.webcams,
-          powerDevices: capabilities.powerDevices,
-          updateManager: capabilities.updateManager,
-          announcements: capabilities.announcements,
-          database: capabilities.database,
-          klippyConnected: capabilities.klippyConnected,
-          extensionComponents: capabilities.extensionComponents.map(units),
-        },
-      },
-    };
+    return { handshake: handshakeWire(readMoonrakerHandshake(parse(request.server), parse(request.printer), policy)) };
   } catch (error) {
     return { refused: transportFaultWire(error) };
   }
+}
+
+export function handshakeWire(handshake: MoonrakerHandshake): ProjectMoonrakerHandshakeWire {
+  const { server, printer, capabilities } = handshake;
+  return {
+    server: {
+      apiVersion: [...server.apiVersion],
+      apiVersionString: units(server.apiVersionString),
+      moonrakerVersion: units(server.moonrakerVersion),
+      components: server.components.map(units),
+      warnings: server.warnings.map(units),
+    },
+    printer: {
+      state: units(printer.state),
+      hostname: units(printer.hostname),
+      softwareVersion: units(printer.softwareVersion),
+    },
+    capabilities: {
+      authorization: capabilities.authorization,
+      fileManagement: capabilities.fileManagement,
+      jobQueue: capabilities.jobQueue,
+      history: capabilities.history,
+      webcams: capabilities.webcams,
+      powerDevices: capabilities.powerDevices,
+      updateManager: capabilities.updateManager,
+      announcements: capabilities.announcements,
+      database: capabilities.database,
+      klippyConnected: capabilities.klippyConnected,
+      extensionComponents: capabilities.extensionComponents.map(units),
+    },
+  };
 }
 
 export function answerReconnectPolicy(

@@ -158,6 +158,34 @@ final class NativeProject {
     static native String printerSessionConfirm(long handle, long intent);
     static native String printerSessionCaptureLease(long handle);
     static native boolean printerSessionLeaseCurrent(long handle, String lease);
+    // The Moonraker transport: stepping calls answer a MoonrakerTransportStep.
+    static native String moonrakerTransportConfigure(String config);
+    static native long moonrakerTransportNew(String config);
+    static native long moonrakerTransportTextUnits();
+    static native String moonrakerTransportTakeResult(long handle, long task);
+    static native String moonrakerTransportTakeParams(long handle, long notification);
+    static native String moonrakerTransportState(long handle);
+    static native boolean moonrakerTransportHasApiKey(long handle);
+    static native boolean moonrakerTransportHasBearerToken(long handle);
+    static native String moonrakerTransportCredentials(long handle, String credentials, double nowMs);
+    static native void moonrakerTransportClearCredentials(long handle, double nowMs);
+    static native String moonrakerTransportSubscription(long handle, String entries, double nowMs);
+    static native String moonrakerTransportClearSubscription(long handle, double nowMs);
+    static native String moonrakerTransportConnect(long handle, String signal, double nowMs);
+    static native String moonrakerTransportDisconnect(long handle, String reason, double nowMs);
+    static native String moonrakerTransportDispose(long handle, double nowMs);
+    static native String moonrakerTransportRequest(long handle, String request, double nowMs);
+    static native String moonrakerTransportUpload(long handle, String request, double nowMs);
+    static native String moonrakerTransportDownload(long handle, String request, double nowMs);
+    static native String moonrakerTransportRecovery(long handle, String request, double nowMs);
+    static native String moonrakerTransportAbort(long handle, long task, double nowMs);
+    static native String moonrakerTransportResolve(long handle, long id, String outcome, double nowMs);
+    static native String moonrakerTransportText(long handle, long id, String text, double nowMs);
+    static native String moonrakerTransportSocketOpen(long handle, long socket, double nowMs);
+    static native String moonrakerTransportSocketError(long handle, long socket, double nowMs);
+    static native String moonrakerTransportSocketClose(long handle, long socket, double nowMs);
+    static native String moonrakerTransportSocketMessage(long handle, long socket, String text, double nowMs);
+    static native String moonrakerTransportTimer(long handle, long timer, double nowMs);
     // Moonraker transport policy: each request answers its reply.
     static native String moonrakerEndpoint(String request);
     static native String moonrakerPath(String request);
