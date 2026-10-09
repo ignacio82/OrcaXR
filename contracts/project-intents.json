@@ -6854,6 +6854,99 @@
         "nonce": "EditText"
       }
     },
+    "PrinterEntry": {
+      "kind": "object",
+      "fields": {
+        "id": "EditText",
+        "name": "EditText",
+        "host": "EditText",
+        "port": "Finite",
+        "capabilities": "OptionalTextList",
+        "toolCount": "OptionalFinite"
+      }
+    },
+    "PrinterEntries": {
+      "kind": "array",
+      "items": "PrinterEntry",
+      "min": 0,
+      "max": 16
+    },
+    "PrinterDirectory": {
+      "kind": "object",
+      "fields": {
+        "printers": "PrinterEntries",
+        "defaultId": "EditText"
+      }
+    },
+    "PrinterDirectoryErrorCode": {
+      "kind": "enum",
+      "values": ["invalidName", "invalidEndpoint", "invalidTools", "duplicate", "notFound", "tooMany"]
+    },
+    "PrinterDirectoryFailure": {
+      "kind": "object",
+      "fields": {
+        "code": "PrinterDirectoryErrorCode",
+        "message": "EditText"
+      }
+    },
+    "PrinterDirectoryReply": {
+      "kind": "union",
+      "variants": {
+        "directory": "PrinterDirectory",
+        "refused": "PrinterDirectoryFailure"
+      }
+    },
+    "PrinterDirectoryAdd": {
+      "kind": "object",
+      "fields": {
+        "directory": "PrinterDirectory",
+        "name": "EditText",
+        "host": "EditText",
+        "port": "OptionalFinite",
+        "id": "EditText"
+      }
+    },
+    "PrinterDirectoryUpdate": {
+      "kind": "object",
+      "fields": {
+        "directory": "PrinterDirectory",
+        "id": "EditText",
+        "name": "OptionalText",
+        "host": "OptionalText",
+        "port": "OptionalFinite",
+        "capabilities": "OptionalTextList",
+        "toolCount": "OptionalFinite"
+      }
+    },
+    "PrinterDirectorySelect": {
+      "kind": "object",
+      "fields": {
+        "directory": "PrinterDirectory",
+        "id": "EditText"
+      }
+    },
+    "LegacyPrinterEndpoint": {
+      "kind": "object",
+      "fields": {
+        "host": "EditText",
+        "port": "Finite"
+      }
+    },
+    "OptionalLegacyPrinterEndpoint": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "LegacyPrinterEndpoint"
+      }
+    },
+    "PrinterDirectoryAdopt": {
+      "kind": "object",
+      "fields": {
+        "directory": "PrinterDirectory",
+        "legacy": "OptionalLegacyPrinterEndpoint",
+        "id": "EditText"
+      }
+    },
     "PrinterStorageResult": {
       "kind": "union",
       "variants": {
@@ -7092,7 +7185,13 @@
     "CameraMechanisms",
     "CameraDescribeRequest",
     "CameraFrameRequest",
-    "OptionalPrinterReplyText"
+    "OptionalPrinterReplyText",
+    "PrinterDirectory",
+    "PrinterDirectoryReply",
+    "PrinterDirectoryAdd",
+    "PrinterDirectoryUpdate",
+    "PrinterDirectorySelect",
+    "PrinterDirectoryAdopt"
   ],
   "sessionVersion": 1
 }

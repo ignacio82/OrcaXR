@@ -201,7 +201,7 @@ fn has(part: Option<&str>) -> bool {
     part.is_some_and(|p| !p.is_empty())
 }
 
-fn direct_endpoint(
+pub(crate) fn direct_endpoint(
     input: &[u16],
     default_port: f64,
 ) -> Result<String, wire::MoonrakerTransportFault> {

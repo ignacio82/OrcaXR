@@ -490,6 +490,42 @@ export function print_readiness_failure(request: string): string;
 export function print_start_options(request: string): string;
 
 /**
+ * A `PrinterDirectoryAdd`; the `PrinterDirectoryReply`.
+ */
+export function printer_directory_add(request: string): string;
+
+/**
+ * A `PrinterDirectoryAdopt`; the `PrinterDirectory` with a legacy endpoint adopted.
+ */
+export function printer_directory_adopt(request: string): string;
+
+/**
+ * The stored directory text (none: nothing stored); the `PrinterDirectory`
+ * it reads as.
+ */
+export function printer_directory_load(stored?: string | null): string;
+
+/**
+ * A `PrinterDirectorySelect`; the `PrinterDirectoryReply` of removing it.
+ */
+export function printer_directory_remove(request: string): string;
+
+/**
+ * A `PrinterDirectory`; the text it is stored as.
+ */
+export function printer_directory_save(directory_json: string): string;
+
+/**
+ * A `PrinterDirectorySelect`; the `PrinterDirectoryReply` of making it the default.
+ */
+export function printer_directory_set_default(request: string): string;
+
+/**
+ * A `PrinterDirectoryUpdate`; the `PrinterDirectoryReply`.
+ */
+export function printer_directory_update(request: string): string;
+
+/**
  * `/printer/objects/list` reply text; the objects, or unknown.
  */
 export function printer_objects(text: string): string;
@@ -628,6 +664,13 @@ export interface InitOutput {
     readonly print_readiness: (a: number, b: number) => [number, number, number, number];
     readonly print_readiness_failure: (a: number, b: number) => [number, number, number, number];
     readonly print_start_options: (a: number, b: number) => [number, number, number, number];
+    readonly printer_directory_add: (a: number, b: number) => [number, number, number, number];
+    readonly printer_directory_adopt: (a: number, b: number) => [number, number, number, number];
+    readonly printer_directory_load: (a: number, b: number) => [number, number, number, number];
+    readonly printer_directory_remove: (a: number, b: number) => [number, number, number, number];
+    readonly printer_directory_save: (a: number, b: number) => [number, number, number, number];
+    readonly printer_directory_set_default: (a: number, b: number) => [number, number, number, number];
+    readonly printer_directory_update: (a: number, b: number) => [number, number, number, number];
     readonly printer_objects: (a: number, b: number) => [number, number, number, number];
     readonly printer_status_summary: (a: number, b: number) => [number, number, number, number];
     readonly printer_storage_finish: (a: number, b: number) => [number, number, number, number];

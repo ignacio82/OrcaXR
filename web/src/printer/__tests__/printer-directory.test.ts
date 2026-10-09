@@ -173,6 +173,82 @@ test('discovery is reported as unavailable with real alternatives', () => {
   assert.match(outcome.alternatives.join(' '), /proxy/);
 });
 
+test('one machine cannot be saved twice under another spelling of its address', () => {
+  const directory = addPrinter(EMPTY_PRINTER_DIRECTORY, { name: 'U1', host: 'Printer.local' }, ids());
+  // Each of these is the same endpoint; they used to be saved as new printers.
+  for (const candidate of [
+    { host: 'printer.local' },
+    { host: 'http://printer.local:7125' },
+    { host: 'printer.local:7125', port: 80 },
+    { host: 'http://PRINTER.LOCAL:7125/' },
+  ]) {
+    assert.throws(
+      () => addPrinter(directory, { name: 'Again', ...candidate }, ids()),
+      (error: unknown) => error instanceof PrinterDirectoryError && error.code === 'duplicate',
+      candidate.host,
+    );
+  }
+  // Another port, or a path behind a proxy, is another machine.
+  assert.equal(addPrinter(directory, { name: 'Other', host: 'printer.local', port: 7126 }, ids()).printers.length, 2);
+  assert.equal(
+    addPrinter(directory, { name: 'Proxied', host: 'http://printer.local:7125/two' }, ids()).printers.length,
+    2,
+  );
+});
+
+test('an address no endpoint can be made from is refused when it is saved', () => {
+  for (const host of [
+    'printer local',
+    'http://',
+    'ftp://printer.local',
+    'http://user:pw@printer.local',
+    'printer.local?x=1',
+  ]) {
+    assert.throws(
+      () => addPrinter(EMPTY_PRINTER_DIRECTORY, { name: 'Bad', host }, ids()),
+      (error: unknown) => error instanceof PrinterDirectoryError && error.code === 'invalid-endpoint',
+      host,
+    );
+  }
+});
+
+test('a long name is cut at a character, never inside one', () => {
+  const name = `${'a'.repeat(63)}😀`;
+  const directory = addPrinter(EMPTY_PRINTER_DIRECTORY, { name, host: 'printer.local' }, ids());
+  // It used to keep the first half of the emoji, a broken character.
+  assert.equal(directory.printers[0].name, 'a'.repeat(63));
+});
+
+test('a repeated id in the store keeps the first printer, so find and remove agree', () => {
+  const store = storage({
+    'orcaxr.printers': JSON.stringify({
+      printers: [
+        { id: 'a', name: 'First', host: 'http://10.0.0.5', port: 7125 },
+        { id: 'a', name: 'Second', host: 'http://10.0.0.6', port: 7125 },
+      ],
+      defaultId: 'a',
+    }),
+  });
+  const loaded = loadPrinterDirectory(store);
+  assert.deepEqual(
+    loaded.printers.map((entry) => entry.name),
+    ['First'],
+  );
+  // Removing "a" used to remove both printers.
+  assert.equal(removePrinter(loaded, 'a').printers.length, 0);
+});
+
+test('a tool count a reload would drop is refused rather than stored', () => {
+  const directory = workshop();
+  for (const toolCount of [0, -1, 1.5, Number.NaN]) {
+    assert.throws(
+      () => updatePrinter(directory, directory.printers[0].id, { toolCount }),
+      (error: unknown) => error instanceof PrinterDirectoryError && error.code === 'invalid-tools',
+      String(toolCount),
+    );
+  }
+});
+
 console.log(`\nPrinter directory: ${passed} tests passed.`);
 
 // ---- Identity on an insecure origin ----------------------------------------

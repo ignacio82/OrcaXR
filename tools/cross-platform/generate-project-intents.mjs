@@ -278,6 +278,12 @@ assert.deepEqual(schema.roots, [
   "CameraDescribeRequest",
   "CameraFrameRequest",
   "OptionalPrinterReplyText",
+  "PrinterDirectory",
+  "PrinterDirectoryReply",
+  "PrinterDirectoryAdd",
+  "PrinterDirectoryUpdate",
+  "PrinterDirectorySelect",
+  "PrinterDirectoryAdopt",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

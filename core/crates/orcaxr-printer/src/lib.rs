@@ -5,6 +5,7 @@
 pub mod camera;
 pub mod console;
 pub mod control;
+pub mod directory;
 pub mod history;
 pub mod moonraker;
 pub mod preparation;

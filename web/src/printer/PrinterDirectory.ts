@@ -21,6 +21,7 @@
  */
 
 import type { KeyValueStorage } from '../settings/Preferences';
+import { normalizeMoonrakerEndpoint } from './MoonrakerEndpoint';
 
 const STORAGE_KEY = 'orcaxr.printers';
 const MAX_PRINTERS = 16;
@@ -59,9 +60,12 @@ export function loadPrinterDirectory(storage: KeyValueStorage | null): PrinterDi
   try {
     const value: unknown = JSON.parse(storage.getItem(STORAGE_KEY) ?? 'null');
     if (!isRecord(value) || !Array.isArray(value.printers)) return EMPTY_PRINTER_DIRECTORY;
+    // A repeated id is a damaged store: the first entry keeps it, because
+    // finding by id and removing by id must agree on which printer that is.
+    const seen = new Set<string>();
     const printers = value.printers
       .map(readEntry)
-      .filter((entry): entry is PrinterEntry => entry !== undefined)
+      .filter((entry): entry is PrinterEntry => entry !== undefined && !seen.has(entry.id) && !!seen.add(entry.id))
       .slice(0, MAX_PRINTERS);
     const defaultId = typeof value.defaultId === 'string' ? value.defaultId : '';
     return Object.freeze({
@@ -81,7 +85,7 @@ export function savePrinterDirectory(directory: PrinterDirectory, storage: KeyVa
     storage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        printers: directory.printers.slice(0, MAX_PRINTERS),
+        printers: directory.printers.slice(0, MAX_PRINTERS).map(storedEntry),
         defaultId: directory.defaultId,
       }),
     );
@@ -90,10 +94,22 @@ export function savePrinterDirectory(directory: PrinterDirectory, storage: KeyVa
   }
 }
 
+/** An entry as it is stored: its keys in one order, whatever edits built it. */
+function storedEntry(entry: PrinterEntry): PrinterEntry {
+  return {
+    id: entry.id,
+    name: entry.name,
+    host: entry.host,
+    port: entry.port,
+    ...(entry.capabilities ? { capabilities: entry.capabilities } : {}),
+    ...(entry.toolCount !== undefined ? { toolCount: entry.toolCount } : {}),
+  };
+}
+
 export class PrinterDirectoryError extends Error {
   constructor(
     message: string,
-    readonly code: 'invalid-name' | 'invalid-endpoint' | 'duplicate' | 'not-found' | 'too-many',
+    readonly code: 'invalid-name' | 'invalid-endpoint' | 'invalid-tools' | 'duplicate' | 'not-found' | 'too-many',
   ) {
     super(message);
     this.name = 'PrinterDirectoryError';
@@ -129,17 +145,17 @@ export function addPrinter(
   candidate: { name: string; host: string; port?: number },
   makeId: () => string,
 ): PrinterDirectory {
-  const name = candidate.name.trim().slice(0, MAX_NAME_LENGTH);
-  if (!name) throw new PrinterDirectoryError('A printer needs a name you will recognise', 'invalid-name');
+  const name = requireName(candidate.name);
   const host = normalizeHost(candidate.host);
   const port = candidate.port ?? DEFAULT_PORT;
   if (!validPort(port)) throw new PrinterDirectoryError('That port is not usable', 'invalid-endpoint');
+  const machine = printerAddress(host, port);
   if (directory.printers.length >= MAX_PRINTERS) {
     throw new PrinterDirectoryError(`This device holds at most ${MAX_PRINTERS} printers`, 'too-many');
   }
   // Two entries for one machine would each hold their own credential and tool
   // map, and there is no way to tell which one a job used.
-  if (directory.printers.some((entry) => entry.host === host && entry.port === port)) {
+  if (directory.printers.some((entry) => sameMachine(entry, machine))) {
     throw new PrinterDirectoryError('That address is already saved under another name', 'duplicate');
   }
   const entry: PrinterEntry = { id: makeId(), name, host, port };
@@ -163,15 +179,15 @@ export function updatePrinter(
     ...(changes.name !== undefined ? { name: requireName(changes.name) } : {}),
     ...(changes.host !== undefined ? { host: normalizeHost(changes.host) } : {}),
     ...(changes.port !== undefined ? { port: requirePort(changes.port) } : {}),
-    ...(changes.capabilities !== undefined ? { capabilities: Object.freeze([...changes.capabilities]) } : {}),
-    ...(changes.toolCount !== undefined ? { toolCount: changes.toolCount } : {}),
+    ...(changes.capabilities !== undefined ? { capabilities: requireCapabilities(changes.capabilities) } : {}),
+    ...(changes.toolCount !== undefined ? { toolCount: requireToolCount(changes.toolCount) } : {}),
   };
-  if (
-    directory.printers.some(
-      (entry, position) => position !== index && entry.host === next.host && entry.port === next.port,
-    )
-  ) {
-    throw new PrinterDirectoryError('Another saved printer already uses that address', 'duplicate');
+  // A changed address must name a machine no other entry does.
+  if (next.host !== current.host || next.port !== current.port) {
+    const machine = printerAddress(next.host, next.port);
+    if (directory.printers.some((entry, position) => position !== index && sameMachine(entry, machine))) {
+      throw new PrinterDirectoryError('Another saved printer already uses that address', 'duplicate');
+    }
   }
   const printers = [...directory.printers];
   printers[index] = next;
@@ -255,11 +271,40 @@ export function describeDiscovery(): DiscoveryOutcome {
   });
 }
 
+/**
+ * The machine an address names: the endpoint OrcaXR would connect to, so
+ * `Printer.local`, `http://printer.local` and `printer.local:7125` are one
+ * printer. An address no endpoint can be made from is refused when it is
+ * saved, not discovered at connect time.
+ */
+export function printerAddress(host: string, port: number): string {
+  try {
+    return normalizeMoonrakerEndpoint(host, { defaultPort: port }).directHttpUrl;
+  } catch {
+    throw new PrinterDirectoryError(`${host} is not an address OrcaXR can connect to`, 'invalid-endpoint');
+  }
+}
+
+/** Whether a saved entry is [machine]; one whose address cannot be read is no machine. */
+function sameMachine(entry: PrinterEntry, machine: string): boolean {
+  try {
+    return printerAddress(entry.host, entry.port) === machine;
+  } catch {
+    return false;
+  }
+}
+
+/** At most [length] UTF-16 units, never ending on half a character. */
+function cut(value: string, length: number): string {
+  const kept = value.slice(0, length);
+  return /[\uD800-\uDBFF]$/.test(kept) && /^[\uDC00-\uDFFF]/.test(value.slice(length)) ? kept.slice(0, -1) : kept;
+}
+
 function readEntry(value: unknown): PrinterEntry | undefined {
   if (!isRecord(value)) return undefined;
   const id = typeof value.id === 'string' ? value.id : '';
-  const name = typeof value.name === 'string' ? value.name.trim().slice(0, MAX_NAME_LENGTH) : '';
-  const host = typeof value.host === 'string' ? value.host.trim().slice(0, MAX_HOST_LENGTH) : '';
+  const name = typeof value.name === 'string' ? cut(value.name.trim(), MAX_NAME_LENGTH) : '';
+  const host = typeof value.host === 'string' ? cut(value.host.trim(), MAX_HOST_LENGTH) : '';
   const port = validPort(value.port) ? (value.port as number) : DEFAULT_PORT;
   if (!id || !name || !host) return undefined;
   const capabilities = Array.isArray(value.capabilities)
@@ -278,7 +323,9 @@ function readEntry(value: unknown): PrinterEntry | undefined {
 }
 
 function requireName(value: string): string {
-  const name = value.trim().slice(0, MAX_NAME_LENGTH);
+  // Cut at a character, not between the halves of one: a name used to end in
+  // a broken character when the limit fell inside an emoji.
+  const name = cut(value.trim(), MAX_NAME_LENGTH);
   if (!name) throw new PrinterDirectoryError('A printer needs a name you will recognise', 'invalid-name');
   return name;
 }
@@ -288,8 +335,24 @@ function requirePort(value: number): number {
   return value;
 }
 
+/** Capabilities as a load keeps them: text, at most 32. */
+function requireCapabilities(value: readonly string[]): readonly string[] {
+  return Object.freeze(value.filter((entry) => typeof entry === 'string').slice(0, 32));
+}
+
+/**
+ * A tool count as a load keeps it, refused otherwise: one a reload would drop
+ * used to be stored anyway, so it lasted only until the page was reloaded.
+ */
+function requireToolCount(value: number): number {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new PrinterDirectoryError('A printer has at least one tool', 'invalid-tools');
+  }
+  return value;
+}
+
 function normalizeHost(value: string): string {
-  const host = value.trim().slice(0, MAX_HOST_LENGTH);
+  const host = cut(value.trim(), MAX_HOST_LENGTH);
   if (!host) throw new PrinterDirectoryError('A printer needs an address', 'invalid-endpoint');
   return host;
 }

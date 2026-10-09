@@ -234,6 +234,15 @@ final class NativeProject {
     static native String cameraDescribe(String request);
     static native double cameraPollInterval(String camera);
     static native String cameraFrameUrl(String request);
+    // Printer directory: the stored text read (null: nothing stored) and
+    // written, and each edit's directory or refusal.
+    static native String printerDirectoryLoad(String stored);
+    static native String printerDirectorySave(String directory);
+    static native String printerDirectoryAdd(String request);
+    static native String printerDirectoryUpdate(String request);
+    static native String printerDirectoryRemove(String request);
+    static native String printerDirectorySetDefault(String request);
+    static native String printerDirectoryAdopt(String request);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

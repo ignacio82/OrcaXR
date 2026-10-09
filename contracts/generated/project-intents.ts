@@ -6897,6 +6897,106 @@ const shapes = {
       "nonce": "EditText"
     }
   },
+  "PrinterEntry": {
+    "kind": "object",
+    "fields": {
+      "id": "EditText",
+      "name": "EditText",
+      "host": "EditText",
+      "port": "Finite",
+      "capabilities": "OptionalTextList",
+      "toolCount": "OptionalFinite"
+    }
+  },
+  "PrinterEntries": {
+    "kind": "array",
+    "items": "PrinterEntry",
+    "min": 0,
+    "max": 16
+  },
+  "PrinterDirectory": {
+    "kind": "object",
+    "fields": {
+      "printers": "PrinterEntries",
+      "defaultId": "EditText"
+    }
+  },
+  "PrinterDirectoryErrorCode": {
+    "kind": "enum",
+    "values": [
+      "invalidName",
+      "invalidEndpoint",
+      "invalidTools",
+      "duplicate",
+      "notFound",
+      "tooMany"
+    ]
+  },
+  "PrinterDirectoryFailure": {
+    "kind": "object",
+    "fields": {
+      "code": "PrinterDirectoryErrorCode",
+      "message": "EditText"
+    }
+  },
+  "PrinterDirectoryReply": {
+    "kind": "union",
+    "variants": {
+      "directory": "PrinterDirectory",
+      "refused": "PrinterDirectoryFailure"
+    }
+  },
+  "PrinterDirectoryAdd": {
+    "kind": "object",
+    "fields": {
+      "directory": "PrinterDirectory",
+      "name": "EditText",
+      "host": "EditText",
+      "port": "OptionalFinite",
+      "id": "EditText"
+    }
+  },
+  "PrinterDirectoryUpdate": {
+    "kind": "object",
+    "fields": {
+      "directory": "PrinterDirectory",
+      "id": "EditText",
+      "name": "OptionalText",
+      "host": "OptionalText",
+      "port": "OptionalFinite",
+      "capabilities": "OptionalTextList",
+      "toolCount": "OptionalFinite"
+    }
+  },
+  "PrinterDirectorySelect": {
+    "kind": "object",
+    "fields": {
+      "directory": "PrinterDirectory",
+      "id": "EditText"
+    }
+  },
+  "LegacyPrinterEndpoint": {
+    "kind": "object",
+    "fields": {
+      "host": "EditText",
+      "port": "Finite"
+    }
+  },
+  "OptionalLegacyPrinterEndpoint": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "LegacyPrinterEndpoint"
+    }
+  },
+  "PrinterDirectoryAdopt": {
+    "kind": "object",
+    "fields": {
+      "directory": "PrinterDirectory",
+      "legacy": "OptionalLegacyPrinterEndpoint",
+      "id": "EditText"
+    }
+  },
   "PrinterStorageResult": {
     "kind": "union",
     "variants": {
@@ -7740,6 +7840,18 @@ export interface ProjectCameraSnapshotFinishWire {readonly request: ProjectCamer
 export interface ProjectCameraMechanismsRequestWire {readonly camera: ProjectPrinterCameraWire;readonly pageProtocol: ProjectOptionalTextWire;}
 export interface ProjectCameraDescribeRequestWire {readonly camera: ProjectPrinterCameraWire;readonly route: ProjectOptionalCameraMechanismWire;readonly pageProtocol: ProjectOptionalTextWire;}
 export interface ProjectCameraFrameRequestWire {readonly camera: ProjectPrinterCameraWire;readonly nonce: ProjectEditTextWire;}
+export interface ProjectPrinterEntryWire {readonly id: ProjectEditTextWire;readonly name: ProjectEditTextWire;readonly host: ProjectEditTextWire;readonly port: ProjectFiniteWire;readonly capabilities: ProjectOptionalTextListWire;readonly toolCount: ProjectOptionalFiniteWire;}
+export type ProjectPrinterEntriesWire = readonly ProjectPrinterEntryWire[];
+export interface ProjectPrinterDirectoryWire {readonly printers: ProjectPrinterEntriesWire;readonly defaultId: ProjectEditTextWire;}
+export type ProjectPrinterDirectoryErrorCodeWire = "invalidName" | "invalidEndpoint" | "invalidTools" | "duplicate" | "notFound" | "tooMany";
+export interface ProjectPrinterDirectoryFailureWire {readonly code: ProjectPrinterDirectoryErrorCodeWire;readonly message: ProjectEditTextWire;}
+export type ProjectPrinterDirectoryReplyWire = {readonly directory:ProjectPrinterDirectoryWire} | {readonly refused:ProjectPrinterDirectoryFailureWire};
+export interface ProjectPrinterDirectoryAddWire {readonly directory: ProjectPrinterDirectoryWire;readonly name: ProjectEditTextWire;readonly host: ProjectEditTextWire;readonly port: ProjectOptionalFiniteWire;readonly id: ProjectEditTextWire;}
+export interface ProjectPrinterDirectoryUpdateWire {readonly directory: ProjectPrinterDirectoryWire;readonly id: ProjectEditTextWire;readonly name: ProjectOptionalTextWire;readonly host: ProjectOptionalTextWire;readonly port: ProjectOptionalFiniteWire;readonly capabilities: ProjectOptionalTextListWire;readonly toolCount: ProjectOptionalFiniteWire;}
+export interface ProjectPrinterDirectorySelectWire {readonly directory: ProjectPrinterDirectoryWire;readonly id: ProjectEditTextWire;}
+export interface ProjectLegacyPrinterEndpointWire {readonly host: ProjectEditTextWire;readonly port: ProjectFiniteWire;}
+export type ProjectOptionalLegacyPrinterEndpointWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectLegacyPrinterEndpointWire};
+export interface ProjectPrinterDirectoryAdoptWire {readonly directory: ProjectPrinterDirectoryWire;readonly legacy: ProjectOptionalLegacyPrinterEndpointWire;readonly id: ProjectEditTextWire;}
 export type ProjectPrinterStorageResultWire = {readonly listing:ProjectPrinterStorageListingWire} | {readonly metadata:ProjectPrinterStorageMetadataWire} | {readonly done:ProjectEmptyWire} | {readonly moved:ProjectPrinterTextWire} | {readonly started:ProjectPrinterTextWire} | {readonly failed:ProjectPrinterStorageFailureWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
@@ -8419,3 +8531,21 @@ export function encodeProjectCameraFrameRequest(value:ProjectCameraFrameRequestW
 export function captureProjectOptionalPrinterReplyText(value:unknown):ProjectOptionalPrinterReplyTextWire { return captureIntent("OptionalPrinterReplyText",value,shapes,bulkLimits) as ProjectOptionalPrinterReplyTextWire; }
 export function decodeProjectOptionalPrinterReplyText(text:string):ProjectOptionalPrinterReplyTextWire { return captureProjectOptionalPrinterReplyText(parseIntentJson(text,bulkLimits)); }
 export function encodeProjectOptionalPrinterReplyText(value:ProjectOptionalPrinterReplyTextWire):string { return JSON.stringify(captureProjectOptionalPrinterReplyText(value)); }
+export function captureProjectPrinterDirectory(value:unknown):ProjectPrinterDirectoryWire { return captureIntent("PrinterDirectory",value,shapes,limits) as ProjectPrinterDirectoryWire; }
+export function decodeProjectPrinterDirectory(text:string):ProjectPrinterDirectoryWire { return captureProjectPrinterDirectory(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterDirectory(value:ProjectPrinterDirectoryWire):string { return JSON.stringify(captureProjectPrinterDirectory(value)); }
+export function captureProjectPrinterDirectoryReply(value:unknown):ProjectPrinterDirectoryReplyWire { return captureIntent("PrinterDirectoryReply",value,shapes,limits) as ProjectPrinterDirectoryReplyWire; }
+export function decodeProjectPrinterDirectoryReply(text:string):ProjectPrinterDirectoryReplyWire { return captureProjectPrinterDirectoryReply(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterDirectoryReply(value:ProjectPrinterDirectoryReplyWire):string { return JSON.stringify(captureProjectPrinterDirectoryReply(value)); }
+export function captureProjectPrinterDirectoryAdd(value:unknown):ProjectPrinterDirectoryAddWire { return captureIntent("PrinterDirectoryAdd",value,shapes,limits) as ProjectPrinterDirectoryAddWire; }
+export function decodeProjectPrinterDirectoryAdd(text:string):ProjectPrinterDirectoryAddWire { return captureProjectPrinterDirectoryAdd(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterDirectoryAdd(value:ProjectPrinterDirectoryAddWire):string { return JSON.stringify(captureProjectPrinterDirectoryAdd(value)); }
+export function captureProjectPrinterDirectoryUpdate(value:unknown):ProjectPrinterDirectoryUpdateWire { return captureIntent("PrinterDirectoryUpdate",value,shapes,limits) as ProjectPrinterDirectoryUpdateWire; }
+export function decodeProjectPrinterDirectoryUpdate(text:string):ProjectPrinterDirectoryUpdateWire { return captureProjectPrinterDirectoryUpdate(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterDirectoryUpdate(value:ProjectPrinterDirectoryUpdateWire):string { return JSON.stringify(captureProjectPrinterDirectoryUpdate(value)); }
+export function captureProjectPrinterDirectorySelect(value:unknown):ProjectPrinterDirectorySelectWire { return captureIntent("PrinterDirectorySelect",value,shapes,limits) as ProjectPrinterDirectorySelectWire; }
+export function decodeProjectPrinterDirectorySelect(text:string):ProjectPrinterDirectorySelectWire { return captureProjectPrinterDirectorySelect(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterDirectorySelect(value:ProjectPrinterDirectorySelectWire):string { return JSON.stringify(captureProjectPrinterDirectorySelect(value)); }
+export function captureProjectPrinterDirectoryAdopt(value:unknown):ProjectPrinterDirectoryAdoptWire { return captureIntent("PrinterDirectoryAdopt",value,shapes,limits) as ProjectPrinterDirectoryAdoptWire; }
+export function decodeProjectPrinterDirectoryAdopt(text:string):ProjectPrinterDirectoryAdoptWire { return captureProjectPrinterDirectoryAdopt(parseIntentJson(text,limits)); }
+export function encodeProjectPrinterDirectoryAdopt(value:ProjectPrinterDirectoryAdoptWire):string { return JSON.stringify(captureProjectPrinterDirectoryAdopt(value)); }

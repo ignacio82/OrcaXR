@@ -4096,6 +4096,47 @@ Rust, WASM in Node and Chrome, the printer core, JNI and 2,231 Kotlin
 checks reproduce every one. The polling lifecycle (stopping when hidden or
 disposed) and the route fallback state stay with each host's panel.
 
+### Printer directory
+
+`orcaxr_printer::directory` ports `PrinterDirectory.ts`: named printers and
+one default, kept on the device. Each entry owns its address, credential and
+capability record, so nothing carries across a switch. A machine is the
+endpoint its address names (`address`, the shared Moonraker endpoint
+normalization), so `Printer.local`, `printer.local:7125` and
+`http://printer.local:7125` are one printer while another port or a path
+behind a proxy is another, and an address no endpoint can be made from is
+refused when it is saved rather than discovered at connect time. The stored
+directory is read (`load`: an unreadable store is an empty one, a repeated
+id keeps its first printer, a default naming no printer falls to the first,
+at most 16 printers) and written (`save`) in the browser's own stored form,
+each entry's keys in one order — the browser now writes that order too,
+whatever edits built the entry, so both hosts store the same text. Every
+edit is a pure step: add (under an id the host draws), update, remove
+(promoting the first remaining printer when the default goes), choose the
+default, adopt a legacy single endpoint. Discovery is not ported: the
+browser reports it unavailable, while Android can offer the platform's own.
+
+Porting fixed five browser defects, each with a regression test: another
+spelling of a saved address was saved as a second printer, each with its
+own credential and tool map; an address no endpoint could be made from was
+accepted until connect; a name at the length limit was cut inside an emoji,
+keeping half a character; a repeated id in the store showed two printers of
+which removing one removed both; and a tool count a reload would drop was
+stored anyway.
+
+Bindings: WASM `printer_directory_load`, `printer_directory_save`,
+`printer_directory_add`, `printer_directory_update`,
+`printer_directory_remove`, `printer_directory_set_default` and
+`printer_directory_adopt`, the matching JNI `printerDirectory*` exports and
+Kotlin `PrinterDirectory`. `printer-directory-vectors.mjs` drives the
+production functions through `PrinterDirectoryExchange.ts` along 24 seeded
+edit sequences and the printer limit: 37 stored directories loaded
+(corrupt, partial, repeated ids, too many printers, stale defaults, long and
+broken text, and every saved directory), 25 saved, 160 adds, 60 updates, 44
+removals, 41 defaults and 15 adoptions. Rust, WASM in Node and Chrome, the
+printer core, JNI and 382 Kotlin checks reproduce every one, and every saved
+text loads back as itself.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

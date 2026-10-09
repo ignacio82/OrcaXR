@@ -1943,8 +1943,16 @@ credential storage, and explicit permission/error flows.
   machine over those clients and passes 17 more: a job identified from the
   printer's history, pause, resume, confirmed cancel and a dialog-confirmed
   emergency stop, with the printer receiving exactly those commands. Endpoint
-  management, credential entry and discovery, which need the application
-  shell, remain.
+  management's policy is shared: `orcaxr_printer::directory` loads and saves
+  the browser's stored directory of named printers and answers every edit
+  (add, update, remove, default, legacy adoption), identifying a machine by
+  the endpoint its address names; 382 browser answers agree in every binding
+  and Kotlin `PrinterDirectory` exposes it. Porting fixed five browser
+  defects (another spelling of a saved address saved twice, an unusable
+  address accepted until connect, a name cut inside a character, a repeated
+  stored id removing two printers, a tool count a reload drops). The
+  directory's screens, credential entry and discovery, which need the
+  application shell, remain.
 - [x] Support intentional HTTP LAN connections through an explicit transport
   policy. Android configuration must allow the intended user-entered endpoints;
   application routing restricts cleartext requests to those selected local

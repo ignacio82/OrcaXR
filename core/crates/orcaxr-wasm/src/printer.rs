@@ -3,8 +3,8 @@ use crate::error;
 use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
-    camera, console, control, history, moonraker, preparation, reply, session, status::JobStatus,
-    storage, summary, tools, transport, workflow,
+    camera, console, control, directory, history, moonraker, preparation, reply, session,
+    status::JobStatus, storage, summary, tools, transport, workflow,
 };
 use wasm_bindgen::prelude::*;
 
@@ -1084,5 +1084,78 @@ pub fn camera_frame_url(request: &str) -> Result<String, JsValue> {
         wire::decode_camera_frame_request,
         camera::frame,
         wire::encode_optional_printer_reply_text,
+    )
+}
+/// The stored directory text (none: nothing stored); the `PrinterDirectory`
+/// it reads as.
+#[wasm_bindgen]
+pub fn printer_directory_load(stored: Option<String>) -> Result<String, JsValue> {
+    if stored
+        .as_ref()
+        .is_some_and(|s| s.len() > reply::LIMITS.bytes)
+    {
+        return Err(error("input_limit"));
+    }
+    wire::encode_printer_directory(&directory::load(stored.as_deref()))
+        .map_err(|_| error("output_limit"))
+}
+/// A `PrinterDirectory`; the text it is stored as.
+#[wasm_bindgen]
+pub fn printer_directory_save(directory_json: &str) -> Result<String, JsValue> {
+    if directory_json.len() > wire::MAX_BYTES {
+        return Err(error("input_limit"));
+    }
+    let request =
+        wire::decode_printer_directory(directory_json).map_err(|_| error("invalid_request"))?;
+    Ok(String::from_utf16_lossy(&directory::save(&request)))
+}
+/// A `PrinterDirectoryAdd`; the `PrinterDirectoryReply`.
+#[wasm_bindgen]
+pub fn printer_directory_add(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_printer_directory_add,
+        directory::add,
+        wire::encode_printer_directory_reply,
+    )
+}
+/// A `PrinterDirectoryUpdate`; the `PrinterDirectoryReply`.
+#[wasm_bindgen]
+pub fn printer_directory_update(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_printer_directory_update,
+        directory::update,
+        wire::encode_printer_directory_reply,
+    )
+}
+/// A `PrinterDirectorySelect`; the `PrinterDirectoryReply` of removing it.
+#[wasm_bindgen]
+pub fn printer_directory_remove(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_printer_directory_select,
+        directory::remove,
+        wire::encode_printer_directory_reply,
+    )
+}
+/// A `PrinterDirectorySelect`; the `PrinterDirectoryReply` of making it the default.
+#[wasm_bindgen]
+pub fn printer_directory_set_default(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_printer_directory_select,
+        directory::set_default,
+        wire::encode_printer_directory_reply,
+    )
+}
+/// A `PrinterDirectoryAdopt`; the `PrinterDirectory` with a legacy endpoint adopted.
+#[wasm_bindgen]
+pub fn printer_directory_adopt(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_printer_directory_adopt,
+        directory::adopt,
+        wire::encode_printer_directory,
     )
 }

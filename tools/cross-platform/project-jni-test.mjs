@@ -46,6 +46,7 @@ import { replayPrinterStorage, storageBytes } from "./printer-storage-replay.mjs
 import { historyNumber, replayPrintHistory } from "./printer-history-replay.mjs";
 import { replayPrinterConsole } from "./printer-console-replay.mjs";
 import { replayPrinterCamera } from "./printer-camera-replay.mjs";
+import { replayPrinterDirectory } from "./printer-directory-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -1166,6 +1167,22 @@ try {
     ...cameraFixture.pollIntervals.map((c) => ["pollIntervals", c.requestJson, String(c.intervalMs)].join("\t")),
   ];
   assert.equal(jvm.call("printerCameraChecks", cameraScript.join("\n")), 2231);
+  // The printer directory through the real JNI exports, then the Kotlin wrapper.
+  const directoryFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/printer-directory-vectors.json", root)),
+  );
+  assert.deepEqual(
+    replayPrinterDirectory(projectJniCore(jvm.call), directoryFixture).printerDirectoryAnswers,
+    [37, 25, 160, 60, 44, 41, 15],
+  );
+  const directoryScript = [
+    ...directoryFixture.loads.map((c) => ["loads", c.stored ?? "-", c.replyJson].join("\t")),
+    ...directoryFixture.saves.map((c) => ["saves", c.requestJson, c.stored].join("\t")),
+    ...["adds", "updates", "removes", "defaults", "adopts"].flatMap((section) =>
+      directoryFixture[section].map((c) => [section, c.requestJson, c.replyJson].join("\t")),
+    ),
+  ];
+  assert.equal(jvm.call("printerDirectoryChecks", directoryScript.join("\n")), 382);
   // The Moonraker transport through the real JNI exports, then the Kotlin
   // wrapper: step and state, or reply, for each input.
   const transportFixture = JSON.parse(

@@ -6,7 +6,7 @@ use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
     camera, console,
     control::{self, HoldToConfirm},
-    history, moonraker, preparation, reply,
+    directory, history, moonraker, preparation, reply,
     session::{self, PrinterSession},
     status::{JobStatus, LIMITS},
     storage, summary, tools,
@@ -989,6 +989,82 @@ pub(super) fn camera_frame_url(env: &mut JNIEnv<'_>, request: JString<'_>) -> Re
         wire::decode_camera_frame_request,
         camera::frame,
         wire::encode_optional_printer_reply_text,
+    )
+}
+
+pub(super) fn printer_directory_load(env: &mut JNIEnv<'_>, stored: JString<'_>) -> Result<jstring> {
+    let stored = if stored.is_null() {
+        None
+    } else {
+        Some(bounded_text(env, &stored, reply::LIMITS.bytes)?)
+    };
+    let json = wire::encode_printer_directory(&directory::load(stored.as_deref()))
+        .map_err(|_| "output_limit")?;
+    string(env, json)
+}
+pub(super) fn printer_directory_save(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = wire::decode_printer_directory(&intent_text(env, &request)?)
+        .map_err(|_| "invalid_request")?;
+    string(env, String::from_utf16_lossy(&directory::save(&request)))
+}
+pub(super) fn printer_directory_add(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_printer_directory_add,
+        directory::add,
+        wire::encode_printer_directory_reply,
+    )
+}
+pub(super) fn printer_directory_update(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_printer_directory_update,
+        directory::update,
+        wire::encode_printer_directory_reply,
+    )
+}
+pub(super) fn printer_directory_remove(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_printer_directory_select,
+        directory::remove,
+        wire::encode_printer_directory_reply,
+    )
+}
+pub(super) fn printer_directory_set_default(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_printer_directory_select,
+        directory::set_default,
+        wire::encode_printer_directory_reply,
+    )
+}
+pub(super) fn printer_directory_adopt(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_printer_directory_adopt,
+        directory::adopt,
+        wire::encode_printer_directory,
     )
 }
 

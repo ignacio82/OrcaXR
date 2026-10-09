@@ -10596,6 +10596,157 @@ object ProjectIntents {
             w.field("nonce") { writeEditText(w, v.nonce) }
         }
     }
+    data class PrinterEntry(val id: List<Int>, val name: List<Int>, val host: List<Int>, val port: Double, val capabilities: OptionalTextList, val toolCount: OptionalFinite)
+    private fun readPrinterEntry(v: Any): PrinterEntry {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "name", "host", "port", "capabilities", "toolCount"), false)
+        return PrinterEntry(readEditText(obj.get("id")), readEditText(obj.get("name")), readEditText(obj.get("host")), readFinite(obj.get("port")), readOptionalTextList(obj.get("capabilities")), readOptionalFinite(obj.get("toolCount")))
+    }
+    private fun writePrinterEntry(w: ProjectIntentWriter, v: PrinterEntry) {
+        w.obj {
+            w.field("id") { writeEditText(w, v.id) }
+            w.field("name") { writeEditText(w, v.name) }
+            w.field("host") { writeEditText(w, v.host) }
+            w.field("port") { writeFinite(w, v.port) }
+            w.field("capabilities") { writeOptionalTextList(w, v.capabilities) }
+            w.field("toolCount") { writeOptionalFinite(w, v.toolCount) }
+        }
+    }
+    private fun readPrinterEntries(v: Any): List<PrinterEntry> {
+        val array = ProjectIntentJson.list(v, 0, 16)
+        return List(array.length()) { readPrinterEntry(array.get(it)) }
+    }
+    private fun writePrinterEntries(w: ProjectIntentWriter, v: List<PrinterEntry>) {
+        w.array(v, 0, 16) { writePrinterEntry(w, it) }
+    }
+    data class PrinterDirectory(val printers: List<PrinterEntry>, val defaultId: List<Int>)
+    private fun readPrinterDirectory(v: Any): PrinterDirectory {
+        val obj = ProjectIntentJson.fields(v, setOf("printers", "defaultId"), false)
+        return PrinterDirectory(readPrinterEntries(obj.get("printers")), readEditText(obj.get("defaultId")))
+    }
+    private fun writePrinterDirectory(w: ProjectIntentWriter, v: PrinterDirectory) {
+        w.obj {
+            w.field("printers") { writePrinterEntries(w, v.printers) }
+            w.field("defaultId") { writeEditText(w, v.defaultId) }
+        }
+    }
+    enum class PrinterDirectoryErrorCode {InvalidName,InvalidEndpoint,InvalidTools,Duplicate,NotFound,TooMany}
+    private fun readPrinterDirectoryErrorCode(v: Any): PrinterDirectoryErrorCode {
+        return when(v) {"invalidName" -> PrinterDirectoryErrorCode.InvalidName;"invalidEndpoint" -> PrinterDirectoryErrorCode.InvalidEndpoint;"invalidTools" -> PrinterDirectoryErrorCode.InvalidTools;"duplicate" -> PrinterDirectoryErrorCode.Duplicate;"notFound" -> PrinterDirectoryErrorCode.NotFound;"tooMany" -> PrinterDirectoryErrorCode.TooMany; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrinterDirectoryErrorCode(w: ProjectIntentWriter, v: PrinterDirectoryErrorCode) {
+        w.literal(when(v) {PrinterDirectoryErrorCode.InvalidName -> "invalidName";PrinterDirectoryErrorCode.InvalidEndpoint -> "invalidEndpoint";PrinterDirectoryErrorCode.InvalidTools -> "invalidTools";PrinterDirectoryErrorCode.Duplicate -> "duplicate";PrinterDirectoryErrorCode.NotFound -> "notFound";PrinterDirectoryErrorCode.TooMany -> "tooMany";})
+    }
+    data class PrinterDirectoryFailure(val code: PrinterDirectoryErrorCode, val message: List<Int>)
+    private fun readPrinterDirectoryFailure(v: Any): PrinterDirectoryFailure {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return PrinterDirectoryFailure(readPrinterDirectoryErrorCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writePrinterDirectoryFailure(w: ProjectIntentWriter, v: PrinterDirectoryFailure) {
+        w.obj {
+            w.field("code") { writePrinterDirectoryErrorCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    sealed interface PrinterDirectoryReply {
+        data class Directory(val value: ProjectIntents.PrinterDirectory) : PrinterDirectoryReply
+        data class Refused(val value: ProjectIntents.PrinterDirectoryFailure) : PrinterDirectoryReply
+    }
+    private fun readPrinterDirectoryReply(v: Any): PrinterDirectoryReply {
+        val obj = ProjectIntentJson.fields(v, setOf("directory", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "directory" -> PrinterDirectoryReply.Directory(readPrinterDirectory(obj.get(key)))
+            "refused" -> PrinterDirectoryReply.Refused(readPrinterDirectoryFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrinterDirectoryReply(w: ProjectIntentWriter, v: PrinterDirectoryReply) {
+        w.obj { when(v) {
+            is PrinterDirectoryReply.Directory -> w.field("directory") { writePrinterDirectory(w, v.value) }
+            is PrinterDirectoryReply.Refused -> w.field("refused") { writePrinterDirectoryFailure(w, v.value) }
+        } }
+    }
+    data class PrinterDirectoryAdd(val directory: PrinterDirectory, val name: List<Int>, val host: List<Int>, val port: OptionalFinite, val id: List<Int>)
+    private fun readPrinterDirectoryAdd(v: Any): PrinterDirectoryAdd {
+        val obj = ProjectIntentJson.fields(v, setOf("directory", "name", "host", "port", "id"), false)
+        return PrinterDirectoryAdd(readPrinterDirectory(obj.get("directory")), readEditText(obj.get("name")), readEditText(obj.get("host")), readOptionalFinite(obj.get("port")), readEditText(obj.get("id")))
+    }
+    private fun writePrinterDirectoryAdd(w: ProjectIntentWriter, v: PrinterDirectoryAdd) {
+        w.obj {
+            w.field("directory") { writePrinterDirectory(w, v.directory) }
+            w.field("name") { writeEditText(w, v.name) }
+            w.field("host") { writeEditText(w, v.host) }
+            w.field("port") { writeOptionalFinite(w, v.port) }
+            w.field("id") { writeEditText(w, v.id) }
+        }
+    }
+    data class PrinterDirectoryUpdate(val directory: PrinterDirectory, val id: List<Int>, val name: OptionalText, val host: OptionalText, val port: OptionalFinite, val capabilities: OptionalTextList, val toolCount: OptionalFinite)
+    private fun readPrinterDirectoryUpdate(v: Any): PrinterDirectoryUpdate {
+        val obj = ProjectIntentJson.fields(v, setOf("directory", "id", "name", "host", "port", "capabilities", "toolCount"), false)
+        return PrinterDirectoryUpdate(readPrinterDirectory(obj.get("directory")), readEditText(obj.get("id")), readOptionalText(obj.get("name")), readOptionalText(obj.get("host")), readOptionalFinite(obj.get("port")), readOptionalTextList(obj.get("capabilities")), readOptionalFinite(obj.get("toolCount")))
+    }
+    private fun writePrinterDirectoryUpdate(w: ProjectIntentWriter, v: PrinterDirectoryUpdate) {
+        w.obj {
+            w.field("directory") { writePrinterDirectory(w, v.directory) }
+            w.field("id") { writeEditText(w, v.id) }
+            w.field("name") { writeOptionalText(w, v.name) }
+            w.field("host") { writeOptionalText(w, v.host) }
+            w.field("port") { writeOptionalFinite(w, v.port) }
+            w.field("capabilities") { writeOptionalTextList(w, v.capabilities) }
+            w.field("toolCount") { writeOptionalFinite(w, v.toolCount) }
+        }
+    }
+    data class PrinterDirectorySelect(val directory: PrinterDirectory, val id: List<Int>)
+    private fun readPrinterDirectorySelect(v: Any): PrinterDirectorySelect {
+        val obj = ProjectIntentJson.fields(v, setOf("directory", "id"), false)
+        return PrinterDirectorySelect(readPrinterDirectory(obj.get("directory")), readEditText(obj.get("id")))
+    }
+    private fun writePrinterDirectorySelect(w: ProjectIntentWriter, v: PrinterDirectorySelect) {
+        w.obj {
+            w.field("directory") { writePrinterDirectory(w, v.directory) }
+            w.field("id") { writeEditText(w, v.id) }
+        }
+    }
+    data class LegacyPrinterEndpoint(val host: List<Int>, val port: Double)
+    private fun readLegacyPrinterEndpoint(v: Any): LegacyPrinterEndpoint {
+        val obj = ProjectIntentJson.fields(v, setOf("host", "port"), false)
+        return LegacyPrinterEndpoint(readEditText(obj.get("host")), readFinite(obj.get("port")))
+    }
+    private fun writeLegacyPrinterEndpoint(w: ProjectIntentWriter, v: LegacyPrinterEndpoint) {
+        w.obj {
+            w.field("host") { writeEditText(w, v.host) }
+            w.field("port") { writeFinite(w, v.port) }
+        }
+    }
+    sealed interface OptionalLegacyPrinterEndpoint {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalLegacyPrinterEndpoint
+        data class Value(val value: ProjectIntents.LegacyPrinterEndpoint) : OptionalLegacyPrinterEndpoint
+    }
+    private fun readOptionalLegacyPrinterEndpoint(v: Any): OptionalLegacyPrinterEndpoint {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalLegacyPrinterEndpoint.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalLegacyPrinterEndpoint.Value(readLegacyPrinterEndpoint(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalLegacyPrinterEndpoint(w: ProjectIntentWriter, v: OptionalLegacyPrinterEndpoint) {
+        w.obj { when(v) {
+            is OptionalLegacyPrinterEndpoint.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalLegacyPrinterEndpoint.Value -> w.field("value") { writeLegacyPrinterEndpoint(w, v.value) }
+        } }
+    }
+    data class PrinterDirectoryAdopt(val directory: PrinterDirectory, val legacy: OptionalLegacyPrinterEndpoint, val id: List<Int>)
+    private fun readPrinterDirectoryAdopt(v: Any): PrinterDirectoryAdopt {
+        val obj = ProjectIntentJson.fields(v, setOf("directory", "legacy", "id"), false)
+        return PrinterDirectoryAdopt(readPrinterDirectory(obj.get("directory")), readOptionalLegacyPrinterEndpoint(obj.get("legacy")), readEditText(obj.get("id")))
+    }
+    private fun writePrinterDirectoryAdopt(w: ProjectIntentWriter, v: PrinterDirectoryAdopt) {
+        w.obj {
+            w.field("directory") { writePrinterDirectory(w, v.directory) }
+            w.field("legacy") { writeOptionalLegacyPrinterEndpoint(w, v.legacy) }
+            w.field("id") { writeEditText(w, v.id) }
+        }
+    }
     sealed interface PrinterStorageResult {
         data class Listing(val value: ProjectIntents.PrinterStorageListing) : PrinterStorageResult
         data class Metadata(val value: ProjectIntents.PrinterStorageMetadata) : PrinterStorageResult
@@ -11078,4 +11229,16 @@ object ProjectIntents {
     fun encodeCameraFrameRequest(value: CameraFrameRequest): String = ProjectIntentWriter(BULK).also { writeCameraFrameRequest(it, value) }.finish()
     fun decodeOptionalPrinterReplyText(text: String): OptionalPrinterReplyText = readOptionalPrinterReplyText(ProjectIntentJson.parse(text, BULK))
     fun encodeOptionalPrinterReplyText(value: OptionalPrinterReplyText): String = ProjectIntentWriter(BULK).also { writeOptionalPrinterReplyText(it, value) }.finish()
+    fun decodePrinterDirectory(text: String): PrinterDirectory = readPrinterDirectory(ProjectIntentJson.parse(text))
+    fun encodePrinterDirectory(value: PrinterDirectory): String = ProjectIntentWriter().also { writePrinterDirectory(it, value) }.finish()
+    fun decodePrinterDirectoryReply(text: String): PrinterDirectoryReply = readPrinterDirectoryReply(ProjectIntentJson.parse(text))
+    fun encodePrinterDirectoryReply(value: PrinterDirectoryReply): String = ProjectIntentWriter().also { writePrinterDirectoryReply(it, value) }.finish()
+    fun decodePrinterDirectoryAdd(text: String): PrinterDirectoryAdd = readPrinterDirectoryAdd(ProjectIntentJson.parse(text))
+    fun encodePrinterDirectoryAdd(value: PrinterDirectoryAdd): String = ProjectIntentWriter().also { writePrinterDirectoryAdd(it, value) }.finish()
+    fun decodePrinterDirectoryUpdate(text: String): PrinterDirectoryUpdate = readPrinterDirectoryUpdate(ProjectIntentJson.parse(text))
+    fun encodePrinterDirectoryUpdate(value: PrinterDirectoryUpdate): String = ProjectIntentWriter().also { writePrinterDirectoryUpdate(it, value) }.finish()
+    fun decodePrinterDirectorySelect(text: String): PrinterDirectorySelect = readPrinterDirectorySelect(ProjectIntentJson.parse(text))
+    fun encodePrinterDirectorySelect(value: PrinterDirectorySelect): String = ProjectIntentWriter().also { writePrinterDirectorySelect(it, value) }.finish()
+    fun decodePrinterDirectoryAdopt(text: String): PrinterDirectoryAdopt = readPrinterDirectoryAdopt(ProjectIntentJson.parse(text))
+    fun encodePrinterDirectoryAdopt(value: PrinterDirectoryAdopt): String = ProjectIntentWriter().also { writePrinterDirectoryAdopt(it, value) }.finish()
 }

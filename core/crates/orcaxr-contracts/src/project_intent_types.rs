@@ -14586,6 +14586,217 @@ fn read_camera_frame_request(v: &Value) -> Result<CameraFrameRequest, InvalidInt
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PrinterEntry {
+    pub id: EditText,
+    pub name: EditText,
+    pub host: EditText,
+    pub port: Finite,
+    pub capabilities: OptionalTextList,
+    pub tool_count: OptionalFinite,
+}
+fn read_printer_entry(v: &Value) -> Result<PrinterEntry, InvalidIntent> {
+    let object = fields(
+        v,
+        &["id", "name", "host", "port", "capabilities", "toolCount"],
+        false,
+    )?;
+    Ok(PrinterEntry {
+        id: read_edit_text(&object["id"])?,
+        name: read_edit_text(&object["name"])?,
+        host: read_edit_text(&object["host"])?,
+        port: read_finite(&object["port"])?,
+        capabilities: read_optional_text_list(&object["capabilities"])?,
+        tool_count: read_optional_finite(&object["toolCount"])?,
+    })
+}
+pub type PrinterEntries = Vec<PrinterEntry>;
+fn read_printer_entries(v: &Value) -> Result<PrinterEntries, InvalidIntent> {
+    list(v, 0, 16)?.iter().map(read_printer_entry).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterDirectory {
+    pub printers: PrinterEntries,
+    pub default_id: EditText,
+}
+fn read_printer_directory(v: &Value) -> Result<PrinterDirectory, InvalidIntent> {
+    let object = fields(v, &["printers", "defaultId"], false)?;
+    Ok(PrinterDirectory {
+        printers: read_printer_entries(&object["printers"])?,
+        default_id: read_edit_text(&object["defaultId"])?,
+    })
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterDirectoryErrorCode {
+    InvalidName,
+    InvalidEndpoint,
+    InvalidTools,
+    Duplicate,
+    NotFound,
+    TooMany,
+}
+fn read_printer_directory_error_code(
+    v: &Value,
+) -> Result<PrinterDirectoryErrorCode, InvalidIntent> {
+    match v.as_str() {
+        Some("invalidName") => Ok(PrinterDirectoryErrorCode::InvalidName),
+        Some("invalidEndpoint") => Ok(PrinterDirectoryErrorCode::InvalidEndpoint),
+        Some("invalidTools") => Ok(PrinterDirectoryErrorCode::InvalidTools),
+        Some("duplicate") => Ok(PrinterDirectoryErrorCode::Duplicate),
+        Some("notFound") => Ok(PrinterDirectoryErrorCode::NotFound),
+        Some("tooMany") => Ok(PrinterDirectoryErrorCode::TooMany),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterDirectoryFailure {
+    pub code: PrinterDirectoryErrorCode,
+    pub message: EditText,
+}
+fn read_printer_directory_failure(v: &Value) -> Result<PrinterDirectoryFailure, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(PrinterDirectoryFailure {
+        code: read_printer_directory_error_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrinterDirectoryReply {
+    Directory(PrinterDirectory),
+    Refused(PrinterDirectoryFailure),
+}
+fn read_printer_directory_reply(v: &Value) -> Result<PrinterDirectoryReply, InvalidIntent> {
+    let object = fields(v, &["directory", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "directory" => Ok(PrinterDirectoryReply::Directory(read_printer_directory(
+            value,
+        )?)),
+        "refused" => Ok(PrinterDirectoryReply::Refused(
+            read_printer_directory_failure(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterDirectoryAdd {
+    pub directory: PrinterDirectory,
+    pub name: EditText,
+    pub host: EditText,
+    pub port: OptionalFinite,
+    pub id: EditText,
+}
+fn read_printer_directory_add(v: &Value) -> Result<PrinterDirectoryAdd, InvalidIntent> {
+    let object = fields(v, &["directory", "name", "host", "port", "id"], false)?;
+    Ok(PrinterDirectoryAdd {
+        directory: read_printer_directory(&object["directory"])?,
+        name: read_edit_text(&object["name"])?,
+        host: read_edit_text(&object["host"])?,
+        port: read_optional_finite(&object["port"])?,
+        id: read_edit_text(&object["id"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterDirectoryUpdate {
+    pub directory: PrinterDirectory,
+    pub id: EditText,
+    pub name: OptionalText,
+    pub host: OptionalText,
+    pub port: OptionalFinite,
+    pub capabilities: OptionalTextList,
+    pub tool_count: OptionalFinite,
+}
+fn read_printer_directory_update(v: &Value) -> Result<PrinterDirectoryUpdate, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "directory",
+            "id",
+            "name",
+            "host",
+            "port",
+            "capabilities",
+            "toolCount",
+        ],
+        false,
+    )?;
+    Ok(PrinterDirectoryUpdate {
+        directory: read_printer_directory(&object["directory"])?,
+        id: read_edit_text(&object["id"])?,
+        name: read_optional_text(&object["name"])?,
+        host: read_optional_text(&object["host"])?,
+        port: read_optional_finite(&object["port"])?,
+        capabilities: read_optional_text_list(&object["capabilities"])?,
+        tool_count: read_optional_finite(&object["toolCount"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterDirectorySelect {
+    pub directory: PrinterDirectory,
+    pub id: EditText,
+}
+fn read_printer_directory_select(v: &Value) -> Result<PrinterDirectorySelect, InvalidIntent> {
+    let object = fields(v, &["directory", "id"], false)?;
+    Ok(PrinterDirectorySelect {
+        directory: read_printer_directory(&object["directory"])?,
+        id: read_edit_text(&object["id"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyPrinterEndpoint {
+    pub host: EditText,
+    pub port: Finite,
+}
+fn read_legacy_printer_endpoint(v: &Value) -> Result<LegacyPrinterEndpoint, InvalidIntent> {
+    let object = fields(v, &["host", "port"], false)?;
+    Ok(LegacyPrinterEndpoint {
+        host: read_edit_text(&object["host"])?,
+        port: read_finite(&object["port"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalLegacyPrinterEndpoint {
+    Absent(Empty),
+    Value(LegacyPrinterEndpoint),
+}
+fn read_optional_legacy_printer_endpoint(
+    v: &Value,
+) -> Result<OptionalLegacyPrinterEndpoint, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalLegacyPrinterEndpoint::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalLegacyPrinterEndpoint::Value(
+            read_legacy_printer_endpoint(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterDirectoryAdopt {
+    pub directory: PrinterDirectory,
+    pub legacy: OptionalLegacyPrinterEndpoint,
+    pub id: EditText,
+}
+fn read_printer_directory_adopt(v: &Value) -> Result<PrinterDirectoryAdopt, InvalidIntent> {
+    let object = fields(v, &["directory", "legacy", "id"], false)?;
+    Ok(PrinterDirectoryAdopt {
+        directory: read_printer_directory(&object["directory"])?,
+        legacy: read_optional_legacy_printer_endpoint(&object["legacy"])?,
+        id: read_edit_text(&object["id"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PrinterStorageResult {
     Listing(PrinterStorageListing),
     Metadata(PrinterStorageMetadata),
@@ -16695,5 +16906,65 @@ pub fn encode_optional_printer_reply_text(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode_bounded(value, &BULK)?;
     decode_optional_printer_reply_text(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_directory(text: &str) -> Result<PrinterDirectory, InvalidIntent> {
+    read_printer_directory(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_directory(value: &PrinterDirectory) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_directory(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_directory_reply(text: &str) -> Result<PrinterDirectoryReply, InvalidIntent> {
+    read_printer_directory_reply(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_directory_reply(
+    value: &PrinterDirectoryReply,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_directory_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_directory_add(text: &str) -> Result<PrinterDirectoryAdd, InvalidIntent> {
+    read_printer_directory_add(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_directory_add(value: &PrinterDirectoryAdd) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_directory_add(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_directory_update(
+    text: &str,
+) -> Result<PrinterDirectoryUpdate, InvalidIntent> {
+    read_printer_directory_update(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_directory_update(
+    value: &PrinterDirectoryUpdate,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_directory_update(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_directory_select(
+    text: &str,
+) -> Result<PrinterDirectorySelect, InvalidIntent> {
+    read_printer_directory_select(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_directory_select(
+    value: &PrinterDirectorySelect,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_directory_select(&text)?;
+    Ok(text)
+}
+pub fn decode_printer_directory_adopt(text: &str) -> Result<PrinterDirectoryAdopt, InvalidIntent> {
+    read_printer_directory_adopt(&super::project_intents::parse(text)?)
+}
+pub fn encode_printer_directory_adopt(
+    value: &PrinterDirectoryAdopt,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_printer_directory_adopt(&text)?;
     Ok(text)
 }

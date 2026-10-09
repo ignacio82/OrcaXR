@@ -1191,6 +1191,41 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_printerDirectoryLoad, printer_directory_load, jstring,
+    stored: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerDirectorySave, printer_directory_save, jstring,
+    directory: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerDirectoryAdd, printer_directory_add, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerDirectoryUpdate, printer_directory_update, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerDirectoryRemove, printer_directory_remove, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerDirectorySetDefault, printer_directory_set_default, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printerDirectoryAdopt, printer_directory_adopt, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,
