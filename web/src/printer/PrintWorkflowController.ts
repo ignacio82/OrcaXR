@@ -73,8 +73,24 @@ interface PrinterFacts {
   readonly fileManagement: boolean;
 }
 
+/**
+ * The send workflow as the application uses it. Two implementations provide
+ * it: this browser controller, and the shared core's (`SharedPrintWorkflow`),
+ * which runs the same submission policy in Rust — the one the Android app
+ * runs. This one stays as the reference the core is replayed against and as
+ * the rollback.
+ */
+export interface PrintWorkflow {
+  readonly busy: boolean;
+  readonly phase: PrintSubmissionPhase | 'idle' | 'cancelled' | 'failed' | 'uncertain';
+  cancel(): void;
+  dispose(): void;
+  run(input: PrintJobIntent, progress?: PrintWorkflowProgress): Promise<PrintSubmissionResult | null>;
+  startStored(path: string): Promise<string | null>;
+}
+
 /** One shared, cancellable owner for DOM and XR submission, including confirmation. */
-export class PrintWorkflowController {
+export class PrintWorkflowController implements PrintWorkflow {
   private active: AbortController | null = null;
   private disposed = false;
   private phaseValue: PrintSubmissionPhase | 'idle' | 'cancelled' | 'failed' | 'uncertain' = 'idle';

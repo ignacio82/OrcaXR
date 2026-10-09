@@ -57,9 +57,9 @@ const cssTotal = css.reduce((sum, file) => sum + file.bytes, 0);
 // schema-1 shape table generated from the native core (7.5 KB, in the lazily
 // loaded serializer chunk; the main chunk did not grow).
 // Raised again from 10,650,000 on 2026-10-09 when printer connections moved onto
-// the shared core: its transport and session hosts and the WASM glue (37 KB) load
-// on demand in their own chunk; the main chunk grew 4.9 KB for choosing between
-// implementations.
+// the shared core: its transport, session and workflow hosts and the WASM glue
+// (45 KB) load on demand in their own chunk; the main chunk grew 6.4 KB for
+// choosing between implementations.
 assert.ok(jsTotal <= 10_700_000, `JavaScript total is ${jsTotal} bytes (budget 10,700,000).`);
 assert.ok(cssTotal <= 200_000, `CSS total is ${cssTotal} bytes (budget 200,000).`);
 console.log(`Bundle budgets passed: main=${main.bytes}, JS total=${jsTotal}, CSS total=${cssTotal}.`);

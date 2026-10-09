@@ -555,9 +555,9 @@ export class SharedMoonrakerTransport implements MoonrakerConnection {
       this.timers.delete(timer);
     }
     for (const id of step.aborted) this.abandon(id);
-    // The core's answer to a synchronous effect is the next step, before
-    // anything a listener does reaches it.
-    if (answer !== undefined) this.queue.unshift(decodeProjectMoonrakerTransportStep(answer));
+    // The core answered the synchronous effect before any listener could reach
+    // it; its step runs in the order the core produced it, like every other.
+    if (answer !== undefined) this.queue.push(decodeProjectMoonrakerTransportStep(answer));
     for (const run of notify) run();
     for (const log of step.logs) this.log(diagnosticEvent(log));
     for (const { task, result } of step.finished) this.finish(task, result);

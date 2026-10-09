@@ -3660,6 +3660,21 @@ size, and before each preparation step and the start a fresh readiness,
 mapping, capability and stored-file check; an ambiguous preparation or start
 is never retried and is reported with one reconciled readiness.
 
+The browser's sends run on this machine. `SharedPrintWorkflow` hosts it with
+`PrintWorkflowController`'s public surface (`PrintWorkflow`, which both
+implement): it captures the printer session (a lost session reaches the core
+as a cancel), asks the operator, sends requests and the upload (the G-code's
+UTF-8 bytes as the multipart file, with elapsed-time ticks while they go out)
+over the session's transport, and answers the synchronous questions — random
+bytes, whether the artifact and the session are current — at once. Failures
+reject with the browser's error classes (`PrinterStorageError` for a refused
+stored path). It passes the browser workflow's own 41 tests
+(`print-workflow-shared.test.ts`). `PrintWorkflowSwitch` adopts it once the
+core has loaded and no send is running; a running send finishes where it
+started. All three hosts apply steps in the order the core produced them:
+a synchronous answer's step once ran ahead of a cancel the question itself
+caused (a session check that cancels), leaving the phase at `confirming`.
+
 Bindings: WASM `PrintWorkflow`, the JNI `printWorkflow*` exports and Kotlin
 `PrintWorkflow`. `printer-workflow-vectors.mjs` drives the production
 controller through `PrintWorkflowExchange.ts`, which records each input and

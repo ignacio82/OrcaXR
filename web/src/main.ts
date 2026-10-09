@@ -17,6 +17,8 @@ import { PRINTER_TRANSPORT_PREFERENCE, PrinterConnections, printerTransportChoic
 import type { MoonrakerConnection } from './printer/MoonrakerTransport';
 import type { PrinterSelection } from './printer/PrinterSessionController';
 import { PrinterSessionSwitch } from './printer/PrinterSessionSwitch';
+import type { PrintWorkflowDependencies } from './printer/PrintWorkflowController';
+import { PrintWorkflowSwitch } from './printer/PrintWorkflowSwitch';
 import {
   loadPrinterEndpointPreferences,
   MoonrakerTransportError,
@@ -640,7 +642,7 @@ function setupDomUI(
     }
   });
 
-  const printWorkflow = new PrintWorkflowController({
+  const printWorkflowDependencies: PrintWorkflowDependencies = {
     captureSession: async (signal) => {
       await connectConfiguredPrinter(signal);
       return printerSession.captureLease();
@@ -649,7 +651,10 @@ function setupDomUI(
       xb.core.renderer?.xr?.isPresenting
         ? workspace.askXrPrintSubmission(input, signal)
         : (await import('./ui/dom/PrintSubmissionDialog')).askPrintSubmission(input, signal),
-  });
+  };
+  // Sends move onto the shared core when it loads; a running send finishes where it started.
+  const printWorkflow = new PrintWorkflowSwitch(new PrintWorkflowController(printWorkflowDependencies));
+  printerConnections.whenReady((runtime) => printWorkflow.adopt(runtime.workflow(printWorkflowDependencies)));
 
   surfaces.own(printWorkflow);
   surfaces.bind(workspace, 'onRequestPrintSubmission', async (intent) => {

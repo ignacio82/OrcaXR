@@ -326,9 +326,9 @@ export class SharedPrinterSession<T extends PrinterSessionTransport = MoonrakerT
     // An ended epoch stays recorded, aborted: anything that names it later is too.
     for (const epoch of step.aborted) this.epoch(epoch).abort();
     for (const id of step.withdrawn) this.hints.delete(id);
-    // The core's answer to opening a transport is the next step, before
-    // anything a listener does reaches it.
-    if (opened !== undefined) this.queue.unshift(decodeProjectPrinterSessionStep(opened));
+    // The core answered the opening before any listener could reach it; its
+    // step runs in the order the core produced it, like every other.
+    if (opened !== undefined) this.queue.push(decodeProjectPrinterSessionStep(opened));
     if (step.changed > 0) {
       this.viewValue = this.readView();
       for (let i = 0; i < step.changed; i++) for (const listener of [...this.listeners]) listener();

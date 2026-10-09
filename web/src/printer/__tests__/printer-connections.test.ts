@@ -8,6 +8,9 @@ import { loadPrinterCore, type SharedPrinterRuntime } from '../SharedPrinterCore
 import { PrinterSessionController } from '../PrinterSessionController';
 import { PrinterSessionSwitch } from '../PrinterSessionSwitch';
 import { SharedPrinterSession } from '../SharedPrinterSession';
+import { PrintWorkflowController } from '../PrintWorkflowController';
+import { PrintWorkflowSwitch } from '../PrintWorkflowSwitch';
+import { SharedPrintWorkflow } from '../SharedPrintWorkflow';
 
 const config = { endpoint: 'printer.local', clientVersion: 'test' };
 
@@ -101,8 +104,8 @@ shared.dispose();
   assert.deepEqual(ran, ['early', 'late']);
 }
 
-// The session adopts the shared core while nothing is selected, and keeps a
-// session in use on the implementation it started with.
+// The session adopts the shared core while nothing is selected; a session in
+// use keeps its implementation until it is cleared, then moves.
 {
   const open = () => new MoonrakerTransport(config);
   const idle = new PrinterSessionSwitch(new PrinterSessionController(open));
@@ -114,14 +117,57 @@ shared.dispose();
   const selected = idle.select({ id: 'p', endpoint: 'printer.local', port: 7125 });
   assert.ok(selected instanceof MoonrakerTransport);
   assert.equal(idle.transport, selected);
-  assert.equal(idle.adopt(runtime.session(open)), false, 'a session in use is not replaced');
   idle.dispose();
 
   const busy = new PrinterSessionSwitch(new PrinterSessionController(open));
   busy.select({ id: 'p', endpoint: 'printer.local', port: 7125 });
-  assert.equal(busy.adopt(runtime.session(open)), false);
+  assert.equal(busy.adopt(runtime.session(open)), false, 'a session in use is not replaced');
   assert.ok(busy.implementation instanceof PrinterSessionController);
+  busy.clear();
+  assert.ok(busy.implementation instanceof SharedPrinterSession, 'it moves once cleared');
   busy.dispose();
+}
+
+// The send workflow adopts the shared core while no send runs; a running send
+// finishes where it started, and the next send runs on the core.
+{
+  let release: (() => void) | undefined;
+  const dependencies = {
+    captureSession: () =>
+      new Promise<never>((_resolve, reject) => {
+        release = () => reject(new Error('no printer'));
+      }),
+    confirm: async () => ({ choice: 'cancel' as const }),
+  };
+  const workflow = new PrintWorkflowSwitch(new PrintWorkflowController(dependencies));
+  const intent = {
+    filename: 'part.gcode',
+    gcode: 'G28\n',
+    plateName: 'Plate',
+    usage: { tools: [0], multiMaterial: false, declaredColors: [], declaredMaterials: [] },
+    artifact: {
+      outputHash: `sha256:${'0'.repeat(64)}`,
+      sourceRevision: 1,
+      sourceHash: 's',
+      sourceAssetHash: 'a',
+      plateId: 'p',
+    },
+    isCurrent: () => true,
+  };
+  const running = workflow.run(intent);
+  running.catch(() => undefined);
+  assert.equal(workflow.busy, true);
+  assert.equal(workflow.adopt(runtime.workflow(dependencies)), false, 'a running send is not replaced');
+  assert.ok(workflow.implementation instanceof PrintWorkflowController);
+  release?.();
+  await assert.rejects(running);
+  const next = workflow.run(intent);
+  next.catch(() => undefined);
+  assert.ok(workflow.implementation instanceof SharedPrintWorkflow, 'the next send runs on the core');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  release?.();
+  await assert.rejects(next);
+  workflow.dispose();
 }
 
 console.log('Printer connections run on the verified shared core, with the browser transport as rollback.');

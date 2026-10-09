@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
-import {
-  PrintWorkflowController,
-  type PrintWorkflowConfirmation,
-  type PrintWorkflowDecision,
-} from '../PrintWorkflowController';
+import { type PrintWorkflowConfirmation, type PrintWorkflowDecision } from '../PrintWorkflowController';
+import { createPrintWorkflow } from './print-workflow.factory';
 import {
   PrintSubmissionError,
   preparePrintUpload,
@@ -113,7 +110,7 @@ function setup(choice: 'upload' | 'upload-and-print' = 'upload-and-print') {
   });
   let confirmations = 0;
   let sessionCheck = () => {};
-  const flow = new PrintWorkflowController({
+  const flow = createPrintWorkflow({
     captureSession: async () => ({
       printerId: 'printer-a',
       generation: 1,

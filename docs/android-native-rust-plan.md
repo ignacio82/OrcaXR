@@ -1867,7 +1867,7 @@ An emulator or spatial screenshot cannot close this phase.
 **Deliverables:** native Moonraker integration, shared command policy, camera,
 credential storage, and explicit permission/error flows.
 
-- [ ] Port printer/session/submission state machines into shared workflow code
+- [x] Port printer/session/submission state machines into shared workflow code
   and run the browser transport through the same policy. Preserve authoritative
   query versus partial-notification merging, reconnection generations, unknown
   readiness, tool mapping, and immutable command/job identities.
@@ -1927,8 +1927,11 @@ credential storage, and explicit permission/error flows.
   and both Moonraker simulators, and the TypeScript transport remains the
   rollback adapter (`?printer-transport=typescript`). The browser's printer
   session runs on the shared session machine too, passing its own tests, and
-  moves onto it before a printer is selected. Running the submission
-  controller on its shared machine remains.
+  moves onto it before a printer is selected; the send workflow runs on the
+  shared workflow machine, passing its own 41 tests, and moves onto it
+  between sends. Porting the hosts fixed their own ordering: a synchronous
+  answer's step ran ahead of a cancel the question itself caused. Each host
+  keeps the TypeScript controller as its rollback.
 - [ ] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
   credential entry, and optional discovery. Discovery proposes verified endpoints
   and cannot overwrite preferences while a stale probe completes.

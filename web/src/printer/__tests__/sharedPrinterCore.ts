@@ -6,16 +6,18 @@ import {
   moonraker_endpoint,
   MoonrakerTransport,
   PrinterSession,
+  PrintWorkflow,
 } from '../../../../core/browser/printer/orcaxr_core.js';
 import type { MoonrakerTransportCore } from '../SharedMoonrakerTransport';
 import type { PrinterSessionCore } from '../SharedPrinterSession';
+import type { PrintWorkflowCore } from '../SharedPrintWorkflow';
 
-let loaded: (MoonrakerTransportCore & PrinterSessionCore) | undefined;
+let loaded: (MoonrakerTransportCore & PrinterSessionCore & PrintWorkflowCore) | undefined;
 
-export function loadSharedPrinterCore(): MoonrakerTransportCore & PrinterSessionCore {
+export function loadSharedPrinterCore(): MoonrakerTransportCore & PrinterSessionCore & PrintWorkflowCore {
   if (!loaded) {
     initSync({ module: readFileSync(new URL(`../../../public/${CORE_PRINTER_ASSET.wasm.path}`, import.meta.url)) });
-    loaded = { MoonrakerTransport, moonraker_endpoint, PrinterSession };
+    loaded = { MoonrakerTransport, moonraker_endpoint, PrinterSession, PrintWorkflow };
   }
   return loaded;
 }

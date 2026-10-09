@@ -10,6 +10,7 @@ import initialize, {
   moonraker_endpoint,
   MoonrakerTransport,
   PrinterSession,
+  PrintWorkflow,
 } from '../../../core/browser/printer/orcaxr_core.js';
 import { CORE_PRINTER_ASSET } from '../../../core/browser/printer/asset';
 import { checkCoreHandshake, fetchCoreAsset } from '../slicer/core/CoreAsset';
@@ -25,6 +26,8 @@ import type {
   PrinterSessionTransport,
 } from './PrinterSessionController';
 import { SharedPrinterSession } from './SharedPrinterSession';
+import type { PrintWorkflow as PrintWorkflowApi, PrintWorkflowDependencies } from './PrintWorkflowController';
+import { SharedPrintWorkflow } from './SharedPrintWorkflow';
 
 /** Makes connections that run on the loaded core. */
 export type SharedConnectionFactory = (
@@ -32,10 +35,11 @@ export type SharedConnectionFactory = (
   dependencies?: MoonrakerTransportDependencies,
 ) => MoonrakerConnection;
 
-/** What runs on the loaded printer core: connections and sessions. */
+/** What runs on the loaded printer core: connections, sessions and send workflows. */
 export interface SharedPrinterRuntime {
   readonly connection: SharedConnectionFactory;
   session<T extends PrinterSessionTransport>(createTransport: (selection: PrinterSelection) => T): PrinterSessionApi<T>;
+  workflow(dependencies: PrintWorkflowDependencies): PrintWorkflowApi;
 }
 
 const PRINTER = { maxBytes: 3 * 1024 * 1024, component: 'printer' } as const;
@@ -48,9 +52,10 @@ export async function loadPrinterCore(
   const bytes = await fetchCoreAsset(CORE_PRINTER_ASSET.wasm, base, fetcher, PRINTER);
   await initialize({ module_or_path: bytes });
   checkCoreHandshake(core_info(), 'printer');
-  const core = { MoonrakerTransport, moonraker_endpoint, PrinterSession };
+  const core = { MoonrakerTransport, moonraker_endpoint, PrinterSession, PrintWorkflow };
   return {
     connection: (config, dependencies) => new SharedMoonrakerTransport(core, config, dependencies),
     session: (createTransport) => new SharedPrinterSession(core, createTransport),
+    workflow: (dependencies) => new SharedPrintWorkflow(core, dependencies),
   };
 }
