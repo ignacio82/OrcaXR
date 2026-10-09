@@ -177,6 +177,10 @@ assert.deepEqual(schema.roots, [
   "PrinterText",
   "TransportFailure",
   "PrintFileIdentityReply",
+  "PrintWorkflowIntent",
+  "PrintWorkflowOutcome",
+  "PrintWorkflowStep",
+  "PrintWorkflowEffect",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

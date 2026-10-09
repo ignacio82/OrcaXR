@@ -91,6 +91,8 @@ const [
   toolsFixtureText,
   preparationReplay,
   preparationFixtureText,
+  workflowReplay,
+  workflowFixtureText,
   hostileArchivesText,
   wasm,
 ] = await Promise.all([
@@ -173,6 +175,8 @@ const [
   read("testdata/cross-platform/printer-tools-vectors.json"),
   read("tools/cross-platform/printer-preparation-replay.mjs"),
   read("testdata/cross-platform/printer-preparation-vectors.json"),
+  read("tools/cross-platform/printer-workflow-replay.mjs"),
+  read("testdata/cross-platform/printer-workflow-vectors.json"),
   read("testdata/cross-platform/hostile-archive-vectors.json"),
   readFile(new URL("core/dist/project-wasm/orcaxr_core_bg.wasm", root)),
 ]);
@@ -209,33 +213,46 @@ const browser = await puppeteer.launch({
 });
 try {
   const page = await browser.newPage();
+  // The largest corpora are fetched by the page from its own (intercepted)
+  // origin: the DevTools pipe refuses any single message over 100 MiB, and
+  // every argument of one evaluate call travels in one message.
+  const served = {
+    fixture: ["/fixtures/project-session.json", fixtureText],
+    stagedFixture: ["/fixtures/project-staged-session.json", stagedFixtureText],
+    queryFixture: ["/fixtures/project-query.json", queryFixtureText],
+    workflowFixture: ["/fixtures/printer-workflow.json", workflowFixtureText],
+  };
+  const bodies = new Map(Object.values(served));
   await page.setRequestInterception(true);
-  page.on("request", (request) =>
-    request.respond({
-      status: 200,
-      contentType: "text/html",
-      body: "<!doctype html><title>project-wasm</title>",
-    }),
-  );
+  page.on("request", (request) => {
+    const body = bodies.get(new URL(request.url()).pathname);
+    request.respond(
+      body === undefined
+        ? {
+            status: 200,
+            contentType: "text/html",
+            body: "<!doctype html><title>project-wasm</title>",
+          }
+        : { status: 200, contentType: "application/json", body },
+    );
+  });
   await page.goto("https://project-wasm.invalid/");
   const result = await page.evaluate(
     async ({
+      served,
       glue,
       replay,
       boundaries,
-      fixture,
       layout,
       base,
       timestamps,
       queryReplay,
-      queryFixture,
       queryLayout,
       stagedReplay,
       stagedBoundaries,
       clipboardBoundaries,
       documentReplay,
       documentFixture,
-      stagedFixture,
       stagingLayout,
       archiveReplay,
       archiveLayout,
@@ -300,16 +317,22 @@ try {
       toolsFixture,
       preparationReplay,
       preparationFixture,
+      workflowReplay,
       hostileArchives,
       wasm,
     }) => {
+      const { fixture, stagedFixture, queryFixture, workflowFixture } = Object.fromEntries(
+        await Promise.all(
+          Object.entries(served).map(async ([name, path]) => [name, await (await fetch(path)).json()]),
+        ),
+      );
       const coreUrl = URL.createObjectURL(
         new Blob([glue], { type: "text/javascript" }),
       );
       const workerUrl = URL.createObjectURL(
         new Blob(
           [
-            `import * as core from '${coreUrl}';\n${replay}\n${boundaries}\n${queryReplay}\n${stagedReplay}\n${stagedBoundaries}\n${clipboardBoundaries}\n${documentReplay}\n${archiveReplay}\n${modelReplay}\n${preflightReplay}\n${catalogReplay}\n${libraryReplay}\n${editorReplay}\n${projectionReplay}\n${capabilityReplay}\n${renderReplay}\n${regionReplay}\n${strokeReplay}\n${pickReplay}\n${placementReplay}\n${arrangeReplay}\n${towerReplay}\n${splitReplay}\n${simplifyReplay}\n${measureReplay}\n${brimEarReplay}\n${embossReplay}\n${svgReplay}\n${packetReplay}\n${assemblyReplay}\n${treeReplay}\n${printJobReplay}\n${controlReplay}\n${toolsReplay}\n${preparationReplay}\nconst b64=(t)=>Uint8Array.from(atob(t),(c)=>c.charCodeAt(0));const sha256=async(b)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",b)),(x)=>x.toString(16).padStart(2,"0")).join("");self.onmessage=async({data})=>{try{await core.default({module_or_path:data.wasm});const result=await replayProject(core,data.fixture,data.layout);result.archives=await replayArchives(core,data.layout,data.archiveLayout,archiveCases(JSON.parse(data.canonicalArchives),JSON.parse(data.foreignArchives),(p)=>b64(data.archiveFiles[p]),b64),sha256);result.hostile=await replayHostileArchives(core,data.layout,data.archiveLayout,JSON.parse(data.hostileArchives),sha256,b64);result.models=await replayModelImports(core,data.layout,data.modelLayout,JSON.parse(data.modelTransactions),JSON.parse(data.modelStaging),JSON.parse(data.modelDecoding),sha256,(p)=>b64(data.archiveFiles[p]),b64);Object.assign(result,replayProjectDocuments(core,data.documentFixture,data.layout),await replayStagedProject(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectStagedBoundaries(core,data.stagedFixture.traces[0],data.layout,data.stagingLayout),projectClipboardBoundaries(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectBoundaries(core,data.base,data.layout,data.timestamps),replayProjectQueries(core,data.queryFixture,data.queryLayout),replayPreflights(core,data.preflightFixture,data.layout,data.fixture.generation),replayCatalogs(core,data.catalogFixture,b64(data.catalogBytes),{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))}),replayLibrary(core,data.libraryFixture,b64(data.catalogBytes),[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))}]),replayProjection(core,data.projectionFixture,data.layout,data.fixture.generation,[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}]),replayCapabilities(core,data.capabilityFixture,data.layout),replayRender(core,data.renderFixture,data.layout),replayFacetRegions(core,data.regionFixture,data.layout),await replayPaintStrokes(core,data.strokeFixture,data.layout,data.stagingLayout.version,sha256),replayPicks(core,data.pickFixture,data.layout),replayPlacements(core,data.placementFixture,data.layout),replayArrangements(core,data.arrangeFixture,data.layout),replayWipeTowers(core,data.towerFixture,data.layout),await replayVolumeSplits(core,data.splitFixture,data.layout,data.stagingLayout.version),await replaySimplify(core,data.simplifyFixture,data.layout,data.stagingLayout.version,sha256),replayMeasure(core,data.measureFixture,data.layout),replayBrimEars(core,data.brimEarFixture,data.layout),await replayEmboss(core,data.embossFixture,data.layout,data.stagingLayout.version,sha256),await replaySvgParts(core,data.svgFixture,data.layout,data.stagingLayout.version,sha256,b64),await replayMeshPackets(core,data.packetFixture,data.layout,sha256),replayAssembly(core,data.assemblyFixture),replayPrintJobStatus(core,data.printJobFixture),replayPrinterControl(core,data.controlFixture),replayPrinterTools(core,data.toolsFixture),replayPrinterPreparation(core,data.preparationFixture),replayObjectTree(core,data.treeFixture,data.layout,data.fixture.generation,{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}),replayEditor(core,data.editorFixture,[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}]));self.postMessage({ok:true,result},[result.owned.buffer,result.ownedQueryText.buffer]);}catch(e){self.postMessage({ok:false,error:String(e)});}};`,
+            `import * as core from '${coreUrl}';\n${replay}\n${boundaries}\n${queryReplay}\n${stagedReplay}\n${stagedBoundaries}\n${clipboardBoundaries}\n${documentReplay}\n${archiveReplay}\n${modelReplay}\n${preflightReplay}\n${catalogReplay}\n${libraryReplay}\n${editorReplay}\n${projectionReplay}\n${capabilityReplay}\n${renderReplay}\n${regionReplay}\n${strokeReplay}\n${pickReplay}\n${placementReplay}\n${arrangeReplay}\n${towerReplay}\n${splitReplay}\n${simplifyReplay}\n${measureReplay}\n${brimEarReplay}\n${embossReplay}\n${svgReplay}\n${packetReplay}\n${assemblyReplay}\n${treeReplay}\n${printJobReplay}\n${controlReplay}\n${toolsReplay}\n${preparationReplay}\n${workflowReplay}\nconst b64=(t)=>Uint8Array.from(atob(t),(c)=>c.charCodeAt(0));const sha256=async(b)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",b)),(x)=>x.toString(16).padStart(2,"0")).join("");self.onmessage=async({data})=>{try{await core.default({module_or_path:data.wasm});const result=await replayProject(core,data.fixture,data.layout);result.archives=await replayArchives(core,data.layout,data.archiveLayout,archiveCases(JSON.parse(data.canonicalArchives),JSON.parse(data.foreignArchives),(p)=>b64(data.archiveFiles[p]),b64),sha256);result.hostile=await replayHostileArchives(core,data.layout,data.archiveLayout,JSON.parse(data.hostileArchives),sha256,b64);result.models=await replayModelImports(core,data.layout,data.modelLayout,JSON.parse(data.modelTransactions),JSON.parse(data.modelStaging),JSON.parse(data.modelDecoding),sha256,(p)=>b64(data.archiveFiles[p]),b64);Object.assign(result,replayProjectDocuments(core,data.documentFixture,data.layout),await replayStagedProject(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectStagedBoundaries(core,data.stagedFixture.traces[0],data.layout,data.stagingLayout),projectClipboardBoundaries(core,data.stagedFixture,data.layout,data.stagingLayout,data.queryLayout),projectBoundaries(core,data.base,data.layout,data.timestamps),replayProjectQueries(core,data.queryFixture,data.queryLayout),replayPreflights(core,data.preflightFixture,data.layout,data.fixture.generation),replayCatalogs(core,data.catalogFixture,b64(data.catalogBytes),{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))}),replayLibrary(core,data.libraryFixture,b64(data.catalogBytes),[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))}]),replayProjection(core,data.projectionFixture,data.layout,data.fixture.generation,[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}]),replayCapabilities(core,data.capabilityFixture,data.layout),replayRender(core,data.renderFixture,data.layout),replayFacetRegions(core,data.regionFixture,data.layout),await replayPaintStrokes(core,data.strokeFixture,data.layout,data.stagingLayout.version,sha256),replayPicks(core,data.pickFixture,data.layout),replayPlacements(core,data.placementFixture,data.layout),replayArrangements(core,data.arrangeFixture,data.layout),replayWipeTowers(core,data.towerFixture,data.layout),await replayVolumeSplits(core,data.splitFixture,data.layout,data.stagingLayout.version),await replaySimplify(core,data.simplifyFixture,data.layout,data.stagingLayout.version,sha256),replayMeasure(core,data.measureFixture,data.layout),replayBrimEars(core,data.brimEarFixture,data.layout),await replayEmboss(core,data.embossFixture,data.layout,data.stagingLayout.version,sha256),await replaySvgParts(core,data.svgFixture,data.layout,data.stagingLayout.version,sha256,b64),await replayMeshPackets(core,data.packetFixture,data.layout,sha256),replayAssembly(core,data.assemblyFixture),replayPrintJobStatus(core,data.printJobFixture),replayPrinterControl(core,data.controlFixture),replayPrinterTools(core,data.toolsFixture),replayPrinterPreparation(core,data.preparationFixture),replayPrinterWorkflow(core,data.workflowFixture),replayObjectTree(core,data.treeFixture,data.layout,data.fixture.generation,{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}),replayEditor(core,data.editorFixture,[{compare:(a,b)=>new Intl.Collator("en").compare(String.fromCharCode(...a),String.fromCharCode(...b))},{fold:(u)=>{const s=String.fromCharCode(...u).normalize("NFKD").toLocaleLowerCase("en-US");return Uint16Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}}]));self.postMessage({ok:true,result},[result.owned.buffer,result.ownedQueryText.buffer]);}catch(e){self.postMessage({ok:false,error:String(e)});}};`,
           ],
           { type: "text/javascript" },
         ),
@@ -373,6 +396,7 @@ try {
               controlFixture,
               toolsFixture,
               preparationFixture,
+              workflowFixture,
               hostileArchives,
             },
             [bytes.buffer],
@@ -498,6 +522,11 @@ try {
           printerSlotReplies: result.printerSlotReplies,
           printerMappings: result.printerMappings,
           printerPreparationAnswers: result.printerPreparationAnswers,
+          printerWorkflow: [
+            result.printerWorkflowScenarios,
+            result.printerWorkflowSteps,
+            result.printerWorkflowRefusals,
+          ],
           owned: Array.from(result.owned),
           isolated: crossOriginIsolated,
         };
@@ -509,11 +538,11 @@ try {
       }
     },
     {
+      served: Object.fromEntries(Object.entries(served).map(([name, [path]]) => [name, path])),
       glue,
       replay,
       boundaries,
       queryReplay,
-      queryFixture: JSON.parse(queryFixtureText),
       queryLayout: JSON.parse(queryLayoutText),
       stagedReplay: stagedReplay.replace(/^import[\s\S]*?;\n/m, ""),
       stagedBoundaries: stagedBoundaries.replace(/^import[\s\S]*?;\n/m, ""),
@@ -523,7 +552,6 @@ try {
       ),
       documentReplay: documentReplay.replace(/^import[\s\S]*?;\n/m, ""),
       documentFixture: JSON.parse(documentFixtureText),
-      stagedFixture: JSON.parse(stagedFixtureText),
       stagingLayout: JSON.parse(stagingLayoutText),
       archiveReplay,
       archiveLayout: JSON.parse(archiveLayoutText),
@@ -588,8 +616,8 @@ try {
       toolsFixture: JSON.parse(toolsFixtureText),
       preparationReplay,
       preparationFixture: JSON.parse(preparationFixtureText),
+      workflowReplay,
       hostileArchives: hostileArchivesText,
-      fixture: JSON.parse(fixtureText),
       layout: JSON.parse(layoutText),
       base: JSON.parse(JSON.parse(modelText).factories[0].stateJson),
       timestamps: JSON.parse(timestampsText).timestamps,
@@ -759,6 +787,7 @@ try {
     [100, 20, 1552],
   );
   assert.equal(result.printerPreparationAnswers, 929);
+  assert.deepEqual(result.printerWorkflow, [402, 19688, 13]);
   assert.deepEqual(
     result.owned,
     JSON.parse(fixtureText).traces.at(-1).asset.bytes,

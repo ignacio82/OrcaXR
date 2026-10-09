@@ -43,11 +43,8 @@ fn result_or_payload(payload: &Value) -> Option<&Value> {
     }
 }
 /// `readStringArray`: the strings of `result[key]`, when it is an array.
-fn string_array(text: &str, key: &str) -> wire::OptionalTextList {
-    let Some(payload) = parsed(text) else {
-        return wire::OptionalTextList::Absent(wire::Empty {});
-    };
-    let list = result_or_payload(&payload)
+fn string_array(payload: &Value, key: &str) -> wire::OptionalTextList {
+    let list = result_or_payload(payload)
         .filter(|r| matches!(r, Value::Object(_) | Value::Array(_)))
         .and_then(|r| field(Some(r), key))
         .and_then(|v| match v {
@@ -68,24 +65,34 @@ fn string_array(text: &str, key: &str) -> wire::OptionalTextList {
     }
 }
 
+fn unknown_list() -> wire::OptionalTextList {
+    wire::OptionalTextList::Absent(wire::Empty {})
+}
 /// `/printer/objects/list`: the configured objects, or unknown.
 pub fn printer_objects(text: &str) -> wire::OptionalTextList {
-    string_array(text, "objects")
+    parsed(text).map_or_else(unknown_list, |payload| printer_objects_of(&payload))
+}
+pub(crate) fn printer_objects_of(payload: &Value) -> wire::OptionalTextList {
+    string_array(payload, "objects")
 }
 /// `/server/info`: the installed components, or unknown.
 pub fn server_components(text: &str) -> wire::OptionalTextList {
-    string_array(text, "components")
+    parsed(text).map_or_else(unknown_list, |payload| server_components_of(&payload))
+}
+pub(crate) fn server_components_of(payload: &Value) -> wire::OptionalTextList {
+    string_array(payload, "components")
 }
 /// `/printer/gcode/help`: an object of `{ COMMAND: description }`; its names,
 /// in UTF-16 order (they are only ever tested for membership).
 pub fn gcode_commands(text: &str) -> wire::OptionalTextList {
-    let names = parsed(text).and_then(|payload| match result_or_payload(&payload) {
-        Some(Value::Object(fields)) => Some(fields.keys().cloned().collect()),
-        _ => None,
-    });
-    match names {
-        Some(names) => wire::OptionalTextList::Value(names),
-        None => wire::OptionalTextList::Absent(wire::Empty {}),
+    parsed(text).map_or_else(unknown_list, |payload| gcode_commands_of(&payload))
+}
+pub(crate) fn gcode_commands_of(payload: &Value) -> wire::OptionalTextList {
+    match result_or_payload(payload) {
+        Some(Value::Object(fields)) => {
+            wire::OptionalTextList::Value(fields.keys().cloned().collect())
+        }
+        _ => unknown_list(),
     }
 }
 
@@ -331,14 +338,17 @@ pub fn readiness_unavailable(request: &wire::PrintReadinessFailure) -> wire::Pri
 /// `queryPrintReadiness` over the query's reply: every blocker names the exact
 /// reported state; an unrecognized one is itself a blocker.
 pub fn readiness(text: &str) -> wire::PrintReadiness {
-    let Some(payload) = parsed(text) else {
+    match parsed(text) {
+        Some(payload) => readiness_of(&payload),
         // The transport refuses a reply that is not JSON.
-        return readiness_failure("invalid_response");
-    };
+        None => readiness_failure("invalid_response"),
+    }
+}
+pub(crate) fn readiness_of(payload: &Value) -> wire::PrintReadiness {
     fn record(v: Option<&Value>) -> Option<&Value> {
         v.filter(|v| matches!(v, Value::Object(_)))
     }
-    let status = record(field(Some(&payload), "status"));
+    let status = record(field(Some(payload), "status"));
     let webhooks = record(field(status, "webhooks"));
     let stats = record(field(status, "print_stats"));
     let text_of = |v: Option<&Value>| match v {
@@ -543,6 +553,12 @@ pub fn describe_failure(request: &wire::TransportFailure) -> Vec<u16> {
 
 /// `readPrintFileIdentity` over a metadata reply for `filename`.
 pub fn file_identity(text: &str, filename: &[u16]) -> wire::PrintFileIdentityReply {
+    match parsed(text) {
+        Some(value) => file_identity_of(&value, filename),
+        None => file_identity_of(&Value::Null, filename),
+    }
+}
+pub(crate) fn file_identity_of(value: &Value, filename: &[u16]) -> wire::PrintFileIdentityReply {
     let unreliable = || {
         wire::PrintFileIdentityReply::Unreliable(wire::PrinterText {
             text: [
@@ -553,11 +569,8 @@ pub fn file_identity(text: &str, filename: &[u16]) -> wire::PrintFileIdentityRep
             .concat(),
         })
     };
-    let Some(value) = parsed(text) else {
-        return unreliable();
-    };
-    let named = matches!(field(Some(&value), "filename"), Some(Value::String(f)) if f == filename);
-    let number = |name| match field(Some(&value), name) {
+    let named = matches!(field(Some(value), "filename"), Some(Value::String(f)) if f == filename);
+    let number = |name| match field(Some(value), name) {
         Some(Value::Number(n)) => Some(*n),
         _ => None,
     };

@@ -7,3 +7,4 @@ pub mod preparation;
 pub mod status;
 pub mod summary;
 pub mod tools;
+pub mod workflow;

@@ -132,6 +132,15 @@ final class NativeProject {
     static native String sanitizeGcodeFilename(String request);
     static native String describeTransportFailure(String request);
     static native String printFileIdentity(String text, String filename);
+    // The print submission workflow: each call answers a PrintWorkflowStep.
+    static native long printWorkflowNew();
+    static native boolean printWorkflowBusy(long handle);
+    static native String printWorkflowRun(long handle, String intent);
+    static native String printWorkflowStartStored(long handle, String path);
+    static native String printWorkflowResolve(long handle, long id, String outcome);
+    static native String printWorkflowReply(long handle, long id, String text);
+    static native String printWorkflowCancel(long handle);
+    static native String printWorkflowDispose(long handle);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

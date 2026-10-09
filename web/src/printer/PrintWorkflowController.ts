@@ -236,7 +236,10 @@ export class PrintWorkflowController {
           phase(value);
         },
       });
-      assertCurrent();
+      // No currency check here: the printer has already done what was
+      // confirmed. A session or artifact that changes after the start request
+      // returned does not unstart a print, and reporting "Send failed" for a
+      // job that is printing invited the operator to send it again.
       return result;
     } catch (error) {
       const uncertain =
@@ -271,9 +274,16 @@ export class PrintWorkflowController {
     const signal = operation.signal;
     const abort = () => operation.abort();
     let session: PrintWorkflowSession | undefined;
-    const assertCurrent = () => {
+    const cancelled = () => {
       if (signal.aborted) throw new PrintSubmissionError('Print cancelled or printer session changed.', 'cancelled');
+    };
+    // The abort is checked again after the session answers: a host that asks
+    // its session asynchronously (the shared core does) can be cancelled in
+    // between, and the start request is the next thing sent.
+    const assertCurrent = () => {
+      cancelled();
       session?.assertCurrent();
+      cancelled();
     };
     try {
       this.phaseValue = 'checking';
@@ -282,6 +292,8 @@ export class PrintWorkflowController {
       if (session.signal.aborted) operation.abort();
       assertCurrent();
       const readiness = await queryPrintReadiness(session.transport, signal);
+      // A cancelled query reads as "not ready"; the operator's cancel is the news.
+      cancelled();
       if (!readiness.ready)
         throw new PrintSubmissionError('The printer must report a ready, idle state before reprinting.', 'not-ready');
       const original = await readPrintFileIdentity(session.transport, filename, signal);
@@ -318,6 +330,7 @@ export class PrintWorkflowController {
           'target-changed',
         );
       const fresh = await queryPrintReadiness(session.transport, signal);
+      cancelled();
       if (!fresh.ready)
         throw new PrintSubmissionError(
           'Printer readiness changed after confirmation. Printing was not started.',
@@ -337,7 +350,7 @@ export class PrintWorkflowController {
           'start-uncertain',
         );
       }
-      assertCurrent();
+      // As in `run`: once the printer accepted the start, it has started.
       this.phaseValue = 'completed';
       return filename;
     } catch (error) {
@@ -351,7 +364,8 @@ export class PrintWorkflowController {
               ? ` Fresh printer state: ${status.printState}.`
               : ' Current printer state could not be verified.'
             : ''),
-        error instanceof PrintSubmissionError ? error.code : 'stale-context',
+        // As in `run`: a transport error the operator's cancel caused is a cancel.
+        error instanceof PrintSubmissionError ? error.code : signal.aborted ? 'cancelled' : 'stale-context',
       );
     } finally {
       session?.signal.removeEventListener('abort', abort);

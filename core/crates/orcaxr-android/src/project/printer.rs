@@ -8,6 +8,7 @@ use orcaxr_printer::{
     preparation,
     status::{JobStatus, LIMITS},
     summary, tools,
+    workflow::{PrintWorkflow, Refusal},
 };
 
 /// Text a printer sent, within the model's bounds.
@@ -353,4 +354,83 @@ pub(super) fn print_file_identity(
         |f| preparation::file_identity(&text, &f.text),
         wire::encode_print_file_identity_reply,
     )
+}
+
+fn with_workflow<R>(
+    handle: jlong,
+    call: impl FnOnce(&mut PrintWorkflow) -> std::result::Result<R, Refusal>,
+) -> Result<R> {
+    registry().slot(handle)?.with(|record| match record {
+        Some(Record::PrintWorkflow(workflow)) => call(workflow).map_err(Refusal::code),
+        _ => Err("invalid_handle_kind"),
+    })
+}
+fn workflow_step(env: &mut JNIEnv<'_>, step: wire::PrintWorkflowStep) -> Result<jstring> {
+    let json = wire::encode_print_workflow_step(&step).map_err(|_| "output_limit")?;
+    string(env, json)
+}
+fn effect_id(id: jlong) -> Result<u64> {
+    u64::try_from(id).map_err(|_| "invalid_request")
+}
+pub(super) fn print_workflow_new(_: &mut JNIEnv<'_>) -> Result<jlong> {
+    let reserved = registry().reserve(false)?;
+    reserved.insert(Record::PrintWorkflow(Box::default()))
+}
+pub(super) fn print_workflow_busy(_: &mut JNIEnv<'_>, handle: jlong) -> Result<jboolean> {
+    with_workflow(handle, |w| Ok(u8::from(w.busy())))
+}
+/// A `PrintWorkflowIntent`: send a sliced artifact.
+pub(super) fn print_workflow_run(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    intent: JString<'_>,
+) -> Result<jstring> {
+    let intent = wire::decode_print_workflow_intent(&intent_text(env, &intent)?)
+        .map_err(|_| "invalid_request")?;
+    let step = with_workflow(handle, |w| w.run(intent))?;
+    workflow_step(env, step)
+}
+/// A `PrinterText` naming a stored file to start.
+pub(super) fn print_workflow_start_stored(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    path: JString<'_>,
+) -> Result<jstring> {
+    let path =
+        wire::decode_printer_text(&intent_text(env, &path)?).map_err(|_| "invalid_request")?;
+    let step = with_workflow(handle, |w| w.start_stored(&path.text))?;
+    workflow_step(env, step)
+}
+/// A `PrintWorkflowOutcome` answering effect `id`.
+pub(super) fn print_workflow_resolve(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    id: jlong,
+    outcome: JString<'_>,
+) -> Result<jstring> {
+    let id = effect_id(id)?;
+    let outcome = wire::decode_print_workflow_outcome(&intent_text(env, &outcome)?)
+        .map_err(|_| "invalid_request")?;
+    let step = with_workflow(handle, |w| w.resolve(id, outcome))?;
+    workflow_step(env, step)
+}
+/// The reply a request or upload received: Moonraker's `result`, as JSON.
+pub(super) fn print_workflow_reply(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    id: jlong,
+    text: JString<'_>,
+) -> Result<jstring> {
+    let id = effect_id(id)?;
+    let text = printer_text(env, &text)?;
+    let step = with_workflow(handle, |w| w.resolve_reply(id, &text))?;
+    workflow_step(env, step)
+}
+pub(super) fn print_workflow_cancel(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let step = with_workflow(handle, |w| Ok(w.cancel()))?;
+    workflow_step(env, step)
+}
+pub(super) fn print_workflow_dispose(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jstring> {
+    let step = with_workflow(handle, |w| Ok(w.dispose()))?;
+    workflow_step(env, step)
 }

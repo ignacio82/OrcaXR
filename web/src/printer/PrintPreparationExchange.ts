@@ -80,7 +80,7 @@ export function answerGcodeCommands(payload: unknown): ProjectOptionalTextListWi
   return list(names === undefined ? undefined : [...names].sort(compareCanonicalText));
 }
 
-function optionWire(option: PrintStartOption): ProjectPrintStartOptionWire {
+export function printStartOptionWire(option: PrintStartOption): ProjectPrintStartOptionWire {
   return {
     id: IDS[option.id],
     label: units(option.label),
@@ -112,7 +112,7 @@ export function answerPrintStartOptions(report: ProjectPrinterCapabilityReportWi
     ...(objects ? { objects } : {}),
     ...(commands ? { commands } : {}),
     ...(components ? { components } : {}),
-  }).map(optionWire);
+  }).map(printStartOptionWire);
 }
 
 function stepWire(step: PrintPreparationStep): ProjectPrintPreparationStepWire {

@@ -38,6 +38,7 @@ import { replayPrintJobStatus } from "./print-job-status-replay.mjs";
 import { replayPrinterControl } from "./printer-control-replay.mjs";
 import { replayPrinterTools } from "./printer-tools-replay.mjs";
 import { replayPrinterPreparation } from "./printer-preparation-replay.mjs";
+import { replayPrinterWorkflow } from "./printer-workflow-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -1010,6 +1011,31 @@ try {
     jvm.call("printPreparationChecks", preparationScript.map((row) => row.join("\t")).join("\n")),
     929,
   );
+  // The submission workflow through the real JNI exports, then the Kotlin
+  // wrapper, step for step.
+  const workflowFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/printer-workflow-vectors.json", root)),
+  );
+  assert.deepEqual(
+    Object.values(replayPrinterWorkflow(projectJniCore(jvm.call), workflowFixture)),
+    [402, 19688, 13],
+  );
+  const workflowScript = workflowFixture.scenarios.flatMap((scenario) => [
+    "N",
+    ...scenario.records.map(({ input, step, refused }) => {
+      const [kind, value] = Object.entries(input)[0];
+      const [id, argument] =
+        kind === "resolve"
+          ? [value.id, value.outcome]
+          : kind === "reply"
+            ? [value.id, Buffer.from(value.text, "utf8").toString("base64")]
+            : kind === "run" || kind === "stored"
+              ? ["", value]
+              : ["", ""];
+      return [kind, id, argument, step ?? `!${refused}`].join("\t");
+    }),
+  ]);
+  assert.equal(jvm.call("printWorkflowChecks", workflowScript.join("\n")), 19689);
   const savedQueryText = Array.from(ownedQueryText);
   await jvm.close();
   assert.deepEqual(Array.from(ownedQueryText), savedQueryText);

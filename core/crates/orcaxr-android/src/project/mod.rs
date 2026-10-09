@@ -120,6 +120,7 @@ enum Record {
     PrintJobStatus(Box<orcaxr_printer::status::JobStatus>),
     HoldToConfirm(Box<orcaxr_printer::control::HoldToConfirm>),
     ToolUsage(Box<orcaxr_printer::tools::ToolUsageScanner>),
+    PrintWorkflow(Box<orcaxr_printer::workflow::PrintWorkflow>),
 }
 fn registry() -> &'static Registry<Record> {
     static REGISTRY: OnceLock<Registry<Record>> = OnceLock::new();

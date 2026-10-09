@@ -3632,6 +3632,58 @@ names travel as a set in UTF-16 order, since only membership is ever asked.
 `printer-preparation-vectors.mjs` records 929 answers; Rust, WASM in Node and
 Chrome, JNI and 929 Kotlin checks agree on every one.
 
+`workflow` ports `PrintWorkflowController.ts` with the `submitPrintJob`,
+`preparePrintUpload` and `validatePrintUploadTarget` flow it drives, as an
+effect machine. `PrintWorkflow` runs one send or stored reprint at a time;
+every call answers a `PrintWorkflowStep`: the controller's phase, the
+progress notices since the last step, the effects issued (each under an id),
+and the operation's state. Effects are what the browser awaits or asks
+synchronously: capture the session, whether the session or artifact is
+still current, a request (`PrinterSend`), the upload, 16 random bytes, the
+operator's decision, and `reconcile`, the one readiness query that is not
+the operation's (it survives a cancel and carries its own 3-second
+deadline). Hosts answer with `resolve` (an outcome) or `resolve_reply`
+(Moonraker's `result` as JSON; text that is not JSON is the transport's
+`invalid_response`). Internally the browser's async code is Rust async code
+polled with a no-op waker: an effect future registers on first poll, a join
+issues `Promise.all`'s requests in order, and every answer polls the
+operation until it waits again or ends. `cancel` aborts the operation and
+withdraws an open confirmation at once; the host fails the operation's
+requests and upload in flight as `cancelled`, or lets a reply that already
+arrived through, which is checked like any other. Refusals are codes:
+`unavailable` (disposed, or an operation already running), `not_pending`
+and `mismatch`. The checks, their order and every message are the
+browser's: readiness and file management before confirmation, a 128-bit
+unique name or an overwrite of exactly the file confirmed (never an active
+one), the upload reply's root, path, size and upload-only mode, the stored
+size, and before each preparation step and the start a fresh readiness,
+mapping, capability and stored-file check; an ambiguous preparation or start
+is never retried and is reported with one reconciled readiness.
+
+Bindings: WASM `PrintWorkflow`, the JNI `printWorkflow*` exports and Kotlin
+`PrintWorkflow`. `printer-workflow-vectors.mjs` drives the production
+controller through `PrintWorkflowExchange.ts`, which records each input and
+the step it produced, over a scripted printer: 402 scenarios (19,688 steps)
+covering sends with and without starting, overwrites and collisions,
+readiness, mapping and capability drift after each mutation, unverified
+uploads, uncertain preparation and starts with every reconciliation, refused
+stored paths, controller misuse, and cancel (with and without late replies),
+session loss and artifact staleness at every single effect. Rust, WASM in
+Node and Chrome, JNI and 19,689 Kotlin checks reproduce every step. This
+corpus pushed the Chrome runner's single `evaluate` call past the DevTools
+pipe's 100 MiB message limit, so the page now fetches its four largest
+corpora from its own intercepted origin. Porting
+fixed four browser defects, each with a regression: the controller
+re-checked currency after the printer accepted a start, so a session that
+changed in that window reported "Send failed … Confirm a new send" for a
+job that was printing; `assertStoragePath` let a lone surrogate through to
+`encodeURIComponent`, which threw "URI malformed"; a readiness query the
+operator cancelled read as an unknown state and was reported as "cannot
+accept this operation" or "readiness changed"; and a reprint cancelled while
+reading metadata reported a stale context. The reprint also re-checks the
+abort after its session answers, since in the machine that answer is a step
+a cancel can land in before the start request.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

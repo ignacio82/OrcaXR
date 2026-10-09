@@ -12,6 +12,7 @@ import { MoonrakerTransportError } from '../MoonrakerTypes';
 import {
   PrinterStorageError,
   assertStorageName,
+  assertStoragePath,
   deletePrinterFile,
   downloadPrinterFile,
   formatStorageSize,
@@ -118,13 +119,16 @@ await test('an unscanned file reports nothing at all rather than zeroes', async 
 
 await test('refuses any target that could act on another file', async () => {
   const transport = new FakeTransport();
-  for (const bad of ['', '   ', '../secrets.gcode', 'projects/../../etc/passwd']) {
+  for (const bad of ['', '   ', '../secrets.gcode', 'projects/../../etc/passwd', 'odd\ud800.gcode', 'a/\udc80b']) {
     await assert.rejects(
       () => deletePrinterFile(transport, bad),
       (error: unknown) => error instanceof PrinterStorageError && error.code === 'invalid-target',
     );
   }
   assert.equal(transport.calls.length, 0, 'a refused target must never reach the printer');
+  // A lone surrogate has no URL spelling; it used to escape as "URI malformed".
+  assert.throws(() => assertStoragePath('odd\ud800.gcode', 'That file'), /That file has a name that is not valid text/);
+  assert.equal(assertStoragePath(' /emoji\ud83d\ude00.gcode/ ', 'That file'), 'emoji\ud83d\ude00.gcode');
   assert.throws(() => assertStorageName('a/b.gcode'), /folder separator/);
   assert.throws(() => assertStorageName('  '), /empty/);
   await assert.rejects(

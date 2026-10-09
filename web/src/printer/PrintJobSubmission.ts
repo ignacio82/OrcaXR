@@ -262,6 +262,9 @@ export async function submitPrintJob(
   const validate = async (phase: PrintSubmissionPhase, uploadedPath?: string): Promise<void> => {
     throwIfCancelled(request.signal);
     const readiness = await queryPrintReadiness(transport, request.signal);
+    // A query the operator cancelled reads as an unknown state; report the
+    // cancel, not a printer that "cannot accept this operation".
+    throwIfCancelled(request.signal);
     if (!readiness.known || (request.startPrint && !readiness.ready)) {
       throw new PrintSubmissionError(
         `${uploadedPath ? `${uploadedPath} is stored, but printing was not started. ` : ''}The printer cannot accept this operation: ${readiness.blockers.map((blocker) => blocker.message).join(' ')}`,
@@ -359,6 +362,7 @@ export async function submitPrintJob(
       if (!samePrintFile(retained, current))
         throw new PrintSubmissionError(`${path} changed after upload. Nothing else was sent.`, 'target-changed');
       const fresh = await queryPrintReadiness(transport, request.signal);
+      throwIfCancelled(request.signal);
       if (!fresh.ready)
         throw new PrintSubmissionError(
           `${path} is stored, but printer readiness changed. Printing was not started.`,
@@ -532,6 +536,7 @@ export async function validatePrintUploadTarget(
     );
   }
   const readiness = await queryPrintReadiness(transport, signal);
+  throwIfCancelled(signal);
   if (
     !readiness.known ||
     ((readiness.printState === 'printing' || readiness.printState === 'paused' || readiness.virtualSdActive) &&

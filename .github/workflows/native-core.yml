@@ -156,6 +156,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/printer-control-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/printer-tools-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/printer-preparation-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/printer-workflow-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/action-capability-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/capability-exchange-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/render-delta-vectors.mjs

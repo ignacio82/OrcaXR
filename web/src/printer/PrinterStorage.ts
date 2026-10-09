@@ -123,17 +123,24 @@ export class PrinterStorageError extends Error {
 }
 
 /**
- * Reject a path that would escape the root or address nothing.
+ * Reject a path that would escape the root, address nothing, or cannot be
+ * written into a request.
  *
  * Moonraker resolves `..` server-side, so a traversal would be refused there
  * too — but refusing it here means the operation is never attempted and the
- * message names the real problem instead of surfacing a 404.
+ * message names the real problem instead of surfacing a 404. A name holding a
+ * lone surrogate (Moonraker reports undecodable bytes that way) has no URL
+ * spelling at all, and `encodeURIComponent` throwing "URI malformed" named
+ * nothing an operator could act on.
  */
 export function assertStoragePath(path: string, what: string): string {
   const trimmed = path.trim().replace(/^\/+|\/+$/g, '');
   if (trimmed.length === 0) throw new PrinterStorageError(`${what} is empty.`, 'invalid-target');
   if (trimmed.split('/').some((segment) => segment === '.' || segment === '..')) {
     throw new PrinterStorageError(`${what} may not step outside the printer's ${GCODE_ROOT} folder.`, 'invalid-target');
+  }
+  if (/\p{Surrogate}/u.test(trimmed)) {
+    throw new PrinterStorageError(`${what} has a name that is not valid text.`, 'invalid-target');
   }
   return trimmed;
 }

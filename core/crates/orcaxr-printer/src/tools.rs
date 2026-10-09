@@ -304,11 +304,14 @@ fn loaded(value: &Value) -> bool {
 
 /// `parseMoonrakerFilamentSlots` over the query's reply text.
 pub fn filament_slots(text: &str) -> wire::FilamentSlotsReply {
-    let Ok(result) = parse_javascript(text, LIMITS) else {
-        return wire::FilamentSlotsReply::InvalidResponse(wire::Empty {});
-    };
+    match parse_javascript(text, LIMITS) {
+        Ok(result) => filament_slots_of(&result),
+        Err(_) => wire::FilamentSlotsReply::InvalidResponse(wire::Empty {}),
+    }
+}
+pub(crate) fn filament_slots_of(result: &Value) -> wire::FilamentSlotsReply {
     let config = record(field(
-        record(field(Some(&result), "status")),
+        record(field(Some(result), "status")),
         "print_task_config",
     ));
     let Some(colors) = config.and_then(|c| string_like(field(Some(c), "filament_color_rgba")))

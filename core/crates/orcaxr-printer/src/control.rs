@@ -226,6 +226,30 @@ pub fn moonraker_code(code: wire::MoonrakerErrorCode) -> &'static str {
     }
 }
 
+/// `MoonrakerTransportError`'s message for each code.
+pub fn moonraker_message(code: wire::MoonrakerErrorCode) -> &'static str {
+    use wire::MoonrakerErrorCode as C;
+    match code {
+        C::InvalidEndpoint => "The Moonraker endpoint is invalid or unsafe.",
+        C::InvalidCredentials => "The Moonraker credentials are invalid.",
+        C::InvalidState => "The Moonraker operation is not valid in the current connection state.",
+        C::InvalidRequest => "The Moonraker operation was given an invalid argument.",
+        C::Cancelled => "The Moonraker operation was cancelled.",
+        C::Timeout => "The Moonraker operation timed out.",
+        C::Network => "Moonraker could not be reached.",
+        C::AuthRequired => "Moonraker requires authentication.",
+        C::Forbidden => "Moonraker rejected the authenticated request.",
+        C::HttpError => "Moonraker returned an HTTP error.",
+        C::InvalidResponse => "Moonraker returned an invalid response.",
+        C::ProtocolError => "Moonraker returned a protocol error.",
+        C::VersionUnsupported => "The Moonraker API version is not supported.",
+        C::WebsocketUnavailable => "WebSocket support is unavailable in this browser.",
+        C::WebsocketFailed => "The Moonraker WebSocket connection failed.",
+        C::HeartbeatTimeout => "The Moonraker WebSocket heartbeat timed out.",
+        C::ReconnectExhausted => "Moonraker reconnection attempts were exhausted.",
+    }
+}
+
 /// The sentence a send reports when the transport fails it, or when the
 /// operator cancelled it in flight.
 pub fn failure(request: &wire::PrintJobCommandFailureRequest) -> wire::PrintJobCommandRefusal {

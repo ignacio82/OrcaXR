@@ -1889,8 +1889,16 @@ credential storage, and explicit permission/error flows.
   mappings agree in every binding. `preparation` ports the start options a
   printer's own replies support and their preparation plan, readiness,
   sanitized upload names, stored-file identity and how a transport failure
-  reads; 929 browser answers agree in every binding. The session,
-  submission and transport state machines remain.
+  reads; 929 browser answers agree in every binding. `workflow` ports the
+  submission state machine (`PrintWorkflowController` and `submitPrintJob`)
+  as an effect machine hosts drive by answering each effect: 402 browser
+  scenarios (19,688 steps), including cancel, session loss and staleness at
+  every effect, agree in every binding. Porting fixed four browser defects:
+  a start the printer accepted was reported failed when the session changed
+  afterwards, a stored path with a lone surrogate failed as "URI malformed",
+  a cancel during a readiness query was reported as a readiness failure, and
+  a reprint cancelled mid-metadata read as a stale context. The session and
+  transport state machines remain.
 - [ ] Implement Kotlin HTTP/WebSocket transport, explicit endpoint management,
   credential entry, and optional discovery. Discovery proposes verified endpoints
   and cannot overwrite preferences while a stale probe completes.

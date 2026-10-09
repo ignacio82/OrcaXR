@@ -918,6 +918,182 @@ export class PrintJobStatus {
 if (Symbol.dispose) PrintJobStatus.prototype[Symbol.dispose] = PrintJobStatus.prototype.free;
 
 /**
+ * The print submission workflow (`PrintWorkflowController`): a send or a
+ * stored reprint, one `PrintWorkflowStep` per call. Each step names the
+ * effects the host carries out and answers by id.
+ */
+export class PrintWorkflow {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        PrintWorkflowFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_printworkflow_free(ptr, 0);
+    }
+    /**
+     * @returns {boolean}
+     */
+    busy() {
+        const ret = wasm.printworkflow_busy(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @returns {string}
+     */
+    cancel() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.printworkflow_cancel(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    dispose() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.printworkflow_dispose(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    constructor() {
+        const ret = wasm.printworkflow_new();
+        this.__wbg_ptr = ret;
+        PrintWorkflowFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * A `PrintWorkflowOutcome` answering effect `id`.
+     * @param {number} id
+     * @param {string} outcome
+     * @returns {string}
+     */
+    resolve(id, outcome) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(outcome, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.printworkflow_resolve(this.__wbg_ptr, id, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * The reply a request or upload received: Moonraker's `result`, as JSON.
+     * @param {number} id
+     * @param {string} text
+     * @returns {string}
+     */
+    resolve_reply(id, text) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.printworkflow_resolve_reply(this.__wbg_ptr, id, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * A `PrintWorkflowIntent`: send a sliced artifact.
+     * @param {string} intent
+     * @returns {string}
+     */
+    run(intent) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(intent, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.printworkflow_run(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * A `PrinterText` naming a stored file to start.
+     * @param {string} path
+     * @returns {string}
+     */
+    start_stored(path) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(path, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.printworkflow_start_stored(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) PrintWorkflow.prototype[Symbol.dispose] = PrintWorkflow.prototype.free;
+
+/**
  * A loaded catalog: compiled, or refused with its diagnostics.
  */
 export class ProfileCatalog {
@@ -4995,6 +5171,9 @@ const PresetLibraryFinalization = (typeof FinalizationRegistry === 'undefined')
 const PrintJobStatusFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_printjobstatus_free(ptr, 1));
+const PrintWorkflowFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_printworkflow_free(ptr, 1));
 const ProfileCatalogFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_profilecatalog_free(ptr, 1));

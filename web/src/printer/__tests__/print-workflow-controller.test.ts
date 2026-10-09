@@ -31,6 +31,8 @@ class Printer implements PrintSubmissionTransport {
   readonly queries: string[] = [];
   onUploaded?: () => void;
   onMutation?: (operation: string) => void;
+  /** Called for each query; throwing stands for the transport rejecting it. */
+  onQuery?: (path: string) => void;
   async request<T>(path: string, options?: { method?: string; signal?: AbortSignal }): Promise<T> {
     if (options?.signal?.aborted) throw new Error('cancelled');
     const url = new URL(path, 'http://printer');
@@ -50,6 +52,7 @@ class Printer implements PrintSubmissionTransport {
       } else if (this.failPreparation) throw new Error('reply lost');
       return 'ok' as T;
     }
+    this.onQuery?.(path);
     this.queries.push(path);
     if (url.pathname === '/server/files/list') {
       if (this.failListing) throw new Error('file list unavailable');
@@ -109,6 +112,7 @@ function setup(choice: 'upload' | 'upload-and-print' = 'upload-and-print') {
     startOptions: ['timelapse', 'bed-leveling'],
   });
   let confirmations = 0;
+  let sessionCheck = () => {};
   const flow = new PrintWorkflowController({
     captureSession: async () => ({
       printerId: 'printer-a',
@@ -117,6 +121,7 @@ function setup(choice: 'upload' | 'upload-and-print' = 'upload-and-print') {
       transport: printer,
       signal: epoch.signal,
       assertCurrent: () => {
+        sessionCheck();
         if (epoch.signal.aborted) throw new Error('session changed');
       },
     }),
@@ -151,6 +156,9 @@ function setup(choice: 'upload' | 'upload-and-print' = 'upload-and-print') {
       confirm = value;
     },
     confirmations: () => confirmations,
+    onSessionCheck: (check: () => void) => {
+      sessionCheck = check;
+    },
   };
 }
 let passed = 0;
@@ -235,6 +243,112 @@ await test('a lost start response is reconciled as printing without retrying', a
   printer.failStart = true;
   await assert.rejects(flow.run(intent), /uncertain outcome.*Fresh printer state: printing/);
   assert.deepEqual(printer.mutations, ['upload', 'timelapse', 'leveling', 'start']);
+});
+
+for (const change of ['session', 'artifact', 'cancel'] as const) {
+  await test(`a ${change} change after the printer accepted the start still reports the print as started`, async () => {
+    // It used to re-check currency after the start returned and report
+    // "Send failed … Confirm a new send" for a job that was already printing.
+    const context = setup();
+    context.printer.onMutation = (operation) => {
+      if (operation !== 'start') return;
+      if (change === 'session') context.epoch.abort();
+      if (change === 'artifact') context.edit();
+      if (change === 'cancel') context.flow.cancel();
+    };
+    const phases: string[] = [];
+    const result = await context.flow.run(context.intent, { onPhase: (phase) => phases.push(phase) });
+    assert.equal(result?.startedPrint, true);
+    assert.equal(phases.at(-1), 'completed');
+    assert.equal(context.flow.phase, 'completed');
+    assert.deepEqual(context.printer.mutations, ['upload', 'timelapse', 'leveling', 'start']);
+  });
+}
+
+await test('a stored reprint the printer accepted is started even if the session changes right after', async () => {
+  const context = setup();
+  context.printer.files.set('part.gcode', { size: 20, modified: 10 });
+  context.printer.onMutation = (operation) => {
+    if (operation === 'start') context.epoch.abort();
+  };
+  assert.equal(await context.flow.startStored('part.gcode'), 'part.gcode');
+  assert.equal(context.flow.phase, 'completed');
+  assert.deepEqual(context.printer.mutations, ['start']);
+});
+
+await test('a stored path with no URL spelling is refused before anything is asked', async () => {
+  const context = setup();
+  await assert.rejects(context.flow.startStored('odd\ud800.gcode'), /not valid text/);
+  assert.deepEqual(context.printer.queries, []);
+  assert.equal(context.flow.busy, false);
+});
+
+const cancelledSend = (error: unknown) => error instanceof PrintSubmissionError && error.code === 'cancelled';
+
+await test('a cancel during a readiness query is reported as a cancel, not a readiness failure', async () => {
+  // A cancelled query reads as an unknown state, and used to surface as
+  // "The printer cannot accept this operation: … (request failed)".
+  const { flow, intent, printer } = setup();
+  printer.onQuery = (path) => {
+    if (printer.mutations.includes('upload') && path.includes('webhooks')) {
+      flow.cancel();
+      throw new Error('cancelled');
+    }
+  };
+  await assert.rejects(
+    flow.run(intent),
+    (error: unknown) => cancelledSend(error) && !/cannot accept/.test(String(error)),
+  );
+  assert.deepEqual(printer.mutations, ['upload']);
+  assert.equal(flow.phase, 'cancelled');
+});
+
+await test('a stored reprint cancelled during its fresh readiness query does not claim readiness changed', async () => {
+  const context = setup();
+  context.printer.files.set('part.gcode', { size: 20, modified: 10 });
+  let confirmed = false;
+  context.confirm(async () => {
+    confirmed = true;
+    return { choice: 'upload-and-print', overwrite: false, startOptions: [] };
+  });
+  context.printer.onQuery = (path) => {
+    if (confirmed && path.includes('webhooks')) {
+      context.flow.cancel();
+      throw new Error('cancelled');
+    }
+  };
+  await assert.rejects(
+    context.flow.startStored('part.gcode'),
+    (error: unknown) => cancelledSend(error) && !/readiness changed/.test(String(error)),
+  );
+  assert.deepEqual(context.printer.mutations, []);
+});
+
+await test('a stored reprint cancelled while reading its metadata reports a cancel, not a stale context', async () => {
+  const context = setup();
+  context.printer.files.set('part.gcode', { size: 20, modified: 10 });
+  context.printer.onQuery = (path) => {
+    if (path.includes('metadata')) {
+      context.flow.cancel();
+      throw new Error('cancelled');
+    }
+  };
+  await assert.rejects(context.flow.startStored('part.gcode'), cancelledSend);
+  assert.equal(context.flow.phase, 'cancelled');
+});
+
+await test('a stored reprint cancelled while its session answers never asks to start', async () => {
+  // The shared core asks the session asynchronously, so a cancel can land
+  // between its abort check and the start request; the abort is re-checked.
+  const context = setup();
+  context.printer.files.set('part.gcode', { size: 20, modified: 10 });
+  let checks = 0;
+  context.onSessionCheck(() => {
+    if (++checks === 4) context.flow.cancel();
+  });
+  await assert.rejects(context.flow.startStored('part.gcode'), cancelledSend);
+  assert.equal(context.flow.phase, 'cancelled');
+  assert.deepEqual(context.printer.mutations, []);
 });
 
 await test('failed listing prevents confirmation and upload', async () => {

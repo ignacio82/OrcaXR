@@ -5245,6 +5245,214 @@ const shapes = {
       "identity": "PrintFileIdentity",
       "unreliable": "PrinterText"
     }
+  },
+  "OptionalPrintFileIdentity": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "PrintFileIdentity"
+    }
+  },
+  "PrintWorkflowIntent": {
+    "kind": "object",
+    "fields": {
+      "filename": "EditText",
+      "byteLength": "Counter",
+      "plateName": "EditText",
+      "usage": "GcodeToolUsage",
+      "outputHash": "EditText"
+    }
+  },
+  "PrinterUpload": {
+    "kind": "object",
+    "fields": {
+      "path": "EditText",
+      "operation": "EditText",
+      "root": "EditText",
+      "directory": "EditText",
+      "print": "Flag",
+      "checksum": "OptionalText",
+      "filename": "EditText",
+      "size": "Counter"
+    }
+  },
+  "PrintOverwrite": {
+    "kind": "object",
+    "fields": {
+      "allowed": "Flag",
+      "existing": "OptionalPrintFileIdentity",
+      "reason": "OptionalText",
+      "filename": "EditText"
+    }
+  },
+  "PrintWorkflowConfirmation": {
+    "kind": "object",
+    "fields": {
+      "stored": "Flag",
+      "filename": "EditText",
+      "plateName": "EditText",
+      "byteLength": "Counter",
+      "endpointLabel": "EditText",
+      "printerStateLabel": "EditText",
+      "toolSummary": "EditText",
+      "blockers": "TextList",
+      "warnings": "TextList",
+      "startOptions": "PrintStartOptions",
+      "overwrite": "PrintOverwrite"
+    }
+  },
+  "PrintWorkflowEffect": {
+    "kind": "union",
+    "variants": {
+      "captureSession": "Empty",
+      "sessionCurrent": "Empty",
+      "artifactCurrent": "Empty",
+      "request": "PrinterSend",
+      "reconcile": "PrinterSend",
+      "upload": "PrinterUpload",
+      "random": "Empty",
+      "confirm": "PrintWorkflowConfirmation"
+    }
+  },
+  "PrintWorkflowPendingEffect": {
+    "kind": "object",
+    "fields": {
+      "id": "Counter",
+      "effect": "PrintWorkflowEffect"
+    }
+  },
+  "PrintWorkflowPendingEffects": {
+    "kind": "array",
+    "items": "PrintWorkflowPendingEffect",
+    "min": 0,
+    "max": 16
+  },
+  "PrintWorkflowDecisionChoice": {
+    "kind": "enum",
+    "values": [
+      "cancel",
+      "upload",
+      "uploadAndPrint"
+    ]
+  },
+  "PrintWorkflowDecision": {
+    "kind": "object",
+    "fields": {
+      "choice": "PrintWorkflowDecisionChoice",
+      "overwrite": "Flag",
+      "startOptions": "PrintStartOptionIds"
+    }
+  },
+  "Byte": {
+    "kind": "integer",
+    "min": 0,
+    "max": 255
+  },
+  "RandomBytes": {
+    "kind": "array",
+    "items": "Byte",
+    "min": 16,
+    "max": 16
+  },
+  "PrintWorkflowOutcome": {
+    "kind": "union",
+    "variants": {
+      "session": "PrinterText",
+      "sessionFailed": "PrinterText",
+      "current": "Flag",
+      "failed": "TransportFailure",
+      "random": "RandomBytes",
+      "decision": "PrintWorkflowDecision"
+    }
+  },
+  "PrintSubmissionPhase": {
+    "kind": "enum",
+    "values": [
+      "checking",
+      "confirming",
+      "uploading",
+      "verifying",
+      "preparing",
+      "starting",
+      "completed"
+    ]
+  },
+  "PrintSubmissionPhases": {
+    "kind": "array",
+    "items": "PrintSubmissionPhase",
+    "min": 0,
+    "max": 64
+  },
+  "PrintSubmissionErrorCode": {
+    "kind": "enum",
+    "values": [
+      "notReady",
+      "emptyArtifact",
+      "uploadFailed",
+      "verificationFailed",
+      "startFailed",
+      "cancelled",
+      "listingFailed",
+      "targetChanged",
+      "preparationUncertain",
+      "startUncertain",
+      "staleContext",
+      "invalidTarget"
+    ]
+  },
+  "PrintWorkflowFailure": {
+    "kind": "object",
+    "fields": {
+      "code": "PrintSubmissionErrorCode",
+      "message": "EditText"
+    }
+  },
+  "PrintSubmissionResult": {
+    "kind": "object",
+    "fields": {
+      "path": "EditText",
+      "root": "EditText",
+      "uploadedBytes": "Counter",
+      "verifiedBytes": "Counter",
+      "startedPrint": "Flag",
+      "renamedFrom": "OptionalText"
+    }
+  },
+  "PrintWorkflowPhase": {
+    "kind": "enum",
+    "values": [
+      "idle",
+      "checking",
+      "confirming",
+      "uploading",
+      "verifying",
+      "preparing",
+      "starting",
+      "completed",
+      "cancelled",
+      "failed",
+      "uncertain"
+    ]
+  },
+  "PrintWorkflowState": {
+    "kind": "union",
+    "variants": {
+      "idle": "Empty",
+      "pending": "Empty",
+      "submitted": "PrintSubmissionResult",
+      "started": "PrinterText",
+      "declined": "Empty",
+      "failed": "PrintWorkflowFailure"
+    }
+  },
+  "PrintWorkflowStep": {
+    "kind": "object",
+    "fields": {
+      "phase": "PrintWorkflowPhase",
+      "phases": "PrintSubmissionPhases",
+      "effects": "PrintWorkflowPendingEffects",
+      "state": "PrintWorkflowState"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -5880,6 +6088,27 @@ export interface ProjectPrinterTextWire {readonly text: ProjectEditTextWire;}
 export interface ProjectTransportFailureWire {readonly code: ProjectOptionalMoonrakerErrorCodeWire;readonly httpStatus: ProjectOptionalFiniteWire;readonly detail: ProjectOptionalTextWire;}
 export interface ProjectPrintFileIdentityWire {readonly filename: ProjectEditTextWire;readonly size: ProjectFiniteWire;readonly modified: ProjectFiniteWire;}
 export type ProjectPrintFileIdentityReplyWire = {readonly identity:ProjectPrintFileIdentityWire} | {readonly unreliable:ProjectPrinterTextWire};
+export type ProjectOptionalPrintFileIdentityWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectPrintFileIdentityWire};
+export interface ProjectPrintWorkflowIntentWire {readonly filename: ProjectEditTextWire;readonly byteLength: ProjectCounterWire;readonly plateName: ProjectEditTextWire;readonly usage: ProjectGcodeToolUsageWire;readonly outputHash: ProjectEditTextWire;}
+export interface ProjectPrinterUploadWire {readonly path: ProjectEditTextWire;readonly operation: ProjectEditTextWire;readonly root: ProjectEditTextWire;readonly directory: ProjectEditTextWire;readonly print: ProjectFlagWire;readonly checksum: ProjectOptionalTextWire;readonly filename: ProjectEditTextWire;readonly size: ProjectCounterWire;}
+export interface ProjectPrintOverwriteWire {readonly allowed: ProjectFlagWire;readonly existing: ProjectOptionalPrintFileIdentityWire;readonly reason: ProjectOptionalTextWire;readonly filename: ProjectEditTextWire;}
+export interface ProjectPrintWorkflowConfirmationWire {readonly stored: ProjectFlagWire;readonly filename: ProjectEditTextWire;readonly plateName: ProjectEditTextWire;readonly byteLength: ProjectCounterWire;readonly endpointLabel: ProjectEditTextWire;readonly printerStateLabel: ProjectEditTextWire;readonly toolSummary: ProjectEditTextWire;readonly blockers: ProjectTextListWire;readonly warnings: ProjectTextListWire;readonly startOptions: ProjectPrintStartOptionsWire;readonly overwrite: ProjectPrintOverwriteWire;}
+export type ProjectPrintWorkflowEffectWire = {readonly captureSession:ProjectEmptyWire} | {readonly sessionCurrent:ProjectEmptyWire} | {readonly artifactCurrent:ProjectEmptyWire} | {readonly request:ProjectPrinterSendWire} | {readonly reconcile:ProjectPrinterSendWire} | {readonly upload:ProjectPrinterUploadWire} | {readonly random:ProjectEmptyWire} | {readonly confirm:ProjectPrintWorkflowConfirmationWire};
+export interface ProjectPrintWorkflowPendingEffectWire {readonly id: ProjectCounterWire;readonly effect: ProjectPrintWorkflowEffectWire;}
+export type ProjectPrintWorkflowPendingEffectsWire = readonly ProjectPrintWorkflowPendingEffectWire[];
+export type ProjectPrintWorkflowDecisionChoiceWire = "cancel" | "upload" | "uploadAndPrint";
+export interface ProjectPrintWorkflowDecisionWire {readonly choice: ProjectPrintWorkflowDecisionChoiceWire;readonly overwrite: ProjectFlagWire;readonly startOptions: ProjectPrintStartOptionIdsWire;}
+export type ProjectByteWire = number;
+export type ProjectRandomBytesWire = readonly ProjectByteWire[];
+export type ProjectPrintWorkflowOutcomeWire = {readonly session:ProjectPrinterTextWire} | {readonly sessionFailed:ProjectPrinterTextWire} | {readonly current:ProjectFlagWire} | {readonly failed:ProjectTransportFailureWire} | {readonly random:ProjectRandomBytesWire} | {readonly decision:ProjectPrintWorkflowDecisionWire};
+export type ProjectPrintSubmissionPhaseWire = "checking" | "confirming" | "uploading" | "verifying" | "preparing" | "starting" | "completed";
+export type ProjectPrintSubmissionPhasesWire = readonly ProjectPrintSubmissionPhaseWire[];
+export type ProjectPrintSubmissionErrorCodeWire = "notReady" | "emptyArtifact" | "uploadFailed" | "verificationFailed" | "startFailed" | "cancelled" | "listingFailed" | "targetChanged" | "preparationUncertain" | "startUncertain" | "staleContext" | "invalidTarget";
+export interface ProjectPrintWorkflowFailureWire {readonly code: ProjectPrintSubmissionErrorCodeWire;readonly message: ProjectEditTextWire;}
+export interface ProjectPrintSubmissionResultWire {readonly path: ProjectEditTextWire;readonly root: ProjectEditTextWire;readonly uploadedBytes: ProjectCounterWire;readonly verifiedBytes: ProjectCounterWire;readonly startedPrint: ProjectFlagWire;readonly renamedFrom: ProjectOptionalTextWire;}
+export type ProjectPrintWorkflowPhaseWire = "idle" | "checking" | "confirming" | "uploading" | "verifying" | "preparing" | "starting" | "completed" | "cancelled" | "failed" | "uncertain";
+export type ProjectPrintWorkflowStateWire = {readonly idle:ProjectEmptyWire} | {readonly pending:ProjectEmptyWire} | {readonly submitted:ProjectPrintSubmissionResultWire} | {readonly started:ProjectPrinterTextWire} | {readonly declined:ProjectEmptyWire} | {readonly failed:ProjectPrintWorkflowFailureWire};
+export interface ProjectPrintWorkflowStepWire {readonly phase: ProjectPrintWorkflowPhaseWire;readonly phases: ProjectPrintSubmissionPhasesWire;readonly effects: ProjectPrintWorkflowPendingEffectsWire;readonly state: ProjectPrintWorkflowStateWire;}
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -6300,3 +6529,15 @@ export function encodeProjectTransportFailure(value:ProjectTransportFailureWire)
 export function captureProjectPrintFileIdentityReply(value:unknown):ProjectPrintFileIdentityReplyWire { return captureIntent("PrintFileIdentityReply",value,shapes,limits) as ProjectPrintFileIdentityReplyWire; }
 export function decodeProjectPrintFileIdentityReply(text:string):ProjectPrintFileIdentityReplyWire { return captureProjectPrintFileIdentityReply(parseIntentJson(text,limits)); }
 export function encodeProjectPrintFileIdentityReply(value:ProjectPrintFileIdentityReplyWire):string { return JSON.stringify(captureProjectPrintFileIdentityReply(value)); }
+export function captureProjectPrintWorkflowIntent(value:unknown):ProjectPrintWorkflowIntentWire { return captureIntent("PrintWorkflowIntent",value,shapes,limits) as ProjectPrintWorkflowIntentWire; }
+export function decodeProjectPrintWorkflowIntent(text:string):ProjectPrintWorkflowIntentWire { return captureProjectPrintWorkflowIntent(parseIntentJson(text,limits)); }
+export function encodeProjectPrintWorkflowIntent(value:ProjectPrintWorkflowIntentWire):string { return JSON.stringify(captureProjectPrintWorkflowIntent(value)); }
+export function captureProjectPrintWorkflowOutcome(value:unknown):ProjectPrintWorkflowOutcomeWire { return captureIntent("PrintWorkflowOutcome",value,shapes,limits) as ProjectPrintWorkflowOutcomeWire; }
+export function decodeProjectPrintWorkflowOutcome(text:string):ProjectPrintWorkflowOutcomeWire { return captureProjectPrintWorkflowOutcome(parseIntentJson(text,limits)); }
+export function encodeProjectPrintWorkflowOutcome(value:ProjectPrintWorkflowOutcomeWire):string { return JSON.stringify(captureProjectPrintWorkflowOutcome(value)); }
+export function captureProjectPrintWorkflowStep(value:unknown):ProjectPrintWorkflowStepWire { return captureIntent("PrintWorkflowStep",value,shapes,limits) as ProjectPrintWorkflowStepWire; }
+export function decodeProjectPrintWorkflowStep(text:string):ProjectPrintWorkflowStepWire { return captureProjectPrintWorkflowStep(parseIntentJson(text,limits)); }
+export function encodeProjectPrintWorkflowStep(value:ProjectPrintWorkflowStepWire):string { return JSON.stringify(captureProjectPrintWorkflowStep(value)); }
+export function captureProjectPrintWorkflowEffect(value:unknown):ProjectPrintWorkflowEffectWire { return captureIntent("PrintWorkflowEffect",value,shapes,limits) as ProjectPrintWorkflowEffectWire; }
+export function decodeProjectPrintWorkflowEffect(text:string):ProjectPrintWorkflowEffectWire { return captureProjectPrintWorkflowEffect(parseIntentJson(text,limits)); }
+export function encodeProjectPrintWorkflowEffect(value:ProjectPrintWorkflowEffectWire):string { return JSON.stringify(captureProjectPrintWorkflowEffect(value)); }

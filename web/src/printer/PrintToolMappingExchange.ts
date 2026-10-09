@@ -40,7 +40,7 @@ export function toolUsageWire(usage: GcodeToolUsage): ProjectGcodeToolUsageWire 
     declaredMaterials: usage.declaredMaterials.map(units),
   };
 }
-function toolUsageFromWire(wire: ProjectGcodeToolUsageWire): GcodeToolUsage {
+export function toolUsageFromWire(wire: ProjectGcodeToolUsageWire): GcodeToolUsage {
   return {
     tools: [...wire.tools],
     multiMaterial: wire.multiMaterial,

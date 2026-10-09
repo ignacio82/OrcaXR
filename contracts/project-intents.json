@@ -5244,6 +5244,214 @@
         "identity": "PrintFileIdentity",
         "unreliable": "PrinterText"
       }
+    },
+    "OptionalPrintFileIdentity": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "PrintFileIdentity"
+      }
+    },
+    "PrintWorkflowIntent": {
+      "kind": "object",
+      "fields": {
+        "filename": "EditText",
+        "byteLength": "Counter",
+        "plateName": "EditText",
+        "usage": "GcodeToolUsage",
+        "outputHash": "EditText"
+      }
+    },
+    "PrinterUpload": {
+      "kind": "object",
+      "fields": {
+        "path": "EditText",
+        "operation": "EditText",
+        "root": "EditText",
+        "directory": "EditText",
+        "print": "Flag",
+        "checksum": "OptionalText",
+        "filename": "EditText",
+        "size": "Counter"
+      }
+    },
+    "PrintOverwrite": {
+      "kind": "object",
+      "fields": {
+        "allowed": "Flag",
+        "existing": "OptionalPrintFileIdentity",
+        "reason": "OptionalText",
+        "filename": "EditText"
+      }
+    },
+    "PrintWorkflowConfirmation": {
+      "kind": "object",
+      "fields": {
+        "stored": "Flag",
+        "filename": "EditText",
+        "plateName": "EditText",
+        "byteLength": "Counter",
+        "endpointLabel": "EditText",
+        "printerStateLabel": "EditText",
+        "toolSummary": "EditText",
+        "blockers": "TextList",
+        "warnings": "TextList",
+        "startOptions": "PrintStartOptions",
+        "overwrite": "PrintOverwrite"
+      }
+    },
+    "PrintWorkflowEffect": {
+      "kind": "union",
+      "variants": {
+        "captureSession": "Empty",
+        "sessionCurrent": "Empty",
+        "artifactCurrent": "Empty",
+        "request": "PrinterSend",
+        "reconcile": "PrinterSend",
+        "upload": "PrinterUpload",
+        "random": "Empty",
+        "confirm": "PrintWorkflowConfirmation"
+      }
+    },
+    "PrintWorkflowPendingEffect": {
+      "kind": "object",
+      "fields": {
+        "id": "Counter",
+        "effect": "PrintWorkflowEffect"
+      }
+    },
+    "PrintWorkflowPendingEffects": {
+      "kind": "array",
+      "items": "PrintWorkflowPendingEffect",
+      "min": 0,
+      "max": 16
+    },
+    "PrintWorkflowDecisionChoice": {
+      "kind": "enum",
+      "values": [
+        "cancel",
+        "upload",
+        "uploadAndPrint"
+      ]
+    },
+    "PrintWorkflowDecision": {
+      "kind": "object",
+      "fields": {
+        "choice": "PrintWorkflowDecisionChoice",
+        "overwrite": "Flag",
+        "startOptions": "PrintStartOptionIds"
+      }
+    },
+    "Byte": {
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    "RandomBytes": {
+      "kind": "array",
+      "items": "Byte",
+      "min": 16,
+      "max": 16
+    },
+    "PrintWorkflowOutcome": {
+      "kind": "union",
+      "variants": {
+        "session": "PrinterText",
+        "sessionFailed": "PrinterText",
+        "current": "Flag",
+        "failed": "TransportFailure",
+        "random": "RandomBytes",
+        "decision": "PrintWorkflowDecision"
+      }
+    },
+    "PrintSubmissionPhase": {
+      "kind": "enum",
+      "values": [
+        "checking",
+        "confirming",
+        "uploading",
+        "verifying",
+        "preparing",
+        "starting",
+        "completed"
+      ]
+    },
+    "PrintSubmissionPhases": {
+      "kind": "array",
+      "items": "PrintSubmissionPhase",
+      "min": 0,
+      "max": 64
+    },
+    "PrintSubmissionErrorCode": {
+      "kind": "enum",
+      "values": [
+        "notReady",
+        "emptyArtifact",
+        "uploadFailed",
+        "verificationFailed",
+        "startFailed",
+        "cancelled",
+        "listingFailed",
+        "targetChanged",
+        "preparationUncertain",
+        "startUncertain",
+        "staleContext",
+        "invalidTarget"
+      ]
+    },
+    "PrintWorkflowFailure": {
+      "kind": "object",
+      "fields": {
+        "code": "PrintSubmissionErrorCode",
+        "message": "EditText"
+      }
+    },
+    "PrintSubmissionResult": {
+      "kind": "object",
+      "fields": {
+        "path": "EditText",
+        "root": "EditText",
+        "uploadedBytes": "Counter",
+        "verifiedBytes": "Counter",
+        "startedPrint": "Flag",
+        "renamedFrom": "OptionalText"
+      }
+    },
+    "PrintWorkflowPhase": {
+      "kind": "enum",
+      "values": [
+        "idle",
+        "checking",
+        "confirming",
+        "uploading",
+        "verifying",
+        "preparing",
+        "starting",
+        "completed",
+        "cancelled",
+        "failed",
+        "uncertain"
+      ]
+    },
+    "PrintWorkflowState": {
+      "kind": "union",
+      "variants": {
+        "idle": "Empty",
+        "pending": "Empty",
+        "submitted": "PrintSubmissionResult",
+        "started": "PrinterText",
+        "declined": "Empty",
+        "failed": "PrintWorkflowFailure"
+      }
+    },
+    "PrintWorkflowStep": {
+      "kind": "object",
+      "fields": {
+        "phase": "PrintWorkflowPhase",
+        "phases": "PrintSubmissionPhases",
+        "effects": "PrintWorkflowPendingEffects",
+        "state": "PrintWorkflowState"
+      }
     }
   },
   "roots": [
@@ -5386,7 +5594,11 @@
     "PrintReadinessFailure",
     "PrinterText",
     "TransportFailure",
-    "PrintFileIdentityReply"
+    "PrintFileIdentityReply",
+    "PrintWorkflowIntent",
+    "PrintWorkflowOutcome",
+    "PrintWorkflowStep",
+    "PrintWorkflowEffect"
   ],
   "sessionVersion": 1
 }

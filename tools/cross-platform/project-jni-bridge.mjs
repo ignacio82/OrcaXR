@@ -48,6 +48,7 @@ export function startProjectJni(profile = "debug") {
   signatures.printerControlChecks = ["String"];
   signatures.printerToolsChecks = ["String"];
   signatures.printPreparationChecks = ["String"];
+  signatures.printWorkflowChecks = ["String"];
   signatures.actorClipboardChecks = ["String", "String", "byte[]", "byte[]"];
   signatures.actorClipboardReplay = ["String", "String", "byte[]", "byte[]", "long", "String", "long[]"];
   signatures.actorCapturedChecks = ["String", "String", "byte[]", "String", "long[]"];
@@ -1085,6 +1086,32 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
       return call("holdCancel", this.handle);
     }
   }
+  class PrintWorkflow extends Handle {
+    constructor() {
+      super(call("printWorkflowNew"));
+    }
+    busy() {
+      return call("printWorkflowBusy", this.handle);
+    }
+    run(intent) {
+      return call("printWorkflowRun", this.handle, intent);
+    }
+    start_stored(path) {
+      return call("printWorkflowStartStored", this.handle, path);
+    }
+    resolve(id, outcome) {
+      return call("printWorkflowResolve", this.handle, id, outcome);
+    }
+    resolve_reply(id, text) {
+      return call("printWorkflowReply", this.handle, id, text);
+    }
+    cancel() {
+      return call("printWorkflowCancel", this.handle);
+    }
+    dispose() {
+      return call("printWorkflowDispose", this.handle);
+    }
+  }
   class ToolUsageScanner extends Handle {
     constructor() {
       super(call("toolUsageNew"));
@@ -1101,6 +1128,7 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
   return {
     PrintJobStatus,
     HoldToConfirm,
+    PrintWorkflow,
     ToolUsageScanner,
     filament_slots: (text) => call("filamentSlots", text),
     printer_objects: (text) => call("printerObjects", text),

@@ -10969,6 +10969,488 @@ fn read_print_file_identity_reply(v: &Value) -> Result<PrintFileIdentityReply, I
         _ => Err(InvalidIntent),
     }
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalPrintFileIdentity {
+    Absent(Empty),
+    Value(PrintFileIdentity),
+}
+fn read_optional_print_file_identity(
+    v: &Value,
+) -> Result<OptionalPrintFileIdentity, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalPrintFileIdentity::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalPrintFileIdentity::Value(read_print_file_identity(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintWorkflowIntent {
+    pub filename: EditText,
+    pub byte_length: Counter,
+    pub plate_name: EditText,
+    pub usage: GcodeToolUsage,
+    pub output_hash: EditText,
+}
+fn read_print_workflow_intent(v: &Value) -> Result<PrintWorkflowIntent, InvalidIntent> {
+    let object = fields(
+        v,
+        &["filename", "byteLength", "plateName", "usage", "outputHash"],
+        false,
+    )?;
+    Ok(PrintWorkflowIntent {
+        filename: read_edit_text(&object["filename"])?,
+        byte_length: read_counter(&object["byteLength"])?,
+        plate_name: read_edit_text(&object["plateName"])?,
+        usage: read_gcode_tool_usage(&object["usage"])?,
+        output_hash: read_edit_text(&object["outputHash"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrinterUpload {
+    pub path: EditText,
+    pub operation: EditText,
+    pub root: EditText,
+    pub directory: EditText,
+    pub print: Flag,
+    pub checksum: OptionalText,
+    pub filename: EditText,
+    pub size: Counter,
+}
+fn read_printer_upload(v: &Value) -> Result<PrinterUpload, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "path",
+            "operation",
+            "root",
+            "directory",
+            "print",
+            "checksum",
+            "filename",
+            "size",
+        ],
+        false,
+    )?;
+    Ok(PrinterUpload {
+        path: read_edit_text(&object["path"])?,
+        operation: read_edit_text(&object["operation"])?,
+        root: read_edit_text(&object["root"])?,
+        directory: read_edit_text(&object["directory"])?,
+        print: read_flag(&object["print"])?,
+        checksum: read_optional_text(&object["checksum"])?,
+        filename: read_edit_text(&object["filename"])?,
+        size: read_counter(&object["size"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintOverwrite {
+    pub allowed: Flag,
+    pub existing: OptionalPrintFileIdentity,
+    pub reason: OptionalText,
+    pub filename: EditText,
+}
+fn read_print_overwrite(v: &Value) -> Result<PrintOverwrite, InvalidIntent> {
+    let object = fields(v, &["allowed", "existing", "reason", "filename"], false)?;
+    Ok(PrintOverwrite {
+        allowed: read_flag(&object["allowed"])?,
+        existing: read_optional_print_file_identity(&object["existing"])?,
+        reason: read_optional_text(&object["reason"])?,
+        filename: read_edit_text(&object["filename"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintWorkflowConfirmation {
+    pub stored: Flag,
+    pub filename: EditText,
+    pub plate_name: EditText,
+    pub byte_length: Counter,
+    pub endpoint_label: EditText,
+    pub printer_state_label: EditText,
+    pub tool_summary: EditText,
+    pub blockers: TextList,
+    pub warnings: TextList,
+    pub start_options: PrintStartOptions,
+    pub overwrite: PrintOverwrite,
+}
+fn read_print_workflow_confirmation(v: &Value) -> Result<PrintWorkflowConfirmation, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "stored",
+            "filename",
+            "plateName",
+            "byteLength",
+            "endpointLabel",
+            "printerStateLabel",
+            "toolSummary",
+            "blockers",
+            "warnings",
+            "startOptions",
+            "overwrite",
+        ],
+        false,
+    )?;
+    Ok(PrintWorkflowConfirmation {
+        stored: read_flag(&object["stored"])?,
+        filename: read_edit_text(&object["filename"])?,
+        plate_name: read_edit_text(&object["plateName"])?,
+        byte_length: read_counter(&object["byteLength"])?,
+        endpoint_label: read_edit_text(&object["endpointLabel"])?,
+        printer_state_label: read_edit_text(&object["printerStateLabel"])?,
+        tool_summary: read_edit_text(&object["toolSummary"])?,
+        blockers: read_text_list(&object["blockers"])?,
+        warnings: read_text_list(&object["warnings"])?,
+        start_options: read_print_start_options(&object["startOptions"])?,
+        overwrite: read_print_overwrite(&object["overwrite"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintWorkflowEffect {
+    CaptureSession(Empty),
+    SessionCurrent(Empty),
+    ArtifactCurrent(Empty),
+    Request(PrinterSend),
+    Reconcile(PrinterSend),
+    Upload(PrinterUpload),
+    Random(Empty),
+    Confirm(PrintWorkflowConfirmation),
+}
+fn read_print_workflow_effect(v: &Value) -> Result<PrintWorkflowEffect, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "captureSession",
+            "sessionCurrent",
+            "artifactCurrent",
+            "request",
+            "reconcile",
+            "upload",
+            "random",
+            "confirm",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "captureSession" => Ok(PrintWorkflowEffect::CaptureSession(read_empty(value)?)),
+        "sessionCurrent" => Ok(PrintWorkflowEffect::SessionCurrent(read_empty(value)?)),
+        "artifactCurrent" => Ok(PrintWorkflowEffect::ArtifactCurrent(read_empty(value)?)),
+        "request" => Ok(PrintWorkflowEffect::Request(read_printer_send(value)?)),
+        "reconcile" => Ok(PrintWorkflowEffect::Reconcile(read_printer_send(value)?)),
+        "upload" => Ok(PrintWorkflowEffect::Upload(read_printer_upload(value)?)),
+        "random" => Ok(PrintWorkflowEffect::Random(read_empty(value)?)),
+        "confirm" => Ok(PrintWorkflowEffect::Confirm(
+            read_print_workflow_confirmation(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintWorkflowPendingEffect {
+    pub id: Counter,
+    pub effect: PrintWorkflowEffect,
+}
+fn read_print_workflow_pending_effect(
+    v: &Value,
+) -> Result<PrintWorkflowPendingEffect, InvalidIntent> {
+    let object = fields(v, &["id", "effect"], false)?;
+    Ok(PrintWorkflowPendingEffect {
+        id: read_counter(&object["id"])?,
+        effect: read_print_workflow_effect(&object["effect"])?,
+    })
+}
+pub type PrintWorkflowPendingEffects = Vec<PrintWorkflowPendingEffect>;
+fn read_print_workflow_pending_effects(
+    v: &Value,
+) -> Result<PrintWorkflowPendingEffects, InvalidIntent> {
+    list(v, 0, 16)?
+        .iter()
+        .map(read_print_workflow_pending_effect)
+        .collect()
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintWorkflowDecisionChoice {
+    Cancel,
+    Upload,
+    UploadAndPrint,
+}
+fn read_print_workflow_decision_choice(
+    v: &Value,
+) -> Result<PrintWorkflowDecisionChoice, InvalidIntent> {
+    match v.as_str() {
+        Some("cancel") => Ok(PrintWorkflowDecisionChoice::Cancel),
+        Some("upload") => Ok(PrintWorkflowDecisionChoice::Upload),
+        Some("uploadAndPrint") => Ok(PrintWorkflowDecisionChoice::UploadAndPrint),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintWorkflowDecision {
+    pub choice: PrintWorkflowDecisionChoice,
+    pub overwrite: Flag,
+    pub start_options: PrintStartOptionIds,
+}
+fn read_print_workflow_decision(v: &Value) -> Result<PrintWorkflowDecision, InvalidIntent> {
+    let object = fields(v, &["choice", "overwrite", "startOptions"], false)?;
+    Ok(PrintWorkflowDecision {
+        choice: read_print_workflow_decision_choice(&object["choice"])?,
+        overwrite: read_flag(&object["overwrite"])?,
+        start_options: read_print_start_option_ids(&object["startOptions"])?,
+    })
+}
+pub type Byte = u16;
+fn read_byte(v: &Value) -> Result<Byte, InvalidIntent> {
+    Ok(integer(v, 0, 255)? as Byte)
+}
+pub type RandomBytes = Vec<Byte>;
+fn read_random_bytes(v: &Value) -> Result<RandomBytes, InvalidIntent> {
+    list(v, 16, 16)?.iter().map(read_byte).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintWorkflowOutcome {
+    Session(PrinterText),
+    SessionFailed(PrinterText),
+    Current(Flag),
+    Failed(TransportFailure),
+    Random(RandomBytes),
+    Decision(PrintWorkflowDecision),
+}
+fn read_print_workflow_outcome(v: &Value) -> Result<PrintWorkflowOutcome, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "session",
+            "sessionFailed",
+            "current",
+            "failed",
+            "random",
+            "decision",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "session" => Ok(PrintWorkflowOutcome::Session(read_printer_text(value)?)),
+        "sessionFailed" => Ok(PrintWorkflowOutcome::SessionFailed(read_printer_text(
+            value,
+        )?)),
+        "current" => Ok(PrintWorkflowOutcome::Current(read_flag(value)?)),
+        "failed" => Ok(PrintWorkflowOutcome::Failed(read_transport_failure(value)?)),
+        "random" => Ok(PrintWorkflowOutcome::Random(read_random_bytes(value)?)),
+        "decision" => Ok(PrintWorkflowOutcome::Decision(
+            read_print_workflow_decision(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintSubmissionPhase {
+    Checking,
+    Confirming,
+    Uploading,
+    Verifying,
+    Preparing,
+    Starting,
+    Completed,
+}
+fn read_print_submission_phase(v: &Value) -> Result<PrintSubmissionPhase, InvalidIntent> {
+    match v.as_str() {
+        Some("checking") => Ok(PrintSubmissionPhase::Checking),
+        Some("confirming") => Ok(PrintSubmissionPhase::Confirming),
+        Some("uploading") => Ok(PrintSubmissionPhase::Uploading),
+        Some("verifying") => Ok(PrintSubmissionPhase::Verifying),
+        Some("preparing") => Ok(PrintSubmissionPhase::Preparing),
+        Some("starting") => Ok(PrintSubmissionPhase::Starting),
+        Some("completed") => Ok(PrintSubmissionPhase::Completed),
+        _ => Err(InvalidIntent),
+    }
+}
+pub type PrintSubmissionPhases = Vec<PrintSubmissionPhase>;
+fn read_print_submission_phases(v: &Value) -> Result<PrintSubmissionPhases, InvalidIntent> {
+    list(v, 0, 64)?
+        .iter()
+        .map(read_print_submission_phase)
+        .collect()
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintSubmissionErrorCode {
+    NotReady,
+    EmptyArtifact,
+    UploadFailed,
+    VerificationFailed,
+    StartFailed,
+    Cancelled,
+    ListingFailed,
+    TargetChanged,
+    PreparationUncertain,
+    StartUncertain,
+    StaleContext,
+    InvalidTarget,
+}
+fn read_print_submission_error_code(v: &Value) -> Result<PrintSubmissionErrorCode, InvalidIntent> {
+    match v.as_str() {
+        Some("notReady") => Ok(PrintSubmissionErrorCode::NotReady),
+        Some("emptyArtifact") => Ok(PrintSubmissionErrorCode::EmptyArtifact),
+        Some("uploadFailed") => Ok(PrintSubmissionErrorCode::UploadFailed),
+        Some("verificationFailed") => Ok(PrintSubmissionErrorCode::VerificationFailed),
+        Some("startFailed") => Ok(PrintSubmissionErrorCode::StartFailed),
+        Some("cancelled") => Ok(PrintSubmissionErrorCode::Cancelled),
+        Some("listingFailed") => Ok(PrintSubmissionErrorCode::ListingFailed),
+        Some("targetChanged") => Ok(PrintSubmissionErrorCode::TargetChanged),
+        Some("preparationUncertain") => Ok(PrintSubmissionErrorCode::PreparationUncertain),
+        Some("startUncertain") => Ok(PrintSubmissionErrorCode::StartUncertain),
+        Some("staleContext") => Ok(PrintSubmissionErrorCode::StaleContext),
+        Some("invalidTarget") => Ok(PrintSubmissionErrorCode::InvalidTarget),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintWorkflowFailure {
+    pub code: PrintSubmissionErrorCode,
+    pub message: EditText,
+}
+fn read_print_workflow_failure(v: &Value) -> Result<PrintWorkflowFailure, InvalidIntent> {
+    let object = fields(v, &["code", "message"], false)?;
+    Ok(PrintWorkflowFailure {
+        code: read_print_submission_error_code(&object["code"])?,
+        message: read_edit_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintSubmissionResult {
+    pub path: EditText,
+    pub root: EditText,
+    pub uploaded_bytes: Counter,
+    pub verified_bytes: Counter,
+    pub started_print: Flag,
+    pub renamed_from: OptionalText,
+}
+fn read_print_submission_result(v: &Value) -> Result<PrintSubmissionResult, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "path",
+            "root",
+            "uploadedBytes",
+            "verifiedBytes",
+            "startedPrint",
+            "renamedFrom",
+        ],
+        false,
+    )?;
+    Ok(PrintSubmissionResult {
+        path: read_edit_text(&object["path"])?,
+        root: read_edit_text(&object["root"])?,
+        uploaded_bytes: read_counter(&object["uploadedBytes"])?,
+        verified_bytes: read_counter(&object["verifiedBytes"])?,
+        started_print: read_flag(&object["startedPrint"])?,
+        renamed_from: read_optional_text(&object["renamedFrom"])?,
+    })
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintWorkflowPhase {
+    Idle,
+    Checking,
+    Confirming,
+    Uploading,
+    Verifying,
+    Preparing,
+    Starting,
+    Completed,
+    Cancelled,
+    Failed,
+    Uncertain,
+}
+fn read_print_workflow_phase(v: &Value) -> Result<PrintWorkflowPhase, InvalidIntent> {
+    match v.as_str() {
+        Some("idle") => Ok(PrintWorkflowPhase::Idle),
+        Some("checking") => Ok(PrintWorkflowPhase::Checking),
+        Some("confirming") => Ok(PrintWorkflowPhase::Confirming),
+        Some("uploading") => Ok(PrintWorkflowPhase::Uploading),
+        Some("verifying") => Ok(PrintWorkflowPhase::Verifying),
+        Some("preparing") => Ok(PrintWorkflowPhase::Preparing),
+        Some("starting") => Ok(PrintWorkflowPhase::Starting),
+        Some("completed") => Ok(PrintWorkflowPhase::Completed),
+        Some("cancelled") => Ok(PrintWorkflowPhase::Cancelled),
+        Some("failed") => Ok(PrintWorkflowPhase::Failed),
+        Some("uncertain") => Ok(PrintWorkflowPhase::Uncertain),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrintWorkflowState {
+    Idle(Empty),
+    Pending(Empty),
+    Submitted(PrintSubmissionResult),
+    Started(PrinterText),
+    Declined(Empty),
+    Failed(PrintWorkflowFailure),
+}
+fn read_print_workflow_state(v: &Value) -> Result<PrintWorkflowState, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "idle",
+            "pending",
+            "submitted",
+            "started",
+            "declined",
+            "failed",
+        ],
+        true,
+    )?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "idle" => Ok(PrintWorkflowState::Idle(read_empty(value)?)),
+        "pending" => Ok(PrintWorkflowState::Pending(read_empty(value)?)),
+        "submitted" => Ok(PrintWorkflowState::Submitted(read_print_submission_result(
+            value,
+        )?)),
+        "started" => Ok(PrintWorkflowState::Started(read_printer_text(value)?)),
+        "declined" => Ok(PrintWorkflowState::Declined(read_empty(value)?)),
+        "failed" => Ok(PrintWorkflowState::Failed(read_print_workflow_failure(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrintWorkflowStep {
+    pub phase: PrintWorkflowPhase,
+    pub phases: PrintSubmissionPhases,
+    pub effects: PrintWorkflowPendingEffects,
+    pub state: PrintWorkflowState,
+}
+fn read_print_workflow_step(v: &Value) -> Result<PrintWorkflowStep, InvalidIntent> {
+    let object = fields(v, &["phase", "phases", "effects", "state"], false)?;
+    Ok(PrintWorkflowStep {
+        phase: read_print_workflow_phase(&object["phase"])?,
+        phases: read_print_submission_phases(&object["phases"])?,
+        effects: read_print_workflow_pending_effects(&object["effects"])?,
+        state: read_print_workflow_state(&object["state"])?,
+    })
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -12209,5 +12691,39 @@ pub fn encode_print_file_identity_reply(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode(value)?;
     decode_print_file_identity_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_print_workflow_intent(text: &str) -> Result<PrintWorkflowIntent, InvalidIntent> {
+    read_print_workflow_intent(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_workflow_intent(value: &PrintWorkflowIntent) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_workflow_intent(&text)?;
+    Ok(text)
+}
+pub fn decode_print_workflow_outcome(text: &str) -> Result<PrintWorkflowOutcome, InvalidIntent> {
+    read_print_workflow_outcome(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_workflow_outcome(
+    value: &PrintWorkflowOutcome,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_workflow_outcome(&text)?;
+    Ok(text)
+}
+pub fn decode_print_workflow_step(text: &str) -> Result<PrintWorkflowStep, InvalidIntent> {
+    read_print_workflow_step(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_workflow_step(value: &PrintWorkflowStep) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_workflow_step(&text)?;
+    Ok(text)
+}
+pub fn decode_print_workflow_effect(text: &str) -> Result<PrintWorkflowEffect, InvalidIntent> {
+    read_print_workflow_effect(&super::project_intents::parse(text)?)
+}
+pub fn encode_print_workflow_effect(value: &PrintWorkflowEffect) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_print_workflow_effect(&text)?;
     Ok(text)
 }

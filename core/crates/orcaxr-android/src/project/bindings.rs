@@ -683,6 +683,51 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_printWorkflowNew, print_workflow_new, jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printWorkflowBusy, print_workflow_busy, jboolean,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printWorkflowRun, print_workflow_run, jstring,
+    handle: jlong,
+    intent: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printWorkflowStartStored, print_workflow_start_stored, jstring,
+    handle: jlong,
+    path: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printWorkflowResolve, print_workflow_resolve, jstring,
+    handle: jlong,
+    id: jlong,
+    outcome: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printWorkflowReply, print_workflow_reply, jstring,
+    handle: jlong,
+    id: jlong,
+    text: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printWorkflowCancel, print_workflow_cancel, jstring,
+    handle: jlong,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_printWorkflowDispose, print_workflow_dispose, jstring,
+    handle: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_sessionCapabilities, session_capabilities, jstring,
     handle: jlong,
     request: JString<'local>,

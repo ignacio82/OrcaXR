@@ -7951,6 +7951,301 @@ object ProjectIntents {
             is PrintFileIdentityReply.Unreliable -> w.field("unreliable") { writePrinterText(w, v.value) }
         } }
     }
+    sealed interface OptionalPrintFileIdentity {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalPrintFileIdentity
+        data class Value(val value: ProjectIntents.PrintFileIdentity) : OptionalPrintFileIdentity
+    }
+    private fun readOptionalPrintFileIdentity(v: Any): OptionalPrintFileIdentity {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalPrintFileIdentity.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalPrintFileIdentity.Value(readPrintFileIdentity(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalPrintFileIdentity(w: ProjectIntentWriter, v: OptionalPrintFileIdentity) {
+        w.obj { when(v) {
+            is OptionalPrintFileIdentity.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalPrintFileIdentity.Value -> w.field("value") { writePrintFileIdentity(w, v.value) }
+        } }
+    }
+    data class PrintWorkflowIntent(val filename: List<Int>, val byteLength: Long, val plateName: List<Int>, val usage: GcodeToolUsage, val outputHash: List<Int>)
+    private fun readPrintWorkflowIntent(v: Any): PrintWorkflowIntent {
+        val obj = ProjectIntentJson.fields(v, setOf("filename", "byteLength", "plateName", "usage", "outputHash"), false)
+        return PrintWorkflowIntent(readEditText(obj.get("filename")), readCounter(obj.get("byteLength")), readEditText(obj.get("plateName")), readGcodeToolUsage(obj.get("usage")), readEditText(obj.get("outputHash")))
+    }
+    private fun writePrintWorkflowIntent(w: ProjectIntentWriter, v: PrintWorkflowIntent) {
+        w.obj {
+            w.field("filename") { writeEditText(w, v.filename) }
+            w.field("byteLength") { writeCounter(w, v.byteLength) }
+            w.field("plateName") { writeEditText(w, v.plateName) }
+            w.field("usage") { writeGcodeToolUsage(w, v.usage) }
+            w.field("outputHash") { writeEditText(w, v.outputHash) }
+        }
+    }
+    data class PrinterUpload(val path: List<Int>, val operation: List<Int>, val root: List<Int>, val directory: List<Int>, val print: Boolean, val checksum: OptionalText, val filename: List<Int>, val size: Long)
+    private fun readPrinterUpload(v: Any): PrinterUpload {
+        val obj = ProjectIntentJson.fields(v, setOf("path", "operation", "root", "directory", "print", "checksum", "filename", "size"), false)
+        return PrinterUpload(readEditText(obj.get("path")), readEditText(obj.get("operation")), readEditText(obj.get("root")), readEditText(obj.get("directory")), readFlag(obj.get("print")), readOptionalText(obj.get("checksum")), readEditText(obj.get("filename")), readCounter(obj.get("size")))
+    }
+    private fun writePrinterUpload(w: ProjectIntentWriter, v: PrinterUpload) {
+        w.obj {
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("operation") { writeEditText(w, v.operation) }
+            w.field("root") { writeEditText(w, v.root) }
+            w.field("directory") { writeEditText(w, v.directory) }
+            w.field("print") { writeFlag(w, v.print) }
+            w.field("checksum") { writeOptionalText(w, v.checksum) }
+            w.field("filename") { writeEditText(w, v.filename) }
+            w.field("size") { writeCounter(w, v.size) }
+        }
+    }
+    data class PrintOverwrite(val allowed: Boolean, val existing: OptionalPrintFileIdentity, val reason: OptionalText, val filename: List<Int>)
+    private fun readPrintOverwrite(v: Any): PrintOverwrite {
+        val obj = ProjectIntentJson.fields(v, setOf("allowed", "existing", "reason", "filename"), false)
+        return PrintOverwrite(readFlag(obj.get("allowed")), readOptionalPrintFileIdentity(obj.get("existing")), readOptionalText(obj.get("reason")), readEditText(obj.get("filename")))
+    }
+    private fun writePrintOverwrite(w: ProjectIntentWriter, v: PrintOverwrite) {
+        w.obj {
+            w.field("allowed") { writeFlag(w, v.allowed) }
+            w.field("existing") { writeOptionalPrintFileIdentity(w, v.existing) }
+            w.field("reason") { writeOptionalText(w, v.reason) }
+            w.field("filename") { writeEditText(w, v.filename) }
+        }
+    }
+    data class PrintWorkflowConfirmation(val stored: Boolean, val filename: List<Int>, val plateName: List<Int>, val byteLength: Long, val endpointLabel: List<Int>, val printerStateLabel: List<Int>, val toolSummary: List<Int>, val blockers: List<List<Int>>, val warnings: List<List<Int>>, val startOptions: List<PrintStartOption>, val overwrite: PrintOverwrite)
+    private fun readPrintWorkflowConfirmation(v: Any): PrintWorkflowConfirmation {
+        val obj = ProjectIntentJson.fields(v, setOf("stored", "filename", "plateName", "byteLength", "endpointLabel", "printerStateLabel", "toolSummary", "blockers", "warnings", "startOptions", "overwrite"), false)
+        return PrintWorkflowConfirmation(readFlag(obj.get("stored")), readEditText(obj.get("filename")), readEditText(obj.get("plateName")), readCounter(obj.get("byteLength")), readEditText(obj.get("endpointLabel")), readEditText(obj.get("printerStateLabel")), readEditText(obj.get("toolSummary")), readTextList(obj.get("blockers")), readTextList(obj.get("warnings")), readPrintStartOptions(obj.get("startOptions")), readPrintOverwrite(obj.get("overwrite")))
+    }
+    private fun writePrintWorkflowConfirmation(w: ProjectIntentWriter, v: PrintWorkflowConfirmation) {
+        w.obj {
+            w.field("stored") { writeFlag(w, v.stored) }
+            w.field("filename") { writeEditText(w, v.filename) }
+            w.field("plateName") { writeEditText(w, v.plateName) }
+            w.field("byteLength") { writeCounter(w, v.byteLength) }
+            w.field("endpointLabel") { writeEditText(w, v.endpointLabel) }
+            w.field("printerStateLabel") { writeEditText(w, v.printerStateLabel) }
+            w.field("toolSummary") { writeEditText(w, v.toolSummary) }
+            w.field("blockers") { writeTextList(w, v.blockers) }
+            w.field("warnings") { writeTextList(w, v.warnings) }
+            w.field("startOptions") { writePrintStartOptions(w, v.startOptions) }
+            w.field("overwrite") { writePrintOverwrite(w, v.overwrite) }
+        }
+    }
+    sealed interface PrintWorkflowEffect {
+        data class CaptureSession(val value: ProjectIntents.Empty) : PrintWorkflowEffect
+        data class SessionCurrent(val value: ProjectIntents.Empty) : PrintWorkflowEffect
+        data class ArtifactCurrent(val value: ProjectIntents.Empty) : PrintWorkflowEffect
+        data class Request(val value: ProjectIntents.PrinterSend) : PrintWorkflowEffect
+        data class Reconcile(val value: ProjectIntents.PrinterSend) : PrintWorkflowEffect
+        data class Upload(val value: ProjectIntents.PrinterUpload) : PrintWorkflowEffect
+        data class Random(val value: ProjectIntents.Empty) : PrintWorkflowEffect
+        data class Confirm(val value: ProjectIntents.PrintWorkflowConfirmation) : PrintWorkflowEffect
+    }
+    private fun readPrintWorkflowEffect(v: Any): PrintWorkflowEffect {
+        val obj = ProjectIntentJson.fields(v, setOf("captureSession", "sessionCurrent", "artifactCurrent", "request", "reconcile", "upload", "random", "confirm"), true)
+        return when(val key = obj.keys().next()) {
+            "captureSession" -> PrintWorkflowEffect.CaptureSession(readEmpty(obj.get(key)))
+            "sessionCurrent" -> PrintWorkflowEffect.SessionCurrent(readEmpty(obj.get(key)))
+            "artifactCurrent" -> PrintWorkflowEffect.ArtifactCurrent(readEmpty(obj.get(key)))
+            "request" -> PrintWorkflowEffect.Request(readPrinterSend(obj.get(key)))
+            "reconcile" -> PrintWorkflowEffect.Reconcile(readPrinterSend(obj.get(key)))
+            "upload" -> PrintWorkflowEffect.Upload(readPrinterUpload(obj.get(key)))
+            "random" -> PrintWorkflowEffect.Random(readEmpty(obj.get(key)))
+            "confirm" -> PrintWorkflowEffect.Confirm(readPrintWorkflowConfirmation(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrintWorkflowEffect(w: ProjectIntentWriter, v: PrintWorkflowEffect) {
+        w.obj { when(v) {
+            is PrintWorkflowEffect.CaptureSession -> w.field("captureSession") { writeEmpty(w, v.value) }
+            is PrintWorkflowEffect.SessionCurrent -> w.field("sessionCurrent") { writeEmpty(w, v.value) }
+            is PrintWorkflowEffect.ArtifactCurrent -> w.field("artifactCurrent") { writeEmpty(w, v.value) }
+            is PrintWorkflowEffect.Request -> w.field("request") { writePrinterSend(w, v.value) }
+            is PrintWorkflowEffect.Reconcile -> w.field("reconcile") { writePrinterSend(w, v.value) }
+            is PrintWorkflowEffect.Upload -> w.field("upload") { writePrinterUpload(w, v.value) }
+            is PrintWorkflowEffect.Random -> w.field("random") { writeEmpty(w, v.value) }
+            is PrintWorkflowEffect.Confirm -> w.field("confirm") { writePrintWorkflowConfirmation(w, v.value) }
+        } }
+    }
+    data class PrintWorkflowPendingEffect(val id: Long, val effect: PrintWorkflowEffect)
+    private fun readPrintWorkflowPendingEffect(v: Any): PrintWorkflowPendingEffect {
+        val obj = ProjectIntentJson.fields(v, setOf("id", "effect"), false)
+        return PrintWorkflowPendingEffect(readCounter(obj.get("id")), readPrintWorkflowEffect(obj.get("effect")))
+    }
+    private fun writePrintWorkflowPendingEffect(w: ProjectIntentWriter, v: PrintWorkflowPendingEffect) {
+        w.obj {
+            w.field("id") { writeCounter(w, v.id) }
+            w.field("effect") { writePrintWorkflowEffect(w, v.effect) }
+        }
+    }
+    private fun readPrintWorkflowPendingEffects(v: Any): List<PrintWorkflowPendingEffect> {
+        val array = ProjectIntentJson.list(v, 0, 16)
+        return List(array.length()) { readPrintWorkflowPendingEffect(array.get(it)) }
+    }
+    private fun writePrintWorkflowPendingEffects(w: ProjectIntentWriter, v: List<PrintWorkflowPendingEffect>) {
+        w.array(v, 0, 16) { writePrintWorkflowPendingEffect(w, it) }
+    }
+    enum class PrintWorkflowDecisionChoice {Cancel,Upload,UploadAndPrint}
+    private fun readPrintWorkflowDecisionChoice(v: Any): PrintWorkflowDecisionChoice {
+        return when(v) {"cancel" -> PrintWorkflowDecisionChoice.Cancel;"upload" -> PrintWorkflowDecisionChoice.Upload;"uploadAndPrint" -> PrintWorkflowDecisionChoice.UploadAndPrint; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrintWorkflowDecisionChoice(w: ProjectIntentWriter, v: PrintWorkflowDecisionChoice) {
+        w.literal(when(v) {PrintWorkflowDecisionChoice.Cancel -> "cancel";PrintWorkflowDecisionChoice.Upload -> "upload";PrintWorkflowDecisionChoice.UploadAndPrint -> "uploadAndPrint";})
+    }
+    data class PrintWorkflowDecision(val choice: PrintWorkflowDecisionChoice, val overwrite: Boolean, val startOptions: List<PrintStartOptionId>)
+    private fun readPrintWorkflowDecision(v: Any): PrintWorkflowDecision {
+        val obj = ProjectIntentJson.fields(v, setOf("choice", "overwrite", "startOptions"), false)
+        return PrintWorkflowDecision(readPrintWorkflowDecisionChoice(obj.get("choice")), readFlag(obj.get("overwrite")), readPrintStartOptionIds(obj.get("startOptions")))
+    }
+    private fun writePrintWorkflowDecision(w: ProjectIntentWriter, v: PrintWorkflowDecision) {
+        w.obj {
+            w.field("choice") { writePrintWorkflowDecisionChoice(w, v.choice) }
+            w.field("overwrite") { writeFlag(w, v.overwrite) }
+            w.field("startOptions") { writePrintStartOptionIds(w, v.startOptions) }
+        }
+    }
+    private fun readByte(v: Any): Int {
+        return ProjectIntentJson.integer(v, 0L, 255L).toInt()
+    }
+    private fun writeByte(w: ProjectIntentWriter, v: Int) {
+        w.integer(v.toLong(), 0L, 255L)
+    }
+    private fun readRandomBytes(v: Any): List<Int> {
+        val array = ProjectIntentJson.list(v, 16, 16)
+        return List(array.length()) { readByte(array.get(it)) }
+    }
+    private fun writeRandomBytes(w: ProjectIntentWriter, v: List<Int>) {
+        w.array(v, 16, 16) { writeByte(w, it) }
+    }
+    sealed interface PrintWorkflowOutcome {
+        data class Session(val value: ProjectIntents.PrinterText) : PrintWorkflowOutcome
+        data class SessionFailed(val value: ProjectIntents.PrinterText) : PrintWorkflowOutcome
+        data class Current(val value: Boolean) : PrintWorkflowOutcome
+        data class Failed(val value: ProjectIntents.TransportFailure) : PrintWorkflowOutcome
+        data class Random(val value: List<Int>) : PrintWorkflowOutcome
+        data class Decision(val value: ProjectIntents.PrintWorkflowDecision) : PrintWorkflowOutcome
+    }
+    private fun readPrintWorkflowOutcome(v: Any): PrintWorkflowOutcome {
+        val obj = ProjectIntentJson.fields(v, setOf("session", "sessionFailed", "current", "failed", "random", "decision"), true)
+        return when(val key = obj.keys().next()) {
+            "session" -> PrintWorkflowOutcome.Session(readPrinterText(obj.get(key)))
+            "sessionFailed" -> PrintWorkflowOutcome.SessionFailed(readPrinterText(obj.get(key)))
+            "current" -> PrintWorkflowOutcome.Current(readFlag(obj.get(key)))
+            "failed" -> PrintWorkflowOutcome.Failed(readTransportFailure(obj.get(key)))
+            "random" -> PrintWorkflowOutcome.Random(readRandomBytes(obj.get(key)))
+            "decision" -> PrintWorkflowOutcome.Decision(readPrintWorkflowDecision(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrintWorkflowOutcome(w: ProjectIntentWriter, v: PrintWorkflowOutcome) {
+        w.obj { when(v) {
+            is PrintWorkflowOutcome.Session -> w.field("session") { writePrinterText(w, v.value) }
+            is PrintWorkflowOutcome.SessionFailed -> w.field("sessionFailed") { writePrinterText(w, v.value) }
+            is PrintWorkflowOutcome.Current -> w.field("current") { writeFlag(w, v.value) }
+            is PrintWorkflowOutcome.Failed -> w.field("failed") { writeTransportFailure(w, v.value) }
+            is PrintWorkflowOutcome.Random -> w.field("random") { writeRandomBytes(w, v.value) }
+            is PrintWorkflowOutcome.Decision -> w.field("decision") { writePrintWorkflowDecision(w, v.value) }
+        } }
+    }
+    enum class PrintSubmissionPhase {Checking,Confirming,Uploading,Verifying,Preparing,Starting,Completed}
+    private fun readPrintSubmissionPhase(v: Any): PrintSubmissionPhase {
+        return when(v) {"checking" -> PrintSubmissionPhase.Checking;"confirming" -> PrintSubmissionPhase.Confirming;"uploading" -> PrintSubmissionPhase.Uploading;"verifying" -> PrintSubmissionPhase.Verifying;"preparing" -> PrintSubmissionPhase.Preparing;"starting" -> PrintSubmissionPhase.Starting;"completed" -> PrintSubmissionPhase.Completed; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrintSubmissionPhase(w: ProjectIntentWriter, v: PrintSubmissionPhase) {
+        w.literal(when(v) {PrintSubmissionPhase.Checking -> "checking";PrintSubmissionPhase.Confirming -> "confirming";PrintSubmissionPhase.Uploading -> "uploading";PrintSubmissionPhase.Verifying -> "verifying";PrintSubmissionPhase.Preparing -> "preparing";PrintSubmissionPhase.Starting -> "starting";PrintSubmissionPhase.Completed -> "completed";})
+    }
+    private fun readPrintSubmissionPhases(v: Any): List<PrintSubmissionPhase> {
+        val array = ProjectIntentJson.list(v, 0, 64)
+        return List(array.length()) { readPrintSubmissionPhase(array.get(it)) }
+    }
+    private fun writePrintSubmissionPhases(w: ProjectIntentWriter, v: List<PrintSubmissionPhase>) {
+        w.array(v, 0, 64) { writePrintSubmissionPhase(w, it) }
+    }
+    enum class PrintSubmissionErrorCode {NotReady,EmptyArtifact,UploadFailed,VerificationFailed,StartFailed,Cancelled,ListingFailed,TargetChanged,PreparationUncertain,StartUncertain,StaleContext,InvalidTarget}
+    private fun readPrintSubmissionErrorCode(v: Any): PrintSubmissionErrorCode {
+        return when(v) {"notReady" -> PrintSubmissionErrorCode.NotReady;"emptyArtifact" -> PrintSubmissionErrorCode.EmptyArtifact;"uploadFailed" -> PrintSubmissionErrorCode.UploadFailed;"verificationFailed" -> PrintSubmissionErrorCode.VerificationFailed;"startFailed" -> PrintSubmissionErrorCode.StartFailed;"cancelled" -> PrintSubmissionErrorCode.Cancelled;"listingFailed" -> PrintSubmissionErrorCode.ListingFailed;"targetChanged" -> PrintSubmissionErrorCode.TargetChanged;"preparationUncertain" -> PrintSubmissionErrorCode.PreparationUncertain;"startUncertain" -> PrintSubmissionErrorCode.StartUncertain;"staleContext" -> PrintSubmissionErrorCode.StaleContext;"invalidTarget" -> PrintSubmissionErrorCode.InvalidTarget; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrintSubmissionErrorCode(w: ProjectIntentWriter, v: PrintSubmissionErrorCode) {
+        w.literal(when(v) {PrintSubmissionErrorCode.NotReady -> "notReady";PrintSubmissionErrorCode.EmptyArtifact -> "emptyArtifact";PrintSubmissionErrorCode.UploadFailed -> "uploadFailed";PrintSubmissionErrorCode.VerificationFailed -> "verificationFailed";PrintSubmissionErrorCode.StartFailed -> "startFailed";PrintSubmissionErrorCode.Cancelled -> "cancelled";PrintSubmissionErrorCode.ListingFailed -> "listingFailed";PrintSubmissionErrorCode.TargetChanged -> "targetChanged";PrintSubmissionErrorCode.PreparationUncertain -> "preparationUncertain";PrintSubmissionErrorCode.StartUncertain -> "startUncertain";PrintSubmissionErrorCode.StaleContext -> "staleContext";PrintSubmissionErrorCode.InvalidTarget -> "invalidTarget";})
+    }
+    data class PrintWorkflowFailure(val code: PrintSubmissionErrorCode, val message: List<Int>)
+    private fun readPrintWorkflowFailure(v: Any): PrintWorkflowFailure {
+        val obj = ProjectIntentJson.fields(v, setOf("code", "message"), false)
+        return PrintWorkflowFailure(readPrintSubmissionErrorCode(obj.get("code")), readEditText(obj.get("message")))
+    }
+    private fun writePrintWorkflowFailure(w: ProjectIntentWriter, v: PrintWorkflowFailure) {
+        w.obj {
+            w.field("code") { writePrintSubmissionErrorCode(w, v.code) }
+            w.field("message") { writeEditText(w, v.message) }
+        }
+    }
+    data class PrintSubmissionResult(val path: List<Int>, val root: List<Int>, val uploadedBytes: Long, val verifiedBytes: Long, val startedPrint: Boolean, val renamedFrom: OptionalText)
+    private fun readPrintSubmissionResult(v: Any): PrintSubmissionResult {
+        val obj = ProjectIntentJson.fields(v, setOf("path", "root", "uploadedBytes", "verifiedBytes", "startedPrint", "renamedFrom"), false)
+        return PrintSubmissionResult(readEditText(obj.get("path")), readEditText(obj.get("root")), readCounter(obj.get("uploadedBytes")), readCounter(obj.get("verifiedBytes")), readFlag(obj.get("startedPrint")), readOptionalText(obj.get("renamedFrom")))
+    }
+    private fun writePrintSubmissionResult(w: ProjectIntentWriter, v: PrintSubmissionResult) {
+        w.obj {
+            w.field("path") { writeEditText(w, v.path) }
+            w.field("root") { writeEditText(w, v.root) }
+            w.field("uploadedBytes") { writeCounter(w, v.uploadedBytes) }
+            w.field("verifiedBytes") { writeCounter(w, v.verifiedBytes) }
+            w.field("startedPrint") { writeFlag(w, v.startedPrint) }
+            w.field("renamedFrom") { writeOptionalText(w, v.renamedFrom) }
+        }
+    }
+    enum class PrintWorkflowPhase {Idle,Checking,Confirming,Uploading,Verifying,Preparing,Starting,Completed,Cancelled,Failed,Uncertain}
+    private fun readPrintWorkflowPhase(v: Any): PrintWorkflowPhase {
+        return when(v) {"idle" -> PrintWorkflowPhase.Idle;"checking" -> PrintWorkflowPhase.Checking;"confirming" -> PrintWorkflowPhase.Confirming;"uploading" -> PrintWorkflowPhase.Uploading;"verifying" -> PrintWorkflowPhase.Verifying;"preparing" -> PrintWorkflowPhase.Preparing;"starting" -> PrintWorkflowPhase.Starting;"completed" -> PrintWorkflowPhase.Completed;"cancelled" -> PrintWorkflowPhase.Cancelled;"failed" -> PrintWorkflowPhase.Failed;"uncertain" -> PrintWorkflowPhase.Uncertain; else -> throw InvalidProjectIntent()}
+    }
+    private fun writePrintWorkflowPhase(w: ProjectIntentWriter, v: PrintWorkflowPhase) {
+        w.literal(when(v) {PrintWorkflowPhase.Idle -> "idle";PrintWorkflowPhase.Checking -> "checking";PrintWorkflowPhase.Confirming -> "confirming";PrintWorkflowPhase.Uploading -> "uploading";PrintWorkflowPhase.Verifying -> "verifying";PrintWorkflowPhase.Preparing -> "preparing";PrintWorkflowPhase.Starting -> "starting";PrintWorkflowPhase.Completed -> "completed";PrintWorkflowPhase.Cancelled -> "cancelled";PrintWorkflowPhase.Failed -> "failed";PrintWorkflowPhase.Uncertain -> "uncertain";})
+    }
+    sealed interface PrintWorkflowState {
+        data class Idle(val value: ProjectIntents.Empty) : PrintWorkflowState
+        data class Pending(val value: ProjectIntents.Empty) : PrintWorkflowState
+        data class Submitted(val value: ProjectIntents.PrintSubmissionResult) : PrintWorkflowState
+        data class Started(val value: ProjectIntents.PrinterText) : PrintWorkflowState
+        data class Declined(val value: ProjectIntents.Empty) : PrintWorkflowState
+        data class Failed(val value: ProjectIntents.PrintWorkflowFailure) : PrintWorkflowState
+    }
+    private fun readPrintWorkflowState(v: Any): PrintWorkflowState {
+        val obj = ProjectIntentJson.fields(v, setOf("idle", "pending", "submitted", "started", "declined", "failed"), true)
+        return when(val key = obj.keys().next()) {
+            "idle" -> PrintWorkflowState.Idle(readEmpty(obj.get(key)))
+            "pending" -> PrintWorkflowState.Pending(readEmpty(obj.get(key)))
+            "submitted" -> PrintWorkflowState.Submitted(readPrintSubmissionResult(obj.get(key)))
+            "started" -> PrintWorkflowState.Started(readPrinterText(obj.get(key)))
+            "declined" -> PrintWorkflowState.Declined(readEmpty(obj.get(key)))
+            "failed" -> PrintWorkflowState.Failed(readPrintWorkflowFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writePrintWorkflowState(w: ProjectIntentWriter, v: PrintWorkflowState) {
+        w.obj { when(v) {
+            is PrintWorkflowState.Idle -> w.field("idle") { writeEmpty(w, v.value) }
+            is PrintWorkflowState.Pending -> w.field("pending") { writeEmpty(w, v.value) }
+            is PrintWorkflowState.Submitted -> w.field("submitted") { writePrintSubmissionResult(w, v.value) }
+            is PrintWorkflowState.Started -> w.field("started") { writePrinterText(w, v.value) }
+            is PrintWorkflowState.Declined -> w.field("declined") { writeEmpty(w, v.value) }
+            is PrintWorkflowState.Failed -> w.field("failed") { writePrintWorkflowFailure(w, v.value) }
+        } }
+    }
+    data class PrintWorkflowStep(val phase: PrintWorkflowPhase, val phases: List<PrintSubmissionPhase>, val effects: List<PrintWorkflowPendingEffect>, val state: PrintWorkflowState)
+    private fun readPrintWorkflowStep(v: Any): PrintWorkflowStep {
+        val obj = ProjectIntentJson.fields(v, setOf("phase", "phases", "effects", "state"), false)
+        return PrintWorkflowStep(readPrintWorkflowPhase(obj.get("phase")), readPrintSubmissionPhases(obj.get("phases")), readPrintWorkflowPendingEffects(obj.get("effects")), readPrintWorkflowState(obj.get("state")))
+    }
+    private fun writePrintWorkflowStep(w: ProjectIntentWriter, v: PrintWorkflowStep) {
+        w.obj {
+            w.field("phase") { writePrintWorkflowPhase(w, v.phase) }
+            w.field("phases") { writePrintSubmissionPhases(w, v.phases) }
+            w.field("effects") { writePrintWorkflowPendingEffects(w, v.effects) }
+            w.field("state") { writePrintWorkflowState(w, v.state) }
+        }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -8231,4 +8526,12 @@ object ProjectIntents {
     fun encodeTransportFailure(value: TransportFailure): String = ProjectIntentWriter().also { writeTransportFailure(it, value) }.finish()
     fun decodePrintFileIdentityReply(text: String): PrintFileIdentityReply = readPrintFileIdentityReply(ProjectIntentJson.parse(text))
     fun encodePrintFileIdentityReply(value: PrintFileIdentityReply): String = ProjectIntentWriter().also { writePrintFileIdentityReply(it, value) }.finish()
+    fun decodePrintWorkflowIntent(text: String): PrintWorkflowIntent = readPrintWorkflowIntent(ProjectIntentJson.parse(text))
+    fun encodePrintWorkflowIntent(value: PrintWorkflowIntent): String = ProjectIntentWriter().also { writePrintWorkflowIntent(it, value) }.finish()
+    fun decodePrintWorkflowOutcome(text: String): PrintWorkflowOutcome = readPrintWorkflowOutcome(ProjectIntentJson.parse(text))
+    fun encodePrintWorkflowOutcome(value: PrintWorkflowOutcome): String = ProjectIntentWriter().also { writePrintWorkflowOutcome(it, value) }.finish()
+    fun decodePrintWorkflowStep(text: String): PrintWorkflowStep = readPrintWorkflowStep(ProjectIntentJson.parse(text))
+    fun encodePrintWorkflowStep(value: PrintWorkflowStep): String = ProjectIntentWriter().also { writePrintWorkflowStep(it, value) }.finish()
+    fun decodePrintWorkflowEffect(text: String): PrintWorkflowEffect = readPrintWorkflowEffect(ProjectIntentJson.parse(text))
+    fun encodePrintWorkflowEffect(value: PrintWorkflowEffect): String = ProjectIntentWriter().also { writePrintWorkflowEffect(it, value) }.finish()
 }

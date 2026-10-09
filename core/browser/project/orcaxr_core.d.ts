@@ -160,6 +160,36 @@ export class PrintJobStatus {
 }
 
 /**
+ * The print submission workflow (`PrintWorkflowController`): a send or a
+ * stored reprint, one `PrintWorkflowStep` per call. Each step names the
+ * effects the host carries out and answers by id.
+ */
+export class PrintWorkflow {
+    free(): void;
+    [Symbol.dispose](): void;
+    busy(): boolean;
+    cancel(): string;
+    dispose(): string;
+    constructor();
+    /**
+     * A `PrintWorkflowOutcome` answering effect `id`.
+     */
+    resolve(id: number, outcome: string): string;
+    /**
+     * The reply a request or upload received: Moonraker's `result`, as JSON.
+     */
+    resolve_reply(id: number, text: string): string;
+    /**
+     * A `PrintWorkflowIntent`: send a sliced artifact.
+     */
+    run(intent: string): string;
+    /**
+     * A `PrinterText` naming a stored file to start.
+     */
+    start_stored(path: string): string;
+}
+
+/**
  * A loaded catalog: compiled, or refused with its diagnostics.
  */
 export class ProfileCatalog {
@@ -1029,6 +1059,7 @@ export interface InitOutput {
     readonly __wbg_holdtoconfirm_free: (a: number, b: number) => void;
     readonly __wbg_presetlibrary_free: (a: number, b: number) => void;
     readonly __wbg_printjobstatus_free: (a: number, b: number) => void;
+    readonly __wbg_printworkflow_free: (a: number, b: number) => void;
     readonly __wbg_profilecatalog_free: (a: number, b: number) => void;
     readonly __wbg_profilecatalogupload_free: (a: number, b: number) => void;
     readonly __wbg_projectarchiveimport_free: (a: number, b: number) => void;
@@ -1136,6 +1167,14 @@ export interface InitOutput {
     readonly printjobstatus_new: () => number;
     readonly printjobstatus_reset: (a: number) => [number, number, number, number];
     readonly printjobstatus_snapshot: (a: number) => [number, number, number, number];
+    readonly printworkflow_busy: (a: number) => number;
+    readonly printworkflow_cancel: (a: number) => [number, number, number, number];
+    readonly printworkflow_dispose: (a: number) => [number, number, number, number];
+    readonly printworkflow_new: () => number;
+    readonly printworkflow_resolve: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly printworkflow_resolve_reply: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly printworkflow_run: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly printworkflow_start_stored: (a: number, b: number, c: number) => [number, number, number, number];
     readonly profilecatalog_diagnostic: (a: number, b: number) => [number, number, number, number];
     readonly profilecatalog_diagnostic_count: (a: number) => number;
     readonly profilecatalog_preflight_target: (a: number, b: number, c: number, d: number) => [number, number, number, number];
