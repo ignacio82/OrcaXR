@@ -17,35 +17,54 @@ export type ExternalEngineFetcher = (
   signal?: AbortSignal,
 ) => Promise<{ ok: boolean; status?: number; json?: () => Promise<unknown> }>;
 
+/**
+ * What one `GET /engine` exchange produced, as the attestation reads it: no
+ * reply (unreachable, or a reply that was not JSON), a refusal with its HTTP
+ * status, or the parsed payload.
+ */
+export type EngineAttestationReply =
+  | { readonly unreachable: true }
+  | { readonly ok: false; readonly status?: number }
+  | { readonly ok: true; readonly payload: unknown };
+
 /** Probe an explicit candidate; never mutate or look up the active route. */
 export async function attestExternalEndpoint(
   endpoint: string,
   fetcher: ExternalEngineFetcher,
   signal?: AbortSignal,
 ): Promise<VerifiedEngineAttestation> {
-  let payload: unknown;
+  let reply: EngineAttestationReply;
   try {
     const response = await fetcher(`${canonicalExternalEndpoint(endpoint)}/engine`, signal);
-    if (!response.ok) {
-      // The status separates the two ways this fails in practice, which
-      // otherwise look identical from the browser: an old server has no
-      // /engine route at all, and a secured one wants a token first.
-      if (response.status === 401 || response.status === 403) {
-        return {
-          attested: false,
-          reason: 'The external slicer requires a token before it will report its engine.',
-        };
-      }
-      const status = response.status === undefined ? '' : ` (HTTP ${response.status})`;
-      return {
-        attested: false,
-        reason: `The external slicer did not report its engine provenance${status}; update the slicer server to a build that serves /engine.`,
-      };
-    }
-    payload = await response.json?.();
+    reply = response.ok ? { ok: true, payload: await response.json?.() } : { ok: false, status: response.status };
   } catch {
+    reply = { unreachable: true };
+  }
+  return readEngineAttestation(reply);
+}
+
+/** An engine attestation reply read against the build this client pins (`PINNED_ENGINE_PROVENANCE`). */
+export function readEngineAttestation(reply: EngineAttestationReply): VerifiedEngineAttestation {
+  if ('unreachable' in reply) {
     return { attested: false, reason: 'The external slicer could not be reached to check its engine.' };
   }
+  if (!reply.ok) {
+    // The status separates the two ways this fails in practice, which
+    // otherwise look identical from the browser: an old server has no
+    // /engine route at all, and a secured one wants a token first.
+    if (reply.status === 401 || reply.status === 403) {
+      return {
+        attested: false,
+        reason: 'The external slicer requires a token before it will report its engine.',
+      };
+    }
+    const status = reply.status === undefined ? '' : ` (HTTP ${reply.status})`;
+    return {
+      attested: false,
+      reason: `The external slicer did not report its engine provenance${status}; update the slicer server to a build that serves /engine.`,
+    };
+  }
+  const payload = reply.payload;
   if (typeof payload !== 'object' || payload === null) {
     return { attested: false, reason: 'The external slicer returned a malformed engine attestation.' };
   }
@@ -59,7 +78,11 @@ export async function attestExternalEndpoint(
     upstream?: { commit?: unknown };
   };
   if (record.attested !== true) {
-    const reason = typeof record.reason === 'string' ? record.reason : 'It reported no verifiable engine build.';
+    // A blank reason reads as none, not as an empty refusal.
+    const reason =
+      typeof record.reason === 'string' && record.reason.trim()
+        ? record.reason
+        : 'It reported no verifiable engine build.';
     return { attested: false, reason };
   }
   if (record.schemaVersion !== 1 || (record.engine !== 'wasm' && record.engine !== 'cli')) {
@@ -133,7 +156,9 @@ function compareCliPatches(reported: unknown): string | undefined {
     if (applied.get(name) !== digest) return `The external slicer carries a different ${name} than this build pins.`;
   }
   for (const name of applied.keys()) {
-    if (!(name in expected)) return `The external slicer carries an engine patch this build does not know: ${name}.`;
+    // Own names only: `in` also finds `toString` or `__proto__` on every object.
+    if (!Object.hasOwn(expected, name))
+      return `The external slicer carries an engine patch this build does not know: ${name}.`;
   }
   return undefined;
 }

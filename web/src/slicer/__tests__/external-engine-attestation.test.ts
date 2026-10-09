@@ -65,6 +65,15 @@ await test('an unproven engine is refused with the server’s own reason', async
   if (!result.attested) assert.equal(result.reason, 'CLI build cannot be proven.');
 });
 
+await test('a blank reason from the server reads as none given, not as an empty refusal', async () => {
+  enabledExternal();
+  for (const reason of ['', '  \n']) {
+    const result = await SlicerClient.attestExternalEngine(respond({ schemaVersion: 1, attested: false, reason }));
+    assert.equal(result.attested, false);
+    if (!result.attested) assert.equal(result.reason, 'It reported no verifiable engine build.');
+  }
+});
+
 /**
  * The CLI route exists precisely to produce what desktop Snapmaker Orca
  * produces, so it must be able to attest. Its identity is the upstream commit
@@ -209,6 +218,20 @@ await test('a CLI engine whose patch set differs is refused by name', async () =
   const silent = await SlicerClient.attestExternalEngine(respond({ ...attestedCli, patches: undefined }));
   assert.equal(silent.attested, false);
   if (!silent.attested) assert.match(silent.reason, /did not report which engine patches/);
+});
+
+await test('a CLI patch named after an object built-in is unknown, not pinned', async () => {
+  enabledExternal();
+  // `name in pinnedPatches` found these on Object.prototype and attested an
+  // engine carrying an extra, unverified patch.
+  for (const name of ['toString', '__proto__', 'constructor', 'hasOwnProperty']) {
+    const result = await SlicerClient.attestExternalEngine(
+      respond({ ...attestedCli, patches: [...attestedCli.patches, { name, sha256: 'x' }] }),
+    );
+    assert.equal(result.attested, false, name);
+    if (!result.attested)
+      assert.equal(result.reason, `The external slicer carries an engine patch this build does not know: ${name}.`);
+  }
 });
 
 await test('a CLI engine off the pinned commit is refused whatever its patches say', async () => {

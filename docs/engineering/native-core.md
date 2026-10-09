@@ -4250,6 +4250,59 @@ the switch, and every saved record) and 63 records saved; Rust, WASM in
 Node and Chrome, the printer core, JNI and 142 Kotlin checks reproduce
 every one.
 
+### Plate projection for slicing
+
+`orcaxr_project::slicing::plate` is the browser's per-plate slice
+projection (`plateProjection.ts`): `project_plate` refuses an unknown or
+unprintable plate, then reduces the project to that plate as plate zero and
+the active one — project-wide and this plate's custom G-code, thumbnails with
+no plate or this plate, no extension blobs — keeping only the source assets
+its volumes and kept thumbnails use (each must have its payload, or
+`MissingAsset`), validated as the browser's `assertValidProjectState`, whose
+fingerprint is the archive's source hash; `plate_print_overrides` is the
+plate's configuration as the engine's wire strings (arrays joined by commas,
+the bookkeeping keys and nulls skipped; a `__proto__` key never reaches the
+overrides, as the browser's plain-object assignment drops it). Errors carry
+the browser's sentences. `plate-projection-vectors.mjs` records 19 browser
+cases (16 projections; unprintable, missing-asset and unknown plates) from the
+model corpus and three variants (a second plate made unprintable, overrides of
+every JSON shape, per-plate thumbnails and custom G-code with an unused
+asset), and a Rust replay matches them byte for byte. The browser's
+`SliceJobCoordinator` now imports the same exported `platePrintOverrides`.
+Bindings follow with the Android slicing route.
+
+### External slicer policy
+
+`orcaxr_printer::slicer` is the browser's external-slicer route
+(`ExternalEngineAttestation.ts`, `ExternalSlicerJobs.ts`) as pure steps over
+`ExternalSlicer*` intents: `endpoint` makes a captured address canonical
+(`canonicalExternalEndpoint`: the trimmed text as typed, HTTP when no scheme
+is named, bare IPv6 bracketed, trailing slashes dropped; credentials, queries
+and fragments refused); `attestation_plan` and `attestation` send
+`GET /engine` and read its reply against the pinned build; `submit_plan` and
+`job_plan` give the request each step sends (`POST /slice?async=1`, status,
+`/gcode`, cancel, and a release bounded to 1 s), refusing a job ID no URL can
+carry; `submission`, `poll`, `cancel` and `artifact` read each reply into the
+next step or a failure whose kind (`failed`, `cancelled`, `alreadyDone`,
+`alreadyFailed`, `alreadyReleased`, `unconfirmed`) and browser sentence the
+host reports. Hosts own the transport, the bearer token, the poll interval
+(700 ms in the browser) and the cancellation deadline (30 s, `timedOut`), and
+decode reply bodies as UTF-8. G-code never crosses into the core: a host
+streams the download once for its facts — length, SHA-256, whether it is
+UTF-8, whether its text (a leading BOM dropped) is only JavaScript white
+space — and `artifact` checks the job ID, `X-OrcaXR-Gcode-Bytes` and
+`X-OrcaXR-Gcode-SHA256` against them, naming the job to release only when
+the transfer named its digest. The pinned build
+(`contracts/pinned-engine-provenance.json`) is written from
+`pinnedEngineProvenance.ts` by the corpus generator, which fails when they
+drift, and embedded by the core (`slicer::pinned`, `engine_supports`).
+
+`external-slicer-vectors.mjs` drives the production functions through
+`ExternalSlicerExchange.ts` (the job loops over a recording fetcher, the
+artifact reader over real `Response`s): 72 endpoints, 230 attestation
+replies, 156 job steps, 247 submission replies, 196 status polls, 44
+cancellation replies and 49 artifacts; Rust reproduces every one.
+
 ### Android Project area
 
 The app's Project area runs the project session as the browser's workspace

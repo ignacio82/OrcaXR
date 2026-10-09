@@ -7029,6 +7029,235 @@ const shapes = {
       "started": "PrinterText",
       "failed": "PrinterStorageFailure"
     }
+  },
+  "ExternalSlicerText": {
+    "kind": "array",
+    "items": "Unit",
+    "min": 0,
+    "max": 2101248
+  },
+  "ExternalSlicerEndpointRequest": {
+    "kind": "object",
+    "fields": {
+      "input": "EditText"
+    }
+  },
+  "ExternalSlicerEndpoint": {
+    "kind": "union",
+    "variants": {
+      "endpoint": "EditText",
+      "refused": "EditText"
+    }
+  },
+  "ExternalSlicerSend": {
+    "kind": "object",
+    "fields": {
+      "method": "EditText",
+      "url": "EditText",
+      "operation": "EditText",
+      "timeoutMs": "OptionalFinite"
+    }
+  },
+  "ExternalSlicerEngine": {
+    "kind": "enum",
+    "values": [
+      "wasm",
+      "cli"
+    ]
+  },
+  "ExternalSlicerAttested": {
+    "kind": "object",
+    "fields": {
+      "commit": "EditText",
+      "artifactHash": "EditText",
+      "engine": "ExternalSlicerEngine"
+    }
+  },
+  "ExternalSlicerAttestation": {
+    "kind": "union",
+    "variants": {
+      "attested": "ExternalSlicerAttested",
+      "unattested": "PrinterReplyText"
+    }
+  },
+  "ExternalSlicerAttestationPlan": {
+    "kind": "union",
+    "variants": {
+      "send": "ExternalSlicerSend",
+      "unattested": "PrinterReplyText"
+    }
+  },
+  "ExternalSlicerResponse": {
+    "kind": "object",
+    "fields": {
+      "status": "Counter",
+      "body": "PrinterReplyText"
+    }
+  },
+  "ExternalSlicerReply": {
+    "kind": "union",
+    "variants": {
+      "failed": "EditText",
+      "response": "ExternalSlicerResponse"
+    }
+  },
+  "ExternalSlicerFailureKind": {
+    "kind": "enum",
+    "values": [
+      "failed",
+      "cancelled",
+      "alreadyDone",
+      "alreadyFailed",
+      "alreadyReleased",
+      "unconfirmed"
+    ]
+  },
+  "ExternalSlicerFailure": {
+    "kind": "object",
+    "fields": {
+      "kind": "ExternalSlicerFailureKind",
+      "message": "ExternalSlicerText"
+    }
+  },
+  "ExternalSlicerPlan": {
+    "kind": "union",
+    "variants": {
+      "send": "ExternalSlicerSend",
+      "refused": "ExternalSlicerFailure"
+    }
+  },
+  "ExternalSlicerJobStep": {
+    "kind": "enum",
+    "values": [
+      "status",
+      "artifact",
+      "cancel",
+      "release"
+    ]
+  },
+  "ExternalSlicerJobRequest": {
+    "kind": "object",
+    "fields": {
+      "endpoint": "EditText",
+      "jobId": "EditText",
+      "step": "ExternalSlicerJobStep"
+    }
+  },
+  "ExternalSlicerSubmitResponse": {
+    "kind": "object",
+    "fields": {
+      "status": "Counter",
+      "body": "PrinterReplyText",
+      "jobIdHeader": "OptionalText"
+    }
+  },
+  "ExternalSlicerSubmitReply": {
+    "kind": "union",
+    "variants": {
+      "failed": "EditText",
+      "response": "ExternalSlicerSubmitResponse"
+    }
+  },
+  "ExternalSlicerSubmitRead": {
+    "kind": "object",
+    "fields": {
+      "reply": "ExternalSlicerSubmitReply",
+      "aborted": "Flag"
+    }
+  },
+  "ExternalSlicerSubmission": {
+    "kind": "union",
+    "variants": {
+      "job": "PrinterReplyText",
+      "cancel": "PrinterReplyText",
+      "artifact": "Empty",
+      "failed": "ExternalSlicerFailure"
+    }
+  },
+  "ExternalSlicerPollRead": {
+    "kind": "object",
+    "fields": {
+      "failures": "Counter",
+      "reply": "ExternalSlicerReply"
+    }
+  },
+  "ExternalSlicerProgress": {
+    "kind": "object",
+    "fields": {
+      "percent": "Finite",
+      "message": "PrinterReplyText"
+    }
+  },
+  "OptionalExternalSlicerProgress": {
+    "kind": "union",
+    "variants": {
+      "absent": "Empty",
+      "value": "ExternalSlicerProgress"
+    }
+  },
+  "ExternalSlicerPollWait": {
+    "kind": "object",
+    "fields": {
+      "failures": "Counter",
+      "progress": "OptionalExternalSlicerProgress"
+    }
+  },
+  "ExternalSlicerPollStep": {
+    "kind": "union",
+    "variants": {
+      "wait": "ExternalSlicerPollWait",
+      "download": "Empty",
+      "failed": "ExternalSlicerFailure"
+    }
+  },
+  "ExternalSlicerCancelRead": {
+    "kind": "union",
+    "variants": {
+      "reply": "ExternalSlicerReply",
+      "timedOut": "Empty"
+    }
+  },
+  "ExternalSlicerCancelStep": {
+    "kind": "union",
+    "variants": {
+      "confirmed": "Empty",
+      "poll": "Empty",
+      "failed": "ExternalSlicerFailure"
+    }
+  },
+  "ExternalSlicerArtifactFacts": {
+    "kind": "object",
+    "fields": {
+      "status": "Counter",
+      "errorBody": "PrinterReplyText",
+      "jobIdHeader": "OptionalText",
+      "sha256Header": "OptionalText",
+      "bytesHeader": "OptionalText",
+      "length": "Counter",
+      "sha256": "EditText",
+      "utf8": "Flag",
+      "blank": "Flag"
+    }
+  },
+  "ExternalSlicerArtifactRead": {
+    "kind": "object",
+    "fields": {
+      "expectedJobId": "OptionalText",
+      "response": "ExternalSlicerArtifactFacts"
+    }
+  },
+  "ExternalSlicerAccepted": {
+    "kind": "object",
+    "fields": {
+      "release": "OptionalText"
+    }
+  },
+  "ExternalSlicerArtifact": {
+    "kind": "union",
+    "variants": {
+      "accepted": "ExternalSlicerAccepted",
+      "failed": "ExternalSlicerFailure"
+    }
   }
 } as const satisfies Readonly<Record<string,IntentShape>>;
 export type ProjectUnitWire = number;
@@ -7878,6 +8107,36 @@ export interface ProjectRememberedSecretWire {readonly key: ProjectEditTextWire;
 export type ProjectRememberedSecretsWire = readonly ProjectRememberedSecretWire[];
 export interface ProjectRememberedCredentialsWire {readonly printerApiKey: ProjectEditTextWire;readonly printerApiKeys: ProjectRememberedSecretsWire;readonly slicerToken: ProjectEditTextWire;readonly remember: ProjectFlagWire;}
 export type ProjectPrinterStorageResultWire = {readonly listing:ProjectPrinterStorageListingWire} | {readonly metadata:ProjectPrinterStorageMetadataWire} | {readonly done:ProjectEmptyWire} | {readonly moved:ProjectPrinterTextWire} | {readonly started:ProjectPrinterTextWire} | {readonly failed:ProjectPrinterStorageFailureWire};
+export type ProjectExternalSlicerTextWire = readonly ProjectUnitWire[];
+export interface ProjectExternalSlicerEndpointRequestWire {readonly input: ProjectEditTextWire;}
+export type ProjectExternalSlicerEndpointWire = {readonly endpoint:ProjectEditTextWire} | {readonly refused:ProjectEditTextWire};
+export interface ProjectExternalSlicerSendWire {readonly method: ProjectEditTextWire;readonly url: ProjectEditTextWire;readonly operation: ProjectEditTextWire;readonly timeoutMs: ProjectOptionalFiniteWire;}
+export type ProjectExternalSlicerEngineWire = "wasm" | "cli";
+export interface ProjectExternalSlicerAttestedWire {readonly commit: ProjectEditTextWire;readonly artifactHash: ProjectEditTextWire;readonly engine: ProjectExternalSlicerEngineWire;}
+export type ProjectExternalSlicerAttestationWire = {readonly attested:ProjectExternalSlicerAttestedWire} | {readonly unattested:ProjectPrinterReplyTextWire};
+export type ProjectExternalSlicerAttestationPlanWire = {readonly send:ProjectExternalSlicerSendWire} | {readonly unattested:ProjectPrinterReplyTextWire};
+export interface ProjectExternalSlicerResponseWire {readonly status: ProjectCounterWire;readonly body: ProjectPrinterReplyTextWire;}
+export type ProjectExternalSlicerReplyWire = {readonly failed:ProjectEditTextWire} | {readonly response:ProjectExternalSlicerResponseWire};
+export type ProjectExternalSlicerFailureKindWire = "failed" | "cancelled" | "alreadyDone" | "alreadyFailed" | "alreadyReleased" | "unconfirmed";
+export interface ProjectExternalSlicerFailureWire {readonly kind: ProjectExternalSlicerFailureKindWire;readonly message: ProjectExternalSlicerTextWire;}
+export type ProjectExternalSlicerPlanWire = {readonly send:ProjectExternalSlicerSendWire} | {readonly refused:ProjectExternalSlicerFailureWire};
+export type ProjectExternalSlicerJobStepWire = "status" | "artifact" | "cancel" | "release";
+export interface ProjectExternalSlicerJobRequestWire {readonly endpoint: ProjectEditTextWire;readonly jobId: ProjectEditTextWire;readonly step: ProjectExternalSlicerJobStepWire;}
+export interface ProjectExternalSlicerSubmitResponseWire {readonly status: ProjectCounterWire;readonly body: ProjectPrinterReplyTextWire;readonly jobIdHeader: ProjectOptionalTextWire;}
+export type ProjectExternalSlicerSubmitReplyWire = {readonly failed:ProjectEditTextWire} | {readonly response:ProjectExternalSlicerSubmitResponseWire};
+export interface ProjectExternalSlicerSubmitReadWire {readonly reply: ProjectExternalSlicerSubmitReplyWire;readonly aborted: ProjectFlagWire;}
+export type ProjectExternalSlicerSubmissionWire = {readonly job:ProjectPrinterReplyTextWire} | {readonly cancel:ProjectPrinterReplyTextWire} | {readonly artifact:ProjectEmptyWire} | {readonly failed:ProjectExternalSlicerFailureWire};
+export interface ProjectExternalSlicerPollReadWire {readonly failures: ProjectCounterWire;readonly reply: ProjectExternalSlicerReplyWire;}
+export interface ProjectExternalSlicerProgressWire {readonly percent: ProjectFiniteWire;readonly message: ProjectPrinterReplyTextWire;}
+export type ProjectOptionalExternalSlicerProgressWire = {readonly absent:ProjectEmptyWire} | {readonly value:ProjectExternalSlicerProgressWire};
+export interface ProjectExternalSlicerPollWaitWire {readonly failures: ProjectCounterWire;readonly progress: ProjectOptionalExternalSlicerProgressWire;}
+export type ProjectExternalSlicerPollStepWire = {readonly wait:ProjectExternalSlicerPollWaitWire} | {readonly download:ProjectEmptyWire} | {readonly failed:ProjectExternalSlicerFailureWire};
+export type ProjectExternalSlicerCancelReadWire = {readonly reply:ProjectExternalSlicerReplyWire} | {readonly timedOut:ProjectEmptyWire};
+export type ProjectExternalSlicerCancelStepWire = {readonly confirmed:ProjectEmptyWire} | {readonly poll:ProjectEmptyWire} | {readonly failed:ProjectExternalSlicerFailureWire};
+export interface ProjectExternalSlicerArtifactFactsWire {readonly status: ProjectCounterWire;readonly errorBody: ProjectPrinterReplyTextWire;readonly jobIdHeader: ProjectOptionalTextWire;readonly sha256Header: ProjectOptionalTextWire;readonly bytesHeader: ProjectOptionalTextWire;readonly length: ProjectCounterWire;readonly sha256: ProjectEditTextWire;readonly utf8: ProjectFlagWire;readonly blank: ProjectFlagWire;}
+export interface ProjectExternalSlicerArtifactReadWire {readonly expectedJobId: ProjectOptionalTextWire;readonly response: ProjectExternalSlicerArtifactFactsWire;}
+export interface ProjectExternalSlicerAcceptedWire {readonly release: ProjectOptionalTextWire;}
+export type ProjectExternalSlicerArtifactWire = {readonly accepted:ProjectExternalSlicerAcceptedWire} | {readonly failed:ProjectExternalSlicerFailureWire};
 export function captureProjectIntent(value:unknown):ProjectIntentWire { return captureIntent("Intent",value,shapes,limits) as ProjectIntentWire; }
 export function decodeProjectIntent(text:string):ProjectIntentWire { return captureProjectIntent(parseIntentJson(text,limits)); }
 export function encodeProjectIntent(value:ProjectIntentWire):string { return JSON.stringify(captureProjectIntent(value)); }
@@ -8577,3 +8836,48 @@ export function encodeProjectPrinterDirectoryAdopt(value:ProjectPrinterDirectory
 export function captureProjectRememberedCredentials(value:unknown):ProjectRememberedCredentialsWire { return captureIntent("RememberedCredentials",value,shapes,bulkLimits) as ProjectRememberedCredentialsWire; }
 export function decodeProjectRememberedCredentials(text:string):ProjectRememberedCredentialsWire { return captureProjectRememberedCredentials(parseIntentJson(text,bulkLimits)); }
 export function encodeProjectRememberedCredentials(value:ProjectRememberedCredentialsWire):string { return JSON.stringify(captureProjectRememberedCredentials(value)); }
+export function captureProjectExternalSlicerEndpointRequest(value:unknown):ProjectExternalSlicerEndpointRequestWire { return captureIntent("ExternalSlicerEndpointRequest",value,shapes,limits) as ProjectExternalSlicerEndpointRequestWire; }
+export function decodeProjectExternalSlicerEndpointRequest(text:string):ProjectExternalSlicerEndpointRequestWire { return captureProjectExternalSlicerEndpointRequest(parseIntentJson(text,limits)); }
+export function encodeProjectExternalSlicerEndpointRequest(value:ProjectExternalSlicerEndpointRequestWire):string { return JSON.stringify(captureProjectExternalSlicerEndpointRequest(value)); }
+export function captureProjectExternalSlicerEndpoint(value:unknown):ProjectExternalSlicerEndpointWire { return captureIntent("ExternalSlicerEndpoint",value,shapes,limits) as ProjectExternalSlicerEndpointWire; }
+export function decodeProjectExternalSlicerEndpoint(text:string):ProjectExternalSlicerEndpointWire { return captureProjectExternalSlicerEndpoint(parseIntentJson(text,limits)); }
+export function encodeProjectExternalSlicerEndpoint(value:ProjectExternalSlicerEndpointWire):string { return JSON.stringify(captureProjectExternalSlicerEndpoint(value)); }
+export function captureProjectExternalSlicerAttestationPlan(value:unknown):ProjectExternalSlicerAttestationPlanWire { return captureIntent("ExternalSlicerAttestationPlan",value,shapes,bulkLimits) as ProjectExternalSlicerAttestationPlanWire; }
+export function decodeProjectExternalSlicerAttestationPlan(text:string):ProjectExternalSlicerAttestationPlanWire { return captureProjectExternalSlicerAttestationPlan(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectExternalSlicerAttestationPlan(value:ProjectExternalSlicerAttestationPlanWire):string { return JSON.stringify(captureProjectExternalSlicerAttestationPlan(value)); }
+export function captureProjectExternalSlicerReply(value:unknown):ProjectExternalSlicerReplyWire { return captureIntent("ExternalSlicerReply",value,shapes,bulkLimits) as ProjectExternalSlicerReplyWire; }
+export function decodeProjectExternalSlicerReply(text:string):ProjectExternalSlicerReplyWire { return captureProjectExternalSlicerReply(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectExternalSlicerReply(value:ProjectExternalSlicerReplyWire):string { return JSON.stringify(captureProjectExternalSlicerReply(value)); }
+export function captureProjectExternalSlicerAttestation(value:unknown):ProjectExternalSlicerAttestationWire { return captureIntent("ExternalSlicerAttestation",value,shapes,bulkLimits) as ProjectExternalSlicerAttestationWire; }
+export function decodeProjectExternalSlicerAttestation(text:string):ProjectExternalSlicerAttestationWire { return captureProjectExternalSlicerAttestation(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectExternalSlicerAttestation(value:ProjectExternalSlicerAttestationWire):string { return JSON.stringify(captureProjectExternalSlicerAttestation(value)); }
+export function captureProjectExternalSlicerPlan(value:unknown):ProjectExternalSlicerPlanWire { return captureIntent("ExternalSlicerPlan",value,shapes,bulkLimits) as ProjectExternalSlicerPlanWire; }
+export function decodeProjectExternalSlicerPlan(text:string):ProjectExternalSlicerPlanWire { return captureProjectExternalSlicerPlan(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectExternalSlicerPlan(value:ProjectExternalSlicerPlanWire):string { return JSON.stringify(captureProjectExternalSlicerPlan(value)); }
+export function captureProjectExternalSlicerJobRequest(value:unknown):ProjectExternalSlicerJobRequestWire { return captureIntent("ExternalSlicerJobRequest",value,shapes,limits) as ProjectExternalSlicerJobRequestWire; }
+export function decodeProjectExternalSlicerJobRequest(text:string):ProjectExternalSlicerJobRequestWire { return captureProjectExternalSlicerJobRequest(parseIntentJson(text,limits)); }
+export function encodeProjectExternalSlicerJobRequest(value:ProjectExternalSlicerJobRequestWire):string { return JSON.stringify(captureProjectExternalSlicerJobRequest(value)); }
+export function captureProjectExternalSlicerSubmitRead(value:unknown):ProjectExternalSlicerSubmitReadWire { return captureIntent("ExternalSlicerSubmitRead",value,shapes,bulkLimits) as ProjectExternalSlicerSubmitReadWire; }
+export function decodeProjectExternalSlicerSubmitRead(text:string):ProjectExternalSlicerSubmitReadWire { return captureProjectExternalSlicerSubmitRead(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectExternalSlicerSubmitRead(value:ProjectExternalSlicerSubmitReadWire):string { return JSON.stringify(captureProjectExternalSlicerSubmitRead(value)); }
+export function captureProjectExternalSlicerSubmission(value:unknown):ProjectExternalSlicerSubmissionWire { return captureIntent("ExternalSlicerSubmission",value,shapes,bulkLimits) as ProjectExternalSlicerSubmissionWire; }
+export function decodeProjectExternalSlicerSubmission(text:string):ProjectExternalSlicerSubmissionWire { return captureProjectExternalSlicerSubmission(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectExternalSlicerSubmission(value:ProjectExternalSlicerSubmissionWire):string { return JSON.stringify(captureProjectExternalSlicerSubmission(value)); }
+export function captureProjectExternalSlicerPollRead(value:unknown):ProjectExternalSlicerPollReadWire { return captureIntent("ExternalSlicerPollRead",value,shapes,bulkLimits) as ProjectExternalSlicerPollReadWire; }
+export function decodeProjectExternalSlicerPollRead(text:string):ProjectExternalSlicerPollReadWire { return captureProjectExternalSlicerPollRead(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectExternalSlicerPollRead(value:ProjectExternalSlicerPollReadWire):string { return JSON.stringify(captureProjectExternalSlicerPollRead(value)); }
+export function captureProjectExternalSlicerPollStep(value:unknown):ProjectExternalSlicerPollStepWire { return captureIntent("ExternalSlicerPollStep",value,shapes,bulkLimits) as ProjectExternalSlicerPollStepWire; }
+export function decodeProjectExternalSlicerPollStep(text:string):ProjectExternalSlicerPollStepWire { return captureProjectExternalSlicerPollStep(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectExternalSlicerPollStep(value:ProjectExternalSlicerPollStepWire):string { return JSON.stringify(captureProjectExternalSlicerPollStep(value)); }
+export function captureProjectExternalSlicerCancelRead(value:unknown):ProjectExternalSlicerCancelReadWire { return captureIntent("ExternalSlicerCancelRead",value,shapes,bulkLimits) as ProjectExternalSlicerCancelReadWire; }
+export function decodeProjectExternalSlicerCancelRead(text:string):ProjectExternalSlicerCancelReadWire { return captureProjectExternalSlicerCancelRead(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectExternalSlicerCancelRead(value:ProjectExternalSlicerCancelReadWire):string { return JSON.stringify(captureProjectExternalSlicerCancelRead(value)); }
+export function captureProjectExternalSlicerCancelStep(value:unknown):ProjectExternalSlicerCancelStepWire { return captureIntent("ExternalSlicerCancelStep",value,shapes,bulkLimits) as ProjectExternalSlicerCancelStepWire; }
+export function decodeProjectExternalSlicerCancelStep(text:string):ProjectExternalSlicerCancelStepWire { return captureProjectExternalSlicerCancelStep(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectExternalSlicerCancelStep(value:ProjectExternalSlicerCancelStepWire):string { return JSON.stringify(captureProjectExternalSlicerCancelStep(value)); }
+export function captureProjectExternalSlicerArtifactRead(value:unknown):ProjectExternalSlicerArtifactReadWire { return captureIntent("ExternalSlicerArtifactRead",value,shapes,bulkLimits) as ProjectExternalSlicerArtifactReadWire; }
+export function decodeProjectExternalSlicerArtifactRead(text:string):ProjectExternalSlicerArtifactReadWire { return captureProjectExternalSlicerArtifactRead(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectExternalSlicerArtifactRead(value:ProjectExternalSlicerArtifactReadWire):string { return JSON.stringify(captureProjectExternalSlicerArtifactRead(value)); }
+export function captureProjectExternalSlicerArtifact(value:unknown):ProjectExternalSlicerArtifactWire { return captureIntent("ExternalSlicerArtifact",value,shapes,bulkLimits) as ProjectExternalSlicerArtifactWire; }
+export function decodeProjectExternalSlicerArtifact(text:string):ProjectExternalSlicerArtifactWire { return captureProjectExternalSlicerArtifact(parseIntentJson(text,bulkLimits)); }
+export function encodeProjectExternalSlicerArtifact(value:ProjectExternalSlicerArtifactWire):string { return JSON.stringify(captureProjectExternalSlicerArtifact(value)); }

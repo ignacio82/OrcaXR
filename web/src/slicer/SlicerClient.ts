@@ -630,50 +630,39 @@ export class SlicerClient {
       // abort arrives while it is in flight, wait for the ID and cancel there.
       let response: Response;
       try {
-        response = await fetchLocalNetwork(`${externalUrl}/slice?async=1`, {
+        response = await fetchLocalNetwork(`${externalUrl}${jobs.SUBMISSION_PATH}`, {
           method: 'POST',
           body: formData,
           headers: context.headers,
         });
       } catch (error) {
-        if (options.signal?.aborted) {
-          throw new SlicerClientCancellationError(
-            `External upload ended before a cancellable job ID was received: ${errorMessage(error)}`,
-            false,
-          );
-        }
+        const step = jobs.readSubmission({ failed: errorMessage(error) }, options.signal?.aborted === true);
+        if (step.kind === 'failed' && step.error instanceof SlicerClientCancellationError) throw step.error;
         throw error;
       }
+      // A job reply's abort is judged once its body is read; any other reply's
+      // before its text is, and an aborted one is left unread while its job is
+      // cancelled.
+      let body = '';
+      let aborted: boolean;
       if (response.status === 202) {
-        const { job } = (await response.json()) as { job?: unknown };
-        if (typeof job !== 'string' || !job) {
-          if (options.signal?.aborted) {
-            throw new SlicerClientCancellationError(
-              'External slicer returned no usable job ID, so cancellation could not be confirmed.',
-              false,
-            );
-          }
-          throw new Error('External slicer returned an invalid async job ID.');
-        }
-        if (options.signal?.aborted) {
-          await jobs.confirmExternalCancellation({ ...context, jobId: job });
-          throw signalReason(options.signal);
-        }
-        return jobs.pollExternalJob({ ...context, jobId: job });
+        body = await response.text();
+        aborted = options.signal?.aborted === true;
+      } else {
+        aborted = options.signal?.aborted === true;
+        if (!aborted && !response.ok) body = await response.text();
       }
-      if (options.signal?.aborted) {
-        const jobId = response.headers.get('x-orcaxr-job-id');
-        if (jobId) {
-          void response.body?.cancel().catch(() => {});
-          await jobs.confirmExternalCancellation({ ...context, jobId });
-          throw signalReason(options.signal);
-        }
-        throw new SlicerClientCancellationError(
-          'The external response did not provide a cancellable job ID before abort.',
-          false,
-        );
+      const step = jobs.readSubmission(
+        { status: response.status, body, jobIdHeader: response.headers.get('x-orcaxr-job-id') },
+        aborted,
+      );
+      if (step.kind === 'failed') throw step.error;
+      if (step.kind === 'cancel') {
+        if (response.status !== 202) void response.body?.cancel().catch(() => {});
+        await jobs.confirmExternalCancellation({ ...context, jobId: step.jobId });
+        throw signalReason(options.signal!);
       }
-      if (!response.ok) throw new Error(`External Slicer Failed: ${await response.text()}`);
+      if (step.kind === 'job') return jobs.pollExternalJob({ ...context, jobId: step.jobId });
       return await jobs.readExternalResult(response, context);
     }
 

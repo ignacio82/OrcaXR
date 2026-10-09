@@ -14869,6 +14869,515 @@ fn read_printer_storage_result(v: &Value) -> Result<PrinterStorageResult, Invali
         _ => Err(InvalidIntent),
     }
 }
+pub type ExternalSlicerText = Vec<Unit>;
+fn read_external_slicer_text(v: &Value) -> Result<ExternalSlicerText, InvalidIntent> {
+    list(v, 0, 2101248)?.iter().map(read_unit).collect()
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerEndpointRequest {
+    pub input: EditText,
+}
+fn read_external_slicer_endpoint_request(
+    v: &Value,
+) -> Result<ExternalSlicerEndpointRequest, InvalidIntent> {
+    let object = fields(v, &["input"], false)?;
+    Ok(ExternalSlicerEndpointRequest {
+        input: read_edit_text(&object["input"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerEndpoint {
+    Endpoint(EditText),
+    Refused(EditText),
+}
+fn read_external_slicer_endpoint(v: &Value) -> Result<ExternalSlicerEndpoint, InvalidIntent> {
+    let object = fields(v, &["endpoint", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "endpoint" => Ok(ExternalSlicerEndpoint::Endpoint(read_edit_text(value)?)),
+        "refused" => Ok(ExternalSlicerEndpoint::Refused(read_edit_text(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerSend {
+    pub method: EditText,
+    pub url: EditText,
+    pub operation: EditText,
+    pub timeout_ms: OptionalFinite,
+}
+fn read_external_slicer_send(v: &Value) -> Result<ExternalSlicerSend, InvalidIntent> {
+    let object = fields(v, &["method", "url", "operation", "timeoutMs"], false)?;
+    Ok(ExternalSlicerSend {
+        method: read_edit_text(&object["method"])?,
+        url: read_edit_text(&object["url"])?,
+        operation: read_edit_text(&object["operation"])?,
+        timeout_ms: read_optional_finite(&object["timeoutMs"])?,
+    })
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerEngine {
+    Wasm,
+    Cli,
+}
+fn read_external_slicer_engine(v: &Value) -> Result<ExternalSlicerEngine, InvalidIntent> {
+    match v.as_str() {
+        Some("wasm") => Ok(ExternalSlicerEngine::Wasm),
+        Some("cli") => Ok(ExternalSlicerEngine::Cli),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerAttested {
+    pub commit: EditText,
+    pub artifact_hash: EditText,
+    pub engine: ExternalSlicerEngine,
+}
+fn read_external_slicer_attested(v: &Value) -> Result<ExternalSlicerAttested, InvalidIntent> {
+    let object = fields(v, &["commit", "artifactHash", "engine"], false)?;
+    Ok(ExternalSlicerAttested {
+        commit: read_edit_text(&object["commit"])?,
+        artifact_hash: read_edit_text(&object["artifactHash"])?,
+        engine: read_external_slicer_engine(&object["engine"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerAttestation {
+    Attested(ExternalSlicerAttested),
+    Unattested(PrinterReplyText),
+}
+fn read_external_slicer_attestation(v: &Value) -> Result<ExternalSlicerAttestation, InvalidIntent> {
+    let object = fields(v, &["attested", "unattested"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "attested" => Ok(ExternalSlicerAttestation::Attested(
+            read_external_slicer_attested(value)?,
+        )),
+        "unattested" => Ok(ExternalSlicerAttestation::Unattested(
+            read_printer_reply_text(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerAttestationPlan {
+    Send(ExternalSlicerSend),
+    Unattested(PrinterReplyText),
+}
+fn read_external_slicer_attestation_plan(
+    v: &Value,
+) -> Result<ExternalSlicerAttestationPlan, InvalidIntent> {
+    let object = fields(v, &["send", "unattested"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "send" => Ok(ExternalSlicerAttestationPlan::Send(
+            read_external_slicer_send(value)?,
+        )),
+        "unattested" => Ok(ExternalSlicerAttestationPlan::Unattested(
+            read_printer_reply_text(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerResponse {
+    pub status: Counter,
+    pub body: PrinterReplyText,
+}
+fn read_external_slicer_response(v: &Value) -> Result<ExternalSlicerResponse, InvalidIntent> {
+    let object = fields(v, &["status", "body"], false)?;
+    Ok(ExternalSlicerResponse {
+        status: read_counter(&object["status"])?,
+        body: read_printer_reply_text(&object["body"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerReply {
+    Failed(EditText),
+    Response(ExternalSlicerResponse),
+}
+fn read_external_slicer_reply(v: &Value) -> Result<ExternalSlicerReply, InvalidIntent> {
+    let object = fields(v, &["failed", "response"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "failed" => Ok(ExternalSlicerReply::Failed(read_edit_text(value)?)),
+        "response" => Ok(ExternalSlicerReply::Response(
+            read_external_slicer_response(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerFailureKind {
+    Failed,
+    Cancelled,
+    AlreadyDone,
+    AlreadyFailed,
+    AlreadyReleased,
+    Unconfirmed,
+}
+fn read_external_slicer_failure_kind(
+    v: &Value,
+) -> Result<ExternalSlicerFailureKind, InvalidIntent> {
+    match v.as_str() {
+        Some("failed") => Ok(ExternalSlicerFailureKind::Failed),
+        Some("cancelled") => Ok(ExternalSlicerFailureKind::Cancelled),
+        Some("alreadyDone") => Ok(ExternalSlicerFailureKind::AlreadyDone),
+        Some("alreadyFailed") => Ok(ExternalSlicerFailureKind::AlreadyFailed),
+        Some("alreadyReleased") => Ok(ExternalSlicerFailureKind::AlreadyReleased),
+        Some("unconfirmed") => Ok(ExternalSlicerFailureKind::Unconfirmed),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerFailure {
+    pub kind: ExternalSlicerFailureKind,
+    pub message: ExternalSlicerText,
+}
+fn read_external_slicer_failure(v: &Value) -> Result<ExternalSlicerFailure, InvalidIntent> {
+    let object = fields(v, &["kind", "message"], false)?;
+    Ok(ExternalSlicerFailure {
+        kind: read_external_slicer_failure_kind(&object["kind"])?,
+        message: read_external_slicer_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerPlan {
+    Send(ExternalSlicerSend),
+    Refused(ExternalSlicerFailure),
+}
+fn read_external_slicer_plan(v: &Value) -> Result<ExternalSlicerPlan, InvalidIntent> {
+    let object = fields(v, &["send", "refused"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "send" => Ok(ExternalSlicerPlan::Send(read_external_slicer_send(value)?)),
+        "refused" => Ok(ExternalSlicerPlan::Refused(read_external_slicer_failure(
+            value,
+        )?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerJobStep {
+    Status,
+    Artifact,
+    Cancel,
+    Release,
+}
+fn read_external_slicer_job_step(v: &Value) -> Result<ExternalSlicerJobStep, InvalidIntent> {
+    match v.as_str() {
+        Some("status") => Ok(ExternalSlicerJobStep::Status),
+        Some("artifact") => Ok(ExternalSlicerJobStep::Artifact),
+        Some("cancel") => Ok(ExternalSlicerJobStep::Cancel),
+        Some("release") => Ok(ExternalSlicerJobStep::Release),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerJobRequest {
+    pub endpoint: EditText,
+    pub job_id: EditText,
+    pub step: ExternalSlicerJobStep,
+}
+fn read_external_slicer_job_request(v: &Value) -> Result<ExternalSlicerJobRequest, InvalidIntent> {
+    let object = fields(v, &["endpoint", "jobId", "step"], false)?;
+    Ok(ExternalSlicerJobRequest {
+        endpoint: read_edit_text(&object["endpoint"])?,
+        job_id: read_edit_text(&object["jobId"])?,
+        step: read_external_slicer_job_step(&object["step"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerSubmitResponse {
+    pub status: Counter,
+    pub body: PrinterReplyText,
+    pub job_id_header: OptionalText,
+}
+fn read_external_slicer_submit_response(
+    v: &Value,
+) -> Result<ExternalSlicerSubmitResponse, InvalidIntent> {
+    let object = fields(v, &["status", "body", "jobIdHeader"], false)?;
+    Ok(ExternalSlicerSubmitResponse {
+        status: read_counter(&object["status"])?,
+        body: read_printer_reply_text(&object["body"])?,
+        job_id_header: read_optional_text(&object["jobIdHeader"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerSubmitReply {
+    Failed(EditText),
+    Response(ExternalSlicerSubmitResponse),
+}
+fn read_external_slicer_submit_reply(
+    v: &Value,
+) -> Result<ExternalSlicerSubmitReply, InvalidIntent> {
+    let object = fields(v, &["failed", "response"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "failed" => Ok(ExternalSlicerSubmitReply::Failed(read_edit_text(value)?)),
+        "response" => Ok(ExternalSlicerSubmitReply::Response(
+            read_external_slicer_submit_response(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerSubmitRead {
+    pub reply: ExternalSlicerSubmitReply,
+    pub aborted: Flag,
+}
+fn read_external_slicer_submit_read(v: &Value) -> Result<ExternalSlicerSubmitRead, InvalidIntent> {
+    let object = fields(v, &["reply", "aborted"], false)?;
+    Ok(ExternalSlicerSubmitRead {
+        reply: read_external_slicer_submit_reply(&object["reply"])?,
+        aborted: read_flag(&object["aborted"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerSubmission {
+    Job(PrinterReplyText),
+    Cancel(PrinterReplyText),
+    Artifact(Empty),
+    Failed(ExternalSlicerFailure),
+}
+fn read_external_slicer_submission(v: &Value) -> Result<ExternalSlicerSubmission, InvalidIntent> {
+    let object = fields(v, &["job", "cancel", "artifact", "failed"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "job" => Ok(ExternalSlicerSubmission::Job(read_printer_reply_text(
+            value,
+        )?)),
+        "cancel" => Ok(ExternalSlicerSubmission::Cancel(read_printer_reply_text(
+            value,
+        )?)),
+        "artifact" => Ok(ExternalSlicerSubmission::Artifact(read_empty(value)?)),
+        "failed" => Ok(ExternalSlicerSubmission::Failed(
+            read_external_slicer_failure(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerPollRead {
+    pub failures: Counter,
+    pub reply: ExternalSlicerReply,
+}
+fn read_external_slicer_poll_read(v: &Value) -> Result<ExternalSlicerPollRead, InvalidIntent> {
+    let object = fields(v, &["failures", "reply"], false)?;
+    Ok(ExternalSlicerPollRead {
+        failures: read_counter(&object["failures"])?,
+        reply: read_external_slicer_reply(&object["reply"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerProgress {
+    pub percent: Finite,
+    pub message: PrinterReplyText,
+}
+fn read_external_slicer_progress(v: &Value) -> Result<ExternalSlicerProgress, InvalidIntent> {
+    let object = fields(v, &["percent", "message"], false)?;
+    Ok(ExternalSlicerProgress {
+        percent: read_finite(&object["percent"])?,
+        message: read_printer_reply_text(&object["message"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OptionalExternalSlicerProgress {
+    Absent(Empty),
+    Value(ExternalSlicerProgress),
+}
+fn read_optional_external_slicer_progress(
+    v: &Value,
+) -> Result<OptionalExternalSlicerProgress, InvalidIntent> {
+    let object = fields(v, &["absent", "value"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "absent" => Ok(OptionalExternalSlicerProgress::Absent(read_empty(value)?)),
+        "value" => Ok(OptionalExternalSlicerProgress::Value(
+            read_external_slicer_progress(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerPollWait {
+    pub failures: Counter,
+    pub progress: OptionalExternalSlicerProgress,
+}
+fn read_external_slicer_poll_wait(v: &Value) -> Result<ExternalSlicerPollWait, InvalidIntent> {
+    let object = fields(v, &["failures", "progress"], false)?;
+    Ok(ExternalSlicerPollWait {
+        failures: read_counter(&object["failures"])?,
+        progress: read_optional_external_slicer_progress(&object["progress"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerPollStep {
+    Wait(ExternalSlicerPollWait),
+    Download(Empty),
+    Failed(ExternalSlicerFailure),
+}
+fn read_external_slicer_poll_step(v: &Value) -> Result<ExternalSlicerPollStep, InvalidIntent> {
+    let object = fields(v, &["wait", "download", "failed"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "wait" => Ok(ExternalSlicerPollStep::Wait(
+            read_external_slicer_poll_wait(value)?,
+        )),
+        "download" => Ok(ExternalSlicerPollStep::Download(read_empty(value)?)),
+        "failed" => Ok(ExternalSlicerPollStep::Failed(
+            read_external_slicer_failure(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerCancelRead {
+    Reply(ExternalSlicerReply),
+    TimedOut(Empty),
+}
+fn read_external_slicer_cancel_read(v: &Value) -> Result<ExternalSlicerCancelRead, InvalidIntent> {
+    let object = fields(v, &["reply", "timedOut"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "reply" => Ok(ExternalSlicerCancelRead::Reply(read_external_slicer_reply(
+            value,
+        )?)),
+        "timedOut" => Ok(ExternalSlicerCancelRead::TimedOut(read_empty(value)?)),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerCancelStep {
+    Confirmed(Empty),
+    Poll(Empty),
+    Failed(ExternalSlicerFailure),
+}
+fn read_external_slicer_cancel_step(v: &Value) -> Result<ExternalSlicerCancelStep, InvalidIntent> {
+    let object = fields(v, &["confirmed", "poll", "failed"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "confirmed" => Ok(ExternalSlicerCancelStep::Confirmed(read_empty(value)?)),
+        "poll" => Ok(ExternalSlicerCancelStep::Poll(read_empty(value)?)),
+        "failed" => Ok(ExternalSlicerCancelStep::Failed(
+            read_external_slicer_failure(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerArtifactFacts {
+    pub status: Counter,
+    pub error_body: PrinterReplyText,
+    pub job_id_header: OptionalText,
+    pub sha256_header: OptionalText,
+    pub bytes_header: OptionalText,
+    pub length: Counter,
+    pub sha256: EditText,
+    pub utf8: Flag,
+    pub blank: Flag,
+}
+fn read_external_slicer_artifact_facts(
+    v: &Value,
+) -> Result<ExternalSlicerArtifactFacts, InvalidIntent> {
+    let object = fields(
+        v,
+        &[
+            "status",
+            "errorBody",
+            "jobIdHeader",
+            "sha256Header",
+            "bytesHeader",
+            "length",
+            "sha256",
+            "utf8",
+            "blank",
+        ],
+        false,
+    )?;
+    Ok(ExternalSlicerArtifactFacts {
+        status: read_counter(&object["status"])?,
+        error_body: read_printer_reply_text(&object["errorBody"])?,
+        job_id_header: read_optional_text(&object["jobIdHeader"])?,
+        sha256_header: read_optional_text(&object["sha256Header"])?,
+        bytes_header: read_optional_text(&object["bytesHeader"])?,
+        length: read_counter(&object["length"])?,
+        sha256: read_edit_text(&object["sha256"])?,
+        utf8: read_flag(&object["utf8"])?,
+        blank: read_flag(&object["blank"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerArtifactRead {
+    pub expected_job_id: OptionalText,
+    pub response: ExternalSlicerArtifactFacts,
+}
+fn read_external_slicer_artifact_read(
+    v: &Value,
+) -> Result<ExternalSlicerArtifactRead, InvalidIntent> {
+    let object = fields(v, &["expectedJobId", "response"], false)?;
+    Ok(ExternalSlicerArtifactRead {
+        expected_job_id: read_optional_text(&object["expectedJobId"])?,
+        response: read_external_slicer_artifact_facts(&object["response"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSlicerAccepted {
+    pub release: OptionalText,
+}
+fn read_external_slicer_accepted(v: &Value) -> Result<ExternalSlicerAccepted, InvalidIntent> {
+    let object = fields(v, &["release"], false)?;
+    Ok(ExternalSlicerAccepted {
+        release: read_optional_text(&object["release"])?,
+    })
+}
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalSlicerArtifact {
+    Accepted(ExternalSlicerAccepted),
+    Failed(ExternalSlicerFailure),
+}
+fn read_external_slicer_artifact(v: &Value) -> Result<ExternalSlicerArtifact, InvalidIntent> {
+    let object = fields(v, &["accepted", "failed"], true)?;
+    let (key, value) = object.iter().next().ok_or(InvalidIntent)?;
+    match key.as_str() {
+        "accepted" => Ok(ExternalSlicerArtifact::Accepted(
+            read_external_slicer_accepted(value)?,
+        )),
+        "failed" => Ok(ExternalSlicerArtifact::Failed(
+            read_external_slicer_failure(value)?,
+        )),
+        _ => Err(InvalidIntent),
+    }
+}
 pub fn decode_intent(text: &str) -> Result<Intent, InvalidIntent> {
     read_intent(&super::project_intents::parse(text)?)
 }
@@ -17017,5 +17526,177 @@ pub fn encode_remembered_credentials(
 ) -> Result<String, InvalidIntent> {
     let text = super::project_intents::encode_bounded(value, &BULK)?;
     decode_remembered_credentials(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_endpoint_request(
+    text: &str,
+) -> Result<ExternalSlicerEndpointRequest, InvalidIntent> {
+    read_external_slicer_endpoint_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_external_slicer_endpoint_request(
+    value: &ExternalSlicerEndpointRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_external_slicer_endpoint_request(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_endpoint(
+    text: &str,
+) -> Result<ExternalSlicerEndpoint, InvalidIntent> {
+    read_external_slicer_endpoint(&super::project_intents::parse(text)?)
+}
+pub fn encode_external_slicer_endpoint(
+    value: &ExternalSlicerEndpoint,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_external_slicer_endpoint(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_attestation_plan(
+    text: &str,
+) -> Result<ExternalSlicerAttestationPlan, InvalidIntent> {
+    read_external_slicer_attestation_plan(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_attestation_plan(
+    value: &ExternalSlicerAttestationPlan,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_attestation_plan(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_reply(text: &str) -> Result<ExternalSlicerReply, InvalidIntent> {
+    read_external_slicer_reply(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_reply(value: &ExternalSlicerReply) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_reply(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_attestation(
+    text: &str,
+) -> Result<ExternalSlicerAttestation, InvalidIntent> {
+    read_external_slicer_attestation(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_attestation(
+    value: &ExternalSlicerAttestation,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_attestation(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_plan(text: &str) -> Result<ExternalSlicerPlan, InvalidIntent> {
+    read_external_slicer_plan(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_plan(value: &ExternalSlicerPlan) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_plan(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_job_request(
+    text: &str,
+) -> Result<ExternalSlicerJobRequest, InvalidIntent> {
+    read_external_slicer_job_request(&super::project_intents::parse(text)?)
+}
+pub fn encode_external_slicer_job_request(
+    value: &ExternalSlicerJobRequest,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode(value)?;
+    decode_external_slicer_job_request(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_submit_read(
+    text: &str,
+) -> Result<ExternalSlicerSubmitRead, InvalidIntent> {
+    read_external_slicer_submit_read(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_submit_read(
+    value: &ExternalSlicerSubmitRead,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_submit_read(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_submission(
+    text: &str,
+) -> Result<ExternalSlicerSubmission, InvalidIntent> {
+    read_external_slicer_submission(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_submission(
+    value: &ExternalSlicerSubmission,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_submission(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_poll_read(
+    text: &str,
+) -> Result<ExternalSlicerPollRead, InvalidIntent> {
+    read_external_slicer_poll_read(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_poll_read(
+    value: &ExternalSlicerPollRead,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_poll_read(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_poll_step(
+    text: &str,
+) -> Result<ExternalSlicerPollStep, InvalidIntent> {
+    read_external_slicer_poll_step(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_poll_step(
+    value: &ExternalSlicerPollStep,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_poll_step(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_cancel_read(
+    text: &str,
+) -> Result<ExternalSlicerCancelRead, InvalidIntent> {
+    read_external_slicer_cancel_read(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_cancel_read(
+    value: &ExternalSlicerCancelRead,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_cancel_read(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_cancel_step(
+    text: &str,
+) -> Result<ExternalSlicerCancelStep, InvalidIntent> {
+    read_external_slicer_cancel_step(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_cancel_step(
+    value: &ExternalSlicerCancelStep,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_cancel_step(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_artifact_read(
+    text: &str,
+) -> Result<ExternalSlicerArtifactRead, InvalidIntent> {
+    read_external_slicer_artifact_read(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_artifact_read(
+    value: &ExternalSlicerArtifactRead,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_artifact_read(&text)?;
+    Ok(text)
+}
+pub fn decode_external_slicer_artifact(
+    text: &str,
+) -> Result<ExternalSlicerArtifact, InvalidIntent> {
+    read_external_slicer_artifact(&super::project_intents::parse_bounded(text, &BULK)?)
+}
+pub fn encode_external_slicer_artifact(
+    value: &ExternalSlicerArtifact,
+) -> Result<String, InvalidIntent> {
+    let text = super::project_intents::encode_bounded(value, &BULK)?;
+    decode_external_slicer_artifact(&text)?;
     Ok(text)
 }

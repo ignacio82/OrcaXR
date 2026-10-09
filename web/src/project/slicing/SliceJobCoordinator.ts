@@ -2,7 +2,7 @@ import { canonicalStringify, cloneJson, compareCanonicalText, deepFreeze } from 
 import type { PlateId } from '../domain/ids';
 import type { CancellationToken, ProjectSerializerPort, SerializedProject } from '../ports';
 import { Sha256SliceContentHasher } from './hash';
-import { projectPlateArchiveForSlice } from './plateProjection';
+import { platePrintOverrides, projectPlateArchiveForSlice } from './plateProjection';
 import {
   CanonicalSlicePreflightValidator,
   type CanonicalSlicePreflightPort,
@@ -628,29 +628,6 @@ function routeRequest(
     engine: deepFreeze(cloneJson(metadata.engine)),
     plateOverrides: platePrintOverrides(archive, plateId),
   });
-}
-
-/**
- * The keys a plate overrides, as engine wire strings.
- *
- * Presentation-only bookkeeping the plate node also carries (`plater_id`, its
- * name, lock and printable state) is not print configuration and would be
- * rejected by the engine, so it is left behind.
- */
-const PLATE_NON_PRINT_KEYS = new Set(['plater_id', 'plater_name', 'locked', 'printable']);
-
-function platePrintOverrides(
-  archive: CanonicalProjectSliceSnapshot,
-  plateId: PlateId,
-): Readonly<Record<string, string>> {
-  const plate = archive.state.plates.find((candidate) => candidate.id === plateId);
-  if (!plate) return Object.freeze({});
-  const overrides: Record<string, string> = {};
-  for (const [key, value] of Object.entries(plate.config)) {
-    if (PLATE_NON_PRINT_KEYS.has(key) || value === undefined || value === null) continue;
-    overrides[key] = Array.isArray(value) ? value.map((entry) => String(entry)).join(',') : String(value);
-  }
-  return Object.freeze(overrides);
 }
 
 function validateSerializedProject(result: SerializedProject, revision: number, hash: string): void {

@@ -285,6 +285,21 @@ assert.deepEqual(schema.roots, [
   "PrinterDirectorySelect",
   "PrinterDirectoryAdopt",
   "RememberedCredentials",
+  "ExternalSlicerEndpointRequest",
+  "ExternalSlicerEndpoint",
+  "ExternalSlicerAttestationPlan",
+  "ExternalSlicerReply",
+  "ExternalSlicerAttestation",
+  "ExternalSlicerPlan",
+  "ExternalSlicerJobRequest",
+  "ExternalSlicerSubmitRead",
+  "ExternalSlicerSubmission",
+  "ExternalSlicerPollRead",
+  "ExternalSlicerPollStep",
+  "ExternalSlicerCancelRead",
+  "ExternalSlicerCancelStep",
+  "ExternalSlicerArtifactRead",
+  "ExternalSlicerArtifact",
 ]);
 const definitions = schema.definitions;
 const known = new Set();

@@ -1800,6 +1800,13 @@ external slice routes, and verified output publication.
 - [ ] Implement the native external-slicer client with explicit credentials,
   connection-generation capture, existing attestation, result digest/length
   validation, repeatable download, leases, and cancellation outcomes.
+  The route's shared parts are in the core: `orcaxr_printer::slicer` is the
+  browser's endpoint, attestation (against `contracts/pinned-engine-provenance.json`,
+  generated from the browser's pin) and job-lifecycle policy — submit, poll,
+  artifact length/hash/job checks, cancel and release outcomes — replayed
+  against 994 browser cases (seven browser defects fixed), and
+  `orcaxr_project::slicing::plate` is the per-plate projection and overrides
+  (19 browser cases). Bindings, the Kotlin transport and the UI remain.
 - [ ] Define local/external route selection using measured resource limits and
   user preferences. Show the selected route and reason; do not upload models or
   silently reroute work to a server the user has not configured and authorized.

@@ -9,7 +9,7 @@
     "maxNodes": 4194304,
     "maxDepth": 12
   },
-  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView", "GcodeAssessment", "ConsolePlan", "ConsoleResult", "MacroInvocation", "CameraListResult", "PrinterCamera", "CameraSnapshotRequest", "CameraSnapshotPlan", "CameraSnapshotFinish", "CameraFailure", "CameraMechanismsRequest", "CameraDescribeRequest", "CameraFrameRequest", "OptionalPrinterReplyText", "RememberedCredentials"],
+  "bulkRoots": ["PrinterStorageResult", "PrintHistoryResult", "PrintHistoryJob", "PrintHistoryJobView", "GcodeAssessment", "ConsolePlan", "ConsoleResult", "MacroInvocation", "CameraListResult", "PrinterCamera", "CameraSnapshotRequest", "CameraSnapshotPlan", "CameraSnapshotFinish", "CameraFailure", "CameraMechanismsRequest", "CameraDescribeRequest", "CameraFrameRequest", "OptionalPrinterReplyText", "RememberedCredentials", "ExternalSlicerAttestationPlan", "ExternalSlicerReply", "ExternalSlicerAttestation", "ExternalSlicerPlan", "ExternalSlicerSubmitRead", "ExternalSlicerSubmission", "ExternalSlicerPollRead", "ExternalSlicerPollStep", "ExternalSlicerCancelRead", "ExternalSlicerCancelStep", "ExternalSlicerArtifactRead", "ExternalSlicerArtifact"],
   "description": "Prepared project commands, session messages and slice preflight exchanges. Text is lossless UTF-16 units. Project transport, command format and persisted schema versions are distinct.",
   "definitions": {
     "Unit": {
@@ -6979,6 +6979,235 @@
         "started": "PrinterText",
         "failed": "PrinterStorageFailure"
       }
+    },
+    "ExternalSlicerText": {
+      "kind": "array",
+      "items": "Unit",
+      "min": 0,
+      "max": 2101248
+    },
+    "ExternalSlicerEndpointRequest": {
+      "kind": "object",
+      "fields": {
+        "input": "EditText"
+      }
+    },
+    "ExternalSlicerEndpoint": {
+      "kind": "union",
+      "variants": {
+        "endpoint": "EditText",
+        "refused": "EditText"
+      }
+    },
+    "ExternalSlicerSend": {
+      "kind": "object",
+      "fields": {
+        "method": "EditText",
+        "url": "EditText",
+        "operation": "EditText",
+        "timeoutMs": "OptionalFinite"
+      }
+    },
+    "ExternalSlicerEngine": {
+      "kind": "enum",
+      "values": [
+        "wasm",
+        "cli"
+      ]
+    },
+    "ExternalSlicerAttested": {
+      "kind": "object",
+      "fields": {
+        "commit": "EditText",
+        "artifactHash": "EditText",
+        "engine": "ExternalSlicerEngine"
+      }
+    },
+    "ExternalSlicerAttestation": {
+      "kind": "union",
+      "variants": {
+        "attested": "ExternalSlicerAttested",
+        "unattested": "PrinterReplyText"
+      }
+    },
+    "ExternalSlicerAttestationPlan": {
+      "kind": "union",
+      "variants": {
+        "send": "ExternalSlicerSend",
+        "unattested": "PrinterReplyText"
+      }
+    },
+    "ExternalSlicerResponse": {
+      "kind": "object",
+      "fields": {
+        "status": "Counter",
+        "body": "PrinterReplyText"
+      }
+    },
+    "ExternalSlicerReply": {
+      "kind": "union",
+      "variants": {
+        "failed": "EditText",
+        "response": "ExternalSlicerResponse"
+      }
+    },
+    "ExternalSlicerFailureKind": {
+      "kind": "enum",
+      "values": [
+        "failed",
+        "cancelled",
+        "alreadyDone",
+        "alreadyFailed",
+        "alreadyReleased",
+        "unconfirmed"
+      ]
+    },
+    "ExternalSlicerFailure": {
+      "kind": "object",
+      "fields": {
+        "kind": "ExternalSlicerFailureKind",
+        "message": "ExternalSlicerText"
+      }
+    },
+    "ExternalSlicerPlan": {
+      "kind": "union",
+      "variants": {
+        "send": "ExternalSlicerSend",
+        "refused": "ExternalSlicerFailure"
+      }
+    },
+    "ExternalSlicerJobStep": {
+      "kind": "enum",
+      "values": [
+        "status",
+        "artifact",
+        "cancel",
+        "release"
+      ]
+    },
+    "ExternalSlicerJobRequest": {
+      "kind": "object",
+      "fields": {
+        "endpoint": "EditText",
+        "jobId": "EditText",
+        "step": "ExternalSlicerJobStep"
+      }
+    },
+    "ExternalSlicerSubmitResponse": {
+      "kind": "object",
+      "fields": {
+        "status": "Counter",
+        "body": "PrinterReplyText",
+        "jobIdHeader": "OptionalText"
+      }
+    },
+    "ExternalSlicerSubmitReply": {
+      "kind": "union",
+      "variants": {
+        "failed": "EditText",
+        "response": "ExternalSlicerSubmitResponse"
+      }
+    },
+    "ExternalSlicerSubmitRead": {
+      "kind": "object",
+      "fields": {
+        "reply": "ExternalSlicerSubmitReply",
+        "aborted": "Flag"
+      }
+    },
+    "ExternalSlicerSubmission": {
+      "kind": "union",
+      "variants": {
+        "job": "PrinterReplyText",
+        "cancel": "PrinterReplyText",
+        "artifact": "Empty",
+        "failed": "ExternalSlicerFailure"
+      }
+    },
+    "ExternalSlicerPollRead": {
+      "kind": "object",
+      "fields": {
+        "failures": "Counter",
+        "reply": "ExternalSlicerReply"
+      }
+    },
+    "ExternalSlicerProgress": {
+      "kind": "object",
+      "fields": {
+        "percent": "Finite",
+        "message": "PrinterReplyText"
+      }
+    },
+    "OptionalExternalSlicerProgress": {
+      "kind": "union",
+      "variants": {
+        "absent": "Empty",
+        "value": "ExternalSlicerProgress"
+      }
+    },
+    "ExternalSlicerPollWait": {
+      "kind": "object",
+      "fields": {
+        "failures": "Counter",
+        "progress": "OptionalExternalSlicerProgress"
+      }
+    },
+    "ExternalSlicerPollStep": {
+      "kind": "union",
+      "variants": {
+        "wait": "ExternalSlicerPollWait",
+        "download": "Empty",
+        "failed": "ExternalSlicerFailure"
+      }
+    },
+    "ExternalSlicerCancelRead": {
+      "kind": "union",
+      "variants": {
+        "reply": "ExternalSlicerReply",
+        "timedOut": "Empty"
+      }
+    },
+    "ExternalSlicerCancelStep": {
+      "kind": "union",
+      "variants": {
+        "confirmed": "Empty",
+        "poll": "Empty",
+        "failed": "ExternalSlicerFailure"
+      }
+    },
+    "ExternalSlicerArtifactFacts": {
+      "kind": "object",
+      "fields": {
+        "status": "Counter",
+        "errorBody": "PrinterReplyText",
+        "jobIdHeader": "OptionalText",
+        "sha256Header": "OptionalText",
+        "bytesHeader": "OptionalText",
+        "length": "Counter",
+        "sha256": "EditText",
+        "utf8": "Flag",
+        "blank": "Flag"
+      }
+    },
+    "ExternalSlicerArtifactRead": {
+      "kind": "object",
+      "fields": {
+        "expectedJobId": "OptionalText",
+        "response": "ExternalSlicerArtifactFacts"
+      }
+    },
+    "ExternalSlicerAccepted": {
+      "kind": "object",
+      "fields": {
+        "release": "OptionalText"
+      }
+    },
+    "ExternalSlicerArtifact": {
+      "kind": "union",
+      "variants": {
+        "accepted": "ExternalSlicerAccepted",
+        "failed": "ExternalSlicerFailure"
+      }
     }
   },
   "roots": [
@@ -7214,7 +7443,22 @@
     "PrinterDirectoryUpdate",
     "PrinterDirectorySelect",
     "PrinterDirectoryAdopt",
-    "RememberedCredentials"
+    "RememberedCredentials",
+    "ExternalSlicerEndpointRequest",
+    "ExternalSlicerEndpoint",
+    "ExternalSlicerAttestationPlan",
+    "ExternalSlicerReply",
+    "ExternalSlicerAttestation",
+    "ExternalSlicerPlan",
+    "ExternalSlicerJobRequest",
+    "ExternalSlicerSubmitRead",
+    "ExternalSlicerSubmission",
+    "ExternalSlicerPollRead",
+    "ExternalSlicerPollStep",
+    "ExternalSlicerCancelRead",
+    "ExternalSlicerCancelStep",
+    "ExternalSlicerArtifactRead",
+    "ExternalSlicerArtifact"
   ],
   "sessionVersion": 1
 }

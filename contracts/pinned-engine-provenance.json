@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "source": "web/src/slicer/pinnedEngineProvenance.ts",
+  "commit": "9fd12ffb2b1b80c9fb4c14564754d2ec1573a626",
+  "cliVersion": "2.3.4",
+  "artifacts": [
+    {
+      "name": "slic3r.mjs",
+      "sha256": "b90d06ccfeb526a4d0d7e08a56ebb5401175f7337f7d9b35c039bd738448f03e"
+    },
+    {
+      "name": "slic3r.wasm",
+      "sha256": "8e9b05f710dd5c6621eaff315477cbe8520a3778f2d31a27e6275b051e0d5cdc"
+    }
+  ],
+  "cliPatches": [
+    {
+      "name": "0001-cli-safe-expand-plate-extruders.patch",
+      "sha256": "0b5cf28ff6c28d00a9a580297c4f97304d1dbcb2d9da6a7f93fc2a95a73a37da"
+    },
+    {
+      "name": "0002-normalize-fdm-partial-config-null-nozzle.patch",
+      "sha256": "7ae55127a840422c143846b932a579d648f7e11d0c8cd052abf301ef030e8b5a"
+    },
+    {
+      "name": "0003-gcodeprocessor-fullspectrum-oob.patch",
+      "sha256": "73402637904ff1500e04e1ca60fe287df74d8d6b930e5b7889737c729f7d9a7a"
+    },
+    {
+      "name": "0004-cli-safe-plate-name-texture.patch",
+      "sha256": "8d6df350cba4a0d3ec4b18cc71ba790129d0c00c0a3e5eb1c4a430f323ca1646"
+    }
+  ],
+  "features": {
+    "wasm": [
+      "wave-overhangs"
+    ],
+    "cli": []
+  }
+}

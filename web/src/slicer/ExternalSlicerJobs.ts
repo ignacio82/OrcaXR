@@ -10,37 +10,196 @@ export interface ExternalJobContext {
   readonly pollIntervalMs: number;
   readonly cancellationTimeoutMs: number;
   readonly onProgress?: (progress: { percent: number; message: string }) => void;
+  /** How requests leave; the local-network fetch unless a host supplies its own. */
+  readonly fetcher?: typeof fetchLocalNetwork;
 }
 
-function jobUrl(context: Pick<ExternalJobContext, 'endpoint' | 'jobId'>): string {
+/** What one exchange with the external slicer produced: the transport's failure, or a reply. */
+export type ExternalReply = { readonly failed: string } | { readonly status: number; readonly body: string };
+
+/** One poll of a job's status: poll again (after any failures so far), fetch its artifact, or stop. */
+export type JobPollStep =
+  | { readonly kind: 'wait'; readonly failures: number; readonly progress?: { percent: number; message: string } }
+  | { readonly kind: 'download' }
+  | { readonly kind: 'failed'; readonly error: Error };
+
+/** One reply while a cancellation is being confirmed: confirmed, ask again, or how it ended. */
+export type CancelStep =
+  | { readonly kind: 'confirmed' }
+  | { readonly kind: 'poll' }
+  | { readonly kind: 'failed'; readonly error: SlicerClientCancellationError };
+
+/** What a `POST /slice?async=1` reply means: a job to poll, a job to cancel, an artifact to read, or a failure. */
+export type SubmissionStep =
+  | { readonly kind: 'job'; readonly jobId: string }
+  | { readonly kind: 'cancel'; readonly jobId: string }
+  | { readonly kind: 'artifact' }
+  | { readonly kind: 'failed'; readonly error: Error };
+
+/** Where a project is submitted, after the captured endpoint. */
+export const SUBMISSION_PATH = '/slice?async=1';
+export const NOT_UTF8 = 'External slicer returned an artifact that is not valid UTF-8 text.';
+/** Consecutive poll failures after which the server is taken to have stopped responding. */
+export const MAX_POLL_FAILURES = 5;
+export const CANCELLATION_TIMED_OUT = 'External slice cancellation confirmation timed out.';
+/** A reply that is not JSON reads the same in every engine, not as its parser's message. */
+export const UNREADABLE_REPLY = 'The server returned an unreadable reply.';
+
+const POLL_STATES = ['queued', 'running', 'cancelling', 'done', 'error', 'cancelled'];
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+const succeeded = (status: number) => status >= 200 && status <= 299;
+/** Text an operator reads, or nothing when it is blank. */
+const said = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value : undefined);
+/** A refusal's body as its sentence; a blank one reads as its status. */
+const refusal = (status: number, body: string) => `External Slicer Failed: ${said(body) ?? `HTTP ${status}`}`;
+function parseReply(body: string): unknown {
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new Error(UNREADABLE_REPLY);
+  }
+}
+
+export function jobUrl(context: Pick<ExternalJobContext, 'endpoint' | 'jobId'>): string {
   if (typeof context.jobId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(context.jobId))
     throw new Error('The external slicer returned an invalid job ID.');
   return `${context.endpoint}/jobs/${encodeURIComponent(context.jobId)}`;
 }
 
+/** One status reply read as the poll loop reads it, given the consecutive failures before it. */
+export function readJobPoll(failures: number, reply: ExternalReply): JobPollStep {
+  let status: Record<string, unknown>;
+  try {
+    if ('failed' in reply) throw new Error(reply.failed);
+    if (!succeeded(reply.status)) throw new Error(`HTTP ${reply.status}`);
+    const payload = parseReply(reply.body);
+    if (!isRecord(payload) || !POLL_STATES.includes(payload.status as string)) throw new Error('Unknown job state.');
+    status = payload;
+  } catch (error) {
+    if (failures + 1 >= MAX_POLL_FAILURES)
+      return {
+        kind: 'failed',
+        error: new Error(`External slicer stopped responding: ${message(error)}`, { cause: error }),
+      };
+    return { kind: 'wait', failures: failures + 1 };
+  }
+  if (status.status === 'error') {
+    // A failure without its reason reads as one, not as "undefined" or nothing.
+    return {
+      kind: 'failed',
+      error: new Error(`External Slicer Failed: ${said(status.error) ?? 'no reason was given'}`),
+    };
+  }
+  if (status.status === 'cancelled')
+    return { kind: 'failed', error: new SlicerClientCancellationError('The external slicer job was cancelled.', true) };
+  if (status.status === 'done') return { kind: 'download' };
+  // Progress is a number and a sentence, whatever else a server sends.
+  const percent = typeof status.percent === 'number' && Number.isFinite(status.percent) ? status.percent : 0;
+  return { kind: 'wait', failures: 0, progress: { percent, message: said(status.message) ?? 'Slicing externally...' } };
+}
+
+/** One reply while confirming a cancellation (the DELETE's, then each status poll's). */
+export function readCancelReply(reply: ExternalReply): CancelStep {
+  const unconfirmed = (text: string): CancelStep => ({
+    kind: 'failed',
+    error: new SlicerClientCancellationError(`Could not confirm external slice cancellation: ${text}`, false),
+  });
+  if ('failed' in reply) return unconfirmed(reply.failed);
+  if (!succeeded(reply.status)) return unconfirmed(`HTTP ${reply.status}`);
+  let payload: unknown;
+  try {
+    payload = parseReply(reply.body);
+  } catch (error) {
+    return unconfirmed(message(error));
+  }
+  const status = isRecord(payload) ? payload.status : undefined;
+  if (status === 'cancelled') return { kind: 'confirmed' };
+  if (status === 'done' || status === 'error' || status === 'released') {
+    return {
+      kind: 'failed',
+      error: new SlicerClientCancellationError(
+        `External slice was already ${status}; it was not cancelled by this request.`,
+        false,
+        status,
+      ),
+    };
+  }
+  if (status !== 'queued' && status !== 'running' && status !== 'cancelling')
+    return unconfirmed('The server returned an unknown job state.');
+  return { kind: 'poll' };
+}
+
+/**
+ * A `POST /slice?async=1` reply ([jobIdHeader]: its `X-OrcaXR-Job-Id`), read
+ * as the canonical route reads it, when the slice was or was not [aborted]
+ * while the upload was in flight.
+ */
+export function readSubmission(
+  reply: ExternalReply & { readonly jobIdHeader?: string | null },
+  aborted: boolean,
+): SubmissionStep {
+  if ('failed' in reply) {
+    return {
+      kind: 'failed',
+      error: aborted
+        ? new SlicerClientCancellationError(
+            `External upload ended before a cancellable job ID was received: ${reply.failed}`,
+            false,
+          )
+        : new Error(reply.failed),
+    };
+  }
+  if (reply.status === 202) {
+    let payload: unknown;
+    try {
+      payload = parseReply(reply.body);
+    } catch {
+      payload = undefined;
+    }
+    const job = isRecord(payload) ? payload.job : undefined;
+    if (typeof job !== 'string' || !job) {
+      return {
+        kind: 'failed',
+        error: aborted
+          ? new SlicerClientCancellationError(
+              'External slicer returned no usable job ID, so cancellation could not be confirmed.',
+              false,
+            )
+          : new Error('External slicer returned an invalid async job ID.'),
+      };
+    }
+    return aborted ? { kind: 'cancel', jobId: job } : { kind: 'job', jobId: job };
+  }
+  if (aborted) {
+    if (reply.jobIdHeader) return { kind: 'cancel', jobId: reply.jobIdHeader };
+    return {
+      kind: 'failed',
+      error: new SlicerClientCancellationError(
+        'The external response did not provide a cancellable job ID before abort.',
+        false,
+      ),
+    };
+  }
+  if (!succeeded(reply.status)) return { kind: 'failed', error: new Error(refusal(reply.status, reply.body)) };
+  return { kind: 'artifact' };
+}
+
 /** The deadline owns DELETE, body parsing, polls, and delays from the first request. */
 export async function confirmExternalCancellation(context: ExternalJobContext): Promise<void> {
-  const timeout = new SlicerClientCancellationError('External slice cancellation confirmation timed out.', false);
+  const fetcher = context.fetcher ?? fetchLocalNetwork;
+  const timeout = new SlicerClientCancellationError(CANCELLATION_TIMED_OUT, false);
   try {
     await withinDeadline(context.cancellationTimeoutMs, timeout, async (signal) => {
-      let response = await fetchLocalNetwork(jobUrl(context), { method: 'DELETE', headers: context.headers, signal });
+      let response = await fetcher(jobUrl(context), { method: 'DELETE', headers: context.headers, signal });
       for (;;) {
         signal.throwIfAborted();
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const status = (await response.json()) as { status?: unknown };
+        const body = response.ok ? await response.text() : '';
         signal.throwIfAborted();
-        if (status.status === 'cancelled') return;
-        if (status.status === 'done' || status.status === 'error' || status.status === 'released') {
-          throw new SlicerClientCancellationError(
-            `External slice was already ${status.status}; it was not cancelled by this request.`,
-            false,
-            status.status,
-          );
-        }
-        if (status.status !== 'queued' && status.status !== 'running' && status.status !== 'cancelling')
-          throw new Error('The server returned an unknown job state.');
+        const step = readCancelReply({ status: response.status, body });
+        if (step.kind === 'confirmed') return;
+        if (step.kind === 'failed') throw step.error;
         await delay(context.pollIntervalMs, signal);
-        response = await fetchLocalNetwork(jobUrl(context), { headers: context.headers, signal });
+        response = await fetcher(jobUrl(context), { headers: context.headers, signal });
       }
     });
   } catch (error) {
@@ -50,34 +209,32 @@ export async function confirmExternalCancellation(context: ExternalJobContext): 
 }
 
 export async function pollExternalJob(context: ExternalJobContext): Promise<string> {
+  const fetcher = context.fetcher ?? fetchLocalNetwork;
   let failures = 0;
   try {
+    // An ID no URL can carry fails now, not as polls that could never be sent.
+    const url = jobUrl(context);
     for (;;) {
       await delay(context.pollIntervalMs, context.signal);
-      let status: { status: string; percent?: number; message?: string; error?: string };
+      let reply: ExternalReply;
       try {
-        const response = await fetchLocalNetwork(jobUrl(context), { headers: context.headers, signal: context.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        status = await response.json();
-        if (!['queued', 'running', 'cancelling', 'done', 'error', 'cancelled'].includes(status.status))
-          throw new Error('Unknown job state.');
-        failures = 0;
+        const response = await fetcher(url, { headers: context.headers, signal: context.signal });
+        reply = { status: response.status, body: response.ok ? await response.text() : '' };
       } catch (error) {
         if (context.signal?.aborted) throw error;
-        if (++failures >= 5) throw new Error(`External slicer stopped responding: ${message(error)}`, { cause: error });
-        continue;
+        reply = { failed: message(error) };
       }
-      if (status.status === 'error') throw new Error(`External Slicer Failed: ${status.error}`);
-      if (status.status === 'cancelled')
-        throw new SlicerClientCancellationError('The external slicer job was cancelled.', true);
-      if (status.status === 'done') {
-        const response = await fetchLocalNetwork(`${jobUrl(context)}/gcode`, {
+      const step = readJobPoll(failures, reply);
+      if (step.kind === 'failed') throw step.error;
+      if (step.kind === 'download') {
+        const response = await fetcher(`${url}/gcode`, {
           headers: context.headers,
           signal: context.signal,
         });
         return await readExternalResult(response, context);
       }
-      context.onProgress?.({ percent: status.percent ?? 0, message: status.message || 'Slicing externally...' });
+      failures = step.failures;
+      if (step.progress) context.onProgress?.(step.progress);
     }
   } catch (error) {
     if (context.signal?.aborted) {
@@ -95,7 +252,7 @@ export async function readExternalResult(
   response: Response,
   context: Omit<ExternalJobContext, 'jobId'> & { readonly jobId?: string },
 ): Promise<string> {
-  if (!response.ok) throw new Error(`External Slicer Failed: ${await response.text()}`);
+  if (!response.ok) throw new Error(refusal(response.status, await response.text()));
   const headerId = response.headers.get('x-orcaxr-job-id');
   if (context.jobId && headerId && context.jobId !== headerId)
     throw new Error('External slicer returned a different job artifact. The result was retained.');
@@ -118,7 +275,13 @@ export async function readExternalResult(
     if (digest !== expectedHash)
       throw new Error('External slice download checksum did not match. The result was retained for retry.');
   }
-  const gcode = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  let gcode: string;
+  try {
+    gcode = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    // The decoder's own message differs between engines.
+    throw new Error(NOT_UTF8);
+  }
   if (!gcode.trim()) throw new Error('External slicer returned an empty artifact.');
   context.signal?.throwIfAborted();
   if (jobId && expectedHash) await releaseCompletedResult({ ...context, jobId });
@@ -127,12 +290,16 @@ export async function readExternalResult(
   return gcode;
 }
 
+/** How long releasing a validated result may take before the server is left to expire it. */
+export const RELEASE_TIMEOUT_MS = 1000;
+
 async function releaseCompletedResult(
-  context: Pick<ExternalJobContext, 'endpoint' | 'jobId' | 'headers'>,
+  context: Pick<ExternalJobContext, 'endpoint' | 'jobId' | 'headers' | 'fetcher'>,
 ): Promise<void> {
+  const fetcher = context.fetcher ?? fetchLocalNetwork;
   try {
-    await withinDeadline(1000, new Error('Result release timed out.'), async (signal) => {
-      const response = await fetchLocalNetwork(jobUrl(context), { method: 'DELETE', signal, headers: context.headers });
+    await withinDeadline(RELEASE_TIMEOUT_MS, new Error('Result release timed out.'), async (signal) => {
+      const response = await fetcher(jobUrl(context), { method: 'DELETE', signal, headers: context.headers });
       await response.body?.cancel();
     });
   } catch {

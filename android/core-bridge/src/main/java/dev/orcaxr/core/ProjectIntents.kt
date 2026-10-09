@@ -10808,6 +10808,426 @@ object ProjectIntents {
             is PrinterStorageResult.Failed -> w.field("failed") { writePrinterStorageFailure(w, v.value) }
         } }
     }
+    private fun readExternalSlicerText(v: Any): List<Int> {
+        val array = ProjectIntentJson.list(v, 0, 2101248)
+        return List(array.length()) { readUnit(array.get(it)) }
+    }
+    private fun writeExternalSlicerText(w: ProjectIntentWriter, v: List<Int>) {
+        w.array(v, 0, 2101248) { writeUnit(w, it) }
+    }
+    data class ExternalSlicerEndpointRequest(val input: List<Int>)
+    private fun readExternalSlicerEndpointRequest(v: Any): ExternalSlicerEndpointRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("input"), false)
+        return ExternalSlicerEndpointRequest(readEditText(obj.get("input")))
+    }
+    private fun writeExternalSlicerEndpointRequest(w: ProjectIntentWriter, v: ExternalSlicerEndpointRequest) {
+        w.obj {
+            w.field("input") { writeEditText(w, v.input) }
+        }
+    }
+    sealed interface ExternalSlicerEndpoint {
+        data class Endpoint(val value: List<Int>) : ExternalSlicerEndpoint
+        data class Refused(val value: List<Int>) : ExternalSlicerEndpoint
+    }
+    private fun readExternalSlicerEndpoint(v: Any): ExternalSlicerEndpoint {
+        val obj = ProjectIntentJson.fields(v, setOf("endpoint", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "endpoint" -> ExternalSlicerEndpoint.Endpoint(readEditText(obj.get(key)))
+            "refused" -> ExternalSlicerEndpoint.Refused(readEditText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerEndpoint(w: ProjectIntentWriter, v: ExternalSlicerEndpoint) {
+        w.obj { when(v) {
+            is ExternalSlicerEndpoint.Endpoint -> w.field("endpoint") { writeEditText(w, v.value) }
+            is ExternalSlicerEndpoint.Refused -> w.field("refused") { writeEditText(w, v.value) }
+        } }
+    }
+    data class ExternalSlicerSend(val method: List<Int>, val url: List<Int>, val operation: List<Int>, val timeoutMs: OptionalFinite)
+    private fun readExternalSlicerSend(v: Any): ExternalSlicerSend {
+        val obj = ProjectIntentJson.fields(v, setOf("method", "url", "operation", "timeoutMs"), false)
+        return ExternalSlicerSend(readEditText(obj.get("method")), readEditText(obj.get("url")), readEditText(obj.get("operation")), readOptionalFinite(obj.get("timeoutMs")))
+    }
+    private fun writeExternalSlicerSend(w: ProjectIntentWriter, v: ExternalSlicerSend) {
+        w.obj {
+            w.field("method") { writeEditText(w, v.method) }
+            w.field("url") { writeEditText(w, v.url) }
+            w.field("operation") { writeEditText(w, v.operation) }
+            w.field("timeoutMs") { writeOptionalFinite(w, v.timeoutMs) }
+        }
+    }
+    enum class ExternalSlicerEngine {Wasm,Cli}
+    private fun readExternalSlicerEngine(v: Any): ExternalSlicerEngine {
+        return when(v) {"wasm" -> ExternalSlicerEngine.Wasm;"cli" -> ExternalSlicerEngine.Cli; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeExternalSlicerEngine(w: ProjectIntentWriter, v: ExternalSlicerEngine) {
+        w.literal(when(v) {ExternalSlicerEngine.Wasm -> "wasm";ExternalSlicerEngine.Cli -> "cli";})
+    }
+    data class ExternalSlicerAttested(val commit: List<Int>, val artifactHash: List<Int>, val engine: ExternalSlicerEngine)
+    private fun readExternalSlicerAttested(v: Any): ExternalSlicerAttested {
+        val obj = ProjectIntentJson.fields(v, setOf("commit", "artifactHash", "engine"), false)
+        return ExternalSlicerAttested(readEditText(obj.get("commit")), readEditText(obj.get("artifactHash")), readExternalSlicerEngine(obj.get("engine")))
+    }
+    private fun writeExternalSlicerAttested(w: ProjectIntentWriter, v: ExternalSlicerAttested) {
+        w.obj {
+            w.field("commit") { writeEditText(w, v.commit) }
+            w.field("artifactHash") { writeEditText(w, v.artifactHash) }
+            w.field("engine") { writeExternalSlicerEngine(w, v.engine) }
+        }
+    }
+    sealed interface ExternalSlicerAttestation {
+        data class Attested(val value: ProjectIntents.ExternalSlicerAttested) : ExternalSlicerAttestation
+        data class Unattested(val value: List<Int>) : ExternalSlicerAttestation
+    }
+    private fun readExternalSlicerAttestation(v: Any): ExternalSlicerAttestation {
+        val obj = ProjectIntentJson.fields(v, setOf("attested", "unattested"), true)
+        return when(val key = obj.keys().next()) {
+            "attested" -> ExternalSlicerAttestation.Attested(readExternalSlicerAttested(obj.get(key)))
+            "unattested" -> ExternalSlicerAttestation.Unattested(readPrinterReplyText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerAttestation(w: ProjectIntentWriter, v: ExternalSlicerAttestation) {
+        w.obj { when(v) {
+            is ExternalSlicerAttestation.Attested -> w.field("attested") { writeExternalSlicerAttested(w, v.value) }
+            is ExternalSlicerAttestation.Unattested -> w.field("unattested") { writePrinterReplyText(w, v.value) }
+        } }
+    }
+    sealed interface ExternalSlicerAttestationPlan {
+        data class Send(val value: ProjectIntents.ExternalSlicerSend) : ExternalSlicerAttestationPlan
+        data class Unattested(val value: List<Int>) : ExternalSlicerAttestationPlan
+    }
+    private fun readExternalSlicerAttestationPlan(v: Any): ExternalSlicerAttestationPlan {
+        val obj = ProjectIntentJson.fields(v, setOf("send", "unattested"), true)
+        return when(val key = obj.keys().next()) {
+            "send" -> ExternalSlicerAttestationPlan.Send(readExternalSlicerSend(obj.get(key)))
+            "unattested" -> ExternalSlicerAttestationPlan.Unattested(readPrinterReplyText(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerAttestationPlan(w: ProjectIntentWriter, v: ExternalSlicerAttestationPlan) {
+        w.obj { when(v) {
+            is ExternalSlicerAttestationPlan.Send -> w.field("send") { writeExternalSlicerSend(w, v.value) }
+            is ExternalSlicerAttestationPlan.Unattested -> w.field("unattested") { writePrinterReplyText(w, v.value) }
+        } }
+    }
+    data class ExternalSlicerResponse(val status: Long, val body: List<Int>)
+    private fun readExternalSlicerResponse(v: Any): ExternalSlicerResponse {
+        val obj = ProjectIntentJson.fields(v, setOf("status", "body"), false)
+        return ExternalSlicerResponse(readCounter(obj.get("status")), readPrinterReplyText(obj.get("body")))
+    }
+    private fun writeExternalSlicerResponse(w: ProjectIntentWriter, v: ExternalSlicerResponse) {
+        w.obj {
+            w.field("status") { writeCounter(w, v.status) }
+            w.field("body") { writePrinterReplyText(w, v.body) }
+        }
+    }
+    sealed interface ExternalSlicerReply {
+        data class Failed(val value: List<Int>) : ExternalSlicerReply
+        data class Response(val value: ProjectIntents.ExternalSlicerResponse) : ExternalSlicerReply
+    }
+    private fun readExternalSlicerReply(v: Any): ExternalSlicerReply {
+        val obj = ProjectIntentJson.fields(v, setOf("failed", "response"), true)
+        return when(val key = obj.keys().next()) {
+            "failed" -> ExternalSlicerReply.Failed(readEditText(obj.get(key)))
+            "response" -> ExternalSlicerReply.Response(readExternalSlicerResponse(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerReply(w: ProjectIntentWriter, v: ExternalSlicerReply) {
+        w.obj { when(v) {
+            is ExternalSlicerReply.Failed -> w.field("failed") { writeEditText(w, v.value) }
+            is ExternalSlicerReply.Response -> w.field("response") { writeExternalSlicerResponse(w, v.value) }
+        } }
+    }
+    enum class ExternalSlicerFailureKind {Failed,Cancelled,AlreadyDone,AlreadyFailed,AlreadyReleased,Unconfirmed}
+    private fun readExternalSlicerFailureKind(v: Any): ExternalSlicerFailureKind {
+        return when(v) {"failed" -> ExternalSlicerFailureKind.Failed;"cancelled" -> ExternalSlicerFailureKind.Cancelled;"alreadyDone" -> ExternalSlicerFailureKind.AlreadyDone;"alreadyFailed" -> ExternalSlicerFailureKind.AlreadyFailed;"alreadyReleased" -> ExternalSlicerFailureKind.AlreadyReleased;"unconfirmed" -> ExternalSlicerFailureKind.Unconfirmed; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeExternalSlicerFailureKind(w: ProjectIntentWriter, v: ExternalSlicerFailureKind) {
+        w.literal(when(v) {ExternalSlicerFailureKind.Failed -> "failed";ExternalSlicerFailureKind.Cancelled -> "cancelled";ExternalSlicerFailureKind.AlreadyDone -> "alreadyDone";ExternalSlicerFailureKind.AlreadyFailed -> "alreadyFailed";ExternalSlicerFailureKind.AlreadyReleased -> "alreadyReleased";ExternalSlicerFailureKind.Unconfirmed -> "unconfirmed";})
+    }
+    data class ExternalSlicerFailure(val kind: ExternalSlicerFailureKind, val message: List<Int>)
+    private fun readExternalSlicerFailure(v: Any): ExternalSlicerFailure {
+        val obj = ProjectIntentJson.fields(v, setOf("kind", "message"), false)
+        return ExternalSlicerFailure(readExternalSlicerFailureKind(obj.get("kind")), readExternalSlicerText(obj.get("message")))
+    }
+    private fun writeExternalSlicerFailure(w: ProjectIntentWriter, v: ExternalSlicerFailure) {
+        w.obj {
+            w.field("kind") { writeExternalSlicerFailureKind(w, v.kind) }
+            w.field("message") { writeExternalSlicerText(w, v.message) }
+        }
+    }
+    sealed interface ExternalSlicerPlan {
+        data class Send(val value: ProjectIntents.ExternalSlicerSend) : ExternalSlicerPlan
+        data class Refused(val value: ProjectIntents.ExternalSlicerFailure) : ExternalSlicerPlan
+    }
+    private fun readExternalSlicerPlan(v: Any): ExternalSlicerPlan {
+        val obj = ProjectIntentJson.fields(v, setOf("send", "refused"), true)
+        return when(val key = obj.keys().next()) {
+            "send" -> ExternalSlicerPlan.Send(readExternalSlicerSend(obj.get(key)))
+            "refused" -> ExternalSlicerPlan.Refused(readExternalSlicerFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerPlan(w: ProjectIntentWriter, v: ExternalSlicerPlan) {
+        w.obj { when(v) {
+            is ExternalSlicerPlan.Send -> w.field("send") { writeExternalSlicerSend(w, v.value) }
+            is ExternalSlicerPlan.Refused -> w.field("refused") { writeExternalSlicerFailure(w, v.value) }
+        } }
+    }
+    enum class ExternalSlicerJobStep {Status,Artifact,Cancel,Release}
+    private fun readExternalSlicerJobStep(v: Any): ExternalSlicerJobStep {
+        return when(v) {"status" -> ExternalSlicerJobStep.Status;"artifact" -> ExternalSlicerJobStep.Artifact;"cancel" -> ExternalSlicerJobStep.Cancel;"release" -> ExternalSlicerJobStep.Release; else -> throw InvalidProjectIntent()}
+    }
+    private fun writeExternalSlicerJobStep(w: ProjectIntentWriter, v: ExternalSlicerJobStep) {
+        w.literal(when(v) {ExternalSlicerJobStep.Status -> "status";ExternalSlicerJobStep.Artifact -> "artifact";ExternalSlicerJobStep.Cancel -> "cancel";ExternalSlicerJobStep.Release -> "release";})
+    }
+    data class ExternalSlicerJobRequest(val endpoint: List<Int>, val jobId: List<Int>, val step: ExternalSlicerJobStep)
+    private fun readExternalSlicerJobRequest(v: Any): ExternalSlicerJobRequest {
+        val obj = ProjectIntentJson.fields(v, setOf("endpoint", "jobId", "step"), false)
+        return ExternalSlicerJobRequest(readEditText(obj.get("endpoint")), readEditText(obj.get("jobId")), readExternalSlicerJobStep(obj.get("step")))
+    }
+    private fun writeExternalSlicerJobRequest(w: ProjectIntentWriter, v: ExternalSlicerJobRequest) {
+        w.obj {
+            w.field("endpoint") { writeEditText(w, v.endpoint) }
+            w.field("jobId") { writeEditText(w, v.jobId) }
+            w.field("step") { writeExternalSlicerJobStep(w, v.step) }
+        }
+    }
+    data class ExternalSlicerSubmitResponse(val status: Long, val body: List<Int>, val jobIdHeader: OptionalText)
+    private fun readExternalSlicerSubmitResponse(v: Any): ExternalSlicerSubmitResponse {
+        val obj = ProjectIntentJson.fields(v, setOf("status", "body", "jobIdHeader"), false)
+        return ExternalSlicerSubmitResponse(readCounter(obj.get("status")), readPrinterReplyText(obj.get("body")), readOptionalText(obj.get("jobIdHeader")))
+    }
+    private fun writeExternalSlicerSubmitResponse(w: ProjectIntentWriter, v: ExternalSlicerSubmitResponse) {
+        w.obj {
+            w.field("status") { writeCounter(w, v.status) }
+            w.field("body") { writePrinterReplyText(w, v.body) }
+            w.field("jobIdHeader") { writeOptionalText(w, v.jobIdHeader) }
+        }
+    }
+    sealed interface ExternalSlicerSubmitReply {
+        data class Failed(val value: List<Int>) : ExternalSlicerSubmitReply
+        data class Response(val value: ProjectIntents.ExternalSlicerSubmitResponse) : ExternalSlicerSubmitReply
+    }
+    private fun readExternalSlicerSubmitReply(v: Any): ExternalSlicerSubmitReply {
+        val obj = ProjectIntentJson.fields(v, setOf("failed", "response"), true)
+        return when(val key = obj.keys().next()) {
+            "failed" -> ExternalSlicerSubmitReply.Failed(readEditText(obj.get(key)))
+            "response" -> ExternalSlicerSubmitReply.Response(readExternalSlicerSubmitResponse(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerSubmitReply(w: ProjectIntentWriter, v: ExternalSlicerSubmitReply) {
+        w.obj { when(v) {
+            is ExternalSlicerSubmitReply.Failed -> w.field("failed") { writeEditText(w, v.value) }
+            is ExternalSlicerSubmitReply.Response -> w.field("response") { writeExternalSlicerSubmitResponse(w, v.value) }
+        } }
+    }
+    data class ExternalSlicerSubmitRead(val reply: ExternalSlicerSubmitReply, val aborted: Boolean)
+    private fun readExternalSlicerSubmitRead(v: Any): ExternalSlicerSubmitRead {
+        val obj = ProjectIntentJson.fields(v, setOf("reply", "aborted"), false)
+        return ExternalSlicerSubmitRead(readExternalSlicerSubmitReply(obj.get("reply")), readFlag(obj.get("aborted")))
+    }
+    private fun writeExternalSlicerSubmitRead(w: ProjectIntentWriter, v: ExternalSlicerSubmitRead) {
+        w.obj {
+            w.field("reply") { writeExternalSlicerSubmitReply(w, v.reply) }
+            w.field("aborted") { writeFlag(w, v.aborted) }
+        }
+    }
+    sealed interface ExternalSlicerSubmission {
+        data class Job(val value: List<Int>) : ExternalSlicerSubmission
+        data class Cancel(val value: List<Int>) : ExternalSlicerSubmission
+        data class Artifact(val value: ProjectIntents.Empty) : ExternalSlicerSubmission
+        data class Failed(val value: ProjectIntents.ExternalSlicerFailure) : ExternalSlicerSubmission
+    }
+    private fun readExternalSlicerSubmission(v: Any): ExternalSlicerSubmission {
+        val obj = ProjectIntentJson.fields(v, setOf("job", "cancel", "artifact", "failed"), true)
+        return when(val key = obj.keys().next()) {
+            "job" -> ExternalSlicerSubmission.Job(readPrinterReplyText(obj.get(key)))
+            "cancel" -> ExternalSlicerSubmission.Cancel(readPrinterReplyText(obj.get(key)))
+            "artifact" -> ExternalSlicerSubmission.Artifact(readEmpty(obj.get(key)))
+            "failed" -> ExternalSlicerSubmission.Failed(readExternalSlicerFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerSubmission(w: ProjectIntentWriter, v: ExternalSlicerSubmission) {
+        w.obj { when(v) {
+            is ExternalSlicerSubmission.Job -> w.field("job") { writePrinterReplyText(w, v.value) }
+            is ExternalSlicerSubmission.Cancel -> w.field("cancel") { writePrinterReplyText(w, v.value) }
+            is ExternalSlicerSubmission.Artifact -> w.field("artifact") { writeEmpty(w, v.value) }
+            is ExternalSlicerSubmission.Failed -> w.field("failed") { writeExternalSlicerFailure(w, v.value) }
+        } }
+    }
+    data class ExternalSlicerPollRead(val failures: Long, val reply: ExternalSlicerReply)
+    private fun readExternalSlicerPollRead(v: Any): ExternalSlicerPollRead {
+        val obj = ProjectIntentJson.fields(v, setOf("failures", "reply"), false)
+        return ExternalSlicerPollRead(readCounter(obj.get("failures")), readExternalSlicerReply(obj.get("reply")))
+    }
+    private fun writeExternalSlicerPollRead(w: ProjectIntentWriter, v: ExternalSlicerPollRead) {
+        w.obj {
+            w.field("failures") { writeCounter(w, v.failures) }
+            w.field("reply") { writeExternalSlicerReply(w, v.reply) }
+        }
+    }
+    data class ExternalSlicerProgress(val percent: Double, val message: List<Int>)
+    private fun readExternalSlicerProgress(v: Any): ExternalSlicerProgress {
+        val obj = ProjectIntentJson.fields(v, setOf("percent", "message"), false)
+        return ExternalSlicerProgress(readFinite(obj.get("percent")), readPrinterReplyText(obj.get("message")))
+    }
+    private fun writeExternalSlicerProgress(w: ProjectIntentWriter, v: ExternalSlicerProgress) {
+        w.obj {
+            w.field("percent") { writeFinite(w, v.percent) }
+            w.field("message") { writePrinterReplyText(w, v.message) }
+        }
+    }
+    sealed interface OptionalExternalSlicerProgress {
+        data class Absent(val value: ProjectIntents.Empty) : OptionalExternalSlicerProgress
+        data class Value(val value: ProjectIntents.ExternalSlicerProgress) : OptionalExternalSlicerProgress
+    }
+    private fun readOptionalExternalSlicerProgress(v: Any): OptionalExternalSlicerProgress {
+        val obj = ProjectIntentJson.fields(v, setOf("absent", "value"), true)
+        return when(val key = obj.keys().next()) {
+            "absent" -> OptionalExternalSlicerProgress.Absent(readEmpty(obj.get(key)))
+            "value" -> OptionalExternalSlicerProgress.Value(readExternalSlicerProgress(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeOptionalExternalSlicerProgress(w: ProjectIntentWriter, v: OptionalExternalSlicerProgress) {
+        w.obj { when(v) {
+            is OptionalExternalSlicerProgress.Absent -> w.field("absent") { writeEmpty(w, v.value) }
+            is OptionalExternalSlicerProgress.Value -> w.field("value") { writeExternalSlicerProgress(w, v.value) }
+        } }
+    }
+    data class ExternalSlicerPollWait(val failures: Long, val progress: OptionalExternalSlicerProgress)
+    private fun readExternalSlicerPollWait(v: Any): ExternalSlicerPollWait {
+        val obj = ProjectIntentJson.fields(v, setOf("failures", "progress"), false)
+        return ExternalSlicerPollWait(readCounter(obj.get("failures")), readOptionalExternalSlicerProgress(obj.get("progress")))
+    }
+    private fun writeExternalSlicerPollWait(w: ProjectIntentWriter, v: ExternalSlicerPollWait) {
+        w.obj {
+            w.field("failures") { writeCounter(w, v.failures) }
+            w.field("progress") { writeOptionalExternalSlicerProgress(w, v.progress) }
+        }
+    }
+    sealed interface ExternalSlicerPollStep {
+        data class Wait(val value: ProjectIntents.ExternalSlicerPollWait) : ExternalSlicerPollStep
+        data class Download(val value: ProjectIntents.Empty) : ExternalSlicerPollStep
+        data class Failed(val value: ProjectIntents.ExternalSlicerFailure) : ExternalSlicerPollStep
+    }
+    private fun readExternalSlicerPollStep(v: Any): ExternalSlicerPollStep {
+        val obj = ProjectIntentJson.fields(v, setOf("wait", "download", "failed"), true)
+        return when(val key = obj.keys().next()) {
+            "wait" -> ExternalSlicerPollStep.Wait(readExternalSlicerPollWait(obj.get(key)))
+            "download" -> ExternalSlicerPollStep.Download(readEmpty(obj.get(key)))
+            "failed" -> ExternalSlicerPollStep.Failed(readExternalSlicerFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerPollStep(w: ProjectIntentWriter, v: ExternalSlicerPollStep) {
+        w.obj { when(v) {
+            is ExternalSlicerPollStep.Wait -> w.field("wait") { writeExternalSlicerPollWait(w, v.value) }
+            is ExternalSlicerPollStep.Download -> w.field("download") { writeEmpty(w, v.value) }
+            is ExternalSlicerPollStep.Failed -> w.field("failed") { writeExternalSlicerFailure(w, v.value) }
+        } }
+    }
+    sealed interface ExternalSlicerCancelRead {
+        data class Reply(val value: ProjectIntents.ExternalSlicerReply) : ExternalSlicerCancelRead
+        data class TimedOut(val value: ProjectIntents.Empty) : ExternalSlicerCancelRead
+    }
+    private fun readExternalSlicerCancelRead(v: Any): ExternalSlicerCancelRead {
+        val obj = ProjectIntentJson.fields(v, setOf("reply", "timedOut"), true)
+        return when(val key = obj.keys().next()) {
+            "reply" -> ExternalSlicerCancelRead.Reply(readExternalSlicerReply(obj.get(key)))
+            "timedOut" -> ExternalSlicerCancelRead.TimedOut(readEmpty(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerCancelRead(w: ProjectIntentWriter, v: ExternalSlicerCancelRead) {
+        w.obj { when(v) {
+            is ExternalSlicerCancelRead.Reply -> w.field("reply") { writeExternalSlicerReply(w, v.value) }
+            is ExternalSlicerCancelRead.TimedOut -> w.field("timedOut") { writeEmpty(w, v.value) }
+        } }
+    }
+    sealed interface ExternalSlicerCancelStep {
+        data class Confirmed(val value: ProjectIntents.Empty) : ExternalSlicerCancelStep
+        data class Poll(val value: ProjectIntents.Empty) : ExternalSlicerCancelStep
+        data class Failed(val value: ProjectIntents.ExternalSlicerFailure) : ExternalSlicerCancelStep
+    }
+    private fun readExternalSlicerCancelStep(v: Any): ExternalSlicerCancelStep {
+        val obj = ProjectIntentJson.fields(v, setOf("confirmed", "poll", "failed"), true)
+        return when(val key = obj.keys().next()) {
+            "confirmed" -> ExternalSlicerCancelStep.Confirmed(readEmpty(obj.get(key)))
+            "poll" -> ExternalSlicerCancelStep.Poll(readEmpty(obj.get(key)))
+            "failed" -> ExternalSlicerCancelStep.Failed(readExternalSlicerFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerCancelStep(w: ProjectIntentWriter, v: ExternalSlicerCancelStep) {
+        w.obj { when(v) {
+            is ExternalSlicerCancelStep.Confirmed -> w.field("confirmed") { writeEmpty(w, v.value) }
+            is ExternalSlicerCancelStep.Poll -> w.field("poll") { writeEmpty(w, v.value) }
+            is ExternalSlicerCancelStep.Failed -> w.field("failed") { writeExternalSlicerFailure(w, v.value) }
+        } }
+    }
+    data class ExternalSlicerArtifactFacts(val status: Long, val errorBody: List<Int>, val jobIdHeader: OptionalText, val sha256Header: OptionalText, val bytesHeader: OptionalText, val length: Long, val sha256: List<Int>, val utf8: Boolean, val blank: Boolean)
+    private fun readExternalSlicerArtifactFacts(v: Any): ExternalSlicerArtifactFacts {
+        val obj = ProjectIntentJson.fields(v, setOf("status", "errorBody", "jobIdHeader", "sha256Header", "bytesHeader", "length", "sha256", "utf8", "blank"), false)
+        return ExternalSlicerArtifactFacts(readCounter(obj.get("status")), readPrinterReplyText(obj.get("errorBody")), readOptionalText(obj.get("jobIdHeader")), readOptionalText(obj.get("sha256Header")), readOptionalText(obj.get("bytesHeader")), readCounter(obj.get("length")), readEditText(obj.get("sha256")), readFlag(obj.get("utf8")), readFlag(obj.get("blank")))
+    }
+    private fun writeExternalSlicerArtifactFacts(w: ProjectIntentWriter, v: ExternalSlicerArtifactFacts) {
+        w.obj {
+            w.field("status") { writeCounter(w, v.status) }
+            w.field("errorBody") { writePrinterReplyText(w, v.errorBody) }
+            w.field("jobIdHeader") { writeOptionalText(w, v.jobIdHeader) }
+            w.field("sha256Header") { writeOptionalText(w, v.sha256Header) }
+            w.field("bytesHeader") { writeOptionalText(w, v.bytesHeader) }
+            w.field("length") { writeCounter(w, v.length) }
+            w.field("sha256") { writeEditText(w, v.sha256) }
+            w.field("utf8") { writeFlag(w, v.utf8) }
+            w.field("blank") { writeFlag(w, v.blank) }
+        }
+    }
+    data class ExternalSlicerArtifactRead(val expectedJobId: OptionalText, val response: ExternalSlicerArtifactFacts)
+    private fun readExternalSlicerArtifactRead(v: Any): ExternalSlicerArtifactRead {
+        val obj = ProjectIntentJson.fields(v, setOf("expectedJobId", "response"), false)
+        return ExternalSlicerArtifactRead(readOptionalText(obj.get("expectedJobId")), readExternalSlicerArtifactFacts(obj.get("response")))
+    }
+    private fun writeExternalSlicerArtifactRead(w: ProjectIntentWriter, v: ExternalSlicerArtifactRead) {
+        w.obj {
+            w.field("expectedJobId") { writeOptionalText(w, v.expectedJobId) }
+            w.field("response") { writeExternalSlicerArtifactFacts(w, v.response) }
+        }
+    }
+    data class ExternalSlicerAccepted(val release: OptionalText)
+    private fun readExternalSlicerAccepted(v: Any): ExternalSlicerAccepted {
+        val obj = ProjectIntentJson.fields(v, setOf("release"), false)
+        return ExternalSlicerAccepted(readOptionalText(obj.get("release")))
+    }
+    private fun writeExternalSlicerAccepted(w: ProjectIntentWriter, v: ExternalSlicerAccepted) {
+        w.obj {
+            w.field("release") { writeOptionalText(w, v.release) }
+        }
+    }
+    sealed interface ExternalSlicerArtifact {
+        data class Accepted(val value: ProjectIntents.ExternalSlicerAccepted) : ExternalSlicerArtifact
+        data class Failed(val value: ProjectIntents.ExternalSlicerFailure) : ExternalSlicerArtifact
+    }
+    private fun readExternalSlicerArtifact(v: Any): ExternalSlicerArtifact {
+        val obj = ProjectIntentJson.fields(v, setOf("accepted", "failed"), true)
+        return when(val key = obj.keys().next()) {
+            "accepted" -> ExternalSlicerArtifact.Accepted(readExternalSlicerAccepted(obj.get(key)))
+            "failed" -> ExternalSlicerArtifact.Failed(readExternalSlicerFailure(obj.get(key)))
+            else -> throw InvalidProjectIntent()
+        }
+    }
+    private fun writeExternalSlicerArtifact(w: ProjectIntentWriter, v: ExternalSlicerArtifact) {
+        w.obj { when(v) {
+            is ExternalSlicerArtifact.Accepted -> w.field("accepted") { writeExternalSlicerAccepted(w, v.value) }
+            is ExternalSlicerArtifact.Failed -> w.field("failed") { writeExternalSlicerFailure(w, v.value) }
+        } }
+    }
     fun decodeIntent(text: String): Intent = readIntent(ProjectIntentJson.parse(text))
     fun encodeIntent(value: Intent): String = ProjectIntentWriter().also { writeIntent(it, value) }.finish()
     fun decodeBatch(text: String): Batch = readBatch(ProjectIntentJson.parse(text))
@@ -11274,4 +11694,34 @@ object ProjectIntents {
     fun encodePrinterDirectoryAdopt(value: PrinterDirectoryAdopt): String = ProjectIntentWriter().also { writePrinterDirectoryAdopt(it, value) }.finish()
     fun decodeRememberedCredentials(text: String): RememberedCredentials = readRememberedCredentials(ProjectIntentJson.parse(text, BULK))
     fun encodeRememberedCredentials(value: RememberedCredentials): String = ProjectIntentWriter(BULK).also { writeRememberedCredentials(it, value) }.finish()
+    fun decodeExternalSlicerEndpointRequest(text: String): ExternalSlicerEndpointRequest = readExternalSlicerEndpointRequest(ProjectIntentJson.parse(text))
+    fun encodeExternalSlicerEndpointRequest(value: ExternalSlicerEndpointRequest): String = ProjectIntentWriter().also { writeExternalSlicerEndpointRequest(it, value) }.finish()
+    fun decodeExternalSlicerEndpoint(text: String): ExternalSlicerEndpoint = readExternalSlicerEndpoint(ProjectIntentJson.parse(text))
+    fun encodeExternalSlicerEndpoint(value: ExternalSlicerEndpoint): String = ProjectIntentWriter().also { writeExternalSlicerEndpoint(it, value) }.finish()
+    fun decodeExternalSlicerAttestationPlan(text: String): ExternalSlicerAttestationPlan = readExternalSlicerAttestationPlan(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerAttestationPlan(value: ExternalSlicerAttestationPlan): String = ProjectIntentWriter(BULK).also { writeExternalSlicerAttestationPlan(it, value) }.finish()
+    fun decodeExternalSlicerReply(text: String): ExternalSlicerReply = readExternalSlicerReply(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerReply(value: ExternalSlicerReply): String = ProjectIntentWriter(BULK).also { writeExternalSlicerReply(it, value) }.finish()
+    fun decodeExternalSlicerAttestation(text: String): ExternalSlicerAttestation = readExternalSlicerAttestation(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerAttestation(value: ExternalSlicerAttestation): String = ProjectIntentWriter(BULK).also { writeExternalSlicerAttestation(it, value) }.finish()
+    fun decodeExternalSlicerPlan(text: String): ExternalSlicerPlan = readExternalSlicerPlan(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerPlan(value: ExternalSlicerPlan): String = ProjectIntentWriter(BULK).also { writeExternalSlicerPlan(it, value) }.finish()
+    fun decodeExternalSlicerJobRequest(text: String): ExternalSlicerJobRequest = readExternalSlicerJobRequest(ProjectIntentJson.parse(text))
+    fun encodeExternalSlicerJobRequest(value: ExternalSlicerJobRequest): String = ProjectIntentWriter().also { writeExternalSlicerJobRequest(it, value) }.finish()
+    fun decodeExternalSlicerSubmitRead(text: String): ExternalSlicerSubmitRead = readExternalSlicerSubmitRead(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerSubmitRead(value: ExternalSlicerSubmitRead): String = ProjectIntentWriter(BULK).also { writeExternalSlicerSubmitRead(it, value) }.finish()
+    fun decodeExternalSlicerSubmission(text: String): ExternalSlicerSubmission = readExternalSlicerSubmission(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerSubmission(value: ExternalSlicerSubmission): String = ProjectIntentWriter(BULK).also { writeExternalSlicerSubmission(it, value) }.finish()
+    fun decodeExternalSlicerPollRead(text: String): ExternalSlicerPollRead = readExternalSlicerPollRead(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerPollRead(value: ExternalSlicerPollRead): String = ProjectIntentWriter(BULK).also { writeExternalSlicerPollRead(it, value) }.finish()
+    fun decodeExternalSlicerPollStep(text: String): ExternalSlicerPollStep = readExternalSlicerPollStep(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerPollStep(value: ExternalSlicerPollStep): String = ProjectIntentWriter(BULK).also { writeExternalSlicerPollStep(it, value) }.finish()
+    fun decodeExternalSlicerCancelRead(text: String): ExternalSlicerCancelRead = readExternalSlicerCancelRead(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerCancelRead(value: ExternalSlicerCancelRead): String = ProjectIntentWriter(BULK).also { writeExternalSlicerCancelRead(it, value) }.finish()
+    fun decodeExternalSlicerCancelStep(text: String): ExternalSlicerCancelStep = readExternalSlicerCancelStep(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerCancelStep(value: ExternalSlicerCancelStep): String = ProjectIntentWriter(BULK).also { writeExternalSlicerCancelStep(it, value) }.finish()
+    fun decodeExternalSlicerArtifactRead(text: String): ExternalSlicerArtifactRead = readExternalSlicerArtifactRead(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerArtifactRead(value: ExternalSlicerArtifactRead): String = ProjectIntentWriter(BULK).also { writeExternalSlicerArtifactRead(it, value) }.finish()
+    fun decodeExternalSlicerArtifact(text: String): ExternalSlicerArtifact = readExternalSlicerArtifact(ProjectIntentJson.parse(text, BULK))
+    fun encodeExternalSlicerArtifact(value: ExternalSlicerArtifact): String = ProjectIntentWriter(BULK).also { writeExternalSlicerArtifact(it, value) }.finish()
 }

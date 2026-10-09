@@ -12,6 +12,7 @@ pub mod moonraker;
 pub mod preparation;
 pub mod reply;
 pub mod session;
+pub mod slicer;
 pub mod status;
 pub mod storage;
 pub mod summary;

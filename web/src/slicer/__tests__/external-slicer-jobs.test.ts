@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { confirmExternalCancellation, readExternalResult, type ExternalJobContext } from '../ExternalSlicerJobs';
+import {
+  confirmExternalCancellation,
+  pollExternalJob,
+  readCancelReply,
+  readExternalResult,
+  readJobPoll,
+  readSubmission,
+  type ExternalJobContext,
+} from '../ExternalSlicerJobs';
 import { SlicerClientCancellationError } from '../SlicerClientCancellationError';
 import { sha256Bytes } from '../Utf8Sha256';
 
@@ -187,9 +195,98 @@ try {
     });
   }
 
+  await test('a failed job without its reason does not read as "undefined" or nothing', async () => {
+    for (const error of [undefined, 42, '', ' \n']) {
+      const step = readJobPoll(0, { status: 200, body: JSON.stringify({ status: 'error', error }) });
+      assert.equal(step.kind, 'failed');
+      if (step.kind === 'failed') assert.equal(step.error.message, 'External Slicer Failed: no reason was given');
+    }
+  });
+
+  await test('a refusal with a blank body reads as its HTTP status', async () => {
+    for (const body of ['', '  \n']) {
+      const submission = readSubmission({ status: 413, body }, false);
+      assert.equal(submission.kind, 'failed');
+      if (submission.kind === 'failed') assert.equal(submission.error.message, 'External Slicer Failed: HTTP 413');
+      await assert.rejects(readExternalResult(new Response(body, { status: 503 }), context), {
+        message: 'External Slicer Failed: HTTP 503',
+      });
+    }
+    const named = readSubmission({ status: 400, body: 'Missing project file.' }, false);
+    if (named.kind === 'failed') assert.equal(named.error.message, 'External Slicer Failed: Missing project file.');
+  });
+
+  await test('progress is always a number and a sentence', async () => {
+    for (const [percent, message, expected] of [
+      ['50', 7, { percent: 0, message: 'Slicing externally...' }],
+      [null, { text: 'x' }, { percent: 0, message: 'Slicing externally...' }],
+      [10, ' ', { percent: 10, message: 'Slicing externally...' }],
+      [42.5, 'Generating supports', { percent: 42.5, message: 'Generating supports' }],
+    ] as const) {
+      const step = readJobPoll(3, { status: 200, body: JSON.stringify({ status: 'running', percent, message }) });
+      assert.deepEqual(step, { kind: 'wait', failures: 0, progress: expected });
+    }
+  });
+
+  await test('replies that are not JSON objects read the same in every engine', async () => {
+    for (const body of ['null', 'not json']) {
+      const poll = readJobPoll(4, { status: 200, body });
+      assert.equal(poll.kind, 'failed');
+      if (poll.kind === 'failed')
+        assert.equal(
+          poll.error.message,
+          `External slicer stopped responding: ${body === 'null' ? 'Unknown job state.' : 'The server returned an unreadable reply.'}`,
+        );
+      const cancel = readCancelReply({ status: 200, body });
+      assert.equal(cancel.kind, 'failed');
+      if (cancel.kind === 'failed')
+        assert.equal(
+          cancel.error.message,
+          `Could not confirm external slice cancellation: ${body === 'null' ? 'The server returned an unknown job state.' : 'The server returned an unreadable reply.'}`,
+        );
+    }
+    for (const body of ['null', 'not json']) {
+      const submission = readSubmission({ status: 202, body }, false);
+      assert.equal(submission.kind, 'failed');
+      if (submission.kind === 'failed')
+        assert.equal(submission.error.message, 'External slicer returned an invalid async job ID.');
+    }
+  });
+
+  await test('an artifact that is not UTF-8 reads the same in every engine and is retained', async () => {
+    implementation = async () => {
+      throw new Error('must not release');
+    };
+    const invalid = new Uint8Array([0x47, 0x32, 0x38, 0xff, 0x0a]);
+    await assert.rejects(
+      readExternalResult(
+        new Response(invalid, {
+          headers: {
+            'x-orcaxr-job-id': 'job-1',
+            'x-orcaxr-gcode-sha256': sha256Bytes(invalid).slice(7),
+            'x-orcaxr-gcode-bytes': String(invalid.length),
+          },
+        }),
+        context,
+      ),
+      { message: 'External slicer returned an artifact that is not valid UTF-8 text.' },
+    );
+    assert.equal(calls.length, 0);
+  });
+
   await test('malformed job IDs cannot redirect cancellation to another route', async () => {
     await assert.rejects(confirmExternalCancellation({ ...context, jobId: '..' }), /invalid job ID/);
     assert.equal(calls.length, 0);
+  });
+
+  await test('a job ID no URL can carry fails at once, not as unanswered polls', async () => {
+    implementation = async () => json('running');
+    const started = performance.now();
+    await assert.rejects(pollExternalJob({ ...context, jobId: 'a/b', pollIntervalMs: 1000 }), {
+      message: 'The external slicer returned an invalid job ID.',
+    });
+    assert.equal(calls.length, 0);
+    assert.ok(performance.now() - started < 500);
   });
 } finally {
   globalThis.fetch = originalFetch;
