@@ -4256,8 +4256,8 @@ the saved one back — in the canonical format — with the same tree; refuse a 
 while keeping the project; and keep recent documents newest first, one per
 document, at most eight. The screen previews an import with the notices the
 operator accepts by importing (the preview counts the resulting project's
-objects, not the additions), asks before New or Open replaces unsaved
-changes — Save (to the document it last saved, or one the operator picks
+objects, not the additions), asks before New, Open or Back (from any
+area) replaces or leaves unsaved changes — Save (to the document it last saved, or one the operator picks
 then; it goes on only once the save is confirmed), Discard or Cancel —, saves to the document "Save as" created or to an opened one in
 OrcaXR's own canonical package (`open` answers the archive format; a foreign
 3MF, which saving would convert, is never overwritten by "Save"), keeps recent documents with persisted
@@ -4268,11 +4268,12 @@ without keeping its grant. `android-project-smoke.py` drives it on an owned
 emulator through the system document picker: import, undo, redo, Save as
 (a ZIP package in Downloads), New, reopen from recents, the unsaved-changes
 dialog (Cancel keeps them, Save writes them before New goes on, Discard drops
-them), a `file:` handover refused, and the recent document reopened after a
+them), Back asking from the Device area (Cancel stays, Discard leaves),
+a `file:` handover refused, and the recent document reopened after a
 restart through its persisted grant. A model lands on the browser's
 200 mm plate until printer profiles reach Android. The smoke saves first only
 to a document already saved; choosing a destination from that dialog is
-unexercised. Recovery storage, the back and window-close guards, sharing a
+unexercised. Recovery storage, the window-close and update guards, sharing a
 project out and multi-window ownership remain.
 
 ### Android Device area

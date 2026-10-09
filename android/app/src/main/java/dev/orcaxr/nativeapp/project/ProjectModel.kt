@@ -135,6 +135,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
         if (view.dirty) pendingDiscard = PendingDiscard(view.name, action) else action()
     }
 
+    /** Leaving the app (Back) with unsaved changes asks first, as New and Open do. */
+    fun leave(finish: () -> Unit) = unlessDirty(finish)
+
     fun answerDiscard(answer: DiscardAnswer) {
         val pending = pendingDiscard ?: return
         pendingDiscard = null

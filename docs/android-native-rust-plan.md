@@ -1835,11 +1835,11 @@ storage journeys on phone, tablet, and desktop-sized windows.
 - [ ] Implement recovery storage and Save/Discard/Cancel guards for back,
   navigation, new/open/replace, window close where observable, and app updates.
   Test process death during capture, write, commit, and restore.
-  New and Open (picked, recent or handed over) in the Project area ask
-  Save/Discard/Cancel when changes are unsaved; Save writes first and goes on
-  only once confirmed (emulator-verified for a document already saved).
-  Recovery storage, back/window-close/update guards and process-death tests
-  remain.
+  New, Open (picked, recent or handed over) and Back (from any area) ask
+  Save/Discard/Cancel when the project's changes are unsaved; Save writes
+  first and goes on only once confirmed (emulator-verified for a document
+  already saved). Recovery storage, window-close/update guards and
+  process-death tests remain.
 - [ ] Introduce document-session ownership for multiple windows. Different
   documents may coexist; reopening an already-owned document focuses its owner
   or opens an explicit read-only view. External changes require conflict handling

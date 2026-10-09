@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -77,6 +78,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         if (savedInstanceState == null) handle(intent) else area = savedInstanceState.getInt(AREA, area)
         setContent {
+            // Back with unsaved changes, from any area, asks in the Project area first.
+            BackHandler(enabled = project.view.dirty) {
+                area = R.string.nav_project
+                project.leave(::finish)
+            }
             var state by remember { mutableIntStateOf(R.string.workspace_loading) }
             LaunchedEffect(Unit) {
                 state = withContext(Dispatchers.Default) {
