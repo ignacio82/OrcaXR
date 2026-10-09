@@ -15,6 +15,7 @@ import dev.orcaxr.core.ContentProjectDocument
 import dev.orcaxr.core.ProjectActorImport
 import dev.orcaxr.core.ProjectArchiveFormat
 import dev.orcaxr.core.ProjectDocumentOutput
+import dev.orcaxr.core.ProjectRecovery
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.core.RecentDocuments
@@ -54,6 +55,8 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     private val worker = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "project-model") }
     private val resolver = application.contentResolver
     private val recentStore = RecentDocuments(PreferencesTextStore(application, "orcaxr.projects", "recent"))
+    /** Unsaved work kept for a session the system ends; in private storage, excluded from backups. */
+    private val recovery = ProjectRecovery(File(application.filesDir, "recovery"))
     private lateinit var workspace: ProjectWorkspace
     private var subscription: AutoCloseable? = null
     /** The document "Save" writes to: one this app saved, or an opened one in OrcaXR's own
@@ -70,6 +73,9 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
         private set
     var pendingImport by mutableStateOf<PendingImport?>(null)
         private set
+    /** Unsaved work earlier sessions left, newest first, for the operator to restore or discard. */
+    var recoveries by mutableStateOf<List<ProjectRecovery.Entry>>(emptyList())
+        private set
     var pendingDiscard by mutableStateOf<PendingDiscard?>(null)
         private set
     /** Set while the screen should ask where to save before going on with [afterSave]. */
@@ -82,9 +88,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
 
     init {
         work {
-            workspace = ProjectWorkspace()
+            workspace = ProjectWorkspace(recovery = recovery)
             subscription = workspace.subscribe { main.post { view = workspace.view } }
             workspace.ready().get()
+            publishRecoveries()
             main.post { view = workspace.view }
         }
     }
@@ -144,12 +151,40 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     /** Leaving the app (Back) with unsaved changes asks first, as New and Open do. */
     fun leave(finish: () -> Unit) = unlessDirty(finish)
 
+    private fun publishRecoveries() {
+        val earlier = recovery.list().filter { it.session != workspace.session }
+        main.post { recoveries = earlier }
+    }
+
+    /** Restores unsaved work an earlier session left; the copy stays until it is discarded. */
+    fun restore(entry: ProjectRecovery.Entry) = unlessDirty {
+        work {
+            workspace.restore(entry).await()
+            savedUri = null
+            main.post { message = "Restored ${entry.projectName}. Save it to keep it." }
+        }
+    }
+
+    fun discardRecovered(entry: ProjectRecovery.Entry) = work {
+        recovery.discard(entry.session)
+        publishRecoveries()
+    }
+
+    /** Keeps the unsaved work now, as the app leaves the screen: the system may end it there. */
+    fun captureNow() {
+        if (view.dirty && ::workspace.isInitialized) work { workspace.captureRecovery().await() }
+    }
+
     fun answerDiscard(answer: DiscardAnswer) {
         val pending = pendingDiscard ?: return
         pendingDiscard = null
         when (answer) {
             DiscardAnswer.Cancel -> Unit
-            DiscardAnswer.Discard -> pending.action()
+            DiscardAnswer.Discard -> {
+                // The changes are dropped, and their recovery copy with them.
+                work { workspace.discardRecovery() }
+                pending.action()
+            }
             DiscardAnswer.Save -> {
                 val target = savedUri
                 if (target != null) {

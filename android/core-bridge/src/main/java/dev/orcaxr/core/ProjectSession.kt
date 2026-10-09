@@ -94,7 +94,16 @@ class ProjectUpload(
 }
 
 /** Prepared immutable bundle; must be consumed or closed by its import task. */
-class ProjectDocument internal constructor(handle: Long) : ProjectHandle(handle)
+/** The identities a session guard reports for a project: what a recovery copy is checked against. */
+data class ProjectIdentity(val projectId: String, val semanticHash: String, val assetFingerprint: String)
+
+class ProjectDocument internal constructor(handle: Long) : ProjectHandle(handle) {
+    /** What a session guard will report once this document is adopted. */
+    fun identity(): ProjectIdentity = read {
+        val lines = String(NativeProject.documentIdentity(it)).split('\n')
+        ProjectIdentity(lines[0], lines[1], lines[2])
+    }
+}
 /** Dropping this ticket invalidates the open; newer tickets supersede older ones. */
 class ProjectOpen internal constructor(handle: Long) : ProjectHandle(handle)
 

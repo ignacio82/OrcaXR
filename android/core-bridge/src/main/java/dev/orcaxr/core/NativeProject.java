@@ -378,6 +378,7 @@ final class NativeProject {
     static native String projectHash(long handle);
     static native byte[] projectFresh(long handle, double[] words, String now);
     static native byte[] projectEmpty(double[] words, String now);
+    static native char[] documentIdentity(long handle);
     static native long projectIdLength(long handle);
     static native char[] projectId(long handle, long start, long count);
     static native long projectExport(long handle, long maxBytes);

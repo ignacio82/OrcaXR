@@ -1,8 +1,8 @@
 {
   "cargo": "cargo 1.94.1 (29ea6fb6a 2026-03-24)",
-  "defaultFeatures": true,
+  "defaultFeatures": false,
   "features": [
-    "gcode"
+    "printer"
   ],
   "inputs": {
     "contracts/core-protocol.json": "63e7ed821d0da12f863004109a41f5dbfd00b73a2c29584ae2b3a3a6b1320f7a",
@@ -26,13 +26,13 @@
     "core/crates/orcaxr-android/src/gcode.rs": "9cc85fabc5e8db7f9d501929e47ac430645c0a5bf35f0038e078d39b8d8b6ede",
     "core/crates/orcaxr-android/src/lib.rs": "e23a755393151ef08c6618d006dac0f37da3b11ad29e265d038114383d972240",
     "core/crates/orcaxr-android/src/project/archive.rs": "4aabe2c9d7a778d1d58ce040df2606d2514efa875d718b22a5f6e8eb9add841e",
-    "core/crates/orcaxr-android/src/project/bindings.rs": "4f2a1b096dc29a77852ce1fd0dcc0a9f1860ec0c58939b8da8ae62cc6e701f93",
+    "core/crates/orcaxr-android/src/project/bindings.rs": "279aa593da01c32046d0ca917a5b99fe8eea56bc64e981ba4d86e767255e18ce",
     "core/crates/orcaxr-android/src/project/catalog.rs": "6e93937ca4ae5a0eb39cefd2564a6f118c7e67f7fae779c61bafc49d96e78be0",
     "core/crates/orcaxr-android/src/project/editor.rs": "9e3aeb144356dffb6b46ba86e205dabaf7fdbde0ed3df16c7a557f40135a7ac2",
     "core/crates/orcaxr-android/src/project/fresh.rs": "dce041212d62ebdba7abaa33cdfd24220d1d6c2f27ece1c5fc1fa78efcb3c219",
     "core/crates/orcaxr-android/src/project/json_sink.rs": "1c0d02488561a09e46e630cf6ed7e9a76c9db044cfe14c59348cd760da3c1404",
     "core/crates/orcaxr-android/src/project/library.rs": "cbc67742d5cd0ccad82c608ba1d84f45656ef3e4fcfe4676552cd9389347135c",
-    "core/crates/orcaxr-android/src/project/mod.rs": "43e6c4d678caf3f363751a24392fc8a2b0fd5b9b8eba10a7133c48a5d80ff3b3",
+    "core/crates/orcaxr-android/src/project/mod.rs": "9fa899f8154552d8197dc677ede955ee4cd1cac2df63edd8e62d39236bb2b839",
     "core/crates/orcaxr-android/src/project/model.rs": "f89277e41d6f3be1fc92cf7538d6d4a161e957feb15052e18d358339e499e250",
     "core/crates/orcaxr-android/src/project/preflight.rs": "c470ccac21b5fec5890522a6d12b8441f0761512c2a1a0abf934f74961e0a201",
     "core/crates/orcaxr-android/src/project/printer.rs": "17786c2e5e62b8dacbaedffee7618e0068ece6e9d399b5e75a3ce85b0271cf82",
@@ -317,7 +317,7 @@
     "core/crates/orcaxr-project/src/render.rs": "317f13899368d7f16be19c28cae161e2caa83967836cf51abe571cfd35e6f76e",
     "core/crates/orcaxr-project/src/selection.rs": "fe5c82620e616259fc6dde0ab6ff7a5e86a180d7cebbc15bf2d872be7519b6e0",
     "core/crates/orcaxr-project/src/session.rs": "7f27f13c16e5bf7843dfc8cd81b0da24b4dd494f602ffa8c5c6e26aaeb52e1f4",
-    "core/crates/orcaxr-project/src/session/document.rs": "7098979639d4389c477eb9a85a8fd49a2732471e00ceb5e82415765b1cad1dda",
+    "core/crates/orcaxr-project/src/session/document.rs": "8f008e0f3bb23b1d838b44c2929b8c1303298e01e506c79754bad88249d81228",
     "core/crates/orcaxr-project/src/session/staging.rs": "34c5b91b036da9382f8081887fef39db444a351c490b8c96df4c8b3555964cd4",
     "core/crates/orcaxr-project/src/settings/catalog.rs": "13f1d8dd59121d164ecee91612c35ed9db12c1820dbe7d52f2979aa076014e09",
     "core/crates/orcaxr-project/src/settings/catalog_exchange.rs": "b200b99a1e78eae61ea31b892b432bcc81774e81bf5c578c16afe3fc107f201d",
@@ -416,7 +416,7 @@
     "core/crates/orcaxr-wasm/src/project.rs": "da536d5de488b58151497d2d2ebb54017614864627edcce325faf00130358042",
     "core/rust-toolchain.toml": "f0c85cfd5110f10de478e970a3c3caa2f96d55266b20724ddbb7f949f64ff05f",
     "tools/cross-platform/android-device-smoke.py": "0d8f6ef577b86734de4998c62826f22e156c90db9baddc30dbab244f1ee90d6c",
-    "tools/cross-platform/android-project-smoke.py": "2a2b2976fe1762cc0cfcd1c932decbe2f81a889ffb12e2bf92d6ea65baf0264f",
+    "tools/cross-platform/android-project-smoke.py": "59e0208969d0ff1a1e057cb17aae0a2cc4bc269b60fda710ad5d1c2033801ed5",
     "tools/cross-platform/android-smoke.py": "7450fe82a7f4a146f1057cc997bfb1e366368902fbf02709a82202fa29da3e1c",
     "tools/cross-platform/artifacts.py": "e6addc1df707757faf498ea6d1dca298f065038546958a0cee46d5e46205e8fd",
     "tools/cross-platform/build-android.py": "28f80643b01f0ef59c6e1cd645d80eb67742417d3ab218a0d6b5ad6cd0d1891e",
@@ -426,12 +426,12 @@
     "tools/cross-platform/test-zip-write.py": "af58df31f97dc99c8c644c4e820878265d9ebf5a0d2a0d622b00b63b11b5a2a0",
     "tools/cross-platform/verify-artifacts.py": "608f9bc1505fcc91843fe0aaf9c707bf28ecf10507481adfb2df2a69ac2f9ff3"
   },
-  "kind": "browser-wasm",
+  "kind": "browser-printer-wasm",
   "outputs": {
-    "orcaxr_core.d.ts": "c28428ccc28d67f9f93ad250d025d51becf5457a4c5887bf671b22a623cf2e08",
-    "orcaxr_core.js": "839ef54779f11f04d758abccb81644a2018d36dc4015ad500e7d940ab2b0f54b",
-    "orcaxr_core_bg.wasm": "82426cb8bba0a61bb3ba69bf9323d63d6886e15d9b349376b0114622b77bfe76",
-    "orcaxr_core_bg.wasm.d.ts": "b04678c581b5240329deecede9af99ec58c1183e19bc8097e875fa5af5b634ed"
+    "orcaxr_core.d.ts": "5e05373c9aa8b63495b68cc358be712158d98bffcbdf3532b32e494b0693535a",
+    "orcaxr_core.js": "4030d0f099b181b7bcb29b3f8a54c72fa5ba8ec10dc8868a4ca1e5e14d56f1c0",
+    "orcaxr_core_bg.wasm": "eaebc050bf2d57148b88ba6bc266050bfd6411afbecea102aa76632b1774a64b",
+    "orcaxr_core_bg.wasm.d.ts": "f24fcb6618ab8e6999deb73d874e61cec3b56a5cc05fcf68695be4683581ab3f"
   },
   "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",
   "schemaVersion": 1,

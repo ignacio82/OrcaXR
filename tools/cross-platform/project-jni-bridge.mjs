@@ -62,6 +62,7 @@ export function startProjectJni(profile = "debug") {
   signatures.newProjectCase = ["String", "double[]", "String", "String"];
   signatures.newProjectChecks = [];
   signatures.projectWorkspaceChecks = ["byte[]", "byte[]"];
+  signatures.projectRecoveryChecks = ["byte[]"];
   signatures.printerDiscoveryChecks = ["String", "String"];
   signatures.printerExchangesChecks = ["String"];
   signatures.credentialVaultChecks = [];

@@ -16,6 +16,16 @@ impl PreparedDocument {
         assets.bundle_fingerprint();
         Ok(Self { project, assets })
     }
+    /// What a session guard will report once this is adopted — project id,
+    /// semantic hash and asset bundle fingerprint — so a host can check a
+    /// recovery copy against the identities captured with it before adoption.
+    pub fn identity(&self) -> (&[u16], &str, &str) {
+        (
+            self.project.state().id.as_utf16(),
+            self.project.fingerprint(),
+            self.assets.bundle_fingerprint(),
+        )
+    }
 }
 
 /// Host-local operation identity. Dropping every ticket invalidates the pending

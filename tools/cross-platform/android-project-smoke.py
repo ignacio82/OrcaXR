@@ -8,7 +8,8 @@ the saved one from the recent documents, keeps unsaved changes on Cancel,
 saves them first on Save and drops them only on Discard, refuses a document handed over outside the system's
 document sharing, and after a restart reopens the recent document through its
 persisted grant; a shared copy reaches the share sheet without saving; Back
-with unsaved changes asks first, from any area. The
+with unsaved changes asks first, from any area; unsaved work survives the
+process being killed in the background and is restored in the next session. The
 saved file is checked to be a ZIP package.
 """
 import argparse
@@ -190,6 +191,30 @@ tap("Discard")
 deadline = time.monotonic() + 20
 while PACKAGE in focused():
     assert time.monotonic() < deadline, "The app stayed in front after Discard"
+    time.sleep(0.5)
+# Process death: unsaved work is kept as the app leaves the screen, and the
+# next session offers it back; the restored copy stays until discarded.
+launch()
+find("0 objects")
+import_cube(1)
+find("1 object", timeout=30)
+adb("shell", "input", "keyevent", "3")
+time.sleep(4)
+adb("shell", "am", "kill", PACKAGE)
+deadline = time.monotonic() + 20
+while subprocess.run(["adb", "-s", args.serial, "shell", "pidof", PACKAGE], capture_output=True, text=True).stdout.strip():
+    assert time.monotonic() < deadline, "The app's process outlived its kill"
+    time.sleep(0.5)
+adb("shell", "am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
+# The system restores the activity it ended, on the Project area it showed.
+find("Unsaved work: Untitled project", timeout=30)
+tap("Restore")
+find("Restored Untitled project. Save it to keep it.", timeout=30)
+find("1 object")
+tap("Discard")
+absent_deadline = time.monotonic() + 20
+while any((node.get("text") or "") == "Unsaved work: Untitled project" for node in nodes()):
+    assert time.monotonic() < absent_deadline, "The discarded copy is still offered"
     time.sleep(0.5)
 report = {
     "evidenceKind": "emulator-only",

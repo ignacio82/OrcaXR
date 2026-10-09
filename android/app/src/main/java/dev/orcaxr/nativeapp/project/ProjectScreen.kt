@@ -21,12 +21,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.core.ProjectIntents
+import dev.orcaxr.core.ProjectRecovery
+import java.text.DateFormat
+import java.util.Date
 import dev.orcaxr.nativeapp.R
 
 private fun text(units: List<Int>) = String(CharArray(units.size) { units[it].toChar() })
@@ -60,6 +64,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 if (model.busy || !view.ready) LinearProgressIndicator(Modifier.fillMaxWidth())
             }
         }
+        items(model.recoveries, key = { "recovery:" + it.session }) { entry -> Recovered(entry, model, view.ready && !model.busy) }
         item {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val enabled = view.ready && !model.busy
@@ -140,6 +145,26 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
             },
             dismissButton = { TextButton(onClick = { model.answerImport(false) }) { Text(stringResource(R.string.device_cancel)) } },
         )
+    }
+}
+
+@Composable
+private fun Recovered(entry: ProjectRecovery.Entry, model: ProjectModel, enabled: Boolean) {
+    val captured = remember(entry.capturedAtMs) {
+        DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(entry.capturedAtMs))
+    }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(stringResource(R.string.project_recovered_title, entry.projectName), style = MaterialTheme.typography.titleSmall)
+            Text(
+                stringResource(if (entry.damaged) R.string.project_recovered_damaged else R.string.project_recovered_detail, captured),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!entry.damaged) Button(onClick = { model.restore(entry) }, enabled = enabled) { Text(stringResource(R.string.project_restore)) }
+                OutlinedButton(onClick = { model.discardRecovered(entry) }, enabled = enabled) { Text(stringResource(R.string.project_discard)) }
+            }
+        }
     }
 }
 

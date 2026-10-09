@@ -1836,6 +1836,11 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_documentIdentity, document_identity, jcharArray,
+    handle: jlong,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_projectIdLength, project_id_length, jlong,
     handle: jlong,
 }

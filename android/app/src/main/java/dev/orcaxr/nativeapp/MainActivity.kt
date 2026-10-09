@@ -63,6 +63,13 @@ class MainActivity : ComponentActivity() {
         project.openIncoming(uri)
     }
 
+    override fun onStop() {
+        super.onStop()
+        // The system may end the app once it is out of sight: keep unsaved work now —
+        // unless the operator is leaving, having just chosen to discard it.
+        if (!isFinishing) project.captureNow()
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt(AREA, area)

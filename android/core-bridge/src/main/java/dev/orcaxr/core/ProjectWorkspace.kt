@@ -36,6 +36,10 @@ class ProjectWorkspace(
     private val clock: () -> Long = System::currentTimeMillis,
     private val words: () -> DoubleArray = { NewProjects.words() },
     private val resolver: LocalTimestampResolver = ProjectTimeZone(ZoneId.systemDefault()),
+    /** Where unsaved work is kept for a session the system ends; none keeps nothing. */
+    private val recovery: ProjectRecovery? = null,
+    /** Runs a task after a delay in milliseconds; closing the handle cancels it. */
+    private val schedule: (Long, () -> Unit) -> AutoCloseable = ::delayed,
 ) : AutoCloseable {
     companion object {
         /** The browser's archive budgets: its safe-ZIP defaults and multi-million facets. */
@@ -47,7 +51,24 @@ class ProjectWorkspace(
         /** The tree's largest page (the browser renders it in windows of this size). */
         private const val TREE_PAGE = 64L
         private const val MAX_NAME_UNITS = 256L
+        /** The browser's capture timing: 5 s after the latest edit, at most 30 s after the first unsaved one. */
+        const val CAPTURE_DELAY_MS = 5_000L
+        const val CAPTURE_LIMIT_MS = 30_000L
+        private val timers = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "project-recovery").also { it.isDaemon = true }
+        }
+
+        private fun delayed(delayMs: Long, task: () -> Unit): AutoCloseable {
+            val pending = timers.schedule(task, delayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            return AutoCloseable { pending.cancel(false) }
+        }
     }
+
+    /** This editing session, which its recovery copy is kept under. */
+    val session: String = java.util.UUID.randomUUID().toString()
+    private var observed: String? = null
+    private var firstEditAt: Long? = null
+    private var timer: AutoCloseable? = null
 
     private val lock = Any()
     private val listeners = LinkedHashSet<() -> Unit>()
@@ -132,8 +153,96 @@ class ProjectWorkspace(
                     undo = label(history.undoCount > 0, history.undoLabel), redo = label(history.redoCount > 0, history.redoLabel),
                 )
             }
+            observe(state)
             state to (completed.authority ?: throw ProjectFailure("The project did not answer."))
         }
+
+    /**
+     * Schedules a recovery capture when the project has unsaved changes it has
+     * not captured yet, as the browser does: 5 s after the latest change, and
+     * never later than 30 s after the first unsaved one. A clean project
+     * cancels it.
+     */
+    private fun observe(state: ProjectIntents.SessionAcknowledgement) {
+        if (recovery == null) return
+        synchronized(lock) {
+            if (state.history.dirtyCategories.isEmpty()) {
+                timer?.close()
+                timer = null
+                firstEditAt = null
+                observed = null
+                return
+            }
+            val identity = "${text(state.guard.projectId)}|${state.guard.revision}|${text(state.guard.semanticHash)}"
+            if (identity == observed) return
+            observed = identity
+            val now = clock()
+            val first = firstEditAt ?: now.also { firstEditAt = it }
+            timer?.close()
+            timer = schedule(maxOf(0, minOf(CAPTURE_DELAY_MS, first + CAPTURE_LIMIT_MS - now))) { captureRecovery() }
+        }
+    }
+
+    /**
+     * Captures this session's recovery copy now, with the identities the
+     * restore will be checked against; answers whether a copy was written. A
+     * clean project writes none.
+     */
+    fun captureRecovery(): CompletableFuture<Boolean> {
+        val store = recovery ?: return CompletableFuture.completedFuture(false)
+        synchronized(lock) {
+            timer = null
+            firstEditAt = null
+        }
+        return query().thenCompose { (state, guard) ->
+            if (state.history.dirtyCategories.isEmpty()) return@thenCompose CompletableFuture.completedFuture(false)
+            val identity = ProjectIdentity(text(state.guard.projectId), text(state.guard.semanticHash), text(state.guard.assetFingerprint))
+            val current = view
+            outcome(actor.exportDocument(guard, EXPORT) { _, source ->
+                store.capture(session, current.name, current.document, clock(), identity) { stream ->
+                    ProjectDocuments.save(source, object : ProjectDocumentOutput {
+                        override fun openOutput() = stream
+                    }, ARCHIVE)
+                }
+            }).thenApply { it is ProjectOutcome.Exported }
+        }
+    }
+
+    /** Forgets this session's recovery copy: its changes were discarded or saved. */
+    fun discardRecovery() {
+        synchronized(lock) {
+            timer?.close()
+            timer = null
+            firstEditAt = null
+            observed = null
+        }
+        recovery?.discard(session)
+    }
+
+    /**
+     * Restores a recovery copy in place of the current project, refused before
+     * adoption unless the copy is the project its record names (id, semantic
+     * hash, asset fingerprint), as the browser's recovery proof requires. The
+     * copy stays until the operator discards it.
+     */
+    fun restore(entry: ProjectRecovery.Entry): CompletableFuture<Unit> {
+        val store = recovery ?: return CompletableFuture.failedFuture(ProjectFailure("Nothing to restore."))
+        if (entry.damaged) return CompletableFuture.failedFuture(ProjectFailure("That copy is damaged and cannot be restored."))
+        return run({ _, record ->
+            actor.openDocument { scope ->
+                capturing(record) {
+                    val document = ProjectDocuments.prepare(scope, store.document(entry.session), ARCHIVE, resolver, ProjectIntegerProfile.CHROMIUM).document()
+                    if (document.identity() != entry.identity) {
+                        document.close()
+                        error("recovery_mismatch")
+                    }
+                    document
+                }
+            }
+        }) { result ->
+            if (result is ProjectOutcome.Opened || result is ProjectOutcome.OpenedWithoutSummary) update { it.copy(document = null) } else null
+        }
+    }
 
     /** Waits for the session to start and reads its first view. */
     fun ready(): CompletableFuture<ProjectView> = outcome(actor.ready).thenCompose { query() }.thenApply { view }
@@ -208,7 +317,13 @@ class ProjectWorkspace(
     fun save(output: ProjectDocumentOutput, name: String): CompletableFuture<Unit> = run({ guard, record ->
         actor.saveDocument(guard, EXPORT) { _, source -> capturing(record) { ProjectDocuments.save(source, output, ARCHIVE) } }
     }) { result ->
-        if (result is ProjectOutcome.Exported) update { it.copy(document = name) } else null
+        if (result is ProjectOutcome.Exported) {
+            update { it.copy(document = name) }
+            // The work is in a document now; its recovery copy is no longer needed.
+            if (result.checkpoint == ProjectCheckpoint.SAVED) recovery?.discard(session)
+        } else {
+            null
+        }
     }
 
     /** Writes a copy of the project as a 3MF document (to share it); the project's saved state is untouched. */
@@ -243,6 +358,7 @@ class ProjectWorkspace(
     fun redo(): CompletableFuture<Unit> = step(false)
 
     override fun close() {
+        synchronized(lock) { timer?.close() }
         actor.close()
         synchronized(lock) { listeners.clear() }
     }

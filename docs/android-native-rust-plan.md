@@ -1840,8 +1840,13 @@ storage journeys on phone, tablet, and desktop-sized windows.
   New, Open (picked, recent or handed over) and Back (from any area) ask
   Save/Discard/Cancel when the project's changes are unsaved; Save writes
   first and goes on only once confirmed (emulator-verified for a document
-  already saved). Recovery storage, window-close/update guards and
-  process-death tests remain.
+  already saved). Recovery storage now keeps unsaved work per session
+  (`ProjectRecovery`, the browser's capture timing and budget, atomic
+  replacement, digests and identity-checked restore before adoption) and
+  captures when the app leaves the screen; 24 host checks pass and the
+  emulator smoke restores work after the process is killed in the
+  background. Process death during a capture's write and commit is covered
+  only by host checks; window-close and update guards remain.
 - [ ] Introduce document-session ownership for multiple windows. Different
   documents may coexist; reopening an already-owned document focuses its owner
   or opens an explicit read-only view. External changes require conflict handling

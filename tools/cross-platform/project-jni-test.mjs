@@ -301,6 +301,9 @@ try {
   // The Project area's session: start, import, undo/redo, Save/Open, New project, recent documents.
   const projectWorkspaceChecks = jvm.call("projectWorkspaceChecks", decodeBytes("stl-binary/cube"), decodeBytes("obj/mtllib-unresolved"));
   assert.equal(projectWorkspaceChecks, 27);
+  // Recovery of unsaved work: the store, the browser's capture timing, checked restore.
+  const projectRecoveryChecks = jvm.call("projectRecoveryChecks", decodeBytes("stl-binary/cube"));
+  assert.equal(projectRecoveryChecks, 24);
   const archiveCase = JSON.parse(
     await readFile(new URL("testdata/cross-platform/foreign-import-vectors.json", root)),
   ).cases.find((c) => c.name === ACTOR_ARCHIVE_CASE);
@@ -1283,6 +1286,7 @@ try {
     models,
     actorImportChecks,
     projectWorkspaceChecks,
+    projectRecoveryChecks,
     actorArchiveChecks,
     providerDocumentChecks,
     ...preflights,

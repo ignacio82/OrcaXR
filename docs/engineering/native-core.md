@@ -4279,7 +4279,36 @@ to a document already saved; choosing a destination from that dialog is
 unexercised. Share writes the copy to the app's cache (replacing the one shared before)
 and offers it through `SharedProjects`, a read-only, unexported provider
 serving only files directly in that folder by exact name, with a one-time
-read grant. Recovery storage, the window-close and update guards and
+read grant.
+
+Unsaved work survives the system ending the app, as the browser's recovery
+store keeps it. `ProjectRecovery` (core-bridge) keeps one complete 3MF per
+editing session in the app's private files (excluded from backups and device
+transfer) with its project name, document, capture time, length, SHA-256 and
+the identities a session guard reports (project id, semantic hash, asset
+fingerprint), within the browser's 512 MiB budget; a copy is written to a
+temporary file and renamed over the previous one only once complete, and one
+whose bytes no longer match its record is listed as damaged and never
+offered. `ProjectWorkspace` captures on the browser's timing — 5 s after the
+latest change, never later than 30 s after the first unsaved one, nothing
+for a clean project — through the actor's `exportDocument`, so a capture
+never marks the project saved; it forgets its copy once the work is saved
+or its changes are discarded. Restoring checks the copy before adoption, as
+the browser's recovery proof does: the prepared document's identities
+(`ProjectDocument.identity`, from the shared core's `PreparedDocument`)
+must be those recorded, or the restore is refused and the project is
+untouched; the copy stays until the operator discards it. The app also
+captures at once when it leaves the screen with unsaved changes (not when
+the operator is leaving after choosing Discard), since the system may end it
+there, and lists earlier sessions' copies with Restore and Discard.
+`ProjectRecoveryChecks` (24 checks over real JNI) cover an interrupted
+capture keeping the previous copy, the budget, damage, session names, the
+capture timing with a controlled clock and scheduler, a clean project
+cancelling it, discard on save and on Discard, a forged identity refused
+before adoption, and a later session restoring the copy. The emulator smoke
+imports a model, sends the app home, kills its process, relaunches (the
+system restores the Project area the activity showed), restores the work and
+discards the copy. The window-close and update guards and
 multi-window ownership remain.
 
 ### Android Device area

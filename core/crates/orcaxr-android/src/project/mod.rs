@@ -786,6 +786,22 @@ fn take_document(handle: jlong) -> Result<PreparedDocument> {
     registry().close(handle)?;
     Ok(document)
 }
+/// A prepared document's project id, semantic hash and asset fingerprint, one per line.
+fn document_identity(env: &mut JNIEnv<'_>, handle: jlong) -> Result<jcharArray> {
+    let units = registry().slot(handle)?.with(|record| match record {
+        Some(Record::Document(document)) => {
+            let (id, hash, assets) = document.identity();
+            let mut units = id.to_vec();
+            units.push(u16::from(b'\n'));
+            units.extend(hash.encode_utf16());
+            units.push(u16::from(b'\n'));
+            units.extend(assets.encode_utf16());
+            Ok(units)
+        }
+        _ => Err("invalid_handle_kind"),
+    })?;
+    text(env, &units)
+}
 fn finish_open(_: &mut JNIEnv<'_>, handle: jlong, ticket: jlong, document: jlong) -> Result<jlong> {
     let document = take_document(document)?;
     let ticket = with_open(ticket, |t| Ok(t.clone()))?;
