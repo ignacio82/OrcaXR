@@ -80,6 +80,8 @@ data class ProjectView(
     val document: String? = null,
     /** The state the session last acknowledged, once it has answered. */
     val revision: ProjectRevision? = null,
+    /** The bed the workspace places on, from the project's own configuration and its active plate's tower. */
+    val bed: WorkspaceBed = WorkspaceBed.DEFAULT,
     /** The active plate, once the session has one. */
     val activePlate: ProjectPlateState? = null,
     /** Every plate, in the project's plate order (the browser's plate bar). */
@@ -122,8 +124,6 @@ class ProjectWorkspace(
         val ARCHIVE = ProjectArchiveOptions(1L shl 30, 4096, 512L shl 20, 2L shl 30, 16_000_000, 16_000_000,
             2_000_000, 64L shl 20, 256_000_000, 4096, 512L shl 20, 2L shl 30, 1_000_000)
         val EXPORT = ProjectExportLimits(512L shl 20, 4096, 2L shl 30)
-        /** Where an imported model lands without a printer profile: the browser's 200 mm plate. */
-        val PLACEMENT = ProjectModelPlacement(200.0, 200.0, dropToBed = true)
         /** The tree's largest page (the browser renders it in windows of this size). */
         /** Vertices per mesh-packet chunk: small enough for 16-bit indices. */
         const val MESH_CHUNK_VERTICES = 65_535L
@@ -312,10 +312,13 @@ class ProjectWorkspace(
         }
         val selection = chosen
         val page = treePage(snapshot, expansion(snapshot), selection.refs, selection.primary)
+        val active = plates.firstOrNull { it.active }
+        // The bed the project's own configuration states, with the active plate's wipe-tower keep-out.
+        val bed = snapshot.workspaceBed(active?.id)
         return { view: ProjectView ->
             view.copy(
                 name = name, plates = count, rows = page?.rows.orEmpty(), totalRows = page?.totalRows ?: 0,
-                activePlate = plates.firstOrNull { it.active }, plateList = plates, selection = selection,
+                activePlate = active, plateList = plates, selection = selection, bed = bed,
             )
         }
     }
@@ -704,10 +707,12 @@ class ProjectWorkspace(
 
     /** Prepares a model import (STL/OBJ/AMF/ZIP) against the current project; nothing changes until it is committed. */
     fun prepareImport(input: ProjectDocumentInput, filename: String): CompletableFuture<ProjectActorImport> = run({ guard, record ->
+        // Centred on the project's own bed and dropped onto it, as the browser places an import.
+        val placement = view.bed.let { ProjectModelPlacement(it.widthMm, it.depthMm, dropToBed = true) }
         actor.prepareImport(guard) { scope, base ->
             capturing(record) {
                 val upload = ProjectDocuments.stageModel(scope, input, ProjectModelImportOptions(), resolver, ProjectIntegerProfile.CHROMIUM)
-                base.prepareModel(upload, filename, NewProjects.timestamp(clock()), PLACEMENT)
+                base.prepareModel(upload, filename, NewProjects.timestamp(clock()), placement)
             }
         }
     }) { result -> (result as? ProjectOutcome.ImportPrepared)?.candidate }
@@ -742,6 +747,154 @@ class ProjectWorkspace(
                     else -> throw failure(result, null)
                 }
             }
+    }
+
+    // --- Placement edits ---------------------------------------------------------------------
+    // The browser workspace's placement actions (CanonicalWorkspaceController's mirror, resets,
+    // centre, scale to fit, lay flat, drop to bed and arrange): planned by the shared core on
+    // the actor's authority from exactly the state the guard names, on the project's own bed,
+    // and applied as one guarded, undoable `setInstanceTransforms` under the browser's gesture.
+
+    /** The transform sequence `batch:<n>` gestures draw from (the browser's `transformSequence`). */
+    private val transformSequence = java.util.concurrent.atomic.AtomicLong()
+
+    /** What a placement planned: the changes to submit under [gesture] and what it reports. */
+    private class Planned<T>(val changes: List<ProjectIntents.InstanceTransform>, val gesture: String, val report: T)
+
+    /**
+     * Plans on the actor's authority against the state the current guard
+     * names (refused as changed when another edit landed first), then submits
+     * the changes as one `setInstanceTransforms` under that guard. No changes
+     * submit nothing; an edit that changes nothing leaves history alone.
+     */
+    private fun <T> place(plan: (ProjectSession, WorkspaceBed) -> Planned<T>): CompletableFuture<T> =
+        query().thenCompose { (state, _) ->
+            inspect { session ->
+                session.snapshot().use { snapshot ->
+                    if (snapshot.revision() != state.guard.revision) throw ProjectFailure("The project changed meanwhile; try again.")
+                    plan(session, snapshot.workspaceBed(view.activePlate?.id))
+                }
+            }.thenCompose { planned ->
+                if (planned.changes.isEmpty()) return@thenCompose CompletableFuture.completedFuture(planned.report)
+                val command = ProjectIntents.Command.SetInstanceTransforms(ProjectIntents.SetInstanceTransforms(planned.changes, units(planned.gesture)))
+                outcome(actor.submit(ProjectIntents.SessionOperation.Execute(ProjectIntents.GuardedIntent(state.guard, ProjectIntents.Intent(1, command)))))
+                    .thenCompose { result -> query().handle { _, _ -> result } }
+                    .thenApply { result ->
+                        val completed = result as? ProjectOutcome.Completed ?: throw failure(result, null)
+                        when (val reply = completed.reply.result) {
+                            is ProjectIntents.SessionResult.Acknowledged, is ProjectIntents.SessionResult.ReceiptUnavailable -> planned.report
+                            is ProjectIntents.SessionResult.Error -> throw ProjectFailure(
+                                when (reply.value) {
+                                    ProjectIntents.SessionError.Stale -> "The project changed meanwhile; try again."
+                                    ProjectIntents.SessionError.Busy -> "The project is busy; try again when the current operation finishes."
+                                    ProjectIntents.SessionError.ResourceLimit -> "The project is too large for this device."
+                                    else -> "The project refused the change."
+                                },
+                            )
+                            else -> throw ProjectFailure("Unexpected answer from the project.")
+                        }
+                    }
+            }
+        }
+
+    /** The core's plan for [request], or its refusal in the browser's words. */
+    private fun planned(session: ProjectSession, request: ProjectIntents.PlacementRequest): ProjectIntents.PlacementPlan =
+        when (val reply = session.planPlacement(request)) {
+            is ProjectIntents.PlacementReply.Plan -> reply.value
+            is ProjectIntents.PlacementReply.Refused -> throw ProjectFailure(text(reply.value.message))
+        }
+
+    private fun ids(instanceIds: List<String>) = instanceIds.map(::units)
+
+    private fun <T> placement(gesture: () -> String, request: (WorkspaceBed) -> ProjectIntents.PlacementRequest, report: (ProjectIntents.PlacementPlan) -> T) =
+        place { session, bed -> planned(session, request(bed)).let { Planned(it.changes, gesture(), report(it)) } }
+
+    /**
+     * "Drop to bed": each instance moved down (or up) until its lowest model
+     * point rests on the bed, as one entry; answers each instance's lowest point
+     * before and its move.
+     */
+    fun dropToBed(instanceIds: List<String>): CompletableFuture<List<ProjectIntents.PlacementDrop>> =
+        placement({ PlacementGestures.batch(transformSequence.incrementAndGet()) }, {
+            ProjectIntents.PlacementRequest.DropToBed(ProjectIntents.PlacementSelection(ids(instanceIds)))
+        }) { it.drops }
+
+    /** "Mirror" across one printer axis. */
+    fun mirror(instanceIds: List<String>, axis: ProjectIntents.PlacementAxis): CompletableFuture<Unit> =
+        placement({ PlacementGestures.mirror(axis) }, {
+            ProjectIntents.PlacementRequest.Mirror(ProjectIntents.PlacementMirror(ids(instanceIds), axis))
+        }) { }
+
+    /** "Reset rotation", "Reset scale" or both. */
+    fun resetTransforms(instanceIds: List<String>, target: TransformReset): CompletableFuture<Unit> =
+        placement({ target.gesture }, {
+            val selection = ProjectIntents.PlacementSelection(ids(instanceIds))
+            when (target) {
+                TransformReset.ROTATION -> ProjectIntents.PlacementRequest.ResetRotation(selection)
+                TransformReset.SCALE -> ProjectIntents.PlacementRequest.ResetScale(selection)
+                TransformReset.BOTH -> ProjectIntents.PlacementRequest.ResetTransform(selection)
+            }
+        }) { }
+
+    /** "Center on plate": the selection's bounds centred on the project's bed. */
+    fun centerOnPlate(instanceIds: List<String>): CompletableFuture<Unit> =
+        placement({ PlacementGestures.CENTER }, { bed ->
+            ProjectIntents.PlacementRequest.CenterOnPlate(ProjectIntents.PlacementCenter(ids(instanceIds), listOf(bed.widthMm, bed.depthMm)))
+        }) { }
+
+    /**
+     * "Scale to fit the build volume" (the bed and the project's printable
+     * height), then placed on the bed; answers how many instances changed (0
+     * when the selection already fills it, committing nothing). A project that
+     * states no printable height is refused in the browser's words.
+     */
+    fun scaleToFit(instanceIds: List<String>): CompletableFuture<Int> =
+        placement({ PlacementGestures.SCALE_TO_FIT }, { bed ->
+            val height = bed.printableHeightMm ?: throw ProjectFailure(PlacementGestures.NO_PRINTABLE_HEIGHT)
+            ProjectIntents.PlacementRequest.ScaleToFit(ProjectIntents.PlacementScaleToFit(ids(instanceIds), listOf(bed.widthMm, bed.depthMm, height)))
+        }) { it.changes.size }
+
+    /** "Lay on face": the instance turned so the face with [localNormal] (in its own frame) rests on the bed. */
+    fun layOnFace(instanceId: String, localNormal: List<Double>): CompletableFuture<Unit> =
+        placement({ PlacementGestures.LAY_ON_FACE }, {
+            ProjectIntents.PlacementRequest.LayOnFace(ProjectIntents.PlacementLayOnFace(units(instanceId), localNormal))
+        }) { }
+
+    /** "Lay on face" by a picked facet: facet [triangle] of volume [volumeId]'s mesh rests on the bed. */
+    fun layOnFacet(instanceId: String, volumeId: String, triangle: Long): CompletableFuture<Unit> =
+        placement({ PlacementGestures.LAY_ON_FACE }, {
+            ProjectIntents.PlacementRequest.LayOnFacet(ProjectIntents.PlacementLayOnFacet(units(instanceId), units(volumeId), triangle))
+        }) { }
+
+    /**
+     * "Arrange" plate [plateId] on the project's bed, keeping its wipe tower
+     * clear, as one entry; answers the arrangement (what moved, what did not
+     * fit, what stayed). An arrangement that moves nothing commits nothing.
+     */
+    fun arrangePlate(plateId: String): CompletableFuture<ProjectIntents.Arrangement> = place { session, _ ->
+        val bed = session.snapshot().use { it.workspaceBed(plateId) }
+        // An edge JSON cannot carry (an infinite tower width) is not a rectangle: the core
+        // refuses an inverted one with the browser's own words, as it refuses that edge.
+        val exclusions = listOfNotNull(bed.keepOut).map { keep ->
+            if (listOf(keep.minX, keep.minY, keep.maxX, keep.maxY).all(Double::isFinite)) ProjectIntents.ArrangeRegion(keep.minX, keep.minY, keep.maxX, keep.maxY)
+            else ProjectIntents.ArrangeRegion(1.0, 1.0, 0.0, 0.0)
+        }
+        val absent = ProjectIntents.OptionalFinite.Absent(ProjectIntents.Empty)
+        val request = ProjectIntents.ArrangeRequest(
+            units(plateId),
+            ProjectIntents.ArrangeConstraintsInput(
+                listOf(bed.widthMm, bed.depthMm), absent, absent, exclusions, emptyList(),
+                ProjectIntents.OptionalVolumeRoleNames.Absent(ProjectIntents.Empty),
+            ),
+        )
+        when (val reply = session.planArrangement(request)) {
+            is ProjectIntents.ArrangeReply.Arrangement -> Planned(
+                reply.value.placements.map { ProjectIntents.InstanceTransform(it.instanceId, it.transform) },
+                PlacementGestures.arrange(plateId),
+                reply.value,
+            )
+            is ProjectIntents.ArrangeReply.Refused -> throw ProjectFailure(text(reply.value.message))
+        }
     }
 
     private fun step(undo: Boolean): CompletableFuture<Unit> = query().thenCompose { (state, _) ->

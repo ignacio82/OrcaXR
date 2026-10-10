@@ -6,7 +6,7 @@ import kotlin.math.max
 /**
  * Where a G-code preview sits on the bed, in millimetres: the bed drawn
  * under it (from the origin) and the area to frame. G-code carries no bed
- * size, so the default plate grows to reach the toolpath's far corner.
+ * size, so the project's bed grows to reach the toolpath's far corner.
  */
 data class PreviewFraming(
     val bedWidthMm: Double,
@@ -22,11 +22,17 @@ data class PreviewFraming(
         private const val GRID_MM = 10.0
         private const val MARGIN_MM = 5.0
 
-        /** The framing for [toolpath] (its render-space bounds), or the whole default bed when it draws nothing. */
-        fun of(toolpath: ToolpathGeometry?, defaultBedMm: Double = 200.0): PreviewFraming {
-            require(defaultBedMm in 1.0..MAX_BED_MM)
+        /** A bed side the renderer can draw: [mm] held within 1 mm and [MAX_BED_MM]. */
+        fun drawable(mm: Double): Double = mm.coerceIn(1.0, MAX_BED_MM)
+
+        /**
+         * The framing for [toolpath] (its render-space bounds) on a bed of
+         * [bedWidthMm] × [bedDepthMm], or that whole bed when it draws nothing.
+         */
+        fun of(toolpath: ToolpathGeometry?, bedWidthMm: Double = 200.0, bedDepthMm: Double = bedWidthMm): PreviewFraming {
+            require(bedWidthMm in 1.0..MAX_BED_MM && bedDepthMm in 1.0..MAX_BED_MM)
             if (toolpath == null || toolpath.segments == 0) {
-                return PreviewFraming(defaultBedMm, defaultBedMm, 0.0, 0.0, defaultBedMm, defaultBedMm)
+                return PreviewFraming(bedWidthMm, bedDepthMm, 0.0, 0.0, bedWidthMm, bedDepthMm)
             }
             val center = toolpath.center
             val half = toolpath.halfExtent
@@ -35,9 +41,9 @@ data class PreviewFraming(
             val maxX = (center[0] + half[0]) * 1000.0
             val minY = -(center[2] + half[2]) * 1000.0
             val maxY = -(center[2] - half[2]) * 1000.0
-            fun bed(far: Double) = max(defaultBedMm, ceil(far / GRID_MM) * GRID_MM).coerceAtMost(MAX_BED_MM)
+            fun bed(side: Double, far: Double) = max(side, ceil(far / GRID_MM) * GRID_MM).coerceAtMost(MAX_BED_MM)
             return PreviewFraming(
-                bed(maxX), bed(maxY),
+                bed(bedWidthMm, maxX), bed(bedDepthMm, maxY),
                 minX - MARGIN_MM, minY - MARGIN_MM, maxX + MARGIN_MM, maxY + MARGIN_MM,
             )
         }

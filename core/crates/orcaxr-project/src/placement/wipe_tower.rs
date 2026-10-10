@@ -209,6 +209,11 @@ fn printable_area_rect(value: Option<&Value>) -> Option<Rect> {
     .valid()
 }
 
+/// `printableAreaRect` as `[xMin, yMin, xMax, yMax]`, for the workspace bed.
+pub(super) fn printable_area(value: Option<&Value>) -> Option<[f64; 4]> {
+    printable_area_rect(value).map(|r| [r.x_min, r.y_min, r.x_max, r.y_max])
+}
+
 const LABELS: [&str; 8] = [
     "back-left",
     "back-right",

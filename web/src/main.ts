@@ -12,6 +12,13 @@ import * as xb from 'xrblocks';
 import * as uikit from '@pmndrs/uikit';
 
 import { OrcaWorkspace, type WorkspacePresetOption } from './workspace/OrcaWorkspace';
+import {
+  TRANSFORM_FIELD_TITLES,
+  transformFieldInput,
+  transformFieldText,
+  transformFieldValue,
+  transformFieldValues,
+} from './workspace/TransformFields';
 import { SlicerClient } from './slicer/SlicerClient';
 import { PRINTER_TRANSPORT_PREFERENCE, PrinterConnections, printerTransportChoice } from './printer/PrinterConnections';
 import type { MoonrakerConnection } from './printer/MoonrakerTransport';
@@ -5289,42 +5296,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       let currentSettingsTool = '';
       const updateToolSettings = () => {
         const s = uiState.get();
-        const hasSelection = !!workspace.getSelectedModelScale();
+        const selectedTransform = workspace.getSelectedModelTransform();
 
         // Colour painting has its own canonical panel; this legacy surface only
         // covers the numeric transform tools.
-        if (hasSelection && (s.activeTool === 'move' || s.activeTool === 'rotate' || s.activeTool === 'scale')) {
+        if (selectedTransform && (s.activeTool === 'move' || s.activeTool === 'rotate' || s.activeTool === 'scale')) {
+          const tool = s.activeTool;
           toolSettingsPanel.style.display = 'block';
 
-          const pos = workspace.getSelectedModelPosition() || new THREE.Vector3();
-          const rot = workspace.getSelectedModelRotation() || new THREE.Euler();
-          const scl = workspace.getSelectedModelScale() || new THREE.Vector3(1, 1, 1);
+          const [xVal, yVal, zVal] = transformFieldValues(tool, selectedTransform);
 
-          let xVal = 0,
-            yVal = 0,
-            zVal = 0;
-          if (s.activeTool === 'move') {
-            xVal = pos.x;
-            yVal = pos.y;
-            zVal = pos.z;
-          } else if (s.activeTool === 'rotate') {
-            xVal = THREE.MathUtils.radToDeg(rot.x);
-            yVal = THREE.MathUtils.radToDeg(rot.y);
-            zVal = THREE.MathUtils.radToDeg(rot.z);
-          } else if (s.activeTool === 'scale') {
-            xVal = scl.x * 100;
-            yVal = scl.y * 100;
-            zVal = scl.z * 100;
-          }
-
-          if (currentSettingsTool !== s.activeTool) {
-            currentSettingsTool = s.activeTool;
-            let title = '';
-            if (s.activeTool === 'move') title = 'Move (mm)';
-            else if (s.activeTool === 'rotate') title = 'Rotate (deg)';
-            else if (s.activeTool === 'scale') title = 'Scale (%)';
-
-            toolSettingsTitle.textContent = title;
+          if (currentSettingsTool !== tool) {
+            currentSettingsTool = tool;
+            toolSettingsTitle.textContent = TRANSFORM_FIELD_TITLES[tool];
             toolSettingsContent.innerHTML = `
           <div style="display:flex; flex-direction:column; gap:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -5348,19 +5332,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const onTransformChange = async () => {
               try {
-                const x = parseFloat(inX.value) || 0;
-                const y = parseFloat(inY.value) || 0;
-                const z = parseFloat(inZ.value) || 0;
-                if (s.activeTool === 'move') {
+                const [x, y, z] = transformFieldInput(tool, [
+                  transformFieldValue(inX.value),
+                  transformFieldValue(inY.value),
+                  transformFieldValue(inZ.value),
+                ]);
+                if (tool === 'move') {
                   await workspace.setSelectedModelPosition(x, y, z);
-                } else if (s.activeTool === 'rotate') {
-                  await workspace.setSelectedModelRotation(
-                    THREE.MathUtils.degToRad(x),
-                    THREE.MathUtils.degToRad(y),
-                    THREE.MathUtils.degToRad(z),
-                  );
-                } else if (s.activeTool === 'scale') {
-                  await workspace.setSelectedModelScale(x / 100, y / 100, z / 100);
+                } else if (tool === 'rotate') {
+                  await workspace.setSelectedModelRotation(x, y, z);
+                } else {
+                  await workspace.setSelectedModelScale(x, y, z);
                 }
               } catch (error) {
                 if (inX.isConnected) workspace.setStatus(`Transform failed: ${(error as Error).message}`);
@@ -5377,9 +5359,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           const inX = byId('ts-x') as HTMLInputElement;
           const inY = byId('ts-y') as HTMLInputElement;
           const inZ = byId('ts-z') as HTMLInputElement;
-          if (inX && document.activeElement !== inX) inX.value = xVal.toFixed(2);
-          if (inY && document.activeElement !== inY) inY.value = yVal.toFixed(2);
-          if (inZ && document.activeElement !== inZ) inZ.value = zVal.toFixed(2);
+          if (inX && document.activeElement !== inX) inX.value = transformFieldText(xVal);
+          if (inY && document.activeElement !== inY) inY.value = transformFieldText(yVal);
+          if (inZ && document.activeElement !== inZ) inZ.value = transformFieldText(zVal);
         } else {
           toolSettingsPanel.style.display = 'none';
           currentSettingsTool = '';

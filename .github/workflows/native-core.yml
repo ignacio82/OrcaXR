@@ -173,6 +173,9 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-fresh-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/plate-projection-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slicing-configuration-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/workspace-bed-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/transform-field-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/placement-edit-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-summary-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/action-capability-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/capability-exchange-vectors.mjs

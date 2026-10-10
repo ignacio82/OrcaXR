@@ -1,7 +1,7 @@
 // Bit-exact references for the ECMAScript `Math` functions the native core
 // reproduces (`orcaxr_project::js_math`): sin and cos (V8's vendored glibc),
-// tan, exp and acos (fdlibm), hypot (V8's scaled, compensated sum) and round. Inputs cover every
-// range-reduction branch of the trig routines, their thresholds, signed zeros,
+// tan, exp, acos, asin and atan2 (fdlibm), hypot (V8's scaled, compensated
+// sum) and round. Inputs cover every range-reduction branch of the trig routines, their thresholds, signed zeros,
 // non-finite values and seeded random doubles across magnitudes. Values are
 // IEEE-754 bit patterns in hex, so no decimal parsing sits between V8 and Rust.
 import assert from "node:assert/strict";
@@ -132,6 +132,44 @@ for (let i = 0; i < 500; i += 1) tan.add(bits(logUniform(1e-20, 1e-6)));
 for (let i = 0; i < 500; i += 1) tan.add(bits(logUniform(1e3, 1e308)));
 const tanRows = [...tan].sort().map((hex) => [hex, bits(Math.tan(fromBits(hex)))]);
 
+// asin and atan2 (three's Euler.setFromRotationMatrix), drawn last so the
+// inputs above stay as they were: asin's 2**-27, 0.5 and 0.975 thresholds
+// with neighbours, ±1 and beyond, the tails near ±1 and seeded doubles;
+// atan2's signed zeros, infinities and NaN in either place, x = 1 (plain
+// atan), every argument-reduction band of atan, |y/x| beyond 2**60 both
+// ways, rotation-matrix-sized pairs and seeded pairs across magnitudes.
+const asin = new Set();
+for (const value of [0, -0, 1, -1, 0.5, -0.5, 0.975, -0.975, 1 + Number.EPSILON, -1 - Number.EPSILON, 2, Infinity, -Infinity, NaN])
+  asin.add(bits(value));
+for (const high of [0x3e400000, 0x3fe00000, 0x3fef3333, 0x3fefffff]) {
+  for (const low of [0, 1, 0x33333333, 0x7fffffff, 0xffffffff]) {
+    for (const sign of [0n, 1n << 63n]) {
+      const value = fromBits(((sign | (BigInt(high) << 32n) | BigInt(low)) & 0xffffffffffffffffn).toString(16));
+      asin.add(bits(value));
+      asin.add(((BigInt(`0x${bits(value)}`) - 1n) & 0xffffffffffffffffn).toString(16).padStart(16, "0"));
+    }
+  }
+}
+for (let i = 0; i < 3000; i += 1) asin.add(bits(uniform(-1, 1)));
+for (let i = 0; i < 500; i += 1) asin.add(bits((1 - Math.abs(logUniform(1e-16, 1e-2))) * (unit() < 0.5 ? -1 : 1)));
+for (let i = 0; i < 300; i += 1) asin.add(bits(logUniform(1e-20, 1e-6)));
+const asinRows = [...asin].sort().map((hex) => [hex, bits(Math.asin(fromBits(hex)))]);
+
+const atan2Rows = [];
+const atan2Cases = [];
+const specials = [0, -0, 1, -1, Infinity, -Infinity, NaN, Number.MIN_VALUE, -Number.MAX_VALUE, 0.5];
+for (const y of specials) for (const x of specials) atan2Cases.push([y, x]);
+// atan's reduction bands: |t| below 2**-29, 0.4375, 0.6875, 1.1875, 2.4375 and 2**66.
+for (const t of [1e-10, 0.3, 0.4375, 0.5, 0.6875, 0.9, 1.1875, 2, 2.4375, 10, 2 ** 66, 1e30]) {
+  atan2Cases.push([t, 1], [-t, 1], [t, -1], [-t, -1], [1, t], [-1, -t]);
+}
+for (const [y, x] of [[1e30, 1e-40], [-1e30, -1e-40], [1e-40, -1e30], [-1e-40, -1e30], [1e-40, 1e30], [2 ** 61, 1], [2 ** 61, -1], [1, -(2 ** 61)]])
+  atan2Cases.push([y, x]);
+for (let i = 0; i < 2000; i += 1) atan2Cases.push([uniform(-1, 1), uniform(-1, 1)]);
+for (let i = 0; i < 1000; i += 1) atan2Cases.push([logUniform(1e-200, 1e200), logUniform(1e-200, 1e200)]);
+for (let i = 0; i < 500; i += 1) atan2Cases.push([uniform(-1, 1), 1]);
+for (const [y, x] of atan2Cases) atan2Rows.push([[bits(y), bits(x)], bits(Math.atan2(y, x))]);
+
 const source = "tools/cross-platform/js-math-vectors.mjs";
 const output =
   JSON.stringify(
@@ -145,6 +183,8 @@ const output =
       tan: tanRows,
       round: roundRows,
       hypot: hypotRows,
+      asin: asinRows,
+      atan2: atan2Rows,
     },
     null,
     1,
@@ -152,4 +192,4 @@ const output =
 const path = new URL("testdata/cross-platform/js-math-vectors.json", root);
 if (process.argv.includes("--write")) writeFileSync(path, output);
 else assert.equal(readFileSync(path, "utf8"), output, "JS Math reference drift");
-console.log(`JS Math references: ${trigRows.length} sin/cos, ${expRows.length} exp, ${acosRows.length} acos, ${tanRows.length} tan, ${roundRows.length} round, ${hypotRows.length} hypot (V8 ${process.versions.v8})`);
+console.log(`JS Math references: ${trigRows.length} sin/cos, ${expRows.length} exp, ${acosRows.length} acos, ${tanRows.length} tan, ${roundRows.length} round, ${hypotRows.length} hypot, ${asinRows.length} asin, ${atan2Rows.length} atan2 (V8 ${process.versions.v8})`);

@@ -1,5 +1,5 @@
 //! `js_math` against V8 (`js-math-vectors.json`): sin/cos through every glibc
-//! range-reduction branch, fdlibm exp and acos and V8's hypot, compared as bit
+//! range-reduction branch, fdlibm exp, acos, asin and atan2 and V8's hypot, compared as bit
 //! patterns.
 use orcaxr_project::js_math;
 use serde_json::Value;
@@ -102,4 +102,27 @@ fn min_and_max_keep_javascript_nan_and_signed_zero_rules() {
     );
     assert_eq!(js_math::min(2.0, -3.0), -3.0);
     assert_eq!(js_math::max(2.0, -3.0), 2.0);
+}
+
+#[test]
+fn asin_matches_v8_bit_for_bit() {
+    let rows = corpus()["asin"].as_array().unwrap().clone();
+    assert!(rows.len() > 3_000);
+    for row in rows {
+        let x = f(&row[0]);
+        assert!(same(js_math::asin(x), f(&row[1])), "asin({x:e})");
+    }
+}
+
+#[test]
+fn atan2_matches_v8_bit_for_bit() {
+    let rows = corpus()["atan2"].as_array().unwrap().clone();
+    assert!(rows.len() > 3_000);
+    for row in rows {
+        let (y, x) = (f(&row[0][0]), f(&row[0][1]));
+        assert!(
+            same(js_math::atan2(y, x), f(&row[1])),
+            "atan2({y:e}, {x:e})"
+        );
+    }
 }

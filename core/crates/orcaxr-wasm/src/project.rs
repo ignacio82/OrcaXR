@@ -1431,6 +1431,12 @@ impl CapturedProject {
             &plate_id,
         )))
     }
+    /// The bed the workspace reads from this project and plate `plateId`'s
+    /// tower keep-out: `{"plateId": string | null}` in, the workspace bed
+    /// document (`orcaxr_project::placement::bed`) out.
+    pub fn workspace_bed(&self, request: &str) -> Result<String, JsValue> {
+        orcaxr_project::placement::bed::state_bed_json(self.inner.state(), request).map_err(error)
+    }
     pub fn id_length(&self) -> usize {
         self.inner.state().id.as_utf16().len()
     }

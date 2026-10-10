@@ -42,6 +42,8 @@ import { replayRememberedCredentials } from "./printer-credentials-replay.mjs";
 import { replayExternalSlicer } from "./external-slicer-replay.mjs";
 import { plateProjectionCases, replayPlateProjection } from "./plate-projection-replay.mjs";
 import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
+import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
+import { replayTransformFields } from "./transform-field-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -309,6 +311,13 @@ if (isMainThread) {
     // configuration: replies, refusals, session commits, their undos, and
     // every commit case (refused and unchanged ones included).
     assert.deepEqual(result.slicingConfigurationAnswers, [349, 14, 29, 29, 32]);
+    // The workspace bed: configurations, refusals and opened projects' plates.
+    assert.deepEqual([result.beds, result.bedRefusals, result.projectBeds], [74, 14, 12]);
+    // The transform inspector's fields: reads, rotations, edits and refusals.
+    assert.deepEqual(
+      [result.fieldReads, result.rotations, result.fieldEdits, result.fieldRefusals],
+      [101, 1720, 94, 19],
+    );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -813,6 +822,15 @@ if (isMainThread) {
     JSON.parse(await readFile(new URL("contracts/project-staging.json", root))).version,
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
   );
+  const workspaceBeds = replayWorkspaceBeds(
+    core,
+    JSON.parse(await readFile(new URL("testdata/cross-platform/workspace-bed-vectors.json", root))),
+    layout,
+  );
+  const transformFields = replayTransformFields(
+    core,
+    JSON.parse(await readFile(new URL("testdata/cross-platform/transform-field-vectors.json", root))),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -866,6 +884,8 @@ if (isMainThread) {
       ...externalSlicer,
       ...plateProjection,
       ...slicingConfiguration,
+      ...workspaceBeds,
+      ...transformFields,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

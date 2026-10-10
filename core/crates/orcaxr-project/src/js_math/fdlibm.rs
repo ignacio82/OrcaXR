@@ -1,5 +1,5 @@
-//! `Math.sin`, `Math.cos`, `Math.tan`, `Math.exp` and `Math.acos` exactly as V8 computes them: a
-//! line-for-line port of V8 12.4's `src/base/ieee754.cc` (fdlibm 5.3, which
+//! `Math.sin`, `Math.cos`, `Math.tan`, `Math.exp`, `Math.acos`, `Math.asin`,
+//! `Math.atan` and `Math.atan2` exactly as V8 computes them: a line-for-line port of V8 12.4's `src/base/ieee754.cc` (fdlibm 5.3, which
 //! Node 22's V8 uses for sin/cos rather than its optional glibc routines), not
 //! the later FreeBSD msun revisions the `libm` crate follows (different
 //! `__kernel_cos`, `init_jk` and reduction thresholds), plus V8's `exp(1) = E`.
@@ -652,4 +652,229 @@ pub fn tan(x: f64) -> f64 {
     let mut y = [0.0; 2];
     let n = rem_pio2(x, &mut y);
     kernel_tan(y[0], y[1], 1 - ((n & 1) << 1))
+}
+
+/// `__ieee754_asin` (fdlibm 5.3 `e_asin.c`), V8's `Math.asin`.
+pub fn asin(x: f64) -> f64 {
+    const ONE: f64 = 1.00000000000000000000e+00;
+    const HUGE: f64 = 1.000e+300;
+    const PIO2_HI: f64 = 1.57079632679489655800e+00;
+    const PIO2_LO: f64 = 6.12323399573676603587e-17;
+    const PIO4_HI: f64 = 7.85398163397448278999e-01;
+    const PS0: f64 = 1.66666666666666657415e-01;
+    const PS1: f64 = -3.25565818622400915405e-01;
+    const PS2: f64 = 2.01212532134862925881e-01;
+    const PS3: f64 = -4.00555345006794114027e-02;
+    const PS4: f64 = 7.91534994289814532176e-04;
+    const PS5: f64 = 3.47933107596021167570e-05;
+    const QS1: f64 = -2.40339491173441421878e+00;
+    const QS2: f64 = 2.02094576023350569471e+00;
+    const QS3: f64 = -6.88283971605453293030e-01;
+    const QS4: f64 = 7.70381505559019352791e-02;
+    let hx = high(x);
+    let ix = hx & 0x7fffffff;
+    if ix >= 0x3ff00000 {
+        // |x| >= 1
+        if ((ix - 0x3ff00000) as u32 | low(x)) == 0 {
+            // asin(±1) = ±pi/2
+            return x * PIO2_HI + x * PIO2_LO;
+        }
+        return f64::NAN; // asin(|x| > 1) is NaN, and JavaScript has one NaN
+    }
+    if ix < 0x3fe00000 {
+        // |x| < 0.5
+        if ix < 0x3e400000 && HUGE + x > ONE {
+            return x; // |x| < 2**-27
+        }
+        let t = x * x;
+        let p = t * (PS0 + t * (PS1 + t * (PS2 + t * (PS3 + t * (PS4 + t * PS5)))));
+        let q = ONE + t * (QS1 + t * (QS2 + t * (QS3 + t * QS4)));
+        let w = p / q;
+        return x + x * w;
+    }
+    // 1 > |x| >= 0.5
+    let w = ONE - x.abs();
+    let t = w * 0.5;
+    let p = t * (PS0 + t * (PS1 + t * (PS2 + t * (PS3 + t * (PS4 + t * PS5)))));
+    let q = ONE + t * (QS1 + t * (QS2 + t * (QS3 + t * QS4)));
+    let s = t.sqrt();
+    let t = if ix >= 0x3FEF3333 {
+        // |x| > 0.975
+        let w = p / q;
+        PIO2_HI - (2.0 * (s + s * w) - PIO2_LO)
+    } else {
+        let w = words(high(s), 0);
+        let c = (t - w * w) / (s + w);
+        let r = p / q;
+        let p = 2.0 * s * r - (PIO2_LO - 2.0 * c);
+        let q = PIO4_HI - 2.0 * w;
+        PIO4_HI - (p - q)
+    };
+    if hx > 0 { t } else { -t }
+}
+
+/// `atan` (fdlibm 5.3 `s_atan.c`), V8's `Math.atan`.
+pub fn atan(x: f64) -> f64 {
+    const ATANHI: [f64; 4] = [
+        4.63647609000806093515e-01,
+        7.85398163397448278999e-01,
+        9.82793723247329054082e-01,
+        1.57079632679489655800e+00,
+    ];
+    const ATANLO: [f64; 4] = [
+        2.26987774529616870924e-17,
+        3.06161699786838301793e-17,
+        1.39033110312309984516e-17,
+        6.12323399573676603587e-17,
+    ];
+    const AT: [f64; 11] = [
+        3.33333333333329318027e-01,
+        -1.99999999998764832476e-01,
+        1.42857142725034663711e-01,
+        -1.11111104054623557880e-01,
+        9.09088713343650656196e-02,
+        -7.69187620504482999495e-02,
+        6.66107313738753120669e-02,
+        -5.83357013379057348645e-02,
+        4.97687799461593236017e-02,
+        -3.65315727442169155270e-02,
+        1.62858201153657823623e-02,
+    ];
+    const ONE: f64 = 1.0;
+    const HUGE: f64 = 1.0e300;
+    let hx = high(x);
+    let ix = hx & 0x7fffffff;
+    let mut x = x;
+    let id: i32;
+    if ix >= 0x44100000 {
+        // |x| >= 2**66
+        if ix > 0x7ff00000 || (ix == 0x7ff00000 && low(x) != 0) {
+            return f64::NAN;
+        }
+        return if hx > 0 {
+            ATANHI[3] + ATANLO[3]
+        } else {
+            -ATANHI[3] - ATANLO[3]
+        };
+    }
+    if ix < 0x3fdc0000 {
+        // |x| < 0.4375
+        if ix < 0x3e400000 && HUGE + x > ONE {
+            return x; // |x| < 2**-27
+        }
+        id = -1;
+    } else {
+        x = x.abs();
+        if ix < 0x3ff30000 {
+            // |x| < 1.1875
+            if ix < 0x3fe60000 {
+                // 7/16 <= |x| < 11/16
+                id = 0;
+                x = (2.0 * x - ONE) / (2.0 + x);
+            } else {
+                // 11/16 <= |x| < 19/16
+                id = 1;
+                x = (x - ONE) / (x + ONE);
+            }
+        } else if ix < 0x40038000 {
+            // |x| < 2.4375
+            id = 2;
+            x = (x - 1.5) / (ONE + 1.5 * x);
+        } else {
+            // 2.4375 <= |x| < 2**66
+            id = 3;
+            x = -1.0 / x;
+        }
+    }
+    let z = x * x;
+    let w = z * z;
+    let s1 = z * (AT[0] + w * (AT[2] + w * (AT[4] + w * (AT[6] + w * (AT[8] + w * AT[10])))));
+    let s2 = w * (AT[1] + w * (AT[3] + w * (AT[5] + w * (AT[7] + w * AT[9]))));
+    if id < 0 {
+        return x - x * (s1 + s2);
+    }
+    let id = id as usize;
+    let z = ATANHI[id] - ((x * (s1 + s2) - ATANLO[id]) - x);
+    if hx < 0 { -z } else { z }
+}
+
+/// `__ieee754_atan2` (fdlibm `e_atan2.c` as V8 ships it, with FreeBSD's
+/// `m &= 1` for |y/x| beyond 2**60), V8's `Math.atan2`.
+pub fn atan2(y: f64, x: f64) -> f64 {
+    const TINY: f64 = 1.0e-300;
+    const PI_O_4: f64 = 7.8539816339744827900E-01;
+    const PI_O_2: f64 = 1.5707963267948965580E+00;
+    const PI: f64 = 3.1415926535897931160E+00;
+    const PI_LO: f64 = 1.2246467991473531772E-16;
+    if x.is_nan() || y.is_nan() {
+        return f64::NAN;
+    }
+    let hx = high(x);
+    let ix = hx & 0x7fffffff;
+    let lx = low(x);
+    let hy = high(y);
+    let iy = hy & 0x7fffffff;
+    let ly = low(y);
+    if (hx.wrapping_sub(0x3ff00000) as u32 | lx) == 0 {
+        return atan(y); // x = 1.0
+    }
+    let mut m = ((hy >> 31) & 1) | ((hx >> 30) & 2); // 2 * sign(x) + sign(y)
+    if (iy as u32 | ly) == 0 {
+        // y = 0
+        return match m {
+            0 | 1 => y,
+            2 => PI + TINY,
+            _ => -PI - TINY,
+        };
+    }
+    if (ix as u32 | lx) == 0 {
+        // x = 0
+        return if hy < 0 {
+            -PI_O_2 - TINY
+        } else {
+            PI_O_2 + TINY
+        };
+    }
+    if ix == 0x7ff00000 {
+        // x is infinite
+        return if iy == 0x7ff00000 {
+            match m {
+                0 => PI_O_4 + TINY,
+                1 => -PI_O_4 - TINY,
+                2 => 3.0 * PI_O_4 + TINY,
+                _ => -3.0 * PI_O_4 - TINY,
+            }
+        } else {
+            match m {
+                0 => 0.0,
+                1 => -0.0,
+                2 => PI + TINY,
+                _ => -PI - TINY,
+            }
+        };
+    }
+    if iy == 0x7ff00000 {
+        // y is infinite
+        return if hy < 0 {
+            -PI_O_2 - TINY
+        } else {
+            PI_O_2 + TINY
+        };
+    }
+    let k = (iy - ix) >> 20;
+    let z = if k > 60 {
+        // |y/x| > 2**60
+        m &= 1;
+        PI_O_2 + 0.5 * PI_LO
+    } else if hx < 0 && k < -60 {
+        0.0 // 0 > |y|/x > -2**-60
+    } else {
+        atan((y / x).abs())
+    };
+    match m {
+        0 => z,
+        1 => -z,
+        2 => PI - (z - PI_LO),
+        _ => (z - PI_LO) - PI,
+    }
 }

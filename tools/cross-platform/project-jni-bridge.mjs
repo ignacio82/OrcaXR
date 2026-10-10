@@ -71,6 +71,9 @@ export function startProjectJni(profile = "debug") {
   signatures.projectRecoveryChecks = ["byte[]"];
   signatures.documentOwnersChecks = ["byte[]"];
   signatures.slicingChoiceChecks = ["byte[]", "byte[]"];
+  signatures.workspaceBedChecks = ["String"];
+  signatures.transformFieldChecks = ["String"];
+  signatures.placementEditChecks = ["String", "byte[]"];
   signatures.projectSceneChecks = ["byte[]"];
   signatures.printerDiscoveryChecks = ["String", "String"];
   signatures.printerExchangesChecks = ["String"];
@@ -778,6 +781,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     plate_print_overrides(plateId) {
       return call("projectPlateOverrides", this.handle, plateId);
     }
+    workspace_bed(request) {
+      return call("projectWorkspaceBed", this.handle, request);
+    }
     id_length() {
       return call("projectIdLength", this.handle);
     }
@@ -1359,6 +1365,10 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     plate_projection: (state, plateId, omitted) => call("plateProjection", state, plateId, omitted, zone, profile),
     plate_print_overrides: (state, plateId) => call("platePrintOverridesJson", state, plateId),
     slicing_match: (request) => call("slicingMatch", request),
+    workspace_bed: (request) => call("workspaceBed", request),
+    transform_fields: (request) => call("transformFields", request),
+    transform_field_edit: (request) => call("transformFieldEdit", request),
+    transform_rotation: (request) => call("transformRotation", request),
     slicing_next_state: (request, words) => call("slicingNextState", request, Array.from(words), zone, profile),
     print_history_plan: (operation) => call("printHistoryPlan", operation),
     print_history_finish: (request) => call("printHistoryFinish", request),

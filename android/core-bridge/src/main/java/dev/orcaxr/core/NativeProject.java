@@ -85,6 +85,14 @@ final class NativeProject {
     static native String slicingMatch(String request);
     static native String slicingNextState(String request, double[] words, LocalTimestampResolver resolver, int integerMode);
     static native String stageSlicingConfiguration(long handle, long catalog, String request, double[] words);
+    // The workspace's bed (a configuration's, or a captured project's for one
+    // plate) and the transform inspector's fields: canonical JSON requests and
+    // replies (the browser's WorkspaceBedExchange and TransformFieldsExchange).
+    static native String workspaceBed(String request);
+    static native String projectWorkspaceBed(long handle, String request);
+    static native String transformFields(String request);
+    static native String transformFieldEdit(String request);
+    static native String transformRotation(String request);
     static native void libraryCreate(long handle, byte[] stored, double[] limits, PresetCollator collator, LocalTimestampResolver resolver, int integerMode);
     static native String libraryApply(long handle, String operation);
     static native String libraryImport(long handle, byte[] bundle, double[] limits);

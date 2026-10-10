@@ -95,13 +95,14 @@ find("1 object", timeout=30)
 drawn = workspace()
 model = changed_pixels(empty, drawn, *box)
 # The 20 mm test cube covers about 1,500 pixels of the framed 200 mm bed at this resolution.
-assert len(model) > 800, f"The imported model was not drawn ({len(model)} pixels changed)"
+# A 20 mm cube on the project's own bed (the default profile's 270 mm U1 plate): a few hundred pixels.
+assert len(model) > 300, f"The imported model was not drawn ({len(model)} pixels changed)"
 x = sum(p[0] for p in model) // len(model)
 y = sum(p[1] for p in model) // len(model)
 adb("shell", "input", "tap", str(x), str(y))
 time.sleep(2)
 highlighted = screen.screenshot()
-assert len(changed_pixels(drawn, highlighted, *box)) > 600, "A tap on the model did not highlight it"
+assert len(changed_pixels(drawn, highlighted, *box)) > len(model) // 2, "A tap on the model did not highlight it"
 adb("shell", "input", "keycombination", "113", "54")
 time.sleep(4)
 undone = screen.screenshot()

@@ -51,6 +51,8 @@ import { replayRememberedCredentials } from "./printer-credentials-replay.mjs";
 import { replayExternalSlicer } from "./external-slicer-replay.mjs";
 import { plateProjectionCases, plateProjectionCode, replayPlateProjection } from "./plate-projection-replay.mjs";
 import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
+import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
+import { replayTransformFields } from "./transform-field-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -327,6 +329,48 @@ try {
     await readFile(new URL("web/public/profiles/catalog.json", root)),
   );
   assert.equal(slicingChoiceChecks, 11);
+  // The workspace bed through the JNI exports, then the Kotlin wrapper.
+  const bedFixture = await json("testdata/cross-platform/workspace-bed-vectors.json");
+  const workspaceBeds = replayWorkspaceBeds(projectJniCore(jvm.call), bedFixture, layout);
+  assert.deepEqual([workspaceBeds.beds, workspaceBeds.bedRefusals, workspaceBeds.projectBeds], [74, 14, 12]);
+  const workspaceBedChecks = jvm.call(
+    "workspaceBedChecks",
+    [
+      ...bedFixture.cases.map((c) => `B\t${c.request}\t${c.reply}`),
+      ...bedFixture.refusals.map((r) => `R\t${r.request}`),
+      ...bedFixture.states.flatMap((p) => [`P\t${p.stateJson}`, ...p.beds.map((b) => `Q\t${b.request}\t${b.reply}`)]),
+    ].join("\n"),
+  );
+  assert.equal(workspaceBedChecks, 178);
+  // The transform inspector's fields through the JNI exports, then the Kotlin wrapper.
+  const fieldFixture = await json("testdata/cross-platform/transform-field-vectors.json");
+  const transformFields = replayTransformFields(projectJniCore(jvm.call), fieldFixture);
+  assert.deepEqual(Object.values(transformFields), [101, 1720, 94, 19]);
+  const transformFieldChecks = jvm.call(
+    "transformFieldChecks",
+    [
+      ...fieldFixture.reads.map((c) => `F\t${c.request}\t${c.reply}`),
+      ...fieldFixture.edits.map((c) => `E\t${c.request}\t${c.reply}`),
+      ...fieldFixture.conversions.map((c) => `Q\t${c.request}\t${c.reply}`),
+      ...fieldFixture.refusals.map((r) => `X\t${r.exchange}\t${r.request}`),
+    ].join("\n"),
+  );
+  assert.equal(transformFieldChecks, 1936);
+  // Placement edits through ProjectWorkspace on a real session: the browser's
+  // hash, undo label and report after every edit, and undo back to the start.
+  const editFixture = await json("testdata/cross-platform/placement-edit-vectors.json");
+  const placementEditChecks = jvm.call(
+    "placementEditChecks",
+    JSON.stringify({
+      bed: editFixture.bed,
+      opened: editFixture.opened,
+      plateId: editFixture.plateId,
+      steps: editFixture.steps,
+      undo: editFixture.undo,
+    }),
+    Buffer.from(editFixture.archive, "base64"),
+  );
+  assert.equal(placementEditChecks, 127);
   // The renderer's view of a real session: render deltas and mesh packets into the scene.
   const projectSceneChecks = jvm.call("projectSceneChecks", decodeBytes("stl-binary/cube"));
   assert.equal(projectSceneChecks, 13);
@@ -1400,6 +1444,11 @@ try {
     projectRecoveryChecks,
     documentOwnersChecks,
     slicingChoiceChecks,
+    workspaceBeds,
+    workspaceBedChecks,
+    transformFields,
+    transformFieldChecks,
+    placementEditChecks,
     projectSceneChecks,
     actorArchiveChecks,
     providerDocumentChecks,

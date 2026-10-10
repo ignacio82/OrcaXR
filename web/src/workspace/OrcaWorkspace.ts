@@ -154,7 +154,7 @@ import type { PreparedSimplify } from './CanonicalWorkspaceController';
 import { runCanonicalSplitToObjectsFlow } from './CanonicalSplitToObjectsFlow';
 import { CanonicalWorkspaceSlicer } from './CanonicalWorkspaceSlicer';
 import {
-  projectMultiInstancePrimaryTransform,
+  primaryTransformEdit,
   projectMultiInstanceTransform,
   type MultiInstanceTransformMode,
   type MultiInstanceTransformOrigin,
@@ -239,6 +239,8 @@ import {
   type WorkspaceProfileSelectionRequest,
 } from './CatalogSlicingConfiguration';
 import { bedSizeFromProfile, ProfileCatalog, type SlicerProfile } from '../slicer/ProfileLoader';
+import { printableHeightMm, wipeTowerKeepOut, wipeTowerWidthMm, workspaceBed } from './WorkspaceBed';
+import { eulerFromQuaternion, withTransformFieldInput } from './TransformFields';
 import { SlicerClient, type AttestedProjectRoute } from '../slicer/SlicerClient';
 import { engineSupports } from '../slicer/pinnedEngineProvenance';
 import type { WaveOverhangsPort, WaveOverhangsProjectSnapshot } from '../settings/waveOverhangs';
@@ -1726,9 +1728,13 @@ export class OrcaWorkspace extends xb.Script {
   public getSelectedModelRotation(): THREE.Euler | null {
     const selected = this.selectedModel;
     const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
-    return instance
-      ? new THREE.Euler().setFromQuaternion(new THREE.Quaternion().fromArray(instance.transform.rotation))
-      : null;
+    return instance ? new THREE.Euler(...eulerFromQuaternion(instance.transform.rotation)) : null;
+  }
+  /** The selected (primary) instance's canonical transform, which the inspector's fields show. */
+  public getSelectedModelTransform(): Transform | null {
+    const selected = this.selectedModel;
+    const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
+    return instance ? instance.transform : null;
   }
   public getSelectedModelScale(): THREE.Vector3 | null {
     const selected = this.selectedModel;
@@ -1739,13 +1745,7 @@ export class OrcaWorkspace extends xb.Script {
     const selected = this.selectedModel;
     const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
     if (!selected || !instance) return;
-    await this.commitSelectedPrimaryTransform(
-      {
-        ...instance.transform,
-        translationMm: [x, y, z],
-      },
-      'move',
-    );
+    await this.commitSelectedPrimaryTransform(withTransformFieldInput('move', instance.transform, [x, y, z]), 'move');
     if (this.disposed) return;
     this.syncTransformProxy();
     this.revalidatePublishedGcode();
@@ -1755,12 +1755,8 @@ export class OrcaWorkspace extends xb.Script {
     const selected = this.selectedModel;
     const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
     if (!selected || !instance) return;
-    const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z)).normalize();
     await this.commitSelectedPrimaryTransform(
-      {
-        ...instance.transform,
-        rotation: [quaternion.x, quaternion.y, quaternion.z, quaternion.w],
-      },
+      withTransformFieldInput('rotate', instance.transform, [x, y, z]),
       'rotate',
     );
     if (this.disposed) return;
@@ -1772,13 +1768,7 @@ export class OrcaWorkspace extends xb.Script {
     const selected = this.selectedModel;
     const instance = selected ? this.canonicalProject.getInstance(selected.instanceId) : undefined;
     if (!selected || !instance) return;
-    await this.commitSelectedPrimaryTransform(
-      {
-        ...instance.transform,
-        scale: [x, y, z],
-      },
-      'scale',
-    );
+    await this.commitSelectedPrimaryTransform(withTransformFieldInput('scale', instance.transform, [x, y, z]), 'scale');
     if (this.disposed) return;
     this.syncTransformProxy();
     this.revalidatePublishedGcode();
@@ -1854,15 +1844,7 @@ export class OrcaWorkspace extends xb.Script {
   ): Promise<void> {
     const selection = this.captureSelectedInstanceOrigins();
     if (!selection) return;
-    const changes =
-      selection.origins.length === 1
-        ? [{ instanceId: selection.primaryInstanceId, transform: currentPrimaryTransform }]
-        : projectMultiInstancePrimaryTransform(
-            selection.origins,
-            selection.primaryInstanceId,
-            currentPrimaryTransform,
-            mode,
-          );
+    const changes = primaryTransformEdit(selection.origins, selection.primaryInstanceId, currentPrimaryTransform, mode);
     await this.invokeTransformEdit(mode, { changes }, surface);
   }
 
@@ -4503,14 +4485,8 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   private synchronizePrinterMappingFromCanonicalConfig(): void {
-    const printableArea = this.canonicalProject.getSlicingConfiguration().config.printable_area;
-    const serialized =
-      typeof printableArea === 'string'
-        ? printableArea
-        : Array.isArray(printableArea) && printableArea.every((value) => typeof value === 'string')
-          ? printableArea.join(',')
-          : '';
-    this.bedMm = bedSizeFromProfile({ printable_area: serialized });
+    const [x, y] = workspaceBed(this.canonicalProject.getSlicingConfiguration().config).sizeMm;
+    this.bedMm = { x, y };
     this.canonicalProject.setPrinterSpaceMapping({
       bedSizeMm: [this.bedMm.x, this.bedMm.y],
       worldUnitsPerMm: CURRENT_THREE_WORLD_UNITS_PER_MM,
@@ -4781,13 +4757,11 @@ export class OrcaWorkspace extends xb.Script {
       if (!tower || !tower.enabled) {
         return this.projectPrimeTower?.enabled ? this.projectPrimeTower : null;
       }
-      const config = this.canonicalProject.getSlicingConfiguration().config;
-      const widthMm = Number(config.prime_tower_width ?? config.wipe_tower_width) || 60;
       return {
         enabled: tower.enabled,
         xMm: tower.positionMm[0],
         yMm: tower.positionMm[1],
-        widthMm,
+        widthMm: wipeTowerWidthMm(this.canonicalProject.getSlicingConfiguration().config),
       };
     } catch {
       return this.projectPrimeTower?.enabled ? this.projectPrimeTower : null;
@@ -8246,10 +8220,8 @@ export class OrcaWorkspace extends xb.Script {
       );
       return false;
     }
-    const config = this.canonicalProject.getSlicingConfiguration().config as Record<string, unknown>;
-    const raw = config['printable_height'];
-    const height = Number.parseFloat(String(Array.isArray(raw) ? raw[0] : (raw ?? '')));
-    if (!Number.isFinite(height) || height <= 0) {
+    const height = printableHeightMm(this.canonicalProject.getSlicingConfiguration().config);
+    if (height === undefined) {
       this.setStatus(
         t(
           'workspace.orcaWorkspace.thisPrinterProfileStatesNo',
@@ -9183,14 +9155,9 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Footprint the project's prime/purge tower reserves, when it has one. */
   private wipeTowerExclusion(): ArrangeRegion | undefined {
-    const tower = this.activePlateWipeTower;
-    if (!tower?.enabled) return undefined;
-    return {
-      minX: tower.xMm,
-      minY: tower.yMm,
-      maxX: tower.xMm + tower.widthMm,
-      maxY: tower.yMm + tower.widthMm,
-    };
+    const summary = this.canonicalProject.getSummary();
+    const plate = summary.plates.find((candidate) => candidate.id === this.activePlateId);
+    return wipeTowerKeepOut(this.canonicalProject.getSlicingConfiguration().config, plate?.wipeTower);
   }
 
   public exportPlateStl() {

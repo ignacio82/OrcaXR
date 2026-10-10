@@ -657,6 +657,12 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
             count(2 + objects * 3),
         )
     }
+    /** The bed the workspace reads from this project (its base profile when it
+     * records one, else its configuration) with plate [plateId]'s wipe-tower
+     * keep-out; no plate, or one the project lacks, keeps nothing out. */
+    fun workspaceBed(plateId: String?): WorkspaceBed = read {
+        WorkspaceBeds.read(NativeProject.projectWorkspaceBed(it, "{\"plateId\":${plateId?.let(CanonicalJson::quote) ?: "null"}}"))
+    }
     /** The filament library as the painting palette, with stable IDs. */
     fun paintPalette(request: ProjectIntents.PaintPaletteRequest): ProjectIntents.PaintPalette = read {
         ProjectIntents.decodePaintPalette(NativeProject.projectPaintPalette(it, ProjectIntents.encodePaintPaletteRequest(request)))

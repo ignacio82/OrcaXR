@@ -323,7 +323,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   including brim/ribs. A bed's far corner is not its size; planning, ghosts and preflight share the same
   footprint authority. The workspace three.js world is scaled, Y-up and bed-centred: geometry tools read
   printer mm via `root.matrixWorld⁻¹ × display.matrixWorld`; brim ears are object-local (all model
-  parts, instance transform only).
+  parts, instance transform only). Shared bed/inspector fields/Android placement: [native-core](docs/engineering/native-core.md#workspace-bed).
 
 ## Surface and startup ownership
 

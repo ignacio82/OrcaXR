@@ -129,12 +129,13 @@ tap("Workspace")
 time.sleep(4)
 drawn = screen.screenshot()
 model = changed_pixels(empty, drawn, *box)
-assert len(model) > 800, f"The imported model was not drawn ({len(model)} pixels changed)"
+# A 20 mm cube on the project's own bed (the default profile's 270 mm U1 plate): a few hundred pixels.
+assert len(model) > 300, f"The imported model was not drawn ({len(model)} pixels changed)"
 x = sum(p[0] for p in model) // len(model)
 y = sum(p[1] for p in model) // len(model)
 adb("shell", "input", "tap", str(x), str(y))
 time.sleep(2)
-assert len(changed_pixels(drawn, screen.screenshot(), *box)) > 600, "The selected model was not highlighted"
+assert len(changed_pixels(drawn, screen.screenshot(), *box)) > len(model) // 2, "The selected model was not highlighted"
 tap("Project")
 # The tree opened to the tapped instance's row, which reports the selection.
 until_instance(0, True, timeout=30)

@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -24,9 +25,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.project.ProjectModel
+import dev.orcaxr.renderer.PreviewFraming
 import dev.orcaxr.renderer.SceneSync
 import dev.orcaxr.renderer.filament.FilamentScene
 import kotlin.math.abs
@@ -34,10 +35,11 @@ import kotlin.math.abs
 /**
  * The Workspace area: the project's active plate and its objects, drawn by
  * the flat renderer from the session's own render deltas and mesh packets
- * (never a second copy of the project). Drag orbits, pinch zooms; a tap
- * selects the instance under the finger in the project (Shift, Ctrl or Meta
- * held toggles it, a tap on nothing deselects all), as a click on a model
- * does in the browser, and the scene highlights the project's selection.
+ * (never a second copy of the project), on the bed the project's own
+ * configuration states. Drag orbits, pinch zooms; a tap selects the
+ * instance under the finger in the project (Shift, Ctrl or Meta held
+ * toggles it, a tap on nothing deselects all), as a click on a model does
+ * in the browser, and the scene highlights the project's selection.
  */
 @Composable
 fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
@@ -63,6 +65,7 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
     // The canonical selection, wherever it was made (here, the Project area's tree, an edit).
     val selected = view.selection.instances
     SideEffect { renderer.highlight(selected) }
+    LaunchedEffect(view.bed.widthMm, view.bed.depthMm) { renderer.bed(view.bed.widthMm, view.bed.depthMm) }
     Box(modifier) {
         AndroidView(factory = { context -> WorkspaceSurface(context).also(renderer::attach) }, Modifier.fillMaxSize())
         // Objects on every plate (the tree may show them collapsed).
@@ -97,6 +100,8 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         highlighted = instances
         scene?.select(instances)
     }
+    /** The project's bed (mm), drawable sides: the browser's 200 mm plate until the project is read. */
+    private var bed = 200.0 to 200.0
 
     fun attach(view: WorkspaceSurface) {
         surface = view
@@ -107,6 +112,17 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
     fun resume() {
         resumed = true
         start()
+    }
+
+    /** Draws the project's bed of [widthMm] × [depthMm] and frames it when it changes. */
+    fun bed(widthMm: Double, depthMm: Double) {
+        val next = PreviewFraming.drawable(widthMm) to PreviewFraming.drawable(depthMm)
+        if (next == bed) return
+        bed = next
+        scene?.let { renderer ->
+            renderer.setBed(next.first, next.second)
+            renderer.frame(next.first, next.second)
+        }
     }
 
     fun pause() {
@@ -122,9 +138,8 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         val view = surface ?: return
         val renderer = FilamentScene(view)
         scene = renderer
-        val bed = ProjectWorkspace.PLACEMENT
-        renderer.setBed(bed.bedWidthMm ?: BED_MM, bed.bedDepthMm ?: BED_MM)
-        renderer.frame(bed.bedWidthMm ?: BED_MM, bed.bedDepthMm ?: BED_MM)
+        renderer.setBed(bed.first, bed.second)
+        renderer.frame(bed.first, bed.second)
         renderer.setActive(true)
         renderer.select(highlighted)
         // The first update is everything known; later ones are what changed.
@@ -186,8 +201,6 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
     }
 
     companion object {
-        /** The browser's plate without a printer profile. */
-        private const val BED_MM = 200.0
         private const val TOUCH_SLOP = 8f
         private const val ORBIT_RADIANS_PER_PIXEL = .006
     }

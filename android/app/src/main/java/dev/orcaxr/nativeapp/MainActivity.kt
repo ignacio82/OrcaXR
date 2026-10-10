@@ -352,12 +352,12 @@ class MainActivity : ComponentActivity() {
                 }
                 WorkspaceScreen(project, Modifier.weight(1f).fillMaxHeight())
             }
-            Viewport.Toolpath -> PreviewScreen(preview, modifier, panelWidth = layout.panelWidthDp.dp)
+            Viewport.Toolpath -> PreviewScreen(preview, modifier, panelWidth = layout.panelWidthDp.dp, bed = project.view.bed)
             null -> when (area) {
                 R.string.nav_device -> DeviceScreen(device, modifier)
                 R.string.nav_project -> ProjectScreen(project, modifier)
                 R.string.nav_prepare -> PrepareScreen(prepare, project, device, modifier)
-                R.string.nav_preview -> PreviewScreen(preview, modifier)
+                R.string.nav_preview -> PreviewScreen(preview, modifier, bed = project.view.bed)
                 else -> Box(modifier) {
                     WorkspaceScreen(project, Modifier.fillMaxSize())
                     if (resources.getBoolean(R.bool.viewport_experiment_enabled)) {

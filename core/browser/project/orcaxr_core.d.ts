@@ -61,6 +61,12 @@ export class CapturedProject {
      * A `SettingsTargetPageRequest`; returns a `SettingsTargetPage`.
      */
     settings_targets(request: string): string;
+    /**
+     * The bed the workspace reads from this project and plate `plateId`'s
+     * tower keep-out: `{"plateId": string | null}` in, the workspace bed
+     * document (`orcaxr_project::placement::bed`) out.
+     */
+    workspace_bed(request: string): string;
 }
 
 export class CapturedSelection {
@@ -1606,6 +1612,32 @@ export function slicing_next_state(request: string, words: Float64Array): string
  */
 export function tool_mapping(request: string): string;
 
+/**
+ * What an edit of the three fields submits (`transformFieldEditExchange`):
+ * `{"origins","primaryInstanceId","texts","tool"}` in, `{"changes"}` or
+ * `{"error":"invalid_edit","message"}` out.
+ */
+export function transform_field_edit(request: string): string;
+
+/**
+ * What a tool's three fields show (`transformFieldsExchange`):
+ * `{"tool","transform"}` in, `{"texts","values"}` out.
+ */
+export function transform_fields(request: string): string;
+
+/**
+ * three's Euler ↔ quaternion conversion (`transformRotationExchange`):
+ * `{"rotation"}` → `{"eulerRadians"}`, or `{"eulerRadians"}` → `{"rotation"}`.
+ */
+export function transform_rotation(request: string): string;
+
+/**
+ * A project configuration's bed and a plate tower's keep-out
+ * (`workspaceBedExchange`): `{"config","wipeTower"}` in,
+ * `{"keepOut","printableArea","printableHeightMm","sizeMm"}` out.
+ */
+export function workspace_bed(request: string): string;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -1685,6 +1717,7 @@ export interface InitOutput {
     readonly capturedproject_settings_explain: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_settings_snapshot: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_settings_targets: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_workspace_bed: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedselection_count: (a: number) => number;
     readonly capturedselection_id: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly capturedselection_id_length: (a: number, b: number) => [number, number, number];
@@ -2026,6 +2059,10 @@ export interface InitOutput {
     readonly toolusagescanner_append: (a: number, b: number, c: number) => [number, number];
     readonly toolusagescanner_finish: (a: number) => [number, number, number, number];
     readonly toolusagescanner_new: () => number;
+    readonly transform_field_edit: (a: number, b: number) => [number, number, number, number];
+    readonly transform_fields: (a: number, b: number) => [number, number, number, number];
+    readonly transform_rotation: (a: number, b: number) => [number, number, number, number];
+    readonly workspace_bed: (a: number, b: number) => [number, number, number, number];
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

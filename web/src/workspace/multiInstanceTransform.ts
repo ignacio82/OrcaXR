@@ -95,6 +95,21 @@ export function projectMultiInstancePrimaryTransform(
   );
 }
 
+/**
+ * The changes a numeric edit of the primary instance submits: that instance
+ * alone when it is the whole selection, else the selection carried around it.
+ */
+export function primaryTransformEdit(
+  origins: readonly MultiInstanceTransformOrigin[],
+  primaryInstanceId: InstanceId,
+  currentPrimaryTransform: Transform,
+  mode: MultiInstanceTransformMode,
+): readonly InstanceTransformChange[] {
+  return origins.length === 1
+    ? [{ instanceId: primaryInstanceId, transform: currentPrimaryTransform }]
+    : projectMultiInstancePrimaryTransform(origins, primaryInstanceId, currentPrimaryTransform, mode);
+}
+
 function validateOrigins(origins: readonly MultiInstanceTransformOrigin[]): void {
   if (origins.length === 0) throw new Error('A multi-instance transform requires at least one origin');
   const ids = new Set<InstanceId>();

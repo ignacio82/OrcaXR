@@ -58,6 +58,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.orcaxr.core.GcodeArtifactText
 import dev.orcaxr.core.GcodePreviewModes
+import dev.orcaxr.core.WorkspaceBed
 import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.shell.focusRing
 import dev.orcaxr.renderer.GcodeMoveFilter
@@ -76,10 +77,11 @@ import kotlin.math.abs
  * layer, Moves and, for a print too large to load at once, Previous/Next moves.
  * Drag orbits and pinch zooms the toolpath view. The view is above the
  * controls, or — given a [panelWidth], in a wide window — beside them at the
- * end, as the browser's sidebar sits at the start of its viewport.
+ * end, as the browser's sidebar sits at the start of its viewport. The
+ * toolpaths sit on the project's [bed], grown to reach them.
  */
 @Composable
-fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier, panelWidth: Dp? = null) {
+fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier, panelWidth: Dp? = null, bed: WorkspaceBed = WorkspaceBed.DEFAULT) {
     val state = model.state
     // Any document: providers often report G-code only as bytes or text.
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::open) }
@@ -102,6 +104,7 @@ fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier, panelWidth
         }
     }
     LaunchedEffect(state.toolpath, state.generation) { renderer.show(state.toolpath?.geometry, state.generation) }
+    LaunchedEffect(bed.widthMm, bed.depthMm) { renderer.bed(bed.widthMm, bed.depthMm) }
 
     val view = @Composable { place: Modifier ->
         AndroidView(factory = { context -> PreviewSurface(context).also(renderer::attach) }, place)
@@ -321,6 +324,8 @@ private class PreviewRenderer {
     private var framed = Long.MIN_VALUE
     private var camera: OrbitCamera? = null
     private var bed: Pair<Double, Double>? = null
+    /** The project's bed (mm), drawable sides. */
+    private var projectBed = 200.0 to 200.0
 
     fun attach(view: PreviewSurface) {
         surface = view
@@ -339,6 +344,12 @@ private class PreviewRenderer {
         scene?.close()
         scene = null
         bed = null
+    }
+
+    /** Draws the toolpaths on a bed of [widthMm] × [depthMm] (the project's), grown to reach them. */
+    fun bed(widthMm: Double, depthMm: Double) {
+        projectBed = PreviewFraming.drawable(widthMm) to PreviewFraming.drawable(depthMm)
+        scene?.let(::present)
     }
 
     /** Shows [value] (none clears it); a new [file] generation frames the camera on it. */
@@ -360,7 +371,7 @@ private class PreviewRenderer {
     }
 
     private fun present(renderer: FilamentScene) {
-        val framing = PreviewFraming.of(toolpath)
+        val framing = PreviewFraming.of(toolpath, projectBed.first, projectBed.second)
         val size = framing.bedWidthMm to framing.bedDepthMm
         if (bed != size) {
             renderer.setBed(size.first, size.second)

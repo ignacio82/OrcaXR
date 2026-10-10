@@ -1618,6 +1618,19 @@ painting, and FullSpectrum operations that can support real native projects.
     limits (28 requests exact in every binding); two fill error codes fixed.
   - [x] Port wipe-tower auto-placement (`placement::wipe_tower`) with the
     browser's configuration coercions (27 requests exact in every binding).
+  - [x] Port the workspace bed (`placement::bed`, from the browser's new
+    `WorkspaceBed.ts`): the bed size (the far corner of `printable_area`,
+    else 200 mm), the printable rectangle, the printable height and a plate
+    tower's arrange keep-out, read from the configuration the workspace reads
+    (74 configurations, 14 refusals and 12 plate beds of opened projects
+    exact in every binding; 178 Kotlin checks).
+  - [x] Port the transform inspector's fields (`placement::fields`, from the
+    browser's new `TransformFields.ts`): Move/Rotate/Scale values and texts
+    (mm, degrees of three.js's XYZ Euler angles, percent), field edits for one
+    instance or a selection carried around its primary with the workspace's
+    refusals, and three.js's Euler ↔ quaternion conversion over V8's `asin`
+    and `atan2` (101 reads, 1,720 conversions, 94 edits and 19 refusals exact
+    in every binding; 1,936 Kotlin checks).
   - [x] Port split preparation (`mesh::split`, `split`): the pinned
     shared-edge components with the browser's float32 signed volume and
     recentring, prepared on a session guard (parts, distinct geometries or a
@@ -1919,7 +1932,13 @@ storage journeys on phone, tablet, and desktop-sized windows.
   the renderer exists only while resumed), with orbit, zoom and a picked
   instance selected in the project and the session's selection highlighted;
   a JNI check syncs a real session and the emulator smoke compares
-  screenshots. Painting, model tools, lighting and preview controls remain.
+  screenshots. The Workspace and Preview draw the project's
+  own bed (`ProjectView.bed`), imports land on it, and `ProjectWorkspace`
+  carries out drop to bed, mirror, the resets, centre, scale to fit, lay flat
+  and arrange as the browser's guarded, coalescing transform edits (a
+  127-check JNI journey matches the browser controller's hash, undo label and
+  report after every step and undo). Painting, the inspector and model-tool
+  UI, lighting and preview controls remain.
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.

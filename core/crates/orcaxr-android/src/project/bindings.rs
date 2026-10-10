@@ -375,6 +375,32 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_workspaceBed, workspace_bed, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectWorkspaceBed, project_workspace_bed, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_transformFields, transform_fields, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_transformFieldEdit, transform_field_edit, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_transformRotation, transform_rotation, jstring,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_libraryCreate, library_create, (),
     handle: jlong,
     stored: JByteArray<'local>,

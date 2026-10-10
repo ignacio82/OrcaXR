@@ -3085,7 +3085,11 @@ line, plus V8's scaled, compensated `hypot` and JavaScript's NaN/signed-zero
 `min`/`max`. `js-math-vectors.mjs` pins 10,099 sin/cos arguments (every
 range-reduction branch, thresholds, huge and subnormal inputs), 2,512 exp and
 1,509 hypot cases as bit patterns. The AMF rotation decoder, previously on
-`libm` trig, now uses it too.
+`libm` trig, now uses it too. `asin`, `atan` and `atan2` (V8's fdlibm,
+including FreeBSD's `m &= 1` for |y/x| beyond 2^60) serve three.js's Euler
+angles: 3,860 asin arguments (every threshold, the tails near ±1) and 3,680
+atan2 pairs (signed zeros, infinities, NaN, x = 1, every reduction band of
+atan) agree bit for bit.
 
 ### Engine-option value codec
 
@@ -3542,6 +3546,76 @@ brim — over the picking scene's parts, an empty plate and a plate with an
 existing tower, under every bias and request override: 27 requests (3
 refusals). Rust, WASM in Node and Chrome and JNI answer all 27 byte for byte;
 55 Kotlin checks cover the wrapper.
+
+### Workspace bed
+
+`placement::bed` ports how the browser's workspace reads its bed from a
+project (`web/src/workspace/WorkspaceBed.ts`, through
+`WorkspaceBedExchange.ts`; `OrcaWorkspace` now calls the module for its
+printer-space mapping, scale-to-fit height and arrange keep-out). The bed size
+is the far corner of `printable_area` — the polygon as the profile's flattened
+text (a string as is, a list of strings joined with commas, anything else
+empty), split on `,` and `x` and read with `Number`
+(`bedSizeFromProfile`), each side 200 mm when zero; the plate is drawn from
+the bed corner to it, and models are placed, centred, scaled to fit and
+arranged on it. The printable area is the rectangle the polygon encloses
+(`printableAreaRect`, shared with wipe-tower placement), whose origin a
+printer may offset from the bed corner (the U1's sits at 0.5 × 1 mm). The
+printable height is `parseFloat(String(printable_height))` (a list's first
+entry) when positive. An enabled plate tower keeps a square of its drawn
+width (`Number(prime_tower_width ?? wipe_tower_width) || 60`) clear when its
+plate is arranged or filled. A project answers from the configuration the
+workspace reads (`getSlicingConfiguration().config`): its base profile when it
+records one, else its configuration — so a project-level override of
+`printable_area` does not move the browser's bed. Requests are canonical JSON
+(`{"config","wipeTower"}` → `{"keepOut","printableArea","printableHeightMm",
+"sizeMm"}`, an absent value or a keep-out edge JSON cannot carry `null`);
+`state_bed_json` answers for one plate of a project. Bindings: WASM
+`workspace_bed` and `CapturedProject.workspace_bed`, the JNI exports
+`workspaceBed`/`projectWorkspaceBed`, Kotlin `WorkspaceBeds.of` and
+`ProjectSnapshot.workspaceBed`.
+
+`workspace-bed-vectors.mjs` reads 74 configurations through the production
+module — the bundled printers' areas and heights (as lists and as text), every
+coercion (`;` separators, upper-case `X` read as hexadecimal by `Number`,
+whitespace, exponents, non-string entries, lone surrogates, infinite and huge
+coordinates), 16 height spellings and 21 tower widths — refuses 14 malformed
+requests, and opens three projects through the real controller (a fresh one,
+towers on two plates, a base profile under an overriding configuration) for
+12 plate beds. Rust, WASM in Node and Chrome and JNI answer all of it byte for
+byte; 178 Kotlin checks cover the wrapper.
+
+### Transform inspector fields
+
+`placement::fields` ports the browser's Tool Settings panel for the Move,
+Rotate and Scale tools (`web/src/workspace/TransformFields.ts`, through
+`TransformFieldsExchange.ts`; `main.ts` and `OrcaWorkspace` now call the
+module). Move shows millimetres, Rotate the degrees of three.js's Euler angles
+in its default XYZ order (`Euler.setFromQuaternion` through
+`Matrix4.makeRotationFromQuaternion`, the stored quaternion as given), Scale
+percent, each as `toFixed(2)`; an edit reads each field with
+`parseFloat(text) || 0`, sets the primary instance's translation, rotation
+(`Quaternion.setFromEuler(...).normalize()` of the degrees in radians) or
+scale (percent / 100), and carries the rest of the selection around it
+(`primaryTransformEdit` over `projectMultiInstanceTransform`); every change is
+then checked as the workspace checks it before submitting
+(`cloneAndValidateTransform`, now `project/objects/transformValidation.ts`):
+non-finite values, a zero scale and a zero rotation refuse in the browser's
+words, as do a flat or unrotated pivot. The trigonometry is V8's:
+`js_math::asin` and `atan2` join the fdlibm port. Bindings: WASM
+`transform_fields`, `transform_field_edit` and `transform_rotation`, the JNI
+exports of the same names, and Kotlin `TransformFields.values`, `edit`,
+`eulerRadians` and `rotation` (`TransformTool` carries the panel titles).
+
+`transform-field-vectors.mjs` drives the production module over three.js's
+own classes: 101 field reads (gimbal-locked, unnormalized, mirrored, zero and
+seeded rotations; tiny, huge and negative translations and scales), 1,720
+Euler ↔ quaternion conversions (a 45° grid, seeded angles, round trips), 94
+edits (every `parseFloat` spelling, single instances and selections carried
+around each member, 25 refusals) and 19 malformed requests. Rust, WASM in
+Node and Chrome and JNI answer all of them byte for byte; 1,936 Kotlin checks
+cover the wrapper. Applying an edit to the session's selection is left to the
+inspector's own work.
 
 ### Paint palette
 
@@ -4473,8 +4547,8 @@ them), Share reaching the system's share sheet with a ZIP copy while the
 project stays unsaved, Back asking from the Device area (Cancel stays,
 Discard leaves),
 a `file:` handover refused, and the recent document reopened after a
-restart through its persisted grant. A model lands on the browser's
-200 mm plate until printer profiles reach Android. The smoke saves first only
+restart through its persisted grant. A model lands centred on the project's
+own bed and dropped onto it, as the browser places an import. The smoke saves first only
 to a document already saved; choosing a destination from that dialog is
 unexercised. Share writes the copy to the app's cache (replacing the one shared before)
 and offers it through `SharedProjects`, a read-only, unexported provider
@@ -4684,8 +4758,50 @@ its mesh, a full snapshot for a new renderer, "New project" emptying the
 bed. The Project smoke compares Workspace screenshots on the emulator: an
 imported model changes about 1,500 pixels of the framed bed, a tap on it
 selects and re-tints it, and undo restores the empty bed. Shading is baked
-flat (the browser lights its surface); paint colours, the printer profile's
-bed size and toolpaths are not drawn yet.
+flat (the browser lights its surface); paint colours and toolpaths are not
+drawn yet.
+
+### Android project bed and placement edits
+
+The Workspace draws the project's own bed: `ProjectView.bed` is read with
+every project effect (`ProjectSnapshot.workspaceBed` for the active plate, see
+[Workspace bed](#workspace-bed)), so opening a U1 project draws its 270.5 ×
+271 mm plate and a profile choice redraws it; a side the renderer cannot draw
+is held within 1–5000 mm (`PreviewFraming.drawable`). Imports land centred on
+that bed and dropped onto it, as the browser places them, and Preview draws
+the toolpaths on it.
+
+`ProjectWorkspace` carries out the browser workspace's placement actions over
+the shared planners: `dropToBed`, `mirror`, `resetTransforms` (rotation,
+scale or both), `centerOnPlate`, `scaleToFit` (the bed and the printable
+height; a project stating none refuses with the browser's status words),
+`layOnFace` (a local normal), `layOnFacet` (a picked facet) and
+`arrangePlate` (the bed, keeping the plate's tower clear). Each plans on the
+actor's authority against exactly the state the current guard names (another
+edit landing first refuses as changed) and submits the plan as one guarded
+`setInstanceTransforms` under the browser's gesture — `mirror:<axis>`,
+`reset:<target>`, `center`, `scale-to-fit`, `lay-on-face`, `arrange:<plate>`,
+or `batch:<n>` from the workspace's transform sequence for drop to bed — so a
+repeated edit of the same instances coalesces into one undo entry as in the
+browser, an edit that changes nothing records nothing, and a plan with no
+changes (an arranged plate, a selection already fitting) submits nothing. A
+keep-out edge JSON cannot carry (an infinite tower width) reaches the planner
+as an inverted rectangle, which it refuses in the browser's words as it
+refuses that edge.
+
+`placement-edit-vectors.mjs` runs the production `CanonicalWorkspaceController`
+over the browser's canonical 3MF of the picking scene (a U1 printable area,
+its height and a plate tower): 24 placement steps — repeated mirrors that
+coalesce, every reset, a centre that changes nothing, scale to fit twice,
+lay flat by a normal and by two facets, arrange twice, drop to bed twice and
+four refusals — recording after each the semantic hash, undo label and count
+and what the workspace reports, then undoing all 14 entries.
+`ProjectPlacementEditChecks` (127 checks over JNI) opens the same bytes in a
+`ProjectWorkspace` with the browser's hash and bed, applies every step
+through the wrappers with the browser's hash, label, report or refusal after
+each, and undoes back through every recorded state to the opened one; the
+empty project refuses to scale to fit for want of a printable height. The
+inspector, selection and their UI are not part of this work.
 
 ### Android Preview area
 
@@ -4699,7 +4815,7 @@ windows, which window a top- or bottom-layer move loads, previous/next
 window steps (single layer included), clamped and swapped layer ranges, the
 hidden move types and the window notice word for word. The toolpaths draw as
 `FilamentScene.setToolpath` lines in the core's colours, framed
-(`PreviewFraming`, 3 tests) above the bed; the screen offers the 12 colour
+(`PreviewFraming`, 4 tests) above the bed; the screen offers the 12 colour
 modes in the browser's order and names, top and bottom layer sliders with the
 layer's Z, single layer, the move filters (each a labelled toggle, so
 accessibility services read its name) and the legend, value range and
@@ -4711,8 +4827,9 @@ picture, the preview survives leaving the area, and an empty file is refused
 as the browser refuses it. Below the filters it shows what the file states —
 estimated time, weight, layers, tool changes, and each tool's material,
 length and weight beside a decorative swatch — as the browser's panel words
-it (`GcodeSession.summary`; the smoke reads `≈42s · 0.02 g`). The bed is 200 mm, enlarged to the
-toolpath (G-code carries no bed). The bottom navigation's labels now stay on
+it (`GcodeSession.summary`; the smoke reads `≈42s · 0.02 g`). The bed is the
+project's (`ProjectView.bed`), enlarged to the toolpath in 10 mm steps (G-code
+carries no bed). The bottom navigation's labels now stay on
 one line: with four areas a phone left "Workspace" wrapped.
 
 ### Android Prepare area
@@ -6034,6 +6151,9 @@ node tools/cross-platform/generate-contracts.mjs
 node tools/cross-platform/generate-opc-lowercase.mjs --verify-runtime
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/generate-filament-mixer.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slicing-configuration-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/workspace-bed-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/transform-field-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/placement-edit-vectors.mjs
 node tools/cross-platform/generate-bbs-filament-keys.mjs
 node web/scripts/run-tests.mjs opc-lowercase.test.ts
 node tools/cross-platform/canonical-requests.mjs

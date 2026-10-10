@@ -9,6 +9,8 @@ mod editor;
 mod library;
 #[cfg(feature = "project")]
 mod model;
+#[cfg(feature = "project")]
+mod placement;
 #[cfg(feature = "printer")]
 mod printer;
 #[cfg(feature = "project")]
