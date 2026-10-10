@@ -5,6 +5,8 @@ import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.Proxy
+import java.util.concurrent.TimeUnit
+import okhttp3.ConnectionPool
 import okhttp3.Interceptor
 
 /** A plain-HTTP exchange the app's policy refused: its destination is not on the local network. */
@@ -51,6 +53,19 @@ object LanTransportPolicy {
 
     private fun mapped(bytes: ByteArray): Boolean =
         (0 until 10).all { bytes[it].toInt() == 0 } && bytes[10].toInt() == -1 && bytes[11].toInt() == -1
+
+    /** How long an idle connection is kept for reuse: below any server's idle timeout. */
+    const val KEEP_ALIVE_MS = 2_000L
+    private const val MAX_IDLE_CONNECTIONS = 4
+
+    /**
+     * A connection pool that lets an idle connection go well before a server
+     * closes it (a Node server after 5 s, nginx after 75). These clients never
+     * retry — a retry could repeat a print start or a slice submission the
+     * server already received — so reusing a connection the server has closed
+     * would fail the next request outright.
+     */
+    fun idleConnections(): ConnectionPool = ConnectionPool(MAX_IDLE_CONNECTIONS, KEEP_ALIVE_MS, TimeUnit.MILLISECONDS)
 
     /**
      * An OkHttp network interceptor refusing a cleartext exchange to anything

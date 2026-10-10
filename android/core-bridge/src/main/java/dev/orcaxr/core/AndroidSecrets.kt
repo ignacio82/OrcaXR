@@ -52,8 +52,15 @@ class SharedPreferencesBlobStore(context: Context, file: String, private val key
 
 /** The app's credential vault: a Keystore key and a private preferences file. */
 object AppCredentialVault {
+    @Volatile private var process: SharedCredentials? = null
+
     fun open(context: Context): CredentialVault = CredentialVault(
         SharedPreferencesBlobStore(context, "orcaxr.secrets", "credentials"),
         SealingCipher(AndroidKeyStoreKeys("orcaxr.credentials")),
     )
+
+    /** The process's one record over [open]'s vault, which every area reads and changes.
+     * The first call reads the vault (the Keystore): make it off the main thread. */
+    fun shared(context: Context): SharedCredentials =
+        process ?: synchronized(this) { process ?: SharedCredentials(open(context.applicationContext)).also { process = it } }
 }

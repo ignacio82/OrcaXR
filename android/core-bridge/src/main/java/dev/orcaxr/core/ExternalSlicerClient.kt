@@ -89,6 +89,7 @@ class ExternalSlicerClient(
     private val http: OkHttpClient = http.newBuilder()
         .apply { localNetwork?.let { addInterceptor(LocalNetworkAccess.gate(it, http.dns)) } }
         .addNetworkInterceptor(LanTransportPolicy.cleartextGuard)
+        .connectionPool(LanTransportPolicy.idleConnections())
         .followRedirects(false)
         .followSslRedirects(false)
         .retryOnConnectionFailure(false)

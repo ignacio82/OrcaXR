@@ -18,7 +18,9 @@ import java.util.concurrent.TimeUnit
  * Project area as the one-plate archive an external slicer loads, its
  * overrides the plate's, reopening as that plate alone, an unknown and an
  * unprintable plate refused with the browser's messages before anything is
- * written; the archive
+ * written; the archive tagged with the project state it was written from,
+ * which its plate's preflight describes too (the unprintable plate's blocks)
+ * and a new project leaves; the archive
  * sliced — submitted, polled with progress, the artifact streamed byte for
  * byte with its digest checked, released; a held job cancelled and the
  * cancellation confirmed; a failed job reported in the policy's words; a
@@ -73,6 +75,10 @@ object ProjectExternalSlicerClientChecks {
             val engine = (attested as ProjectIntents.ExternalSlicerAttestation.Attested).value
             check(engine.engine == ProjectIntents.ExternalSlicerEngine.Cli && text(engine.artifactHash).startsWith("sha256:"), "cli engine")
             check(!ExternalSlicerPolicy.supports(engine.engine, "wave-overhangs"), "cli features")
+            // Idle until the server has closed the connection (Node: its 5 s keep-alive and 1 s of
+            // grace), as while the operator types a token: never retried, the next request must not reuse it.
+            Thread.sleep(7_000)
+            check(done(client.attest(endpoint, token)) is ProjectIntents.ExternalSlicerAttestation.Attested, "attested_after_idle")
             val tokenless = done(client.attest(endpoint, null))
             check(
                 (tokenless as? ProjectIntents.ExternalSlicerAttestation.Unattested)?.let { text(it.value) } ==
@@ -111,6 +117,17 @@ object ProjectExternalSlicerClientChecks {
                     .completion.toCompletableFuture()) as ProjectOutcome.Inspected
                 check(plate.overrides == inspected.result.getOrThrow(), "plate overrides ${plate.overrides}")
                 check(!workspace.view.dirty, "the project's saved state is untouched")
+                // The archive is the state the session last acknowledged; its preflight describes that state.
+                check(plate.revision != null && plate.revision == workspace.view.revision, "plate revision ${plate.revision}")
+                check(opened.activePlate?.id in ids && opened.activePlate?.printable == true, "active plate ${opened.activePlate}")
+                val preflight = done(workspace.preflight(ids[0]))
+                check(
+                    preflight.revision == plate.revision && text(preflight.summary.plateId) == ids[0] &&
+                        preflight.issues.size.toLong() == minOf(preflight.summary.issueCount, ProjectWorkspace.MAX_PREFLIGHT_ISSUES),
+                    "plate preflight ${preflight.summary}",
+                )
+                val blocked = done(workspace.preflight(ids[1])).summary
+                check(!blocked.canSlice && blocked.blockingCount > 0, "an unprintable plate's preflight blocks ${blocked}")
                 ProjectWorkspace(resolver = LocalTimestampResolver { it }).use { second ->
                     done(second.ready())
                     done(second.open(Memory(output.bytes), "plate.3mf"))
@@ -158,6 +175,10 @@ object ProjectExternalSlicerClientChecks {
                         credentials.message == "Canonical external slicer URLs cannot contain credentials, query parameters, or fragments.",
                     "credentials $credentials",
                 )
+
+                // A changed project is another state: output from the plate archive is stale.
+                done(workspace.newProject())
+                check(workspace.view.revision != null && workspace.view.revision != plate.revision, "a new revision ${workspace.view.revision}")
             }
         }
         // The policy's timing, as the browser's.

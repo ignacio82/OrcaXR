@@ -18,11 +18,14 @@ import dev.orcaxr.core.DocumentOwners
 import dev.orcaxr.core.ProjectActorImport
 import dev.orcaxr.core.ProjectArchiveFormat
 import dev.orcaxr.core.ProjectDocumentOutput
+import dev.orcaxr.core.ProjectPlateArchive
+import dev.orcaxr.core.ProjectPlatePreflight
 import dev.orcaxr.core.ProjectRecovery
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.core.RecentDocuments
 import dev.orcaxr.nativeapp.device.PreferencesTextStore
+import dev.orcaxr.nativeapp.prepare.PlateSource
 import dev.orcaxr.renderer.SceneSync
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
@@ -58,9 +61,10 @@ enum class ConflictAnswer { Overwrite, SaveAs, Cancel }
  * The Project area's host adapter: it owns the [ProjectWorkspace], runs
  * provider reads and writes on one worker thread, keeps recently used
  * documents with their persisted grants, and publishes the workspace's
- * [ProjectView] projection to Compose on the main thread.
+ * [ProjectView] projection to Compose on the main thread. Prepare slices
+ * through it ([PlateSource]), never through a second session.
  */
-class ProjectModel(application: Application) : AndroidViewModel(application) {
+class ProjectModel(application: Application) : AndroidViewModel(application), PlateSource {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "project-model") }
     private val resolver = application.contentResolver
@@ -68,6 +72,8 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     /** Unsaved work kept for a session the system ends; in private storage, excluded from backups. */
     private val recovery = ProjectRecovery(File(application.filesDir, "recovery"))
     private lateinit var workspace: ProjectWorkspace
+    /** The workspace, once the worker made it. */
+    private val started = CompletableFuture<ProjectWorkspace>()
     private var subscription: AutoCloseable? = null
     /** The document "Save" writes to: one this app saved, or an opened one in OrcaXR's own
      * canonical package (writing it back loses nothing); never a foreign 3MF it would convert. */
@@ -87,7 +93,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
     @Volatile private var sceneSync: SceneSync? = null
     private val sceneListeners = LinkedHashSet<(SceneSync.Update) -> Unit>()
 
-    var view by mutableStateOf(ProjectView())
+    override var view by mutableStateOf(ProjectView())
         private set
     var busy by mutableStateOf(false)
         private set
@@ -124,6 +130,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
                 sync.request()
             }
             sync.request()
+            started.complete(workspace)
             workspace.ready().get()
             publishRecoveries()
             main.post { view = workspace.view }
@@ -462,6 +469,13 @@ class ProjectModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    /** The plate's slice preflight as the project stands ([ProjectWorkspace.preflight]). */
+    override fun preflight(plateId: String): CompletableFuture<ProjectPlatePreflight> = started.thenCompose { it.preflight(plateId) }
+
+    /** The plate's one-plate slice archive ([ProjectWorkspace.projectPlate]); the project's saved state is untouched. */
+    override fun projectPlate(plateId: String, output: ProjectDocumentOutput): CompletableFuture<ProjectPlateArchive> =
+        started.thenCompose { it.projectPlate(plateId, output) }
 
     fun undo() = work { workspace.undo().await() }
     fun redo() = work { workspace.redo().await() }

@@ -311,7 +311,7 @@ jobs:
           rustup toolchain install 1.94.1 --profile minimal --target aarch64-linux-android,x86_64-linux-android
           sdkmanager 'platforms;android-37' 'build-tools;37.0.0' 'ndk;29.0.14206865' 'system-images;android-34;google_apis;x86_64' 'emulator'
       - name: Build both ABIs, shrink release, verify dependencies, lint and test geometry/boundaries
-        run: ./android/gradlew -p android :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest :core-bridge:assembleDebugAndroidTest :core-bridge:testDebugUnitTest :renderer-api:testDebugUnitTest :app:lintDebug :xr-experiment:assembleDebug :xr-experiment:assembleDebugAndroidTest :renderer-scenecore:testDebugUnitTest :xr-experiment:lintDebug :renderer-scenecore:lintDebug --dependency-verification strict --no-daemon --console=plain
+        run: ./android/gradlew -p android :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest :core-bridge:assembleDebugAndroidTest :core-bridge:testDebugUnitTest :renderer-api:testDebugUnitTest :app:testDebugUnitTest :app:lintDebug :xr-experiment:assembleDebug :xr-experiment:assembleDebugAndroidTest :renderer-scenecore:testDebugUnitTest :xr-experiment:lintDebug :renderer-scenecore:lintDebug --dependency-verification strict --no-daemon --console=plain
       - name: Verify every packaged ELF and APK alignment
         run: |
           python3 tools/cross-platform/verify-artifacts.py --apk android/app/build/outputs/apk/debug/app-debug.apk

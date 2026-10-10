@@ -107,6 +107,7 @@ fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier) {
             }
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(status(state), style = MaterialTheme.typography.bodySmall)
+            if (state.slice != null) Text(stringResource(R.string.preview_sliced), style = MaterialTheme.typography.bodySmall)
             model.message?.let { message ->
                 Card(Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {

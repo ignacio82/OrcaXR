@@ -1810,11 +1810,18 @@ external slice routes, and verified output publication.
   `ProjectWorkspace.projectPlate` over the export capture) and the Kotlin
   transport `ExternalSlicerClient` (attest, submit, poll, streamed and checked
   download, release, confirmed cancel) is host-checked end to end against the
-  real headless server. Connection-generation capture, remembered slicer
-  credentials, repeatable download/leases and the UI remain.
+  real headless server. The Prepare area now drives it: the browser
+  controller's connection (canonical endpoint, generation-captured attestation,
+  persisted record), the token in the shared remembered-credentials record
+  (`SharedCredentials`, so the Device area's keys and switch govern it too),
+  and output tagged with the `ProjectRevision` it came from. Repeatable
+  download/leases remain.
 - [ ] Define local/external route selection using measured resource limits and
   user preferences. Show the selected route and reason; do not upload models or
   silently reroute work to a server the user has not configured and authorized.
+  Prepare shows the route and why (an attested external slicer, or none: there
+  is no local engine yet) and asks once per endpoint before any plate is
+  uploaded; local slicing and the selection between routes remain.
 - [ ] Qualify foreground/background execution for each SDK/distribution target.
   Test task switching, screen lock, thermal pressure, notification denial where
   relevant, service timeout, process death, and reopening an interrupted job.
@@ -1839,8 +1846,18 @@ storage journeys on phone, tablet, and desktop-sized windows.
   area's actions carry the browser's action names (New Project, Open
   Project…, Save Project, Save Project As…, Import Model…, Undo, Redo).
   The Preview area is the browser's G-code viewer over the shared core's
-  preview (picker, colour modes, layer window and filters, emulator-verified);
-  previewing a slice and Prepare wait for the slicing route.
+  preview (picker, colour modes, layer window and filters, emulator-verified).
+  The Prepare area (`PrepareModel`) slices the active plate on the external
+  slicer as the browser's `sliceNow`: attested route, the shared preflight's
+  issues as the browser's panel shows them, the one-plate archive, "Slice" /
+  "Cancel Slice" with progress, the G-code streamed to the app's cache and
+  opened in Preview; output whose project changed is discarded or withdrawn.
+  The bar's order is Workspace (the home), Prepare, Preview, Device, Project.
+  JVM tests cover its platform-free flow, and `android-prepare-smoke.py`
+  runs it on API 34 and the 16 KB API 37 image against the real server. Until
+  catalog profiles can be chosen, only a project carrying its own printer and
+  filament settings passes the preflight; a bare imported model is blocked
+  with the browser's card.
 - [ ] Adapt inspector/object tree, toolbars, menus, command palette, dialogs,
   settings, and progress states to narrow, medium, and wide windows. Support
   keyboard traversal, shortcuts, hover, context menus, trackpad navigation,

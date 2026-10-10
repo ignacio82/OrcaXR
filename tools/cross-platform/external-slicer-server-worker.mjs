@@ -4,7 +4,9 @@
 // of the pinned build (this repository's `server/patches/`, a stand-in binary
 // hashed from disk), and an injected runner stands in for Snapmaker Orca: it
 // keeps what each job uploaded and writes one fixed G-code, or holds until
-// cancelled, or fails, as the test override `orcaxr_test` asks.
+// cancelled, or fails, as the test override `orcaxr_test` asks — or, once the
+// parent sent `hold` (a client that sets no test override), holds every job
+// until it sends `release`.
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -41,9 +43,10 @@ const gcode = workerData.gcode;
 const jobs = [];
 const requests = [];
 const authorizations = [];
+let holding = false;
 const service = createSlicerService({
   engine: "cli",
-  logger: { log() {}, info() {}, warn() {}, error() {} },
+  logger: { log() {}, info() {}, warn: console.error, error: console.error },
   uploadDirectory: scratch,
   config: {
     ...loadServerConfig({}),
@@ -63,7 +66,7 @@ const service = createSlicerService({
     const model = await readFile(modelPath);
     const job = { sha256: sha256(model), bytes: model.length, zip: model[0] === 0x50 && model[1] === 0x4b, overrides, outcome: "running" };
     jobs.push(job);
-    const mode = overrides.orcaxr_test;
+    const mode = overrides.orcaxr_test ?? (holding ? "hold" : undefined);
     onProgress(25, mode === "hold" ? "Holding for cancellation" : "Generating G-code");
     if (mode === "hold") {
       await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
@@ -93,6 +96,9 @@ parentPort.postMessage(`http://127.0.0.1:${server.address().port}`);
 parentPort.on("message", async (message) => {
   if (message === "summary") {
     parentPort.postMessage({ jobs, requests, authorizations: [...new Set(authorizations)], patches });
+  } else if (message === "hold" || message === "release") {
+    holding = message === "hold";
+    parentPort.postMessage(holding ? "holding" : "released");
   } else if (message === "close") {
     await service.shutdown();
     await new Promise((resolve) => server.close(resolve));

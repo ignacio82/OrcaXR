@@ -145,7 +145,8 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         work {
             workspace = DeviceWorkspace(
                 PreferencesTextStore(application, "orcaxr.printers", "directory"),
-                AppCredentialVault.open(application),
+                // One record with Prepare's slicer token: neither area overwrites the other's change.
+                AppCredentialVault.shared(application),
                 AndroidLocalNetwork.permission(application),
                 // The transport's diagnostics (redacted by the core) reach logcat in debuggable builds only.
                 logger = if (application.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
@@ -315,16 +316,17 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         workspace.setRemember(remember)
         main.post {
             message = if (remember) {
-                "Printer keys will be remembered on this device."
+                "Printer keys and the slicer token will be remembered on this device."
             } else {
-                "Stopped remembering printer keys; the saved copies were erased."
+                "Stopped remembering printer keys and the slicer token; the saved copies were erased."
             }
         }
     }
 
     fun forgetCredentials() = work {
         workspace.forgetCredentials()
-        main.post { message = "Every saved printer key was forgotten on this device." }
+        // The browser's words: the slicer token is in the same record.
+        main.post { message = "Forgot the saved printer key and slicer token on this device." }
     }
 
     /** Reports how [future] failed, without holding the worker while it runs. */

@@ -9,8 +9,15 @@ data class ProjectExportLimits(val jsonBytes: Long, val assets: Long, val assetB
 
 /** One plate's slice archive, once every byte reached its destination: the
  * projected project's fingerprint (the browser's archive `sourceHash`), the
- * print overrides a submission carries with it, and the Save warnings. */
-class ProjectPlateArchive(val sourceHash: String, val overrides: Map<String, String>, val warnings: List<CharArray>)
+ * print overrides a submission carries with it, the Save warnings, and —
+ * from [ProjectWorkspace.projectPlate] — the state of the project it was
+ * written from. */
+class ProjectPlateArchive(
+    val sourceHash: String,
+    val overrides: Map<String, String>,
+    val warnings: List<CharArray>,
+    val revision: ProjectRevision? = null,
+)
 
 /** Borrowed on one export worker. Streams canonical JSON and assets in declaration
  * order through bounded owned chunks, or one complete 3MF package. The host owns

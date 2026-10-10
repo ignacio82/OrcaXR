@@ -277,6 +277,14 @@ polling, and delays, and distinguishes confirmed cancellation from an already
 terminal job and an unconfirmed outcome. Its 30-second inner deadline precedes
 the canonical route's 31-second outer cleanup safeguard.
 
+Results and the web UI's `index.html` are sent by paths the server chose,
+never the request's, so Express's dotfile rule (which answers 404 for any
+path with a segment starting with ".") must not apply: a result is sent with
+`dotfiles: "allow"` and `index.html` relative to its root. Before this, a
+temporary or upload directory under a dot directory (`~/.cache/tmp`) failed
+every G-code download as `INTERNAL_ERROR`, and a web UI installed under one
+failed its routes; two integration tests keep both working.
+
 Multer is pinned to 2.4.0 or newer: 2.2/2.3 can orphan disk writes when an
 upload aborts before the filename callback. Keep the delayed-storage regression
 and real HTTP disconnect tests. Multipart overrides accept one JSON string,

@@ -1237,7 +1237,7 @@ try {
     ...credentialsFixture.saves.map((c) => ["saves", c.requestJson, c.stored ?? "-"].join("\t")),
   ];
   assert.equal(jvm.call("credentialsChecks", credentialsScript.join("\n")), 142);
-  assert.equal(jvm.call("credentialVaultChecks"), 17);
+  assert.equal(jvm.call("credentialVaultChecks"), 22);
   // The external slicer's policy through the real JNI exports, then the Kotlin wrapper.
   const slicerFixture = JSON.parse(
     await readFile(new URL("testdata/cross-platform/external-slicer-vectors.json", root)),

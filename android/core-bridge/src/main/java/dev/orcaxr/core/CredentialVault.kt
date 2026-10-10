@@ -105,3 +105,50 @@ class CredentialVault(private val store: SecretBlobStore, private val cipher: Se
         val PURPOSE = "orcaxr.credentials.v1".toByteArray(Charsets.UTF_8)
     }
 }
+
+/**
+ * The one remembered-credentials record a process works from. The Device
+ * area's printer keys and Prepare's slicer token are fields of the same
+ * record (the browser's), so every change is made to the latest record under
+ * one lock — no area writes back a copy that lacks another's change — and
+ * stored through the [CredentialVault], which keeps nothing while remembering
+ * is off; this copy still holds the run's values then. Listeners hear every
+ * change.
+ */
+class SharedCredentials(private val vault: CredentialVault) {
+    private val lock = Any()
+    private var value = vault.load()
+    private val listeners = LinkedHashSet<() -> Unit>()
+
+    val current: ProjectIntents.RememberedCredentials get() = synchronized(lock) { value }
+
+    /** Replaces the record with [change] of the latest one, stores it, and answers it. */
+    fun update(change: (ProjectIntents.RememberedCredentials) -> ProjectIntents.RememberedCredentials): ProjectIntents.RememberedCredentials {
+        val next = synchronized(lock) {
+            change(value).also {
+                vault.save(it)
+                value = it
+            }
+        }
+        changed()
+        return next
+    }
+
+    /** Forgets every secret, stored and in memory ([CredentialVault.forget]). */
+    fun forget() {
+        synchronized(lock) {
+            vault.forget()
+            value = vault.load()
+        }
+        changed()
+    }
+
+    fun subscribe(listener: () -> Unit): AutoCloseable {
+        synchronized(lock) { listeners += listener }
+        return AutoCloseable { synchronized(lock) { listeners -= listener } }
+    }
+
+    private fun changed() {
+        for (listener in synchronized(lock) { listeners.toList() }) listener()
+    }
+}

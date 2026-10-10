@@ -4377,8 +4377,17 @@ G-code): the Project area writes plate 1 of a two-plate project as its
 archive (plate 2, unprintable, and an unknown plate are refused), which is
 attested, submitted, polled, downloaded byte for byte and released; a held
 job is cancelled and confirmed; a failure reads in the policy's words; a
-tokenless slice and an unusable address are refused before any upload (25
-Kotlin checks, and the server's own record of each request and upload).
+tokenless slice and an unusable address are refused before any upload; the
+archive carries the `ProjectRevision` it was written from, which the plate's
+`ProjectWorkspace.preflight` describes too (the unprintable plate's blocks)
+and a new project leaves; and a connection left idle until the server
+closed it is not reused (31 Kotlin checks, and the server's own record of
+each request and upload). That last check failed before: the client never
+retries, yet kept idle connections OkHttp's default five minutes while the
+Node server closes them after six seconds (its 5 s keep-alive and 1 s of
+grace), so connecting again after typing a token failed as unreachable.
+`MoonrakerClient` already let them go after 2 s; the slicer client and
+`PrinterExchanges` now share that pool (`LanTransportPolicy.idleConnections`).
 
 ### Android Project area
 
@@ -4579,6 +4588,46 @@ as the browser refuses it. Estimated time, filament and per-tool usage await
 the shared artifact summary's bindings; the bed is 200 mm, enlarged to the
 toolpath (G-code carries no bed). The bottom navigation's labels now stay on
 one line: with four areas a phone left "Workspace" wrapped.
+
+### Android Prepare area
+
+Prepare slices the active plate on the external slicer as the browser's
+`sliceNow` does. Its connection is the browser's
+`ExternalSlicerConnectionController` (`SlicerConnection`: the policy's
+canonical endpoint, off until its engine attests within 8 s, generations
+that make a check in flight moot, persisted as its record is and checked
+again at start), with the browser panel's words ("Checking engine…",
+"Online — attested" and the engine, or the policy's refusal). The bearer
+token is the `slicerToken` of the one remembered-credentials record a process
+shares (`SharedCredentials` over the `CredentialVault`), so the Device area's
+keys never overwrite it, its remember switch keeps or drops it, and its
+Forget clears it (in the browser's words). A slice attests the route again,
+runs the shared preflight of the active plate (`ProjectWorkspace.preflight`,
+the project's own printer and filaments, shown as the browser's panel cards
+with Hide/Show; a blocking one refuses as `SlicePreflightError` does), writes
+the one-plate archive (`projectPlate`, refused when its `ProjectRevision` is
+not the preflight's), and — only to an endpoint the operator agreed to once —
+uploads it, with "Cancel Slice" stopping before the upload or ending in the
+client's confirmed outcome. The G-code streams into the app's cache through
+`GcodeTally` (lines and the browser's fallback layer count) and is discarded
+when the project changed meanwhile; otherwise Preview opens it
+(`PreviewModel.openSlice`, keeping its revision) and withdraws it once the
+project changes. The platform-free flow has 11 JVM tests;
+`android-prepare-smoke.py` drives it on the emulator suites (API 34, and the
+16 KB API 37 image) against the real server on the host
+(`external-slicer-serve.mjs`, reached at 10.0.2.2): the refusal without a
+token; a cube imported into a new project, blocked by the preflight's card
+(it carries no printer or filament profile, and the app cannot choose catalog
+ones yet) with Slice unavailable; the multicolour hexagon (which carries its
+own) opened in its place, sliced after consent, shown in Preview, a confirmed
+cancel, and the slice withdrawn once a model is imported. Its first run
+found the client's stale keep-alive connection (above) and a server defect:
+results in a temporary directory under a dot directory were never delivered
+([runtime and deployment](runtime-and-deployment.md)). Not yet matched: local slicing,
+catalog profile targets for preflight, the wave-overhang engine check,
+preflight actions (reveal, drop to bed), troubleshooting text, slicing all
+plates, and the shared artifact summary (layers are the browser's fallback
+count).
 
 ### Android Device area
 

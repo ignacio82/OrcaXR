@@ -86,6 +86,27 @@ object ProjectCredentialVaultChecks {
         vault.forget()
         check(store.blob == null && keys.key == null, "forgetting removes the blob and the key")
         check(vault.load() == record("", ""), "a forgotten vault remembers nothing")
+
+        // One record for every area (the Device area's keys, Prepare's token): no change loses another's.
+        val sharedKeys = SoftwareKeys()
+        val sharedStore = MemoryStore()
+        val shared = SharedCredentials(CredentialVault(sharedStore, SealingCipher(sharedKeys)))
+        var heard = 0
+        shared.subscribe { heard++ }.use {
+            shared.update { it.copy(slicerToken = units("slicer-token-0002")) }
+            shared.update { it.copy(printerApiKeys = listOf(ProjectIntents.RememberedSecret(units("printer-a"), units("key-for-a-0003")))) }
+            check(shared.current == record("", "slicer-token-0002", keys = mapOf("printer-a" to "key-for-a-0003")), "neither change lost the other")
+            check(CredentialVault(sharedStore, SealingCipher(sharedKeys)).load() == shared.current, "the stored record is the shared one")
+            shared.update { it.copy(remember = false) }
+            check(
+                shared.current.slicerToken == units("slicer-token-0002") && sharedStore.blob != null && !sharedStore.blob!!.holds("slicer-token-0002"),
+                "remembering off keeps the run's token and stores none",
+            )
+            shared.forget()
+            check(shared.current == record("", "") && sharedStore.blob == null && sharedKeys.key == null, "forgetting clears the run's copy too")
+        }
+        shared.update { it }
+        check(heard == 4, "listeners hear every change until they stop")
         return checks
     }
 }

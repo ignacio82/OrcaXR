@@ -3,6 +3,25 @@ package dev.orcaxr.core
 import java.time.ZoneId
 import java.util.concurrent.CompletableFuture
 
+/**
+ * Which state of the project something was made from — the browser's slice
+ * guard (`sourceRevision`, `sourceHash`, `sourceAssetHash`): equal only while
+ * nothing in the project changed. The revision only grows, so even an undo
+ * back to the same content is a different state.
+ */
+data class ProjectRevision(val revision: Long, val semanticHash: String, val assetFingerprint: String)
+
+/** The plate slicing works on (the browser's `activePlateId`), as the project names it. */
+data class ProjectPlateState(val id: String, val name: String, val printable: Boolean, val objects: Int)
+
+/** One plate's slice preflight and the state of the project it describes. At most
+ * [ProjectWorkspace.MAX_PREFLIGHT_ISSUES] issues are read; the summary counts them all. */
+class ProjectPlatePreflight(
+    val revision: ProjectRevision,
+    val summary: ProjectIntents.PreflightSummary,
+    val issues: List<ProjectIntents.PreflightIssue>,
+)
+
 /** What the Project area shows: a projection of the session, never a second copy of the project. */
 data class ProjectView(
     val ready: Boolean = false,
@@ -17,6 +36,10 @@ data class ProjectView(
     val totalRows: Long = 0,
     /** The document the project was opened from or last saved to, by its display name. */
     val document: String? = null,
+    /** The state the session last acknowledged, once it has answered. */
+    val revision: ProjectRevision? = null,
+    /** The active plate, once the session has one. */
+    val activePlate: ProjectPlateState? = null,
 )
 
 /** An operation the session refused or could not confirm, in an operator's words. */
@@ -51,8 +74,14 @@ class ProjectWorkspace(
         /** The tree's largest page (the browser renders it in windows of this size). */
         /** Vertices per mesh-packet chunk: small enough for 16-bit indices. */
         const val MESH_CHUNK_VERTICES = 65_535L
+        /** A preflight's bounds: the archive's assets and facets, and the engine's 64 filaments. */
+        val PREFLIGHT = ProjectIntents.PreflightBudget(512L shl 20, 48_000_000, 48_000_000, 4096, 48_000_000, 64)
+        /** The most preflight issues read for display. */
+        const val MAX_PREFLIGHT_ISSUES = 256L
         private const val TREE_PAGE = 64L
         private const val MAX_NAME_UNITS = 256L
+        private const val MAX_ID_UNITS = 4096L
+        private const val MAX_PLATES = 4096L
         /** The browser's capture timing: 5 s after the latest edit, at most 30 s after the first unsaved one. */
         const val CAPTURE_DELAY_MS = 5_000L
         const val CAPTURE_LIMIT_MS = 30_000L
@@ -105,6 +134,7 @@ class ProjectWorkspace(
             val length = minOf(root.textLength(QueryText.NAME) ?: 0, MAX_NAME_UNITS)
             String(root.text(QueryText.NAME, 0, length)) to (root.metadata().values[QueryNumber.PLATE_COUNT] ?: 0.0).toInt()
         }
+        val active = snapshot.query().use(::activePlate)
         fun page(expansion: ProjectIntents.ObjectTreeExpansion) = (snapshot.objectTree(
             ProjectIntents.ObjectTreeRequest(
                 expansion, emptyList(), emptyList(),
@@ -116,7 +146,31 @@ class ProjectWorkspace(
         val plateKeys = page(ProjectIntents.ObjectTreeExpansion.Default(ProjectIntents.Empty))?.rows.orEmpty()
             .filter { it.kind == ProjectIntents.ObjectTreeRowKind.Plate }.map { it.key }
         val page = page(ProjectIntents.ObjectTreeExpansion.Keys(plateKeys))
-        update { it.copy(name = name, plates = plates, rows = page?.rows.orEmpty(), totalRows = page?.totalRows ?: 0) }
+        update { it.copy(name = name, plates = plates, rows = page?.rows.orEmpty(), totalRows = page?.totalRows ?: 0, activePlate = active) }
+    }
+
+    /** The project's active plate, read from its plates in order; a plate without a name is called as the browser lists it. */
+    private fun activePlate(root: ProjectQueryNode): ProjectPlateState? = root.children(QueryRelation.PLATES, MAX_PLATES).use { list ->
+        val total = list.count()
+        var start = 0L
+        while (start < total) {
+            val rows = list.page(start, minOf(ProjectQuery.MAX_PAGE_ROWS.toLong(), total - start)).rows
+            if (rows.isEmpty()) return@use null
+            for ((offset, row) in rows.withIndex()) {
+                if (row.values[QueryNumber.ACTIVE] != 1.0) continue
+                return@use list.node(start + offset).use { plate ->
+                    fun read(field: QueryText, most: Long) = String(plate.text(field, 0, minOf(plate.textLength(field) ?: 0, most)))
+                    ProjectPlateState(
+                        read(QueryText.ID, MAX_ID_UNITS),
+                        read(QueryText.NAME, MAX_NAME_UNITS).ifEmpty { "Plate ${start + offset + 1}" },
+                        row.values[QueryNumber.PRINTABLE] == 1.0,
+                        (row.values[QueryNumber.OBJECT_COUNT] ?: 0.0).toInt(),
+                    )
+                }
+            }
+            start += rows.size
+        }
+        null
     }
 
     private fun effects(effects: ProjectEffects) {
@@ -153,6 +207,7 @@ class ProjectWorkspace(
                 it.copy(
                     ready = true, dirty = history.dirtyCategories.isNotEmpty(),
                     undo = label(history.undoCount > 0, history.undoLabel), redo = label(history.redoCount > 0, history.redoLabel),
+                    revision = revision(state.guard),
                 )
             }
             observe(state)
@@ -288,12 +343,21 @@ class ProjectWorkspace(
     private fun <T> run(
         start: (ProjectActorGuard, (Throwable) -> Unit) -> ProjectRequest,
         accept: (ProjectOutcome) -> T?,
+    ): CompletableFuture<T> = guarded({ _, guard, record -> start(guard, record) }, accept)
+
+    /** [run], with the state the guard was taken from: a guarded operation works on exactly that state. */
+    private fun <T> guarded(
+        start: (ProjectIntents.SessionAcknowledgement, ProjectActorGuard, (Throwable) -> Unit) -> ProjectRequest,
+        accept: (ProjectOutcome) -> T?,
     ): CompletableFuture<T> {
         var cause: Throwable? = null
-        return query().thenCompose { (_, guard) -> outcome(start(guard) { cause = it }) }
+        return query().thenCompose { (state, guard) -> outcome(start(state, guard) { cause = it }) }
             .thenCompose { result -> query().handle { _, _ -> result } }
             .thenApply { result -> accept(result) ?: throw failure(result, cause) }
     }
+
+    private fun revision(guard: ProjectIntents.SessionGuard) =
+        ProjectRevision(guard.revision, text(guard.semanticHash), text(guard.assetFingerprint))
 
     private fun <T> capturing(record: (Throwable) -> Unit, work: () -> T): T = try {
         work()
@@ -352,16 +416,40 @@ class ProjectWorkspace(
     }) { result -> if (result is ProjectOutcome.Exported) Unit else null }
 
     /**
+     * The slice preflight of plate [plateId] as the project stands now (the
+     * browser's `CanonicalSlicePreflightValidator`, in the shared core),
+     * against the project's own printer and filaments — the configuration an
+     * external slice of it carries — with the state it describes.
+     */
+    fun preflight(plateId: String): CompletableFuture<ProjectPlatePreflight> = inspect { session ->
+        val revision = session.snapshot().use { ProjectRevision(it.revision(), it.hash(), session.assetFingerprint()) }
+        val request = ProjectIntents.PreflightRequest(
+            1, units(plateId), ProjectIntents.PreflightTarget.Authored(ProjectIntents.Empty), PREFLIGHT,
+        )
+        session.captureGuard().use { guard ->
+            session.captureExport(guard).use { capture ->
+                capture.preflight(request).use { report ->
+                    val summary = report.summary()
+                    ProjectPlatePreflight(revision, summary, List(minOf(summary.issueCount, MAX_PREFLIGHT_ISSUES).toInt()) { report.issue(it.toLong()) })
+                }
+            }
+        }
+    }
+
+    /**
      * Writes plate [plateId] as the one-plate archive an external slicer
      * loads (the browser's slice projection) to [output], and answers its
-     * fingerprint and the print overrides to submit with it. A plate that
-     * cannot be projected fails with the browser's message before [output]
-     * opens. The project's saved state is untouched.
+     * fingerprint, the print overrides to submit with it and the state of
+     * the project it was written from. A plate that cannot be projected fails
+     * with the browser's message before [output] opens. The project's saved
+     * state is untouched.
      */
     fun projectPlate(plateId: String, output: ProjectDocumentOutput): CompletableFuture<ProjectPlateArchive> {
         var archive: ProjectPlateArchive? = null
         var refusal: ProjectFailure? = null
-        return run({ guard, record ->
+        var from: ProjectRevision? = null
+        return guarded({ state, guard, record ->
+            from = revision(state.guard)
             actor.exportDocument(guard, EXPORT) { _, source ->
                 capturing(record) {
                     archive = try {
@@ -376,7 +464,10 @@ class ProjectWorkspace(
                     }
                 }
             }
-        }) { result -> if (result is ProjectOutcome.Exported) archive else null }
+        }) { result ->
+            // The export was guarded by the state just read, so the archive is that state's.
+            if (result is ProjectOutcome.Exported) archive?.let { ProjectPlateArchive(it.sourceHash, it.overrides, it.warnings, from) } else null
+        }
             // The export reads a failed callback as uncertain; a refused projection wrote nothing.
             .handle { value, error -> if (error == null) value else throw (refusal ?: error) }
     }

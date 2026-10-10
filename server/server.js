@@ -674,7 +674,8 @@ export function createSlicerService(options = {}) {
         return next();
       applyWebHeaders(res);
       res.setHeader("Cache-Control", "no-cache");
-      res.sendFile(path.join(WEB_ROOT, "index.html"), (error) => {
+      // Relative to its root, so a root under a dot directory still serves.
+      res.sendFile("index.html", { root: WEB_ROOT }, (error) => {
         if (error) next(error);
       });
     });
@@ -784,8 +785,10 @@ export function createSlicerService(options = {}) {
     res.setHeader("X-OrcaXR-Gcode-Bytes", String(job.outputBytes));
     res.type("text/plain");
     try {
+      // The path is the server's own, never the request's: a temporary
+      // directory under a dot directory (~/.cache/tmp) must not hide it.
       await new Promise((resolve, reject) =>
-        res.sendFile(job.outputPath, (error) =>
+        res.sendFile(job.outputPath, { dotfiles: "allow" }, (error) =>
           error ? reject(error) : resolve(),
         ),
       );

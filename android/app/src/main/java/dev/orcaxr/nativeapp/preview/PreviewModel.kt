@@ -15,13 +15,17 @@ import dev.orcaxr.core.GcodePreviewModes
 import dev.orcaxr.core.GcodeRequests
 import dev.orcaxr.core.GcodeSession
 import dev.orcaxr.core.GcodeViewPacket
+import dev.orcaxr.core.ProjectRevision
+import dev.orcaxr.nativeapp.prepare.PrepareWords
 import dev.orcaxr.renderer.GcodeIndexEntry
 import dev.orcaxr.renderer.GcodeMoveFilter
 import dev.orcaxr.renderer.GcodePreviewIndex
 import dev.orcaxr.renderer.GcodePreviewPlan
 import dev.orcaxr.renderer.GcodeWindow
 import dev.orcaxr.renderer.ToolpathGeometry
+import java.io.File
 import java.io.FileNotFoundException
+import java.io.InputStream
 import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -68,14 +72,19 @@ data class PreviewState(
     /** The toolpath to draw (none when the mode is unavailable), and which opened file is shown (a new one reframes the view). */
     val toolpath: PreviewToolpath? = null,
     val generation: Long = 0,
+    /** For a plate Prepare sliced, the state of the project it came from; none for a file the operator opened. */
+    val slice: ProjectRevision? = null,
 )
 
 /**
  * The Preview area's host adapter, as the browser's "Open G-code Viewer…":
- * it reads one G-code document (bounded), hands it to the shared core's
+ * it reads one G-code document (bounded) — one the operator picked, or a
+ * plate Prepare sliced into the app's cache — hands it to the shared core's
  * `GcodeSession`, and publishes [PreviewState] projections of the shared
- * preview — every parse, projection and colour is the core's. All native
- * work runs on one worker thread; a new file closes the previous session.
+ * preview — every parse, projection and colour is the core's. A sliced plate
+ * keeps the state of the project it came from and is withdrawn once the
+ * project changes, as the browser withdraws stale output. All native work
+ * runs on one worker thread; a new file closes the previous session.
  */
 class PreviewModel(application: Application) : AndroidViewModel(application) {
     private val main = Handler(Looper.getMainLooper())
@@ -97,6 +106,9 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
     private var layerCount = 0
     private var name: String? = null
     private var generation = 0L
+    /** The shown slice's project state, and the latest one the project reported. */
+    private var origin: ProjectRevision? = null
+    private var latest: ProjectRevision? = null
 
     private fun work(task: () -> Unit) {
         worker.execute {
@@ -147,10 +159,9 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
      * The document's bytes, refused past [MAX_BYTES] while reading. A declared
      * size only sizes the buffer (one copy when it is right); the stream decides.
      */
-    private fun read(uri: Uri, declared: Long?): ByteArray {
+    private fun read(open: () -> InputStream, declared: Long?): ByteArray {
         if (declared != null && declared > MAX_BYTES) error("too_large")
-        val input = resolver.openInputStream(uri) ?: throw FileNotFoundException("document_unavailable")
-        return input.use { stream ->
+        return open().use { stream ->
             var bytes = ByteArray(declared?.toInt() ?: READ_CHUNK)
             var size = 0
             while (true) {
@@ -170,8 +181,8 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** A session holding the document's text, decoded as the browser decodes it; the text itself is not kept. */
-    private fun feed(uri: Uri, name: String, declared: Long?): GcodeSession {
-        val units = GcodeSession.decodeUtf8(read(uri, declared))
+    private fun feed(open: () -> InputStream, name: String, declared: Long?): GcodeSession {
+        val units = GcodeSession.decodeUtf8(read(open, declared))
         if (units.all(Char::isWhitespace)) throw Refusal("$name is empty.")
         val opened = GcodeSession(units.size)
         try {
@@ -191,16 +202,48 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
     private fun text(units: Any?): String = (units as? JSONArray)?.let(GcodePacket::text) ?: ""
 
     /** Opens a G-code document in the viewer, replacing the one shown ("Open G-code file…"). */
-    fun open(uri: Uri) {
+    fun open(uri: Uri) = load(null) {
+        val (shown, declared) = document(uri)
+        Source(shown, declared) { resolver.openInputStream(uri) ?: throw FileNotFoundException("document_unavailable") }
+    }
+
+    /**
+     * Opens the G-code Prepare sliced from the project at [revision] into
+     * [file] (the app's cache), shown as [name]. Refused when the project
+     * has changed since: stale output is never shown.
+     */
+    fun openSlice(file: File, name: String, revision: ProjectRevision) = load(revision) {
+        if (latest != null && latest != revision) throw Refusal(PrepareWords.OUT_OF_DATE)
+        Source(name, file.length()) { file.inputStream() }
+    }
+
+    /** The project is now at [revision]: a slice of any other state is withdrawn. */
+    fun projectChanged(revision: ProjectRevision?) = worker.execute {
+        latest = revision
+        if (origin == null || origin == revision) return@execute
+        session?.close()
+        session = null; model = null; loaded = null; plan = null; origin = null
+        main.post {
+            state = PreviewState(loading = pending.get() > 0)
+            message = PrepareWords.OUT_OF_DATE
+        }
+    }
+
+    /** A document to read: its display name, the size it declares, and how to open it. */
+    private class Source(val name: String, val declared: Long?, val open: () -> InputStream)
+
+    /** Replaces the source shown with the one [source] names and opens, from the project at [slice] if a slice. */
+    private fun load(slice: ProjectRevision?, source: () -> Source) {
         state = state.copy(loading = true)
         pending.incrementAndGet()
         work {
             try {
                 // One source at a time: the previous one is released before the next is read.
                 session?.close()
-                session = null; model = null; loaded = null; plan = null
-                val (shown, declared) = document(uri)
-                val opened = feed(uri, shown, declared)
+                session = null; model = null; loaded = null; plan = null; origin = null
+                val document = source()
+                val shown = document.name
+                val opened = feed(document.open, shown, document.declared)
                 try {
                     index(opened)
                 } catch (failure: Throwable) {
@@ -209,6 +252,7 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
                 }
                 session = opened
                 name = shown
+                origin = slice
                 generation++
             } catch (failure: Throwable) {
                 pending.decrementAndGet()
@@ -313,7 +357,7 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
             bottomZMm = selection?.getDouble("firstZMm"), topZMm = selection?.getDouble("lastZMm"), moves = view.moves,
             legend = legend, range = numeric, unsupportedReason = unsupportedReason, layerCount = layerCount,
             limitations = limitations, windowed = shown.window != null, hasPrevious = shown.hasPrevious,
-            hasNext = shown.hasNext, toolpath = toolpath, generation = generation,
+            hasNext = shown.hasNext, toolpath = toolpath, generation = generation, slice = origin,
         )
         main.post {
             state = next.copy(loading = pending.get() > 0)

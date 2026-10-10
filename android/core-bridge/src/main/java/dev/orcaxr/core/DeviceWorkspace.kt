@@ -20,8 +20,9 @@ class DeviceRefusal(message: String) : Exception(message)
  *
  * The directory is the shared one ([PrinterDirectory]), stored as the
  * browser stores it; each printer's API key is its own, remembered in the
- * [CredentialVault] while the operator lets it be (and kept in memory for
- * this run when not), and removed with its printer. Switching printers
+ * [CredentialVault] record ([SharedCredentials], which also holds the slicer
+ * token) while the operator lets it be (and kept in memory for this run when
+ * not), and removed with its printer. Switching printers
  * rebuilds the connection, so no socket, credential or capability crosses
  * from the printer selected before. Every exchange is judged by the
  * local-network permission first. Discovery ([discovery]) only proposes
@@ -30,7 +31,7 @@ class DeviceRefusal(message: String) : Exception(message)
  */
 class DeviceWorkspace(
     private val directoryStore: DeviceTextStore,
-    private val vault: CredentialVault,
+    private val shared: SharedCredentials,
     private val localNetwork: LocalNetworkPermission,
     private val newId: () -> String = { UUID.randomUUID().toString() },
     private val http: OkHttpClient = OkHttpClient(),
@@ -38,10 +39,20 @@ class DeviceWorkspace(
     /** The transport's diagnostics, redacted by the core before they arrive. */
     private val logger: ((ProjectIntents.MoonrakerLog) -> Unit)? = null,
 ) : AutoCloseable {
+    /** A workspace whose record no other area shares. */
+    constructor(
+        directoryStore: DeviceTextStore,
+        vault: CredentialVault,
+        localNetwork: LocalNetworkPermission,
+        newId: () -> String = { UUID.randomUUID().toString() },
+        http: OkHttpClient = OkHttpClient(),
+        clock: () -> Double = { System.currentTimeMillis().toDouble() },
+        logger: ((ProjectIntents.MoonrakerLog) -> Unit)? = null,
+    ) : this(directoryStore, SharedCredentials(vault), localNetwork, newId, http, clock, logger)
+
     private val lock = Any()
     private val listeners = LinkedHashSet<() -> Unit>()
     private var directoryValue = PrinterDirectory.load(directoryStore.read())
-    private var credentialsValue = vault.load()
 
     /**
      * The printer session. The active printer is selected as soon as it is
@@ -59,7 +70,7 @@ class DeviceWorkspace(
     }
 
     val directory: ProjectIntents.PrinterDirectory get() = synchronized(lock) { directoryValue }
-    val credentials: ProjectIntents.RememberedCredentials get() = synchronized(lock) { credentialsValue }
+    val credentials: ProjectIntents.RememberedCredentials get() = shared.current
 
     /** The printer connections go to: the directory's default. */
     val active: ProjectIntents.PrinterEntry? get() = synchronized(lock) {
@@ -110,11 +121,6 @@ class DeviceWorkspace(
     private fun store(directory: ProjectIntents.PrinterDirectory) {
         directoryStore.write(PrinterDirectory.save(directory))
         directoryValue = directory
-    }
-
-    private fun remember(credentials: ProjectIntents.RememberedCredentials) {
-        vault.save(credentials)
-        credentialsValue = credentials
     }
 
     /**
@@ -181,28 +187,26 @@ class DeviceWorkspace(
         val wasActive = id == active?.let { text(it.id) }
         synchronized(lock) {
             store(applied(PrinterDirectory.remove(ProjectIntents.PrinterDirectorySelect(directoryValue, units(id)))))
-            val record = credentialsValue
-            remember(record.copy(printerApiKeys = record.printerApiKeys.filter { text(it.key) != id }))
         }
+        shared.update { record -> record.copy(printerApiKeys = record.printerApiKeys.filter { text(it.key) != id }) }
         if (wasActive) reselect()
         changed()
     }
 
     /** The API key a printer connects with: its own, or the legacy key for the default printer. */
     fun apiKey(id: String): String = synchronized(lock) {
-        val record = credentialsValue
+        val record = shared.current
         record.printerApiKeys.firstOrNull { text(it.key) == id }?.let { text(it.secret) }
             ?: if (id == text(directoryValue.defaultId)) text(record.printerApiKey) else ""
     }
 
     /** Sets a printer's API key; it is stored only while remembering is on. */
     fun setApiKey(id: String, key: String) {
-        synchronized(lock) {
-            val record = credentialsValue
+        shared.update { record ->
             val others = record.printerApiKeys.filter { text(it.key) != id }
             val trimmed = key.trim()
             val keys = if (trimmed.isEmpty()) others else others + ProjectIntents.RememberedSecret(units(id), units(trimmed))
-            remember(record.copy(printerApiKeys = keys))
+            record.copy(printerApiKeys = keys)
         }
         if (id == active?.let { text(it.id) }) reselect()
         changed()
@@ -210,16 +214,13 @@ class DeviceWorkspace(
 
     /** Turns remembering on or off; off erases every stored secret but keeps this run's keys. */
     fun setRemember(remember: Boolean) {
-        synchronized(lock) { remember(credentialsValue.copy(remember = remember)) }
+        shared.update { it.copy(remember = remember) }
         changed()
     }
 
-    /** Forgets every key, stored and in memory. */
+    /** Forgets every key and the slicer token, stored and in memory. */
     fun forgetCredentials() {
-        synchronized(lock) {
-            vault.forget()
-            credentialsValue = vault.load()
-        }
+        shared.forget()
         reselect()
         changed()
     }

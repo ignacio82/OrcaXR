@@ -5,9 +5,30 @@
     <string name="workspace_empty">Import a model in the Project area to see it here.</string>
     <string name="workspace_unavailable">Unable to open this workspace. Please reinstall the application.</string>
     <string name="nav_workspace">Workspace</string>
+    <string name="nav_prepare">Prepare</string>
     <string name="nav_device">Device</string>
     <string name="nav_project">Project</string>
     <string name="nav_preview">Preview</string>
+    <!-- The browser's slice actions (web/src/actions/groups/slice.ts) and External slicer panel (web/index.html). -->
+    <string name="prepare_plate">%1$s · %2$d object(s)</string>
+    <string name="prepare_no_plate">Import a model in the Project area to slice it here.</string>
+    <string name="prepare_external_slicer">External slicer</string>
+    <string name="prepare_url">External slicer URL</string>
+    <string name="prepare_token">Access token (only if the server requires one)</string>
+    <string name="prepare_token_remembered">The token is remembered on this device with the printer keys.</string>
+    <string name="prepare_token_session">The token is kept until OrcaXR closes: remembering is off in the Device area.</string>
+    <string name="prepare_connect">Connect</string>
+    <string name="prepare_remove">Delete</string>
+    <string name="prepare_enabled">Use external slicer</string>
+    <string name="prepare_preflight">Slice preflight issues</string>
+    <string name="prepare_hide">Hide</string>
+    <string name="prepare_show">Show</string>
+    <string name="prepare_path">Path: %1$s</string>
+    <string name="prepare_slice">Slice</string>
+    <string name="prepare_cancel">Cancel Slice</string>
+    <string name="prepare_upload">Upload and slice</string>
+    <string name="prepare_sliced_on">Sliced on %1$s</string>
+    <string name="preview_sliced">Sliced in Prepare from the project as it stands.</string>
     <!-- The browser's G-code viewer wording (web/src/ui/dom/GcodePreviewPanel.ts). -->
     <string name="preview_heading">G-code preview</string>
     <string name="preview_open">Open G-code file…</string>
@@ -80,7 +101,7 @@
     <string name="device_open_settings">Open app settings</string>
     <string name="device_api_key">API key (if the printer requires one)</string>
     <string name="device_save_key">Use this key</string>
-    <string name="device_remember">Remember keys on this device</string>
+    <string name="device_remember">Remember printer keys and the slicer token on this device</string>
     <string name="device_forget">Forget saved keys</string>
     <string name="device_connect">Connect</string>
     <string name="device_disconnect">Disconnect</string>

@@ -61,6 +61,18 @@ class Screen:
         (self.output / f"{self.name}-smoke-seen.txt").write_text("\n".join(seen) + "\n")
         raise AssertionError(f"'{text}' never appeared")
 
+    def enabled(self, text, **kwargs):
+        """Whether the control showing [text] is enabled: a Compose button reports it on its
+        clickable node, not on the text inside, which always reads enabled."""
+        self.find(text, **kwargs)
+        root = ET.fromstring(self.adb("shell", "cat", self.dump))
+        parents = {child: parent for parent in root.iter("node") for child in parent}
+        node = next(node for node in root.iter("node") if (node.get("text") or node.get("content-desc") or "") == text)
+        while node is not None and node.get("clickable") != "true":
+            node = parents.get(node)
+        assert node is not None, f"'{text}' is not inside a control"
+        return node.get("enabled") == "true"
+
     def absent(self, text, timeout=20):
         deadline = time.monotonic() + timeout
         while any((node.get("text") or "") == text for node in self.nodes()):

@@ -54,7 +54,7 @@ try {
     Buffer.from(archive.archiveBase64, "base64"),
     gcode,
   );
-  assert.equal(checks, 25);
+  assert.equal(checks, 31);
   const received = await server.summary();
   // The pinned build attested from this repository's own patches.
   assert.deepEqual(
@@ -83,7 +83,7 @@ try {
   // The slice: attested, submitted, polled, downloaded, released.
   const requests = received.requests;
   const slice = requests.slice(0, requests.indexOf("DELETE /jobs/:id") + 1);
-  assert.equal(slice.filter((r) => r === "GET /engine").length, 3, "two attestations, then the slice's");
+  assert.equal(slice.filter((r) => r === "GET /engine").length, 4, "three attestations, then the slice's");
   assert.deepEqual(
     [...new Set(slice.slice(slice.indexOf("POST /slice?async=1")))],
     ["POST /slice?async=1", "GET /jobs/:id", "GET /jobs/:id/gcode", "DELETE /jobs/:id"],

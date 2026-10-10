@@ -36,6 +36,8 @@ import dev.orcaxr.core.CoreCompatibility
 import dev.orcaxr.core.DocumentOwners
 import dev.orcaxr.nativeapp.device.DeviceModel
 import dev.orcaxr.nativeapp.device.DeviceScreen
+import dev.orcaxr.nativeapp.prepare.PrepareModel
+import dev.orcaxr.nativeapp.prepare.PrepareScreen
 import dev.orcaxr.nativeapp.preview.PreviewModel
 import dev.orcaxr.nativeapp.preview.PreviewScreen
 import dev.orcaxr.nativeapp.project.ProjectModel
@@ -45,14 +47,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** The shell. Product areas are added only with complete shared workflows: the
- * workspace preview, the Project area's documents over the shared project
- * session, the Preview area's G-code viewer over the shared G-code preview,
- * and the Device area's printers over the shared printer core. */
+ * workspace preview, Prepare's slicing of the active plate on the external
+ * slicer, the Preview area's G-code viewer over the shared G-code preview,
+ * the Device area's printers over the shared printer core, and the Project
+ * area's documents over the shared project session.
+ *
+ * The areas follow the plan's order (Prepare, Preview, Device, Project) after
+ * the Workspace, which stays first as the home the app opens on: it shows the
+ * plate being prepared, as desktop Orca's Prepare view does, and needs no
+ * printer, slicer or document before it shows anything. */
 class MainActivity : ComponentActivity() {
     private val device: DeviceModel by viewModels()
     private val project: ProjectModel by viewModels()
     private val preview: PreviewModel by viewModels()
-    /** The area shown; an opened or shared document switches to the Project area. */
+    private val prepare: PrepareModel by viewModels()
+    /** The area shown; an opened or shared document switches to the Project area, a finished slice to Preview. */
     private var area by mutableIntStateOf(R.string.nav_workspace)
 
     /** A document another app opened or shared with OrcaXR, if [intent] carries one. */
@@ -118,6 +127,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         project.taskId = taskId
+        prepare.bind(project)
         if (savedInstanceState == null) handle(intent, created = true) else area = savedInstanceState.getInt(AREA, area)
         setContent {
             // Back with unsaved changes, from any area, asks in the Project area first.
@@ -125,6 +135,17 @@ class MainActivity : ComponentActivity() {
                 area = R.string.nav_project
                 project.leave(::finish)
             }
+            // A finished slice opens in Preview, as desktop Orca turns to its preview once a plate is sliced.
+            val sliced = prepare.sliced
+            LaunchedEffect(sliced) {
+                sliced ?: return@LaunchedEffect
+                preview.openSlice(sliced.file, sliced.name, sliced.revision)
+                area = R.string.nav_preview
+                prepare.slicedShown()
+            }
+            // Output of a state the project has left is withdrawn wherever it is shown.
+            val revision = project.view.revision
+            LaunchedEffect(revision) { preview.projectChanged(revision) }
             var state by remember { mutableIntStateOf(R.string.workspace_loading) }
             LaunchedEffect(Unit) {
                 state = withContext(Dispatchers.Default) {
@@ -145,15 +166,16 @@ class MainActivity : ComponentActivity() {
                             NavigationBar {
                                 for ((label, icon) in listOf(
                                     R.string.nav_workspace to android.R.drawable.ic_menu_gallery,
-                                    R.string.nav_project to android.R.drawable.ic_menu_save,
+                                    R.string.nav_prepare to android.R.drawable.ic_menu_upload,
                                     R.string.nav_preview to android.R.drawable.ic_menu_view,
                                     R.string.nav_device to android.R.drawable.ic_menu_share,
+                                    R.string.nav_project to android.R.drawable.ic_menu_save,
                                 )) {
                                     NavigationBarItem(
                                         selected = area == label,
                                         onClick = { area = label },
                                         icon = { Icon(painterResource(icon), contentDescription = null) },
-                                        // One line: four areas leave a narrow phone little room per label.
+                                        // One line: five areas leave a narrow phone little room per label.
                                         label = { Text(stringResource(label), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
                                     )
                                 }
@@ -165,6 +187,8 @@ class MainActivity : ComponentActivity() {
                         DeviceScreen(device, Modifier.fillMaxSize().padding(padding))
                     } else if (area == R.string.nav_project && state == R.string.workspace_development) {
                         ProjectScreen(project, Modifier.fillMaxSize().padding(padding))
+                    } else if (area == R.string.nav_prepare && state == R.string.workspace_development) {
+                        PrepareScreen(prepare, project.view, Modifier.fillMaxSize().padding(padding))
                     } else if (area == R.string.nav_preview && state == R.string.workspace_development) {
                         PreviewScreen(preview, Modifier.fillMaxSize().padding(padding))
                     } else if (state == R.string.workspace_development) {
