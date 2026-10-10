@@ -7,6 +7,8 @@
 //! `min`/`max` keep JavaScript's NaN and signed-zero rules. The
 //! `js-math-vectors.json` corpus pins all of this against V8. `convert` holds
 //! the matching `Number`/`String`/`toFixed` conversions.
+pub mod case;
+mod case_data;
 pub mod convert;
 mod fdlibm;
 

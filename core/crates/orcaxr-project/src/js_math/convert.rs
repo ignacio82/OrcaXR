@@ -375,6 +375,48 @@ pub fn encode_uri_component(units: &[u16]) -> Result<String, MalformedUri> {
     }
     Ok(out)
 }
+/// `decodeURIComponent`; `None` is the `URIError`.
+pub fn decode_uri_component(units: &[u16]) -> Option<Vec<u16>> {
+    let hex = |at: usize| -> Option<u8> {
+        if units.get(at) != Some(&u16::from(b'%')) {
+            return None;
+        }
+        let digit = |u: Option<&u16>| u.and_then(|&u| char::from_u32(u32::from(u))?.to_digit(16));
+        Some((digit(units.get(at + 1))? * 16 + digit(units.get(at + 2))?) as u8)
+    };
+    let mut out = Vec::with_capacity(units.len());
+    let mut at = 0;
+    while at < units.len() {
+        if units[at] != u16::from(b'%') {
+            out.push(units[at]);
+            at += 1;
+            continue;
+        }
+        let first = hex(at)?;
+        at += 3;
+        let count = match first {
+            0x00..=0x7f => {
+                out.push(u16::from(first));
+                continue;
+            }
+            0xc0..=0xdf => 2,
+            0xe0..=0xef => 3,
+            0xf0..=0xf7 => 4,
+            _ => return None,
+        };
+        let mut bytes = vec![first];
+        for _ in 1..count {
+            let byte = hex(at)?;
+            if byte & 0xc0 != 0x80 {
+                return None;
+            }
+            bytes.push(byte);
+            at += 3;
+        }
+        out.extend(std::str::from_utf8(&bytes).ok()?.encode_utf16());
+    }
+    Some(out)
+}
 /// The `URIError` `encodeURIComponent` throws for a lone surrogate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MalformedUri;

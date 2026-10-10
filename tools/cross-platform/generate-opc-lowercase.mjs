@@ -165,7 +165,7 @@ const ts =
     )
     .join("");
 for (const [name, text] of [
-  ["core/crates/orcaxr-archive/src/opc/case_data.rs", rust],
+  ["core/crates/orcaxr-project/src/js_math/case_data.rs", rust],
   ["web/src/project/serialization/opcCaseData.ts", ts],
 ]) {
   const p = new URL(name, root);

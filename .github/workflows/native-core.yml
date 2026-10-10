@@ -94,6 +94,7 @@ jobs:
         run: |
           node tools/cross-platform/generate-contracts.mjs
           node tools/cross-platform/generate-opc-lowercase.mjs --verify-runtime
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/generate-filament-mixer.mjs
           node tools/cross-platform/generate-bbs-filament-keys.mjs
           node web/scripts/run-tests.mjs opc-lowercase.test.ts deterministic-zip.test.ts
           node tools/cross-platform/canonical-requests.mjs
@@ -170,6 +171,7 @@ jobs:
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/external-slicer-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/project-fresh-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/plate-projection-vectors.mjs
+          node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slicing-configuration-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/gcode-summary-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/action-capability-vectors.mjs
           node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/capability-exchange-vectors.mjs

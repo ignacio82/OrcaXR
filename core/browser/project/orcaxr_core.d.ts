@@ -376,6 +376,30 @@ export class ProfileCatalog {
      * `CatalogSelectionRequest` in, `CatalogSelection` out.
      */
     reconcile(selection: string): string;
+    /**
+     * The pickers' choices (`slicingChoicesExchange`): canonical JSON
+     * `{"machinePresetId"?, "processPresetId"?}` in, `{"machines",
+     * "processes","filaments"}` of `{"id","label","name"}` out.
+     */
+    slicing_choices(request: string): string;
+    /**
+     * A live choice's slicing configuration against a state document,
+     * admitted under the host's `Date.parse` (`slicingConfigurationExchange`).
+     */
+    slicing_configuration(request: string): string;
+    /**
+     * The catalog's default triple selected (`defaultProfileSelectionExchange`).
+     */
+    slicing_default(request: string): string;
+    /**
+     * A selection by preset ID from a live choice (`profileSelectionExchange`):
+     * `{"live","request"}` in, `{"feedback","live"?}` out.
+     */
+    slicing_select(request: string): string;
+    /**
+     * A selection by typed names (`profileSelectionByNamesExchange`).
+     */
+    slicing_select_by_names(request: string): string;
 }
 
 /**
@@ -900,6 +924,15 @@ export class ProjectSession {
      * when it touched no facet. A stroke whose state changed refuses `stale`.
      */
     stage_paint_stroke(stroke: ProjectPaintStroke, label?: Uint16Array | null): number;
+    /**
+     * Stage the slicing configuration a live catalog choice describes
+     * (`{"autoPairs","live"}`) as one "Update slicing configuration"
+     * replacement for `executeStaged`; `words` are the random words new pair
+     * identities draw. Answers `{"staged": id}`, `{"unchanged": true}` or
+     * `{"error","message"}`; a disposed session or one without staging room
+     * throws its code.
+     */
+    stage_slicing_configuration(catalog: ProfileCatalog, request: string, words: Float64Array): string;
     /**
      * Stage a prepared SVG cut (an `SvgPartStage`) for `executeStaged`: a
      * new part under the host's IDs, or a re-cut of an SVG part.
@@ -1554,6 +1587,21 @@ export function settings_rules(rules: string): string;
 export function settings_step(step: string): string;
 
 /**
+ * The one option a typed name means among `options` (`presetMatchExchange`):
+ * `{"options","query"}` in, `{"option": option | null}` out.
+ */
+export function slicing_match(request: string): string;
+
+/**
+ * The state a slicing configuration leads to (`nextSlicingStateExchange`):
+ * `{"autoPairs","configurationJson","stateJson"}` and the random words new
+ * pair identities draw (sixteen each) in; `{"stateJson"}`,
+ * `{"unchanged":true}` or `{"error","message"}` out, admitted under the
+ * host's `Date.parse`.
+ */
+export function slicing_next_state(request: string, words: Float64Array): string;
+
+/**
  * A `ToolMappingRequest`; the `ToolMappingReport`.
  */
 export function tool_mapping(request: string): string;
@@ -1798,6 +1846,11 @@ export interface InitOutput {
     readonly profilecatalog_profile_config: (a: number, b: number) => [number, number, number, number];
     readonly profilecatalog_profile_count: (a: number) => number;
     readonly profilecatalog_reconcile: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly profilecatalog_slicing_choices: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly profilecatalog_slicing_configuration: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly profilecatalog_slicing_default: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly profilecatalog_slicing_select: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly profilecatalog_slicing_select_by_names: (a: number, b: number, c: number) => [number, number, number, number];
     readonly profilecatalogupload_append: (a: number, b: number, c: number, d: number) => [number, number];
     readonly profilecatalogupload_build: (a: number, b: number) => [number, number, number];
     readonly profilecatalogupload_new: (a: number, b: number, c: number) => [number, number, number];
@@ -1925,6 +1978,7 @@ export interface InitOutput {
     readonly projectsession_stage_commands: (a: number, b: number) => [number, number, number];
     readonly projectsession_stage_emboss: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_stage_paint_stroke: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly projectsession_stage_slicing_configuration: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly projectsession_stage_svg_part: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_stage_volume_simplify: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectsession_stage_volume_split: (a: number, b: number, c: number, d: number) => [number, number, number];
@@ -1966,6 +2020,8 @@ export interface InitOutput {
     readonly settingseditor_rows: (a: number, b: number, c: number) => [number, number, number];
     readonly settingseditor_state: (a: number, b: number, c: number) => [number, number, number, number];
     readonly settingseditor_unavailable: (a: number) => number;
+    readonly slicing_match: (a: number, b: number) => [number, number, number, number];
+    readonly slicing_next_state: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly tool_mapping: (a: number, b: number) => [number, number, number, number];
     readonly toolusagescanner_append: (a: number, b: number, c: number) => [number, number];
     readonly toolusagescanner_finish: (a: number) => [number, number, number, number];

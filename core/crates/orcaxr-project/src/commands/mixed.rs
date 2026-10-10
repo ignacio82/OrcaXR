@@ -391,8 +391,9 @@ impl MixedOp {
                 };
                 if let Some(full_spectrum) = &mut copy.full_spectrum {
                     let full_spectrum = Arc::make_mut(full_spectrum);
-                    full_spectrum.upstream_stable_id =
-                        Text::from_utf8(&stable_numeric_id(duplicate.as_utf16()));
+                    full_spectrum.upstream_stable_id = Text::from_utf8(
+                        &crate::filaments::auto_pairs::stable_numeric_id(duplicate.as_utf16()),
+                    );
                     full_spectrum.custom = true;
                     full_spectrum.origin_auto = false;
                     full_spectrum.deleted = false;
@@ -579,17 +580,6 @@ fn validate_shape<E>(filament: &MixedFilament) -> Result<(), CommandError<E>> {
         }
     }
 }
-/// `fullSpectrumStableNumericId`: FNV-1a 64 of the ID's UTF-8 (lone
-/// surrogates become U+FFFD, like `TextEncoder`), never zero, in decimal.
-fn stable_numeric_id(id: &[u16]) -> String {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in String::from_utf16_lossy(id).bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    (if hash == 0 { 1 } else { hash }).to_string()
-}
-
 /// `RemoveMixedFilamentCommand`: removal only after a canonical dependency scan
 /// finds no reference; undo restores the exact previous state.
 #[derive(Clone)]

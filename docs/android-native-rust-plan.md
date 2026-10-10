@@ -1360,6 +1360,15 @@ and replay coverage for the complete current command inventory.
   - [x] Expose the settings editor to hosts (WASM, JNI, Kotlin) with host
     collation and search folding (14,938 replies and 78 refusals per
     binding; 24 Kotlin checks).
+  - [x] Port the step that turns a chosen catalog profile into the project's
+    slicing configuration (`slicing::choices`, `slicing::configuration`,
+    `filaments::auto_pairs`): picker choices and labels, name matching, the
+    default triple, selections and their messages, the live configuration,
+    the next state with overrides and automatic pairs, and a session
+    operation staging it as "Update slicing configuration". Bound to WASM,
+    JNI and Kotlin (349 replies, 14 refusals and 29 committed choices per
+    binding; 412 Kotlin checks); two browser defects fixed. The browser stays
+    on TypeScript; Android's profile pickers remain (Phase 7).
 - [x] Provide bounded object-tree, inspector, capability, selection, and renderer
   projections. Subscribe to revisioned deltas; do not send the complete project
   or all geometry to every panel after each edit.
@@ -1860,7 +1869,10 @@ storage journeys on phone, tablet, and desktop-sized windows.
   runs it on API 34 and the 16 KB API 37 image against the real server. Until
   catalog profiles can be chosen, only a project carrying its own printer and
   filament settings passes the preflight; a bare imported model is blocked
-  with the browser's card.
+  with the browser's card. The shared core now selects catalog profiles and
+  stages the configuration they describe
+  (`ProjectSession.stageSlicingConfiguration`); the pickers and their
+  workspace operation remain.
 - [ ] Adapt inspector/object tree, toolbars, menus, command palette, dialogs,
   settings, and progress states to narrow, medium, and wide windows. Support
   keyboard traversal, shortcuts, hover, context menus, trackpad navigation,

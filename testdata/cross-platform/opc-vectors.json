@@ -7,7 +7,7 @@
     },
     {
       "path": "tools/cross-platform/generate-opc-lowercase.mjs",
-      "sha256": "295cf0e03bd14826280cbdb0cb5059808b8b03c0df0173ad6828b4df5e7856e9"
+      "sha256": "7358e0d4669bec2ec84333f678297cee4a0544dd7198672f5145be5560ff84e8"
     },
     {
       "path": "tools/cross-platform/opc-vectors.mjs",

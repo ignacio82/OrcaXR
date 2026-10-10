@@ -34,7 +34,7 @@ import type { MagnetSpec } from '../features/MagnetOp';
 import { describeDiscovery, type DiscoveryOutcome } from '../printer/PrinterDirectory';
 import type { ProjectSummaryInput } from '../diagnostics/DiagnosticsBundle';
 import type { FilamentId, InstanceId, LayerRangeId, ObjectId, PlateId, VolumeId } from '../project/domain/ids';
-import { entityId, UuidIdSource } from '../project/domain/ids';
+import { UuidIdSource } from '../project/domain/ids';
 import type { ConfigMap, FacetRefinementEncoding, JsonValue, Transform, Vec3 } from '../project/domain/model';
 import type { FacetAnnotationGuard } from '../project/annotations';
 import { paintOverlayFacets } from '../project/painting/PaintOverlay';
@@ -215,7 +215,29 @@ import {
   ManipulationBehavior,
 } from 'xrblocks/addons/uiblocks/src/index.js';
 
-import { FilamentPalette } from './FilamentPalette';
+import { FilamentPalette, FILAMENT_PALETTE_MAX_SLOTS } from './FilamentPalette';
+import {
+  catalogDefaultProfile,
+  filamentPresetChoices,
+  headSelectionFromProfile,
+  liveSlicingConfiguration,
+  machinePresetChoices,
+  matchPresetOption,
+  processPresetChoices,
+  profileExtruderCount,
+  profileNozzleForTool,
+  resolvedProfileSlots,
+  resolveProfileSelection,
+  resolveProfileSelectionByNames,
+  synchronizedHeadSlots,
+  unambiguousProfileScalar,
+  type HeadFilamentSelection,
+  type ProfileSelectionOutcome,
+  type WorkspacePresetId,
+  type WorkspacePresetOption,
+  type WorkspaceProfileSelectionFeedback,
+  type WorkspaceProfileSelectionRequest,
+} from './CatalogSlicingConfiguration';
 import { bedSizeFromProfile, ProfileCatalog, type SlicerProfile } from '../slicer/ProfileLoader';
 import { SlicerClient, type AttestedProjectRoute } from '../slicer/SlicerClient';
 import { engineSupports } from '../slicer/pinnedEngineProvenance';
@@ -307,32 +329,12 @@ function xrSafeText(text: string): string {
     .replaceAll('–', '-');
 }
 
-export type WorkspacePresetId = NonNullable<SlicerProfile['machinePresetId']>;
-
-export interface WorkspacePresetOption {
-  readonly id: WorkspacePresetId;
-  /** Exact canonical preset name. */
-  readonly name: string;
-  /** Compact, disambiguated picker label. */
-  readonly label: string;
-}
-
-export interface WorkspaceProfileSelectionRequest {
-  readonly machinePresetId?: WorkspacePresetId;
-  readonly processPresetId?: WorkspacePresetId;
-  readonly filamentPresetIds?: readonly (WorkspacePresetId | undefined)[];
-}
-
-export interface WorkspaceProfileSelectionFeedback {
-  readonly applied: boolean;
-  readonly severity: 'info' | 'warning' | 'error';
-  readonly messages: readonly string[];
-}
-
-interface HeadFilamentSelection {
-  readonly presetId?: WorkspacePresetId;
-  readonly name: string;
-}
+export type {
+  WorkspacePresetId,
+  WorkspacePresetOption,
+  WorkspaceProfileSelectionFeedback,
+  WorkspaceProfileSelectionRequest,
+} from './CatalogSlicingConfiguration';
 
 /** Fallback bed until the profile catalog loads. */
 /** Height the given layer prints at, from the inspection layer index. */
@@ -540,24 +542,6 @@ function cryptographicRandomWord(): number {
   return word[0] / 0x1_0000_0000;
 }
 
-function matchPresetOption(
-  options: readonly WorkspacePresetOption[],
-  query: string,
-): WorkspacePresetOption | undefined {
-  const normalized = query.trim().toLocaleLowerCase('en-US');
-  if (!normalized) return undefined;
-  const exactLabels = options.filter((option) => option.label.toLocaleLowerCase('en-US') === normalized);
-  if (exactLabels.length === 1) return exactLabels[0];
-  const exactNames = options.filter((option) => option.name.toLocaleLowerCase('en-US') === normalized);
-  if (exactNames.length === 1) return exactNames[0];
-  const partial = options.filter(
-    (option) =>
-      option.name.toLocaleLowerCase('en-US').includes(normalized) ||
-      option.label.toLocaleLowerCase('en-US').includes(normalized),
-  );
-  return partial.length === 1 ? partial[0] : undefined;
-}
-
 /**
  * The local filament every selected scope already shares, or undefined when
  * they differ — the same rule the flat bar uses, so the two agree about what
@@ -571,53 +555,6 @@ function uniformLocalFilament(snapshot: CanonicalFilamentAssignmentSnapshot): Fi
     else if (choice !== local) return undefined;
   }
   return choice;
-}
-
-function disambiguatePresetOptionLabels(options: readonly WorkspacePresetOption[]): WorkspacePresetOption[] {
-  const labelCounts = new Map<string, number>();
-  const nameCounts = new Map<string, number>();
-  for (const option of options) {
-    labelCounts.set(option.label, (labelCounts.get(option.label) ?? 0) + 1);
-    nameCounts.set(option.name, (nameCounts.get(option.name) ?? 0) + 1);
-  }
-  return options.map((option) =>
-    labelCounts.get(option.label) === 1
-      ? option
-      : Object.freeze({
-          ...option,
-          label:
-            nameCounts.get(option.name) === 1
-              ? option.name
-              : `${option.name} — ${presetVendorName(option.id) ?? 'another vendor'}`,
-        }),
-  );
-}
-
-function presetVendorName(id: WorkspacePresetId): string | undefined {
-  const encoded = id.split(':')[1];
-  if (!encoded) return undefined;
-  try {
-    return decodeURIComponent(encoded);
-  } catch {
-    return undefined;
-  }
-}
-
-function unambiguousProfileScalar(value: string | undefined): string | undefined {
-  if (!value?.trim() || /[;,]/.test(value)) return undefined;
-  return value.trim();
-}
-
-function profileNozzleForTool(profile: SlicerProfile | null, toolId: number): string {
-  const nozzles = profile?.config['nozzle_diameter']
-    ?.split(/[;,]/)
-    .map((value) => value.trim())
-    .filter((value) => Number.isFinite(Number(value)) && Number(value) > 0);
-  if (nozzles?.[toolId]) return nozzles[toolId];
-  const singleExtruderMultiMaterial =
-    unambiguousProfileScalar(profile?.config['single_extruder_multi_material'])?.toLowerCase() === '1' ||
-    unambiguousProfileScalar(profile?.config['single_extruder_multi_material'])?.toLowerCase() === 'true';
-  return nozzles?.length === 1 && singleExtruderMultiMaterial ? nozzles[0] : '0.4';
 }
 
 function canonicalPreflightUnavailable(plateId: PlateId, error: unknown): CanonicalSlicePreflightResult {
@@ -1396,15 +1333,9 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   private synchronizeHeadSlotLengths(): void {
-    const target = this.palette.count();
-    this.headFilaments.length = Math.min(this.headFilaments.length, target);
-    this.headNozzles.length = Math.min(this.headNozzles.length, target);
-    while (this.headFilaments.length < target) {
-      this.headFilaments.push(this.headSelectionFromProfile(this.profile));
-    }
-    while (this.headNozzles.length < target) {
-      this.headNozzles.push(profileNozzleForTool(this.profile, this.headNozzles.length));
-    }
+    const slots = synchronizedHeadSlots(this.profile, this.headFilaments, this.headNozzles, this.palette.count());
+    this.headFilaments = slots.heads;
+    this.headNozzles = slots.nozzles;
   }
 
   async init() {
@@ -3947,10 +3878,7 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   get extruderCount(): number {
-    if (!this.profile) return 1;
-    const n = this.profile.config['nozzle_diameter'];
-    if (!n) return 1;
-    return n.split(',').length;
+    return profileExtruderCount(this.profile);
   }
 
   public getHeadFilament(index: number): string {
@@ -3997,13 +3925,13 @@ export class OrcaWorkspace extends xb.Script {
   }
 
   public addFilamentSlot(): void {
-    if (this.palette.count() >= 16) {
+    if (this.palette.count() >= FILAMENT_PALETTE_MAX_SLOTS) {
       this.setStatus(
         t('workspace.orcaWorkspace.the16SlotFilamentLimit', 'The 16-slot filament limit has been reached.'),
       );
       return;
     }
-    this.headFilaments.push(this.headSelectionFromProfile(this.profile));
+    this.headFilaments.push(headSelectionFromProfile(this.profile));
     this.headNozzles.push(profileNozzleForTool(this.profile, this.headNozzles.length));
     this.palette.add();
     void this.applyLiveSlicingConfiguration();
@@ -4245,43 +4173,12 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Complete printers in deterministic catalog order, keyed by canonical graph ID. */
   private machinePresetChoices(): WorkspacePresetOption[] {
-    const choices = new Map<WorkspacePresetId, WorkspacePresetOption>();
-    for (const profile of this.catalog.profiles) {
-      if (!profile.machinePresetId || choices.has(profile.machinePresetId)) continue;
-      choices.set(
-        profile.machinePresetId,
-        Object.freeze({
-          id: profile.machinePresetId,
-          name: profile.machineName,
-          label: profile.machineName,
-        }),
-      );
-    }
-    return disambiguatePresetOptionLabels([...choices.values()]);
+    return machinePresetChoices(this.catalog.profiles);
   }
 
   /** Compatibility-filtered processes for one exact printer preset. */
   private processPresetChoices(machinePresetId: WorkspacePresetId | undefined): WorkspacePresetOption[] {
-    if (!machinePresetId) return [];
-    const choices = new Map<WorkspacePresetId, WorkspacePresetOption>();
-    for (const profile of this.catalog.profiles) {
-      if (
-        profile.machinePresetId !== machinePresetId ||
-        !profile.processPresetId ||
-        choices.has(profile.processPresetId)
-      ) {
-        continue;
-      }
-      choices.set(
-        profile.processPresetId,
-        Object.freeze({
-          id: profile.processPresetId,
-          name: profile.processName,
-          label: profile.processName,
-        }),
-      );
-    }
-    return disambiguatePresetOptionLabels([...choices.values()]);
+    return processPresetChoices(this.catalog.profiles, machinePresetId);
   }
 
   /** Compatibility-filtered filaments for one exact printer/process pair. */
@@ -4289,35 +4186,12 @@ export class OrcaWorkspace extends xb.Script {
     machinePresetId: WorkspacePresetId | undefined,
     processPresetId: WorkspacePresetId | undefined,
   ): WorkspacePresetOption[] {
-    if (!machinePresetId || !processPresetId) return [];
-    const choices = new Map<WorkspacePresetId, WorkspacePresetOption>();
-    for (const profile of this.catalog.profiles) {
-      if (
-        profile.machinePresetId !== machinePresetId ||
-        profile.processPresetId !== processPresetId ||
-        !profile.filamentPresetId ||
-        choices.has(profile.filamentPresetId)
-      ) {
-        continue;
-      }
-      choices.set(
-        profile.filamentPresetId,
-        Object.freeze({
-          id: profile.filamentPresetId,
-          name: profile.filamentPresetName ?? profile.filamentName,
-          label: profile.filamentName,
-        }),
-      );
-    }
-    return disambiguatePresetOptionLabels([...choices.values()]);
+    return filamentPresetChoices(this.catalog.profiles, machinePresetId, processPresetId);
   }
 
   private async applyCatalogDefaultProfile(): Promise<void> {
     if (this.profile || this.projectImportInProgress || this.importedProjectOwnsSlicingConfiguration) return;
-    const fallback =
-      this.catalog.find('Snapmaker U1 (0.4 nozzle)', '0.20 Standard', 'Snapmaker PLA') ??
-      this.catalog.profiles[0] ??
-      null;
+    const fallback = catalogDefaultProfile(this.catalog);
     if (!fallback) return;
     const before = this.canonicalProject.getSummary();
     const isPristineStartup =
@@ -4429,41 +4303,9 @@ export class OrcaWorkspace extends xb.Script {
 
   /** Legacy name adapter. Exact scoped matches reconcile through stable IDs. */
   setProfileByNames(machine: string, process: string, filament: string) {
-    const machineOption = machine.trim() ? matchPresetOption(this.machinePresetChoices(), machine) : undefined;
-    if (machine.trim() && !machineOption) {
-      return this.publishProfileSelectionFeedback({
-        applied: false,
-        severity: 'error',
-        messages: [`Printer preset ${JSON.stringify(machine)} is unavailable.`],
-      });
-    }
-    const machinePresetId = machineOption?.id ?? this.profile?.machinePresetId;
-    const processOptions = this.processPresetChoices(machinePresetId);
-    const processOption = process.trim() ? matchPresetOption(processOptions, process) : undefined;
-    if (process.trim() && !processOption) {
-      return this.publishProfileSelectionFeedback({
-        applied: false,
-        severity: 'error',
-        messages: [`Process preset ${JSON.stringify(process)} is unavailable for the selected printer.`],
-      });
-    }
-    const processPresetId = processOption?.id ?? this.profile?.processPresetId;
-    const filamentOptions = this.filamentPresetChoices(machinePresetId, processPresetId);
-    const filamentOption = filament.trim() ? matchPresetOption(filamentOptions, filament) : undefined;
-    if (filament.trim() && !filamentOption) {
-      return this.publishProfileSelectionFeedback({
-        applied: false,
-        severity: 'error',
-        messages: [`Filament preset ${JSON.stringify(filament)} is unavailable for the selected printer and process.`],
-      });
-    }
-    const filamentPresetIds = this.headFilaments.map((selection) => selection.presetId);
-    if (filamentOption) filamentPresetIds[0] = filamentOption.id;
-    return this.selectProfilePresets({
-      ...(machinePresetId ? { machinePresetId } : {}),
-      ...(processPresetId ? { processPresetId } : {}),
-      filamentPresetIds,
-    });
+    return this.applyProfileSelection(
+      resolveProfileSelectionByNames(this.catalog, this.liveProfileChoice(), machine, process, filament),
+    );
   }
 
   /** Fires whenever the active profile changes (2D pickers re-render). */
@@ -4504,118 +4346,22 @@ export class OrcaWorkspace extends xb.Script {
    * survive printer/process changes; resolver substitutions are reported.
    */
   public selectProfilePresets(request: WorkspaceProfileSelectionRequest): WorkspaceProfileSelectionFeedback {
-    const machinePresetId = request.machinePresetId ?? this.profile?.machinePresetId;
-    if (!machinePresetId) {
-      return this.publishProfileSelectionFeedback({
-        applied: false,
-        severity: 'error',
-        messages: ['Choose an available printer before selecting process or filament presets.'],
-      });
-    }
-    const processPresetId = request.processPresetId ?? this.profile?.processPresetId;
-    const filamentPresetIds = request.filamentPresetIds ?? this.headFilaments.map((selection) => selection.presetId);
-    const resolution = this.catalog.reconcileSelection({
-      printerId: machinePresetId,
-      ...(processPresetId ? { processId: processPresetId } : {}),
-      filamentIds: filamentPresetIds,
-    });
-    if (!resolution.selection) {
-      return this.publishProfileSelectionFeedback({
-        applied: false,
-        severity: 'error',
-        messages: [resolution.unavailableReason ?? 'The requested profile selection is unavailable.'],
-      });
-    }
-
-    const resolved = resolution.selection;
-    const messages = this.profileReconciliationMessages(resolved);
-    if (!resolved.complete || !resolved.process || resolved.filaments.some((filament) => !filament)) {
-      return this.publishProfileSelectionFeedback({
-        applied: false,
-        severity: 'error',
-        messages:
-          messages.length > 0
-            ? messages
-            : ['No complete compatible process and filament selection exists for this printer.'],
-      });
-    }
-
-    const profiles = resolved.filaments.map((filament) =>
-      filament
-        ? this.catalog.profiles.find(
-            (profile) =>
-              profile.machinePresetId === resolved.printer.id &&
-              profile.processPresetId === resolved.process?.id &&
-              profile.filamentPresetId === filament.id,
-          )
-        : undefined,
-    );
-    const primary = profiles[0];
-    if (!primary || profiles.some((profile) => !profile)) {
-      return this.publishProfileSelectionFeedback({
-        applied: false,
-        severity: 'error',
-        messages: [
-          'The resolver produced a combination that is absent from the validated slicing catalog; the prior selection was preserved.',
-        ],
-      });
-    }
-
-    this.applyResolvedProfile(
-      primary,
-      profiles.map((profile) => this.headSelectionFromProfile(profile)),
-    );
-    return this.publishProfileSelectionFeedback({
-      applied: true,
-      severity: messages.length > 0 ? 'warning' : 'info',
-      messages: messages.length > 0 ? messages : ['Profile selection is compatible.'],
-    });
+    return this.applyProfileSelection(resolveProfileSelection(this.catalog, this.liveProfileChoice(), request));
   }
 
-  private profileReconciliationMessages(
-    resolved: NonNullable<ReturnType<ProfileCatalog['reconcileSelection']>['selection']>,
-  ): string[] {
-    const messages: string[] = [];
-    for (const substitution of resolved.substitutions) {
-      const nextName = substitution.nextId ? this.presetDisplayName(substitution.kind, substitution.nextId) : undefined;
-      const previousName = substitution.previousId
-        ? this.presetDisplayName(substitution.kind, substitution.previousId)
-        : undefined;
-      if (substitution.kind === 'process') {
-        if (nextName) {
-          messages.push(
-            previousName
-              ? `${previousName} is unavailable for ${resolved.printer.name}; substituted ${nextName}.`
-              : `Selected ${nextName} for ${resolved.printer.name}.`,
-          );
-        } else {
-          messages.push(`No compatible process preset is available for ${resolved.printer.name}.`);
-        }
-        continue;
-      }
-      const slot = `Filament slot ${(substitution.slot ?? 0) + 1}`;
-      if (nextName) {
-        messages.push(
-          previousName
-            ? `${slot}: ${previousName} is unavailable for ${resolved.printer.name} / ${resolved.process?.name ?? 'the selected process'}; substituted ${nextName}.`
-            : `${slot}: selected ${nextName}.`,
-        );
-      } else {
-        messages.push(
-          `${slot}: no compatible filament preset is available for ${resolved.printer.name} / ${resolved.process?.name ?? 'the selected process'}.`,
-        );
-      }
-    }
-    messages.push(...resolved.diagnostics.map((diagnostic) => diagnostic.message));
-    return [...new Set(messages)];
+  private liveProfileChoice() {
+    return { profile: this.profile, heads: this.headFilaments };
   }
 
-  private presetDisplayName(kind: 'process' | 'filament', id: WorkspacePresetId): string {
-    const profile = this.catalog.profiles.find((candidate) =>
-      kind === 'process' ? candidate.processPresetId === id : candidate.filamentPresetId === id,
-    );
-    if (!profile) return 'The previous preset';
-    return kind === 'process' ? profile.processName : (profile.filamentPresetName ?? profile.filamentName);
+  /** Apply a reconciled selection's exact profiles, then report it. */
+  private applyProfileSelection(outcome: ProfileSelectionOutcome): WorkspaceProfileSelectionFeedback {
+    if (outcome.profiles) {
+      this.applyResolvedProfile(
+        outcome.profiles[0],
+        outcome.profiles.map((profile) => headSelectionFromProfile(profile)),
+      );
+    }
+    return this.publishProfileSelectionFeedback(outcome.feedback);
   }
 
   private publishProfileSelectionFeedback(
@@ -4639,17 +4385,11 @@ export class OrcaWorkspace extends xb.Script {
     this.applyingProfile = true;
     try {
       this.profile = p;
-      const count = this.extruderCount;
-
-      // Ensure palette has at least 'count' slots.
-      while (this.palette.count() < count) this.palette.add();
-
-      const totalSlots = this.palette.count();
-      this.headFilaments = Array.from(
-        { length: totalSlots },
-        (_, index) => resolvedHeads[index] ?? this.headSelectionFromProfile(p),
-      );
-      this.headNozzles = Array.from({ length: totalSlots }, (_, toolId) => profileNozzleForTool(p, toolId));
+      // The palette grows to the profile's extruders, up to its slot limit.
+      const slots = resolvedProfileSlots(p, resolvedHeads, this.palette.list());
+      while (this.palette.count() < slots.palette.length) this.palette.add();
+      this.headFilaments = [...slots.heads];
+      this.headNozzles = [...slots.nozzles];
     } finally {
       this.applyingProfile = false;
     }
@@ -4664,14 +4404,6 @@ export class OrcaWorkspace extends xb.Script {
     this.rebuildWipeTowerGhost();
     this.setStatus(`profile: ${p.displayName}\nbed ${this.bedMm.x}×${this.bedMm.y} mm`);
     this.recomputePreflight();
-  }
-
-  private headSelectionFromProfile(profile: SlicerProfile | null | undefined): HeadFilamentSelection {
-    if (!profile) return Object.freeze({ name: '' });
-    return Object.freeze({
-      ...(profile.filamentPresetId ? { presetId: profile.filamentPresetId } : {}),
-      name: profile.filamentName,
-    });
   }
 
   private createLiveProfilePreflight(): LiveProfileSlicePreflight {
@@ -4752,70 +4484,13 @@ export class OrcaWorkspace extends xb.Script {
     const profile = this.profile;
     if (!profile || this.applyingProfile || this.disposed) return;
     this.synchronizeHeadSlotLengths();
-    const slots = this.palette.list();
-    const previous = this.canonicalProject.getSlicingConfiguration();
-    const previousPhysicalByTool = new Map(previous.filaments.physical.map((filament) => [filament.toolId, filament]));
-    const config = {
-      ...profile.config,
-      ...this.palette.toSlicerOverrides(),
-      printer_settings_id: profile.machineName,
-      print_settings_id: profile.processName,
-    };
-    const physical = slots.map((slot, index) => {
-      const filamentSelection = this.headFilaments[index] ?? this.headSelectionFromProfile(profile);
-      const filamentName = filamentSelection.name || profile.filamentName;
-      const exactFilamentProfile =
-        profile.machinePresetId && profile.processPresetId && filamentSelection.presetId
-          ? this.catalog.profiles.find(
-              (candidate) =>
-                candidate.machinePresetId === profile.machinePresetId &&
-                candidate.processPresetId === profile.processPresetId &&
-                candidate.filamentPresetId === filamentSelection.presetId,
-            )
-          : undefined;
-      const filamentProfile =
-        exactFilamentProfile ?? this.catalog.find(profile.machineName, profile.processName, filamentName) ?? profile;
-      const exactMaterial = exactFilamentProfile
-        ? unambiguousProfileScalar(exactFilamentProfile.config['filament_type'])
-        : undefined;
-      const nozzle = Number(this.headNozzles[index] ?? '0.4');
-      return {
-        id:
-          previousPhysicalByTool.get(index)?.id ??
-          entityId<'physical-filament'>(`import:live:filament-slot-${index + 1}`),
-        name: filamentName || `Filament ${index + 1}`,
-        toolId: index,
-        presetId: filamentSelection.presetId ?? (filamentName || undefined),
-        material: (exactMaterial ?? slot.type) || 'Unknown',
-        color: slot.color,
-        ...(Number.isFinite(nozzle) && nozzle > 0 ? { nozzleDiameterMm: nozzle } : {}),
-        config: { ...filamentProfile.config },
-        enabled: true,
-      };
-    });
-    const availableFilaments = new Set([
-      ...physical.map((filament) => filament.id),
-      ...previous.filaments.mixed.map((filament) => filament.id),
-    ]);
-    const orphanedComponent = previous.filaments.mixed
-      .flatMap((filament) => filament.components)
-      .find((component) => !availableFilaments.has(component.filamentId));
-    if (orphanedComponent) {
-      throw new Error(
-        `The selected profile would orphan mixed-filament component ${orphanedComponent.filamentId}; remap it before changing profiles.`,
-      );
-    }
-    await this.canonicalProject.applySlicingConfiguration({
-      printer: {
-        profileId: profile.machineName,
-        toolCount: Math.max(1, slots.length),
-      },
-      config,
-      filaments: {
-        physical,
-        mixed: previous.filaments.mixed,
-      },
-    });
+    const configuration = liveSlicingConfiguration(
+      this.catalog,
+      { profile, palette: this.palette.list(), heads: this.headFilaments, nozzles: this.headNozzles },
+      this.canonicalProject.getSlicingConfiguration(),
+    );
+    if (!configuration) return;
+    await this.canonicalProject.applySlicingConfiguration(configuration);
     if (this.disposed) return;
     this.bedMm = bedSizeFromProfile(profile.config);
     this.canonicalProject.setPrinterSpaceMapping({

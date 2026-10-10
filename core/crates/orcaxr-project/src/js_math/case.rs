@@ -1,5 +1,8 @@
-//! Unicode 16 default lowercase, pinned to the browser reference corpus.
-//! Do not use Rust's version-dependent Unicode tables for persisted OPC data.
+//! `String.prototype.toLowerCase` over UTF-16: Unicode 16 default lowercase,
+//! Final_Sigma included, pinned to the browser reference corpus
+//! (`contracts/opc-lowercase.json`). Ports use it instead of Rust's
+//! version-dependent Unicode tables, for persisted OPC names and for matching
+//! text the browser lowercases. Lone surrogates pass through unchanged.
 use super::case_data::{CASED, EXPANSIONS, IGNORABLE, LOWER};
 
 fn contains(ranges: &[(u32, u32)], cp: u32) -> bool {
@@ -21,7 +24,7 @@ fn emit(cp: u32, output: &mut Vec<u16>) {
     }
 }
 
-pub(crate) fn lower(input: &[u16]) -> Vec<u16> {
+pub fn lower(input: &[u16]) -> Vec<u16> {
     let mut output = Vec::with_capacity(input.len());
     let mut before = false;
     let mut chars = points(input);

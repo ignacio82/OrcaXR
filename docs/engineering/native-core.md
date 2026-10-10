@@ -2076,6 +2076,7 @@ expansions and Final_Sigma context. Generated browser/Rust tables prevent runtim
 Unicode upgrades from changing persisted OPC declarations; member names are
 unchanged. An exhaustive comparison found 28 scalar differences between Rust
 1.94.1 and the established Node 22.21.0 reference. The shared implementation
+(`orcaxr_project::js_math::case`, also the ports' `toLowerCase`)
 matches all 1,112,064 scalars, 2,048 isolated surrogate units and 9,986 captured
 contexts. Both contextual algorithms use linear scans and retain no full context
 buffer. Generation independently verifies the pinned runtime's mappings and
@@ -4645,7 +4646,8 @@ cancel, and the slice withdrawn once a model is imported. Its first run
 found the client's stale keep-alive connection (above) and a server defect:
 results in a temporary directory under a dot directory were never delivered
 ([runtime and deployment](runtime-and-deployment.md)). Not yet matched: local slicing,
-catalog profile targets for preflight, the wave-overhang engine check,
+choosing catalog profiles (the core's catalog slicing configuration, below, is
+ready; the area offers no picker yet) and catalog profile targets for preflight, the wave-overhang engine check,
 preflight actions (reveal, drop to bed), troubleshooting text, slicing all
 plates, and the shared artifact summary (layers are the browser's fallback
 count).
@@ -5299,6 +5301,95 @@ Chrome) and the JNI bridge each match 59 replies across the 7 cases and 42
 refusals. The Kotlin wrapper re-encodes every decoded value and checks budget
 and closed-capture refusals: 115 checks.
 
+### Catalog slicing configuration
+
+The step that turns a chosen catalog profile into the project's own slicing
+configuration is shared. The browser's rules now live in one production
+module, `web/src/workspace/CatalogSlicingConfiguration.ts`, which
+`OrcaWorkspace` and `CanonicalWorkspaceController` call (the workspace keeps
+the live state: the selected profile, each palette slot's filament and
+nozzle, and the palette). The core ports it as:
+
+- `slicing::choices`: the pickers' printer, process and filament choices in
+  catalog order, labels disambiguated by name and then by the vendor the
+  preset ID encodes (`" — "`); `match_option` (a unique exact label, else a
+  unique exact name, else the one containing match, ignoring case);
+  `find_by_names` (`ProfileCatalog.find`); the default triple (Snapmaker U1
+  0.4 / 0.20 Standard / Snapmaker PLA, else the first profile); `resolve`
+  (`selectProfilePresets` after `reconcileSelection`: the completeness check,
+  the exact profile of every slot and the operator's substitution messages in
+  the browser's words) and `resolve_by_names` (`setProfileByNames`); and the
+  slots a selection leaves (`resolved_slots`: the palette grown to the
+  extruder count, never past 16 slots, each slot's filament and nozzle).
+- `slicing::configuration`: `live_configuration`
+  (`commitLiveSlicingConfiguration`: the profile's configuration with the
+  palette's colours, one physical filament per slot keeping the ID the
+  project gave that tool or `import:live:filament-slot-N`, its exact catalog
+  filament's configuration and material, a mixed component left without its
+  filament refused) and `next_state` (`nextSlicingState`: the project's
+  overrides overlaid, or replaced when the configuration carries them; an
+  unchanged configuration is no change; printer and filament records
+  replaced whole; then `withReconciledAutoPairs`).
+- `filaments::auto_pairs`: the stable-ID projection of the pinned
+  `MixedFilamentManager::auto_generate` and its project adapter
+  (`reconcileFullSpectrumAutoPairFilaments`), with `filaments::pigment`, the
+  pinned `filament_mixer` polynomial in the browser's operation order. Its
+  330-feature table (`filaments::mixer_model`) is generated from the
+  browser's by `generate-filament-mixer.mjs`, checked in CI. Pairs regenerate
+  only when enabled and for at most four physical filaments or a confirmed
+  count; new identities are UUIDs over host-supplied random words, sixteen
+  each, as the browser's UUID source draws them (too few words refuse as
+  `ids-exhausted`).
+
+Text compares as the browser's: `toLowerCase` is the pinned Unicode 16
+table, now `orcaxr_project::js_math::case` (moved from the OPC module, which
+uses it unchanged; Rust's own tables differ from V8 in 28 scalars),
+`decodeURIComponent` is shared with the printer port, and a colour's
+`toUpperCase` reads only `a`–`f` and U+FB00 (`ﬀ` upper-cases to `FF`), the
+only units that upper-case into hexadecimal.
+
+`slicing::configuration_exchange` is the hosts' contract, mirroring the
+browser's `CatalogSlicingConfigurationExchange.ts`: canonical JSON requests
+and replies over a live choice (`{profile, heads, nozzles, palette}`; a
+profile the catalog no longer holds reads as none), with states and
+configurations as JSON text of at most 1 MiB. `ProjectSession::stage_slicing_configuration`
+computes the next state from the session's current project and stages it as
+one "Update slicing configuration" `replaceProject`, validated when it
+executes; no profile or no change stages nothing, and an orphaned component
+or a refused reconciliation answers with the browser's message.
+
+`slicing-configuration-vectors.mjs` drives the production module through
+its exchange over the bundled catalog and a synthetic one (labels shared by
+name and by vendor, a 17-nozzle printer, a filament named only by its
+qualifier, ambiguous filament types, odd nozzle lists): 80 choice lists, 46
+matches (Final_Sigma, `İ`, `ß`, `ﬀ`, the Kelvin sign, lone surrogates,
+ambiguity), 46 selections by ID, name and default (unknown printers,
+processes and filaments, substitutions, wider and narrower palettes, a stale
+profile), 58 configurations against eight states (model-corpus states with
+unknown members, lone surrogates and `__proto__` keys, overrides, a wipe
+tower on a dropped tool, a mixed filament on a dropped tool) — 46
+configured, 9 orphaned, 3 without a profile — and 119 next states under
+every auto-pair policy (101 changed, 10 unchanged, 2 invalid, 3 auto-pair
+refusals, 3 exhausted words), fed forward as a host feeds them, plus 32
+session commits and 14 malformed requests. Large replies are pinned by the
+SHA-256 of their text. Rust replays all of it, committing on real sessions
+with undo; WASM in Node and a Chrome 150 worker and the JNI exports answer
+349 replies and 14 refusals and commit 29 live choices (undone each time);
+the Kotlin wrapper (`ProfileCatalog.slicingChoices`, `selectPresets`,
+`selectByNames`, `defaultSelection`, `slicingConfiguration`;
+`SlicingConfigurations.match`, `nextState`, `words`;
+`ProjectSession.stageSlicingConfiguration`) passes 412 checks, including that
+`LiveSlicingChoice.EMPTY` selects the browser's default. Porting found two
+browser defects, fixed with regression tests: a slot with neither a preset
+nor a name recorded `presetId: undefined`, so the canonical comparison threw
+and the profile never committed; and a printer with more extruders than the
+palette's 16 slots never left the loop that grew the palette.
+
+The browser's production path stays on TypeScript: its project session does
+not run on the core, so parity rests on the corpus. Not yet done: the
+Android app's profile pickers and their workspace/actor operation (Prepare
+still preflights only a project's own configuration).
+
 ## Edited canonical archive interchange
 
 `archive_interchange` and `test-archive-interchange.mjs` exercise actual archive
@@ -5674,6 +5765,8 @@ cargo +1.94.1 install wasm-bindgen-cli --version 0.2.129 --locked --jobs 2
 cargo +1.94.1 install cargo-audit --version 0.22.2 --locked --jobs 2
 node tools/cross-platform/generate-contracts.mjs
 node tools/cross-platform/generate-opc-lowercase.mjs --verify-runtime
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/generate-filament-mixer.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slicing-configuration-vectors.mjs
 node tools/cross-platform/generate-bbs-filament-keys.mjs
 node web/scripts/run-tests.mjs opc-lowercase.test.ts
 node tools/cross-platform/canonical-requests.mjs

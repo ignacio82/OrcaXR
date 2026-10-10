@@ -41,6 +41,7 @@ import { replayPrinterDirectory } from "./printer-directory-replay.mjs";
 import { replayRememberedCredentials } from "./printer-credentials-replay.mjs";
 import { replayExternalSlicer } from "./external-slicer-replay.mjs";
 import { plateProjectionCases, replayPlateProjection } from "./plate-projection-replay.mjs";
+import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -304,6 +305,10 @@ if (isMainThread) {
     assert.deepEqual(result.externalSlicerAnswers, [72, 230, 156, 247, 196, 44, 49]);
     // One plate for an external slicer: projected, refused, and its overrides.
     assert.deepEqual(result.plateProjectionAnswers, [16, 3, 19]);
+    // Catalog profiles chosen and turned into the project's slicing
+    // configuration: replies, refusals, session commits, their undos, and
+    // every commit case (refused and unchanged ones included).
+    assert.deepEqual(result.slicingConfigurationAnswers, [349, 14, 29, 29, 32]);
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -797,6 +802,17 @@ if (isMainThread) {
       JSON.parse(await readFile(new URL("testdata/cross-platform/project-model-vectors.json", root))),
     ),
   );
+  const slicingConfiguration = await replaySlicingConfiguration(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/slicing-configuration-vectors.json", root)),
+    ),
+    catalogBytes,
+    collator,
+    layout,
+    JSON.parse(await readFile(new URL("contracts/project-staging.json", root))).version,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -849,6 +865,7 @@ if (isMainThread) {
       ...rememberedCredentials,
       ...externalSlicer,
       ...plateProjection,
+      ...slicingConfiguration,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

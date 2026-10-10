@@ -548,6 +548,48 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             None => Ok(None),
         }
     }
+    /// Stage the slicing configuration a live catalog choice describes
+    /// against the current project (the browser's
+    /// `commitLiveSlicingConfiguration`) as one "Update slicing configuration"
+    /// replacement, for `executeStaged`. Nothing is staged without a profile,
+    /// when nothing would change, when a mixed filament would lose a component
+    /// or when automatic pairs cannot be reconciled; the replacement is
+    /// validated when it executes. `allocate` supplies new pair identities.
+    pub fn stage_slicing_configuration<E>(
+        &mut self,
+        profiles: &[crate::settings::catalog::Profile],
+        live: &crate::slicing::configuration::Live<'_>,
+        policy: &crate::slicing::configuration::AutoPairPolicy,
+        allocate: &mut crate::slicing::configuration::Allocator<'_, E>,
+    ) -> Result<crate::slicing::configuration::Stage<E>, wire::SessionError> {
+        use crate::slicing::configuration::{self, Stage};
+        let guard = self.capture_guard()?;
+        let next = match configuration::commit_state(
+            guard.project.state(),
+            profiles,
+            live,
+            policy,
+            allocate,
+        )
+        .map_err(|_| wire::SessionError::ResourceLimit)?
+        {
+            Ok(next) => next,
+            Err(stage) => return Ok(stage),
+        };
+        let captured = crate::commands::staged::CapturedCommand::replace_project(
+            next,
+            Some(Text::from_utf8(
+                crate::slicing::configuration_exchange::COMMIT_LABEL,
+            )),
+            self.staging.max_units(),
+        )
+        .map_err(|error| match error {
+            crate::commands::staged::CaptureError::Limit => wire::SessionError::ResourceLimit,
+            _ => wire::SessionError::InvalidRequest,
+        })?;
+        self.stage(&guard, StagedWork::single(captured))
+            .map(Stage::Staged)
+    }
     pub fn capture_guard(&self) -> Result<LocalGuard, wire::SessionError> {
         if self.disposed {
             return Err(wire::SessionError::Disposed);

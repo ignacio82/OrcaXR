@@ -1,8 +1,6 @@
 //! Canonical-package OPC metadata compatibility. The legacy tag scanner matches
 //! the existing browser contract; it is not a general XML parser or BBS loader.
 //! It never resolves external entities or performs network/filesystem extraction.
-pub(crate) mod case;
-mod case_data;
 mod scan;
 mod write;
 use crate::{Archive, canonical::ENVELOPE_PATH};
@@ -613,7 +611,7 @@ pub fn read<R: Read + Seek>(
 }
 // Persisted declarations use the same pinned Unicode data on every host.
 fn lower_path(path: &[u16]) -> Vec<u16> {
-    case::lower(path)
+    orcaxr_project::js_math::case::lower(path)
 }
 fn default_extension(path: &[u16]) -> Option<Vec<u16>> {
     let dot = path.iter().rposition(|&c| c == 46)?;

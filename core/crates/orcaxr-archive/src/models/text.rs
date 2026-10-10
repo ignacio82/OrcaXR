@@ -44,7 +44,7 @@ pub(crate) fn is_space_unit(unit: u16) -> bool {
 
 /// ECMAScript `toLowerCase` (pinned Unicode casing, Final_Sigma).
 pub(crate) fn lower(units: &[u16]) -> Vec<u16> {
-    crate::opc::case::lower(units)
+    orcaxr_project::js_math::case::lower(units)
 }
 
 /// `text.toLowerCase().startsWith(keyword)` for ASCII keywords without `i` or

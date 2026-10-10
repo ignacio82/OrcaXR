@@ -50,6 +50,7 @@ import { replayPrinterDirectory } from "./printer-directory-replay.mjs";
 import { replayRememberedCredentials } from "./printer-credentials-replay.mjs";
 import { replayExternalSlicer } from "./external-slicer-replay.mjs";
 import { plateProjectionCases, plateProjectionCode, replayPlateProjection } from "./plate-projection-replay.mjs";
+import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -1275,6 +1276,53 @@ try {
     ].join("\t"),
   );
   assert.equal(jvm.call("plateProjectionChecks", plateScript.join("\n")), 57);
+  // Catalog profiles turned into the project's slicing configuration through
+  // the raw exports, then the Kotlin wrapper against those verified replies.
+  const slicingFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/slicing-configuration-vectors.json", root)),
+  );
+  const verified = { configurations: [], nextStates: [] };
+  const sliced = await replaySlicingConfiguration(
+    projectJniCore(jvm.call),
+    slicingFixture,
+    catalogBytes,
+    undefined,
+    layout,
+    stagingLayout.version,
+    async (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    verified,
+  );
+  assert.deepEqual(sliced.slicingConfigurationAnswers, [349, 14, 29, 29, 32]);
+  const digest = (text) => createHash("sha256").update(text).digest("hex");
+  /** What the Kotlin wrapper must answer: a payload by its digest, or the reply itself. */
+  const expect = (reply, payload, key) => {
+    const value = JSON.parse(reply);
+    if (typeof value[payload] === "string") return JSON.stringify({ [key]: digest(value[payload]) });
+    if (payload in value) return JSON.stringify({ none: true });
+    return reply;
+  };
+  const slicingScript = [
+    ...Object.entries(slicingFixture.states).map(([name, state]) => `T\t${name}\t${state}`),
+    ...slicingFixture.choices.map((c) => `C\t${c.catalog}\t${c.requestJson}\t${c.replyJson}`),
+    ...slicingFixture.matches.map((c) => `M\t${c.requestJson}\t${c.replyJson}`),
+    ...slicingFixture.selections.map((c) => `S\t${c.catalog}\t${c.kind}\t${c.requestJson}\t${c.replyJson}`),
+    ...slicingFixture.configurations.map(
+      (c, i) =>
+        `G\t${c.catalog}\t${JSON.stringify(c.live)}\t${c.state}\t${expect(verified.configurations[i], "configurationJson", "configurationSha256")}`,
+    ),
+    ...slicingFixture.nextStates.map(
+      (c, i) =>
+        `N\t${"state" in c ? `state:${c.state}` : `after:${c.after}`}\t${"configuration" in c ? `index:${c.configuration}` : `json:${c.configurationJson}`}\t${JSON.stringify(c.autoPairs)}\t${JSON.stringify(c.words)}\t${expect(verified.nextStates[i], "stateJson", "stateSha256")}`,
+    ),
+    ...slicingFixture.commits.map(
+      (c) =>
+        `K\t${c.catalog}\t${c.state}\t${JSON.stringify(c.live)}\t${JSON.stringify(c.autoPairs)}\t${JSON.stringify(c.words)}\t${c.expectedJson}`,
+    ),
+  ];
+  assert.equal(
+    jvm.call("slicingConfigurationChecks", catalogBytes, slicingFixture.syntheticCatalogJson, slicingScript.join("\n")),
+    412,
+  );
   // The Moonraker transport through the real JNI exports, then the Kotlin
   // wrapper: step and state, or reply, for each input.
   const transportFixture = JSON.parse(

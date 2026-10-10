@@ -316,6 +316,59 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_catalogSlicingChoices, catalog_slicing_choices, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogSlicingSelect, catalog_slicing_select, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogSlicingSelectByNames, catalog_slicing_select_by_names, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogSlicingDefault, catalog_slicing_default, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_catalogSlicingConfiguration, catalog_slicing_configuration, jstring,
+    handle: jlong,
+    request: JString<'local>,
+    resolver: JObject<'local>,
+    integer_mode: jint,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_slicingMatch, slicing_match, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_slicingNextState, slicing_next_state, jstring,
+    request: JString<'local>,
+    words: JDoubleArray<'local>,
+    resolver: JObject<'local>,
+    integer_mode: jint,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_stageSlicingConfiguration, stage_slicing_configuration, jstring,
+    handle: jlong,
+    catalog: jlong,
+    request: JString<'local>,
+    words: JDoubleArray<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_libraryCreate, library_create, (),
     handle: jlong,
     stored: JByteArray<'local>,

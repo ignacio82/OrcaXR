@@ -54,6 +54,7 @@ export function startProjectJni(profile = "debug") {
   signatures.printerStorageChecks = ["String"];
   signatures.externalSlicerChecks = ["String"];
   signatures.plateProjectionChecks = ["String"];
+  signatures.slicingConfigurationChecks = ["byte[]", "String", "String"];
   signatures.externalSlicerClientChecks = ["String", "String", "byte[]", "String"];
   signatures.printHistoryChecks = ["String"];
   signatures.printerConsoleChecks = ["String"];
@@ -441,6 +442,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     stage_svg_part(svg, request) {
       return call("stageSvgPart", this.handle, svg.handle, request);
+    }
+    stage_slicing_configuration(catalog, request, words) {
+      return call("stageSlicingConfiguration", this.handle, catalog.handle, request, Array.from(words));
     }
     mesh_packet(request) {
       return wrap(
@@ -986,6 +990,21 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     preflight_target(request, maxTools) {
       return call("catalogTarget", this.handle, request, maxTools);
     }
+    slicing_choices(request) {
+      return call("catalogSlicingChoices", this.handle, request);
+    }
+    slicing_select(request) {
+      return call("catalogSlicingSelect", this.handle, request);
+    }
+    slicing_select_by_names(request) {
+      return call("catalogSlicingSelectByNames", this.handle, request);
+    }
+    slicing_default(request) {
+      return call("catalogSlicingDefault", this.handle, request);
+    }
+    slicing_configuration(request) {
+      return call("catalogSlicingConfiguration", this.handle, request, zone, profile);
+    }
   }
   // The upload handle consumed by a native call that closes it itself.
   const spent = (upload) => {
@@ -1337,6 +1356,8 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     external_slicer_supports: (engine, feature) => call("externalSlicerSupports", engine, feature),
     plate_projection: (state, plateId, omitted) => call("plateProjection", state, plateId, omitted, zone, profile),
     plate_print_overrides: (state, plateId) => call("platePrintOverridesJson", state, plateId),
+    slicing_match: (request) => call("slicingMatch", request),
+    slicing_next_state: (request, words) => call("slicingNextState", request, Array.from(words), zone, profile),
     print_history_plan: (operation) => call("printHistoryPlan", operation),
     print_history_finish: (request) => call("printHistoryFinish", request),
     print_history_read: (operation, reply) => call("printHistoryRead", operation, reply),

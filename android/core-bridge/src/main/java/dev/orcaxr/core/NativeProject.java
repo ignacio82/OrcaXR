@@ -68,6 +68,18 @@ final class NativeProject {
     static native String catalogProfileConfig(long handle, long position);
     static native String catalogReconcile(long handle, String request);
     static native String catalogTarget(long handle, String request, long maxTools);
+    // Slicing configuration from catalog profiles: canonical JSON requests and
+    // replies (the browser's CatalogSlicingConfigurationExchange). States and
+    // configurations travel as JSON text; words are the random words new
+    // FullSpectrum pair identities draw, sixteen each.
+    static native String catalogSlicingChoices(long handle, String request);
+    static native String catalogSlicingSelect(long handle, String request);
+    static native String catalogSlicingSelectByNames(long handle, String request);
+    static native String catalogSlicingDefault(long handle, String request);
+    static native String catalogSlicingConfiguration(long handle, String request, LocalTimestampResolver resolver, int integerMode);
+    static native String slicingMatch(String request);
+    static native String slicingNextState(String request, double[] words, LocalTimestampResolver resolver, int integerMode);
+    static native String stageSlicingConfiguration(long handle, long catalog, String request, double[] words);
     static native void libraryCreate(long handle, byte[] stored, double[] limits, PresetCollator collator, LocalTimestampResolver resolver, int integerMode);
     static native String libraryApply(long handle, String operation);
     static native String libraryImport(long handle, byte[] bundle, double[] limits);

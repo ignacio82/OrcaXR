@@ -68,6 +68,55 @@ class ProfileCatalog internal constructor(handle: Long) : ProjectHandle(handle) 
             NativeProject.catalogReconcile(it, ProjectIntents.encodeCatalogSelectionRequest(request)),
         )
     }
+    /** The pickers' choices: every printer, the processes of [machinePresetId]
+     * and the filaments of it with [processPresetId], labels disambiguated. */
+    fun slicingChoices(machinePresetId: String? = null, processPresetId: String? = null): PresetChoices = read {
+        SlicingConfigurations.Json.choices(
+            NativeProject.catalogSlicingChoices(it, SlicingConfigurations.Json.choicesRequest(machinePresetId, processPresetId)),
+        )
+    }
+    /** Select presets by ID from [live]; absent parts keep the live choice,
+     * a null filament names no preset. Applies only a complete selection. */
+    fun selectPresets(
+        live: LiveSlicingChoice,
+        machinePresetId: String? = null,
+        processPresetId: String? = null,
+        filamentPresetIds: List<String?>? = null,
+    ): ProfileSelection = read {
+        checkNotNull(
+            SlicingConfigurations.Json.selection(
+                NativeProject.catalogSlicingSelect(
+                    it, SlicingConfigurations.Json.selectRequest(live, machinePresetId, processPresetId, filamentPresetIds),
+                ),
+            ),
+        )
+    }
+    /** Select a printer, process and primary filament by typed names (blank keeps the live one). */
+    fun selectByNames(live: LiveSlicingChoice, machine: String, process: String, filament: String): ProfileSelection = read {
+        checkNotNull(
+            SlicingConfigurations.Json.selection(
+                NativeProject.catalogSlicingSelectByNames(it, SlicingConfigurations.Json.namesRequest(live, machine, process, filament)),
+            ),
+        )
+    }
+    /** Select the catalog's default triple; null when the catalog has no profile. */
+    fun defaultSelection(live: LiveSlicingChoice): ProfileSelection? = read {
+        SlicingConfigurations.Json.selection(NativeProject.catalogSlicingDefault(it, SlicingConfigurations.Json.liveRequest(live)))
+    }
+    /** The slicing configuration [live] describes against the state document
+     * [stateJson], admitted under [resolver] and [profile]. */
+    fun slicingConfiguration(
+        live: LiveSlicingChoice,
+        stateJson: String,
+        resolver: LocalTimestampResolver,
+        profile: ProjectIntegerProfile,
+    ): SlicingConfiguration = read {
+        SlicingConfigurations.Json.configuration(
+            NativeProject.catalogSlicingConfiguration(
+                it, SlicingConfigurations.Json.configurationRequest(live, stateJson), resolver, profile.bits,
+            ),
+        )
+    }
     /** The catalog target of a live `PreflightRequest` for the selected presets
      * and each head's filament; more than [maxTools] tools is refused. */
     fun preflightTarget(request: ProjectIntents.CatalogTargetRequest, maxTools: Long): ProjectIntents.CatalogPreflightTarget = read {

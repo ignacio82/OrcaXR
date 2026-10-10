@@ -14,6 +14,22 @@ export interface FilamentSlot {
   type: string;
 }
 
+/** The most slots a palette holds. */
+export const FILAMENT_PALETTE_MAX_SLOTS = 16;
+/** The slot {@link FilamentPalette.add} appends by default. */
+export const NEW_FILAMENT_SLOT: Readonly<FilamentSlot> = Object.freeze({ color: '#cccccc', type: 'PLA' });
+
+/** Slicer overrides for the filament slots. libslic3r's ConfigOptionStrings
+ *  splits on ';' — a comma-joined list parses as ONE value, which silently
+ *  shrank the engine's filament count (libslic3r gotcha #19). */
+export function slicerOverridesForSlots(slots: readonly FilamentSlot[]): Record<string, string> {
+  const colors = slots.map((s) => s.color).join(';');
+  return {
+    filament_colour: colors,
+    extruder_colour: colors,
+  };
+}
+
 const DEFAULT_SLOTS: FilamentSlot[] = [
   { color: '#5F605F', type: 'PLA' },
   { color: '#E22B22', type: 'PLA' },
@@ -45,8 +61,8 @@ export class FilamentPalette {
     }
   }
 
-  add(color = '#cccccc', type = 'PLA') {
-    if (this.slots.length >= 16) return;
+  add(color = NEW_FILAMENT_SLOT.color, type = NEW_FILAMENT_SLOT.type) {
+    if (this.slots.length >= FILAMENT_PALETTE_MAX_SLOTS) return;
     this.slots.push({ color, type });
     this.emit();
   }
@@ -71,15 +87,9 @@ export class FilamentPalette {
     this.emit();
   }
 
-  /** Slicer overrides for the filament slots. libslic3r's ConfigOptionStrings
-   *  splits on ';' — a comma-joined list parses as ONE value, which silently
-   *  shrank the engine's filament count (libslic3r gotcha #19). */
+  /** Slicer overrides for the filament slots ({@link slicerOverridesForSlots}). */
   toSlicerOverrides(): Record<string, string> {
-    const colors = this.slots.map((s) => s.color).join(';');
-    return {
-      filament_colour: colors,
-      extruder_colour: colors,
-    };
+    return slicerOverridesForSlots(this.slots);
   }
 
   private emit() {

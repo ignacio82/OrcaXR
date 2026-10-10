@@ -295,6 +295,28 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
         val id = NativeProject.stagePaintStroke(it, stroke.reference(), label?.toCharArray())
         if (id == 0L) null else ProjectStagedInput.own(this, id)
     }
+    /** The slicing configuration [live] describes against this session's
+     * current project, staged as one "Update slicing configuration"
+     * replacement for `executeStaged` (validated when it executes); [words]
+     * supply new FullSpectrum pair identities, sixteen each. */
+    fun stageSlicingConfiguration(
+        catalog: ProfileCatalog,
+        live: LiveSlicingChoice,
+        policy: AutoPairPolicy,
+        words: DoubleArray,
+    ): SlicingStage = read {
+        val reply = CanonicalJson.read(
+            NativeProject.stageSlicingConfiguration(
+                it, catalog.reference(), SlicingConfigurations.Json.stageRequest(live, policy), words,
+            ),
+        ) as ProjectJsonObject
+        val keys = reply.keys().asSequence().toSet()
+        when {
+            "staged" in keys -> SlicingStage.Staged(ProjectStagedInput.own(this, (reply.get("staged") as Double).toLong()))
+            "error" in keys -> SlicingStage.Refused(reply.get("error") as String, reply.get("message") as String)
+            else -> SlicingStage.Unchanged
+        }
+    }
     fun assetFingerprint(): String = read { NativeProject.assetFingerprint(it) }
     fun asset(position: Long): ProjectAsset = read { own(NativeProject.asset(it, position), ::ProjectAsset) }
     fun captureGuard(): ProjectGuard = read { own(NativeProject.captureGuard(it), ::ProjectGuard) }

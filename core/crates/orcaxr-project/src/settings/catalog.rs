@@ -376,6 +376,15 @@ pub struct Profile {
     parts: [Arc<WireConfig>; 3],
 }
 impl Profile {
+    /// One key of [`Self::config`], without merging the whole configuration.
+    pub fn config_value(&self, key: &str) -> Option<&[u16]> {
+        let key: Vec<u16> = key.encode_utf16().collect();
+        self.parts
+            .iter()
+            .rev()
+            .find_map(|part| part.get(&key))
+            .map(Vec::as_slice)
+    }
     /// `{ ...machine, ...process, ...filament }`.
     pub fn config(&self) -> WireConfig {
         let mut merged = WireConfig::new();

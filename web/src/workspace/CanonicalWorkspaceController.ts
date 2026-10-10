@@ -1,4 +1,5 @@
 import { AsyncTransformGesture, type TransformGestureHost } from './AsyncTransformGesture';
+import { nextSlicingState, withReconciledAutoPairs, type SlicingAutoPairPolicy } from './CatalogSlicingConfiguration';
 import {
   LocalProjectSessionTransport,
   ProjectReceiptUnavailableError,
@@ -105,7 +106,6 @@ import {
   findVolume,
   resolveFilament,
 } from '../project/domain/selectors';
-import { assertValidProjectState } from '../project/domain/validation';
 import {
   AddLayerEventCommand,
   DeleteLayerEventCommand,
@@ -2733,47 +2733,7 @@ export class CanonicalWorkspaceController {
 
   /** The validated state a slicing configuration leads to, or nothing when it is the current one. */
   private nextSlicingState(configuration: CanonicalSlicingConfiguration): ProjectState | undefined {
-    const state = this.session.project.getSnapshot().state;
-    const submitsOverrides = Object.prototype.hasOwnProperty.call(configuration, 'settingsOverrides');
-    if (submitsOverrides && configuration.settingsOverrides === undefined) {
-      throw new Error('Submitted project setting overrides must be a complete JSON object');
-    }
-    const settingsOverrides = cloneJson(
-      submitsOverrides ? configuration.settingsOverrides! : (state.settingsOverrides ?? {}),
-    ) as ConfigMap;
-    const baseConfig = cloneJson(configuration.config) as ConfigMap;
-    const requested = {
-      printer: cloneJson(configuration.printer) as ProjectState['printer'],
-      baseConfig,
-      config: applyProjectSettingsOverrides(baseConfig, settingsOverrides),
-      settingsOverrides,
-      filaments: {
-        physical: cloneJson(configuration.filaments.physical) as PhysicalFilament[],
-        mixed: cloneJson(configuration.filaments.mixed) as MixedFilament[],
-      },
-    };
-    if (
-      canonicalStringify({
-        printer: state.printer,
-        baseConfig: state.settingsBaseConfig ?? state.config,
-        config: state.config,
-        settingsOverrides: state.settingsOverrides ?? {},
-        filaments: state.filaments,
-      }) === canonicalStringify(requested)
-    ) {
-      return undefined;
-    }
-    const next = cloneProjectState(state);
-    next.printer = requested.printer;
-    next.config = requested.config;
-    if (submitsOverrides || state.settingsBaseConfig !== undefined || state.settingsOverrides !== undefined) {
-      next.settingsBaseConfig = requested.baseConfig;
-    }
-    if (submitsOverrides) next.settingsOverrides = requested.settingsOverrides;
-    next.filaments = requested.filaments;
-    const reconciled = this.withReconciledAutoPairs(next);
-    assertValidProjectState(reconciled);
-    return reconciled;
+    return nextSlicingState(this.session.project.getSnapshot().state, configuration, this.autoPairPolicy());
   }
 
   importBufferGeometry(
@@ -4902,13 +4862,15 @@ export class CanonicalWorkspaceController {
   }
 
   private withReconciledAutoPairs(state: ProjectState): ProjectState {
-    if (!this.autoPairGenerationAllowed(state.filaments.physical.length)) return state;
-    const reconciliation = this.reconcileAutoPairFilaments(state.filaments.physical, state.filaments.mixed);
-    if (!reconciliation.changed) return state;
-    const next = cloneProjectState(state);
-    next.filaments.mixed = reconciliation.filaments.map((filament) => cloneJson(filament));
-    assertValidProjectState(next);
-    return next;
+    return withReconciledAutoPairs(state, this.autoPairPolicy());
+  }
+
+  /** The live auto-pair preference and confirmations, with this project's ID source. */
+  private autoPairPolicy(): SlicingAutoPairPolicy {
+    return {
+      allowed: (physicalCount) => this.autoPairGenerationAllowed(physicalCount),
+      createId: () => this.options.idSource.next('mixed-filament'),
+    };
   }
 
   private autoPairGenerationAllowed(physicalCount: number): boolean {

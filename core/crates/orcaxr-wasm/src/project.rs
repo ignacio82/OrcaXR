@@ -769,6 +769,26 @@ impl ProjectSession {
                 })
             })
     }
+    /// Stage the slicing configuration a live catalog choice describes
+    /// (`{"autoPairs","live"}`) as one "Update slicing configuration"
+    /// replacement for `executeStaged`; `words` are the random words new pair
+    /// identities draw. Answers `{"staged": id}`, `{"unchanged": true}` or
+    /// `{"error","message"}`; a disposed session or one without staging room
+    /// throws its code.
+    pub fn stage_slicing_configuration(
+        &mut self,
+        catalog: &crate::catalog::ProfileCatalog,
+        request: &str,
+        words: &[f64],
+    ) -> Result<String, JsValue> {
+        orcaxr_project::slicing::configuration_exchange::stage_json(
+            &mut self.inner,
+            catalog.inner.catalog(),
+            request,
+            words,
+        )
+        .map_err(error)
+    }
     pub fn asset_fingerprint(&self) -> String {
         self.inner.assets().bundle_fingerprint().into()
     }

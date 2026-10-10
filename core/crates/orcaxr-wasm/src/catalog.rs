@@ -8,6 +8,7 @@ use orcaxr_project::{
         catalog_exchange::{CatalogUpload, HostCatalog},
         presets::{AsciiRootCollation, Collation},
     },
+    slicing::configuration_exchange as slicing,
 };
 use std::cmp::Ordering;
 use wasm_bindgen::prelude::*;
@@ -174,6 +175,31 @@ impl ProfileCatalog {
             wire::encode_catalog_selection,
         )
     }
+    /// The pickers' choices (`slicingChoicesExchange`): canonical JSON
+    /// `{"machinePresetId"?, "processPresetId"?}` in, `{"machines",
+    /// "processes","filaments"}` of `{"id","label","name"}` out.
+    pub fn slicing_choices(&self, request: &str) -> Result<String, JsValue> {
+        slicing::choices_json(self.inner.catalog(), request).map_err(error)
+    }
+    /// A selection by preset ID from a live choice (`profileSelectionExchange`):
+    /// `{"live","request"}` in, `{"feedback","live"?}` out.
+    pub fn slicing_select(&self, request: &str) -> Result<String, JsValue> {
+        slicing::select_json(self.inner.catalog(), request).map_err(error)
+    }
+    /// A selection by typed names (`profileSelectionByNamesExchange`).
+    pub fn slicing_select_by_names(&self, request: &str) -> Result<String, JsValue> {
+        slicing::select_by_names_json(self.inner.catalog(), request).map_err(error)
+    }
+    /// The catalog's default triple selected (`defaultProfileSelectionExchange`).
+    pub fn slicing_default(&self, request: &str) -> Result<String, JsValue> {
+        slicing::default_selection_json(self.inner.catalog(), request).map_err(error)
+    }
+    /// A live choice's slicing configuration against a state document,
+    /// admitted under the host's `Date.parse` (`slicingConfigurationExchange`).
+    pub fn slicing_configuration(&self, request: &str) -> Result<String, JsValue> {
+        let mut policy = crate::project::timestamps as crate::project::Timestamps;
+        slicing::configuration_json(self.inner.catalog(), request, &mut policy).map_err(error)
+    }
     /// `CatalogTargetRequest` in, the `CatalogPreflightTarget` of a
     /// `PreflightRequest` out. More than `max_tools` tools is refused.
     pub fn preflight_target(&self, target: &str, max_tools: f64) -> Result<String, JsValue> {
@@ -184,4 +210,21 @@ impl ProfileCatalog {
             .map_err(|e| error(e.code()))?;
         contract(Some(result), wire::encode_catalog_preflight_target)
     }
+}
+
+/// The one option a typed name means among `options` (`presetMatchExchange`):
+/// `{"options","query"}` in, `{"option": option | null}` out.
+#[wasm_bindgen]
+pub fn slicing_match(request: &str) -> Result<String, JsValue> {
+    slicing::match_json(request).map_err(error)
+}
+/// The state a slicing configuration leads to (`nextSlicingStateExchange`):
+/// `{"autoPairs","configurationJson","stateJson"}` and the random words new
+/// pair identities draw (sixteen each) in; `{"stateJson"}`,
+/// `{"unchanged":true}` or `{"error","message"}` out, admitted under the
+/// host's `Date.parse`.
+#[wasm_bindgen]
+pub fn slicing_next_state(request: &str, words: &[f64]) -> Result<String, JsValue> {
+    let mut policy = crate::project::timestamps as crate::project::Timestamps;
+    slicing::next_state_json(request, words, &mut policy).map_err(error)
 }

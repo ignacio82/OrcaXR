@@ -98,6 +98,9 @@ public final class ProjectJniHarness {
     public static long plateProjectionChecks(String script) {
         return ProjectPlateProjectionChecks.run(script);
     }
+    public static long slicingConfigurationChecks(byte[] bundled, String synthetic, String script) {
+        return ProjectSlicingConfigurationChecks.run(bundled, synthetic, script);
+    }
     public static long externalSlicerClientChecks(String endpoint, String token, byte[] archive, String gcode) {
         return ProjectExternalSlicerClientChecks.run(endpoint, token, archive, gcode);
     }
@@ -374,6 +377,7 @@ public final class ProjectJniHarness {
             if (name.equals("printerStorageChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("externalSlicerChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("plateProjectionChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("slicingConfigurationChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class, String.class);
             if (name.equals("externalSlicerClientChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, String.class);
             if (name.equals("moonrakerTransportChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("moonrakerClientChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
