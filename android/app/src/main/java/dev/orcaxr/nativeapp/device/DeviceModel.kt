@@ -493,9 +493,27 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun printFile(path: String) = askFirst("Print ${path.substringAfterLast('/')} on ${printerName()}?", "The printer starts this file now.", "Print") {
-        val result = exchanges().storage(ProjectIntents.PrinterStorageOperation.Start(ProjectIntents.PrinterText(units(path)))).get().result
-        main.post { message = failure(result) ?: "Started ${path.substringAfterLast('/')}." }
+    /**
+     * "Print this file": the stored file reprinted through the shared print
+     * workflow, as the browser's storage panel does — its confirmation is the
+     * send dialog in its stored-file mode — with the browser's words.
+     */
+    fun printFile(path: String) = work {
+        val started = try {
+            workspace.startStored(path)
+        } catch (failure: Exception) {
+            CompletableFuture.failedFuture(failure)
+        }
+        started.whenComplete { file, thrown ->
+            val cause = (thrown as? CompletionException)?.cause ?: thrown
+            main.post {
+                message = when {
+                    cause != null -> cause.message ?: cause.javaClass.simpleName
+                    file == null -> "Print cancelled."
+                    else -> "Printing $file."
+                }
+            }
+        }
     }
 
     fun deleteFile(path: String) = askFirst("Delete ${path.substringAfterLast('/')}?", "It is removed from the printer's storage.", "Delete") {

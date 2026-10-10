@@ -2178,8 +2178,8 @@ credential storage, and explicit permission/error flows.
   mapping, start options, exact-name choice, separate upload and start) and
   status words; 9 JVM tests, 26 host checks against the simulator and
   `android-send-smoke.py` (blocked start, upload only, a cancel mid-upload, a
-  started print with levelling) cover it. The Files tab's reprint still uses
-  its own confirmation rather than the workflow's stored one.
+  started print with levelling) cover it. The Files tab reprints a stored
+  file through the same workflow and dialog (`DeviceWorkspace.startStored`).
 - [x] Implement status/history/storage/console/camera features matching current
   scope. Camera subscriptions stop when hidden/disposed; emergency stop and the
   distinct firmware-restart action remain reachable without successful status

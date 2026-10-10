@@ -366,6 +366,18 @@ class DeviceWorkspace(
         }
     }
 
+    /**
+     * Reprints the stored file at [path] through the same workflow, as the
+     * browser's storage panel does: the operator confirms (the dialog in its
+     * stored-file mode, nothing uploaded), and a started print refreshes the
+     * session. Completes with the started file's path, `null` when the
+     * operator declined, or a [PrintSubmissionException] with the workflow's
+     * sentence.
+     */
+    fun startStored(path: String): CompletableFuture<String?> = workflow.startStored(path).thenCompose { started ->
+        if (started == null) CompletableFuture.completedFuture(null) else session.refresh().handle { _, _ -> started }
+    }
+
     /** Whether a send is running. */
     val sending: Boolean get() = workflow.busy
 

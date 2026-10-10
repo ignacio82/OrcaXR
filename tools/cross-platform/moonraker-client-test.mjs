@@ -106,7 +106,7 @@ try {
   // One filament loaded: the send's tool-mapping blocker and colour warning come from it.
   const toolchanger = await simulator({ options: { slots: [{ color: "FF0000", material: "PLA" }] } });
   printers.push(toolchanger);
-  assert.equal(jvm.call("deviceSendChecks", toolchanger.url), 26);
+  assert.equal(jvm.call("deviceSendChecks", toolchanger.url), 28);
   const delivered = await toolchanger.summary();
   // The upload cancelled in flight (the simulator had stored it), the
   // upload-only send under a unique name, and the print under its exact name;
@@ -159,7 +159,7 @@ try {
       printerDiscoveryChecks: 27,
       printerExchangesChecks: 20,
       deviceWorkspaceChecks: 30,
-      deviceSendChecks: 26,
+      deviceSendChecks: 28,
       lanPolicyChecks: 21,
       localNetworkChecks: 28,
       moonrakerClientChecks: 23,

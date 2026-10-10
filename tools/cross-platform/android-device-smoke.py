@@ -115,7 +115,19 @@ try:
     # Files: the job's file, read and deleted once confirmed.
     tap("Files")
     tap("smoke.gcode")
-    find("Print this file")
+    # Reprinted through the shared print workflow: its confirmation is the send dialog for a stored file.
+    tap("Print this file")
+    find("Start stored file", timeout=30)
+    tap("Start print")
+    find("Printing smoke.gcode.", timeout=30)
+    tap("Status")
+    find("Printing", timeout=30, exact=False)
+    tap("Cancel print")
+    find("Send to Simulator?")
+    tap("Send")
+    find("Cancelled", timeout=30)
+    tap("Files")
+    tap("smoke.gcode")
     tap("Delete file")
     find("Delete smoke.gcode?")
     tap("Delete")
@@ -189,7 +201,7 @@ try:
     received = json.loads(simulator.stdout.readline())
     # The typed-in printer's key, and none from the probe or the discovered printer (saved without one).
     assert sorted(received["apiKeys"], key=str) == sorted(["emulator-key", None], key=str), received["apiKeys"]
-    assert received["commands"] == ["start", "pause", "resume", "cancel", "delete:smoke.gcode", "gcode:M105",
+    assert received["commands"] == ["start", "pause", "resume", "cancel", "start", "cancel", "delete:smoke.gcode", "gcode:M105",
                                     "gcode:G28", "gcode:LOAD_FILAMENT TEMP=220"], received["commands"]
     assert received["snapshotRequests"] >= 1, received
     # Connections from the typed-in printer (twice), the probe and the discovered printer.

@@ -175,6 +175,10 @@ object ProjectDeviceSendChecks {
             val download = device.exchanges()!!.storage(ProjectIntents.PrinterStorageOperation.Download(ProjectIntents.PrinterText(stored.path)))
                 .get(WAIT_S, TimeUnit.SECONDS)
             check(download.bytes.contentEquals(twoTools), "stored_byte_for_byte")
+            // The stored file reprinted through the same workflow: the dialog in its stored-file mode, and declined, nothing starts.
+            answer.set { CompletableFuture.completedFuture(decision(ProjectIntents.PrintWorkflowDecisionChoice.Cancel)) }
+            check(device.startStored(text(stored.path)).get(WAIT_S, TimeUnit.SECONDS) == null, "stored_declined")
+            check(confirmations.last().stored, "stored_confirmation")
             artifact.close()
 
             // A stale artifact is refused before the operator is asked, and after they confirm.

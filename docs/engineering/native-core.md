@@ -4747,10 +4747,13 @@ upload-only send verified, a send held by the printer and cancelled, then —
 both filaments loaded — levelling and the exact name chosen and the print
 started, the Device area showing it printing, and a model import leaving the
 slice out of date with nothing to send; the printer receives the three
-uploads, the levelling and one start. Not yet matched: the Files tab still
-prints a stored file with its own confirmation rather than the workflow's
-stored one (`startStored`, which the dialog already renders), and sending
-every plate.
+uploads, the levelling and one start. The Device area's Files tab reprints a
+stored file through the same workflow (`DeviceWorkspace.startStored`, the
+browser storage panel's `startStored`): the dialog in its stored-file mode
+("Start stored file", "Start print", nothing uploaded), then "Printing
+<file>." or "Print cancelled." in the browser's words; the device smoke
+reprints the simulator's file and cancels it, and the host checks decline
+one (28 checks). Not yet matched: sending every plate.
 
 ### Android Device area
 
