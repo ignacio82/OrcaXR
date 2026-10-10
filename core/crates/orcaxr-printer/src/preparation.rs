@@ -96,31 +96,6 @@ pub(crate) fn gcode_commands_of(payload: &Value) -> wire::OptionalTextList {
     }
 }
 
-/// `String.prototype.toLowerCase` over UTF-16; lone surrogates pass through.
-fn lower(text: &[u16]) -> Vec<u16> {
-    let mut out = Vec::with_capacity(text.len());
-    let mut run: Vec<u16> = Vec::new();
-    let flush = |run: &mut Vec<u16>, out: &mut Vec<u16>| {
-        if !run.is_empty() {
-            let lowered = String::from_utf16(run)
-                .expect("well-formed run")
-                .to_lowercase();
-            out.extend(lowered.encode_utf16());
-            run.clear();
-        }
-    };
-    for decoded in char::decode_utf16(text.iter().copied()) {
-        match decoded {
-            Ok(c) => run.extend_from_slice(c.encode_utf16(&mut [0; 2])),
-            Err(lone) => {
-                flush(&mut run, &mut out);
-                out.push(lone.unpaired_surrogate());
-            }
-        }
-    }
-    flush(&mut run, &mut out);
-    out
-}
 /// `normalize`: each name's first whitespace-separated word, lowercased.
 fn section_names(list: &wire::OptionalTextList) -> Option<Vec<Vec<u16>>> {
     match list {
@@ -132,7 +107,8 @@ fn section_names(list: &wire::OptionalTextList) -> Option<Vec<Vec<u16>>> {
                         .iter()
                         .position(|&u| char::from_u32(u32::from(u)).is_some_and(is_space))
                         .unwrap_or(name.len());
-                    lower(&name[..end])
+                    // `toLowerCase` with the pinned Unicode data every port shares.
+                    orcaxr_project::js_math::case::lower(&name[..end])
                 })
                 .collect(),
         ),
