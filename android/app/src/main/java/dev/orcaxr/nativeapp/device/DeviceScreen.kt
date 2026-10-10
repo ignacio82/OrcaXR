@@ -157,7 +157,7 @@ fun DeviceScreen(model: DeviceModel, modifier: Modifier = Modifier) {
                 item {
                     PrimaryTabRow(selectedTabIndex = tab.ordinal) {
                         for (each in DeviceTab.entries) {
-                            Tab(selected = tab == each, onClick = { tab = each }, text = { Text(each.label) })
+                            Tab(selected = tab == each, onClick = { tab = each }, text = { Text(stringResource(each.label)) })
                         }
                     }
                 }

@@ -1,0 +1,344 @@
+{
+  "version": 1,
+  "policy": {
+    "resources": "Each Android string resource (android/app/src/main/res/values) that carries a browser message's English maps to that message's key: tools/cross-platform/android-strings.mjs checks the English is still exactly the browser's and writes the translations (values-*/) from web/public/l10n. Mapped by role as well as words: equal English for a different control is declined with a reason. Arguments list the message's ICU arguments in %1$s, %2$s order; every argument is text the host formats as the browser does (a number as `{n, number}`), and a plural's form is chosen by its integer quantity.",
+    "english": "Resources no browser message carries. They stay English in every language, as a message missing from the browser's catalogue does, until the browser has a message for them.",
+    "kotlin": "Kotlin literals of the app that carry a browser message's words, kept in Kotlin for the reason named; the generator checks each still says exactly what the browser says. A new one fails until it becomes a mapped resource or is recorded here.",
+    "declined": "Equal English that is not the same message: never mapped, and never reported again while its words are unchanged."
+  },
+  "reasons": {
+    "model": "Status text a ViewModel or workflow composes off the composition; it holds no Resources, and the text is checked through it.",
+    "tested": "Platform-free words the JVM tests check through the class that composes them (PrepareFlowTest, SendFlowTest)."
+  },
+  "resources": {
+    "nav_workspace": { "key": "startup.feature.workspace" },
+    "drop_prompt": { "key": "app.main.dropA3MFSTLOBJ" },
+    "nav_prepare": { "key": "ui.workspaceViews.prepare" },
+    "nav_device": { "key": "ui.workspaceViews.device" },
+    "nav_project": { "key": "ui.workspaceViews.project" },
+    "nav_preview": { "key": "ui.workspaceViews.preview" },
+    "prepare_head_filament": {
+      "key": "app.main.headFilament",
+      "arguments": ["index"]
+    },
+    "prepare_no_presets": { "key": "app.main.noCompatiblePresets" },
+    "prepare_own_settings": { "key": "app.main.usingTheProjectSOwn" },
+    "prepare_remove": { "key": "action.delete_models.label" },
+    "prepare_preflight": {
+      "key": "ui.slicePreflightPanel.slicePreflightIssues"
+    },
+    "prepare_show": { "key": "ui.slicePreflightPanel.show" },
+    "prepare_hidden_issues": {
+      "key": "ui.slicePreflightPanel.hiddenIssues",
+      "arguments": ["count"]
+    },
+    "prepare_slice": { "key": "action.slice_active_plate.label" },
+    "prepare_cancel": { "key": "action.slice_cancel.label" },
+    "send_action": { "key": "action.send_to_printer.label" },
+    "preview_heading": { "key": "ui.gcodePreviewPanel.gCodePreview" },
+    "preview_open": { "key": "ui.gcodePreviewPanel.openGCodeFile" },
+    "preview_loading": { "key": "ui.preview.loading" },
+    "preview_single_layer": { "key": "ui.gcodePreviewPanel.singleLayer" },
+    "preview_previous_moves": { "key": "ui.preview.previousMoves" },
+    "preview_next_moves": { "key": "ui.preview.nextMoves" },
+    "project_unsaved": { "key": "ui.projectSummaryPanel.unsavedChanges" },
+    "project_new": { "key": "action.file_new_project.label" },
+    "project_open": { "key": "action.file_open_project.label" },
+    "project_save": { "key": "action.file_save_project.label" },
+    "project_save_as": { "key": "action.file_save_project_as.label" },
+    "project_import": { "key": "action.file_import_model.label" },
+    "project_undo": { "key": "action.edit_undo.label" },
+    "project_redo": { "key": "action.edit_redo.label" },
+    "device_cancel": { "key": "persistence.cancel" },
+    "device_tab_camera": { "key": "startup.feature.camera" },
+    "device_folder_empty": {
+      "key": "ui.printerStoragePanel.thisFolderIsEmpty"
+    },
+    "device_no_longer_on_printer": {
+      "key": "ui.printHistoryPanel.noLongerOnThePrinter"
+    }
+  },
+  "english": [
+    "app_name",
+    "workspace_loading",
+    "workspace_development",
+    "workspace_empty",
+    "workspace_unavailable",
+    "prepare_plate",
+    "prepare_no_plate",
+    "prepare_printer",
+    "prepare_process",
+    "prepare_filament",
+    "prepare_external_slicer",
+    "prepare_url",
+    "prepare_token",
+    "prepare_token_remembered",
+    "prepare_token_session",
+    "prepare_connect",
+    "prepare_enabled",
+    "prepare_hide",
+    "prepare_path",
+    "prepare_upload",
+    "prepare_sliced_on",
+    "send_cancel",
+    "preview_sliced",
+    "preview_showing",
+    "preview_showing_layers",
+    "preview_unavailable",
+    "preview_idle",
+    "preview_view",
+    "preview_top_layer",
+    "preview_bottom_layer",
+    "preview_layer_of",
+    "preview_z_mm",
+    "preview_moves",
+    "preview_layers",
+    "project_saved",
+    "project_guard_save",
+    "project_share",
+    "project_recovered_title",
+    "project_recovered_detail",
+    "project_recovered_damaged",
+    "project_restore",
+    "project_conflict_title",
+    "project_conflict_detail",
+    "project_overwrite",
+    "project_undo_named",
+    "project_redo_named",
+    "project_objects",
+    "project_more_rows",
+    "project_recent",
+    "project_discard_title",
+    "project_discard_detail",
+    "project_discard",
+    "project_import_title",
+    "project_import_objects",
+    "project_import_blocked",
+    "project_import_confirm",
+    "project_import_accept",
+    "device_printers",
+    "device_no_printers",
+    "device_add_printer",
+    "device_find_printers",
+    "device_finding",
+    "device_found_none",
+    "device_found_verified",
+    "device_found_needs_key",
+    "device_found_saved",
+    "device_found_add",
+    "device_find_needs_settings",
+    "device_find_needs_permission",
+    "device_printer_name",
+    "device_printer_address",
+    "device_printer_port",
+    "device_save",
+    "device_local_network_needed",
+    "device_local_network_allow",
+    "device_open_settings",
+    "device_api_key",
+    "device_save_key",
+    "device_remember",
+    "device_forget",
+    "device_connect",
+    "device_disconnect",
+    "device_remove_printer",
+    "device_remove_title",
+    "device_remove_detail",
+    "device_remove",
+    "device_keep",
+    "device_confirm_title",
+    "device_confirm",
+    "device_do_not",
+    "device_dismiss",
+    "device_tab_status",
+    "device_tab_files",
+    "device_tab_history",
+    "device_tab_console"
+  ],
+  "kotlin": [
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/device/DeviceModel.kt",
+      "key": "app.main.forgotTheSavedPrinterKey",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/device/DeviceModel.kt",
+      "key": "action.delete_models.label",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/prepare/PrepareFlow.kt",
+      "key": "workspace.orcaWorkspace.noModelsToSlice",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/prepare/PrepareFlow.kt",
+      "key": "app.main.externalSlicerConnectedExternalSlicing",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/prepare/PrepareFlow.kt",
+      "key": "app.externalSlicer.checking",
+      "kept": "tested"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/prepare/PrepareFlow.kt",
+      "key": "app.externalSlicer.offline",
+      "kept": "tested"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/prepare/PrepareFlow.kt",
+      "key": "app.externalSlicer.on",
+      "kept": "tested"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/prepare/PrepareFlow.kt",
+      "key": "app.externalSlicer.online",
+      "kept": "tested"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.cancellingTheSend",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "workspace.orcaWorkspace.sliceTheActivePlateBefore",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.aSendIsAlreadyIn",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.sendCancelledNothingWasUploaded",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.sendFailure",
+      "arguments": { "reason": "reason" },
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.checkingPrinter",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.confirmSend",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.uploadingFile",
+      "arguments": { "filename": "filename" },
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.verifyingFile",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.preparingPrinter",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.startingPrint",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.sendCompleted",
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.uploadElapsed",
+      "arguments": {
+        "filename": "filename",
+        "megabytes": "fixed(totalBytes / 1048576.0, 1)",
+        "elapsed": "clock"
+      },
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.verifiedPrint",
+      "arguments": {
+        "filename": "text(result.path)",
+        "kilobytes": "kilobytes"
+      },
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "app.main.verifiedUpload",
+      "arguments": {
+        "filename": "text(result.path)",
+        "kilobytes": "kilobytes"
+      },
+      "kept": "model"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "ui.printSubmission.overwriteUnavailable",
+      "kept": "tested"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "ui.printSubmission.exactNewName",
+      "arguments": { "filename": "name" },
+      "kept": "tested"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "ui.printSubmission.exactReplacement",
+      "arguments": {
+        "filename": "name",
+        "bytes": "jsNumber(existing.size)",
+        "modified": "modified(existing.modified)"
+      },
+      "kept": "tested"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "ui.printSubmissionDialog.startStoredFile",
+      "kept": "tested"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "ui.printSubmissionDialog.sendToPrinter",
+      "kept": "tested"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "ui.printSubmissionDialog.beforePrinting",
+      "kept": "tested"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "ui.printSubmissionDialog.resolveTheFilamentMappingProblems",
+      "kept": "tested"
+    },
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "key": "persistence.cancel",
+      "kept": "tested"
+    }
+  ],
+  "declined": [
+    {
+      "file": "android/app/src/main/java/dev/orcaxr/nativeapp/send/SendFlow.kt",
+      "text": "Plate",
+      "key": "ui.xrToolRail.group.plate",
+      "reason": "The send dialog's Plate fact is not the XR tool rail's Plate group, whose upstream translations name an action (de: Aktuelle Platte drucken, print the current plate)."
+    }
+  ]
+}

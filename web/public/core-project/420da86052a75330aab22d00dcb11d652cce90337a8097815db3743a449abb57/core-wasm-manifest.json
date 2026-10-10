@@ -1,10 +1,11 @@
 {
   "cargo": "cargo 1.94.1 (29ea6fb6a 2026-03-24)",
-  "defaultFeatures": true,
+  "defaultFeatures": false,
   "features": [
-    "gcode"
+    "project"
   ],
   "inputs": {
+    "contracts/android-strings.json": "ca64ea70eaa2b655df871faccdeee2883565dadfabd6de558dba5ebaa1fbda70",
     "contracts/core-protocol.json": "63e7ed821d0da12f863004109a41f5dbfd00b73a2c29584ae2b3a3a6b1320f7a",
     "contracts/gcode-buffer.json": "237797f7310f4eb9cd1fe14bedc5c1bce31e2b2fb7b6995056c98da975c7f716",
     "contracts/gcode-metadata.json": "9839972a577bf7fb31f3fbbbffca1ec3003c4dbbd86ec165b9fbf8263b7d23df",
@@ -434,6 +435,7 @@
     "tools/cross-platform/android-adaptive-smoke.py": "697bc3cae9a13b379715e64510b251255b995f0a36a6911fc6b476c5647f662b",
     "tools/cross-platform/android-device-smoke.py": "25f078b660945ac132727bb8be05b540f5a2dbab60d94299ad8d83dd3e914a61",
     "tools/cross-platform/android-local-network-smoke.py": "28a69831ae655ffcc28e0197595b517848349c01f8b6471517760b3b5327871c",
+    "tools/cross-platform/android-locale-smoke.py": "d0f81b3017cae31ade09be71df8553f01e43baeb57cecf761f90bf1b76dc87ed",
     "tools/cross-platform/android-prepare-smoke.py": "94b58f0b01c84fcd2888fc372fc719b2bb3d3578b762a1a5124761ee2840c069",
     "tools/cross-platform/android-preview-smoke.py": "bbfe024f5b0c1cc435166531193109b5fb051ec87b3eb7f7d6c8ec60ee2eb26b",
     "tools/cross-platform/android-project-smoke.py": "d8c51a32ee5a291678956feb3e63d6514a7223f24114d669ceac4ecaf5ba557a",
@@ -443,17 +445,17 @@
     "tools/cross-platform/build-android.py": "28f80643b01f0ef59c6e1cd645d80eb67742417d3ab218a0d6b5ad6cd0d1891e",
     "tools/cross-platform/build-project-jvm.py": "a2f74bb17f1ff830674689292b7bf489bc42fa4a7d065fa708fbdb4903e7f339",
     "tools/cross-platform/build-wasm.py": "6311757d4e2261a1121247fabf0b6eaa0b8840ef371e161d407c4a1c0d75b53c",
-    "tools/cross-platform/emulator-smoke.py": "eda3cd9580295e9adf30a02eb96263ed84e01017cdab46e99e2b2fe5c3d01f16",
-    "tools/cross-platform/smoke_ui.py": "fb1d2499fbd542b08fb7a9ecd7f4127302a745a57d519fa2efc400b7af9bbfdf",
+    "tools/cross-platform/emulator-smoke.py": "c9afd866c1b0e1cb89e3d1886419bd6af58aba4c685db2b90e501a0991e02f88",
+    "tools/cross-platform/smoke_ui.py": "8c00c80d0a8c71afa41f669f2e9330a8c8056b0e55226bd812a56fad48badd1d",
     "tools/cross-platform/test-zip-write.py": "af58df31f97dc99c8c644c4e820878265d9ebf5a0d2a0d622b00b63b11b5a2a0",
     "tools/cross-platform/verify-artifacts.py": "608f9bc1505fcc91843fe0aaf9c707bf28ecf10507481adfb2df2a69ac2f9ff3"
   },
-  "kind": "browser-wasm",
+  "kind": "browser-project-wasm",
   "outputs": {
-    "orcaxr_core.d.ts": "b4d97fa1b44a0304f40f981d72a0efed69b90dc11aa9961b9372f8d41a6fb851",
-    "orcaxr_core.js": "494c7ddef19f4cda6df3e457b0c9ce155a9c53eec2028ec6dc49b727e13458bf",
-    "orcaxr_core_bg.wasm": "bbf18142f6a95e120f97c13e9972976f3ddd79646e37e63811d8938f404a2584",
-    "orcaxr_core_bg.wasm.d.ts": "ff66e2233b5af6e42e05feeef67b33a739c50f29a6c434131dd7bb341686f2c5"
+    "orcaxr_core.d.ts": "7c9e441df5bb9908e631f5b5e8bf873bb5434bde67832c86022bc6df78468207",
+    "orcaxr_core.js": "da0b57d423f10bcb477e8d8999bb97ee1d36d8654789327322ab33dd67d4fc6e",
+    "orcaxr_core_bg.wasm": "16c2da1023bcfc909b02a53f2b2bdbd4a54f8aabc6278f1b87495459e37ef049",
+    "orcaxr_core_bg.wasm.d.ts": "4bcb19a518a6fe28ac217746f2f2fd3a05e7a249c415980b74aecc8b70fba3b6"
   },
   "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",
   "schemaVersion": 1,

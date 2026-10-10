@@ -809,6 +809,8 @@ workspace, versioned protocol, CI jobs, and cross-language test runner.
 - [ ] Extract action/settings/profile/localization manifests from current
   authorities for Android packaging. Check generated output instead of manually
   copying inventories. Package required assets for offline use.
+  The app's localized string resources are generated from the browser's
+  catalogues (`android-strings.mjs`, Phase 7).
 - [ ] Extend CI with host Rust tests, WASM browser tests, Android assemble/lint/JVM
   tests, binding regeneration checks, dependency checks, and artifact provenance.
   Keep the existing web/server/WASM gates unchanged.
@@ -1951,6 +1953,18 @@ storage journeys on phone, tablet, and desktop-sized windows.
   sources. Preserve placeholder/plural behavior and canonical locale independence.
   Test TalkBack, enlarged text, RTL/pseudo-locales, contrast, reduced motion,
   keyboard focus, edge-to-edge system bars, and IME insets.
+  Localization is generated: `contracts/android-strings.json` maps each string
+  resource to the browser message with the same English and role (or lists it
+  as English only), and `android-strings.mjs` checks the English against the
+  browser's source text, records Kotlin literals that carry browser words, and
+  writes the translations (19 languages) and the per-app language list from
+  `web/public/l10n`, converting ICU arguments and plurals exactly and refusing
+  what Android cannot say. Resources are display only; canonical text stays
+  `Locale.ROOT`. Debug builds carry the en-XA/ar-XB pseudo-locales; a JVM test
+  holds format arguments, and `android-locale-smoke.py` (German, ar-XB right to
+  left, en-XA) is written but not yet run on the emulator. Design tokens,
+  TalkBack, enlarged text, contrast, reduced motion, keyboard focus,
+  edge-to-edge and IME insets remain.
 
 **Exit gate:** open a large painted project, edit it, undo/redo, save/reopen,
 slice locally or externally, inspect toolpaths, and recover after process death

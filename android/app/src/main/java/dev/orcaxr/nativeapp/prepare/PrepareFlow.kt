@@ -179,9 +179,6 @@ object PrepareWords {
         )
     }
 
-    /** "N hidden issue(s)", as the browser's panel counts what the operator put away. */
-    fun hidden(count: Int) = if (count == 1) "1 hidden issue" else "$count hidden issues"
-
     private val UNSAFE = Regex("[^A-Za-z0-9._-]+")
 
     /** The browser's printer-safe G-code file name (`sanitizeGcodeFilename`). */

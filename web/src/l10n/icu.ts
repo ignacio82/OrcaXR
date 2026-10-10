@@ -25,6 +25,9 @@
  * dependent by construction, which is exactly what a saved project must not be.
  * `src/project/` may not import this module, and the architecture check
  * enforces that rather than trusting it.
+ *
+ * `#` follows ICU: it is the number only where a plural branch writes it, not
+ * inside an argument's value or a nested select, and `'#'` quotes it there.
  */
 
 export type MessageValue = string | number | boolean | Date | null | undefined;
@@ -44,8 +47,15 @@ export interface FormatOptions {
   readonly onProblem?: (problem: FormatProblem) => void;
 }
 
-type Node =
+/**
+ * One parsed piece of a message. Exported, with {@link parseMessage}, for the
+ * tools that carry the browser's messages to another platform, so they read
+ * exactly the grammar rendered here rather than a second parser's idea of it.
+ */
+export type MessageNode =
   | { readonly kind: 'text'; readonly value: string }
+  /** `#` written directly in a plural branch: that plural's number. */
+  | { readonly kind: 'pound' }
   | { readonly kind: 'argument'; readonly name: string }
   | { readonly kind: 'number'; readonly name: string; readonly style?: string }
   | { readonly kind: 'unit'; readonly name: string; readonly unit: string }
@@ -55,9 +65,13 @@ type Node =
       readonly kind: 'plural';
       readonly name: string;
       readonly offset: number;
-      readonly branches: ReadonlyMap<string, readonly Node[]>;
+      /** `selectordinal`: chosen by ordinal rules (1st, 2nd), not cardinal ones. */
+      readonly ordinal: boolean;
+      readonly branches: ReadonlyMap<string, readonly MessageNode[]>;
     }
-  | { readonly kind: 'select'; readonly name: string; readonly branches: ReadonlyMap<string, readonly Node[]> };
+  | { readonly kind: 'select'; readonly name: string; readonly branches: ReadonlyMap<string, readonly MessageNode[]> };
+
+type Node = MessageNode;
 
 class ParseError extends Error {}
 
@@ -95,7 +109,7 @@ export function messageArguments(message: string): readonly string[] {
   }
   const walk = (list: readonly Node[]): void => {
     for (const node of list) {
-      if (node.kind === 'text') continue;
+      if (node.kind === 'text' || node.kind === 'pound') continue;
       names.add(node.name);
       if (node.kind === 'plural' || node.kind === 'select') {
         for (const branch of node.branches.values()) walk(branch);
@@ -142,6 +156,11 @@ function parseCached(message: string, options: FormatOptions): readonly Node[] |
 
 // ---- parsing ---------------------------------------------------------
 
+/** A message's syntax tree, exactly as it is rendered. Throws when the message does not parse. */
+export function parseMessage(message: string): readonly MessageNode[] {
+  return parse(message);
+}
+
 function parse(message: string): readonly Node[] {
   const state = { text: message, index: 0 };
   const nodes = parseNodes(state, false);
@@ -154,18 +173,24 @@ interface Cursor {
   index: number;
 }
 
-function parseNodes(state: Cursor, nested: boolean): readonly Node[] {
+/**
+ * Literal text and placeholders up to the end, or — when nested — the `}`
+ * closing a branch. In a plural branch (`plural`), `#` is that plural's number
+ * and `'#` quotes it, as ICU reads them; anywhere else `#` is a character.
+ */
+function parseNodes(state: Cursor, nested: boolean, plural = false): readonly Node[] {
   const nodes: Node[] = [];
   let buffer = '';
   while (state.index < state.text.length) {
     const char = state.text[state.index];
-    if (char === "'" && state.text[state.index + 1] === "'") {
+    const next = state.text[state.index + 1];
+    if (char === "'" && next === "'") {
       // ICU's escape for a literal apostrophe.
       buffer += "'";
       state.index += 2;
       continue;
     }
-    if (char === "'" && (state.text[state.index + 1] === '{' || state.text[state.index + 1] === '}')) {
+    if (char === "'" && (next === '{' || next === '}' || (plural && next === '#'))) {
       // ICU quoting: a `'` before a brace opens a quoted run that ends at the
       // next lone `'` or at the end of the message. Handling only the single
       // brace would leave the run's closing brace to be read as syntax.
@@ -189,12 +214,19 @@ function parseNodes(state: Cursor, nested: boolean): readonly Node[] {
       if (!nested) throw new ParseError(`Unmatched "}" at ${state.index}`);
       break;
     }
-    if (char === '{') {
+    if (char === '{' || (plural && char === '#')) {
       if (buffer) {
         nodes.push({ kind: 'text', value: buffer });
         buffer = '';
       }
-      nodes.push(parsePlaceholder(state));
+      if (char === '#') {
+        // A node, not text replaced after rendering: an argument's value or a
+        // nested select's text may itself contain `#`, and that is not the number.
+        nodes.push({ kind: 'pound' });
+        state.index += 1;
+      } else {
+        nodes.push(parsePlaceholder(state));
+      }
       continue;
     }
     buffer += char;
@@ -240,14 +272,15 @@ function parsePlaceholder(state: Cursor): Node {
     const { branches, offset } = parseBranches(state, type !== 'select');
     expect(state, '}');
     if (type === 'select') return { kind: 'select', name, branches };
-    return { kind: 'plural', name, offset, branches };
+    return { kind: 'plural', name, offset, ordinal: type === 'selectordinal', branches };
   }
   throw new ParseError(`Unknown placeholder type "${type}" for "${name}"`);
 }
 
+/** A plural's (`plural`, which may carry an offset and binds `#`) or a select's branches. */
 function parseBranches(
   state: Cursor,
-  allowOffset: boolean,
+  plural: boolean,
 ): { branches: ReadonlyMap<string, readonly Node[]>; offset: number } {
   const branches = new Map<string, readonly Node[]>();
   let offset = 0;
@@ -259,7 +292,7 @@ function parseBranches(
     if (!key) throw new ParseError('Branch without a key');
     // `offset:N` is not a branch — it sits in front of the first one, so it
     // arrives here glued to that branch's key and has to be split back off.
-    if (allowOffset && key.startsWith('offset:')) {
+    if (plural && key.startsWith('offset:')) {
       const [head, ...rest] = key.split(/\s+/);
       const parsed = Number.parseInt(head.slice('offset:'.length), 10);
       if (!Number.isFinite(parsed)) throw new ParseError(`Bad plural offset "${head}"`);
@@ -272,7 +305,7 @@ function parseBranches(
     }
     if (/\s/.test(key)) throw new ParseError(`Branch key "${key}" contains whitespace`);
     expect(state, '{');
-    branches.set(key, parseNodes(state, true));
+    branches.set(key, parseNodes(state, true, plural));
     expect(state, '}');
   }
   if (branches.size === 0) throw new ParseError('Branch list is empty');
@@ -297,14 +330,16 @@ function skipSpace(state: Cursor): void {
 
 // ---- rendering -------------------------------------------------------
 
-function render(nodes: readonly Node[], options: FormatOptions): string {
+/** `pound` is the formatted number a `#` in these nodes stands for: its plural's, when inside one. */
+function render(nodes: readonly Node[], options: FormatOptions, pound?: string): string {
   let out = '';
-  for (const node of nodes) out += renderNode(node, options);
+  for (const node of nodes) out += renderNode(node, options, pound);
   return out;
 }
 
-function renderNode(node: Node, options: FormatOptions): string {
+function renderNode(node: Node, options: FormatOptions, pound: string | undefined): string {
   if (node.kind === 'text') return node.value;
+  if (node.kind === 'pound') return pound ?? '#';
   const values = options.values ?? {};
   const raw = Object.prototype.hasOwnProperty.call(values, node.name) ? values[node.name] : undefined;
   if (raw === undefined || raw === null) {
@@ -344,9 +379,10 @@ function renderNode(node: Node, options: FormatOptions): string {
     case 'plural': {
       const value = toNumber(raw);
       const adjusted = value - node.offset;
+      const number = formatPluralNumber(adjusted, options.locale);
       const exact = node.branches.get(`=${value}`);
-      if (exact) return render(exact, options).replaceAll('#', formatPluralNumber(adjusted, options.locale));
-      const category = pluralRules(options.locale).select(adjusted);
+      if (exact) return render(exact, options, number);
+      const category = pluralRules(options.locale, node.ordinal).select(adjusted);
       const branch = node.branches.get(category) ?? node.branches.get('other');
       if (!branch) {
         options.onProblem?.({
@@ -356,7 +392,7 @@ function renderNode(node: Node, options: FormatOptions): string {
         });
         return String(raw);
       }
-      return render(branch, options).replaceAll('#', formatPluralNumber(adjusted, options.locale));
+      return render(branch, options, number);
     }
   }
 }
@@ -454,11 +490,12 @@ function formatTime(value: Date, style: string, locale: string): string {
   return dateFormat(locale, { timeStyle }, `t:${timeStyle}`).format(value);
 }
 
-function pluralRules(locale: string): Intl.PluralRules {
-  const cached = PLURAL_RULES.get(locale);
+function pluralRules(locale: string, ordinal: boolean): Intl.PluralRules {
+  const key = `${locale} ${ordinal ? 'ordinal' : 'cardinal'}`;
+  const cached = PLURAL_RULES.get(key);
   if (cached) return cached;
-  const rules = new Intl.PluralRules(locale);
-  PLURAL_RULES.set(locale, rules);
+  const rules = new Intl.PluralRules(locale, { type: ordinal ? 'ordinal' : 'cardinal' });
+  PLURAL_RULES.set(key, rules);
   return rules;
 }
 

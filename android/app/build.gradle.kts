@@ -35,6 +35,12 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
     buildTypes {
+        // Android's pseudo-locales, as the browser exercises its own: en-XA expands and
+        // accents every resource, ar-XB mirrors the layout right-to-left. A debug build
+        // offers them; text left in Kotlin stays plain English under en-XA.
+        debug {
+            isPseudoLocalesEnabled = true
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

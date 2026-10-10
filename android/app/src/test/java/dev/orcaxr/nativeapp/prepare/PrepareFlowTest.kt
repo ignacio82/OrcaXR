@@ -121,8 +121,7 @@ class PrepareFlowTest {
         assertEquals("plates[0].objects[0]", card.path)
         assertEquals(listOf("instance: instance-1", "project"), card.entities)
         assertEquals("Warning instance-outside-build-volume", PrepareWords.card(issue(ProjectIntents.PreflightSeverity.Warning, "Edge.")).heading)
-        assertEquals("1 hidden issue", PrepareWords.hidden(1))
-        assertEquals("3 hidden issues", PrepareWords.hidden(3))
+        // "N hidden issues" is the browser's plural message, a resource the generator checks.
     }
 
     @Test

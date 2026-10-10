@@ -93,6 +93,38 @@ test('nested plurals inside a select render every branch', () => {
   assert.equal(en(message, { kind: 'other', count: 3 }), '3 items');
 });
 
+test('# is the number only where a plural branch writes it, never inside an argument', () => {
+  // Rendering a branch and then replacing every `#` in the result turned a
+  // file called "Part #2" into "Part 32"; ICU binds `#` in the branch's own text.
+  const message = '{count, plural, one {# file in {name}} other {# files in {name}}}';
+  assert.equal(en(message, { count: 3, name: 'Part #2' }), '3 files in Part #2');
+  assert.equal(en(message, { count: 1, name: '#' }), '1 file in #');
+  // Outside a plural, `#` is a character.
+  assert.equal(en('Item #{n}', { n: 2 }), 'Item #2');
+  // A select nested in a plural does not bind it either, as ICU parses it.
+  assert.equal(en('{count, plural, other {{kind, select, other {# {kind}}}}}', { count: 3, kind: 'a' }), '# a');
+  // A nested plural rebinds `#` to its own number.
+  assert.equal(en('{count, plural, other {# and {n, plural, other {# more}}}}', { count: 3, n: 5 }), '3 and 5 more');
+});
+
+test("a quoted '#' in a plural branch is a literal", () => {
+  assert.equal(en("{count, plural, other {'#' {count}}}", { count: 3 }), '# 3');
+  assert.equal(en("{count, plural, other {'#'# left}}", { count: 4 }), '#4 left');
+  // Outside a plural an apostrophe before `#` is just an apostrophe.
+  assert.equal(en("It''s '#1'"), "It's '#1'");
+});
+
+test('selectordinal chooses by ordinal rules, not cardinal ones', () => {
+  // Cardinal English rules put 2, 3 and 22 in "other", which printed "2th".
+  const message = '{n, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}';
+  assert.deepEqual(
+    [1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101].map((n) => en(message, { n })),
+    ['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '23rd', '101st'],
+  );
+  // The same number as a plural is still cardinal.
+  assert.equal(en('{n, plural, one {# file} other {# files}}', { n: 21 }), '21 files');
+});
+
 test('a message that does not parse renders as itself and reports why', () => {
   // A render must not throw. Twenty catalogues written by twenty people will
   // eventually contain one unbalanced brace, and a panel that disappears is a

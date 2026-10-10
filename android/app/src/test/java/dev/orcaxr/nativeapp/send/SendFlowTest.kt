@@ -58,10 +58,8 @@ class SendFlowTest {
         assertEquals("Send cancelled; nothing was uploaded.", SendWords.DECLINED)
         assertEquals("Cancelling the send…", SendWords.CANCELLING)
         assertEquals("A send is already in progress; cancel it before starting another.", SendWords.BUSY)
-        // web/src/workspace/OrcaWorkspace.ts, sendToPrinter; web/src/actions/groups/output.ts.
+        // web/src/workspace/OrcaWorkspace.ts, sendToPrinter. The button's words are resources.
         assertEquals("Slice the active plate before sending it to the printer.", SendWords.SLICE_FIRST)
-        assertEquals("Send to Printer", SendWords.ACTION)
-        assertEquals("Cancel send", SendWords.CANCEL)
     }
 
     @Test

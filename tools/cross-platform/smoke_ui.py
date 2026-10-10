@@ -31,8 +31,17 @@ class Screen:
         return int(self.adb("shell", "getprop", "ro.build.version.sdk"))
 
     def nodes(self):
-        self.adb("shell", "uiautomator", "dump", self.dump)
-        return list(ET.fromstring(self.adb("shell", "cat", self.dump)).iter("node"))
+        """The screen's nodes. While a window is being replaced (an activity recreated, say) the
+        dump finds no root and writes nothing; it is taken again once the new window is up."""
+        for attempt in range(10):
+            self.adb("shell", "rm", "-f", self.dump)
+            self.adb("shell", "uiautomator", "dump", self.dump)
+            try:
+                return list(ET.fromstring(self.adb("shell", "cat", self.dump)).iter("node"))
+            except subprocess.CalledProcessError:
+                if attempt == 9:
+                    raise
+                time.sleep(0.5)
 
     @staticmethod
     def center(node):

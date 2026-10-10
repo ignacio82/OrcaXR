@@ -1,6 +1,7 @@
 package dev.orcaxr.nativeapp.device
 
 import android.graphics.BitmapFactory
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,19 +28,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import dev.orcaxr.core.PrinterStorage
 import dev.orcaxr.core.ProjectIntents
+import dev.orcaxr.nativeapp.R
 import dev.orcaxr.nativeapp.shell.tabMovesFocus
 import kotlinx.coroutines.delay
 
 private fun text(units: List<Int>) = String(CharArray(units.size) { units[it].toChar() })
 
-/** The tabs a connected printer offers. */
-enum class DeviceTab(val label: String) { Status("Status"), Files("Files"), History("History"), Console("Console"), Camera("Camera") }
+/** The tabs a connected printer offers, by their names' resources. */
+enum class DeviceTab(@StringRes val label: Int) {
+    Status(R.string.device_tab_status),
+    Files(R.string.device_tab_files),
+    History(R.string.device_tab_history),
+    Console(R.string.device_tab_console),
+    Camera(R.string.device_tab_camera),
+}
 
 @Composable
 fun FilesTab(model: DeviceModel) {
@@ -70,7 +79,7 @@ fun FilesTab(model: DeviceModel) {
                     size?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
             }
-            if (listing.directories.isEmpty() && listing.files.isEmpty()) Text("This folder is empty.")
+            if (listing.directories.isEmpty() && listing.files.isEmpty()) Text(stringResource(R.string.device_folder_empty))
         }
         view.selected?.let { metadata ->
             val path = text(metadata.path)
@@ -104,7 +113,7 @@ fun HistoryTab(model: DeviceModel) {
                     Text(text(jobView.status), style = MaterialTheme.typography.labelMedium)
                 }
                 Text(text(jobView.facts), style = MaterialTheme.typography.bodySmall)
-                if (!job.fileExists) Text("No longer on the printer", style = MaterialTheme.typography.bodySmall)
+                if (!job.fileExists) Text(stringResource(R.string.device_no_longer_on_printer), style = MaterialTheme.typography.bodySmall)
             }
         }
         view.pager?.let { pager ->

@@ -42,6 +42,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.nativeapp.R
+import dev.orcaxr.nativeapp.pluralMessage
 import dev.orcaxr.nativeapp.project.ProjectModel
 import dev.orcaxr.nativeapp.device.DeviceModel
 import dev.orcaxr.nativeapp.send.SendGuard
@@ -174,7 +175,7 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
             if (hiddenCount > 0) {
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(PrepareWords.hidden(hiddenCount), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        Text(pluralMessage(R.plurals.prepare_hidden_issues, hiddenCount), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
                         TextButton(onClick = { hidden = emptySet() }) { Text(stringResource(R.string.prepare_show)) }
                     }
                 }
@@ -230,9 +231,11 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                                 OutlinedButton(onClick = model::showResult) { Text(stringResource(R.string.nav_preview)) }
                                 // One button, as the browser's: "Cancel send" while a send runs.
                                 if (send.busy) {
-                                    OutlinedButton(onClick = device::cancelSend) { Text(SendWords.CANCEL) }
+                                    OutlinedButton(onClick = device::cancelSend) { Text(stringResource(R.string.send_cancel)) }
                                 } else {
-                                    Button(onClick = { device.send(model.sendable()) }, enabled = current && connected) { Text(SendWords.ACTION) }
+                                    Button(onClick = { device.send(model.sendable()) }, enabled = current && connected) {
+                                        Text(stringResource(R.string.send_action))
+                                    }
                                 }
                             }
                             if (!connected && !send.busy) Text(SendWords.CONNECT_FIRST, style = MaterialTheme.typography.bodySmall)
@@ -249,7 +252,9 @@ fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceMode
                         Text(send.status.orEmpty(), Modifier.weight(1f))
                         if (send.busy) {
                             // Here when the slice was withdrawn or left behind mid-send, so the send can still be stopped.
-                            if (state.result?.revision != view.revision) TextButton(onClick = device::cancelSend) { Text(SendWords.CANCEL) }
+                            if (state.result?.revision != view.revision) {
+                                TextButton(onClick = device::cancelSend) { Text(stringResource(R.string.send_cancel)) }
+                            }
                         } else {
                             TextButton(onClick = device::dismissSend) { Text(stringResource(R.string.device_dismiss)) }
                         }

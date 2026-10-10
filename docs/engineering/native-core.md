@@ -4931,6 +4931,78 @@ crosses them with Tab. adb cannot drive a drag and drop. The smoke has not
 yet run on an emulator; hover, context menus, trackpad and stylus input,
 and keyboard control of the 3D views remain.
 
+### Android localization
+
+The app speaks the browser's languages through the browser's own catalogues
+(`web/public/l10n`, extracted and seeded by `web/scripts/generate-messages.mjs`).
+`contracts/android-strings.json` is the maintained mapping: every translatable
+string resource of `android/app/src/main/res/values` is either mapped to the
+browser message carrying the same English *in the same role* (with its ICU
+arguments in `%1$s`, `%2$s` order) or listed as English only. Equal English in
+another role is declined with a reason: the send dialog's "Plate" is not the XR
+tool rail's group, whose upstream German is "Aktuelle Platte drucken".
+`tools/cross-platform/android-strings.mjs` (check by default, `--write`; in the
+contracts CI job) checks that each mapped English is still exactly the browser's
+source text, fails when an English-only resource or a Kotlin literal of the app
+(`src/main`, `src/debug`) carries a browser message's words without being mapped,
+recorded or declined, and writes `values-<qualifier>/strings.xml` for each browser
+language that translates a mapped message, plus `xml/locales_config.xml` (the
+manifest's `localeConfig`: the system's per-app language setting offers English
+and those languages). Qualifiers follow BCP-47: `pt-BR` is `pt-rBR`, `zh-Hans` and
+`zh-Hant` are `b+zh+Hans`/`b+zh+Hant` (Android adds the likely script, so `zh-CN`
+reads Hans and `zh-TW`/`zh-HK` Hant). Today 33 of 128 resources are mapped (one
+plural), 95 stay English, 19 languages carry 265 translations and none is
+refused — the browser's catalogues hold about a hundred upstream-seeded
+messages each, mostly action names, so most Android text is English in every
+language, as most browser text is.
+
+Messages are parsed by the browser's `icu.ts` (`parseMessage`), never a second
+grammar. Every argument becomes `%N$s`, which the host formats as the browser
+does: text as is, a number as `{n, number}` (`MessageArguments.number`: ICU's
+`NumberFormatter`, at most two fraction digits, half away from zero — V8's
+`Intl.NumberFormat` from the same CLDR). One plural becomes `<plurals>`, the text
+around it repeated in each form, its categories those the language selects;
+`pluralMessage` passes the integer quantity and the formatted number. What
+Android cannot say exactly is refused, never approximated (a refused translation
+falls back to English, a refused English fails): select, `=N` and offset forms,
+`selectordinal`, a second or nested plural, unit/date/time and styled numbers,
+one argument used both as text and as a number, and characters a resource cannot
+hold. Each conversion is rendered against the browser's `formatMessage` for
+sample values (Android's form chosen by the same CLDR rules) and must agree, and
+fixed vectors hold the converter and aapt2 escaping (apostrophes, quotes, a
+leading `@`/`?`, collapsed and trimmed spaces) on every run.
+`LocalizedResourcesTest` (JVM) holds every generated resource to its English's
+format arguments and the offered languages to the generated ones.
+
+Words that stay in Kotlin are recorded with the reason: status text a ViewModel
+or workflow composes (`SendWords`' phases and outcomes, Prepare's connection and
+slice statuses, the Device area's messages) and platform-free words the JVM
+tests check (`PrepareWords.status`/`hint`, `SendDialogView`); the generator still
+checks each says exactly what the browser says. The screen-only browser words
+moved to resources: the preflight panel's hidden-issue count (a plural), "Send
+to Printer" and "Cancel send", the Device tabs (Camera mapped), the empty folder
+and the job no longer on the printer; the head filament label now takes the
+browser's `{index}` as text. Resources are display only: canonical and file-name
+text (the `Untitled project` base, G-code names, dates and numbers in sent
+labels) stays in Kotlin with `Locale.ROOT`, so a language never reaches a
+project, a protocol or a printer. Lint's `MissingTranslation` is off for the
+English (partial catalogues are the browser's policy; the generator is the
+gate). Debug builds enable Android's pseudo-locales, as the browser exercises
+its own: `en-XA` expands and accents every resource (text left in Kotlin shows
+plainly English), `ar-XB` mirrors the layout. `android-locale-smoke.py` (in
+`emulator-smoke.py`, API 33+) sets the app's language as the system setting
+does: in German the bar and the Project and Prepare areas show the German
+catalogue's words (read through the contract) beside English for what the
+browser lacks; under `ar-XB` the bar runs right to left and every area opens;
+under `en-XA` the bar is pseudo-localized; the language is reset at the end.
+It has not run on an emulator yet. Holding the converter to the browser's
+renderer found three `icu.ts` defects, fixed with regression tests: `#` was replaced in a plural's rendered text, so an
+argument such as a file "Part #2" printed "Part 32"; `'#'` did not quote a
+literal `#` in a plural; and `selectordinal` used cardinal rules ("2th").
+Design tokens, TalkBack, enlarged text, contrast, reduced motion, keyboard
+focus, edge-to-edge and IME insets remain, as do the Android-only words still
+literal in Kotlin (the Device tabs' contents, model messages).
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

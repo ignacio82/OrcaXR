@@ -28,12 +28,11 @@ object SendGuard {
 /** The send as the Prepare area shows it: whether one runs, and the browser's status line for it. */
 data class SendState(val busy: Boolean = false, val status: String? = null)
 
-/** The browser's words for a send (`web/src/main.ts`'s submission handler and `send_to_printer`). */
+/**
+ * The browser's words for a send (`web/src/main.ts`'s submission handler). The
+ * button's own words — "Send to Printer", "Cancel send" — are string resources.
+ */
 object SendWords {
-    /** The action's name (`web/src/actions/groups/output.ts`). */
-    const val ACTION = "Send to Printer"
-    /** The same button while a send runs. */
-    const val CANCEL = "Cancel send"
     const val CANCELLING = "Cancelling the send…"
     const val SLICE_FIRST = "Slice the active plate before sending it to the printer."
     const val BUSY = "A send is already in progress; cancel it before starting another."

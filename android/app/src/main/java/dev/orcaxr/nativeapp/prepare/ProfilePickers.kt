@@ -52,7 +52,8 @@ fun ProfilePickers(
             Picker(stringResource(R.string.prepare_filament), profiles.filaments, profiles.heads.firstOrNull(), enabled) { onFilament(0, it) }
         } else {
             for (index in 0 until profiles.extruders) {
-                Picker(stringResource(R.string.prepare_head_filament, index + 1), profiles.filaments, profiles.heads.getOrNull(index), enabled) {
+                // The browser's `{index}`: the head's number as text (contracts/android-strings.json).
+                Picker(stringResource(R.string.prepare_head_filament, (index + 1).toString()), profiles.filaments, profiles.heads.getOrNull(index), enabled) {
                     onFilament(index, it)
                 }
             }

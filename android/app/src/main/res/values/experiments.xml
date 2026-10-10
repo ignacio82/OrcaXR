@@ -1,4 +1,5 @@
 <resources>
     <bool name="viewport_experiment_enabled">false</bool>
-    <string name="open_viewport_experiment">Open viewport experiment</string>
+    <!-- A developer's way into the debug build's viewport experiment, never shown to an operator. -->
+    <string name="open_viewport_experiment" translatable="false">Open viewport experiment</string>
 </resources>

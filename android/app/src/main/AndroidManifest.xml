@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <!-- Printers (Moonraker) and the operator's slicer on the local network:
          Android 17 also asks the operator for local-network access, which the
          clients check before every exchange (LocalNetworkAccess). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <!-- The languages offered (system settings' per-app language): those the browser offers that
+         carry any of the app's words, generated with their resources by android-strings.mjs. -->
     <application android:allowBackup="false" android:icon="@mipmap/ic_launcher"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:label="@string/app_name" android:supportsRtl="true" android:theme="@style/Theme.OrcaXR">
+        android:localeConfig="@xml/locales_config"
+        android:label="@string/app_name" android:supportsRtl="true" android:theme="@style/Theme.OrcaXR"
+        tools:targetApi="33">
         <activity android:name=".MainActivity" android:exported="true" android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
