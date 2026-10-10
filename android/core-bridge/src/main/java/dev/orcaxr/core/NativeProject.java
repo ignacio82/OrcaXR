@@ -93,6 +93,12 @@ final class NativeProject {
     static native String transformFields(String request);
     static native String transformFieldEdit(String request);
     static native String transformRotation(String request);
+    // New geometry (orcaxr_project::primitives): a primitive's or the helper
+    // cube's mesh payload, and what a primitive or a helper volume becomes in
+    // a session's project, as canonical JSON.
+    static native byte[] primitivePayload(String request);
+    static native String sessionPrimitiveObject(long handle, String request);
+    static native String sessionHelperVolume(long handle, String request);
     static native void libraryCreate(long handle, byte[] stored, double[] limits, PresetCollator collator, LocalTimestampResolver resolver, int integerMode);
     static native String libraryApply(long handle, String operation);
     static native String libraryImport(long handle, byte[] bundle, double[] limits);

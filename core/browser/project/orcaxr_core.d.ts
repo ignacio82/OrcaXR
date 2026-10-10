@@ -899,10 +899,23 @@ export class ProjectSession {
      */
     plan_bed_fill(request: string): string;
     /**
+     * A helper volume for the object a selection names:
+     * `{"ids","primary","role","sizeMm"}` → `{"assetJson","idsUsed",
+     * "objectId","volumeJson"}` or `{"refusal"}`.
+     */
+    plan_helper_volume(request: string): string;
+    /**
      * The transforms one placement edit submits: a `PlacementRequest`;
      * returns a `PlacementReply`.
      */
     plan_placement(request: string): string;
+    /**
+     * A primitive as a new object of the acknowledged state
+     * (`orcaxr_project::primitives`): `{"bedMm","ids","importedAt","kind",
+     * "plateId","sizeMm"}` → `{"assetJson","idsUsed","objectJson","plateId",
+     * "reusedAsset"}` or `{"refusal"}`.
+     */
+    plan_primitive_object(request: string): string;
     /**
      * The plate's wipe tower, auto-placed: a `WipeTowerRequest`; returns a
      * `WipeTowerReply`.
@@ -1414,6 +1427,13 @@ export function prepare_emboss(request: string): ProjectEmboss;
 export function prepare_svg_part(request: string, drawing: Uint8Array): ProjectSvgPart;
 
 /**
+ * A primitive's or the helper cube's canonical mesh payload
+ * (`orcaxr_project::primitives::payload_json`): `{"kind","sizeMm"}` in, the
+ * bytes the browser stores out.
+ */
+export function primitive_payload(request: string): Uint8Array;
+
+/**
  * A metadata reply's text and the `PrinterText` filename asked about; the
  * `PrintFileIdentityReply`.
  */
@@ -1811,6 +1831,7 @@ export interface InitOutput {
     readonly presetlibrary_plan_update: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_state: (a: number, b: number) => [number, number, number, number];
     readonly presetlibrary_view: (a: number) => [number, number, number, number];
+    readonly primitive_payload: (a: number, b: number) => [number, number, number, number];
     readonly print_file_identity: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly print_history_duration: (a: number) => [number, number, number, number];
     readonly print_history_filament: (a: number) => [number, number, number, number];
@@ -1999,7 +2020,9 @@ export interface InitOutput {
     readonly projectsession_pick_scene: (a: number, b: number, c: number) => [number, number, number];
     readonly projectsession_plan_arrangement: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_plan_bed_fill: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectsession_plan_helper_volume: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_plan_placement: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly projectsession_plan_primitive_object: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_plan_wipe_tower: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectsession_release_staged: (a: number, b: number) => [number, number, number];
     readonly projectsession_render: (a: number, b: number, c: number) => [number, number, number, number];

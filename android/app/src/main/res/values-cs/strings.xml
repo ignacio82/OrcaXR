@@ -19,6 +19,16 @@
     <string name="project_instance_to_object">Nastavit jako samostatný objekt</string>
     <string name="project_reset_rotation">Výchozí Natočení</string>
     <string name="project_scale_to_fit_volume">Škálovat na sestavení objemu</string>
+    <string name="project_edit_cut">Řezat</string>
+    <string name="project_edit_copy">Kopírovat</string>
+    <string name="project_edit_paste">Vložit</string>
+    <string name="project_add_cube">Kostka</string>
+    <string name="project_add_cylinder">Válec</string>
+    <string name="project_add_sphere">Koule</string>
+    <string name="project_add_cone">Kužel</string>
+    <string name="project_add_disc">Disk</string>
+    <string name="project_add_torus">Torus</string>
+    <string name="project_add_modifier">Přidat modifikátor</string>
     <string name="device_cancel">Zrušit</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

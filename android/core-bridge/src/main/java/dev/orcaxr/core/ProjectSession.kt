@@ -275,6 +275,14 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     }
     /** The transforms one placement edit submits, as one `setInstanceTransforms`
      * intent's changes, or the operation's refusal. */
+    /** A primitive as a new object of the acknowledged state ([Primitives.primitiveRequest]). */
+    fun planPrimitiveObject(request: String): PrimitivePlan<PrimitiveObjectPlan> = read {
+        Primitives.primitiveReply(NativeProject.sessionPrimitiveObject(it, request))
+    }
+    /** A helper volume for the object a selection names ([Primitives.helperRequest]). */
+    fun planHelperVolume(request: String): PrimitivePlan<HelperVolumePlan> = read {
+        Primitives.helperReply(NativeProject.sessionHelperVolume(it, request))
+    }
     fun planPlacement(request: ProjectIntents.PlacementRequest): ProjectIntents.PlacementReply = read {
         ProjectIntents.decodePlacementReply(NativeProject.sessionPlacement(it, ProjectIntents.encodePlacementRequest(request)))
     }

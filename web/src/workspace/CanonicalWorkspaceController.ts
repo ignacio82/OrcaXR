@@ -45,7 +45,13 @@ import {
   type AsyncSessionGuard,
 } from '../project/AsyncEditorSession';
 import { AddObjectWithAssetCommand, ReplaceProjectCommand, SetPlateWipeTowerCommand } from '../project/commands';
-import { canonicalStringify, cloneJson, cloneProjectState, deepFreeze } from '../project/domain/canonical';
+import {
+  canonicalStringify,
+  cloneJson,
+  cloneProjectState,
+  compareCanonicalText,
+  deepFreeze,
+} from '../project/domain/canonical';
 import type { CalibrationJobPlan } from '../project/calibration/types';
 import { settingScopeAllows } from '../project/domain/settingScopes';
 import { matchFlowPatches } from '../project/calibration/resourceObjects';
@@ -5047,7 +5053,8 @@ function extractTriangleMesh(geometry: THREE.BufferGeometry): {
 function findReusableMeshAsset(candidates: readonly AssetPayload[], staged: AssetPayload): AssetPayload | undefined {
   const digestMatches = candidates
     .filter((candidate) => candidate.descriptor.digest === staged.descriptor.digest)
-    .sort((left, right) => left.descriptor.id.localeCompare(right.descriptor.id));
+    // Code-unit order: the runtime's locale must not choose which asset a model shares.
+    .sort((left, right) => compareCanonicalText(left.descriptor.id, right.descriptor.id));
   if (digestMatches.length === 0) return undefined;
   const compatible = digestMatches.find((candidate) => meshAssetsMatch(candidate, staged));
   if (compatible) return compatible;

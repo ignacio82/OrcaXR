@@ -4604,6 +4604,33 @@ export class ProjectSession {
         }
     }
     /**
+     * A helper volume for the object a selection names:
+     * `{"ids","primary","role","sizeMm"}` → `{"assetJson","idsUsed",
+     * "objectId","volumeJson"}` or `{"refusal"}`.
+     * @param {string} request
+     * @returns {string}
+     */
+    plan_helper_volume(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.projectsession_plan_helper_volume(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * The transforms one placement edit submits: a `PlacementRequest`;
      * returns a `PlacementReply`.
      * @param {string} request
@@ -4616,6 +4643,34 @@ export class ProjectSession {
             const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             const len0 = WASM_VECTOR_LEN;
             const ret = wasm.projectsession_plan_placement(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * A primitive as a new object of the acknowledged state
+     * (`orcaxr_project::primitives`): `{"bedMm","ids","importedAt","kind",
+     * "plateId","sizeMm"}` → `{"assetJson","idsUsed","objectJson","plateId",
+     * "reusedAsset"}` or `{"refusal"}`.
+     * @param {string} request
+     * @returns {string}
+     */
+    plan_primitive_object(request) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.projectsession_plan_primitive_object(this.__wbg_ptr, ptr0, len0);
             var ptr2 = ret[0];
             var len2 = ret[1];
             if (ret[3]) {
@@ -6960,6 +7015,25 @@ export function prepare_svg_part(request, drawing) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return ProjectSvgPart.__wrap(ret[0]);
+}
+
+/**
+ * A primitive's or the helper cube's canonical mesh payload
+ * (`orcaxr_project::primitives::payload_json`): `{"kind","sizeMm"}` in, the
+ * bytes the browser stores out.
+ * @param {string} request
+ * @returns {Uint8Array}
+ */
+export function primitive_payload(request) {
+    const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.primitive_payload(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 }
 
 /**

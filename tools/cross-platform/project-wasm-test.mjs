@@ -44,6 +44,7 @@ import { plateProjectionCases, replayPlateProjection } from "./plate-projection-
 import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
+import { replayPrimitives } from "./primitive-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -317,6 +318,12 @@ if (isMainThread) {
     assert.deepEqual(
       [result.fieldReads, result.rotations, result.fieldEdits, result.fieldRefusals],
       [101, 1720, 94, 19],
+    );
+    // Primitives and helper volumes: meshes (seven byte for byte), refusals,
+    // plans in recorded states and malformed plans.
+    assert.deepEqual(
+      [result.primitiveMeshes, result.exactPrimitiveMeshes, result.primitiveMeshRefusals, result.primitivePlans, result.primitivePlanRefusals],
+      [48, 7, 11, 35, 13],
     );
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
@@ -831,6 +838,12 @@ if (isMainThread) {
     core,
     JSON.parse(await readFile(new URL("testdata/cross-platform/transform-field-vectors.json", root))),
   );
+  const primitives = replayPrimitives(
+    core,
+    JSON.parse(await readFile(new URL("testdata/cross-platform/primitive-vectors.json", root))),
+    layout,
+    (text) => Uint8Array.from(Buffer.from(text, "base64")),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -886,6 +899,7 @@ if (isMainThread) {
       ...slicingConfiguration,
       ...workspaceBeds,
       ...transformFields,
+      ...primitives,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

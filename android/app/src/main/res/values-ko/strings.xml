@@ -21,6 +21,16 @@
     <string name="project_duplicate_plate">현재 플레이트 복제</string>
     <string name="project_reset_rotation">회전 초기화</string>
     <string name="project_scale_to_fit_volume">출력 가능 영역에 맞게 확장</string>
+    <string name="project_edit_cut">잘라내기</string>
+    <string name="project_edit_copy">복사</string>
+    <string name="project_edit_paste">붙여넣기</string>
+    <string name="project_add_cube">정육면체</string>
+    <string name="project_add_cylinder">원기둥</string>
+    <string name="project_add_sphere">구체</string>
+    <string name="project_add_cone">원뿔</string>
+    <string name="project_add_disc">디스크</string>
+    <string name="project_add_torus">토러스</string>
+    <string name="project_add_modifier">수정자 추가</string>
     <string name="device_cancel">취소</string>
     <string name="device_tab_camera">카메라</string>
 </resources>

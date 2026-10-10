@@ -19,6 +19,16 @@
     <string name="project_instance_to_object">個別オブジェクトとして設定</string>
     <string name="project_reset_rotation">回転をリセット</string>
     <string name="project_scale_to_fit_volume">ビルド容積に合わせる</string>
+    <string name="project_edit_cut">カット</string>
+    <string name="project_edit_copy">コピー</string>
+    <string name="project_edit_paste">貼り付け</string>
+    <string name="project_add_cube">キューブ</string>
+    <string name="project_add_cylinder">シリンダー</string>
+    <string name="project_add_sphere">球体</string>
+    <string name="project_add_cone">コーン</string>
+    <string name="project_add_disc">Disc</string>
+    <string name="project_add_torus">Torus</string>
+    <string name="project_add_modifier">モディファイアの追加</string>
     <string name="device_cancel">取消し</string>
     <string name="device_tab_camera">カメラ</string>
 </resources>

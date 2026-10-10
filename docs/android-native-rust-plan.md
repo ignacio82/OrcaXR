@@ -1877,9 +1877,15 @@ storage journeys on phone, tablet, and desktop-sized windows.
   plate bar — Delete Selected/All, Clone Selected (the browser's staged
   instance copy), Printable, Rename, Set as an individual object, and plates
   added, activated, renamed, reordered, included, duplicated and deleted —
-  each one undoable step with the browser's label (73 host JNI checks; the
-  edit smoke has not run yet). Copy, cut, paste, fill bed and transforms
-  remain.
+  each one undoable step with the browser's label (73 host JNI checks and an
+  emulator edit smoke). It creates through the browser's staged
+  records (a typed Kotlin writer replayed over the staged corpus): an Add menu
+  of the six primitives and the modifier, support enforcer and blocker
+  (the shapes three's generators exactly, in the shared core), and Cut, Copy,
+  Paste (Ctrl/Meta+C/X/V) and Fill Bed with Instances in the Edit menu — each
+  one undoable step with the browser's label (a 145-check JNI journey matches
+  the browser controller's hash after every step, and an emulator create
+  smoke).
   The Preview area is the browser's G-code viewer over the shared core's
   preview (picker, colour modes, layer window and filters, emulator-verified),
   with the file's own totals from the shared artifact summary.
@@ -1922,10 +1928,10 @@ storage journeys on phone, tablet, and desktop-sized windows.
   G-code in Preview, anything else refused in the browser's words. JVM tests
   cover the layouts and the drop; `android-adaptive-smoke.py` resizes the
   emulator for the bar, rail and panels and drives the keyboard (adb cannot
-  drag and drop) but has not yet run. The transform inspector sits under the
-  Project area's tree (beside the Workspace from 840 dp). Hover, context
-  menus, trackpad, stylus, the inspector's other panels, toolbars, menus and
-  the command palette remain.
+  drag and drop) and passes on both emulators. The transform inspector sits
+  under the Project area's tree (beside the Workspace from 840 dp). Hover,
+  context menus, trackpad, stylus, the inspector's other panels, toolbars,
+  menus and the command palette remain.
 - [ ] Integrate the flat renderer with panel resizing, visibility, lifecycle,
   selection, painting, model tools, and preview controls. Keep CPU work and
   loading off the UI thread; avoid per-frame Compose recomposition for meshes.
@@ -1946,8 +1952,8 @@ storage journeys on phone, tablet, and desktop-sized windows.
   menu's placement entries (Lay flat as a Workspace tap tool, mirror, resets,
   centre, scale to fit, drop to bed, arrange; the core's enablement) carry
   them out: a 509-check JNI journey lands the transform-field corpus's edits
-  on a real session as the browser computed them and undoes each; the
-  emulator inspector smoke has not run yet. Painting, other model-tool UI,
+  on a real session as the browser computed them and undoes each, and an
+  emulator inspector smoke drives them. Painting, other model-tool UI,
   lighting and preview controls remain.
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
@@ -2002,7 +2008,7 @@ storage journeys on phone, tablet, and desktop-sized windows.
   what Android cannot say. Resources are display only; canonical text stays
   `Locale.ROOT`. Debug builds carry the en-XA/ar-XB pseudo-locales; a JVM test
   holds format arguments, and `android-locale-smoke.py` (German, ar-XB right to
-  left, en-XA) is written but not yet run on the emulator. Design tokens,
+  left, en-XA) passes on both emulators. Design tokens,
   TalkBack, enlarged text, contrast, reduced motion, keyboard focus,
   edge-to-edge and IME insets remain.
 

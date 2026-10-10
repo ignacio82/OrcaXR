@@ -19,6 +19,16 @@
     <string name="project_instance_to_object">Instellen als individueel object</string>
     <string name="project_reset_rotation">Rotatie herstellen</string>
     <string name="project_scale_to_fit_volume">Schalen naar bruikbaar volume</string>
+    <string name="project_edit_cut">Knippen</string>
+    <string name="project_edit_copy">Kopie</string>
+    <string name="project_edit_paste">Plakken</string>
+    <string name="project_add_cube">Kubus</string>
+    <string name="project_add_cylinder">Cilinder</string>
+    <string name="project_add_sphere">Bol</string>
+    <string name="project_add_cone">Kegel</string>
+    <string name="project_add_disc">Schijf</string>
+    <string name="project_add_torus">Torus</string>
+    <string name="project_add_modifier">Aanpasser toevoegen</string>
     <string name="device_cancel">Annuleren</string>
     <string name="device_tab_camera">Camera</string>
 </resources>

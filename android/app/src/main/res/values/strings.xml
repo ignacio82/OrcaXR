@@ -149,6 +149,21 @@
     <string name="workspace_lay_flat_hint">Lay flat: click the facet that should rest on the bed.</string>
     <string name="workspace_lay_flat_missed">Click a model facet to lay it flat.</string>
     <string name="workspace_lay_flat_done">Done</string>
+    <!-- Creation: the browser's clipboard and bed fill (edit.ts, scene.ts), its Add menu primitives (scene.ts) and helper volumes (gizmos.ts). -->
+    <string name="project_add_menu">Add</string>
+    <string name="project_edit_cut">Cut</string>
+    <string name="project_edit_copy">Copy</string>
+    <string name="project_edit_paste">Paste</string>
+    <string name="project_fill_bed">Fill Bed with Instances</string>
+    <string name="project_add_cube">Cube</string>
+    <string name="project_add_cylinder">Cylinder</string>
+    <string name="project_add_sphere">Sphere</string>
+    <string name="project_add_cone">Cone</string>
+    <string name="project_add_disc">Disc</string>
+    <string name="project_add_torus">Torus</string>
+    <string name="project_add_modifier">Add Modifier</string>
+    <string name="project_add_support_enforcer">Add Support Enforcer</string>
+    <string name="project_add_support_blocker">Add Support Blocker</string>
     <string name="device_printers">Printers</string>
     <string name="device_no_printers">No printer saved yet. Add one by its address on your network.</string>
     <string name="device_add_printer">Add printer</string>

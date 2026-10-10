@@ -691,6 +691,19 @@ impl ProjectSession {
             .map_err(|_| error("disposed"))?;
         wire::encode_arrange_reply(&reply).map_err(|_| error("output_limit"))
     }
+    /// A primitive as a new object of the acknowledged state
+    /// (`orcaxr_project::primitives`): `{"bedMm","ids","importedAt","kind",
+    /// "plateId","sizeMm"}` → `{"assetJson","idsUsed","objectJson","plateId",
+    /// "reusedAsset"}` or `{"refusal"}`.
+    pub fn plan_primitive_object(&self, request: &str) -> Result<String, JsValue> {
+        self.inner.plan_primitive_object(request).map_err(error)
+    }
+    /// A helper volume for the object a selection names:
+    /// `{"ids","primary","role","sizeMm"}` → `{"assetJson","idsUsed",
+    /// "objectId","volumeJson"}` or `{"refusal"}`.
+    pub fn plan_helper_volume(&self, request: &str) -> Result<String, JsValue> {
+        self.inner.plan_helper_volume(request).map_err(error)
+    }
     /// Copies of one instance in a plate's free space: a `BedFillRequest`;
     /// returns a `BedFillReply`.
     pub fn plan_bed_fill(&self, request: &str) -> Result<String, JsValue> {

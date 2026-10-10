@@ -190,12 +190,15 @@ export function clipboardObjectQuery(
     for (const value of held.reverse()) value.free();
   }
 }
+/** `encodeWork`, when given, writes a work's records itself (a host's typed
+ * writer) or answers undefined to leave it to `stagedCommandJson`. */
 export async function replayStagedProject(
   core,
   fixture,
   layout,
   schema,
   queryLayout,
+  encodeWork = () => undefined,
 ) {
   const { encode, decode, eq, bytes, effects, observe } = projectReader(
     core,
@@ -349,7 +352,7 @@ export async function replayStagedProject(
               let upload;
               try {
                 const source = encode.encode(
-                  stagedCommandJson(action.work, schema),
+                  encodeWork(action.work) ?? stagedCommandJson(action.work, schema),
                 );
                 const names = [
                   ...new Set(

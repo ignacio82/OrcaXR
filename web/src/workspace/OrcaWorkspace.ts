@@ -182,6 +182,7 @@ import { loadCalibrationResource } from '../project/calibration/resources';
 import type { CalibrationFormField, CalibrationFormPreview } from '../project/calibration/form';
 import type { ScopedStepperSurface, ScopedStepperView } from '../settings/editor/scopedStepper';
 import { primitiveFileName, primitiveGeometry, type PrimitiveKind } from '../project/objects/primitives';
+import { geometryBedPlacement } from './geometryPlacement';
 import {
   BRIM_EAR_COLORS,
   BRIM_EAR_DISC_HEIGHT_MM,
@@ -6278,20 +6279,7 @@ export class OrcaWorkspace extends xb.Script {
     options: GeometryLoadOptions = {},
     name?: string,
   ) {
-    raw.computeBoundingBox();
-    const bb = raw.boundingBox!;
-    if (!bb || bb.isEmpty()) throw new Error('Imported geometry has no finite bounds');
-    const centerX = (bb.min.x + bb.max.x) / 2;
-    const centerY = (bb.min.y + bb.max.y) / 2;
-    const transform: Transform = {
-      translationMm: [
-        options.preservePrinterXY ? 0 : this.bedMm.x / 2 - centerX,
-        options.preservePrinterXY ? 0 : this.bedMm.y / 2 - centerY,
-        options.preservePrinterZ ? 0 : -bb.min.z,
-      ],
-      rotation: [0, 0, 0, 1],
-      scale: [1, 1, 1],
-    };
+    const transform = geometryBedPlacement(raw, this.bedMm, options);
     const imported = await this.canonicalProject.importGeometry(raw, {
       name,
       sourceFilename: name,

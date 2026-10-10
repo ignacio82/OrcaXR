@@ -21,6 +21,16 @@
     <string name="project_duplicate_plate">Geçerli plakayı çoğalt</string>
     <string name="project_reset_rotation">Döndürmeyi Sıfırla</string>
     <string name="project_scale_to_fit_volume">Yapı hacmine göre ölçeklendir</string>
+    <string name="project_edit_cut">Kes</string>
+    <string name="project_edit_copy">Kopyala</string>
+    <string name="project_edit_paste">Yapıştır</string>
+    <string name="project_add_cube">Küp</string>
+    <string name="project_add_cylinder">Silindir</string>
+    <string name="project_add_sphere">Küre</string>
+    <string name="project_add_cone">Koni</string>
+    <string name="project_add_disc">Disk</string>
+    <string name="project_add_torus">Simit</string>
+    <string name="project_add_modifier">Değiştirici Ekle</string>
     <string name="device_cancel">İptal</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

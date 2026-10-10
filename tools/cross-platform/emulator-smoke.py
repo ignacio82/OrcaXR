@@ -68,6 +68,7 @@ with tempfile.TemporaryDirectory(prefix="orcaxr-avd-") as directory:
             subprocess.run(["python3", "tools/cross-platform/android-locale-smoke.py", "--serial", serial], cwd=ROOT, check=True)
             subprocess.run(["python3", "tools/cross-platform/android-edit-smoke.py", "--serial", serial], cwd=ROOT, check=True)
             subprocess.run(["python3", "tools/cross-platform/android-inspector-smoke.py", "--serial", serial], cwd=ROOT, check=True)
+            subprocess.run(["python3", "tools/cross-platform/android-create-smoke.py", "--serial", serial], cwd=ROOT, check=True)
             # Last: it resizes the display (restoring it as it ends) for the window-size layouts.
             subprocess.run(["python3", "tools/cross-platform/android-adaptive-smoke.py", "--serial", serial], cwd=ROOT, check=True)
         finally:

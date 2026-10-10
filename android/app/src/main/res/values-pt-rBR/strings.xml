@@ -21,6 +21,16 @@
     <string name="project_duplicate_plate">Duplicar Placa Atual</string>
     <string name="project_reset_rotation">Redefinir Rotação</string>
     <string name="project_scale_to_fit_volume">Dimensionar para o volume de impressão</string>
+    <string name="project_edit_cut">Cortar</string>
+    <string name="project_edit_copy">Copiar</string>
+    <string name="project_edit_paste">Colar</string>
+    <string name="project_add_cube">Cubo</string>
+    <string name="project_add_cylinder">Cilindro</string>
+    <string name="project_add_sphere">Esfera</string>
+    <string name="project_add_cone">Cone</string>
+    <string name="project_add_disc">Disco</string>
+    <string name="project_add_torus">Toro</string>
+    <string name="project_add_modifier">Adicionar Modificador</string>
     <string name="device_cancel">Cancelar</string>
     <string name="device_tab_camera">Câmera</string>
 </resources>

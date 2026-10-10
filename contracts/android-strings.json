@@ -80,6 +80,19 @@
     "workspace_lay_flat_missed": {
       "key": "workspace.orcaWorkspace.clickAModelFacetTo"
     },
+    "project_edit_cut": { "key": "action.edit_cut.label" },
+    "project_edit_copy": { "key": "action.edit_copy.label" },
+    "project_edit_paste": { "key": "action.edit_paste.label" },
+    "project_fill_bed": { "key": "action.fill_bed_with_instances.label" },
+    "project_add_cube": { "key": "action.add_primitive_cube.label" },
+    "project_add_cylinder": { "key": "action.add_primitive_cylinder.label" },
+    "project_add_sphere": { "key": "action.add_primitive_sphere.label" },
+    "project_add_cone": { "key": "action.add_primitive_cone.label" },
+    "project_add_disc": { "key": "action.add_primitive_disc.label" },
+    "project_add_torus": { "key": "action.add_primitive_torus.label" },
+    "project_add_modifier": { "key": "action.add_modifier.label" },
+    "project_add_support_enforcer": { "key": "action.add_support_enforcer.label" },
+    "project_add_support_blocker": { "key": "action.add_support_blocker.label" },
     "device_cancel": { "key": "persistence.cancel" },
     "device_tab_camera": { "key": "startup.feature.camera" },
     "device_folder_empty": {
@@ -165,6 +178,7 @@
     "project_inspector_y",
     "project_inspector_z",
     "workspace_lay_flat_done",
+    "project_add_menu",
     "device_printers",
     "device_no_printers",
     "device_add_printer",

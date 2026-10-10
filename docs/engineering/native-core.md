@@ -3617,6 +3617,63 @@ Node and Chrome and JNI answer all of them byte for byte; 1,936 Kotlin checks
 cover the wrapper. The Android app applies an edit to the session's selection
 in its [transform inspector](#android-transform-inspector).
 
+### Primitives and helper volumes
+
+`primitives` ports how the browser creates new geometry. The six shapes of
+the `add_primitive_*` actions (`primitives.ts`: a 20 mm cube, cylinder,
+sphere, cone, 0.2 mm disc and torus) are three r184's generators operation
+for operation (`primitives::geometry`: `BoxGeometry`, `CylinderGeometry` with
+a cone's zero top radius, `SphereGeometry`, `TorusGeometry`, `rotateX` as
+`Matrix4.makeRotationX` through `Vector3.applyMatrix4` with its perspective
+divide, every coordinate the same double expression stored as Float32, V8's
+`sin`/`cos` from `js_math`), then `toNonIndexed` and `extractTriangleMesh`'s
+identity index buffer; the helper volumes' cube is
+`createPrimitiveCubeGeometry` (24 vertices, two triangles a face). Each
+encodes as the browser's canonical mesh payload (`encodeIndexedMeshAsset`).
+What a shape becomes in a project is planned against a session's
+acknowledged state: a primitive (`addPrimitive` → `importGeometry` →
+`prepareGeometryObject`) is an object named after its file (`cube.stl`), one
+model part and one instance on the active plate (or a requested one, an
+unknown plate refused as `Unknown plate …`), translated by
+`geometryBedPlacement` — now its own module, which `OrcaWorkspace` calls —
+to the bed's centre and onto it from three's Float32 bounds (`Math.min`/`max`
+signed zeros kept); its mesh is shared with an asset the project already
+holds with the same digest, layout and bytes, the first in code-unit ID
+order, or else a new asset recording the file and `importedAt`; a matching
+digest that is not this mesh refuses in the browser's words. A helper volume
+(`addHelperVolume`) is a cube part of the object the primary selected
+instance, object or part belongs to, named after its role and how many parts
+of that role the object has ("Modifier 2"), on an asset of its own; without
+such a selection it refuses as the browser does. IDs are drawn in the
+browser's order from the request's list — a primitive's asset only when no
+asset is shared — and the reply says how many it took. The exchange is
+canonical JSON: `{"kind","sizeMm"}` → the payload's bytes;
+`{"bedMm","ids","importedAt","kind","plateId","sizeMm"}` →
+`{"assetJson","idsUsed","objectJson","plateId","reusedAsset"}`;
+`{"ids","primary","role","sizeMm"}` →
+`{"assetJson","idsUsed","objectId","volumeJson"}`; a refusal is
+`{"refusal"}` and a malformed request `invalid_request`. Records travel as the
+canonical JSON a host stages. One browser defect was fixed on the way: the
+asset a new model shares was chosen by `localeCompare` order, so two assets
+holding the same mesh (two helper cubes do) made the choice depend on the
+runtime's locale; it is code-unit order now, with a regression test.
+Bindings: WASM `primitive_payload` and `ProjectSession.plan_primitive_object`
+/ `plan_helper_volume`, the JNI exports `primitivePayload`,
+`sessionPrimitiveObject` and `sessionHelperVolume`, and Kotlin
+`Primitives.payload` and `ProjectSession.planPrimitiveObject` /
+`planHelperVolume` (`PrimitiveShape`, `HelperVolumeRole`).
+
+`primitive-vectors.mjs` reads every payload from a real controller's
+repository — the six shapes at seven sizes and the helper cube at six, 48
+meshes (the seven default ones byte for byte, the rest by length and digest)
+and 11 malformed requests — and runs 35 plans on real controllers in five
+recorded states (an empty project, primitives on two plates with helper
+volumes and a height range, two assets holding the cube's bytes under `a` and
+`B`, and a foreign layout of the same bytes with and without a compatible
+twin; 6 browser refusals), each undone, plus 13 malformed plans. Rust, WASM in
+Node and Chrome and JNI answer all of them byte for byte; 214 Kotlin checks
+cover the wrapper. The same corpus records a creation journey a native workspace replays.
+
 ### Paint palette
 
 `facets::palette` ports `projectPaintPalette`: the filament library as the
@@ -4701,9 +4758,9 @@ Selected and Deselect All when no focused view takes them. The Workspace's tap
 selects in the project (Shift/Ctrl/Meta extend; a tap on nothing deselects
 all) and the scene highlights the project's selected instances. The plate
 menu of the tree, like the catalogue's actions, duplicates and deletes the
-active plate; the plate bar acts on its own plate. Copy, cut, paste and
-fill bed remain; transforms are the inspector's and the Edit menu's
-placement entries ([below](#android-transform-inspector)).
+ active plate; the plate bar acts on its own plate. Transforms are the
+inspector's and the Edit menu's placement entries ([below](#android-transform-inspector));
+copy, cut, paste and the bed fill are [Android creation](#android-creation).
 
 `ProjectEditChecks` (73 checks over real JNI) replay the browser's UUID
 vectors from its seeded word source, every selection rule above and its
@@ -4716,7 +4773,7 @@ eligibility and the row and Edit menus. `android-edit-smoke.py` (run by
 the Workspace (its highlight and its checked tree row), deletes and undoes,
 clones, makes the copy unprintable, deletes with the Delete key, deselects
 with Escape, renames from a row's menu and adds, renames and deletes a plate;
-it has not run yet.
+it passes on both emulators.
 
 ### Android Workspace renderer
 
@@ -4877,7 +4934,72 @@ the statuses and the fields' change and follow rules.
 smoke) imports a cube, selects it, lays a tapped face flat and undoes it,
 types Move X, centres, raises and drops it, rotates 90° about Z, scales to
 200 % and undoes, mirrors on X, then arranges two cubes as one "Transform 2
-instances"; it has not run yet.
+instances". An import selects nothing, as in the browser, so it selects the cube
+with Select All first; it passes on the API 34 emulator.
+
+### Android creation
+
+The Project area creates as the browser's workspace does, through the
+browser's staged records. `ProjectStagedRecords` (core-bridge) is a typed
+writer for the records the browser stages (`StagedProjectCommands.ts`, written
+as `project-staged-replay.mjs` writes them for the core): `createInstance`,
+`clipboardPaste`, `addVolume` and `addObjectWithAsset`, alone or as one
+labelled transaction, each record (`StagedRecord`: one canonical JSON object,
+text outside ASCII escaped) and payload (`StagedPayload`: its descriptor and
+bytes) typed; the bytes are ASCII JSON, payloads are declared by descriptor
+and streamed after the records, each distinct ID once in first-declaration
+order. Staged intents are left out: the core charges a staged intent by its
+exact text, which only the browser's encoder writes (Kotlin's wire writer
+prints `1.0` for `1`). The host JNI replay of the staged corpus writes every
+work it can type — 102 of them, instance copies, clipboard pastes, added parts
+and objects with payloads, alone and in transactions — through the writer and
+compares every reply, effect, state and staging charge with the browser's;
+where a work's records survive a JSON round trip the bytes are the browser's
+own (102 works, 116 Kotlin checks with the writer's typed rules).
+
+`ProjectWorkspace` plans each creation on the actor's authority against
+exactly the state the current guard names, writes its records and stages
+them (`ProjectActor.prepareCommands`, or `preparePaste` through the
+clipboard's own upload) under that guard, as one undoable step with the
+browser's label: `addPrimitive` (each `add_primitive_*`, "Add cube.stl" on the
+project's bed), `addHelperVolume` (`add_modifier`, `add_support_enforcer`,
+`add_support_blocker`: "Add modifier to object", selecting the part; nothing
+selected refuses in the browser's words), `fillBed` (`fill_bed_with_instances`:
+copies of the last selected instance laid into its plate's free space on the
+bed, keeping the active plate's tower clear, as one "Fill n instances" — one
+copy is "Duplicate instance" — an instance record of ID, name when it has
+one, the planned transform and its printability), `copySelected`
+(`edit_copy`: the primary object's or instance's whole object and assets into
+the actor's clipboard, replacing the copy held; the project is unchanged),
+`cutSelected` (`edit_cut`: Copy, then Delete Selected when the primary is an
+instance) and `paste` (`edit_paste`: the copy under fresh IDs on the active
+plate, "Paste model"). Add Instance stays the session-staged copy of
+[selection and object edits](#android-selection-and-object-edits). New IDs
+follow the browser's draw order; `ProjectIds.giveBack` returns the asset ID a
+shared mesh did not take. The core's capabilities see the clipboard (`edit_paste`
+enabled once a copy is held, which New and Open keep, as the browser's
+controller keeps it).
+
+`ProjectCreateEditChecks` (145 checks over JNI) open the corpus journey's
+browser 3MF (a U1 bed and a plate tower) with the browser's seeded IDs and
+apply its 32 steps through the wrappers — every primitive (a second cube
+sharing the first's mesh), the three helper volumes (one with a part
+selected), an added instance, a 64-copy bed fill, copies, two pastes, cuts of
+an object's last instance and of an instance, and with nothing selected a
+refused helper, no instance, no fill and no copy — with the browser's hash,
+undo label and result after each, then undo all 19 entries back to the
+opened state. The app: an Add menu (the six primitives, then the helper
+volumes) and the Edit menu's Cut, Copy and Paste first and Add Instance and
+Fill Bed with Instances last, enabled as the core enables them; row menus
+offer the bed fill for an object and the primitives for a plate; Ctrl/Meta+C,
++X and +V copy, cut and paste a model when no focused view takes the key (the
+platform's keys: the browser's catalogue leaves them to page text). Labels
+are the browser's messages (`contracts/android-strings.json`).
+`ProjectEditingTest` covers the menus; `android-create-smoke.py` (run by
+`emulator-smoke.py` before the adaptive smoke) adds a cube and a cylinder,
+copies and pastes, pastes with Ctrl+V, adds an instance, cuts it with Ctrl+X
+and pastes it back, and adds and undoes a modifier, each by its undo label; it
+passes on the API 34 emulator.
 
 ### Android Preview area
 
@@ -5227,8 +5349,8 @@ layouts and the drop's decisions and words; `android-adaptive-smoke.py`
 Shift+Tab, Space and Enter, the focused button's pixels, a dialog keeping
 and returning the focus and Escape, then resizes the display (`wm density`,
 `wm size`, always restored) for the medium rail and the expanded panels and
-crosses them with Tab. adb cannot drive a drag and drop. The smoke has not
-yet run on an emulator; hover, context menus, trackpad and stylus input,
+crosses them with Tab. adb cannot drive a drag and drop. The smoke passes on
+both emulators; hover, context menus, trackpad and stylus input,
 and keyboard control of the 3D views remain.
 
 ### Android localization
@@ -5295,7 +5417,7 @@ does: in German the bar and the Project and Prepare areas show the German
 catalogue's words (read through the contract) beside English for what the
 browser lacks; under `ar-XB` the bar runs right to left and every area opens;
 under `en-XA` the bar is pseudo-localized; the language is reset at the end.
-It has not run on an emulator yet. Holding the converter to the browser's
+It passes on both emulators. Holding the converter to the browser's
 renderer found three `icu.ts` defects, fixed with regression tests: `#` was replaced in a plural's rendered text, so an
 argument such as a file "Part #2" printed "Part 32"; `'#'` did not quote a
 literal `#` in a plural; and `selectordinal` used cardinal rules ("2th").
@@ -6230,6 +6352,7 @@ node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/slicin
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/workspace-bed-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/transform-field-vectors.mjs
 node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/placement-edit-vectors.mjs
+node --import ./web/node_modules/tsx/dist/loader.mjs tools/cross-platform/primitive-vectors.mjs
 node tools/cross-platform/generate-bbs-filament-keys.mjs
 node web/scripts/run-tests.mjs opc-lowercase.test.ts
 node tools/cross-platform/canonical-requests.mjs

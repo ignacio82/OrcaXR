@@ -130,6 +130,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                     Text(view.redo?.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.project_redo_named, it) } ?: stringResource(R.string.project_redo))
                 }
                 EditMenu(view, model)
+                AddMenu(view, model)
             }
         }
         item { Text(stringResource(R.string.project_plates), style = MaterialTheme.typography.titleMedium) }
@@ -258,6 +259,19 @@ private sealed interface Renaming {
 private fun actionLabel(action: ProjectActionState): String = when (action.id) {
     "edit_select_all" -> stringResource(R.string.project_edit_select_all)
     "edit_deselect_all" -> stringResource(R.string.project_edit_deselect_all)
+    "edit_cut" -> stringResource(R.string.project_edit_cut)
+    "edit_copy" -> stringResource(R.string.project_edit_copy)
+    "edit_paste" -> stringResource(R.string.project_edit_paste)
+    "fill_bed_with_instances" -> stringResource(R.string.project_fill_bed)
+    "add_primitive_cube" -> stringResource(R.string.project_add_cube)
+    "add_primitive_cylinder" -> stringResource(R.string.project_add_cylinder)
+    "add_primitive_sphere" -> stringResource(R.string.project_add_sphere)
+    "add_primitive_cone" -> stringResource(R.string.project_add_cone)
+    "add_primitive_disc" -> stringResource(R.string.project_add_disc)
+    "add_primitive_torus" -> stringResource(R.string.project_add_torus)
+    "add_modifier" -> stringResource(R.string.project_add_modifier)
+    "add_support_enforcer" -> stringResource(R.string.project_add_support_enforcer)
+    "add_support_blocker" -> stringResource(R.string.project_add_support_blocker)
     "edit_duplicate" -> stringResource(R.string.project_edit_duplicate)
     "add_instance" -> stringResource(R.string.project_add_instance)
     "edit_delete_selected" -> stringResource(R.string.project_edit_delete_selected)
@@ -371,6 +385,31 @@ private fun InspectorTool(tool: TransformTool, shown: List<String>, edits: Int, 
                             }
                         }
                         .semantics { contentDescription = description },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The browser's Add menu: the six primitives, each placed on the project's
+ * bed as one undoable step, then the helper volumes for the selected object —
+ * enabled as the core enables them.
+ */
+@Composable
+private fun AddMenu(view: ProjectView, model: ProjectModel) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { open = true }, enabled = view.ready && !model.busy) { Text(stringResource(R.string.project_add_menu)) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            for (action in ProjectEditing.addMenu(view)) {
+                DropdownMenuItem(
+                    text = { Text(actionLabel(action)) },
+                    onClick = {
+                        open = false
+                        model.perform(action.id)
+                    },
+                    enabled = action.enabled,
                 )
             }
         }

@@ -21,6 +21,16 @@
     <string name="project_duplicate_plate">Aktuelle Druckplatte duplizieren</string>
     <string name="project_reset_rotation">Rotation zurücksetzen</string>
     <string name="project_scale_to_fit_volume">Auf Druckvolumen skalieren</string>
+    <string name="project_edit_cut">Schneiden</string>
+    <string name="project_edit_copy">Kopieren</string>
+    <string name="project_edit_paste">Einfügen</string>
+    <string name="project_add_cube">Würfel</string>
+    <string name="project_add_cylinder">Zylinder</string>
+    <string name="project_add_sphere">Kugel</string>
+    <string name="project_add_cone">Kegel</string>
+    <string name="project_add_disc">Scheibe</string>
+    <string name="project_add_torus">Torus</string>
+    <string name="project_add_modifier">Modifizierer hinzufügen</string>
     <string name="device_cancel">Abbrechen</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

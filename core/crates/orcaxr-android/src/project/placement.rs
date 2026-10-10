@@ -1,9 +1,11 @@
-//! The workspace's bed and the transform inspector's fields
-//! (`orcaxr_project::placement::{bed, fields}`): canonical JSON requests and
-//! replies over a configuration, a captured project or three field texts.
+//! The workspace's bed, the transform inspector's fields and new geometry
+//! (`orcaxr_project::placement::{bed, fields}`, `orcaxr_project::primitives`):
+//! canonical JSON requests and replies over a configuration, a captured
+//! project, a session or three field texts.
 use super::*;
 use orcaxr_contracts::generated::MAX_INPUT_BYTES;
 use orcaxr_project::placement::{bed, fields};
+use orcaxr_project::primitives;
 
 fn exchange(
     env: &mut JNIEnv<'_>,
@@ -39,4 +41,32 @@ pub(super) fn transform_field_edit(env: &mut JNIEnv<'_>, request: JString<'_>) -
 /// `{"rotation"}` ↔ `{"eulerRadians"}`, as three converts them.
 pub(super) fn transform_rotation(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jstring> {
     exchange(env, &request, fields::rotation_json)
+}
+/// `{"kind","sizeMm"}` → a primitive's or the helper cube's canonical mesh payload.
+pub(super) fn primitive_payload(env: &mut JNIEnv<'_>, request: JString<'_>) -> Result<jbyteArray> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let bytes = primitives::payload_json(&request)?;
+    env.byte_array_from_slice(&bytes)
+        .map(|array| array.into_raw())
+        .map_err(|_| "output_limit")
+}
+/// A primitive as a new object of the session's acknowledged state.
+pub(super) fn session_primitive_object(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = with_session(handle, |s| s.plan_primitive_object(&request))?;
+    string(env, json)
+}
+/// A helper volume for the object a selection names, in the session's acknowledged state.
+pub(super) fn session_helper_volume(
+    env: &mut JNIEnv<'_>,
+    handle: jlong,
+    request: JString<'_>,
+) -> Result<jstring> {
+    let request = bounded_text(env, &request, MAX_INPUT_BYTES)?;
+    let json = with_session(handle, |s| s.plan_helper_volume(&request))?;
+    string(env, json)
 }

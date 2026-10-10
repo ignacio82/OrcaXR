@@ -21,6 +21,16 @@
     <string name="project_duplicate_plate">复制当前打印板</string>
     <string name="project_reset_rotation">重置旋转</string>
     <string name="project_scale_to_fit_volume">缩放到构建空间大小</string>
+    <string name="project_edit_cut">剪切</string>
+    <string name="project_edit_copy">复制</string>
+    <string name="project_edit_paste">粘贴</string>
+    <string name="project_add_cube">立方体</string>
+    <string name="project_add_cylinder">圆柱体</string>
+    <string name="project_add_sphere">球</string>
+    <string name="project_add_cone">锥体</string>
+    <string name="project_add_disc">圆盘</string>
+    <string name="project_add_torus">环面</string>
+    <string name="project_add_modifier">添加修改器</string>
     <string name="device_cancel">取消</string>
     <string name="device_tab_camera">摄像机</string>
 </resources>

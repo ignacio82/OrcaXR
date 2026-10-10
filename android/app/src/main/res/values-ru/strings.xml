@@ -21,6 +21,16 @@
     <string name="project_duplicate_plate">Дублировать печатную пластину</string>
     <string name="project_reset_rotation">Сброс вращения</string>
     <string name="project_scale_to_fit_volume">Отмасштабировать под область печати</string>
+    <string name="project_edit_cut">Разрезать</string>
+    <string name="project_edit_copy">Копировать</string>
+    <string name="project_edit_paste">Вставить</string>
+    <string name="project_add_cube">Куб</string>
+    <string name="project_add_cylinder">Цилиндр</string>
+    <string name="project_add_sphere">Сфера</string>
+    <string name="project_add_cone">Конус</string>
+    <string name="project_add_disc">Диск</string>
+    <string name="project_add_torus">Тороид</string>
+    <string name="project_add_modifier">Добавление модификатора</string>
     <string name="device_cancel">Отмена</string>
     <string name="device_tab_camera">Камера</string>
 </resources>

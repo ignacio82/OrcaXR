@@ -29,6 +29,14 @@ pub fn transform_field_edit(request: &str) -> Result<String, JsValue> {
     fields::edit_json(request).map_err(error)
 }
 
+/// A primitive's or the helper cube's canonical mesh payload
+/// (`orcaxr_project::primitives::payload_json`): `{"kind","sizeMm"}` in, the
+/// bytes the browser stores out.
+#[wasm_bindgen]
+pub fn primitive_payload(request: &str) -> Result<Vec<u8>, JsValue> {
+    orcaxr_project::primitives::payload_json(request).map_err(error)
+}
+
 /// three's Euler ↔ quaternion conversion (`transformRotationExchange`):
 /// `{"rotation"}` → `{"eulerRadians"}`, or `{"eulerRadians"}` → `{"rotation"}`.
 #[wasm_bindgen]

@@ -559,6 +559,27 @@ impl<P: TimestampPolicy> ProjectSession<P> {
             request,
         ))
     }
+    /// A primitive as a new object of the acknowledged state, its mesh shared
+    /// with an asset the session already holds when one matches
+    /// ([`crate::primitives::primitive_object_json`]).
+    pub fn plan_primitive_object(&self, request: &str) -> Result<String, &'static str> {
+        if self.disposed {
+            return Err("disposed");
+        }
+        crate::primitives::primitive_object_json(
+            self.bus.snapshot().state(),
+            self.bus.assets(),
+            request,
+        )
+    }
+    /// A helper volume for the object a selection names, from the
+    /// acknowledged state ([`crate::primitives::helper_volume_json`]).
+    pub fn plan_helper_volume(&self, request: &str) -> Result<String, &'static str> {
+        if self.disposed {
+            return Err("disposed");
+        }
+        crate::primitives::helper_volume_json(self.bus.snapshot().state(), request)
+    }
     /// One plate's volumes captured for picking from the acknowledged state;
     /// the scene owns its meshes, so picks run off the session.
     pub fn pick_scene(

@@ -138,6 +138,8 @@ class ProjectWorkspace(
         /** The browser workspace's staged-edit pool (`INSTANCE_STAGING_LIMITS`): four staged
          * resources, 4096 commands, a whole project's 256 Mi units and its archive's 2 GiB of assets. */
         val STAGING = ProjectStagingPoolOptions(4, 4096, 256L shl 20, 2048L shl 20)
+        /** The browser's clipboard bounds (`CLIPBOARD_ASSET_LIMITS`): 4096 assets in 512 MiB. */
+        val CLIPBOARD = ProjectStagingClipboardOptions(4096, 512L shl 20)
         /** A project's own printer and filaments, as an opened project carries them. */
         val AUTHORED: ProjectIntents.PreflightTarget = ProjectIntents.PreflightTarget.Authored(ProjectIntents.Empty)
         /** A preflight's bounds: the archive's assets and facets, and the engine's 64 filaments. */
@@ -169,10 +171,17 @@ class ProjectWorkspace(
         )
         val PLACEMENT_TOOLBAR_ACTIONS = listOf("tool_lay_on_face", "drop_to_bed")
         val TRANSFORM_ACTIONS = listOf("tool_move", "tool_rotate", "tool_scale")
-        /** The capability host facts of the Android shell: the flat (non-XR) workspace, preparing, without a clipboard or printer job. */
-        private val HOST = ProjectIntents.CapabilityHostState(
+        /** The catalogue actions the Project area's Edit and Add menus offer for creation (`dom-menu`):
+         * the clipboard, the bed fill, the primitives and the helper volumes. */
+        val CREATE_ACTIONS = listOf(
+            "edit_cut", "edit_copy", "edit_paste", "fill_bed_with_instances",
+            "add_primitive_cube", "add_primitive_cylinder", "add_primitive_sphere", "add_primitive_cone", "add_primitive_disc", "add_primitive_torus",
+            "add_modifier", "add_support_enforcer", "add_support_blocker",
+        )
+        /** The capability host facts of the Android shell: the flat (non-XR) workspace, preparing, without a printer job; [clipboard] while a copy is held. */
+        private fun host(clipboard: Boolean) = ProjectIntents.CapabilityHostState(
             ProjectIntents.OptionalStartupSnapshot.Absent(ProjectIntents.Empty), ProjectIntents.WorkspaceMode.Prepare,
-            simplifyPreviewing = false, calibrationSessionOpen = false, projectionHealthy = true, hasClipboard = false,
+            simplifyPreviewing = false, calibrationSessionOpen = false, projectionHealthy = true, hasClipboard = clipboard,
             isSlicing = false, gcodeReady = false, preflightBlocked = false, printerJobState = ProjectIntents.PrinterJobUiState.Disconnected,
         )
         private const val MAX_PLATES = 4096L
@@ -395,7 +404,7 @@ class ProjectWorkspace(
         val request = actor.inspect { session ->
             actionsQueued.set(false)
             fun page(surface: ProjectIntents.ActionSurface, query: ProjectIntents.CapabilityQuery) =
-                session.capabilities(ProjectIntents.CapabilityRequest(surface, HOST, query)).actions.map { action ->
+                session.capabilities(ProjectIntents.CapabilityRequest(surface, host(clipboard != null), query)).actions.map { action ->
                     val availability = action.availability
                     val reason = (availability as? ProjectIntents.ActionAvailability.Disabled)?.value?.text
                         ?: (availability as? ProjectIntents.ActionAvailability.Hidden)?.value?.text
@@ -405,7 +414,8 @@ class ProjectWorkspace(
                 page(surface, ProjectIntents.CapabilityQuery.Actions(ProjectIntents.CapabilityActions(ids.map(::units))))
             fun context(target: ProjectIntents.ActionContextTarget) =
                 page(ProjectIntents.ActionSurface.DomContext, ProjectIntents.CapabilityQuery.Context(ProjectIntents.CapabilityContextPage(target, 0, TREE_PAGE)))
-            val all = actions(ProjectIntents.ActionSurface.DomMenu, MENU_ACTIONS) + actions(ProjectIntents.ActionSurface.DomInspector, INSPECTOR_ACTIONS)
+            val all = actions(ProjectIntents.ActionSurface.DomMenu, MENU_ACTIONS) + actions(ProjectIntents.ActionSurface.DomInspector, INSPECTOR_ACTIONS) +
+                actions(ProjectIntents.ActionSurface.DomMenu, CREATE_ACTIONS)
             val placement = actions(ProjectIntents.ActionSurface.DomMenu, PLACEMENT_MENU_ACTIONS) +
                 actions(ProjectIntents.ActionSurface.DomToolbar, PLACEMENT_TOOLBAR_ACTIONS) +
                 actions(ProjectIntents.ActionSurface.DomInspector, TRANSFORM_ACTIONS)
@@ -1494,6 +1504,223 @@ class ProjectWorkspace(
         Edit(listOf(ProjectIntents.Command.ReorderPlates(ProjectIntents.ReorderPlates(order.map(::units)))), Unit)
     }
 
+    // ---- Creation: new geometry, instances and the clipboard, staged as the browser stages them ----
+    // Each plans on the actor's authority against exactly the state the current guard names (an
+    // edit landing first refuses it as changed), writes the browser's staged records
+    // (`ProjectStagedRecords`) and stages them on the actor under that guard — mesh payloads
+    // streamed after the records — as one undoable step with the browser's history label.
+
+    /** The latest copy (the browser controller's clipboard), kept across New and Open as the browser keeps it. */
+    @Volatile private var clipboard: ProjectActorClipboard? = null
+
+    /** Whether a copy is held, so Paste has something to paste (`hasClipboard`). */
+    val hasClipboard: Boolean get() = clipboard != null
+
+    /** What a creation's plan chose: the work to stage (none: nothing to commit) and what the operation answers. */
+    private class Creation<T>(val work: StagedWork?, val result: T)
+
+    /** [work]'s records and payloads staged and executed on the actor under [guard] (through [paste]'s upload when it pastes). */
+    private fun stage(guard: ProjectActorGuard, work: StagedWork, paste: ProjectActorClipboard?): CompletableFuture<Unit> {
+        val bytes = ProjectStagedRecords.encode(work)
+        val payloads = ProjectStagedRecords.payloads(work)
+        val options = ProjectStagedRecords.options(bytes.size.toLong())
+        val write = { _: ProjectPreparation, _: ProjectSnapshot, writer: ProjectCommandWriter -> ProjectStagedRecords.write(writer, bytes) }
+        val request = when {
+            paste != null -> actor.preparePaste(guard, paste, bytes.size.toLong(), options, write)
+            payloads.isEmpty() -> actor.prepareCommands(guard, bytes.size.toLong(), options, write)
+            else -> actor.prepareCommands(guard, bytes.size.toLong(), options, write) { _, assets -> ProjectStagedRecords.stream(assets, payloads) }
+        }
+        return outcome(request).thenApply { result ->
+            val completed = result as? ProjectOutcome.Completed ?: throw failure(result, null)
+            when (val reply = completed.reply.result) {
+                is ProjectIntents.SessionResult.Acknowledged, is ProjectIntents.SessionResult.ReceiptUnavailable -> Unit
+                is ProjectIntents.SessionResult.Error -> throw refusedBy(reply.value)
+                else -> throw failure(result, null)
+            }
+        }
+    }
+
+    /**
+     * Plans on the authority from the state the current guard names (null:
+     * nothing selected to act on), then stages the plan's work under that guard.
+     */
+    private fun <T> create(paste: ProjectActorClipboard? = null, plan: (ProjectSession, ProjectSnapshot) -> Creation<T>?): CompletableFuture<T?> = refreshed(
+        query().thenCompose { (state, guard) ->
+            inspect { session ->
+                session.snapshot().use { snapshot ->
+                    if (snapshot.revision() != state.guard.revision) throw ProjectFailure("The project changed meanwhile; try again.")
+                    listOfNotNull(plan(session, snapshot))
+                }
+            }.thenCompose { planned ->
+                val creation = planned.firstOrNull() ?: return@thenCompose CompletableFuture.completedFuture<T?>(null)
+                val work = creation.work ?: return@thenCompose CompletableFuture.completedFuture<T?>(creation.result)
+                stage(guard, work, paste).thenApply<T?> { creation.result }
+            }
+        },
+    )
+
+    /**
+     * A primitive (`add_primitive_*`, the browser's `addPrimitive`): a new
+     * object named after its file (`cube.stl`) on the active plate, centred on
+     * the project's bed and resting on it, its mesh shared with an asset the
+     * project already holds with the same bytes — one "Add cube.stl".
+     */
+    fun addPrimitive(shape: PrimitiveShape): CompletableFuture<ProjectPrimitiveAdded?> = later {
+        if (shape == PrimitiveShape.HELPER_CUBE) throw ProjectFailure("The helper cube is not a primitive.")
+        create { session, snapshot ->
+            val bed = snapshot.workspaceBed(null)
+            val drawn = ids.next(Primitives.PRIMITIVE_IDS)
+            val request = Primitives.primitiveRequest(shape, bed.widthMm, bed.depthMm, drawn, NewProjects.timestamp(clock()))
+            when (val plan = session.planPrimitiveObject(request)) {
+                is PrimitivePlan.Refused -> {
+                    ids.giveBack(drawn)
+                    throw ProjectFailure(plan.message)
+                }
+                is PrimitivePlan.Planned -> {
+                    // The browser draws an asset ID only for a mesh the project does not hold yet.
+                    ids.giveBack(drawn.drop(plan.plan.idsUsed))
+                    val made = CanonicalJson.read(plan.plan.objectJson) as ProjectJsonObject
+                    val instance = ((made.get("instances") as ProjectJsonArray).get(0) as ProjectJsonObject).get("id") as String
+                    val payload = StagedPayload(plan.plan.assetJson, Primitives.payload(shape))
+                    Creation(
+                        StagedWork.Single(StagedCommand.AddObjectWithAsset(plan.plan.plateId, StagedRecord.of(plan.plan.objectJson), payload)),
+                        ProjectPrimitiveAdded(made.get("id") as String, instance, plan.plan.reusedAsset),
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * A helper volume (`add_modifier`, `add_support_enforcer`,
+     * `add_support_blocker`; the browser's `addHelperVolume`): a 10 mm cube
+     * part of the object the primary selected instance, object or part belongs
+     * to, named after its role ("Modifier 2") — one "Add modifier to object"
+     * that selects the part. Without such a selection it is refused in the
+     * browser's words.
+     */
+    fun addHelperVolume(role: HelperVolumeRole): CompletableFuture<ProjectHelperAdded?> = create { session, _ ->
+        val drawn = ids.next(Primitives.HELPER_IDS)
+        when (val plan = session.planHelperVolume(Primitives.helperRequest(role, whole(session).primary, drawn))) {
+            is PrimitivePlan.Refused -> {
+                ids.giveBack(drawn)
+                throw ProjectFailure(plan.message)
+            }
+            is PrimitivePlan.Planned -> {
+                ids.giveBack(drawn.drop(plan.plan.idsUsed))
+                val volume = (CanonicalJson.read(plan.plan.volumeJson) as ProjectJsonObject).get("id") as String
+                val payload = StagedPayload(plan.plan.assetJson, Primitives.payload(PrimitiveShape.HELPER_CUBE))
+                Creation(
+                    StagedWork.Single(StagedCommand.AddVolume(plan.plan.objectId, StagedRecord.of(plan.plan.volumeJson), payload)),
+                    ProjectHelperAdded(plan.plan.objectId, volume),
+                )
+            }
+        }
+    }
+
+    /**
+     * Fill Bed with Instances (`fill_bed_with_instances`, the browser's
+     * `fillPlateWithSelection`): copies of the last selected instance laid into
+     * its plate's free space on the project's bed, keeping the active plate's
+     * tower clear, as one "Fill n instances" (one copy: "Duplicate instance").
+     * Answers how many were added (none commits nothing) and how many free
+     * slots the copy limit left; null without a selected instance.
+     */
+    fun fillBed(): CompletableFuture<ProjectBedFill?> = create { session, snapshot ->
+        val selected = whole(session).refs.lastOrNull { it is ProjectIntents.SelectionEntity.Instance } as ProjectIntents.SelectionEntity.Instance?
+            ?: return@create null
+        val instanceId = text(selected.value)
+        val (facts, name) = snapshot.query().use { root ->
+            (ProjectFacts.instance(root, instanceId) ?: throw ProjectFailure("Unknown instance $instanceId")) to ProjectFacts.instanceName(root, instanceId)
+        }
+        val bed = snapshot.workspaceBed(platesOf(snapshot).firstOrNull { it.active }?.id)
+        // As arranging does: an edge JSON cannot carry refuses through an inverted rectangle.
+        val exclusions = listOfNotNull(bed.keepOut).map { keep ->
+            if (listOf(keep.minX, keep.minY, keep.maxX, keep.maxY).all(Double::isFinite)) ProjectIntents.ArrangeRegion(keep.minX, keep.minY, keep.maxX, keep.maxY)
+            else ProjectIntents.ArrangeRegion(1.0, 1.0, 0.0, 0.0)
+        }
+        val absent = ProjectIntents.OptionalFinite.Absent(ProjectIntents.Empty)
+        val request = ProjectIntents.BedFillRequest(
+            units(facts.plateId), units(instanceId), absent,
+            ProjectIntents.ArrangeConstraintsInput(
+                listOf(bed.widthMm, bed.depthMm), absent, absent, exclusions, emptyList(),
+                ProjectIntents.OptionalVolumeRoleNames.Absent(ProjectIntents.Empty),
+            ),
+        )
+        when (val reply = session.planBedFill(request)) {
+            is ProjectIntents.BedFillReply.Refused -> throw ProjectFailure(text(reply.value.message))
+            is ProjectIntents.BedFillReply.Fill -> {
+                val placements = reply.value.placements
+                val result = ProjectBedFill(placements.size, reply.value.withheldSlotCount)
+                if (placements.isEmpty()) return@create Creation(null, result)
+                val commands = placements.map { placement ->
+                    // `createInstancesAtTransforms` omits an empty name.
+                    StagedCommand.CreateInstance(facts.objectId, StagedRecord.instance(ids.next(), placement.transform, facts.printable, name?.takeIf { it.isNotEmpty() }))
+                }
+                Creation(StagedWork.Transaction(if (commands.size == 1) "Duplicate instance" else "Fill ${commands.size} instances", commands), result)
+            }
+        }
+    }
+
+    /** The object a copy takes: the primary selected object, or the primary selected instance's. */
+    private fun copiedObject(session: ProjectSession): String? = when (val primary = whole(session).primary) {
+        is ProjectIntents.SelectionEntity.Object -> text(primary.value)
+        is ProjectIntents.SelectionEntity.Instance -> session.snapshot().use { snapshot ->
+            snapshot.query().use { ProjectFacts.instance(it, text(primary.value))?.objectId }
+        }
+        else -> null
+    }
+
+    /**
+     * Copy (`edit_copy`, the browser's `copySelectedObject`): the selected
+     * model's whole object and the assets it uses into the clipboard, replacing
+     * the copy held; the project is unchanged. Answers the copied object's ID,
+     * or null with nothing selected to copy.
+     */
+    fun copySelected(): CompletableFuture<String?> = query().thenCompose { (_, guard) ->
+        inspect { session -> listOfNotNull(copiedObject(session)) }.thenCompose { found ->
+            val objectId = found.firstOrNull() ?: return@thenCompose CompletableFuture.completedFuture<String?>(null)
+            outcome(
+                actor.copyObject(guard, CLIPBOARD) { _, snapshot ->
+                    snapshot.query().use { root -> ProjectFacts.objectNode(root, objectId) } ?: error("missing_object")
+                },
+            ).thenApply<String?> { result ->
+                val copied = result as? ProjectOutcome.Copied ?: throw failure(result, null)
+                clipboard = copied.clipboard
+                refreshActions()
+                objectId
+            }
+        }
+    }
+
+    /**
+     * Cut (`edit_cut`, the browser's `cutSelectedObject`): Copy, then — when
+     * the primary selection is an instance — Delete Selected as one step
+     * ("Delete instance", or "Delete object" with its last instance). Answers
+     * what was deleted, or null when nothing was (an object row cuts as a copy).
+     */
+    fun cutSelected(): CompletableFuture<ProjectDeletion?> = copySelected().thenCompose { copied ->
+        if (copied == null) CompletableFuture.completedFuture(null) else deleteSelected()
+    }
+
+    /**
+     * Paste (`edit_paste`, the browser's `pasteClipboard`): the copied object
+     * under fresh IDs (object, then each part, instance and height range) on
+     * the active plate, its assets restored when the project no longer holds
+     * them — one "Paste model". Answers the new object's ID, or null without a copy.
+     */
+    fun paste(): CompletableFuture<String?> {
+        val source = clipboard ?: return CompletableFuture.completedFuture(null)
+        return create(source) { _, _ ->
+            val objectId = ids.next()
+            val info = source.info
+            val command = StagedCommand.ClipboardPaste(
+                objectId, ids.next(info.volumes.toInt()), ids.next(info.instances.toInt()), ids.next(info.layerRanges.toInt()),
+            )
+            Creation(StagedWork.Single(command), objectId)
+        }
+    }
+
     override fun close() {
         synchronized(lock) { timer?.close() }
         actor.close()
@@ -1511,6 +1738,15 @@ enum class ProjectDeletion { INSTANCE, OBJECT }
 
 /** What Printable did: the state the selected instances took, and how many changed to it. */
 data class ProjectPrintableChange(val printable: Boolean, val changed: Int)
+
+/** A primitive placed: its object and instance, and whether its mesh is shared with an asset the project held. */
+data class ProjectPrimitiveAdded(val objectId: String, val instanceId: String, val reusedAsset: Boolean)
+
+/** A helper volume added: the object it joined and the new part. */
+data class ProjectHelperAdded(val objectId: String, val volumeId: String)
+
+/** A bed fill: how many copies were added, and how many free slots the copy limit left. */
+data class ProjectBedFill(val created: Int, val withheld: Long)
 
 /**
  * Recently used documents, newest first: at most [MAX] entries, one per

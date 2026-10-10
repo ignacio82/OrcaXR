@@ -1,5 +1,7 @@
 package dev.orcaxr.nativeapp.project
 
+import dev.orcaxr.core.HelperVolumeRole
+import dev.orcaxr.core.PrimitiveShape
 import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.core.ProjectRowSelection
@@ -46,6 +48,17 @@ object ProjectEditing {
         "toggle_printable", "instance_to_object",
     )
 
+    /** The Edit menu's clipboard, first as in the browser's Edit menu, and its instance creations, after its object edits. */
+    val EDIT_CLIPBOARD = listOf("edit_cut", "edit_copy", "edit_paste")
+    val EDIT_INSTANCES = listOf("add_instance", "fill_bed_with_instances")
+
+    /** The Add menu: the browser's `add` section primitives (scene.ts), then the helper volumes for the selected object (gizmos.ts). */
+    val ADD_MENU = PrimitiveShape.PRIMITIVES.mapNotNull { it.actionId } +
+        HelperVolumeRole.entries.mapNotNull { it.actionId }
+
+    /** Creation's catalogue actions the app performs: the clipboard, the bed fill and the Add menu. */
+    val CREATED = (EDIT_CLIPBOARD + EDIT_INSTANCES + ADD_MENU).toSet()
+
     /** A row activation's selection: Shift extends a range, Ctrl or Meta toggles, a plain tap replaces. */
     fun rowMode(shift: Boolean, toggle: Boolean): ProjectRowSelection = when {
         shift -> ProjectRowSelection.Range
@@ -79,12 +92,16 @@ object ProjectEditing {
             ProjectIntents.ObjectTreeRowKind.Object, ProjectIntents.ObjectTreeRowKind.Instance -> view.objectMenu
             else -> emptyList()
         }
-        menu.filter { it.id in PERFORMED }.forEach { add(Choice.Action(it)) }
+        menu.filter { it.id in PERFORMED || it.id in CREATED }.forEach { add(Choice.Action(it)) }
     }
 
     /** The Edit menu's actions with the core's enablement; one the core has not answered for yet is disabled. */
     fun editMenu(view: ProjectView): List<ProjectActionState> =
-        EDIT_MENU.map { id -> view.actions[id] ?: ProjectActionState(id, id, enabled = false) }
+        (EDIT_CLIPBOARD + EDIT_MENU + EDIT_INSTANCES).map { id -> view.actions[id] ?: ProjectActionState(id, id, enabled = false) }
+
+    /** The Add menu's actions with the core's enablement, as [editMenu]. */
+    fun addMenu(view: ProjectView): List<ProjectActionState> =
+        ADD_MENU.map { id -> view.actions[id] ?: ProjectActionState(id, id, enabled = false) }
 
     /** The Edit menu's placement actions with the core's enablement; one the core has not answered for yet is disabled. */
     fun placementMenu(view: ProjectView): List<ProjectActionState> =

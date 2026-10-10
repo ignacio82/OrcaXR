@@ -119,6 +119,18 @@ public final class ProjectJniHarness {
     public static long transformFieldChecks(String script) {
         return ProjectTransformFieldChecks.run(script);
     }
+    public static long primitiveChecks(String script) {
+        return ProjectPrimitiveChecks.run(script);
+    }
+    public static long stagedRecordChecks(String script) {
+        return ProjectStagedRecordChecks.run(script);
+    }
+    public static String stagedRecords(String work) {
+        return ProjectStagedRecordChecks.encode(work);
+    }
+    public static long createEditChecks(String corpus, byte[] archive) {
+        return ProjectCreateEditChecks.run(corpus, archive);
+    }
     public static long placementEditChecks(String corpus, byte[] archive) {
         return ProjectPlacementEditChecks.run(corpus, archive);
     }
@@ -385,6 +397,10 @@ public final class ProjectJniHarness {
             if (name.equals("transformFieldChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("placementEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("transformEditChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class);
+            if (name.equals("primitiveChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("stagedRecordChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("stagedRecords")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("createEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
             if (name.equals("projectRecoveryChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);
             if (name.equals("projectWorkspaceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);
             if (name.equals("projectEditChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);

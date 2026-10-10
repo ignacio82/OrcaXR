@@ -75,6 +75,10 @@ export function startProjectJni(profile = "debug") {
   signatures.transformFieldChecks = ["String"];
   signatures.placementEditChecks = ["String", "byte[]"];
   signatures.transformEditChecks = ["byte[]", "String"];
+  signatures.primitiveChecks = ["String"];
+  signatures.stagedRecordChecks = ["String"];
+  signatures.stagedRecords = ["String"];
+  signatures.createEditChecks = ["String", "byte[]"];
   signatures.projectSceneChecks = ["byte[]"];
   signatures.printerDiscoveryChecks = ["String", "String"];
   signatures.printerExchangesChecks = ["String"];
@@ -409,6 +413,12 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     plan_bed_fill(request) {
       return call("sessionBedFill", this.handle, request);
+    }
+    plan_primitive_object(request) {
+      return call("sessionPrimitiveObject", this.handle, request);
+    }
+    plan_helper_volume(request) {
+      return call("sessionHelperVolume", this.handle, request);
     }
     plan_placement(request) {
       return call("sessionPlacement", this.handle, request);
@@ -1370,6 +1380,7 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     transform_fields: (request) => call("transformFields", request),
     transform_field_edit: (request) => call("transformFieldEdit", request),
     transform_rotation: (request) => call("transformRotation", request),
+    primitive_payload: (request) => call("primitivePayload", request),
     slicing_next_state: (request, words) => call("slicingNextState", request, Array.from(words), zone, profile),
     print_history_plan: (operation) => call("printHistoryPlan", operation),
     print_history_finish: (request) => call("printHistoryFinish", request),

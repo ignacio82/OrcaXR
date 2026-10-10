@@ -16,6 +16,8 @@ import androidx.lifecycle.AndroidViewModel
 import dev.orcaxr.core.ContentProjectDocument
 import dev.orcaxr.core.DigestingDocument
 import dev.orcaxr.core.DocumentOwners
+import dev.orcaxr.core.HelperVolumeRole
+import dev.orcaxr.core.PrimitiveShape
 import dev.orcaxr.core.ProjectActorImport
 import dev.orcaxr.core.ProjectArchiveFormat
 import dev.orcaxr.core.ProjectDocumentOutput
@@ -570,6 +572,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
 
     /** Performs catalogue action [id] (the Edit menu, a row's menu, a shortcut) on the selection or the active plate. */
     fun perform(id: String) {
+        if (create(id)) return
         when (id) {
             "edit_select_all" -> quietly { workspace.selectAll().await() }
             "edit_deselect_all" -> quietly { workspace.deselectAll().await() }
@@ -672,6 +675,29 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun duplicatePlate(plateId: String) = work { workspace.duplicatePlate(plateId).await() }
     fun deletePlate(plateId: String) = work { workspace.deletePlate(plateId).await() }
     fun setPlatePrintable(plateId: String, printable: Boolean) = work { workspace.setPlatePrintable(plateId, printable).await() }
+
+    /**
+     * Performs a creation action — Cut, Copy, Paste, Fill Bed with Instances,
+     * a primitive or a helper volume — through the workspace's staged edits;
+     * false for any other action.
+     */
+    private fun create(id: String): Boolean {
+        val shape = PrimitiveShape.forAction(id)
+        val role = HelperVolumeRole.forAction(id)
+        when {
+            shape != null -> work { workspace.addPrimitive(shape).await() }
+            role != null -> work { workspace.addHelperVolume(role).await() }
+            id == "edit_cut" -> work { workspace.cutSelected().await() }
+            id == "edit_copy" -> work { workspace.copySelected().await() }
+            id == "edit_paste" -> work { workspace.paste().await() }
+            id == "fill_bed_with_instances" -> work { workspace.fillBed().await() }
+            else -> return false
+        }
+        return true
+    }
+
+    /** Ctrl/Meta+C, +X and +V (Copy, Cut, Paste) from the keyboard, when the core enables them; answers whether one applied. */
+    fun clipboardShortcut(id: String): Boolean = (!busy && ProjectEditing.enabled(view, id)).also { if (it) perform(id) }
 
     /** Delete from the keyboard (`edit_delete_selected`'s shortcut); answers whether it applied. */
     fun deleteShortcut(): Boolean = (!busy && ProjectEditing.enabled(view, "edit_delete_selected")).also { if (it) perform("edit_delete_selected") }

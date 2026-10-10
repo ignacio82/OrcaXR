@@ -40,6 +40,7 @@ pub mod model;
 pub mod objects_tree;
 pub mod picking;
 pub mod placement;
+pub mod primitives;
 pub mod query;
 pub mod render;
 pub mod selection;

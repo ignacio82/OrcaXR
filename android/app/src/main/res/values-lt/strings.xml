@@ -21,6 +21,16 @@
     <string name="project_duplicate_plate">Dubliuoti dabartinę plokštę</string>
     <string name="project_reset_rotation">Iš naujo nustatyti pasukimą</string>
     <string name="project_scale_to_fit_volume">Mastelis pagal spausdinimo plotą</string>
+    <string name="project_edit_cut">Pjauti</string>
+    <string name="project_edit_copy">Kopijuoti</string>
+    <string name="project_edit_paste">Įklijuoti</string>
+    <string name="project_add_cube">Kubas</string>
+    <string name="project_add_cylinder">Cilindras</string>
+    <string name="project_add_sphere">Sfera</string>
+    <string name="project_add_cone">Konusas</string>
+    <string name="project_add_disc">Diskas</string>
+    <string name="project_add_torus">Toras</string>
+    <string name="project_add_modifier">Pridėti modifikatorių</string>
     <string name="device_cancel">Atšaukti</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

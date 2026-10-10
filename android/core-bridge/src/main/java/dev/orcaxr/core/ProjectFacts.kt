@@ -128,4 +128,55 @@ internal object ProjectFacts {
 
     /** One instance by its ID, or null. */
     fun instance(root: ProjectQueryNode, id: String): InstanceFacts? = instances(root) { it.id == id }.lastOrNull()?.takeIf { it.id == id }
+
+    /**
+     * Object [objectId]'s query node (the caller's to close; it outlives
+     * [root]), or null: what a copy captures for the clipboard.
+     */
+    fun objectNode(root: ProjectQueryNode, objectId: String): ProjectQueryNode? = root.children(QueryRelation.PLATES, MAX_PLATES).use { plates ->
+        var found: ProjectQueryNode? = null
+        rows(plates) { position, _ ->
+            plates.node(position).use { plate ->
+                plate.children(QueryRelation.OBJECTS, UNSORTED).use { objects ->
+                    rows(objects) { at, _ ->
+                        val node = objects.node(at)
+                        if (text(node, QueryText.ID) == objectId) found = node else node.close()
+                        found == null
+                    }
+                }
+            }
+            found == null
+        }
+        found
+    }
+
+    /** Instance [instanceId]'s own name (none when it has none or is not in the project). */
+    fun instanceName(root: ProjectQueryNode, instanceId: String): String? = root.children(QueryRelation.PLATES, MAX_PLATES).use { plates ->
+        var name: String? = null
+        var found = false
+        rows(plates) { position, _ ->
+            plates.node(position).use { plate ->
+                plate.children(QueryRelation.OBJECTS, UNSORTED).use { objects ->
+                    rows(objects) { at, row ->
+                        if (count(row, QueryNumber.INSTANCE_COUNT) > 0) objects.node(at).use { node ->
+                            node.children(QueryRelation.INSTANCES, UNSORTED).use { list ->
+                                rows(list) { index, _ ->
+                                    list.node(index).use { item ->
+                                        if (text(item, QueryText.ID) == instanceId) {
+                                            found = true
+                                            name = text(item, QueryText.NAME)
+                                        }
+                                    }
+                                    !found
+                                }
+                            }
+                        }
+                        !found
+                    }
+                }
+            }
+            !found
+        }
+        name
+    }
 }

@@ -20,6 +20,15 @@
     <string name="project_instance_to_object">Ställ in som ett enskilt objekt</string>
     <string name="project_reset_rotation">Återställ Rotation</string>
     <string name="project_scale_to_fit_volume">Skala till bygg volymen</string>
+    <string name="project_edit_cut">Beskär</string>
+    <string name="project_edit_copy">Kopiera</string>
+    <string name="project_edit_paste">Klistra in</string>
+    <string name="project_add_cube">Kub</string>
+    <string name="project_add_sphere">Sfär</string>
+    <string name="project_add_cone">Kon</string>
+    <string name="project_add_disc">Skiva</string>
+    <string name="project_add_torus">Torus</string>
+    <string name="project_add_modifier">Lägg till Modifierare</string>
     <string name="device_cancel">Avbryt</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

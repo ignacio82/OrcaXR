@@ -96,7 +96,7 @@ class ProjectEditingTest {
     @Test
     fun theEditMenuListsTheBrowsersEditsDisabledUntilTheCoreAnswers() {
         val menu = ProjectEditing.editMenu(view)
-        assertEquals(ProjectEditing.EDIT_MENU, menu.map { it.id })
+        assertEquals(ProjectEditing.EDIT_CLIPBOARD + ProjectEditing.EDIT_MENU + ProjectEditing.EDIT_INSTANCES, menu.map { it.id })
         assertTrue(menu.first { it.id == "edit_select_all" }.enabled)
         assertFalse(menu.first { it.id == "edit_delete_selected" }.enabled)
         assertFalse(menu.first { it.id == "edit_delete_all" }.enabled)
@@ -154,5 +154,35 @@ class ProjectEditingTest {
         // main.ts onTransformChange and layPickedFacetOnBed.
         assertEquals("Transform failed: Instance transform scale cannot contain zero", ProjectEditing.transformFailed("Instance transform scale cannot contain zero"))
         assertEquals("Lay flat failed: Unknown instance i", ProjectEditing.layFlatFailed("Unknown instance i"))
+    }
+
+    @Test
+    fun creationOffersTheBrowsersClipboardAddMenuAndBedFill() {
+        // The clipboard opens the Edit menu, as in the browser's; instance creations close it.
+        assertEquals(listOf("edit_cut", "edit_copy", "edit_paste"), ProjectEditing.editMenu(view).take(3).map { it.id })
+        assertEquals(listOf("add_instance", "fill_bed_with_instances"), ProjectEditing.editMenu(view).takeLast(2).map { it.id })
+        // The Add menu: the six primitives in the browser's order, then the helper volumes.
+        assertEquals(
+            listOf(
+                "add_primitive_cube", "add_primitive_cylinder", "add_primitive_sphere", "add_primitive_cone", "add_primitive_disc",
+                "add_primitive_torus", "add_modifier", "add_support_enforcer", "add_support_blocker",
+            ),
+            ProjectEditing.ADD_MENU,
+        )
+        val creating = view.copy(
+            actions = mapOf("add_primitive_cube" to action("add_primitive_cube"), "add_modifier" to action("add_modifier", false)),
+            objectMenu = listOf(action("add_instance"), action("fill_bed_with_instances"), action("split_to_objects")),
+            plateMenu = listOf(action("add_primitive_torus"), action("arrange_all")),
+        )
+        val add = ProjectEditing.addMenu(creating)
+        assertTrue(add.first { it.id == "add_primitive_cube" }.enabled)
+        assertFalse(add.first { it.id == "add_modifier" }.enabled)
+        assertFalse(add.first { it.id == "add_support_blocker" }.enabled)
+        // Row menus offer the creations the app performs beside its other actions: a bed fill for an object, a primitive for a
+        // plate (whose Arrange, as the browser's, arranges the active plate); what the app does not perform stays out.
+        fun ids(row: ProjectIntents.ObjectTreeRow) = ProjectEditing.rowMenu(row, creating)
+            .filterIsInstance<ProjectEditing.Choice.Action>().map { it.state.id }
+        assertEquals(listOf("add_instance", "fill_bed_with_instances"), ids(instanceRow))
+        assertEquals(listOf("add_primitive_torus", "arrange_all"), ids(plateRow))
     }
 }

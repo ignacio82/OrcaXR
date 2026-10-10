@@ -53,6 +53,7 @@ import { plateProjectionCases, plateProjectionCode, replayPlateProjection } from
 import { replaySlicingConfiguration } from "./slicing-configuration-replay.mjs";
 import { replayWorkspaceBeds } from "./workspace-bed-replay.mjs";
 import { replayTransformFields } from "./transform-field-replay.mjs";
+import { replayPrimitives } from "./primitive-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -198,6 +199,11 @@ try {
     Uint8Array.from(capturedActorTrace.asset.bytes), JSON.stringify(capturedActorExpected.replies[0]),
     capturedActorExpected.effects.map(effect => layout.effects.indexOf(effect.kind)));
   assert.equal(actorCapturedChecks, 1);
+  // The Kotlin writer (`ProjectStagedRecords`) writes every work whose
+  // commands the app stages — instance copies, clipboard pastes, added parts
+  // and objects with payloads — as typed values; the replay stages those
+  // bytes and compares replies, effects and states with the browser's.
+  let kotlinStagedWorks = 0;
   const staged = await replayStagedProject(
     projectJniCore(jvm.call),
     JSON.parse(
@@ -211,7 +217,37 @@ try {
     layout,
     JSON.parse(await readFile(new URL("contracts/project-staging.json", root))),
     queryLayout,
+    (work) => {
+      const records = jvm.call("stagedRecords", JSON.stringify(work));
+      if (records !== undefined) kotlinStagedWorks++;
+      return records;
+    },
   );
+  assert.equal(kotlinStagedWorks, 102);
+  // The writer's bytes are the browser's own wherever its records survive a
+  // JSON round trip (no integer-like keys) and no intent is re-encoded.
+  const escaped = (text) => text.replace(/[\u0080-\uffff]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+  const verbatim = (json) => JSON.stringify(JSON.parse(json)) === json;
+  const recordLines = stagedFixture.traces
+    .flatMap((trace) => trace.steps.flatMap((group) => group.actions))
+    .filter((action) => action.kind === "stage")
+    .map((action) => action.work)
+    .filter((work) => {
+      const commands = work.single ? [work.single] : (work.commands ?? []);
+      if (!work.single && !work.commands) return false;
+      return commands.every(
+        (c) =>
+          !c.intent &&
+          (c.clipboard || ["instance", "addVolume", "addObjectWithAsset"].includes(c.kind)) &&
+          (c.index == null || (Number.isInteger(c.index) && Math.abs(c.index) < 2 ** 31)) &&
+          (c.recordJson === undefined || verbatim(c.recordJson)) &&
+          (c.asset === undefined || verbatim(c.asset.descriptorJson)),
+      );
+    })
+    .map((work) => `W\t${JSON.stringify(work)}\t${escaped(stagedCommandJson(work, stagingLayout))}`);
+  assert.equal(recordLines.length, 102);
+  const stagedRecordChecks = jvm.call("stagedRecordChecks", recordLines.join("\n"));
+  assert.equal(stagedRecordChecks, recordLines.length + 14);
   Object.assign(
     staged,
     replayProjectDocuments(
@@ -356,6 +392,44 @@ try {
     ].join("\n"),
   );
   assert.equal(transformFieldChecks, 1936);
+  // Primitives and helper volumes through the JNI exports, then the Kotlin wrapper.
+  const primitiveFixture = await json("testdata/cross-platform/primitive-vectors.json");
+  const primitives = replayPrimitives(projectJniCore(jvm.call), primitiveFixture, layout, (text) => Uint8Array.from(Buffer.from(text, "base64")));
+  assert.deepEqual(Object.values(primitives), [48, 7, 11, 35, 13]);
+  const primitiveChecks = jvm.call(
+    "primitiveChecks",
+    [
+      ...primitiveFixture.meshes.map((m) => `M\t${m.request}\t${m.byteLength}\t${m.digest}\t${m.payload ?? "-"}`),
+      ...primitiveFixture.meshRefusals.map((r) => `X\t${r.request}`),
+      ...primitiveFixture.states.flatMap((s) => [
+        `S\t${s.name}\t${s.stateJson}`,
+        ...JSON.parse(s.stateJson).sourceAssets.map((declared) => {
+          const asset = s.assets.find((a) => JSON.parse(a.descriptorJson).id === declared.id);
+          return `A\t${asset.descriptorJson}\t${asset.bytes}`;
+        }),
+        ...s.plans.map((p) => `P\t${p.kind}\t${p.request}\t${p.reply}`),
+        ...primitiveFixture.planRefusals.filter((r) => (r.state ?? "empty") === s.name).map((r) => `R\t${r.kind}\t${r.request}`),
+      ]),
+    ].join("\n"),
+  );
+  assert.equal(primitiveChecks, 214);
+  // Creation through ProjectWorkspace on a real session: the browser's hash,
+  // undo label and count after every primitive, helper volume, instance, fill,
+  // copy, cut and paste, then undo back to the opened project.
+  const createEditChecks = jvm.call(
+    "createEditChecks",
+    JSON.stringify({
+      seed: primitiveFixture.journey.seed,
+      skippedIds: primitiveFixture.journey.skippedIds,
+      importedAt: primitiveFixture.journey.importedAt,
+      opened: primitiveFixture.journey.opened,
+      bed: primitiveFixture.journey.bed,
+      steps: primitiveFixture.journey.steps,
+      undo: primitiveFixture.journey.undo,
+    }),
+    Buffer.from(primitiveFixture.journey.archive, "base64"),
+  );
+  assert.equal(createEditChecks, 145);
   // Placement edits through ProjectWorkspace on a real session: the browser's
   // hash, undo label and report after every edit, and undo back to the start.
   const editFixture = await json("testdata/cross-platform/placement-edit-vectors.json");
@@ -1459,6 +1533,11 @@ try {
     transformFieldChecks,
     placementEditChecks,
     transformEditChecks,
+    ...primitives,
+    primitiveChecks,
+    createEditChecks,
+    kotlinStagedWorks,
+    stagedRecordChecks,
     projectSceneChecks,
     actorArchiveChecks,
     providerDocumentChecks,

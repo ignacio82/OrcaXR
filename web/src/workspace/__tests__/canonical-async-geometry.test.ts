@@ -10,6 +10,7 @@ import { AsyncSessionError } from '../../project/AsyncEditorSession';
 import { seededRandom, UuidIdSource } from '../../project/domain/ids';
 import { identityTransform } from '../../project/domain/model';
 import { BbsProjectImportParser } from '../../project/import/BbsProjectImportParser';
+import { decodeIndexedMeshAsset } from '../../project/meshCodec';
 import { CanonicalWorkspaceController } from '../CanonicalWorkspaceController';
 
 function setup() {
@@ -151,6 +152,41 @@ await test('a mesh import commits its object and bytes as staged work, reusing i
     assert.equal(await controller.undoAsync(), true);
     assert.equal(await controller.undoAsync(), true);
     assert.equal(controller.captureProjectExportGuard().semanticHash, before.identity.semanticHash);
+  } finally {
+    controller.dispose();
+  }
+});
+
+await test('a mesh two assets hold is shared from the first in code-unit order, whatever the locale', async () => {
+  // Helper volumes each get an asset of their own, so two modifiers hold the
+  // same cube bytes under two IDs. `localeCompare` sorted `a` before `B` and
+  // made the shared asset depend on the runtime's collation.
+  const queued: string[] = [];
+  const fallback = new UuidIdSource(seededRandom(0x10c));
+  const controller = CanonicalWorkspaceController.createEmpty({
+    idSource: { next: (kind) => (queued.shift() ?? fallback.next(kind)) as never },
+    clock: () => '2026-10-08T00:00:00.000Z',
+    parent: new THREE.Scene(),
+    mapping: { bedSizeMm: [270, 270], worldUnitsPerMm: 0.00175 },
+  });
+  try {
+    const block = new THREE.BoxGeometry(20, 20, 20);
+    const imported = await controller.importGeometry(block, { name: 'Block', transform: identityTransform() });
+    block.dispose();
+    queued.unshift('import:asset:a', 'import:volume:a', 'import:asset:B', 'import:volume:B');
+    controller.selectInstance(imported.instanceId);
+    await controller.addHelperVolume('parameter-modifier');
+    controller.selectInstance(imported.instanceId);
+    await controller.addHelperVolume('parameter-modifier');
+    const twin = decodeIndexedMeshAsset(controller['assets'].get('import:asset:a' as never)!);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(twin.positions, 3));
+    geometry.setIndex(Array.from(twin.indices));
+    const shared = await controller.importGeometry(geometry, { name: 'Cube twin' });
+    geometry.dispose();
+    assert.equal(shared.reusedAsset, true);
+    assert.equal('import:asset:a'.localeCompare('import:asset:B') < 0, true, 'the locale sorts a first');
+    assert.equal(shared.assetId, 'import:asset:B', 'code units sort B (U+0042) first');
   } finally {
     controller.dispose();
   }

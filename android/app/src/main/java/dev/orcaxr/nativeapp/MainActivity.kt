@@ -191,8 +191,9 @@ class MainActivity : ComponentActivity() {
     /**
      * The browser's edit shortcuts (web/src/actions/groups/edit.ts): Ctrl/Meta+Z undoes,
      * Ctrl/Meta+Shift+Z and Ctrl+Y redo, Delete deletes the selected model and Escape
-     * deselects all — only when nothing focused took the key, as the browser leaves a
-     * text field its own editing keys.
+     * deselects all; Ctrl/Meta+C, +X and +V copy, cut and paste a model (the platform's
+     * keys; the browser's catalogue leaves them to page text) — only when nothing focused
+     * took the key, as the browser leaves a text field its own editing keys.
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         // Reached only by keys no focused view consumed.
@@ -204,6 +205,10 @@ class MainActivity : ComponentActivity() {
             event.isCtrlPressed && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_Y -> project.redoShortcut()
             plain && keyCode == KeyEvent.KEYCODE_FORWARD_DEL -> project.deleteShortcut()
             plain && keyCode == KeyEvent.KEYCODE_ESCAPE -> project.escapeShortcut()
+            // The platform's clipboard keys for the browser's Copy, Cut and Paste of a model.
+            command && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_C -> project.clipboardShortcut("edit_copy")
+            command && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_X -> project.clipboardShortcut("edit_cut")
+            command && !event.isShiftPressed && keyCode == KeyEvent.KEYCODE_V -> project.clipboardShortcut("edit_paste")
             else -> false
         }
         return handled || super.onKeyDown(keyCode, event)

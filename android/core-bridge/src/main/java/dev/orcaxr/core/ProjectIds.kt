@@ -12,8 +12,20 @@ import java.security.SecureRandom
  * draws 32-bit words from [SecureRandom], as the browser draws a Uint32.
  */
 class ProjectIds(private val word: () -> Double = ::secureWord) {
+    /** IDs a plan drew but did not take, handed out again first, in order. */
+    private val returned = ArrayDeque<String>()
+
     /** The next ID: a UUID the browser's `isStableEntityId` accepts. */
-    fun next(): String {
+    fun next(): String = synchronized(returned) { returned.removeFirstOrNull() } ?: fresh()
+
+    /**
+     * Hands back IDs drawn for a plan that took fewer (a primitive sharing an
+     * asset takes no asset ID), so the next draws take them again: the IDs then
+     * follow the browser's sequence, which draws only what it uses.
+     */
+    fun giveBack(unused: List<String>) = synchronized(returned) { for (id in unused.asReversed()) returned.addFirst(id) }
+
+    private fun fresh(): String {
         val bytes = IntArray(16) { kotlin.math.floor(word() * 256).toInt() and 0xff }
         bytes[6] = (bytes[6] and 0x0f) or 0x40
         bytes[8] = (bytes[8] and 0x3f) or 0x80

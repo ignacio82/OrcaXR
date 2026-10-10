@@ -401,6 +401,23 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_primitivePayload, primitive_payload, jbyteArray,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_sessionPrimitiveObject, session_primitive_object, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_sessionHelperVolume, session_helper_volume, jstring,
+    handle: jlong,
+    request: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_libraryCreate, library_create, (),
     handle: jlong,
     stored: JByteArray<'local>,
