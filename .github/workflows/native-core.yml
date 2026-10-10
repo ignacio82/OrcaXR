@@ -296,8 +296,12 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            server/package-lock.json
       - run: npm --prefix web ci
+      # The real slicer server, headless, for the external slicer client's host check.
+      - run: npm --prefix server ci
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -323,6 +327,7 @@ jobs:
           node tools/cross-platform/project-jni-test.mjs
           node tools/cross-platform/project-jni-test.mjs --release
           node tools/cross-platform/moonraker-client-test.mjs
+          node tools/cross-platform/external-slicer-client-test.mjs
       - name: Run JNI, non-XR startup, renderer pixels and lifecycle on an owned emulator
         run: |
           sudo chmod a+rw /dev/kvm

@@ -462,6 +462,17 @@ class ProjectExportCapture internal constructor(handle: Long) : ProjectHandle(ha
     fun writeArchive(options: ProjectArchiveOptions): ProjectArchiveOutput = read {
         own(NativeProject.exportArchive(it, ProjectArchive.VERSION, options.encode()), ::ProjectArchiveOutput)
     }
+    /** The one-plate slice capture of [plateId] (the browser's
+     * `projectPlateArchiveForSlice`): this frozen bundle reduced to that plate
+     * as plate zero and the active plate, with only its custom G-code,
+     * thumbnails and source assets, admitted under [resolver] and [profile].
+     * [writeArchive] packages it as the archive an external slicer loads; its
+     * [project]'s hash is that archive's `sourceHash`. Refused with
+     * `plate_projection_unknown_plate` or `plate_projection_not_printable`
+     * (the browser's "Unknown plate …", "Plate … is not printable"). */
+    fun plate(plateId: String, resolver: LocalTimestampResolver, profile: ProjectIntegerProfile): ProjectExportCapture = read {
+        own(NativeProject.exportPlate(it, CanonicalJson.quote(plateId), resolver, profile.bits), ::ProjectExportCapture)
+    }
     /** Live slice preflight of exactly this frozen bundle. Synchronous; run it on
      * the export worker. Closing this capture cancels the native preflight. */
     fun preflight(request: ProjectIntents.PreflightRequest): ProjectPreflight = read {
@@ -583,6 +594,12 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
      * canonical document of a clean project keeping its printer, base profile
      * and physical tools. See [NewProjects] for the words and timestamp. */
     fun fresh(words: DoubleArray, now: String): ByteArray = read { NativeProject.projectFresh(it, words, now) }
+    /** The print configuration plate [plateId] overrides (the browser's
+     * `platePrintOverrides`), as the engine wire strings a slice submission's
+     * `overrides` field carries; an unknown plate overrides nothing. */
+    fun platePrintOverrides(plateId: String): Map<String, String> = read {
+        CanonicalJson.stringMap(NativeProject.projectPlateOverrides(it, CanonicalJson.quote(plateId)))
+    }
     /** The filament library as the painting palette, with stable IDs. */
     fun paintPalette(request: ProjectIntents.PaintPaletteRequest): ProjectIntents.PaintPalette = read {
         ProjectIntents.decodePaintPalette(NativeProject.projectPaintPalette(it, ProjectIntents.encodePaintPaletteRequest(request)))

@@ -1806,7 +1806,12 @@ external slice routes, and verified output publication.
   artifact length/hash/job checks, cancel and release outcomes — replayed
   against 994 browser cases (seven browser defects fixed), and
   `orcaxr_project::slicing::plate` is the per-plate projection and overrides
-  (19 browser cases). Bindings, the Kotlin transport and the UI remain.
+  (19 browser cases). Both are bound (WASM, JNI, Kotlin `ExternalSlicerPolicy`,
+  `ProjectWorkspace.projectPlate` over the export capture) and the Kotlin
+  transport `ExternalSlicerClient` (attest, submit, poll, streamed and checked
+  download, release, confirmed cancel) is host-checked end to end against the
+  real headless server. Connection-generation capture, remembered slicer
+  credentials, repeatable download/leases and the UI remain.
 - [ ] Define local/external route selection using measured resource limits and
   user preferences. Show the selected route and reason; do not upload models or
   silently reroute work to a server the user has not configured and authorized.

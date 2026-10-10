@@ -352,6 +352,62 @@ export function describe_transport_failure(request: string): string;
 export function evaluate(request: string): string;
 
 /**
+ * An `ExternalSlicerArtifactRead` (the facts its host streamed); the
+ * `ExternalSlicerArtifact`: accepted, with the job to release, or refused.
+ */
+export function external_slicer_artifact(read: string): string;
+
+/**
+ * An `ExternalSlicerReply` to the attestation; the `ExternalSlicerAttestation`
+ * it reads as against the pinned build.
+ */
+export function external_slicer_attestation(reply: string): string;
+
+/**
+ * An `ExternalSlicerEndpointRequest`; the `ExternalSlicerAttestationPlan`:
+ * the engine attestation it sends, or how it reads when none can be sent.
+ */
+export function external_slicer_attestation_plan(request: string): string;
+
+/**
+ * An `ExternalSlicerCancelRead`; the `ExternalSlicerCancelStep`.
+ */
+export function external_slicer_cancel(read: string): string;
+
+/**
+ * An `ExternalSlicerEndpointRequest`; the `ExternalSlicerEndpoint`: the
+ * canonical endpoint a captured address names, or why none can be made.
+ */
+export function external_slicer_endpoint(request: string): string;
+
+/**
+ * An `ExternalSlicerJobRequest`; the `ExternalSlicerPlan` one step of a job sends.
+ */
+export function external_slicer_job_plan(request: string): string;
+
+/**
+ * An `ExternalSlicerPollRead`; the `ExternalSlicerPollStep`.
+ */
+export function external_slicer_poll(read: string): string;
+
+/**
+ * An `ExternalSlicerSubmitRead`; the `ExternalSlicerSubmission`: a job to
+ * poll or cancel, an artifact to read, or a failure.
+ */
+export function external_slicer_submission(read: string): string;
+
+/**
+ * An `ExternalSlicerEndpointRequest`; the `ExternalSlicerPlan` submitting a
+ * project sends (the archive and overrides are the host's multipart fields).
+ */
+export function external_slicer_submit_plan(request: string): string;
+
+/**
+ * Whether the attested engine (`wasm` or `cli`) carries `feature`.
+ */
+export function external_slicer_supports(engine: string, feature: string): boolean;
+
+/**
  * A Snapmaker filament query reply as received; the `FilamentSlotsReply`.
  */
 export function filament_slots(text: string): string;
@@ -617,6 +673,16 @@ export interface InitOutput {
     readonly credentials_save: (a: number, b: number) => [number, number, number, number];
     readonly describe_transport_failure: (a: number, b: number) => [number, number, number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
+    readonly external_slicer_artifact: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_attestation: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_attestation_plan: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_cancel: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_endpoint: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_job_plan: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_poll: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_submission: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_submit_plan: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_supports: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly filament_slots: (a: number, b: number) => [number, number, number, number];
     readonly gcode_commands: (a: number, b: number) => [number, number, number, number];
     readonly guarded_printer_actions: (a: number, b: number) => [number, number, number, number];

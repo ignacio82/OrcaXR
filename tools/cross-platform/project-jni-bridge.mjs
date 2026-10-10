@@ -52,6 +52,9 @@ export function startProjectJni(profile = "debug") {
   signatures.printerSessionChecks = ["String"];
   signatures.moonrakerPolicyChecks = ["String"];
   signatures.printerStorageChecks = ["String"];
+  signatures.externalSlicerChecks = ["String"];
+  signatures.plateProjectionChecks = ["String"];
+  signatures.externalSlicerClientChecks = ["String", "String", "byte[]", "String"];
   signatures.printHistoryChecks = ["String"];
   signatures.printerConsoleChecks = ["String"];
   signatures.printerCameraChecks = ["String"];
@@ -522,6 +525,16 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     preflight(request) {
       return new ProjectPreflight(call("exportPreflight", this.handle, request));
     }
+    project() {
+      return new CapturedProject(call("exportProject", this.handle));
+    }
+    plate(plateId) {
+      return new ProjectExport(call("exportPlate", this.handle, plateId, zone, profile));
+    }
+    // An export is never a save: its archive carries no checkpoint guard.
+    write_archive(version, policy) {
+      return new ProjectArchiveOutput(call("exportArchive", this.handle, version, policy));
+    }
   }
   class ProjectPreflight extends Handle {
     summary() {
@@ -754,6 +767,9 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     }
     hash() {
       return call("projectHash", this.handle);
+    }
+    plate_print_overrides(plateId) {
+      return call("projectPlateOverrides", this.handle, plateId);
     }
     id_length() {
       return call("projectIdLength", this.handle);
@@ -1308,6 +1324,18 @@ export function projectJniCore(call, zone = "UTC", profile = 32) {
     printer_storage_finish: (request) => call("printerStorageFinish", request),
     printer_storage_read: (operation, reply) => call("printerStorageRead", operation, reply),
     printer_storage_size: (bytes) => call("printerStorageSize", bytes),
+    external_slicer_endpoint: (request) => call("externalSlicerEndpoint", request),
+    external_slicer_attestation_plan: (request) => call("externalSlicerAttestationPlan", request),
+    external_slicer_attestation: (reply) => call("externalSlicerAttestation", reply),
+    external_slicer_submit_plan: (request) => call("externalSlicerSubmitPlan", request),
+    external_slicer_job_plan: (request) => call("externalSlicerJobPlan", request),
+    external_slicer_submission: (read) => call("externalSlicerSubmission", read),
+    external_slicer_poll: (read) => call("externalSlicerPoll", read),
+    external_slicer_cancel: (read) => call("externalSlicerCancel", read),
+    external_slicer_artifact: (read) => call("externalSlicerArtifact", read),
+    external_slicer_supports: (engine, feature) => call("externalSlicerSupports", engine, feature),
+    plate_projection: (state, plateId, omitted) => call("plateProjection", state, plateId, omitted, zone, profile),
+    plate_print_overrides: (state, plateId) => call("platePrintOverridesJson", state, plateId),
     print_history_plan: (operation) => call("printHistoryPlan", operation),
     print_history_finish: (request) => call("printHistoryFinish", request),
     print_history_read: (operation, reply) => call("printHistoryRead", operation, reply),

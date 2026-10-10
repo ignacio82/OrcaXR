@@ -5,7 +5,8 @@
 //! its own checkpoint guard; only a confirmed host handoff may acknowledge it.
 //! Both are synchronous: run them on the host's owned import/export task.
 use crate::project::{
-    ProjectDocument, ProjectGuard, ProjectSession, Timestamps, error, index, range, timestamps,
+    ProjectDocument, ProjectExport, ProjectGuard, ProjectSession, Timestamps, error, index, range,
+    timestamps,
 };
 use orcaxr_archive::{
     Archive,
@@ -146,8 +147,9 @@ impl ProjectArchiveOutput {
             .ok_or_else(|| error("invalid_range"))?;
         Ok(text[range(start, count, text.len(), host_layout::MAX_TEXT_CHUNK_UNITS)?].to_vec())
     }
-    /// The checkpoint guard of the written capture, taken once. Acknowledge it
-    /// only after the host confirms the save handoff.
+    /// The checkpoint guard of the written capture, taken once; an export
+    /// capture's archive has none. Acknowledge it only after the host confirms
+    /// the save handoff.
     pub fn guard(&mut self) -> Result<ProjectGuard, JsValue> {
         self.guard.take().ok_or_else(|| error("invalid_state"))
     }
@@ -186,6 +188,40 @@ impl ProjectSession {
             bytes: output.into_inner(),
             warnings,
             guard: Some(ProjectGuard { inner: guard }),
+        })
+    }
+}
+
+#[wasm_bindgen]
+impl ProjectExport {
+    /// Write this frozen capture — a plate's, for an external slicer — as a
+    /// complete 3MF package. It carries no checkpoint guard: an export is
+    /// never a save.
+    pub fn write_archive(
+        &self,
+        version: f64,
+        policy: &[f64],
+    ) -> Result<ProjectArchiveOutput, JsValue> {
+        let policy = Policy::new(options(version, policy)?);
+        let capture = &self.inner;
+        let assets = (0..capture.asset_count())
+            .map(|i| capture.asset(i))
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| error("missing_asset"))?;
+        let mut output = Cursor::new(Vec::new());
+        let receipt = package::write(
+            capture.project().project(),
+            assets,
+            &mut output,
+            policy.package(),
+            || false,
+        )
+        .map_err(|e| error(save_code(e)))?;
+        let warnings = text::package_warnings(capture.project().state(), &receipt.warnings);
+        Ok(ProjectArchiveOutput {
+            bytes: output.into_inner(),
+            warnings,
+            guard: None,
         })
     }
 }

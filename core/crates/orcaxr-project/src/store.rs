@@ -42,6 +42,11 @@ impl ProjectSnapshot {
             hash: Text::from_utf8(self.hash()),
         }
     }
+    /// A project derived from the one captured at `revision` (a plate's slice
+    /// projection), read under that capture's revision.
+    pub(crate) fn derived(project: ValidatedProject, revision: Counter) -> Self {
+        Self { project, revision }
+    }
 }
 
 /// Owned metadata is immutable once captured in a receipt. Duplicate categories

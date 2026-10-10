@@ -8,6 +8,7 @@ use orcaxr_printer::{
     control::{self, HoldToConfirm},
     credentials, directory, history, moonraker, preparation, reply,
     session::{self, PrinterSession},
+    slicer,
     status::{JobStatus, LIMITS},
     storage, summary, tools,
     transport::{self, MoonrakerTransport},
@@ -18,7 +19,11 @@ use orcaxr_printer::{
 fn printer_text(env: &mut JNIEnv<'_>, text: &JString<'_>) -> Result<String> {
     bounded_text(env, text, LIMITS.bytes)
 }
-fn bounded_text(env: &mut JNIEnv<'_>, text: &JString<'_>, bytes: usize) -> Result<String> {
+pub(super) fn bounded_text(
+    env: &mut JNIEnv<'_>,
+    text: &JString<'_>,
+    bytes: usize,
+) -> Result<String> {
     let length = env
         .call_method(text, "length", "()I", &[])
         .and_then(|v| v.i())
@@ -1416,4 +1421,127 @@ pub(super) fn moonraker_transport_timer(
     let timer = effect_id(timer)?;
     let step = with_transport(handle, |t| Ok(t.timer(timer, now_ms)))?;
     transport_step(env, step)
+}
+
+/// An `ExternalSlicerEndpointRequest`; the `ExternalSlicerEndpoint`.
+pub(super) fn external_slicer_endpoint(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_external_slicer_endpoint_request,
+        slicer::endpoint,
+        wire::encode_external_slicer_endpoint,
+    )
+}
+/// An `ExternalSlicerEndpointRequest`; the `ExternalSlicerAttestationPlan`.
+pub(super) fn external_slicer_attestation_plan(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_external_slicer_endpoint_request,
+        slicer::attestation_plan,
+        wire::encode_external_slicer_attestation_plan,
+    )
+}
+/// An `ExternalSlicerReply` to the attestation; the `ExternalSlicerAttestation`.
+pub(super) fn external_slicer_attestation(
+    env: &mut JNIEnv<'_>,
+    reply: JString<'_>,
+) -> Result<jstring> {
+    bulk_exchange(
+        env,
+        reply,
+        wire::decode_external_slicer_reply,
+        slicer::attestation,
+        wire::encode_external_slicer_attestation,
+    )
+}
+/// An `ExternalSlicerEndpointRequest`; the submission's `ExternalSlicerPlan`.
+pub(super) fn external_slicer_submit_plan(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_external_slicer_endpoint_request,
+        slicer::submit_plan,
+        wire::encode_external_slicer_plan,
+    )
+}
+/// An `ExternalSlicerJobRequest`; the step's `ExternalSlicerPlan`.
+pub(super) fn external_slicer_job_plan(
+    env: &mut JNIEnv<'_>,
+    request: JString<'_>,
+) -> Result<jstring> {
+    exchange(
+        env,
+        request,
+        wire::decode_external_slicer_job_request,
+        slicer::job_plan,
+        wire::encode_external_slicer_plan,
+    )
+}
+/// An `ExternalSlicerSubmitRead`; the `ExternalSlicerSubmission`.
+pub(super) fn external_slicer_submission(
+    env: &mut JNIEnv<'_>,
+    read: JString<'_>,
+) -> Result<jstring> {
+    bulk_exchange(
+        env,
+        read,
+        wire::decode_external_slicer_submit_read,
+        slicer::submission,
+        wire::encode_external_slicer_submission,
+    )
+}
+/// An `ExternalSlicerPollRead`; the `ExternalSlicerPollStep`.
+pub(super) fn external_slicer_poll(env: &mut JNIEnv<'_>, read: JString<'_>) -> Result<jstring> {
+    bulk_exchange(
+        env,
+        read,
+        wire::decode_external_slicer_poll_read,
+        slicer::poll,
+        wire::encode_external_slicer_poll_step,
+    )
+}
+/// An `ExternalSlicerCancelRead`; the `ExternalSlicerCancelStep`.
+pub(super) fn external_slicer_cancel(env: &mut JNIEnv<'_>, read: JString<'_>) -> Result<jstring> {
+    bulk_exchange(
+        env,
+        read,
+        wire::decode_external_slicer_cancel_read,
+        slicer::cancel,
+        wire::encode_external_slicer_cancel_step,
+    )
+}
+/// An `ExternalSlicerArtifactRead`; the `ExternalSlicerArtifact`.
+pub(super) fn external_slicer_artifact(env: &mut JNIEnv<'_>, read: JString<'_>) -> Result<jstring> {
+    bulk_exchange(
+        env,
+        read,
+        wire::decode_external_slicer_artifact_read,
+        slicer::artifact,
+        wire::encode_external_slicer_artifact,
+    )
+}
+/// Whether the attested engine (`wasm` or `cli`) carries `feature`.
+pub(super) fn external_slicer_supports(
+    env: &mut JNIEnv<'_>,
+    engine: JString<'_>,
+    feature: JString<'_>,
+) -> Result<jboolean> {
+    let engine = match intent_text(env, &engine)?.as_str() {
+        "wasm" => wire::ExternalSlicerEngine::Wasm,
+        "cli" => wire::ExternalSlicerEngine::Cli,
+        _ => return Err("invalid_request"),
+    };
+    let feature = intent_text(env, &feature)?;
+    Ok(slicer::engine_supports(engine, &feature).into())
 }

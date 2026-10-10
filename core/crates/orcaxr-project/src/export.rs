@@ -3,8 +3,12 @@
 //! by acknowledgement of the original local guard can establish a checkpoint.
 use crate::{
     assets::{AssetLease, AssetSnapshot},
+    ids::PlateId,
     session::{LocalGuard, ProjectSession},
-    slicing::report::{Report, RequestError},
+    slicing::{
+        plate::{ProjectionError, project_plate},
+        report::{Report, RequestError},
+    },
     store::ProjectSnapshot,
     validation::TimestampPolicy,
 };
@@ -46,5 +50,29 @@ impl ExportCapture {
         cancelled: impl FnMut() -> bool,
     ) -> Result<Report, RequestError> {
         Report::run(self.project.project(), &self.assets, request, cancelled)
+    }
+    /// The one-plate slice capture of `plate_id`
+    /// ([`project_plate`](crate::slicing::plate::project_plate)): the
+    /// projected project under this capture's revision, reading only the
+    /// frozen assets it keeps, so the archive writer packages it as it does
+    /// any capture. Its project hash is the projection's own fingerprint (the
+    /// archive's `sourceHash`); this capture's guard stays the caller's proof
+    /// of the live project it came from. The projection is admitted under
+    /// `timestamps`, as the browser re-validates it.
+    pub fn plate<P: TimestampPolicy>(
+        &self,
+        plate_id: &PlateId,
+        timestamps: &mut P,
+    ) -> Result<Self, ProjectionError<P::Error>> {
+        let projection = project_plate(
+            self.project.state(),
+            plate_id,
+            |id| self.assets.peek(id).is_some(),
+            timestamps,
+        )?;
+        Ok(Self {
+            project: ProjectSnapshot::derived(projection.project, self.project.revision()),
+            assets: self.assets.clone(),
+        })
     }
 }

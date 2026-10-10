@@ -251,7 +251,8 @@ class ProjectActor private constructor(
         enqueue(Work.ClearClipboard)
     }
 
-    /** Complete immutable bundle export, without changing dirty state. The host
+    /** Complete immutable bundle export (or one plate's slice archive,
+     * [ProjectExportSource.writePlateArchive]), without changing dirty state. The host
      * owns its destination and returns only after successful output handoff.
      * Cancellation refuses once the callback starts: external writes may already
      * have happened. Callback failure/close reports uncertainty and never retries. */
@@ -455,7 +456,7 @@ class ProjectActor private constructor(
                             task.mayCommit = true
                         }
                         work.write(task.scope, source)
-                        source.requireComplete()
+                        source.requireComplete(work.save)
                         val handoff = Prepared.Export(work.expected, guard, work.save)
                         synchronized(gate) {
                             if (task.phase == Phase.EXPORTING) task.handoff = handoff

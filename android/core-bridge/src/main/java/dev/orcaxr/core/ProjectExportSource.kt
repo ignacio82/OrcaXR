@@ -7,6 +7,11 @@ data class ProjectExportLimits(val jsonBytes: Long, val assets: Long, val assetB
     internal fun validate() { require(listOf(jsonBytes, assets, assetBytes).all { it in 0..ProjectHost.MAX_BUDGET }) { "invalid_options" } }
 }
 
+/** One plate's slice archive, once every byte reached its destination: the
+ * projected project's fingerprint (the browser's archive `sourceHash`), the
+ * print overrides a submission carries with it, and the Save warnings. */
+class ProjectPlateArchive(val sourceHash: String, val overrides: Map<String, String>, val warnings: List<CharArray>)
+
 /** Borrowed on one export worker. Streams canonical JSON and assets in declaration
  * order through bounded owned chunks, or one complete 3MF package. The host owns
  * its destination, flushing, durable-write policy and handoff; return only after success.
@@ -24,6 +29,7 @@ class ProjectExportSource internal constructor(
     private var nextAsset = 0L
     private var jsonWritten = false
     private var archiveWritten = false
+    private var plateWritten = false
     init {
         check(assetCount <= limits.assets) { "resource_limit" }
         var total = 0L
@@ -69,20 +75,52 @@ class ProjectExportSource internal constructor(
      * browser's Save warnings once every byte reached [destination]. A refused
      * Save (for example unresolvable plate origins) writes nothing. */
     fun writeArchive(options: ProjectArchiveOptions, destination: OutputStream): List<CharArray> {
-        checkActive(); check(!jsonWritten && nextAsset == 0L && !archiveWritten) { "already_written" }
+        checkActive(); check(!jsonWritten && nextAsset == 0L && !archiveWritten && !plateWritten) { "already_written" }
         return capture.writeArchive(options).use { output ->
-            val length = output.length()
-            var offset = 0L
-            while (offset < length) {
-                checkActive()
-                val bytes = output.read(offset, minOf(ProjectArchive.MAX_CHUNK_BYTES.toLong(), length - offset))
-                destination.write(bytes); offset += bytes.size
-            }
-            val warnings = output.warnings()
+            val warnings = copy(output, destination)
             checkActive(); archiveWritten = true
             warnings
         }
     }
-    internal fun requireComplete() { checkActive(); check(archiveWritten || (jsonWritten && nextAsset == assetCount)) { "incomplete_export" } }
+    /** Alternative for an external slice: write plate [plateId]'s one-plate
+     * archive ([ProjectExportCapture.plate], admitted under [resolver] and
+     * [profile]) to [destination], and answer what the submission needs with
+     * it. The plate's project is this capture's, so a guard checked against
+     * this export is the projection's provenance. A plate archive completes an
+     * export but never a save. A refused projection writes nothing. */
+    fun writePlateArchive(
+        plateId: String,
+        options: ProjectArchiveOptions,
+        resolver: LocalTimestampResolver,
+        profile: ProjectIntegerProfile,
+        destination: OutputStream,
+    ): ProjectPlateArchive {
+        checkActive(); check(!jsonWritten && nextAsset == 0L && !archiveWritten && !plateWritten) { "already_written" }
+        return capture.plate(plateId, resolver, profile).use { plate ->
+            val sourceHash = plate.project().use { it.hash() }
+            val overrides = project.platePrintOverrides(plateId)
+            plate.writeArchive(options).use { output ->
+                val warnings = copy(output, destination)
+                checkActive(); plateWritten = true
+                ProjectPlateArchive(sourceHash, overrides, warnings)
+            }
+        }
+    }
+    private fun copy(output: ProjectArchiveOutput, destination: OutputStream): List<CharArray> {
+        val length = output.length()
+        var offset = 0L
+        while (offset < length) {
+            checkActive()
+            val bytes = output.read(offset, minOf(ProjectArchive.MAX_CHUNK_BYTES.toLong(), length - offset))
+            destination.write(bytes); offset += bytes.size
+        }
+        return output.warnings()
+    }
+    /** Whether the callback consumed the capture: the complete bundle, or for
+     * an export (never a [save]) one plate's archive. */
+    internal fun requireComplete(save: Boolean) {
+        checkActive()
+        check(archiveWritten || (jsonWritten && nextAsset == assetCount) || (!save && plateWritten)) { "incomplete_export" }
+    }
     internal fun invalidate() { active.set(false) }
 }

@@ -351,6 +351,36 @@ class ProjectWorkspace(
         actor.exportDocument(guard, EXPORT) { _, source -> capturing(record) { ProjectDocuments.save(source, output, ARCHIVE) } }
     }) { result -> if (result is ProjectOutcome.Exported) Unit else null }
 
+    /**
+     * Writes plate [plateId] as the one-plate archive an external slicer
+     * loads (the browser's slice projection) to [output], and answers its
+     * fingerprint and the print overrides to submit with it. A plate that
+     * cannot be projected fails with the browser's message before [output]
+     * opens. The project's saved state is untouched.
+     */
+    fun projectPlate(plateId: String, output: ProjectDocumentOutput): CompletableFuture<ProjectPlateArchive> {
+        var archive: ProjectPlateArchive? = null
+        var refusal: ProjectFailure? = null
+        return run({ guard, record ->
+            actor.exportDocument(guard, EXPORT) { _, source ->
+                capturing(record) {
+                    archive = try {
+                        ProjectDocuments.savePlate(source, plateId, output, ARCHIVE, resolver, ProjectIntegerProfile.CHROMIUM)
+                    } catch (failure: IllegalStateException) {
+                        refusal = when (failure.message) {
+                            "plate_projection_unknown_plate" -> ProjectFailure("Unknown plate $plateId")
+                            "plate_projection_not_printable" -> ProjectFailure("Plate $plateId is not printable")
+                            else -> null
+                        }
+                        throw failure
+                    }
+                }
+            }
+        }) { result -> if (result is ProjectOutcome.Exported) archive else null }
+            // The export reads a failed callback as uncertain; a refused projection wrote nothing.
+            .handle { value, error -> if (error == null) value else throw (refusal ?: error) }
+    }
+
     /** Prepares a model import (STL/OBJ/AMF/ZIP) against the current project; nothing changes until it is committed. */
     fun prepareImport(input: ProjectDocumentInput, filename: String): CompletableFuture<ProjectActorImport> = run({ guard, record ->
         actor.prepareImport(guard) { scope, base ->

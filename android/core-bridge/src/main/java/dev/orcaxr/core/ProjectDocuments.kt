@@ -100,6 +100,28 @@ object ProjectDocuments {
         return warnings
     }
 
+    /** Callback body for [ProjectActor.exportDocument]: plate [plateId]'s
+     * one-plate slice archive ([ProjectExportSource.writePlateArchive]) into
+     * [document], with the same deferred open and failure rules as [save]. */
+    fun savePlate(
+        source: ProjectExportSource,
+        plateId: String,
+        document: ProjectDocumentOutput,
+        options: ProjectArchiveOptions,
+        resolver: LocalTimestampResolver,
+        profile: ProjectIntegerProfile,
+    ): ProjectPlateArchive {
+        val output = DeferredOutput(document)
+        val archive = try {
+            source.writePlateArchive(plateId, options, resolver, profile, output)
+        } catch (failure: Throwable) {
+            output.abandon(failure)
+            if (output.opened) throw written(failure) else throw failure
+        }
+        try { output.close() } catch (failure: Throwable) { throw written(failure) }
+        return archive
+    }
+
     private fun <T> provider(code: String, operation: () -> T): T = try { operation() } catch (failure: Throwable) {
         throw mapped(failure, code)
     }

@@ -39,6 +39,8 @@ import { replayPrinterConsole } from "./printer-console-replay.mjs";
 import { replayPrinterCamera } from "./printer-camera-replay.mjs";
 import { replayPrinterDirectory } from "./printer-directory-replay.mjs";
 import { replayRememberedCredentials } from "./printer-credentials-replay.mjs";
+import { replayExternalSlicer } from "./external-slicer-replay.mjs";
+import { plateProjectionCases, replayPlateProjection } from "./plate-projection-replay.mjs";
 import { replayAssembly } from "./assembly-replay.mjs";
 import { projectBoundaries } from "./project-wasm-boundaries.mjs";
 import { replayProjectQueries } from "./project-query-replay.mjs";
@@ -72,6 +74,14 @@ if (isMainThread) {
       [result.archives.cases, result.archives.accepted, result.archives.saves],
       [1341, 1225, 1223],
     );
+    // Every plate of every opened archive projected through the export
+    // capture as the state-document exchange projects it (unprintable ones
+    // refused), and one plate archive per project reopened.
+    assert.deepEqual(
+      [result.archives.plates, result.archives.plateRefusals, result.archives.plateExchanges, result.archives.plateArchives],
+      [1403, 185, 1403, 1225],
+    );
+    assert.deepEqual(result.archives.plateArchiveRefusals, []);
     // Hostile archives: the browser's acceptance, format, warnings and state;
     // no refusal reaches an edited live session.
     assert.deepEqual(
@@ -289,6 +299,11 @@ if (isMainThread) {
     assert.deepEqual(result.printerDirectoryAnswers, [37, 25, 160, 60, 44, 41, 15]);
     // Remembered credentials: stored records loaded and records saved.
     assert.deepEqual(result.rememberedCredentialsAnswers, [79, 63]);
+    // The external slicer: endpoints, attestations, job plans, submissions,
+    // polls, cancellations and artifacts.
+    assert.deepEqual(result.externalSlicerAnswers, [72, 230, 156, 247, 196, 44, 49]);
+    // One plate for an external slicer: projected, refused, and its overrides.
+    assert.deepEqual(result.plateProjectionAnswers, [16, 3, 19]);
     // Live preflights through the binding, reply for reply.
     assert.deepEqual(
       [result.preflightCases, result.preflightItems, result.preflightRefusals],
@@ -769,6 +784,19 @@ if (isMainThread) {
       await readFile(new URL("testdata/cross-platform/printer-credentials-vectors.json", root)),
     ),
   );
+  const externalSlicer = replayExternalSlicer(
+    core,
+    JSON.parse(
+      await readFile(new URL("testdata/cross-platform/external-slicer-vectors.json", root)),
+    ),
+  );
+  const plateProjection = replayPlateProjection(
+    core,
+    plateProjectionCases(
+      JSON.parse(await readFile(new URL("testdata/cross-platform/plate-projection-vectors.json", root))),
+      JSON.parse(await readFile(new URL("testdata/cross-platform/project-model-vectors.json", root))),
+    ),
+  );
   const editors = replayEditor(core, editorFixture, [collator, {
     fold: (units) => {
       const s = String.fromCharCode(...units)
@@ -819,6 +847,8 @@ if (isMainThread) {
       ...printerCamera,
       ...printerDirectory,
       ...rememberedCredentials,
+      ...externalSlicer,
+      ...plateProjection,
       owned,
     },
     [owned.buffer, queries.ownedQueryText.buffer],

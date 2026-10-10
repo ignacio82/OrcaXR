@@ -146,6 +146,20 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_exportPlate, export_plate, jlong,
+    handle: jlong,
+    plate_id: JString<'local>,
+    resolver: JObject<'local>,
+    integer_mode: jint,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_projectPlateOverrides, project_plate_overrides, jstring,
+    handle: jlong,
+    plate_id: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_archiveUploadNew, archive_upload_new, jlong,
     version: jint,
     archive_bytes: jlong,
@@ -1233,6 +1247,72 @@ export! {
 export! {
     Java_dev_orcaxr_core_NativeProject_credentialsSave, credentials_save, jstring,
     record: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_externalSlicerEndpoint, external_slicer_endpoint, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_externalSlicerAttestationPlan, external_slicer_attestation_plan, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_externalSlicerAttestation, external_slicer_attestation, jstring,
+    reply: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_externalSlicerSubmitPlan, external_slicer_submit_plan, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_externalSlicerJobPlan, external_slicer_job_plan, jstring,
+    request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_externalSlicerSubmission, external_slicer_submission, jstring,
+    read: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_externalSlicerPoll, external_slicer_poll, jstring,
+    read: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_externalSlicerCancel, external_slicer_cancel, jstring,
+    read: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_externalSlicerArtifact, external_slicer_artifact, jstring,
+    read: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_externalSlicerSupports, external_slicer_supports, jboolean,
+    engine: JString<'local>,
+    feature: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_plateProjection, plate_projection, jstring,
+    state: JString<'local>,
+    plate_id: JString<'local>,
+    omitted: JString<'local>,
+    resolver: JObject<'local>,
+    integer_mode: jint,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_platePrintOverridesJson, plate_print_overrides_json, jstring,
+    state: JString<'local>,
+    plate_id: JString<'local>,
 }
 
 export! {

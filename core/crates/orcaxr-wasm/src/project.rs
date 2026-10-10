@@ -19,7 +19,7 @@ use orcaxr_project::{
         DocumentOpen, LocalGuard, PreparedDocument, ProjectSession as Session, Response,
         StagingLimits, Submission,
     },
-    slicing::report::Report,
+    slicing::{plate, report::Report},
     staging_layout as staging,
     store::ProjectSnapshot,
 };
@@ -73,6 +73,27 @@ pub(crate) fn range(
     } else {
         Ok(start..start + count)
     }
+}
+fn plate_id_from_json(text: &str) -> Result<PlateId, JsValue> {
+    plate::read_plate(text).map_err(error)
+}
+/// One plate of a state document projected for an external slicer
+/// (`projectPlateArchiveForSlice`), admitted under the host's `Date.parse`:
+/// `plate_id` is a JSON string, `omitted` a JSON array of the source asset
+/// IDs whose payloads the host does not hold. Answers canonical JSON —
+/// `{"assetIds","sourceHash","stateJson"}`, or `{"error","message"}` with the
+/// browser's message. A session's project is projected through
+/// `ProjectExport.plate` instead.
+#[wasm_bindgen]
+pub fn plate_projection(state: &str, plate_id: &str, omitted: &str) -> Result<String, JsValue> {
+    let mut policy = timestamps as Timestamps;
+    plate::projection_json(state, plate_id, omitted, &mut policy).map_err(error)
+}
+/// The print configuration a plate of a state document overrides
+/// (`platePrintOverrides`), as a canonical JSON object of engine wire strings.
+#[wasm_bindgen]
+pub fn plate_print_overrides(state: &str, plate_id: &str) -> Result<String, JsValue> {
+    plate::print_overrides_json(state, plate_id).map_err(error)
 }
 fn text_read(value: &[u16], start: f64, count: f64) -> Result<Vec<u16>, JsValue> {
     Ok(value[range(start, count, value.len(), layout::MAX_TEXT_CHUNK_UNITS)?].to_vec())
@@ -1380,6 +1401,16 @@ impl CapturedProject {
     pub fn hash(&self) -> String {
         self.inner.hash().into()
     }
+    /// The print configuration plate `plate_id` (a JSON string) overrides, as
+    /// the canonical JSON object of engine wire strings a slice submission's
+    /// `overrides` field carries; an unknown plate overrides nothing.
+    pub fn plate_print_overrides(&self, plate_id: &str) -> Result<String, JsValue> {
+        let plate_id = plate_id_from_json(plate_id)?;
+        Ok(plate::overrides_json(&plate::plate_print_overrides(
+            self.inner.state(),
+            &plate_id,
+        )))
+    }
     pub fn id_length(&self) -> usize {
         self.inner.state().id.as_utf16().len()
     }
@@ -1665,10 +1696,30 @@ impl CapturedHistory {
 
 #[wasm_bindgen]
 pub struct ProjectExport {
-    inner: ExportCapture,
+    pub(crate) inner: ExportCapture,
 }
 #[wasm_bindgen]
 impl ProjectExport {
+    /// The captured project: for a plate's capture, the projected one, whose
+    /// hash is its archive's `sourceHash`.
+    pub fn project(&self) -> CapturedProject {
+        CapturedProject {
+            inner: self.inner.project().clone(),
+        }
+    }
+    /// The one-plate slice capture of `plate_id` (a JSON string): this
+    /// capture's project reduced to that plate as plate zero with only the
+    /// assets it keeps, admitted under the host's `Date.parse`, for
+    /// `write_archive` to package as the archive an external slicer loads.
+    /// Refused with `plate_projection_*` codes.
+    pub fn plate(&self, plate_id: &str) -> Result<ProjectExport, JsValue> {
+        let plate_id = plate_id_from_json(plate_id)?;
+        let mut policy = timestamps as Timestamps;
+        self.inner
+            .plate(&plate_id, &mut policy)
+            .map(|inner| ProjectExport { inner })
+            .map_err(|e| error(e.code()))
+    }
     /// Live slice preflight of exactly this frozen bundle from a contract
     /// `PreflightRequest`. Synchronous; run it on a worker.
     pub fn preflight(&self, request: &str) -> Result<ProjectPreflight, JsValue> {

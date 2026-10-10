@@ -6,10 +6,10 @@
 use crate::{
     ids::{AssetId, PlateId},
     js_math::convert::value_to_string,
-    model::{GcodeScope, Number, ProjectData, ProjectState, find_plate},
+    model::{Decode, Encode, GcodeScope, Number, ProjectData, ProjectState, find_plate},
     validation::{AdmissionError, TimestampPolicy, ValidatedProject, ValidationReport},
 };
-use orcaxr_contracts::canonical::Value;
+use orcaxr_contracts::canonical::{Value, parse};
 use std::{
     collections::{BTreeMap, BTreeSet},
     convert::Infallible,
@@ -76,16 +76,22 @@ impl<T> ProjectionError<T> {
         }
     }
 }
-impl<T: fmt::Debug> fmt::Display for ProjectionError<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
+impl<T> ProjectionError<T> {
+    /// The stable refusal code bindings report.
+    pub fn code(&self) -> &'static str {
+        match self {
             Self::UnknownPlate => "plate_projection_unknown_plate",
             Self::PlateNotPrintable => "plate_projection_not_printable",
             Self::MissingAsset(_) => "plate_projection_missing_asset",
             Self::Invalid(_) => "plate_projection_invalid",
             Self::Encoding => "plate_projection_encoding",
             Self::Timestamp(_) => "plate_projection_timestamp",
-        })
+        }
+    }
+}
+impl<T: fmt::Debug> fmt::Display for ProjectionError<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
     }
 }
 impl<T: fmt::Debug> std::error::Error for ProjectionError<T> {}
@@ -203,4 +209,122 @@ pub fn plate_print_overrides(
         overrides.insert(key.clone(), text);
     }
     overrides
+}
+
+// --- Binding exchange ------------------------------------------------------------------------
+
+/// The largest text each argument of a binding exchange may be: the
+/// canonical parser's bound. A session's project of any size is projected
+/// through its export capture ([`ExportCapture::plate`](crate::export::ExportCapture::plate)).
+pub const MAX_EXCHANGE_BYTES: usize = orcaxr_contracts::generated::MAX_INPUT_BYTES;
+/// Why a binding exchange could not be answered: its input was not a state
+/// document, a plate ID or a list of asset IDs.
+pub const INVALID_REQUEST: &str = "invalid_request";
+/// An argument longer than [`MAX_EXCHANGE_BYTES`].
+pub const INPUT_LIMIT: &str = "input_limit";
+
+fn read(text: &str) -> Result<Value, &'static str> {
+    if text.len() > MAX_EXCHANGE_BYTES {
+        return Err(INPUT_LIMIT);
+    }
+    parse(text).map_err(|_| INVALID_REQUEST)
+}
+fn read_state(text: &str) -> Result<ProjectState, &'static str> {
+    ProjectState::from_value(read(text)?).map_err(|_| INVALID_REQUEST)
+}
+/// A plate ID carried as a JSON string, so UTF-16 identities survive a binding.
+pub fn read_plate(text: &str) -> Result<PlateId, &'static str> {
+    match read(text)? {
+        Value::String(units) => PlateId::try_from_utf16(units).map_err(|_| INVALID_REQUEST),
+        _ => Err(INVALID_REQUEST),
+    }
+}
+fn read_assets(text: &str) -> Result<BTreeSet<AssetId>, &'static str> {
+    let Value::Array(items) = read(text)? else {
+        return Err(INVALID_REQUEST);
+    };
+    items
+        .into_iter()
+        .map(|item| match item {
+            Value::String(units) => AssetId::try_from_utf16(units).map_err(|_| INVALID_REQUEST),
+            _ => Err(INVALID_REQUEST),
+        })
+        .collect()
+}
+fn canonical(value: &Value) -> String {
+    let mut bytes = Vec::new();
+    value
+        .write_canonical(&mut bytes)
+        .expect("an answer is finite JSON");
+    String::from_utf8(bytes).expect("canonical JSON is UTF-8")
+}
+fn text(value: &str) -> Value {
+    Value::String(value.encode_utf16().collect())
+}
+
+/// [`project_plate`] over a state document, for hosts without a session and
+/// for the bindings' replays: `plate_id` is a JSON string and `omitted` a JSON
+/// array of the source asset IDs whose payloads the host does not hold, so
+/// every UTF-16 identity survives. Answers canonical JSON: the projection as
+/// `{"assetIds":[…],"sourceHash":"…","stateJson":"…"}` (the projected state as
+/// its canonical text, the kept assets in descriptor order), or why it was
+/// refused as `{"error":"<code>","message":"…"}`, the browser's message.
+pub fn projection_json<P: TimestampPolicy>(
+    state: &str,
+    plate_id: &str,
+    omitted: &str,
+    timestamps: &mut P,
+) -> Result<String, &'static str> {
+    let state = read_state(state)?;
+    let plate_id = read_plate(plate_id)?;
+    let omitted = read_assets(omitted)?;
+    let answer = match project_plate(&state, &plate_id, |id| !omitted.contains(id), timestamps) {
+        Ok(projection) => {
+            let mut json = Vec::new();
+            projection
+                .project
+                .state()
+                .write_json(&mut json)
+                .map_err(|_| "output_limit")?;
+            let json = String::from_utf8(json).map_err(|_| "output_limit")?;
+            let ids = projection
+                .assets
+                .iter()
+                .map(|id| Value::String(id.as_utf16().to_vec()))
+                .collect();
+            BTreeMap::from([
+                ("assetIds", Value::Array(ids)),
+                ("sourceHash", text(projection.source_hash())),
+                ("stateJson", text(&json)),
+            ])
+        }
+        Err(error) => BTreeMap::from([
+            ("error", text(error.code())),
+            ("message", Value::String(error.message(&plate_id))),
+        ]),
+    };
+    Ok(canonical(&Value::Object(
+        answer
+            .into_iter()
+            .map(|(name, value)| (name.encode_utf16().collect(), value))
+            .collect(),
+    )))
+}
+
+/// [`plate_print_overrides`] over a state document, `plate_id` a JSON string.
+pub fn print_overrides_json(state: &str, plate_id: &str) -> Result<String, &'static str> {
+    let state = read_state(state)?;
+    let plate_id = read_plate(plate_id)?;
+    Ok(overrides_json(&plate_print_overrides(&state, &plate_id)))
+}
+
+/// Overrides as the canonical JSON object a slice submission's `overrides`
+/// field carries.
+pub fn overrides_json(overrides: &BTreeMap<Vec<u16>, Vec<u16>>) -> String {
+    canonical(&Value::Object(
+        overrides
+            .iter()
+            .map(|(key, value)| (key.clone(), Value::String(value.clone())))
+            .collect(),
+    ))
 }

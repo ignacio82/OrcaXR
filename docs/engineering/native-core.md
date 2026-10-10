@@ -4292,7 +4292,31 @@ model corpus and three variants (a second plate made unprintable, overrides of
 every JSON shape, per-plate thumbnails and custom G-code with an unused
 asset), and a Rust replay matches them byte for byte. The browser's
 `SliceJobCoordinator` now imports the same exported `platePrintOverrides`.
-Bindings follow with the Android slicing route.
+
+Bindings project a session through its export capture: `ExportCapture::plate`
+is the capture reduced to one plate (admitted under the host's timestamp
+policy, at the capture's revision, reading only the frozen assets it keeps),
+so the existing archive writer packages it and its project hash is the
+archive's `sourceHash`; the capture's guard stays the caller's proof of the
+live project. WASM `ProjectExport.plate`/`project`/`write_archive` (no
+checkpoint guard: an export is never a save) and
+`CapturedProject.plate_print_overrides`; JNI `exportPlate` (a capture in a
+slot of its own; `exportArchive`/`exportProject` read it) and
+`projectPlateOverrides`; Kotlin `ProjectExportCapture.plate`,
+`ProjectSnapshot.platePrintOverrides`,
+`ProjectExportSource.writePlateArchive` (completes an export, never a save),
+`ProjectDocuments.savePlate` and `ProjectWorkspace.projectPlate` (a refused
+plate fails with the browser's sentence before the provider opens). Plate
+and asset IDs cross as JSON text. For hosts and replays without a session,
+WASM `plate_projection`/`plate_print_overrides`, JNI
+`plateProjection`/`platePrintOverridesJson` and Kotlin `PlateProjections`
+answer the same over a state document of at most 1 MiB (canonical JSON:
+`{assetIds, sourceHash, stateJson}` or `{error, message}`, `error` a
+`plate_projection_*` code). The 19 cases replay in Rust, WASM in Node and
+Chrome, JNI and 57 Kotlin checks; the archive replay also projects all 1,403
+printable plates of the 1,225 opened archives through the capture (185
+unprintable ones refused), each equal to the state-document projection, and
+reopens one plate archive per project as exactly that plate and its assets.
 
 ### External slicer policy
 
@@ -4325,6 +4349,36 @@ drift, and embedded by the core (`slicer::pinned`, `engine_supports`).
 artifact reader over real `Response`s): 72 endpoints, 230 attestation
 replies, 156 job steps, 247 submission replies, 196 status polls, 44
 cancellation replies and 49 artifacts; Rust reproduces every one.
+
+Bindings: WASM `external_slicer_endpoint`, `_attestation_plan`,
+`_attestation`, `_submit_plan`, `_job_plan`, `_submission`, `_poll`,
+`_cancel`, `_artifact` and `_supports` (in the printer and project cores),
+the matching JNI `externalSlicer*` exports and Kotlin `ExternalSlicerPolicy`
+(with the browser's 700 ms poll interval and 30 s cancellation deadline).
+Replies, reads and steps travel on the intent bulk tier. WASM in Node and
+Chrome, the printer core, JNI and 996 Kotlin checks reproduce every case.
+
+Android hosts the route with `ExternalSlicerClient` (OkHttp, like
+`MoonrakerClient`): no redirect (one fails the exchange, so the bearer token
+never reaches another host), no retry, the local-network gate and cleartext
+rule, reply bodies read to at most 1 MiB, the artifact streamed into the
+caller's sink while its length, SHA-256, UTF-8 validity and JavaScript-blank
+text are computed. `slice` attests, submits the archive and overrides
+(multipart `file` `project.3mf`, `overrides` JSON), polls, downloads, judges
+and releases; the POST is never aborted (its reply holds the only job ID a
+cancel can name), a cancel arriving meanwhile is carried out once the reply
+is read, and `cancel` ends in the policy's outcome or a
+`CancellationException` once the server confirms. Transport failures reach
+operators only as the network rules' own sentences or "could not be reached".
+`external-slicer-client-test.mjs` drives it on the JVM against the real
+server (`server/server.js` headless: a provenance manifest of the pinned
+build from this repository's `server/patches/`, a runner writing one fixed
+G-code): the Project area writes plate 1 of a two-plate project as its
+archive (plate 2, unprintable, and an unknown plate are refused), which is
+attested, submitted, polled, downloaded byte for byte and released; a held
+job is cancelled and confirmed; a failure reads in the policy's words; a
+tokenless slice and an unusable address are refused before any upload (25
+Kotlin checks, and the server's own record of each request and upload).
 
 ### Android Project area
 

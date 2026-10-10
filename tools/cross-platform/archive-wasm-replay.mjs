@@ -100,7 +100,107 @@ export async function replayArchives(core, hostLayout, archiveLayout, cases, sha
       ticket.free();
     }
   };
-  const counts = { cases: 0, openEnded: 0, accepted: 0, refused: 0, canonical: 0, foreign: 0, saves: 0, identical: 0, acknowledged: 0, saveRefusals: [] };
+  const projectJson = (capture) => {
+    const exported = capture.export_json(512 * 2 ** 20);
+    try {
+      const bytes = new Uint8Array(exported.length());
+      for (let p = 0; p < bytes.length; p += hostLayout.maxChunkBytes)
+        bytes.set(exported.read(p, Math.min(hostLayout.maxChunkBytes, bytes.length - p)), p);
+      return decode.decode(bytes);
+    } finally {
+      exported.free();
+    }
+  };
+  // Each plate as the archive an external slicer loads: the session's export
+  // capture projects it as the state-document exchange does (within that
+  // exchange's bound) with the same overrides, and the first printable
+  // plate's archive reopens to that one plate with exactly its assets.
+  const MAX_EXCHANGE_BYTES = 2 ** 20;
+  const plateArchives = (name, owner, json) => {
+    const parsed = JSON.parse(json);
+    const exchange = encode.encode(json).length <= MAX_EXCHANGE_BYTES;
+    const guard = owner.capture_guard();
+    let capture;
+    try {
+      capture = owner.capture_export(guard);
+    } finally {
+      guard.free();
+    }
+    try {
+      let written = false;
+      for (const plate of parsed.plates) {
+        const id = JSON.stringify(plate.id);
+        const expected = exchange ? JSON.parse(core.plate_projection(json, id, "[]")) : undefined;
+        let projected;
+        try {
+          projected = capture.plate(id);
+        } catch (error) {
+          check(!plate.printable && String(error) === "plate_projection_not_printable", `${name}: plate refused (${error})`);
+          check(!expected || expected.error === "plate_projection_not_printable", `${name}: plate exchange accepted a refusal`);
+          counts.plateRefusals++;
+          continue;
+        }
+        try {
+          const project = projected.project();
+          let projectedJson;
+          try {
+            projectedJson = projectJson(project);
+            check(JSON.parse(projectedJson).plates.length === 1, `${name}: one plate`);
+            if (expected) {
+              check(project.hash() === expected.sourceHash, `${name}: plate hash`);
+              check(projectedJson === expected.stateJson, `${name}: plate state`);
+              check(project.plate_print_overrides(id) === core.plate_print_overrides(json, id), `${name}: plate overrides`);
+              counts.plateExchanges++;
+            }
+          } finally {
+            project.free();
+          }
+          counts.plates++;
+          if (written) continue;
+          written = true;
+          let output;
+          try {
+            output = projected.write_archive(archiveLayout.version, policy);
+          } catch (error) {
+            // The plate inherits whatever makes its project unsavable.
+            counts.plateArchiveRefusals.push(`${name}: ${error}`);
+            continue;
+          }
+          let bytes;
+          try {
+            bytes = read(output);
+          } finally {
+            output.free();
+          }
+          const reopened = open(bytes);
+          const second = session();
+          try {
+            adopt(second, reopened);
+            const after = JSON.parse(state(second));
+            const before = JSON.parse(projectedJson);
+            check(after.plates.length === 1 && after.plates[0].id === plate.id, `${name}: plate archive plate`);
+            check(after.activePlateId === plate.id, `${name}: plate archive active plate`);
+            check(
+              JSON.stringify(after.sourceAssets) === JSON.stringify(before.sourceAssets),
+              `${name}: plate archive assets`,
+            );
+            counts.plateArchives++;
+          } finally {
+            reopened.free();
+            second.free();
+          }
+        } finally {
+          projected.free();
+        }
+      }
+    } finally {
+      capture.free();
+    }
+  };
+  const counts = {
+    cases: 0, openEnded: 0, accepted: 0, refused: 0, canonical: 0, foreign: 0, saves: 0, identical: 0, acknowledged: 0, saveRefusals: [],
+    plates: 0, plateRefusals: 0, plateExchanges: 0, plateArchives: 0, plateArchiveRefusals: [],
+  };
   for (const c of cases) {
     const exact = counts.cases++ % 2 === 0;
     if (!exact) counts.openEnded++;
@@ -126,6 +226,7 @@ export async function replayArchives(core, hostLayout, archiveLayout, cases, sha
       check(c.stateJson ? json === c.stateJson : (await sha256(encode.encode(json))) === c.stateSha256, `${c.name}: state`);
       counts[c.format]++;
       counts.accepted++;
+      plateArchives(c.name, owner, json);
       // Save the adopted project, then reopen those exact bytes in a new session.
       let output;
       try {

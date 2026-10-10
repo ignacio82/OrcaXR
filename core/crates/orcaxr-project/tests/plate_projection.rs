@@ -19,6 +19,27 @@ fn corpus(name: &str) -> Json {
     };
     serde_json::from_str(text).unwrap()
 }
+/// The model corpus's states, by the names the plate corpus gives them.
+fn sources() -> BTreeMap<String, String> {
+    let model = corpus("model");
+    model["factories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|each| {
+            (
+                format!("factory:{}", each["seed"]),
+                each["stateJson"].as_str().unwrap().to_owned(),
+            )
+        })
+        .chain(model["cases"].as_array().unwrap().iter().map(|each| {
+            (
+                format!("case:{}", each["name"].as_str().unwrap()),
+                each["stateJson"].as_str().unwrap().to_owned(),
+            )
+        }))
+        .collect()
+}
 fn utc() -> impl TimestampPolicy<Error = ()> {
     V8Timestamps::new(
         timestamp::V8IntegerMode::Smi32,
@@ -57,24 +78,7 @@ fn asset_ids(json: &Json) -> BTreeSet<AssetId> {
 #[test]
 fn a_plate_projects_and_overrides_as_the_browser_does() {
     let vectors = corpus("plate");
-    let model = corpus("model");
-    let named: BTreeMap<String, String> = model["factories"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|each| {
-            (
-                format!("factory:{}", each["seed"]),
-                each["stateJson"].as_str().unwrap().to_owned(),
-            )
-        })
-        .chain(model["cases"].as_array().unwrap().iter().map(|each| {
-            (
-                format!("case:{}", each["name"].as_str().unwrap()),
-                each["stateJson"].as_str().unwrap().to_owned(),
-            )
-        }))
-        .collect();
+    let named = sources();
     let cases = vectors["cases"].as_array().unwrap();
     assert_eq!(cases.len(), 19);
     let mut outcomes = BTreeMap::<String, usize>::new();
@@ -158,6 +162,79 @@ fn a_plate_projects_and_overrides_as_the_browser_does() {
             ("unknown-plate".into(), 1),
         ])
     );
+}
+
+/// The state-document exchange both bindings expose answers each case as the
+/// browser recorded it: the projected state's text, its hash and kept assets,
+/// or the refusal's message; and the overrides byte for byte.
+#[test]
+fn the_binding_exchange_answers_every_case() {
+    let vectors = corpus("plate");
+    let named = sources();
+    let mut checked = 0;
+    for case in vectors["cases"].as_array().unwrap() {
+        let source = case["source"].as_str().unwrap();
+        let text = case["sourceJson"]
+            .as_str()
+            .map_or_else(|| named[source].clone(), str::to_owned);
+        let plate_id = match case["plateIndex"].as_u64() {
+            Some(index) => {
+                let state = ProjectState::from_value(parse(&text).unwrap()).unwrap();
+                canonical_value(&Value::String(
+                    state.plates[index as usize].id.as_utf16().to_vec(),
+                ))
+            }
+            None => case["plateIdJson"].as_str().unwrap().to_owned(),
+        };
+        let omitted = case["omittedJson"].as_str().unwrap_or("[]");
+        let answer = projection_json(&text, &plate_id, omitted, &mut utc()).unwrap();
+        let Value::Object(answer) = parse(&answer).unwrap() else {
+            panic!("not an object");
+        };
+        let get = |name: &str| answer[&name.encode_utf16().collect::<Vec<_>>()].clone();
+        let result = &case["result"];
+        match result["error"].as_str() {
+            None => {
+                assert_eq!(
+                    get("stateJson"),
+                    Value::String(
+                        result["stateJson"]
+                            .as_str()
+                            .unwrap()
+                            .encode_utf16()
+                            .collect()
+                    ),
+                    "{source}"
+                );
+                assert_eq!(
+                    get("sourceHash"),
+                    Value::String(
+                        result["sourceHash"]
+                            .as_str()
+                            .unwrap()
+                            .encode_utf16()
+                            .collect()
+                    )
+                );
+                assert_eq!(
+                    canonical_value(&get("assetIds")),
+                    canonical_value(&parse(result["assetIdsJson"].as_str().unwrap()).unwrap())
+                );
+            }
+            Some(code) => {
+                let code = format!("plate_projection_{}", code.replace('-', "_"))
+                    .replace("plate_not_printable", "not_printable");
+                assert_eq!(get("error"), Value::String(code.encode_utf16().collect()));
+                assert_eq!(get("message"), Value::String(units(&result["messageJson"])));
+            }
+        }
+        assert_eq!(
+            print_overrides_json(&text, &plate_id).unwrap(),
+            case["overridesJson"].as_str().unwrap()
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 19);
 }
 
 #[test]

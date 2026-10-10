@@ -36,6 +36,12 @@ export class CapturedProject {
      * A `PaintPaletteRequest`; returns the project's `PaintPalette`.
      */
     paint_palette(request: string): string;
+    /**
+     * The print configuration plate `plate_id` (a JSON string) overrides, as
+     * the canonical JSON object of engine wire strings a slice submission's
+     * `overrides` field carries; an unknown plate overrides nothing.
+     */
+    plate_print_overrides(plate_id: string): string;
     query(version: number): ProjectQueryNode;
     revision(): number;
     /**
@@ -418,8 +424,9 @@ export class ProjectArchiveOutput {
     free(): void;
     [Symbol.dispose](): void;
     /**
-     * The checkpoint guard of the written capture, taken once. Acknowledge it
-     * only after the host confirms the save handoff.
+     * The checkpoint guard of the written capture, taken once; an export
+     * capture's archive has none. Acknowledge it only after the host confirms
+     * the save handoff.
      */
     guard(): ProjectGuard;
     length(): number;
@@ -561,10 +568,29 @@ export class ProjectExport {
     free(): void;
     [Symbol.dispose](): void;
     /**
+     * The one-plate slice capture of `plate_id` (a JSON string): this
+     * capture's project reduced to that plate as plate zero with only the
+     * assets it keeps, admitted under the host's `Date.parse`, for
+     * `write_archive` to package as the archive an external slicer loads.
+     * Refused with `plate_projection_*` codes.
+     */
+    plate(plate_id: string): ProjectExport;
+    /**
      * Live slice preflight of exactly this frozen bundle from a contract
      * `PreflightRequest`. Synchronous; run it on a worker.
      */
     preflight(request: string): ProjectPreflight;
+    /**
+     * The captured project: for a plate's capture, the projected one, whose
+     * hash is its archive's `sourceHash`.
+     */
+    project(): CapturedProject;
+    /**
+     * Write this frozen capture — a plate's, for an external slicer — as a
+     * complete 3MF package. It carries no checkpoint guard: an export is
+     * never a save.
+     */
+    write_archive(version: number, policy: Float64Array): ProjectArchiveOutput;
 }
 
 export class ProjectGuard {
@@ -1195,6 +1221,62 @@ export function describe_transport_failure(request: string): string;
 export function evaluate(request: string): string;
 
 /**
+ * An `ExternalSlicerArtifactRead` (the facts its host streamed); the
+ * `ExternalSlicerArtifact`: accepted, with the job to release, or refused.
+ */
+export function external_slicer_artifact(read: string): string;
+
+/**
+ * An `ExternalSlicerReply` to the attestation; the `ExternalSlicerAttestation`
+ * it reads as against the pinned build.
+ */
+export function external_slicer_attestation(reply: string): string;
+
+/**
+ * An `ExternalSlicerEndpointRequest`; the `ExternalSlicerAttestationPlan`:
+ * the engine attestation it sends, or how it reads when none can be sent.
+ */
+export function external_slicer_attestation_plan(request: string): string;
+
+/**
+ * An `ExternalSlicerCancelRead`; the `ExternalSlicerCancelStep`.
+ */
+export function external_slicer_cancel(read: string): string;
+
+/**
+ * An `ExternalSlicerEndpointRequest`; the `ExternalSlicerEndpoint`: the
+ * canonical endpoint a captured address names, or why none can be made.
+ */
+export function external_slicer_endpoint(request: string): string;
+
+/**
+ * An `ExternalSlicerJobRequest`; the `ExternalSlicerPlan` one step of a job sends.
+ */
+export function external_slicer_job_plan(request: string): string;
+
+/**
+ * An `ExternalSlicerPollRead`; the `ExternalSlicerPollStep`.
+ */
+export function external_slicer_poll(read: string): string;
+
+/**
+ * An `ExternalSlicerSubmitRead`; the `ExternalSlicerSubmission`: a job to
+ * poll or cancel, an artifact to read, or a failure.
+ */
+export function external_slicer_submission(read: string): string;
+
+/**
+ * An `ExternalSlicerEndpointRequest`; the `ExternalSlicerPlan` submitting a
+ * project sends (the archive and overrides are the host's multipart fields).
+ */
+export function external_slicer_submit_plan(request: string): string;
+
+/**
+ * Whether the attested engine (`wasm` or `cli`) carries `feature`.
+ */
+export function external_slicer_supports(engine: string, feature: string): boolean;
+
+/**
  * A Snapmaker filament query reply as received; the `FilamentSlotsReply`.
  */
 export function filament_slots(text: string): string;
@@ -1264,6 +1346,23 @@ export function moonraker_reconnect_policy(request: string): string;
  * A `MoonrakerObjectSubscription`; the `MoonrakerSubscriptionReply`.
  */
 export function moonraker_subscription(request: string): string;
+
+/**
+ * The print configuration a plate of a state document overrides
+ * (`platePrintOverrides`), as a canonical JSON object of engine wire strings.
+ */
+export function plate_print_overrides(state: string, plate_id: string): string;
+
+/**
+ * One plate of a state document projected for an external slicer
+ * (`projectPlateArchiveForSlice`), admitted under the host's `Date.parse`:
+ * `plate_id` is a JSON string, `omitted` a JSON array of the source asset
+ * IDs whose payloads the host does not hold. Answers canonical JSON —
+ * `{"assetIds","sourceHash","stateJson"}`, or `{"error","message"}` with the
+ * browser's message. A session's project is projected through
+ * `ProjectExport.plate` instead.
+ */
+export function plate_projection(state: string, plate_id: string, omitted: string): string;
 
 /**
  * Cut a recipe with the host's glyph outlines: an `EmbossRequest`.
@@ -1531,6 +1630,7 @@ export interface InitOutput {
     readonly capturedproject_id_length: (a: number) => number;
     readonly capturedproject_object_tree: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly capturedproject_paint_palette: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly capturedproject_plate_print_overrides: (a: number, b: number, c: number) => [number, number, number, number];
     readonly capturedproject_query: (a: number, b: number) => [number, number, number];
     readonly capturedproject_revision: (a: number) => number;
     readonly capturedproject_settings_editor: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
@@ -1556,6 +1656,16 @@ export interface InitOutput {
     readonly credentials_save: (a: number, b: number) => [number, number, number, number];
     readonly describe_transport_failure: (a: number, b: number) => [number, number, number, number];
     readonly evaluate: (a: number, b: number) => [number, number];
+    readonly external_slicer_artifact: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_attestation: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_attestation_plan: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_cancel: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_endpoint: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_job_plan: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_poll: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_submission: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_submit_plan: (a: number, b: number) => [number, number, number, number];
+    readonly external_slicer_supports: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly filament_slots: (a: number, b: number) => [number, number, number, number];
     readonly format_override_value: (a: number, b: number) => [number, number, number, number];
     readonly gcode_commands: (a: number, b: number) => [number, number, number, number];
@@ -1602,6 +1712,8 @@ export interface InitOutput {
     readonly moonrakertransport_take_result: (a: number, b: number) => [number, number, number, number];
     readonly moonrakertransport_timer: (a: number, b: number, c: number) => [number, number, number, number];
     readonly moonrakertransport_upload: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly plate_print_overrides: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly plate_projection: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly prepare_emboss: (a: number, b: number) => [number, number, number];
     readonly prepare_svg_part: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly presetlibrary_apply: (a: number, b: number, c: number) => [number, number, number, number];
@@ -1731,7 +1843,10 @@ export interface InitOutput {
     readonly projecteffects_selection: (a: number, b: number, c: number) => [number, number, number];
     readonly projectemboss_mesh: (a: number, b: number, c: number) => [number, number, number, number];
     readonly projectemboss_reply: (a: number) => [number, number, number, number];
+    readonly projectexport_plate: (a: number, b: number, c: number) => [number, number, number];
     readonly projectexport_preflight: (a: number, b: number, c: number) => [number, number, number];
+    readonly projectexport_project: (a: number) => number;
+    readonly projectexport_write_archive: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly projectimportbase_prepare_model: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number];
     readonly projectimportpreview_blocked: (a: number) => [number, number, number];
     readonly projectimportpreview_length: (a: number) => number;

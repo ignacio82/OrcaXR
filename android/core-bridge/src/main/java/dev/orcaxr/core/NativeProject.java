@@ -29,6 +29,10 @@ final class NativeProject {
     static native long exportProject(long handle);
     static native long exportAssetCount(long handle);
     static native long exportAsset(long handle, long position);
+    // An export capture's plate projected for an external slicer, as a capture
+    // of its own (plateId is JSON text), and a captured project's plate overrides.
+    static native long exportPlate(long handle, String plateId, LocalTimestampResolver resolver, int integerMode);
+    static native String projectPlateOverrides(long handle, String plateId);
     // Archive Open stages exact bytes; prepare consumes the upload in place and
     // the slot then holds the completed import. Closing cancels native work.
     static native long archiveUploadNew(int version, long archiveBytes, double[] options, LocalTimestampResolver resolver, int integerMode);
@@ -247,6 +251,23 @@ final class NativeProject {
     // and a record's text to store (null: remove what is stored).
     static native String credentialsLoad(String stored);
     static native String credentialsSave(String record);
+    // External slicer: a captured endpoint made canonical, what attesting and
+    // submitting to it and each job step send, and how an attestation, a
+    // submission, a poll, a cancellation and a streamed artifact read.
+    static native String externalSlicerEndpoint(String request);
+    static native String externalSlicerAttestationPlan(String request);
+    static native String externalSlicerAttestation(String reply);
+    static native String externalSlicerSubmitPlan(String request);
+    static native String externalSlicerJobPlan(String request);
+    static native String externalSlicerSubmission(String read);
+    static native String externalSlicerPoll(String read);
+    static native String externalSlicerCancel(String read);
+    static native String externalSlicerArtifact(String read);
+    static native boolean externalSlicerSupports(String engine, String feature);
+    // One plate for an external slicer: a state document's plate projected and
+    // its print overrides (IDs as JSON text, answers canonical JSON).
+    static native String plateProjection(String state, String plateId, String omitted, LocalTimestampResolver resolver, int integerMode);
+    static native String platePrintOverridesJson(String state, String plateId);
     // Capabilities: a CapabilityRequest against a session's current state.
     static native String sessionCapabilities(long handle, String request);
     // Render deltas: a RenderRequest against the session's acknowledged state.

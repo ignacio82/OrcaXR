@@ -92,6 +92,15 @@ public final class ProjectJniHarness {
     public static long printerExchangesChecks(String endpoint) {
         return ProjectPrinterExchangesChecks.run(endpoint);
     }
+    public static long externalSlicerChecks(String script) {
+        return ProjectExternalSlicerChecks.run(script);
+    }
+    public static long plateProjectionChecks(String script) {
+        return ProjectPlateProjectionChecks.run(script);
+    }
+    public static long externalSlicerClientChecks(String endpoint, String token, byte[] archive, String gcode) {
+        return ProjectExternalSlicerClientChecks.run(endpoint, token, archive, gcode);
+    }
     public static long newProjectCase(String now, double[] words, String source, String expected) {
         return ProjectNewChecks.replay(now, words, source, expected);
     }
@@ -359,6 +368,9 @@ public final class ProjectJniHarness {
             if (name.equals("printerConsoleChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("printHistoryChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("printerStorageChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("externalSlicerChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("plateProjectionChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("externalSlicerClientChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class, byte[].class, String.class);
             if (name.equals("moonrakerTransportChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("moonrakerClientChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("printerSessionClientChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);

@@ -48,6 +48,8 @@ import { replayPrinterConsole } from "./printer-console-replay.mjs";
 import { replayPrinterCamera } from "./printer-camera-replay.mjs";
 import { replayPrinterDirectory } from "./printer-directory-replay.mjs";
 import { replayRememberedCredentials } from "./printer-credentials-replay.mjs";
+import { replayExternalSlicer } from "./external-slicer-replay.mjs";
+import { plateProjectionCases, plateProjectionCode, replayPlateProjection } from "./plate-projection-replay.mjs";
 import { readFileSync } from "node:fs";
 const root = new URL("../../", import.meta.url);
 /** Authored two-plate BBS archive shared with the instrumented actor test. */
@@ -260,6 +262,13 @@ try {
     async (bytes) => createHash("sha256").update(bytes).digest("hex"),
   );
   assert.deepEqual([archives.cases, archives.accepted, archives.saves], [1341, 1225, 1223]);
+  // Every plate projected through the export capture's JNI exports as the
+  // state-document exchange projects it, and one plate archive per project.
+  assert.deepEqual(
+    [archives.plates, archives.plateRefusals, archives.plateExchanges, archives.plateArchives],
+    [1403, 185, 1403, 1225],
+  );
+  assert.deepEqual(archives.plateArchiveRefusals, []);
   // Hostile archives through the real JNI exports; no refusal reaches an
   // edited live session.
   const hostile = await replayHostileArchives(
@@ -1229,6 +1238,43 @@ try {
   ];
   assert.equal(jvm.call("credentialsChecks", credentialsScript.join("\n")), 142);
   assert.equal(jvm.call("credentialVaultChecks"), 17);
+  // The external slicer's policy through the real JNI exports, then the Kotlin wrapper.
+  const slicerFixture = JSON.parse(
+    await readFile(new URL("testdata/cross-platform/external-slicer-vectors.json", root)),
+  );
+  assert.deepEqual(
+    replayExternalSlicer(projectJniCore(jvm.call), slicerFixture).externalSlicerAnswers,
+    [72, 230, 156, 247, 196, 44, 49],
+  );
+  const slicerScript = [
+    ...slicerFixture.endpoints.map((c) =>
+      ["endpoints", c.requestJson, c.endpointJson, c.attestationPlanJson, c.submitPlanJson].join("\t"),
+    ),
+    ...["attestations", "jobPlans", "submissions", "polls", "cancels", "artifacts"].flatMap((section) =>
+      slicerFixture[section].map((c) => [section, c.requestJson, c.replyJson].join("\t")),
+    ),
+  ];
+  assert.equal(jvm.call("externalSlicerChecks", slicerScript.join("\n")), 996);
+  // One plate for an external slicer through the real JNI exports, then the Kotlin wrapper.
+  const plateCases = plateProjectionCases(
+    JSON.parse(await readFile(new URL("testdata/cross-platform/plate-projection-vectors.json", root))),
+    model,
+  );
+  assert.deepEqual(replayPlateProjection(projectJniCore(jvm.call), plateCases).plateProjectionAnswers, [16, 3, 19]);
+  const plateScript = plateCases.map((c) =>
+    [
+      c.stateJson,
+      c.plateIdJson,
+      c.omittedJson,
+      JSON.stringify(
+        c.result.error === undefined
+          ? { stateJson: c.result.stateJson, sourceHash: c.result.sourceHash, assetIds: JSON.parse(c.result.assetIdsJson) }
+          : { error: plateProjectionCode(c.result.error), message: JSON.parse(c.result.messageJson) },
+      ),
+      c.overridesJson,
+    ].join("\t"),
+  );
+  assert.equal(jvm.call("plateProjectionChecks", plateScript.join("\n")), 57);
   // The Moonraker transport through the real JNI exports, then the Kotlin
   // wrapper: step and state, or reply, for each input.
   const transportFixture = JSON.parse(

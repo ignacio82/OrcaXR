@@ -201,6 +201,33 @@ export class CapturedProject {
         }
     }
     /**
+     * The print configuration plate `plate_id` (a JSON string) overrides, as
+     * the canonical JSON object of engine wire strings a slice submission's
+     * `overrides` field carries; an unknown plate overrides nothing.
+     * @param {string} plate_id
+     * @returns {string}
+     */
+    plate_print_overrides(plate_id) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(plate_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.capturedproject_plate_print_overrides(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * @param {number} version
      * @returns {ProjectQueryNode}
      */
@@ -2409,8 +2436,9 @@ export class ProjectArchiveOutput {
         wasm.__wbg_projectarchiveoutput_free(ptr, 0);
     }
     /**
-     * The checkpoint guard of the written capture, taken once. Acknowledge it
-     * only after the host confirms the save handoff.
+     * The checkpoint guard of the written capture, taken once; an export
+     * capture's archive has none. Acknowledge it only after the host confirms
+     * the save handoff.
      * @returns {ProjectGuard}
      */
     guard() {
@@ -3024,6 +3052,24 @@ export class ProjectExport {
         wasm.__wbg_projectexport_free(ptr, 0);
     }
     /**
+     * The one-plate slice capture of `plate_id` (a JSON string): this
+     * capture's project reduced to that plate as plate zero with only the
+     * assets it keeps, admitted under the host's `Date.parse`, for
+     * `write_archive` to package as the archive an external slicer loads.
+     * Refused with `plate_projection_*` codes.
+     * @param {string} plate_id
+     * @returns {ProjectExport}
+     */
+    plate(plate_id) {
+        const ptr0 = passStringToWasm0(plate_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectexport_plate(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectExport.__wrap(ret[0]);
+    }
+    /**
      * Live slice preflight of exactly this frozen bundle from a contract
      * `PreflightRequest`. Synchronous; run it on a worker.
      * @param {string} request
@@ -3037,6 +3083,32 @@ export class ProjectExport {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ProjectPreflight.__wrap(ret[0]);
+    }
+    /**
+     * The captured project: for a plate's capture, the projected one, whose
+     * hash is its archive's `sourceHash`.
+     * @returns {CapturedProject}
+     */
+    project() {
+        const ret = wasm.projectexport_project(this.__wbg_ptr);
+        return CapturedProject.__wrap(ret);
+    }
+    /**
+     * Write this frozen capture — a plate's, for an external slicer — as a
+     * complete 3MF package. It carries no checkpoint guard: an export is
+     * never a save.
+     * @param {number} version
+     * @param {Float64Array} policy
+     * @returns {ProjectArchiveOutput}
+     */
+    write_archive(version, policy) {
+        const ptr0 = passArrayF64ToWasm0(policy, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.projectexport_write_archive(this.__wbg_ptr, version, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ProjectArchiveOutput.__wrap(ret[0]);
     }
 }
 if (Symbol.dispose) ProjectExport.prototype[Symbol.dispose] = ProjectExport.prototype.free;
@@ -5987,6 +6059,264 @@ export function evaluate(request) {
 }
 
 /**
+ * An `ExternalSlicerArtifactRead` (the facts its host streamed); the
+ * `ExternalSlicerArtifact`: accepted, with the job to release, or refused.
+ * @param {string} read
+ * @returns {string}
+ */
+export function external_slicer_artifact(read) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(read, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.external_slicer_artifact(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * An `ExternalSlicerReply` to the attestation; the `ExternalSlicerAttestation`
+ * it reads as against the pinned build.
+ * @param {string} reply
+ * @returns {string}
+ */
+export function external_slicer_attestation(reply) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(reply, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.external_slicer_attestation(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * An `ExternalSlicerEndpointRequest`; the `ExternalSlicerAttestationPlan`:
+ * the engine attestation it sends, or how it reads when none can be sent.
+ * @param {string} request
+ * @returns {string}
+ */
+export function external_slicer_attestation_plan(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.external_slicer_attestation_plan(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * An `ExternalSlicerCancelRead`; the `ExternalSlicerCancelStep`.
+ * @param {string} read
+ * @returns {string}
+ */
+export function external_slicer_cancel(read) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(read, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.external_slicer_cancel(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * An `ExternalSlicerEndpointRequest`; the `ExternalSlicerEndpoint`: the
+ * canonical endpoint a captured address names, or why none can be made.
+ * @param {string} request
+ * @returns {string}
+ */
+export function external_slicer_endpoint(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.external_slicer_endpoint(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * An `ExternalSlicerJobRequest`; the `ExternalSlicerPlan` one step of a job sends.
+ * @param {string} request
+ * @returns {string}
+ */
+export function external_slicer_job_plan(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.external_slicer_job_plan(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * An `ExternalSlicerPollRead`; the `ExternalSlicerPollStep`.
+ * @param {string} read
+ * @returns {string}
+ */
+export function external_slicer_poll(read) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(read, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.external_slicer_poll(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * An `ExternalSlicerSubmitRead`; the `ExternalSlicerSubmission`: a job to
+ * poll or cancel, an artifact to read, or a failure.
+ * @param {string} read
+ * @returns {string}
+ */
+export function external_slicer_submission(read) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(read, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.external_slicer_submission(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * An `ExternalSlicerEndpointRequest`; the `ExternalSlicerPlan` submitting a
+ * project sends (the archive and overrides are the host's multipart fields).
+ * @param {string} request
+ * @returns {string}
+ */
+export function external_slicer_submit_plan(request) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.external_slicer_submit_plan(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Whether the attested engine (`wasm` or `cli`) carries `feature`.
+ * @param {string} engine
+ * @param {string} feature
+ * @returns {boolean}
+ */
+export function external_slicer_supports(engine, feature) {
+    const ptr0 = passStringToWasm0(engine, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(feature, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.external_slicer_supports(ptr0, len0, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0] !== 0;
+}
+
+/**
  * A Snapmaker filament query reply as received; the `FilamentSlotsReply`.
  * @param {string} text
  * @returns {string}
@@ -6337,6 +6667,74 @@ export function moonraker_subscription(request) {
         return getStringFromWasm0(ptr2, len2);
     } finally {
         wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * The print configuration a plate of a state document overrides
+ * (`platePrintOverrides`), as a canonical JSON object of engine wire strings.
+ * @param {string} state
+ * @param {string} plate_id
+ * @returns {string}
+ */
+export function plate_print_overrides(state, plate_id) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const ptr0 = passStringToWasm0(state, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(plate_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.plate_print_overrides(ptr0, len0, ptr1, len1);
+        var ptr3 = ret[0];
+        var len3 = ret[1];
+        if (ret[3]) {
+            ptr3 = 0; len3 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred4_0 = ptr3;
+        deferred4_1 = len3;
+        return getStringFromWasm0(ptr3, len3);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+    }
+}
+
+/**
+ * One plate of a state document projected for an external slicer
+ * (`projectPlateArchiveForSlice`), admitted under the host's `Date.parse`:
+ * `plate_id` is a JSON string, `omitted` a JSON array of the source asset
+ * IDs whose payloads the host does not hold. Answers canonical JSON —
+ * `{"assetIds","sourceHash","stateJson"}`, or `{"error","message"}` with the
+ * browser's message. A session's project is projected through
+ * `ProjectExport.plate` instead.
+ * @param {string} state
+ * @param {string} plate_id
+ * @param {string} omitted
+ * @returns {string}
+ */
+export function plate_projection(state, plate_id, omitted) {
+    let deferred5_0;
+    let deferred5_1;
+    try {
+        const ptr0 = passStringToWasm0(state, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(plate_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(omitted, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.plate_projection(ptr0, len0, ptr1, len1, ptr2, len2);
+        var ptr4 = ret[0];
+        var len4 = ret[1];
+        if (ret[3]) {
+            ptr4 = 0; len4 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred5_0 = ptr4;
+        deferred5_1 = len4;
+        return getStringFromWasm0(ptr4, len4);
+    } finally {
+        wasm.__wbindgen_free(deferred5_0, deferred5_1, 1);
     }
 }
 

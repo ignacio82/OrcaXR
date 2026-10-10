@@ -20,6 +20,7 @@ mod fresh;
 mod json_sink;
 mod library;
 mod model;
+mod plate;
 mod preflight;
 mod printer;
 mod registry;
@@ -56,6 +57,7 @@ use orcaxr_project::{
     staging_layout as staging,
     store::ProjectSnapshot,
 };
+use plate::*;
 use preflight::*;
 use printer::*;
 use registry::Registry;

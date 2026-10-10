@@ -4,7 +4,7 @@ use orcaxr_contracts::project_intent_types as wire;
 use orcaxr_contracts::project_intents::InvalidIntent;
 use orcaxr_printer::{
     camera, console, control, credentials, directory, history, moonraker, preparation, reply,
-    session, status::JobStatus, storage, summary, tools, transport, workflow,
+    session, slicer, status::JobStatus, storage, summary, tools, transport, workflow,
 };
 use wasm_bindgen::prelude::*;
 
@@ -1182,4 +1182,114 @@ pub fn credentials_save(record: &str) -> Result<Option<String>, JsValue> {
     let record =
         wire::decode_remembered_credentials(record).map_err(|_| error("invalid_request"))?;
     Ok(credentials::save(&record).map(|text| String::from_utf16_lossy(&text)))
+}
+
+/// An `ExternalSlicerEndpointRequest`; the `ExternalSlicerEndpoint`: the
+/// canonical endpoint a captured address names, or why none can be made.
+#[wasm_bindgen]
+pub fn external_slicer_endpoint(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_external_slicer_endpoint_request,
+        slicer::endpoint,
+        wire::encode_external_slicer_endpoint,
+    )
+}
+/// An `ExternalSlicerEndpointRequest`; the `ExternalSlicerAttestationPlan`:
+/// the engine attestation it sends, or how it reads when none can be sent.
+#[wasm_bindgen]
+pub fn external_slicer_attestation_plan(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_external_slicer_endpoint_request,
+        slicer::attestation_plan,
+        wire::encode_external_slicer_attestation_plan,
+    )
+}
+/// An `ExternalSlicerReply` to the attestation; the `ExternalSlicerAttestation`
+/// it reads as against the pinned build.
+#[wasm_bindgen]
+pub fn external_slicer_attestation(reply: &str) -> Result<String, JsValue> {
+    bulk_exchange(
+        reply,
+        wire::decode_external_slicer_reply,
+        slicer::attestation,
+        wire::encode_external_slicer_attestation,
+    )
+}
+/// An `ExternalSlicerEndpointRequest`; the `ExternalSlicerPlan` submitting a
+/// project sends (the archive and overrides are the host's multipart fields).
+#[wasm_bindgen]
+pub fn external_slicer_submit_plan(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_external_slicer_endpoint_request,
+        slicer::submit_plan,
+        wire::encode_external_slicer_plan,
+    )
+}
+/// An `ExternalSlicerJobRequest`; the `ExternalSlicerPlan` one step of a job sends.
+#[wasm_bindgen]
+pub fn external_slicer_job_plan(request: &str) -> Result<String, JsValue> {
+    exchange(
+        request,
+        wire::decode_external_slicer_job_request,
+        slicer::job_plan,
+        wire::encode_external_slicer_plan,
+    )
+}
+/// An `ExternalSlicerSubmitRead`; the `ExternalSlicerSubmission`: a job to
+/// poll or cancel, an artifact to read, or a failure.
+#[wasm_bindgen]
+pub fn external_slicer_submission(read: &str) -> Result<String, JsValue> {
+    bulk_exchange(
+        read,
+        wire::decode_external_slicer_submit_read,
+        slicer::submission,
+        wire::encode_external_slicer_submission,
+    )
+}
+/// An `ExternalSlicerPollRead`; the `ExternalSlicerPollStep`.
+#[wasm_bindgen]
+pub fn external_slicer_poll(read: &str) -> Result<String, JsValue> {
+    bulk_exchange(
+        read,
+        wire::decode_external_slicer_poll_read,
+        slicer::poll,
+        wire::encode_external_slicer_poll_step,
+    )
+}
+/// An `ExternalSlicerCancelRead`; the `ExternalSlicerCancelStep`.
+#[wasm_bindgen]
+pub fn external_slicer_cancel(read: &str) -> Result<String, JsValue> {
+    bulk_exchange(
+        read,
+        wire::decode_external_slicer_cancel_read,
+        slicer::cancel,
+        wire::encode_external_slicer_cancel_step,
+    )
+}
+/// An `ExternalSlicerArtifactRead` (the facts its host streamed); the
+/// `ExternalSlicerArtifact`: accepted, with the job to release, or refused.
+#[wasm_bindgen]
+pub fn external_slicer_artifact(read: &str) -> Result<String, JsValue> {
+    bulk_exchange(
+        read,
+        wire::decode_external_slicer_artifact_read,
+        slicer::artifact,
+        wire::encode_external_slicer_artifact,
+    )
+}
+/// Whether the attested engine (`wasm` or `cli`) carries `feature`.
+#[wasm_bindgen]
+pub fn external_slicer_supports(engine: &str, feature: &str) -> Result<bool, JsValue> {
+    let engine = match engine {
+        "wasm" => wire::ExternalSlicerEngine::Wasm,
+        "cli" => wire::ExternalSlicerEngine::Cli,
+        _ => return Err(error("invalid_request")),
+    };
+    if feature.len() > wire::MAX_BYTES {
+        return Err(error("input_limit"));
+    }
+    Ok(slicer::engine_supports(engine, feature))
 }

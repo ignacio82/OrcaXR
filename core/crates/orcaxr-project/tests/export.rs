@@ -123,3 +123,79 @@ fn export_retains_one_exact_bundle_across_history_reset_and_source_disposal() {
         assert_eq!(actual.bytes(), original.bytes());
     }
 }
+
+#[test]
+fn a_plate_capture_is_the_projection_over_the_frozen_bundle() {
+    use orcaxr_project::{ids::PlateId, slicing::plate::*};
+    let (project, assets) = source();
+    let owner = ProjectSession::new(
+        project,
+        SelectionStore::default(),
+        assets,
+        utc(),
+        HistoryOptions::default(),
+        [0, 1, 2, 3],
+    )
+    .unwrap();
+    let guard = owner.capture_guard().unwrap();
+    let captured = ExportCapture::new(&owner, &guard).unwrap();
+    let state = captured.project().state().clone();
+    let plate_id = state.plates[0].id.clone();
+    let plate = captured.plate(&plate_id, &mut utc()).unwrap();
+    let expected = project_plate(&state, &plate_id, |_| true, &mut utc()).unwrap();
+    // The archive's sourceHash, at the live capture's revision.
+    assert_eq!(plate.project().hash(), expected.source_hash());
+    assert_eq!(plate.project().revision(), captured.project().revision());
+    assert_eq!(plate.project().state().plates.len(), 1);
+    // Only the kept assets, in descriptor order, as the very frozen records.
+    assert!(expected.assets.len() < state.source_assets.len());
+    assert_eq!(plate.asset_count(), expected.assets.len());
+    for (index, id) in expected.assets.iter().enumerate() {
+        let lease = plate.asset(index).unwrap();
+        assert_eq!(lease.id(), id);
+        assert!(lease.same_record(&owner.assets().peek(id).unwrap()));
+    }
+    assert!(plate.asset(expected.assets.len()).is_none());
+    let unknown = PlateId::try_from_str("import:plate:unknown").unwrap();
+    assert!(matches!(
+        captured.plate(&unknown, &mut utc()),
+        Err(ProjectionError::UnknownPlate)
+    ));
+    // The state-document exchange answers the same projection.
+    let mut json = Vec::new();
+    state.write_json(&mut json).unwrap();
+    let json = String::from_utf8(json).unwrap();
+    let id_json = format!("\"{}\"", String::from_utf16(plate_id.as_utf16()).unwrap());
+    let answer: serde_json::Value =
+        serde_json::from_str(&projection_json(&json, &id_json, "[]", &mut utc()).unwrap()).unwrap();
+    assert_eq!(answer["sourceHash"], plate.project().hash());
+    let mut projected = Vec::new();
+    plate.project().state().write_json(&mut projected).unwrap();
+    assert_eq!(answer["stateJson"], String::from_utf8(projected).unwrap());
+    let refused: serde_json::Value = serde_json::from_str(
+        &projection_json(&json, "\"import:plate:unknown\"", "[]", &mut utc()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        refused,
+        serde_json::json!({
+            "error": "plate_projection_unknown_plate",
+            "message": "Unknown plate import:plate:unknown"
+        })
+    );
+    for bad in ["", "3", "\"\"", "[\"x\"]"] {
+        assert_eq!(
+            projection_json(&json, bad, "[]", &mut utc()),
+            Err(INVALID_REQUEST)
+        );
+    }
+    assert_eq!(
+        projection_json(&json, &id_json, "{}", &mut utc()),
+        Err(INVALID_REQUEST)
+    );
+    assert_eq!(print_overrides_json("{}", &id_json), Err(INVALID_REQUEST));
+    assert_eq!(
+        print_overrides_json(&json, &id_json).unwrap(),
+        r#"{"layer_height":"0.2"}"#
+    );
+}
