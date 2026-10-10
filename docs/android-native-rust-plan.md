@@ -1853,6 +1853,8 @@ storage journeys on phone, tablet, and desktop-sized windows.
   issues as the browser's panel shows them, the one-plate archive, "Slice" /
   "Cancel Slice" with progress, the G-code streamed to the app's cache and
   opened in Preview; output whose project changed is discarded or withdrawn.
+  Its result offers "Send to Printer" for a current slice and a connected
+  printer, through the Device area's shared send workflow.
   The bar's order is Workspace (the home), Prepare, Preview, Device, Project.
   JVM tests cover its platform-free flow, and `android-prepare-smoke.py`
   runs it on API 34 and the 16 KB API 37 image against the real server. Until
@@ -2128,8 +2130,16 @@ credential storage, and explicit permission/error flows.
   402 browser scenarios) carries the policy; `PrintWorkflowClient` runs it on
   Android over a `PrinterSessionClient` lease, and 12 end-to-end checks against
   the simulator upload under a unique name, overwrite by choice, decline,
-  reprint and refuse a busy printer. The operator's UI for it belongs to the
-  application shell.
+  reprint and refuse a busy printer. The app's operator UI now exists: Prepare's
+  "Send to Printer" sends a still-current slice (the browser's `isCurrent`
+  guard) to the Device area's connected printer through `DeviceWorkspace.send`,
+  the file's digest and tool usage read by the shared scanner and its upload
+  streamed from the held file, with the browser's confirmation dialog (tool
+  mapping, start options, exact-name choice, separate upload and start) and
+  status words; 9 JVM tests, 26 host checks against the simulator and
+  `android-send-smoke.py` (blocked start, upload only, a cancel mid-upload, a
+  started print with levelling) cover it. The Files tab's reprint still uses
+  its own confirmation rather than the workflow's stored one.
 - [x] Implement status/history/storage/console/camera features matching current
   scope. Camera subscriptions stop when hidden/disposed; emergency stop and the
   distinct firmware-restart action remain reachable without successful status

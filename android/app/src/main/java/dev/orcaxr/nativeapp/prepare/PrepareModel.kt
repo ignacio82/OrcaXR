@@ -23,6 +23,8 @@ import dev.orcaxr.core.ProjectPlatePreflight
 import dev.orcaxr.core.ProjectRevision
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.SharedCredentials
+import dev.orcaxr.nativeapp.send.SendGuard
+import dev.orcaxr.nativeapp.send.SliceToSend
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.CancellationException
@@ -54,8 +56,20 @@ data class PreflightView(
 /** A slice in flight: its progress message and percent, and whether it is being cancelled. */
 data class SliceJob(val message: String, val percent: Double? = null, val cancelling: Boolean = false)
 
-/** A finished slice: its G-code in the app's cache, the state of the project it came from, and the browser's summary. */
-data class SlicedPlate(val file: File, val name: String, val revision: ProjectRevision, val endpoint: String, val summary: String)
+/**
+ * A finished slice: its G-code in the app's cache under the name it is sent
+ * by, the plate and the state of the project it came from, and the browser's
+ * summary. Identity matters: a send checks it is still the published one.
+ */
+class SlicedPlate(
+    val file: File,
+    val name: String,
+    val plateId: String,
+    val plateName: String,
+    val revision: ProjectRevision,
+    val endpoint: String,
+    val summary: String,
+)
 
 /** What the Prepare area shows. */
 data class PrepareState(
@@ -105,6 +119,8 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     /** A finished slice for Preview to open, once. */
     var sliced by mutableStateOf<SlicedPlate?>(null)
         private set
+    /** The slice [state] shows (`state.result`), readable from any thread: the output a send checks it still is. */
+    @Volatile private var published: SlicedPlate? = null
 
     // Shared between the threads, under [lock]: the connection, the token and the slice in flight.
     private val lock = Any()
@@ -366,6 +382,7 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             connection.generation to token
         }
         // A new slice withdraws the previous output, as the browser's does.
+        published = null
         state = state.copy(job = SliceJob("preflighting"), result = null, status = null)
         slicer.execute {
             val outcome = try {
@@ -385,7 +402,10 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
                     is Outcome.Done -> state.copy(job = null, result = outcome.plate, status = outcome.plate.summary)
                     is Outcome.Failed -> state.copy(job = null, status = outcome.status)
                 }
-                if (outcome is Outcome.Done) sliced = outcome.plate
+                if (outcome is Outcome.Done) {
+                    published = outcome.plate
+                    sliced = outcome.plate
+                }
             }
         }
     }
@@ -397,6 +417,18 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
     /** "Preview": the finished slice again (the screen offers it only while it is the project's). */
     fun showResult() {
         state.result?.let { sliced = it }
+    }
+
+    /**
+     * "Send to Printer": the finished slice with the browser's `isCurrent`
+     * guard — still the published output, of the active plate, of the project
+     * as it stands — or `null` when it no longer is.
+     */
+    fun sendable(): SliceToSend? {
+        val sent = published ?: return null
+        val project = source ?: return null
+        val isCurrent = { project.view.let { SendGuard.current(published, sent, it.activePlate?.id, it.revision) } }
+        return if (isCurrent()) SliceToSend(sent.file, sent.name, sent.plateName, isCurrent) else null
     }
 
     private sealed interface Outcome {
@@ -495,7 +527,7 @@ class PrepareModel(application: Application) : AndroidViewModel(application) {
             check(part.renameTo(file)) { "OrcaXR could not keep the sliced G-code." }
             val elapsed = SystemClock.elapsedRealtime() - started
             val summary = PrepareWords.sliced(elapsed, result.length, tally.lines, tally.layers, archive.warnings.size)
-            return SlicedPlate(file, name, archive.revision!!, endpoint, summary)
+            return SlicedPlate(file, name, plateId, plateName, archive.revision!!, endpoint, summary)
         } finally {
             archiveFile.delete()
             part.delete()

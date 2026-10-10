@@ -42,15 +42,17 @@ import dev.orcaxr.nativeapp.preview.PreviewModel
 import dev.orcaxr.nativeapp.preview.PreviewScreen
 import dev.orcaxr.nativeapp.project.ProjectModel
 import dev.orcaxr.nativeapp.project.ProjectScreen
+import dev.orcaxr.nativeapp.send.SendDialog
 import dev.orcaxr.nativeapp.workspace.WorkspaceScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** The shell. Product areas are added only with complete shared workflows: the
  * workspace preview, Prepare's slicing of the active plate on the external
- * slicer, the Preview area's G-code viewer over the shared G-code preview,
- * the Device area's printers over the shared printer core, and the Project
- * area's documents over the shared project session.
+ * slicer (and sending it to the Device area's printer), the Preview area's
+ * G-code viewer over the shared G-code preview, the Device area's printers
+ * over the shared printer core, and the Project area's documents over the
+ * shared project session.
  *
  * The areas follow the plan's order (Prepare, Preview, Device, Project) after
  * the Workspace, which stays first as the home the app opens on: it shows the
@@ -188,7 +190,7 @@ class MainActivity : ComponentActivity() {
                     } else if (area == R.string.nav_project && state == R.string.workspace_development) {
                         ProjectScreen(project, Modifier.fillMaxSize().padding(padding))
                     } else if (area == R.string.nav_prepare && state == R.string.workspace_development) {
-                        PrepareScreen(prepare, project.view, Modifier.fillMaxSize().padding(padding))
+                        PrepareScreen(prepare, project.view, device, Modifier.fillMaxSize().padding(padding))
                     } else if (area == R.string.nav_preview && state == R.string.workspace_development) {
                         PreviewScreen(preview, Modifier.fillMaxSize().padding(padding))
                     } else if (state == R.string.workspace_development) {
@@ -210,6 +212,8 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+                // A send's confirmation waits above whichever area is shown: the operator may have moved on.
+                device.sendConfirmation?.let { pending -> SendDialog(pending.view, device::answerSend) }
             }
         }
     }

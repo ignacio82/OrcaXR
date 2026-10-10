@@ -21,8 +21,7 @@ class Screen:
         self.output = output
         self.name = name
         self.dump = f"/data/local/tmp/orcaxr-{name}.xml"
-        # Where a swipe scrolls the list: its top and bottom y. A screen whose upper part
-        # does not scroll (Preview's toolpath view) narrows it to the part that does.
+        # Where a swipe scrolls when the screen shows no scrolling container: top and bottom y.
         self.scroll = (450, 900)
 
     def adb(self, *command, timeout=120):
@@ -57,13 +56,28 @@ class Screen:
             if layout == placed:
                 onward = not onward
             placed = layout
-            top, bottom = self.scroll
+            x, top, bottom = self.scroll_band(current)
             start, end = (bottom, top) if onward else (top, bottom)
-            self.adb("shell", "input", "swipe", "360", str(start), "360", str(end), "300")
+            self.adb("shell", "input", "swipe", str(x), str(start), str(x), str(end), "300")
             time.sleep(0.3)
         (self.output / f"{self.name}-smoke-failed.xml").write_text(self.adb("shell", "cat", self.dump))
         (self.output / f"{self.name}-smoke-seen.txt").write_text("\n".join(seen) + "\n")
         raise AssertionError(f"'{text}' never appeared")
+
+    def scroll_band(self, nodes):
+        """Where to swipe: inside the largest scrolling container shown (a dialog's own list, or
+        the part of a screen that scrolls — never a view beside it that a swipe would turn), as its
+        centre x and a top and bottom y inset from its edges."""
+        containers = []
+        for node in nodes:
+            if node.get("scrollable") == "true":
+                left, top, right, bottom = map(int, re.findall(r"\d+", node.get("bounds")))
+                containers.append(((right - left) * (bottom - top), (left + right) // 2, top, bottom))
+        if not containers:
+            return 360, *self.scroll
+        _, x, top, bottom = max(containers)
+        inset = (bottom - top) // 6
+        return x, top + inset, bottom - inset
 
     def enabled(self, text, **kwargs):
         """Whether the control showing [text] is enabled: a Compose button reports it on its

@@ -57,10 +57,10 @@ object ProjectPrintWorkflowClientChecks {
                 val phases = Collections.synchronizedList(ArrayList<ProjectIntents.PrintSubmissionPhase>())
                 val part = artifact("part.gcode", "G28\nG1 X10 Y10\n; android send\n")
                 val uploaded = workflow.run(part, PrintSendProgress(onPhase = { phases += it })).get(WAIT_S, TimeUnit.SECONDS)!!
-                check(!uploaded.startedPrint && uploaded.verifiedBytes == part.gcode.size.toLong()) { "uploaded $uploaded" }; checks++
+                check(!uploaded.startedPrint && uploaded.verifiedBytes == part.byteLength) { "uploaded $uploaded" }; checks++
                 check(Regex("part_[0-9a-f]{32}\\.gcode").matches(text(uploaded.path))) { "unique_name ${text(uploaded.path)}" }; checks++
                 val asked = confirmations.single()
-                check(asked.byteLength == part.gcode.size.toLong() && text(asked.overwrite.filename) == "part.gcode") { "confirmation" }
+                check(asked.byteLength == part.byteLength && text(asked.overwrite.filename) == "part.gcode") { "confirmation" }
                 check(text(asked.endpointLabel) == "Simulator" && asked.blockers.isEmpty()) { "confirmation_labels" }; checks++
                 check(phases.containsAll(listOf(ProjectIntents.PrintSubmissionPhase.Checking, ProjectIntents.PrintSubmissionPhase.Uploading,
                     ProjectIntents.PrintSubmissionPhase.Verifying))) { "phases $phases" }; checks++

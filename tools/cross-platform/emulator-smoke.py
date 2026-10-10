@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Own a temporary AVD/process for the JNI, app-startup, Device, Project, Preview and Prepare smoke tests.
+"""Own a temporary AVD/process for the JNI, app-startup, Device, Project, Preview, Prepare and Send smoke tests.
 
 API 34 by default; `--api 37` runs them on Android 17, where every printer
 exchange needs the local-network permission, and adds that permission's own
@@ -64,6 +64,7 @@ with tempfile.TemporaryDirectory(prefix="orcaxr-avd-") as directory:
             subprocess.run(["python3", "tools/cross-platform/android-project-smoke.py", "--serial", serial], cwd=ROOT, check=True)
             subprocess.run(["python3", "tools/cross-platform/android-preview-smoke.py", "--serial", serial], cwd=ROOT, check=True)
             subprocess.run(["python3", "tools/cross-platform/android-prepare-smoke.py", "--serial", serial], cwd=ROOT, check=True)
+            subprocess.run(["python3", "tools/cross-platform/android-send-smoke.py", "--serial", serial], cwd=ROOT, check=True)
         finally:
             process.terminate()
             try:

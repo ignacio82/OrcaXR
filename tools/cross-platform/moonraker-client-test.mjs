@@ -1,6 +1,7 @@
 // The Android Moonraker hosts end to end on this machine's JVM: the shared
 // core's transport, session and send workflow (JNI) driven by `MoonrakerClient`
-// (OkHttp), `PrinterSessionClient` and `PrintWorkflowClient`, each against a
+// (OkHttp), `PrinterSessionClient`, `PrintWorkflowClient` and the Device
+// area's workspace (its sends too), each against a
 // fresh Moonraker simulator (a real
 // HTTP and WebSocket server). The Kotlin checks assert what the client sees;
 // this asserts what the printer received.
@@ -102,6 +103,21 @@ try {
   assert.deepEqual([...new Set(worked.apiKeys.filter(Boolean))], ["sim-key-1234"]);
   // The firmware restart reached it before any connection; then the cancel.
   assert.deepEqual(worked.commands, ["firmware-restart", "start", "cancel"]);
+  // One filament loaded: the send's tool-mapping blocker and colour warning come from it.
+  const toolchanger = await simulator({ options: { slots: [{ color: "FF0000", material: "PLA" }] } });
+  printers.push(toolchanger);
+  assert.equal(jvm.call("deviceSendChecks", toolchanger.url), 26);
+  const delivered = await toolchanger.summary();
+  // The upload cancelled in flight (the simulator had stored it), the
+  // upload-only send under a unique name, and the print under its exact name;
+  // the refused and declined sends left nothing.
+  assert.equal(delivered.stored.length, 3);
+  assert.equal(delivered.stored.filter((path) => /^Bracket_Plate_1_[0-9a-f]{32}\.gcode$/.test(path)).length, 2);
+  assert.ok(delivered.stored.includes("Bracket_Plate_2.gcode"));
+  assert.equal(delivered.started, "Bracket_Plate_2.gcode");
+  // The options the operator chose, timelapse before levelling, then the start: nothing else moved the printer.
+  assert.deepEqual(delivered.commands, ["timelapse:true", "gcode:BED_MESH_CALIBRATE", "start"]);
+  assert.deepEqual([...new Set(delivered.apiKeys.filter(Boolean))], ["send-key"]);
   const shop = await simulator({
     cameras: true,
     options: {
@@ -143,6 +159,7 @@ try {
       printerDiscoveryChecks: 27,
       printerExchangesChecks: 20,
       deviceWorkspaceChecks: 30,
+      deviceSendChecks: 26,
       lanPolicyChecks: 21,
       localNetworkChecks: 28,
       moonrakerClientChecks: 23,

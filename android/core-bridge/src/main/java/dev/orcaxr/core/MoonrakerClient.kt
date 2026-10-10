@@ -1,6 +1,8 @@
 package dev.orcaxr.core
 
+import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.io.InputStream
 import java.security.SecureRandom
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
@@ -20,7 +22,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import okio.BufferedSink
 import okio.ByteString
+import okio.source
 
 /** Why a Moonraker call failed: the transport's fault — code, operation, status and the server's detail. */
 class MoonrakerException(val fault: ProjectIntents.MoonrakerTransportFault) :
@@ -34,13 +38,32 @@ class MoonrakerCall<T> internal constructor(
     fun cancel() = onCancel()
 }
 
-/** A multipart upload: its form fields, in order, then the file. */
+/**
+ * A multipart upload: its form fields, in order, then the file — [length]
+ * bytes streamed from [open], which reads them from the start each time it is
+ * called, so a file need not be held in memory. A source that yields any other
+ * length fails the upload rather than send something else.
+ */
 class MoonrakerUpload(
     val fields: List<Pair<String, String>>,
     val filename: String,
-    val bytes: ByteArray,
+    val length: Long,
+    val open: () -> InputStream,
     val contentType: String = "text/plain",
-)
+) {
+    /** An upload of [bytes] held in memory. */
+    constructor(fields: List<Pair<String, String>>, filename: String, bytes: ByteArray, contentType: String = "text/plain") :
+        this(fields, filename, bytes.size.toLong(), { ByteArrayInputStream(bytes) }, contentType)
+
+    internal fun body(): RequestBody = object : RequestBody() {
+        override fun contentType() = this@MoonrakerUpload.contentType.toMediaType()
+        override fun contentLength() = length
+        override fun writeTo(sink: BufferedSink) {
+            val written = open().source().use { sink.writeAll(it) }
+            if (written != length) throw IOException("The file to upload changed: $written bytes, not $length.")
+        }
+    }
+}
 
 /** How a request is sent; the core decides what each choice means. */
 data class MoonrakerRequestOptions(
@@ -386,7 +409,7 @@ class MoonrakerClient(
         val body: RequestBody? = when {
             upload != null -> MultipartBody.Builder().setType(MultipartBody.FORM).apply {
                 for ((name, value) in upload.fields) addFormDataPart(name, value)
-                addFormDataPart("file", upload.filename, upload.bytes.toRequestBody(upload.contentType.toMediaType()))
+                addFormDataPart("file", upload.filename, upload.body())
             }.build()
             method == "GET" || method == "HEAD" -> null
             else -> ByteArray(0).toRequestBody(null)

@@ -1,5 +1,7 @@
 package dev.orcaxr.core
 
+import java.io.ByteArrayInputStream
+import java.io.InputStream
 import java.security.SecureRandom
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
@@ -13,17 +15,35 @@ import java.util.concurrent.TimeUnit
 /** Why a send failed or was refused: the workflow's code and sentence. */
 class PrintSubmissionException(val code: ProjectIntents.PrintSubmissionErrorCode, message: String) : Exception(message)
 
-/** A sliced artifact to send: its G-code bytes, identity and the tools it uses. */
+/**
+ * A sliced artifact to send: its G-code — [byteLength] bytes that [open] reads
+ * from the start each time — its identity and the tools it uses. Closing it
+ * releases what holds the bytes (see [PrintJobArtifacts]).
+ */
 class PrintJobArtifact(
     val filename: String,
-    val gcode: ByteArray,
+    val byteLength: Long,
+    val open: () -> InputStream,
     val plateName: String,
     val usage: ProjectIntents.GcodeToolUsage,
-    /** `sha256:` and the hex digest of [gcode]. */
+    /** `sha256:` and the hex digest of the G-code. */
     val outputHash: String,
     /** Whether the artifact still matches what the operator sliced. */
     val isCurrent: () -> Boolean,
-)
+    private val release: () -> Unit = {},
+) : AutoCloseable {
+    /** An artifact whose G-code is held in memory. */
+    constructor(
+        filename: String,
+        gcode: ByteArray,
+        plateName: String,
+        usage: ProjectIntents.GcodeToolUsage,
+        outputHash: String,
+        isCurrent: () -> Boolean,
+    ) : this(filename, gcode.size.toLong(), { ByteArrayInputStream(gcode) }, plateName, usage, outputHash, isCurrent)
+
+    override fun close() = release()
+}
 
 /** Progress the operator sees while a send runs. */
 class PrintSendProgress(
@@ -103,7 +123,7 @@ class PrintWorkflowClient(
     /** Sends [artifact]: the submitted result, `null` when the operator declined. */
     fun run(artifact: PrintJobArtifact, progress: PrintSendProgress = PrintSendProgress()): CompletableFuture<ProjectIntents.PrintSubmissionResult?> {
         val intent = ProjectIntents.PrintWorkflowIntent(
-            units(artifact.filename), artifact.gcode.size.toLong(), units(artifact.plateName), artifact.usage,
+            units(artifact.filename), artifact.byteLength, units(artifact.plateName), artifact.usage,
             units(artifact.outputHash),
         )
         @Suppress("UNCHECKED_CAST")
@@ -246,7 +266,7 @@ class PrintWorkflowClient(
             }
             is ProjectIntents.PrintWorkflowEffect.Upload -> {
                 val upload = effect.value
-                val bytes = operation.artifact?.gcode ?: ByteArray(0)
+                val artifact = operation.artifact
                 val fields = buildList {
                     add("root" to text(upload.root))
                     add("path" to text(upload.directory))
@@ -263,7 +283,8 @@ class PrintWorkflowClient(
                 exchange(id, operation, track = true, done = { operation.ticker?.cancel(false) }) {
                     it.upload(
                         text(upload.path),
-                        MoonrakerUpload(fields, text(upload.filename), bytes),
+                        if (artifact == null) MoonrakerUpload(fields, text(upload.filename), ByteArray(0))
+                        else MoonrakerUpload(fields, text(upload.filename), artifact.byteLength, artifact.open),
                         MoonrakerRequestOptions(operation = operationName.ifEmpty { null }, timeoutMs = MoonrakerClient.UNBOUNDED),
                     )
                 }

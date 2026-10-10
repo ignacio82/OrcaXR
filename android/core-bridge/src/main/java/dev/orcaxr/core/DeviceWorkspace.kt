@@ -26,7 +26,9 @@ class DeviceRefusal(message: String) : Exception(message)
  * rebuilds the connection, so no socket, credential or capability crosses
  * from the printer selected before. Every exchange is judged by the
  * local-network permission first. Discovery ([discovery]) only proposes
- * printers it verified; one is saved only when the operator adds it.
+ * printers it verified; one is saved only when the operator adds it. Sends
+ * ([send]) run the shared submission workflow over the active printer's
+ * session, asking the operator through [confirmSend].
  * Listeners hear every change.
  */
 class DeviceWorkspace(
@@ -38,6 +40,14 @@ class DeviceWorkspace(
     private val clock: () -> Double = { System.currentTimeMillis().toDouble() },
     /** The transport's diagnostics, redacted by the core before they arrive. */
     private val logger: ((ProjectIntents.MoonrakerLog) -> Unit)? = null,
+    /**
+     * Asks the operator to confirm a send (the browser's `PrintSubmissionDialog`):
+     * what is about to be sent and to which printer, answered with their
+     * decision; the second argument completes when the send no longer waits
+     * for it. Without one, every send is declined.
+     */
+    confirmSend: (ProjectIntents.PrintWorkflowConfirmation, CompletableFuture<Unit>) -> CompletableFuture<ProjectIntents.PrintWorkflowDecision> =
+        { _, _ -> CompletableFuture.completedFuture(DECLINE) },
 ) : AutoCloseable {
     /** A workspace whose record no other area shares. */
     constructor(
@@ -48,7 +58,13 @@ class DeviceWorkspace(
         http: OkHttpClient = OkHttpClient(),
         clock: () -> Double = { System.currentTimeMillis().toDouble() },
         logger: ((ProjectIntents.MoonrakerLog) -> Unit)? = null,
-    ) : this(directoryStore, SharedCredentials(vault), localNetwork, newId, http, clock, logger)
+        confirmSend: (ProjectIntents.PrintWorkflowConfirmation, CompletableFuture<Unit>) -> CompletableFuture<ProjectIntents.PrintWorkflowDecision> =
+            { _, _ -> CompletableFuture.completedFuture(DECLINE) },
+    ) : this(directoryStore, SharedCredentials(vault), localNetwork, newId, http, clock, logger, confirmSend)
+
+    private companion object {
+        val DECLINE = ProjectIntents.PrintWorkflowDecision(ProjectIntents.PrintWorkflowDecisionChoice.Cancel, false, emptyList())
+    }
 
     private val lock = Any()
     private val listeners = LinkedHashSet<() -> Unit>()
@@ -64,6 +80,18 @@ class DeviceWorkspace(
 
     /** Printers the platform's discovery found and verified, offered for the operator to add. */
     val discovery = PrinterDiscovery(MoonrakerProbe(http, localNetwork, clock))
+
+    /**
+     * The send workflow (`orcaxr_printer::workflow`) over this session. As the
+     * browser's shell captures a send's session, the active printer is
+     * connected (a connected one stays as it is) and its session leased; a
+     * printer switch or disconnect ends the lease, which the workflow treats
+     * as a cancel.
+     */
+    private val workflow = PrintWorkflowClient(
+        captureSession = { _ -> connect().thenApply { session.captureLease() } },
+        confirm = confirmSend,
+    )
 
     init {
         selectActive()
@@ -317,8 +345,36 @@ class DeviceWorkspace(
         return client
     }
 
+    /**
+     * Sends [artifact] to the active printer through the shared submission
+     * workflow: readiness, the tool mapping and the start options are the
+     * core's, the operator confirms through `confirmSend`, and the upload is
+     * verified before anything starts. A print that started refreshes the
+     * session, so the status summary shows the job. Completes with the result,
+     * `null` when the operator declined, or a [PrintSubmissionException] with
+     * the workflow's sentence. The caller still owns (and closes) [artifact].
+     */
+    fun send(
+        artifact: PrintJobArtifact,
+        progress: PrintSendProgress = PrintSendProgress(),
+    ): CompletableFuture<ProjectIntents.PrintSubmissionResult?> = workflow.run(artifact, progress).thenCompose { result ->
+        if (result?.startedPrint != true) {
+            CompletableFuture.completedFuture(result)
+        } else {
+            // The browser refreshes once and ignores a failure: the print started either way.
+            session.refresh().handle { _, _ -> result }
+        }
+    }
+
+    /** Whether a send is running. */
+    val sending: Boolean get() = workflow.busy
+
+    /** Stops the running send: what it started is cancelled, and it ends in the workflow's outcome. */
+    fun cancelSend() = workflow.cancel()
+
     override fun close() {
         discovery.stop()
+        workflow.close()
         session.close()
         synchronized(lock) { listeners.clear() }
     }

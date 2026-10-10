@@ -25,8 +25,6 @@ fixture = ROOT / "testdata/parity/fixtures/reference.gcode"
 SHOWING = "Showing reference.gcode — Layers 1 through 2, Z 0.2 through 0.4 mm"
 
 screen = Screen(args.serial, output, "preview")
-# Only the controls below the toolpath view scroll; a swipe on the view orbits it.
-screen.scroll = (600, 980)
 adb, find, tap = screen.adb, screen.find, screen.tap
 
 

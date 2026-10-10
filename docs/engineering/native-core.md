@@ -3954,7 +3954,9 @@ receives exactly `start, pause, resume, cancel, emergency-stop`.
 `PrintWorkflowClient` hosts the submission machine over a session lease:
 it captures the session (one that ends reaches the core as a cancel), asks
 the operator, sends requests and the multipart upload over the lease's
-client, answers random bytes and currency at once, and stops what a cancelled
+client — streamed from the artifact's source of known length, never held in
+memory (`MoonrakerUpload` fails an upload whose source yields another length)
+— answers random bytes and currency at once, and stops what a cancelled
 operation started while the reconciling query runs on. Its 12 checks upload
 under a fresh `part_<128-bit hex>.gcode` name and verify it, take the
 requested name on an overwrite, offer the existing file's identity when the
@@ -4647,6 +4649,69 @@ catalog profile targets for preflight, the wave-overhang engine check,
 preflight actions (reveal, drop to bed), troubleshooting text, slicing all
 plates, and the shared artifact summary (layers are the browser's fallback
 count).
+
+### Android send to printer
+
+Prepare's result card offers the browser's "Send to Printer"
+(`send_to_printer`: `OrcaWorkspace.sendToPrinter`, the shell's
+`onRequestPrintSubmission`, `PrintSubmissionDialog`) beside "Preview", for a
+slice that is still current and a printer the Device area connected — the
+browser connects as it sends; the app says to connect in the Device area
+first. Currency is the browser's `isCurrent` (`SendGuard`): the same
+published output (Prepare's `SlicedPlate`, by identity), the same active
+plate and the unchanged `ProjectRevision`. A slice that fails it is refused in
+the browser's words ("Slice the active plate before sending it to the
+printer."), and the workflow asks again at every step, so a project edited
+mid-send ends in the core's "The sliced artifact is no longer current…". The
+artifact is the file in the app's cache under Prepare's sanitized
+`<project>_<plate>.gcode` name: `PrintJobArtifacts` (core-bridge) reads its
+SHA-256 and the tools it selects and declares with the shared
+`ToolUsageScanner` (the browser's `summarizeGcodeToolUsage`) while holding the
+file open, and the upload streams that same open file, so a slice that
+replaces or deletes it meanwhile changes nothing sent and Moonraker's
+checksum field still matches. `DeviceWorkspace.send` runs the shared workflow
+over its session: the capture connects the active printer as the browser's
+does and leases the session (a switch or disconnect ends the lease, which the
+workflow takes as a cancel), and a print that started refreshes the session,
+so the Device area's status summary shows the job. `DeviceModel` hosts it.
+Its confirmation (`SendDialogView`, `SendDialog`), shown above whichever area
+is open, is the browser's dialog: the printer and its state, the plate, the
+file and its size (the exact name once chosen), the filaments, the
+tool-mapping blockers and warnings, "Before printing" with unavailable options
+disabled and the printer's reason, the exact-name choice in
+`printOverwriteLabel`'s words, and "Upload and start print" (disabled, saying
+why, while a blocker stands), "Upload only" and "Cancel"; a cancel or a
+session that ends withdraws it. Progress and outcomes are the browser's status
+lines (each phase, the upload's elapsed time, "Printing … verified on the
+printer.", "Uploaded … verified; start it from the printer when ready.", "Send
+cancelled; nothing was uploaded.", "Send failed: …"), and the button reads
+"Cancel send" while a send runs.
+
+The platform-free flow has 9 JVM tests (`SendFlowTest`: the guard, every
+status line, sizes, the exact-name label with `toISOString` dates and
+`Number` text, the dialog's facts, options and decisions). 26 host checks
+(`ProjectDeviceSendChecks`, against a simulator holding one filament) open a
+two-tool artifact whose second tool lies past the scanner's first chunk,
+replace its file and still store the original byte for byte, cancel an upload
+in flight, refuse a second send while one waits for its confirmation,
+withdraw a confirmation on cancel, read the confirmation's printer, state,
+names, tools, blocker, colour warning and options, refuse a start while the
+blocker stands, refuse stale artifacts before and after the operator
+confirms, and start a one-tool print with timelapse and levelling chosen,
+after which the status is active; the simulator receives exactly the three
+uploads, `timelapse:true`, `BED_MESH_CALIBRATE` and one start, with only that
+printer's key. `android-send-smoke.py` drives it on the emulator suites
+against the simulator and the slicer stand-in: the simulator added and
+connected, the hexagon sliced, the confirmation's printer, plate, file, tools
+and the blocker for the empty second slot with starting unavailable, an
+upload-only send verified, a send held by the printer and cancelled, then —
+both filaments loaded — levelling and the exact name chosen and the print
+started, the Device area showing it printing, and a model import leaving the
+slice out of date with nothing to send; the printer receives the three
+uploads, the levelling and one start. Not yet matched: the Files tab still
+prints a stored file with its own confirmation rather than the workflow's
+stored one (`startStored`, which the dialog already renders), and sending
+every plate.
 
 ### Android Device area
 

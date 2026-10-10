@@ -122,6 +122,9 @@ public final class ProjectJniHarness {
     public static long deviceWorkspaceChecks(String endpoint) {
         return ProjectDeviceWorkspaceChecks.run(endpoint);
     }
+    public static long deviceSendChecks(String endpoint) {
+        return ProjectDeviceSendChecks.run(endpoint);
+    }
     public static long printerDiscoveryChecks(String endpoint, String lockedEndpoint) {
         return ProjectPrinterDiscoveryChecks.run(endpoint, lockedEndpoint);
     }
@@ -359,6 +362,7 @@ public final class ProjectJniHarness {
             if (name.equals("projectWorkspaceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);
             if (name.equals("newProjectChecks")) method = ProjectJniHarness.class.getMethod(name);
             if (name.equals("deviceWorkspaceChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
+            if (name.equals("deviceSendChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("printerDiscoveryChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, String.class);
             if (name.equals("localNetworkChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("credentialsChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);

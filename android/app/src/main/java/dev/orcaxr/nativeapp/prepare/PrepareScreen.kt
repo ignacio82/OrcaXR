@@ -43,6 +43,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.nativeapp.R
+import dev.orcaxr.nativeapp.device.DeviceModel
+import dev.orcaxr.nativeapp.send.SendGuard
+import dev.orcaxr.nativeapp.send.SendWords
 
 /**
  * The Prepare area: the active plate, the external slicer it is sliced on
@@ -51,11 +54,14 @@ import dev.orcaxr.nativeapp.R
  * the shared preflight's issues as the browser's panel shows them, and
  * "Slice" / "Cancel Slice" with the job's progress. The first slice on an
  * endpoint asks before uploading; a finished slice opens in Preview, and one
- * whose project changed afterwards is marked out of date.
+ * whose project changed afterwards is marked out of date. A current slice
+ * goes to the printer the Device area connected ("Send to Printer", through
+ * [device]'s shared workflow), with the send's progress and outcome below.
  */
 @Composable
-fun PrepareScreen(model: PrepareModel, view: ProjectView, modifier: Modifier = Modifier) {
+fun PrepareScreen(model: PrepareModel, view: ProjectView, device: DeviceModel, modifier: Modifier = Modifier) {
     val state = model.state
+    val send = device.sendState
     val connection = state.connection
     val plate = view.activePlate
     val context = LocalContext.current
@@ -207,7 +213,34 @@ fun PrepareScreen(model: PrepareModel, view: ProjectView, modifier: Modifier = M
                             // Output for a state the project has left is never previewed or sent.
                             Text(PrepareWords.OUT_OF_DATE, color = MaterialTheme.colorScheme.error)
                         } else {
-                            OutlinedButton(onClick = model::showResult) { Text(stringResource(R.string.nav_preview)) }
+                            val current = SendGuard.current(state.result, result, view.activePlate?.id, view.revision)
+                            val connected = device.state.connected
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = model::showResult) { Text(stringResource(R.string.nav_preview)) }
+                                // One button, as the browser's: "Cancel send" while a send runs.
+                                if (send.busy) {
+                                    OutlinedButton(onClick = device::cancelSend) { Text(SendWords.CANCEL) }
+                                } else {
+                                    Button(onClick = { device.send(model.sendable()) }, enabled = current && connected) { Text(SendWords.ACTION) }
+                                }
+                            }
+                            if (!connected && !send.busy) Text(SendWords.CONNECT_FIRST, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        }
+        if (send.status != null || send.busy) {
+            // The send's progress and outcome, as the browser's status line words them.
+            item {
+                Card(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(send.status.orEmpty(), Modifier.weight(1f))
+                        if (send.busy) {
+                            // Here when the slice was withdrawn or left behind mid-send, so the send can still be stopped.
+                            if (state.result?.revision != view.revision) TextButton(onClick = device::cancelSend) { Text(SendWords.CANCEL) }
+                        } else {
+                            TextButton(onClick = device::dismissSend) { Text(stringResource(R.string.device_dismiss)) }
                         }
                     }
                 }

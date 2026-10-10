@@ -21,9 +21,16 @@ import dev.orcaxr.core.PrintHistory
 import dev.orcaxr.core.PrintJobCommandException
 import dev.orcaxr.core.PrinterCamera
 import dev.orcaxr.core.PrinterConsole
+import dev.orcaxr.core.PrintJobArtifacts
+import dev.orcaxr.core.PrintSendProgress
 import dev.orcaxr.core.PrinterExchanges
 import dev.orcaxr.core.ProjectIntents
+import dev.orcaxr.nativeapp.send.SendDialogView
+import dev.orcaxr.nativeapp.send.SendState
+import dev.orcaxr.nativeapp.send.SendWords
+import dev.orcaxr.nativeapp.send.SliceToSend
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 
@@ -44,6 +51,9 @@ class PendingConfirmation(val intent: ProjectIntents.PrintJobCommandIntent, val 
 
 /** Something the operator must confirm before it is done. */
 class PendingAsk(val title: String, val detail: String, val confirm: String, val action: () -> Unit)
+
+/** A send waiting for the operator: the browser's dialog for it, and how to answer. */
+class PendingSend(val view: SendDialogView, val answer: CompletableFuture<ProjectIntents.PrintWorkflowDecision>)
 
 /** The active printer's files: the folder shown, its listing, and the file chosen. */
 data class FilesView(
@@ -106,7 +116,10 @@ private const val HISTORY_PAGE = 20.0
  * The Device area's host adapter: it owns the [DeviceWorkspace], runs every
  * call that may block (storage, the Keystore, name resolution, the session)
  * on one worker thread, and publishes a [DeviceState] projection to Compose on
- * the main thread.
+ * the main thread. Sends to the active printer run here too, through the
+ * workspace's shared workflow: Prepare offers its finished slice, the
+ * operator confirms in the browser's dialog ([sendConfirmation]), and [send]
+ * reports progress and the outcome in the browser's words.
  */
 class DeviceModel(application: Application) : AndroidViewModel(application) {
     private val main = Handler(Looper.getMainLooper())
@@ -131,6 +144,12 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
         private set
     var cameras by mutableStateOf(CameraView())
         private set
+    /** The send in progress or the last one's outcome, in the browser's status words. */
+    var sendState by mutableStateOf(SendState())
+        private set
+    /** The confirmation a send waits for, shown above every area. */
+    var sendConfirmation by mutableStateOf<PendingSend?>(null)
+        private set
 
     // Worker-thread state: the client the transcript listens to, and the camera's routes.
     private var listened: dev.orcaxr.core.MoonrakerClient? = null
@@ -154,6 +173,7 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     null
                 },
+                confirmSend = ::confirmSend,
             )
             finder = AndroidPrinterDiscovery(application, workspace.discovery) { work { publish() } }
             subscription = workspace.subscribe { work { publish() } }
@@ -373,6 +393,86 @@ class DeviceModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun printerName(): String = workspace.active?.let { text(it.name) } ?: "the printer"
+
+    // --- Send --------------------------------------------------------------------------------
+
+    /** Asks the operator; a send that stops waiting (cancelled, its session ended) withdraws the dialog, sending nothing. */
+    private fun confirmSend(
+        input: ProjectIntents.PrintWorkflowConfirmation,
+        withdrawn: CompletableFuture<Unit>,
+    ): CompletableFuture<ProjectIntents.PrintWorkflowDecision> {
+        val answer = CompletableFuture<ProjectIntents.PrintWorkflowDecision>()
+        val pending = PendingSend(SendDialogView(input), answer)
+        withdrawn.whenComplete { _, _ -> answer.complete(SendDialogView.CANCEL) }
+        main.post { if (!answer.isDone) sendConfirmation = pending }
+        answer.whenComplete { _, _ -> main.post { if (sendConfirmation === pending) sendConfirmation = null } }
+        return answer
+    }
+
+    /** The operator's answer to the send dialog. */
+    fun answerSend(decision: ProjectIntents.PrintWorkflowDecision) {
+        sendConfirmation?.answer?.complete(decision)
+    }
+
+    /**
+     * "Send to Printer" (the browser's `sendToPrinter` and its shell's
+     * submission handler): [slice] — `null`, or no longer current, is refused
+     * in the browser's words — is opened as an artifact (its digest and tool
+     * usage read by the shared core) and sent to the active printer.
+     */
+    fun send(slice: SliceToSend?) {
+        if (sendState.busy) {
+            sendState = sendState.copy(status = SendWords.BUSY)
+            return
+        }
+        if (slice == null || !slice.isCurrent()) {
+            sendState = SendState(status = SendWords.SLICE_FIRST)
+            return
+        }
+        sendState = SendState(busy = true)
+        val finish = { status: String -> main.post { sendState = SendState(status = status) } }
+        work {
+            val artifact = try {
+                PrintJobArtifacts.open(slice.file, slice.filename, slice.plateName, slice.isCurrent)
+            } catch (failure: Exception) {
+                finish(SendWords.failed(failure.message ?: failure.javaClass.simpleName))
+                return@work
+            }
+            val progress = PrintSendProgress(
+                onPhase = { phase -> main.post { if (sendState.busy) sendState = sendState.copy(status = SendWords.phase(phase, slice.filename)) } },
+                onUploadElapsed = { elapsed, total ->
+                    main.post { if (sendState.busy) sendState = sendState.copy(status = SendWords.uploadElapsed(slice.filename, elapsed, total)) }
+                },
+            )
+            val sent = try {
+                workspace.send(artifact, progress)
+            } catch (failure: Exception) {
+                CompletableFuture.failedFuture(failure)
+            }
+            sent.whenComplete { result, thrown ->
+                artifact.close()
+                val cause = (thrown as? CompletionException)?.cause ?: thrown
+                finish(
+                    when {
+                        cause != null -> SendWords.failed(cause.message ?: cause.javaClass.simpleName)
+                        result == null -> SendWords.DECLINED
+                        else -> SendWords.result(result)
+                    },
+                )
+            }
+        }
+    }
+
+    /** "Cancel send": what the send started stops, and it ends in the workflow's own outcome. */
+    fun cancelSend() {
+        if (!sendState.busy) return
+        sendState = sendState.copy(status = SendWords.CANCELLING)
+        work { workspace.cancelSend() }
+    }
+
+    fun dismissSend() {
+        if (!sendState.busy) sendState = SendState()
+    }
 
     // --- Files -------------------------------------------------------------------------------
 
