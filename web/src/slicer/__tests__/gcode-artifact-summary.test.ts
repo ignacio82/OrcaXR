@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { formatArtifactDuration, summarizeGcodeArtifact } from '../GcodeArtifactSummary';
+import { describeArtifactSummary, formatArtifactDuration, summarizeGcodeArtifact } from '../GcodeArtifactSummary';
 
 let passed = 0;
 function test(name: string, run: () => void): void {
@@ -113,6 +113,32 @@ test('formats durations for display', () => {
   assert.equal(formatArtifactDuration(750), '12m 30s');
   assert.equal(formatArtifactDuration(3852), '1h 04m');
   assert.equal(formatArtifactDuration(2 * 86_400 + 3 * 3600), '2d 3h');
+});
+
+test('words the totals and the tools that used filament as the preview panel shows them', () => {
+  const description = describeArtifactSummary(summarizeGcodeArtifact(ARTIFACT));
+  assert.equal(description.totals, '≈45m 50s · 18.56 g · 225 layers · 88 tool changes');
+  assert.deepEqual(description.tools, [
+    { toolIndex: 0, colorHex: '#5F605F', text: 'T0 · PLA · 4.75 m · 14.16 g' },
+    { toolIndex: 1, colorHex: '#E22B22', text: 'T1 · PLA · 1.47 m · 4.39 g' },
+  ]);
+  assert.deepEqual(describeArtifactSummary(summarizeGcodeArtifact('G1 X1\n')), { totals: '', tools: [] });
+});
+
+test('offers a swatch only for a hex colour, never style text from the file', () => {
+  // The colour becomes the swatch's style: `url(…)` would make the page fetch
+  // a URL the file chose, and a `;` would let it add declarations.
+  const hostile = [
+    '; filament used [mm] = 10, 20, 30',
+    '; filament_colour = url(https://example.invalid/t.png);#fff;width:9999px',
+    '',
+  ].join('\n');
+  const tools = describeArtifactSummary(summarizeGcodeArtifact(hostile)).tools;
+  assert.deepEqual(
+    tools.map((tool) => tool.colorHex),
+    [undefined, '#fff', undefined],
+  );
+  assert.equal(summarizeGcodeArtifact(hostile).perTool[0].colorHex, 'url(https://example.invalid/t.png)');
 });
 
 console.log(`\nG-code artifact summary: ${passed} tests passed.`);

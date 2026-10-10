@@ -4250,6 +4250,29 @@ the switch, and every saved record) and 63 records saved; Rust, WASM in
 Node and Chrome, the printer core, JNI and 142 Kotlin checks reproduce
 every one.
 
+### G-code artifact summary
+
+`orcaxr_gcode::artifact` is the browser's G-code artifact summary
+(`GcodeArtifactSummary.ts`): `summarize` reads, from the end of the file as
+the browser does (the last 64 Ki units), the estimated and first-layer
+times, total weight and cost, layer and tool-change counts and each tool's
+length, volume and weight, and from anywhere the filament colours and types;
+only that tail is decoded, the rest is searched line by line on the raw
+bytes (two property tests prove the result equals decoding everything).
+`describe` writes the panel's text (`≈45m 50s · 18.56 g · 225 layers · 88
+tool changes` and one line per tool), now one definition shared with the
+browser's `describeArtifactSummary`. `gcode-summary-vectors.mjs` records 101
+browser summaries (both repository G-code fixtures, realistic Orca output,
+odd numbers and durations, hostile colour text, 300 tools, CRLF, BOM,
+invalid bytes, cuts around the 64 Ki boundary) and 31 durations; Rust
+matches them exactly. Porting found that the browser put a G-code file's
+`filament_colour` text straight into a swatch's CSS — a crafted file could
+inject styles or make the page fetch a URL; only a hex colour now gets a
+swatch, in both. The browser never fills per-layer times, so neither does
+the core; totals the engine writes before a settings block longer than the
+scanned tail are missed by both. Bindings follow with the Preview's
+statistics.
+
 ### Plate projection for slicing
 
 `orcaxr_project::slicing::plate` is the browser's per-plate slice

@@ -37,6 +37,16 @@ impl Utf8Decoder {
         Self::default()
     }
 
+    /// A decoder for bytes from the middle of a stream, starting where the
+    /// whole stream's decoder starts a fresh sequence: a byte-order mark
+    /// there is text, not a mark to drop.
+    pub(crate) fn fragment() -> Self {
+        Self {
+            started: true,
+            ..Self::default()
+        }
+    }
+
     /// Decode `bytes`, appending UTF-16 to `out`; `last` ends the stream, so
     /// an unfinished sequence becomes U+FFFD.
     pub fn decode(&mut self, bytes: &[u8], last: bool, out: &mut Vec<u16>) {

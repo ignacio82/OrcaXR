@@ -1,4 +1,4 @@
-import { formatArtifactDuration, type GcodeArtifactSummary } from '../../slicer/GcodeArtifactSummary';
+import { describeArtifactSummary, type GcodeArtifactSummary } from '../../slicer/GcodeArtifactSummary';
 import type { GcodePreviewMode } from '../../slicer/GcodePreviewModel';
 import type {
   GcodePreviewMoveFilterId,
@@ -303,24 +303,17 @@ export class GcodePreviewPanel {
     group.dataset.previewSummary = 'true';
     group.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
 
+    const description = describeArtifactSummary(summary);
     const totals = document.createElement('p');
     totals.dataset.previewSummaryTotals = 'true';
     totals.style.cssText = 'margin:0;';
-    totals.textContent = [
-      summary.estimatedSeconds !== undefined ? `≈${formatArtifactDuration(summary.estimatedSeconds)}` : null,
-      summary.totalWeightG !== undefined ? `${summary.totalWeightG.toFixed(2)} g` : null,
-      summary.layerCount !== undefined ? `${summary.layerCount} layers` : null,
-      summary.toolChanges !== undefined ? `${summary.toolChanges} tool changes` : null,
-    ]
-      .filter((entry): entry is string => entry !== null)
-      .join(' · ');
+    totals.textContent = description.totals;
     group.append(totals);
 
-    const used = summary.perTool.filter((tool) => (tool.lengthMm ?? tool.weightG ?? 0) > 0);
-    if (used.length > 0) {
+    if (description.tools.length > 0) {
       const list = document.createElement('ul');
       list.style.cssText = 'list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;';
-      for (const tool of used) {
+      for (const tool of description.tools) {
         const item = document.createElement('li');
         item.dataset.previewSummaryTool = String(tool.toolIndex);
         item.style.cssText = 'display:flex;align-items:center;gap:6px;';
@@ -335,14 +328,7 @@ export class GcodePreviewPanel {
         const text = document.createElement('span');
         // The swatch is decorative; the tool number and material carry the
         // identity so nothing here depends on colour alone.
-        text.textContent = [
-          `T${tool.toolIndex}`,
-          tool.material,
-          tool.lengthMm !== undefined ? `${(tool.lengthMm / 1000).toFixed(2)} m` : undefined,
-          tool.weightG !== undefined ? `${tool.weightG.toFixed(2)} g` : undefined,
-        ]
-          .filter((entry): entry is string => entry !== undefined)
-          .join(' · ');
+        text.textContent = tool.text;
         item.append(text);
         list.append(item);
       }

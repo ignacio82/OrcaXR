@@ -94,6 +94,64 @@ export function formatArtifactDuration(seconds: number | undefined): string {
   return `${rest}s`;
 }
 
+/** One tool line of the preview panel: its colour swatch, if stated, and its text. */
+export interface GcodeArtifactToolLine {
+  readonly toolIndex: number;
+  readonly colorHex?: string;
+  readonly text: string;
+}
+
+/** The summary as the preview panel words it. */
+export interface GcodeArtifactSummaryText {
+  /** Estimated time, total weight, layers and tool changes, as far as stated. */
+  readonly totals: string;
+  /** A line for each tool that used filament (a stated length decides alone). */
+  readonly tools: readonly GcodeArtifactToolLine[];
+}
+
+/**
+ * The preview panel's wording of a summary: every figure is the artifact's
+ * own, and a figure it never stated is simply left out.
+ */
+export function describeArtifactSummary(summary: GcodeArtifactSummary): GcodeArtifactSummaryText {
+  const totals = [
+    summary.estimatedSeconds !== undefined ? `≈${formatArtifactDuration(summary.estimatedSeconds)}` : null,
+    summary.totalWeightG !== undefined ? `${summary.totalWeightG.toFixed(2)} g` : null,
+    summary.layerCount !== undefined ? `${summary.layerCount} layers` : null,
+    summary.toolChanges !== undefined ? `${summary.toolChanges} tool changes` : null,
+  ]
+    .filter((entry): entry is string => entry !== null)
+    .join(' · ');
+  const tools = summary.perTool
+    .filter((tool) => (tool.lengthMm ?? tool.weightG ?? 0) > 0)
+    .map((tool) =>
+      Object.freeze({
+        toolIndex: tool.toolIndex,
+        ...optionalText('colorHex', swatchColor(tool.colorHex)),
+        // The tool number and material carry the identity, so nothing here
+        // depends on the colour alone.
+        text: [
+          `T${tool.toolIndex}`,
+          tool.material,
+          tool.lengthMm !== undefined ? `${(tool.lengthMm / 1000).toFixed(2)} m` : undefined,
+          tool.weightG !== undefined ? `${tool.weightG.toFixed(2)} g` : undefined,
+        ]
+          .filter((entry): entry is string => entry !== undefined)
+          .join(' · '),
+      }),
+    );
+  return Object.freeze({ totals, tools: Object.freeze(tools) });
+}
+
+/**
+ * A swatch takes only a CSS hex colour. The text is the artifact's own and
+ * becomes style text: anything else (`url(…)`, extra declarations) would let
+ * a G-code file restyle the panel or make the page fetch a URL.
+ */
+function swatchColor(value: string | undefined): string | undefined {
+  return value !== undefined && /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value) ? value : undefined;
+}
+
 /**
  * Parse the engine's own duration wording (`2d 3h 4m 5s`). An unrecognised
  * shape yields nothing rather than a partial number that would read as fact.

@@ -1,6 +1,7 @@
 //! Bounded, UI-independent G-code computation. The TypeScript parser remains
 //! the production/reference implementation until cross-host qualification.
 mod arc;
+pub mod artifact;
 mod cancellation;
 pub mod document;
 pub mod inspection;
