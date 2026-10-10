@@ -14,11 +14,13 @@ package dev.orcaxr.core
 /** A preset a picker offers: its ID, exact name and disambiguated label. */
 data class PresetOption(val id: String, val name: String, val label: String)
 
-/** Every printer, the processes of one printer and the filaments of one printer/process pair. */
+/** Every printer, the processes of one printer and the filaments of one printer/process pair,
+ * and that printer's heads (`profileExtruderCount`; one without a printer). */
 data class PresetChoices(
     val machines: List<PresetOption>,
     val processes: List<PresetOption>,
     val filaments: List<PresetOption>,
+    val extruders: Int = 1,
 )
 
 /** One catalog profile: its printer, process and primary filament presets. */
@@ -193,7 +195,10 @@ object SlicingConfigurations {
             (value as ProjectJsonArray).let { list -> List(list.length()) { option(list.get(it) as ProjectJsonObject) } }
         fun choices(json: String): PresetChoices {
             val reply = CanonicalJson.read(json) as ProjectJsonObject
-            return PresetChoices(options(reply.get("machines")), options(reply.get("processes")), options(reply.get("filaments")))
+            return PresetChoices(
+                options(reply.get("machines")), options(reply.get("processes")), options(reply.get("filaments")),
+                (reply.get("extruders") as Double).toInt(),
+            )
         }
         fun live(value: ProjectJsonObject): LiveSlicingChoice {
             val heads = value.get("heads") as ProjectJsonArray

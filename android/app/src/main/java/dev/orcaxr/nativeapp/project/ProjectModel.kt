@@ -119,6 +119,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     /** The system's share sheet for a copy of the project, for the screen to show once. */
     var shareRequest by mutableStateOf<Intent?>(null)
         private set
+    /** The printer, process and filament profiles the project slices with. */
+    var profilesView by mutableStateOf(ProfilesView())
+        private set
+    private val profiles = SlicingProfiles(application) { next -> main.post { profilesView = next } }
 
     init {
         work {
@@ -134,6 +138,8 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             workspace.ready().get()
             publishRecoveries()
             main.post { view = workspace.view }
+            // The browser's new document starts from the remembered or default catalog profile.
+            profiles.start(workspace)
         }
     }
 
@@ -201,6 +207,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     fun restore(entry: ProjectRecovery.Entry) = unlessDirty {
         work {
             workspace.restore(entry).await()
+            profiles.opened()
             savedUri = null
             hold(null)
             main.post { message = "Restored ${entry.projectName}. Save it to keep it." }
@@ -274,6 +281,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             claimed(uri) {
                 val document = DigestingDocument(ContentProjectDocument(resolver, uri), null)
                 val format = workspace.open(document, name).await()
+                profiles.opened()
                 adopt(uri, format, document.digest)
             }
             remember(uri, name)
@@ -297,6 +305,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
                 }
                 throw failure
             }
+            profiles.opened()
             adopt(uri, format, document.digest)
             remember(uri, entry.name)
         }
@@ -315,6 +324,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         unlessDirty {
             work {
                 workspace.open(ContentProjectDocument(resolver, uri), displayName(uri)).await()
+                profiles.opened()
                 // A one-time grant: this window does not write it back, so it holds nothing.
                 savedUri = null
                 hold(null)
@@ -470,8 +480,16 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         }
     }
 
-    /** The plate's slice preflight as the project stands ([ProjectWorkspace.preflight]). */
-    override fun preflight(plateId: String): CompletableFuture<ProjectPlatePreflight> = started.thenCompose { it.preflight(plateId) }
+    /** The plate's slice preflight as the project stands ([ProjectWorkspace.preflight]), against
+     * the chosen profile — or the project's own configuration while an opened project owns it. */
+    override fun preflight(plateId: String): CompletableFuture<ProjectPlatePreflight> =
+        started.thenCompose { it.preflight(plateId, profiles::target) }
+
+    /** Chooses a printer; its processes and filaments are reconciled as the browser's pickers do. */
+    fun chooseMachine(id: String) = work { profiles.select(workspace, machine = id) }
+    fun chooseProcess(id: String) = work { profiles.select(workspace, process = id) }
+    /** Chooses head [index]'s filament (the first is the profile's own). */
+    fun chooseFilament(index: Int, id: String) = work { profiles.selectHead(workspace, index, id) }
 
     /** The plate's one-plate slice archive ([ProjectWorkspace.projectPlate]); the project's saved state is untouched. */
     override fun projectPlate(plateId: String, output: ProjectDocumentOutput): CompletableFuture<ProjectPlateArchive> =
@@ -503,6 +521,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             subscription?.close()
             pendingImport?.candidate?.close()
             if (::workspace.isInitialized) workspace.close()
+            profiles.close()
         }
         worker.shutdown()
     }

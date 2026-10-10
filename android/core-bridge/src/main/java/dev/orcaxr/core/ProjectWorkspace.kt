@@ -74,6 +74,17 @@ class ProjectWorkspace(
         /** The tree's largest page (the browser renders it in windows of this size). */
         /** Vertices per mesh-packet chunk: small enough for 16-bit indices. */
         const val MESH_CHUNK_VERTICES = 65_535L
+        /** The bounds a project document the workspace makes (the starting, new or reset
+         * project) is read under: 1 M nodes, 8 M text units, 4096 assets of at most 512 MiB
+         * and 2 GiB in all, and 100 history entries in 64 MiB. */
+        fun hostOptions(documentBytes: Long) =
+            ProjectHostOptions(documentBytes, 1_000_000, 8_000_000, 1024, 128, 4096, 512L shl 20, 2L shl 30, 100, 64L shl 20)
+
+        /** The browser workspace's staged-edit pool (`INSTANCE_STAGING_LIMITS`): four staged
+         * resources, 4096 commands, a whole project's 256 Mi units and its archive's 2 GiB of assets. */
+        val STAGING = ProjectStagingPoolOptions(4, 4096, 256L shl 20, 2048L shl 20)
+        /** A project's own printer and filaments, as an opened project carries them. */
+        val AUTHORED: ProjectIntents.PreflightTarget = ProjectIntents.PreflightTarget.Authored(ProjectIntents.Empty)
         /** A preflight's bounds: the archive's assets and facets, and the engine's 64 filaments. */
         val PREFLIGHT = ProjectIntents.PreflightBudget(512L shl 20, 48_000_000, 48_000_000, 4096, 48_000_000, 64)
         /** The most preflight issues read for display. */
@@ -119,11 +130,17 @@ class ProjectWorkspace(
         return AutoCloseable { synchronized(lock) { listeners -= listener } }
     }
 
+    /** [bytes] into [upload] in the host's chunks: a project carrying a catalog configuration outgrows one. */
+    private fun append(upload: ProjectUpload, bytes: ByteArray) {
+        for (start in bytes.indices step ProjectHost.MAX_CHUNK_BYTES)
+            upload.appendDocument(start.toLong(), bytes.copyOfRange(start, minOf(start + ProjectHost.MAX_CHUNK_BYTES, bytes.size)))
+    }
+
     /** A canonical document as an upload's prepared document. */
     private fun document(scope: ProjectPreparation, bytes: ByteArray): ProjectDocument {
-        val options = ProjectHostOptions(bytes.size.toLong(), 1_000_000, 8_000_000, 1024, 128, 4096, 512L shl 20, 2L shl 30, 100, 64L shl 20)
+        val options = hostOptions(bytes.size.toLong())
         val upload = scope.own(ProjectUpload(bytes.size.toLong(), options, resolver, ProjectIntegerProfile.CHROMIUM))
-        upload.appendDocument(0, bytes)
+        append(upload, bytes)
         upload.sealDocument()
         return upload.prepare()
     }
@@ -184,15 +201,15 @@ class ProjectWorkspace(
 
     val actor: ProjectActor = ProjectActor.open({ scope, nonce ->
         val bytes = NewProjects.empty(words(), NewProjects.timestamp(clock()))
-        val options = ProjectHostOptions(bytes.size.toLong(), 1_000_000, 8_000_000, 1024, 128, 4096, 512L shl 20, 2L shl 30, 100, 64L shl 20)
+        val options = hostOptions(bytes.size.toLong())
         val upload = scope.own(ProjectUpload(bytes.size.toLong(), options, resolver, ProjectIntegerProfile.CHROMIUM))
-        upload.appendDocument(0, bytes)
+        append(upload, bytes)
         upload.sealDocument()
         val session = upload.open(nonce)
         // The first view, before any effect.
         session.snapshot().use(::read)
         session
-    }, ::effects)
+    }, ::effects, staging = STAGING)
 
     private fun outcome(request: ProjectRequest): CompletableFuture<ProjectOutcome> = request.completion.toCompletableFuture()
 
@@ -418,14 +435,19 @@ class ProjectWorkspace(
     /**
      * The slice preflight of plate [plateId] as the project stands now (the
      * browser's `CanonicalSlicePreflightValidator`, in the shared core),
-     * against the project's own printer and filaments — the configuration an
-     * external slice of it carries — with the state it describes.
+     * against the [target] made for the project's tool count: its own
+     * printer and filaments (authored) or the catalog profile chosen for it
+     * ([ProfileCatalogs.preflightTarget]), with the state it describes.
      */
-    fun preflight(plateId: String): CompletableFuture<ProjectPlatePreflight> = inspect { session ->
-        val revision = session.snapshot().use { ProjectRevision(it.revision(), it.hash(), session.assetFingerprint()) }
-        val request = ProjectIntents.PreflightRequest(
-            1, units(plateId), ProjectIntents.PreflightTarget.Authored(ProjectIntents.Empty), PREFLIGHT,
-        )
+    fun preflight(
+        plateId: String,
+        target: (toolCount: Int) -> ProjectIntents.PreflightTarget = { AUTHORED },
+    ): CompletableFuture<ProjectPlatePreflight> = inspect { session ->
+        val (revision, tools) = session.snapshot().use { snapshot ->
+            val tools = snapshot.query().use { it.metadata().values[QueryNumber.TOOL_COUNT] ?: 0.0 }
+            ProjectRevision(snapshot.revision(), snapshot.hash(), session.assetFingerprint()) to tools.toInt()
+        }
+        val request = ProjectIntents.PreflightRequest(1, units(plateId), target(tools), PREFLIGHT)
         session.captureGuard().use { guard ->
             session.captureExport(guard).use { capture ->
                 capture.preflight(request).use { report ->
@@ -487,6 +509,32 @@ class ProjectWorkspace(
         outcome(actor.commitImport(candidate, acknowledged))
             .thenCompose { result -> query().handle { _, _ -> result } }
             .thenApply { result -> if (result is ProjectOutcome.Imported) Unit else throw failure(result, null) }
+
+    /**
+     * The browser's `commitLiveSlicingConfiguration`: the catalog choice [live]
+     * becomes the project's own slicing configuration (printer, settings and
+     * one physical filament per palette slot) as one undoable "Update slicing
+     * configuration". Completes true when it changed the project, false when
+     * the project already had it; a refusal (a mixed filament that would lose
+     * a component) fails with the browser's message.
+     */
+    fun applySlicingChoice(
+        catalog: ProfileCatalog,
+        live: LiveSlicingChoice,
+        policy: AutoPairPolicy = AutoPairPolicy(enabled = false),
+    ): CompletableFuture<Boolean> {
+        val words = SlicingConfigurations.words(live.palette.size)
+        return outcome(actor.configureSlicing { session -> session.stageSlicingConfiguration(catalog, live, policy, words) })
+            .thenCompose { result -> query().handle { _, _ -> result } }
+            .thenApply { result ->
+                when (result) {
+                    is ProjectOutcome.Completed -> true
+                    ProjectOutcome.SlicingUnchanged -> false
+                    is ProjectOutcome.SlicingRefused -> throw ProjectFailure(result.message)
+                    else -> throw failure(result, null)
+                }
+            }
+    }
 
     private fun step(undo: Boolean): CompletableFuture<Unit> = query().thenCompose { (state, _) ->
         val operation = if (undo) ProjectIntents.SessionOperation.Undo(state.guard) else ProjectIntents.SessionOperation.Redo(state.guard)

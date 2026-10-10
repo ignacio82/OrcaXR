@@ -2,6 +2,24 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
 }
+
+/** The browser's bundled profile catalog — the one file of `profiles/` the app reads — as an asset. */
+abstract class BundleCatalog : DefaultTask() {
+    @get:InputFile abstract val catalog: RegularFileProperty
+    @get:OutputDirectory abstract val assets: DirectoryProperty
+
+    @TaskAction fun copy() {
+        val target = assets.get().dir("profiles").asFile
+        target.mkdirs()
+        catalog.get().asFile.copyTo(target.resolve("catalog.json"), overwrite = true)
+    }
+}
+val bundleCatalog by tasks.registering(BundleCatalog::class) {
+    catalog.set(rootProject.file("../web/public/profiles/catalog.json"))
+}
+androidComponents.onVariants { variant ->
+    variant.sources.assets?.addGeneratedSourceDirectory(bundleCatalog) { it.assets }
+}
 android {
     namespace = "dev.orcaxr.nativeapp"
     compileSdk = 37

@@ -23,7 +23,7 @@ fn concat(parts: &[&[u16]]) -> Vec<u16> {
     parts.concat()
 }
 /// A preset ID as UTF-16; catalog IDs are percent-encoded ASCII.
-fn id_units(id: &str) -> Vec<u16> {
+pub(crate) fn id_units(id: &str) -> Vec<u16> {
     units(id)
 }
 /// `a.includes(b)` over UTF-16.

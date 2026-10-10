@@ -190,7 +190,7 @@ class MainActivity : ComponentActivity() {
                     } else if (area == R.string.nav_project && state == R.string.workspace_development) {
                         ProjectScreen(project, Modifier.fillMaxSize().padding(padding))
                     } else if (area == R.string.nav_prepare && state == R.string.workspace_development) {
-                        PrepareScreen(prepare, project.view, device, Modifier.fillMaxSize().padding(padding))
+                        PrepareScreen(prepare, project, device, Modifier.fillMaxSize().padding(padding))
                     } else if (area == R.string.nav_preview && state == R.string.workspace_development) {
                         PreviewScreen(preview, Modifier.fillMaxSize().padding(padding))
                     } else if (state == R.string.workspace_development) {

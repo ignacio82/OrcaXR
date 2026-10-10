@@ -12,6 +12,13 @@
     <!-- The browser's slice actions (web/src/actions/groups/slice.ts) and External slicer panel (web/index.html). -->
     <string name="prepare_plate">%1$s · %2$d object(s)</string>
     <string name="prepare_no_plate">Import a model in the Project area to slice it here.</string>
+    <!-- The browser's profile pickers (web/index.html, app.main.* in web/src/main.ts). -->
+    <string name="prepare_printer">Printer</string>
+    <string name="prepare_process">Process</string>
+    <string name="prepare_filament">Filament</string>
+    <string name="prepare_head_filament">Head %1$d filament</string>
+    <string name="prepare_no_presets">No compatible presets</string>
+    <string name="prepare_own_settings">Using the project’s own settings</string>
     <string name="prepare_external_slicer">External slicer</string>
     <string name="prepare_url">External slicer URL</string>
     <string name="prepare_token">Access token (only if the server requires one)</string>

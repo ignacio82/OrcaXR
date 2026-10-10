@@ -300,7 +300,20 @@ pub fn choices_json(catalog: Option<&ProfileCatalog>, request: &str) -> Answer {
         .map(|v| string(Some(v)))
         .transpose()?;
     let profiles = profiles(catalog);
+    // `profileExtruderCount` of the printer's first profile: its machine config is shared.
+    let printer = machine
+        .as_deref()
+        .filter(|id| !id.is_empty())
+        .and_then(|id| {
+            profiles
+                .iter()
+                .find(|p| choices::id_units(&p.machine_preset_id) == id)
+        });
     answer([
+        (
+            "extruders",
+            Value::Number(choices::extruder_count(printer) as f64),
+        ),
         (
             "machines",
             options_value(&choices::machine_choices(profiles)),

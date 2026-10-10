@@ -41,8 +41,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import dev.orcaxr.core.ProjectView
 import dev.orcaxr.nativeapp.R
+import dev.orcaxr.nativeapp.project.ProjectModel
 import dev.orcaxr.nativeapp.device.DeviceModel
 import dev.orcaxr.nativeapp.send.SendGuard
 import dev.orcaxr.nativeapp.send.SendWords
@@ -59,14 +59,16 @@ import dev.orcaxr.nativeapp.send.SendWords
  * [device]'s shared workflow), with the send's progress and outcome below.
  */
 @Composable
-fun PrepareScreen(model: PrepareModel, view: ProjectView, device: DeviceModel, modifier: Modifier = Modifier) {
+fun PrepareScreen(model: PrepareModel, project: ProjectModel, device: DeviceModel, modifier: Modifier = Modifier) {
+    val view = project.view
+    val profiles = project.profilesView
     val state = model.state
     val send = device.sendState
     val connection = state.connection
     val plate = view.activePlate
     val context = LocalContext.current
     // The preflight follows the project while this area is shown.
-    LaunchedEffect(view.revision, plate) { model.refreshPreflight() }
+    LaunchedEffect(view.revision, plate, profiles) { model.refreshPreflight() }
     // A draft the field edits; the connected endpoint replaces it once canonical.
     var url by rememberSaveable(connection.endpoint) { mutableStateOf(connection.endpoint) }
     // Android 17 asks for the local network first; the check then says what it reached.
@@ -100,6 +102,15 @@ fun PrepareScreen(model: PrepareModel, view: ProjectView, device: DeviceModel, m
                 plate?.let { stringResource(R.string.prepare_plate, it.name, it.objects) } ?: stringResource(R.string.prepare_no_plate),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.semantics { heading() },
+            )
+        }
+        item {
+            ProfilePickers(
+                profiles,
+                enabled = !project.busy,
+                onMachine = project::chooseMachine,
+                onProcess = project::chooseProcess,
+                onFilament = project::chooseFilament,
             )
         }
         item {

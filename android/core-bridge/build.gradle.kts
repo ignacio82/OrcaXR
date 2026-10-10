@@ -34,6 +34,8 @@ androidComponents.onVariants { variant ->
     variant.sources.jniLibs?.addGeneratedSourceDirectory(buildRust) { it.jniDirectory }
     variant.deviceTests.values.forEach { test ->
         test.sources.assets?.addStaticSourceDirectory(rootProject.file("../testdata/cross-platform").path)
+        // The bundled profile catalog, built on the device as the app builds it.
+        test.sources.assets?.addStaticSourceDirectory(rootProject.file("../web/public/profiles").path)
     }
 }
 dependencies {

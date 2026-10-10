@@ -4638,19 +4638,56 @@ project changes. The platform-free flow has 11 JVM tests;
 `android-prepare-smoke.py` drives it on the emulator suites (API 34, and the
 16 KB API 37 image) against the real server on the host
 (`external-slicer-serve.mjs`, reached at 10.0.2.2): the refusal without a
-token; a cube imported into a new project, blocked by the preflight's card
-(it carries no printer or filament profile, and the app cannot choose catalog
-ones yet) with Slice unavailable; the multicolour hexagon (which carries its
-own) opened in its place, sliced after consent, shown in Preview, a confirmed
-cancel, and the slice withdrawn once a model is imported. Its first run
+token; a cube imported into a new project, which starts from the catalog's
+default profile and passes the preflight; another printer chosen from the
+picker (one undoable step); the cube sliced after consent, shown in Preview,
+a confirmed cancel, and the slice withdrawn once a model is imported; then
+the multicolour hexagon, which carries its own printer and filaments, slicing
+with them while the pickers say so. Its first run
 found the client's stale keep-alive connection (above) and a server defect:
 results in a temporary directory under a dot directory were never delivered
 ([runtime and deployment](runtime-and-deployment.md)). Not yet matched: local slicing,
-choosing catalog profiles (the core's catalog slicing configuration, below, is
-ready; the area offers no picker yet) and catalog profile targets for preflight, the wave-overhang engine check,
+the palette's further colours (the browser's Filament tab), the wave-overhang engine check,
 preflight actions (reveal, drop to bed), troubleshooting text, slicing all
 plates, and the shared artifact summary (layers are the browser's fallback
 count).
+
+### Android profile selection
+
+Prepare chooses the catalog profile a project slices with, as the browser's
+top-bar pickers do. `SlicingProfiles` (the browser workspace's `profile` and
+head filaments) builds the bundled `profiles/catalog.json` — an asset the app
+build copies from `web/public/profiles` — in the shared core with ICU's
+English collator (`EnglishPresetCollator`, the browser's
+`localeCompare(…, 'en')`; an instrumented test replays the browser's
+collation pairs and builds the catalog in its exact profile order), once per
+process: every window shares it (`ProfileCatalogs.shared`), since it never
+changes and the core admits only four live documents — a catalog per window
+beside each window's session left a second window's New Project none, which
+the Project smoke's second window found. The
+pickers are `ProfileCatalog.slicingChoices`, labels disambiguated, with
+"Using the project's own settings" when nothing is chosen and "No compatible
+presets" for an empty list; a printer with several heads (the choices'
+`extruders`, the shared `profileExtruderCount`) has a filament picker per
+head. A choice applies only when complete (`selectPresets`, the browser's
+messages shown), is remembered as the browser's `orcaxr.profiles` (presets,
+then names to fall back on), and becomes the project's configuration as one
+undoable "Update slicing configuration": `ProjectWorkspace.applySlicingChoice`
+stages it on the project's authority (`ProjectActor.configureSlicing`, which
+now has the browser's staged-edit pool) and executes it. As the browser's new
+document, a pristine project takes the remembered or default profile
+(Snapmaker U1, 0.4 mm) as its baseline, with nothing to undo; New Project
+keeps it. An opened or restored project slices with its own printer and
+filaments (the authored preflight) until a profile is chosen; otherwise the
+preflight is the chosen profile's exact presets for the project's tool count
+(`ProfileCatalogs.preflightTarget`). `ProjectSlicingChoiceChecks` (11, real
+session and catalog): a bare cube blocked as authored, the default applied as
+one undoable step, the same choice changing nothing, the catalog preflight
+passing, undo and redo moving across it, and a new project keeping it. That
+last check found that the workspace appended a project document in one
+chunk, so any document over the host's 64 KiB chunk — a fresh project
+carrying a catalog configuration, or New Project after opening a project
+with its own — failed as `input_limit`; documents are now appended in chunks.
 
 ### Android send to printer
 
@@ -5312,7 +5349,8 @@ nozzle, and the palette). The core ports it as:
 
 - `slicing::choices`: the pickers' printer, process and filament choices in
   catalog order, labels disambiguated by name and then by the vendor the
-  preset ID encodes (`" — "`); `match_option` (a unique exact label, else a
+  preset ID encodes (`" — "`), with the printer's heads (`extruders`,
+  `profileExtruderCount`: its `nozzle_diameter` entries, one without one); `match_option` (a unique exact label, else a
   unique exact name, else the one containing match, ignoring case);
   `find_by_names` (`ProfileCatalog.find`); the default triple (Snapmaker U1
   0.4 / 0.20 Standard / Snapmaker PLA, else the first profile); `resolve`

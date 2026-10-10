@@ -1866,13 +1866,16 @@ storage journeys on phone, tablet, and desktop-sized windows.
   printer, through the Device area's shared send workflow.
   The bar's order is Workspace (the home), Prepare, Preview, Device, Project.
   JVM tests cover its platform-free flow, and `android-prepare-smoke.py`
-  runs it on API 34 and the 16 KB API 37 image against the real server. Until
-  catalog profiles can be chosen, only a project carrying its own printer and
-  filament settings passes the preflight; a bare imported model is blocked
-  with the browser's card. The shared core now selects catalog profiles and
-  stages the configuration they describe
-  (`ProjectSession.stageSlicingConfiguration`); the pickers and their
-  workspace operation remain.
+  runs it on API 34 and the 16 KB API 37 image against the real server.
+  Prepare's Printer, Process and Filament pickers (one per head on a printer
+  with several) choose catalog profiles over the bundled catalog, in the
+  shared core: a new project starts from the remembered or default profile,
+  as the browser's new document does, so a bare imported model slices; each
+  choice is one undoable "Update slicing configuration"
+  (`ProjectWorkspace.applySlicingChoice`), and the preflight checks the
+  chosen profile's exact presets; an opened project slices with its own
+  printer and filaments until a profile is chosen. The palette's further
+  colours (the browser's Filament tab) remain.
 - [ ] Adapt inspector/object tree, toolbars, menus, command palette, dialogs,
   settings, and progress states to narrow, medium, and wide windows. Support
   keyboard traversal, shortcuts, hover, context menus, trackpad navigation,

@@ -29,6 +29,7 @@ import {
   matchPresetOption,
   nextSlicingState,
   processPresetChoices,
+  profileExtruderCount,
   resolvedProfileSlots,
   resolveProfileSelection,
   resolveProfileSelectionByNames,
@@ -153,7 +154,8 @@ function selectionReply(outcome: ProfileSelectionOutcome, live: LiveSlicingChoic
 
 /**
  * The pickers' choices: `{"machinePresetId"?, "processPresetId"?}` in,
- * `{"machines","processes","filaments"}` out, each a list of `{"id","label","name"}`.
+ * `{"machines","processes","filaments"}` out, each a list of `{"id","label","name"}`,
+ * with `"extruders"`, the printer's heads (`profileExtruderCount`; one without a printer).
  */
 export function slicingChoicesExchange(catalog: SlicingProfileCatalog, requestJson: string): string {
   const request = object(read(requestJson), [], ['machinePresetId', 'processPresetId']);
@@ -163,6 +165,9 @@ export function slicingChoicesExchange(catalog: SlicingProfileCatalog, requestJs
     machines: machinePresetChoices(catalog.profiles).map(optionJson),
     processes: processPresetChoices(catalog.profiles, machine).map(optionJson),
     filaments: filamentPresetChoices(catalog.profiles, machine, process).map(optionJson),
+    extruders: profileExtruderCount(
+      (machine && catalog.profiles.find((profile) => profile.machinePresetId === machine)) || null,
+    ),
   });
 }
 

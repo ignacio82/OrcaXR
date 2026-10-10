@@ -131,7 +131,7 @@ fn choices_matches_and_selections_answer_as_the_browser_does() {
     // A catalog that did not load offers nothing and resolves nothing.
     assert_eq!(
         exchange::choices_json(None, "{}").unwrap(),
-        r#"{"filaments":[],"machines":[],"processes":[]}"#
+        r#"{"extruders":1,"filaments":[],"machines":[],"processes":[]}"#
     );
     let empty = r##"{"live":{"heads":[],"nozzles":[],"palette":[{"color":"#000000","type":"PLA"}],"profile":null},"request":{"machinePresetId":"preset:x:machine:y"}}"##;
     assert_eq!(

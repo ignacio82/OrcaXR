@@ -4,18 +4,20 @@
 The real external slicer server runs on this machine (headless, its engine a
 stand-in that writes the two-layer reference G-code; the emulator reaches the
 host at 10.0.2.2) with a bearer token. A cube is imported through the system's
-document picker into a fresh project. Prepare shows the slicer offline and
-Slice unavailable; a connection without the token shows the policy's refusal,
-with the token the attested engine — and Slice stays unavailable, the shared
-preflight's card saying the plate carries no attested printer and filament
-profiles. A project that carries its own (the multicolour hexagon) is opened
-instead, discarding the cube. The first slice asks before uploading the plate,
-then the G-code opens in Preview (toolpaths drawn); the next slice to the same
-slicer does not ask again — held by the server, it is cancelled and the
-cancellation confirmed. Sliced again, then the cube imported: the G-code is
-withdrawn from Preview and Prepare's result is out of date. Deleting the
-slicer turns slicing off. The server sees each upload as a 3MF package, with
-the token and nothing else.
+document picker into a fresh project, which starts — as the browser's new
+document does — from the catalog's default profile (Snapmaker U1, 0.4 mm,
+four heads). Prepare shows the slicer offline and Slice unavailable; a
+connection without the token shows the policy's refusal, with the token the
+attested engine. The cube passes the shared preflight; another printer chosen
+from the picker becomes the project's configuration as one undoable step and
+passes too. The first slice asks before uploading the plate, then the G-code
+opens in Preview (toolpaths drawn); the next slice to the same slicer does not
+ask again — held by the server, it is cancelled and the cancellation
+confirmed. Sliced again, then a second cube imported: the G-code is withdrawn
+from Preview and Prepare's result is out of date. A project carrying its own
+printer and filaments (the multicolour hexagon) slices with them, the pickers
+saying so. Deleting the slicer turns slicing off. The server sees each upload
+as a 3MF package, with the token and nothing else.
 """
 import argparse
 import base64
@@ -127,22 +129,23 @@ try:
     find("On — models will be sliced on the external server.")
     find(f"Slicing route: the external slicer at {endpoint}, whose engine attested as", exact=False)
 
-    # A bare model carries no printer or filament profiles: the shared preflight blocks it.
-    find("Slice preflight issues", timeout=30)
-    find("Error missing-profile-attestation", exact=False)
-    assert not enabled("Slice"), "Slice was offered for a plate the preflight blocks"
-
-    # A project that carries its own profiles, opened in place of the unsaved cube.
-    tap("Project")
-    tap("Open Project…")
-    pick_download("hexagon.3mf")
-    find("Save changes to Untitled project?", timeout=30)
-    tap("Discard")
-    find("hexagon.3mf · No unsaved changes", timeout=60)
-    tap("Prepare")
-    find("Plate 1 · 1 object(s)", timeout=30)
+    # A new project starts from the catalog's default profile: the bare cube passes the preflight.
+    find("Snapmaker U1 (0.4 nozzle)")
+    find("Head 4 filament")
     screen.absent("Slice preflight issues", timeout=30)
-    assert enabled("Slice"), "Slice was not offered for a plate the preflight passes"
+    assert enabled("Slice"), "Slice was not offered for a cube on the default profile"
+
+    # Another printer, chosen from the picker: one undoable step, and its preflight passes too.
+    screen.to_top()
+    tap("Snapmaker U1 (0.4 nozzle)")
+    tap("Elegoo Centauri Carbon 0.4 nozzle")
+    find("Elegoo Centauri Carbon 0.4 nozzle", timeout=30)
+    screen.absent("Head 2 filament", timeout=30)
+    tap("Project")
+    find("Undo Update slicing configuration", timeout=30)
+    tap("Prepare")
+    screen.absent("Slice preflight issues", timeout=30)
+    assert enabled("Slice"), "Slice was not offered for the chosen printer"
 
     # The first slice asks before anything leaves the device; then Preview shows the G-code.
     tap("Slice")
@@ -179,6 +182,18 @@ try:
     find("Slice the plate or open a G-code file to inspect toolpaths.")
     tap("Prepare")
     find(OUT_OF_DATE, timeout=30)
+
+    # A project carrying its own printer and filaments slices with them until a profile is chosen.
+    tap("Project")
+    tap("Open Project…")
+    pick_download("hexagon.3mf")
+    find("Save changes to Untitled project?", timeout=30)
+    tap("Discard")
+    find("hexagon.3mf · No unsaved changes", timeout=60)
+    tap("Prepare")
+    find("Using the project’s own settings", timeout=30)
+    screen.absent("Slice preflight issues", timeout=30)
+    assert enabled("Slice"), "Slice was not offered for a project with its own settings"
 
     # Deleting the slicer turns slicing off and forgets the consent.
     tap("Delete")

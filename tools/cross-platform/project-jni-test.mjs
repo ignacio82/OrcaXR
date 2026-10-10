@@ -317,6 +317,13 @@ try {
   // One writer per document, and changes made outside detected by digest.
   const documentOwnersChecks = jvm.call("documentOwnersChecks", decodeBytes("stl-binary/cube"));
   assert.equal(documentOwnersChecks, 14);
+  // A catalog choice becomes the project's configuration, undoably, and its preflight passes.
+  const slicingChoiceChecks = jvm.call(
+    "slicingChoiceChecks",
+    decodeBytes("stl-binary/cube"),
+    await readFile(new URL("web/public/profiles/catalog.json", root)),
+  );
+  assert.equal(slicingChoiceChecks, 11);
   // The renderer's view of a real session: render deltas and mesh packets into the scene.
   const projectSceneChecks = jvm.call("projectSceneChecks", decodeBytes("stl-binary/cube"));
   assert.equal(projectSceneChecks, 13);
@@ -1388,6 +1395,7 @@ try {
     projectWorkspaceChecks,
     projectRecoveryChecks,
     documentOwnersChecks,
+    slicingChoiceChecks,
     projectSceneChecks,
     actorArchiveChecks,
     providerDocumentChecks,

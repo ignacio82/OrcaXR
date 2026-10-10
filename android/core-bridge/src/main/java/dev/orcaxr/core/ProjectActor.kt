@@ -43,6 +43,10 @@ sealed interface ProjectOutcome {
     data class NotStarted(val reason: ProjectRefusal) : ProjectOutcome
     /** What a read-only [ProjectActor.inspect] answered, or how it failed; the project is unchanged either way. */
     data class Inspected(val result: Result<Any?>) : ProjectOutcome
+    /** A slicing configuration the project already has: nothing was staged or recorded. */
+    data object SlicingUnchanged : ProjectOutcome
+    /** A slicing configuration the core refused to stage (`orphaned-mixed-component`, `auto-pairs`, `ids-exhausted`), in the browser's words. */
+    data class SlicingRefused(val code: String, val message: String) : ProjectOutcome
     /** No retry is safe: the operation may have changed the project or handed off output. */
     data object Uncertain : ProjectOutcome
 }
@@ -133,6 +137,7 @@ class ProjectActor private constructor(
         data class Import(val expected: ProjectActorGuard, val prepare: (ProjectPreparation, ProjectImportBase) -> ProjectImportPreview) : Work
         data class CommitImport(val candidate: ProjectActorImport, val acknowledged: List<String>) : Work
         data class Inspect(val read: (ProjectSession) -> Any?) : Work
+        data class Slicing(val stage: (ProjectSession) -> SlicingStage) : Work
     }
     private sealed interface Prepared {
         data class Export(val source: ProjectActorGuard, val guard: ProjectGuard, val save: Boolean) : Prepared
@@ -371,6 +376,18 @@ class ProjectActor private constructor(
         enqueue(Work.Inspect(read))
     }
 
+    /**
+     * Makes the slicing configuration [stage] describes the project's own, on
+     * the authority: staged against the current project and executed as one
+     * undoable "Update slicing configuration", answered as [ProjectOutcome.Completed]
+     * — or [ProjectOutcome.SlicingUnchanged] / [ProjectOutcome.SlicingRefused]
+     * with nothing recorded.
+     */
+    fun configureSlicing(stage: (ProjectSession) -> SlicingStage): ProjectRequest = synchronized(gate) {
+        refusal()?.let { return refused(it) }
+        enqueue(Work.Slicing(stage))
+    }
+
     private fun enqueue(work: Work) = Task().also { it.work = work; tasks.add(it); authority.execute(it) }.request
     private fun refusal(): ProjectRefusal? = when {
         closed -> ProjectRefusal.CLOSED
@@ -523,7 +540,7 @@ class ProjectActor private constructor(
                     Prepared.Import(task.scope.own(work.prepare(task.scope, base)))
                 })
             }
-            is Work.Message, Work.ClearClipboard, is Work.CommitImport, is Work.Inspect -> error("unexpected_preparation")
+            is Work.Message, Work.ClearClipboard, is Work.CommitImport, is Work.Inspect, is Work.Slicing -> error("unexpected_preparation")
         }
     }
 
@@ -614,7 +631,8 @@ class ProjectActor private constructor(
             value = session ?: return
             work = task.work
             prepared = task.prepared
-            preparing = prepared == null && work !is Work.Message && work != Work.ClearClipboard && work !is Work.CommitImport && work !is Work.Inspect
+            preparing = prepared == null && work !is Work.Message && work != Work.ClearClipboard && work !is Work.CommitImport &&
+                work !is Work.Inspect && work !is Work.Slicing
             task.phase = if (preparing) Phase.PREPARING else Phase.EXECUTING
             task.mayCommit = !preparing && task !== startup && prepared !is Prepared.Copy && prepared !is Prepared.Import &&
                 work != Work.ClearClipboard && work !is Work.Inspect
@@ -647,6 +665,14 @@ class ProjectActor private constructor(
                     work.candidate.close()
                     NativeResult(ProjectOutcome.Imported(ProjectProjection.DELIVERED, optionalAuthority(value)), effects)
                 } catch (failure: Throwable) { effects.close(); throw failure }
+            } else if (work is Work.Slicing) {
+                when (val stage = preflight { work.stage(value) }) {
+                    SlicingStage.Unchanged -> NativeResult(ProjectOutcome.SlicingUnchanged, null)
+                    is SlicingStage.Refused -> NativeResult(ProjectOutcome.SlicingRefused(stage.code, stage.message), null)
+                    is SlicingStage.Staged -> stage.input.use { ready ->
+                        acknowledged(value, exchange(value, capture(ProjectIntents.SessionOperation.ExecuteStaged(ProjectIntents.StagedReference(ready.id)))))
+                    }
+                }
             } else if (work is Work.Inspect) {
                 // A read's own failure is its answer: it never ends the connection.
                 NativeResult(ProjectOutcome.Inspected(runCatching { work.read(value) }), null)
