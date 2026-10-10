@@ -18,6 +18,14 @@ from artifacts import ROOT
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--api", type=int, choices=(34, 37), default=34)
 parser.add_argument("--pages", type=int, choices=(4, 16), default=4)
+# Every smoke installs the app it drives, so a run may start part-way through the order.
+SMOKES = ["android-smoke", "android-local-network-smoke", "android-device-smoke", "android-project-smoke",
+          "android-preview-smoke", "android-prepare-smoke", "android-send-smoke", "android-locale-smoke",
+          "android-edit-smoke", "android-inspector-smoke", "android-create-smoke",
+          # Last: it resizes the display (restoring it as it ends) for the window-size layouts.
+          "android-adaptive-smoke"]
+parser.add_argument("--from", dest="start", choices=SMOKES, default=SMOKES[0],
+                    help="run the smokes from this one on, in order")
 arguments = parser.parse_args()
 api = arguments.api
 images = {
@@ -57,20 +65,11 @@ with tempfile.TemporaryDirectory(prefix="orcaxr-avd-") as directory:
                 raise RuntimeError("Owned emulator did not boot before the deadline")
             page = subprocess.check_output(["adb", "-s", serial, "shell", "getconf", "PAGESIZE"], text=True).strip()
             assert page == str(arguments.pages * 1024), f"Expected {arguments.pages} KB pages, the kernel uses {page} bytes"
-            subprocess.run(["python3", "tools/cross-platform/android-smoke.py", "--serial", serial], cwd=ROOT, check=True)
-            if api >= 37:
-                subprocess.run(["python3", "tools/cross-platform/android-local-network-smoke.py", "--serial", serial], cwd=ROOT, check=True)
-            subprocess.run(["python3", "tools/cross-platform/android-device-smoke.py", "--serial", serial], cwd=ROOT, check=True)
-            subprocess.run(["python3", "tools/cross-platform/android-project-smoke.py", "--serial", serial], cwd=ROOT, check=True)
-            subprocess.run(["python3", "tools/cross-platform/android-preview-smoke.py", "--serial", serial], cwd=ROOT, check=True)
-            subprocess.run(["python3", "tools/cross-platform/android-prepare-smoke.py", "--serial", serial], cwd=ROOT, check=True)
-            subprocess.run(["python3", "tools/cross-platform/android-send-smoke.py", "--serial", serial], cwd=ROOT, check=True)
-            subprocess.run(["python3", "tools/cross-platform/android-locale-smoke.py", "--serial", serial], cwd=ROOT, check=True)
-            subprocess.run(["python3", "tools/cross-platform/android-edit-smoke.py", "--serial", serial], cwd=ROOT, check=True)
-            subprocess.run(["python3", "tools/cross-platform/android-inspector-smoke.py", "--serial", serial], cwd=ROOT, check=True)
-            subprocess.run(["python3", "tools/cross-platform/android-create-smoke.py", "--serial", serial], cwd=ROOT, check=True)
-            # Last: it resizes the display (restoring it as it ends) for the window-size layouts.
-            subprocess.run(["python3", "tools/cross-platform/android-adaptive-smoke.py", "--serial", serial], cwd=ROOT, check=True)
+            for smoke in SMOKES[SMOKES.index(arguments.start):]:
+                # The local-network permission exists from Android 17.
+                if smoke == "android-local-network-smoke" and api < 37:
+                    continue
+                subprocess.run(["python3", f"tools/cross-platform/{smoke}.py", "--serial", serial], cwd=ROOT, check=True)
         finally:
             process.terminate()
             try:

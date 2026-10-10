@@ -14,6 +14,7 @@ import argparse
 import base64
 import json
 import re
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -78,32 +79,37 @@ def edit(action, timeout=20):
         time.sleep(0.5)
 
 
+def described(title, axis, nodes):
+    """The inspector field [axis] of tool [title] among [nodes]: the text field described as
+    "<title> <axis>", else the tool's fields in order after its title; None when not shown."""
+    # The description sits on a node inside the text field (Compose reports the field around it, with
+    # the same bounds), or around it.
+    fields = [n for n in nodes if n.get("class") == "android.widget.EditText"]
+
+    def text_field(node):
+        around = next((f for f in fields if f.get("bounds") == node.get("bounds")), None)
+        if around is not None:
+            return around
+        return next((c for c in node.iter("node") if c.get("class") == "android.widget.EditText"), node)
+
+    found = [text_field(n) for n in nodes if n.get("content-desc") == f"{title} {axis}"]
+    if not found:
+        heading = next((i for i, n in enumerate(nodes) if (n.get("text") or "") == title), None)
+        after = [n for n in nodes[heading + 1:] if n.get("class") == "android.widget.EditText"] if heading is not None else []
+        found = after[AXES.index(axis):AXES.index(axis) + 1]
+    return found[0] if found else None
+
+
 def field(title, axis, timeout=20):
-    """The inspector field [axis] of tool [title], scrolled clear of the bottom bar: the text field
-    described as "<title> <axis>", else the tool's fields in order after its title."""
+    """The inspector field [axis] of tool [title], scrolled clear of the bottom bar."""
     deadline = time.monotonic() + timeout
     while True:
         find(title)
-        nodes = screen.nodes()
-        # The description sits on a node inside the text field (Compose reports the field around it, with
-        # the same bounds), or around it.
-        fields = [n for n in nodes if n.get("class") == "android.widget.EditText"]
-
-        def text_field(node):
-            around = next((f for f in fields if f.get("bounds") == node.get("bounds")), None)
-            if around is not None:
-                return around
-            return next((c for c in node.iter("node") if c.get("class") == "android.widget.EditText"), node)
-
-        described = [text_field(n) for n in nodes if n.get("content-desc") == f"{title} {axis}"]
-        if not described:
-            heading = next((i for i, n in enumerate(nodes) if (n.get("text") or "") == title), None)
-            after = [n for n in nodes[heading + 1:] if n.get("class") == "android.widget.EditText"] if heading is not None else []
-            described = after[AXES.index(axis):AXES.index(axis) + 1]
-        if described:
-            left, top, right, bottom = bounds(described[0])
+        node = described(title, axis, screen.nodes())
+        if node is not None:
+            left, top, right, bottom = bounds(node)
             if bottom - top > 40 and bottom < height - 260:
-                return described[0]
+                return node
         assert time.monotonic() < deadline, f"The {title} {axis} field never showed"
         adb("shell", "input", "swipe", "360", "900", "360", "600", "300")
         time.sleep(0.5)
@@ -122,18 +128,38 @@ def until_value(title, axis, expected, timeout=30):
 
 def type_field(title, axis, text, expected):
     """Types [text] into a field and presses Enter — the browser's change — then waits for the
-    selection's value, [expected], with the browser's two decimals."""
+    selection's value, [expected], with the browser's two decimals. Enter commits whatever the
+    field holds, so the field must show exactly [text] first. On a loaded emulator Ctrl+A can
+    arrive without its Ctrl, and the tap's caret can land after a Move End sent to follow it,
+    so the old digits survive around the caret: the field is emptied on both sides of the caret
+    instead — a Forward Delete and a Backspace per character it shows (the field consumes the
+    spare ones: a Forward Delete it does not use would delete the model) — and typed again until
+    it reads right. Once the keyboard is up nothing scrolls: a swipe could land on the keyboard."""
     shown = lambda: "mInputShown=true" in adb("shell", "dumpsys", "input_method")
-    x, y = screen.center(field(title, axis))
-    adb("shell", "input", "tap", str(x), str(y))
-    deadline = time.monotonic() + 3
-    while not shown() and time.monotonic() < deadline:
-        time.sleep(0.2)
-    time.sleep(0.3)
-    # Select everything in the field and delete it, then type.
-    adb("shell", "input", "keycombination", "113", "29")
-    screen.key(67)
-    adb("shell", "input", "text", text)
+    def held():
+        node = described(title, axis, screen.nodes())
+        return "" if node is None else node.get("text") or ""
+
+    seen = []
+    for attempt in range(3):
+        x, y = screen.center(field(title, axis))
+        adb("shell", "input", "tap", str(x), str(y))
+        deadline = time.monotonic() + 3
+        while not shown() and time.monotonic() < deadline:
+            time.sleep(0.2)
+        time.sleep(1)
+        count = len(held()) + 1
+        adb("shell", "input", "keyevent", *(["112"] * count), *(["67"] * count))
+        adb("shell", "input", "text", text)
+        time.sleep(0.3)
+        seen.append(held())
+        if seen[-1] == text:
+            break
+        screen.hide_keyboard()
+    else:
+        png = subprocess.check_output(["adb", "-s", args.serial, "exec-out", "screencap", "-p"], timeout=60)
+        (output / f"inspector-{title.split()[0].lower()}-{axis}-typing.png").write_bytes(png)
+        raise AssertionError(f"Could not type '{text}' into {title} {axis}; it showed {seen}")
     screen.key(66)
     screen.hide_keyboard()
     until_value(title, axis, expected)

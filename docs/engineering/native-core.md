@@ -4935,7 +4935,10 @@ smoke) imports a cube, selects it, lays a tapped face flat and undoes it,
 types Move X, centres, raises and drops it, rotates 90° about Z, scales to
 200 % and undoes, mirrors on X, then arranges two cubes as one "Transform 2
 instances". An import selects nothing, as in the browser, so it selects the cube
-with Select All first; it passes on the API 34 emulator.
+with Select All first. It types into a field only once the field is emptied on both
+sides of the caret and shows exactly the new text (a loaded emulator can drop Ctrl+A's
+Ctrl, or place the tap's caret after a following key), since Enter commits whatever the
+field holds; it passes on both emulators.
 
 ### Android creation
 
@@ -4999,7 +5002,7 @@ are the browser's messages (`contracts/android-strings.json`).
 `emulator-smoke.py` before the adaptive smoke) adds a cube and a cylinder,
 copies and pastes, pastes with Ctrl+V, adds an instance, cuts it with Ctrl+X
 and pastes it back, and adds and undoes a modifier, each by its undo label; it
-passes on the API 34 emulator.
+passes on both emulators.
 
 ### Android Preview area
 
@@ -6514,7 +6517,10 @@ a temporary 720×1280 AVD/process, uses two CPU cores and software GLES with Vul
 disabled, and refuses to reuse an occupied emulator port. A larger fresh emulator
 on the busy shared host encountered a System UI ANR after JNI tests passed; the
 startup assertion correctly failed. This small CI display is for protocol/startup
-checks, not renderer performance measurements. To test an
+checks, not renderer performance measurements. `--from <smoke>` (for example
+`--from android-inspector-smoke`) runs the order from that smoke on, on the same
+freshly owned AVD: every smoke installs the app it drives. Its density is the
+`pixel_2` profile's 420 dpi, so the 720-pixel display is 274 dp wide. To test an
 already-owned emulator explicitly, use `android-smoke.py --serial emulator-NNNN`.
 It refuses physical-device serials. Tests install the development app and test APK,
 run real JNI vectors, and check three cold starts through the UI hierarchy.
