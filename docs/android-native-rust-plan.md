@@ -1922,8 +1922,10 @@ storage journeys on phone, tablet, and desktop-sized windows.
   G-code in Preview, anything else refused in the browser's words. JVM tests
   cover the layouts and the drop; `android-adaptive-smoke.py` resizes the
   emulator for the bar, rail and panels and drives the keyboard (adb cannot
-  drag and drop) but has not yet run. Hover, context menus, trackpad, stylus,
-  the inspector's own panels, toolbars, menus and the command palette remain.
+  drag and drop) but has not yet run. The transform inspector sits under the
+  Project area's tree (beside the Workspace from 840 dp). Hover, context
+  menus, trackpad, stylus, the inspector's other panels, toolbars, menus and
+  the command palette remain.
 - [ ] Integrate the flat renderer with panel resizing, visibility, lifecycle,
   selection, painting, model tools, and preview controls. Keep CPU work and
   loading off the UI thread; avoid per-frame Compose recomposition for meshes.
@@ -1937,8 +1939,16 @@ storage journeys on phone, tablet, and desktop-sized windows.
   carries out drop to bed, mirror, the resets, centre, scale to fit, lay flat
   and arrange as the browser's guarded, coalescing transform edits (a
   127-check JNI journey matches the browser controller's hash, undo label and
-  report after every step and undo). Painting, the inspector and model-tool
-  UI, lighting and preview controls remain.
+  report after every step and undo). The Project area's transform inspector
+  (Move/Rotate/Scale fields of the selected instance, each edit one
+  `ProjectWorkspace.editTransform` step with the browser's label, never
+  coalescing, as its field edits draw `single:<n>`/`batch:<n>`) and the Edit
+  menu's placement entries (Lay flat as a Workspace tap tool, mirror, resets,
+  centre, scale to fit, drop to bed, arrange; the core's enablement) carry
+  them out: a 509-check JNI journey lands the transform-field corpus's edits
+  on a real session as the browser computed them and undoes each; the
+  emulator inspector smoke has not run yet. Painting, other model-tool UI,
+  lighting and preview controls remain.
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.

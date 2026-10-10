@@ -32,7 +32,8 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         val frames: Long, val maxFrameCpuMs: Double, val closed: Boolean,
         val toolpathSegments: Int = 0,
     )
-    data class Pick(val key: String, val instanceId: String, val facet: Int, val distanceMetres: Double)
+    /** The draw [key] a pick met: [facet] of volume [volumeId]'s mesh as placed by instance [instanceId]. */
+    data class Pick(val key: String, val instanceId: String, val facet: Int, val distanceMetres: Double, val volumeId: String = "")
 
     private class Chunk(val vertices: VertexBuffer, val indices: IndexBuffer, val count: Int,
         val facetCount: Int, val center: FloatArray, val extent: FloatArray, val bytes: Long)
@@ -546,7 +547,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
             val hit = index.pick(local, closest?.distanceMetres ?: Double.POSITIVE_INFINITY) { facet, point ->
                 facet < mesh.uploadedFacets && transform.point(point).z * .001 <= clipHeight
             }
-            if (hit != null) closest = Pick(key, each.draw.instanceId, hit.facet, hit.distance)
+            if (hit != null) closest = Pick(key, each.draw.instanceId, hit.facet, hit.distance, each.draw.volumeId)
         }
         return closest
     }

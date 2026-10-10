@@ -64,6 +64,22 @@
     "project_rename_plate": { "key": "action.rename_plate.label" },
     "project_activate_plate": { "key": "action.activate_plate.label" },
     "project_set_plate_printable": { "key": "action.set_plate_printable.label" },
+    "project_lay_flat": { "key": "action.tool_lay_on_face.label" },
+    "project_mirror_x": { "key": "action.mirror_x.label" },
+    "project_mirror_y": { "key": "action.mirror_y.label" },
+    "project_mirror_z": { "key": "action.mirror_z.label" },
+    "project_reset_rotation": { "key": "action.reset_rotation.label" },
+    "project_reset_scale": { "key": "action.reset_scale.label" },
+    "project_center_on_plate": { "key": "action.center_on_plate.label" },
+    "project_scale_to_fit_volume": { "key": "action.scale_to_fit_volume.label" },
+    "project_drop_to_bed": { "key": "action.drop_to_bed.label" },
+    "project_arrange_all": { "key": "action.arrange_all.label" },
+    "workspace_lay_flat_hint": {
+      "key": "workspace.orcaWorkspace.layFlatClickTheFacet"
+    },
+    "workspace_lay_flat_missed": {
+      "key": "workspace.orcaWorkspace.clickAModelFacetTo"
+    },
     "device_cancel": { "key": "persistence.cancel" },
     "device_tab_camera": { "key": "startup.feature.camera" },
     "device_folder_empty": {
@@ -142,6 +158,13 @@
     "project_row_select",
     "project_row_expand",
     "project_row_collapse",
+    "project_inspector_move",
+    "project_inspector_rotate",
+    "project_inspector_scale",
+    "project_inspector_x",
+    "project_inspector_y",
+    "project_inspector_z",
+    "workspace_lay_flat_done",
     "device_printers",
     "device_no_printers",
     "device_add_printer",

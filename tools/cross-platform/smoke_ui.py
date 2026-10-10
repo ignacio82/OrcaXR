@@ -122,9 +122,14 @@ class Screen:
     def hide_keyboard(self):
         """Closes the soft keyboard, which would cover the next field or button. Back closes it; a
         second Back while it is still animating away would dismiss the dialog behind it, so each
-        press waits for it to go."""
+        press waits for it to go. A field that commits on Enter closes the keyboard itself, a moment
+        later: a Back sent then would reach the screen (and ask to leave the project), so it waits
+        that moment first."""
         shown = lambda: "mInputShown=true" in self.adb("shell", "dumpsys", "input_method")
         for _ in range(5):
+            settle = time.monotonic() + 1
+            while shown() and time.monotonic() < settle:
+                time.sleep(0.2)
             if not shown():
                 return
             self.key(4)

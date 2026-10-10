@@ -22,6 +22,8 @@ internal object PlacementGestures {
     const val LAY_ON_FACE = "lay-on-face"
     fun arrange(plateId: String) = "arrange:$plateId"
     fun batch(sequence: Long) = "batch:$sequence"
+    /** A one-instance transform without a gesture of its own (an inspector field edit): `single:<n>` from the same sequence. */
+    fun single(sequence: Long) = "single:$sequence"
     /** The browser's status when a project states no printable height (`scaleSelectionToFitPrintVolume`). */
     const val NO_PRINTABLE_HEIGHT = "This printer profile states no printable height, so a fitting scale cannot be computed."
 }

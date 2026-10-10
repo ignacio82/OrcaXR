@@ -19,6 +19,8 @@
     <string name="project_toggle_printable">Доступно для друку</string>
     <string name="project_instance_to_object">Встановити як окремий об\'єкт</string>
     <string name="project_duplicate_plate">Дублювати поточну пластину</string>
+    <string name="project_reset_rotation">Скинути орієнтацію</string>
+    <string name="project_scale_to_fit_volume">Масштабування для збільшення обсягу</string>
     <string name="device_cancel">Скасувати</string>
     <string name="device_tab_camera">Камера</string>
 </resources>

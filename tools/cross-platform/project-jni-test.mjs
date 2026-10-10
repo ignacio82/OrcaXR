@@ -371,6 +371,15 @@ try {
     Buffer.from(editFixture.archive, "base64"),
   );
   assert.equal(placementEditChecks, 127);
+  // The transform inspector on a real session: every field edit of the corpus
+  // lands as the browser computed it (or is refused in its words), one undo
+  // entry each that never coalesces; the Edit menu's placement on the selection.
+  const transformEditChecks = jvm.call(
+    "transformEditChecks",
+    decodeBytes("stl-binary/cube"),
+    fieldFixture.edits.map((c) => `E\t${c.request}\t${c.reply}`).join("\n"),
+  );
+  assert.equal(transformEditChecks, 509);
   // The renderer's view of a real session: render deltas and mesh packets into the scene.
   const projectSceneChecks = jvm.call("projectSceneChecks", decodeBytes("stl-binary/cube"));
   assert.equal(projectSceneChecks, 13);
@@ -1449,6 +1458,7 @@ try {
     transformFields,
     transformFieldChecks,
     placementEditChecks,
+    transformEditChecks,
     projectSceneChecks,
     actorArchiveChecks,
     providerDocumentChecks,

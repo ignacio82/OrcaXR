@@ -19,6 +19,8 @@
     <string name="project_toggle_printable">Druckbar</string>
     <string name="project_instance_to_object">Als eigenes Objekt definieren</string>
     <string name="project_duplicate_plate">Aktuelle Druckplatte duplizieren</string>
+    <string name="project_reset_rotation">Rotation zurücksetzen</string>
+    <string name="project_scale_to_fit_volume">Auf Druckvolumen skalieren</string>
     <string name="device_cancel">Abbrechen</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

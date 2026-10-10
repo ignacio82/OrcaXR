@@ -19,6 +19,8 @@
     <string name="project_toggle_printable">출력 가능</string>
     <string name="project_instance_to_object">개별 객체로 설정</string>
     <string name="project_duplicate_plate">현재 플레이트 복제</string>
+    <string name="project_reset_rotation">회전 초기화</string>
+    <string name="project_scale_to_fit_volume">출력 가능 영역에 맞게 확장</string>
     <string name="device_cancel">취소</string>
     <string name="device_tab_camera">카메라</string>
 </resources>

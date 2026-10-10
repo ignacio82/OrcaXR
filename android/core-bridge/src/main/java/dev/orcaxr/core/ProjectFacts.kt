@@ -51,7 +51,7 @@ internal object ProjectFacts {
     }
 
     /** Every row of [list] with its node, page by page; [visit] answers false to stop. */
-    private fun rows(list: ProjectQueryList, visit: (Long, QueryMetadata) -> Boolean) {
+    internal fun rows(list: ProjectQueryList, visit: (Long, QueryMetadata) -> Boolean) {
         val total = list.count()
         var start = 0L
         while (start < total) {

@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -26,6 +27,8 @@ import dev.orcaxr.core.ProjectRowSelection
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.core.RecentDocuments
+import dev.orcaxr.core.TransformReset
+import dev.orcaxr.core.TransformTool
 import dev.orcaxr.nativeapp.device.PreferencesTextStore
 import dev.orcaxr.nativeapp.prepare.PlateSource
 import dev.orcaxr.renderer.SceneSync
@@ -578,6 +581,77 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
             "add_plate" -> work { workspace.addPlate().await() }
             "duplicate_plate" -> view.activePlate?.let { plate -> duplicatePlate(plate.id) }
             "delete_plate" -> view.activePlate?.let { plate -> deletePlate(plate.id) }
+            "tool_lay_on_face" -> layFlat(!layingFlat)
+            "mirror_x" -> work { workspace.mirrorSelected(ProjectIntents.PlacementAxis.X).await() }
+            "mirror_y" -> work { workspace.mirrorSelected(ProjectIntents.PlacementAxis.Y).await() }
+            "mirror_z" -> work { workspace.mirrorSelected(ProjectIntents.PlacementAxis.Z).await() }
+            "reset_rotation" -> work { workspace.resetSelected(TransformReset.ROTATION).await() }
+            "reset_scale" -> work { workspace.resetSelected(TransformReset.SCALE).await() }
+            "center_on_plate" -> work { workspace.centerSelectedOnPlate().await() }
+            "scale_to_fit_volume" -> work { status(ProjectEditing.scaledStatus(workspace.scaleSelectedToFit().await())) }
+            "drop_to_bed" -> work { status(ProjectEditing.droppedStatus(workspace.dropSelectedToBed().await())) }
+            "arrange_all" -> work { status(ProjectEditing.arrangedStatus(workspace.arrangeActivePlate().await())) }
+        }
+    }
+
+    /** Shows [text], the browser's status for an outcome the project alone does not show; none shows nothing. */
+    private fun status(text: String?) {
+        if (text != null) main.post { message = text }
+    }
+
+    // ---- The transform inspector and the Lay flat tool ----
+
+    /** Inspector edits finished (main thread): a field shows the selection's value again after each, even a refused one. */
+    var inspectorEdits by mutableIntStateOf(0)
+        private set
+
+    /**
+     * An edit of the inspector's [tool] fields, [texts] as typed (the
+     * browser's Tool Settings change): one undoable step, or refused with the
+     * browser's status.
+     */
+    fun editTransform(tool: TransformTool, texts: List<String>) = work {
+        try {
+            workspace.editTransform(tool, texts).await()
+        } catch (failure: Throwable) {
+            throw IllegalStateException(ProjectEditing.transformFailed(cause(failure).message))
+        } finally {
+            main.post { inspectorEdits++ }
+        }
+    }
+
+    /** The Lay flat tool (`tool_lay_on_face`): while on, a tap in the Workspace lays the tapped facet on the bed instead of selecting. */
+    var layingFlat by mutableStateOf(false)
+        private set
+    /** The last lay-flat tap met no model facet: the Workspace says so, as the browser's status does. */
+    var layFlatMissed by mutableStateOf(false)
+        private set
+
+    fun layFlat(on: Boolean) {
+        layingFlat = on
+        layFlatMissed = false
+    }
+
+    /**
+     * A tap in the Workspace while laying flat: facet [facet] of volume
+     * [volumeId]'s mesh, as instance [instanceId] places it, is laid on the
+     * bed as one undoable step; a tap that met no facet ([instanceId] null)
+     * is told to pick one. As the browser's registry gate, nothing happens
+     * while the core does not enable the tool.
+     */
+    fun layFlatAt(instanceId: String?, volumeId: String?, facet: Int) {
+        if (instanceId == null || volumeId.isNullOrEmpty()) {
+            layFlatMissed = true
+            return
+        }
+        layFlatMissed = false
+        if (!ProjectEditing.enabled(view, "tool_lay_on_face")) return
+        work {
+            try {
+                workspace.layOnFacet(instanceId, volumeId, facet.toLong()).await()
+            } catch (failure: Throwable) {
+                throw IllegalStateException(ProjectEditing.layFlatFailed(cause(failure).message))
+            }
         }
     }
 

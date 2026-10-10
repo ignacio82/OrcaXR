@@ -19,6 +19,8 @@
     <string name="project_toggle_printable">Stampabile</string>
     <string name="project_instance_to_object">Imposta come singolo oggetto</string>
     <string name="project_duplicate_plate">Duplica piatto corrente</string>
+    <string name="project_reset_rotation">Reimposta rotazione</string>
+    <string name="project_scale_to_fit_volume">Scala per creare volume</string>
     <string name="device_cancel">Annulla</string>
     <string name="device_tab_camera">Telecamera</string>
 </resources>

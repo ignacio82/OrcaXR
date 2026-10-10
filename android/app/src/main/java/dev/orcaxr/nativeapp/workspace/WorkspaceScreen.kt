@@ -7,10 +7,13 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.SurfaceView
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -20,6 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -39,7 +45,9 @@ import kotlin.math.abs
  * configuration states. Drag orbits, pinch zooms; a tap selects the
  * instance under the finger in the project (Shift, Ctrl or Meta held
  * toggles it, a tap on nothing deselects all), as a click on a model does
- * in the browser, and the scene highlights the project's selection.
+ * in the browser, and the scene highlights the project's selection. While
+ * the Lay flat tool is on (the Edit menu's), a tap lays the tapped facet on
+ * the bed instead, as a click does with the browser's tool.
  */
 @Composable
 fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
@@ -76,6 +84,19 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
             color = Color.White,
             style = MaterialTheme.typography.bodyMedium,
         )
+        if (model.layingFlat) {
+            // The Lay flat tool's status (the browser's), and the way out of it.
+            Card(Modifier.align(Alignment.BottomCenter).padding(16.dp)) {
+                Row(Modifier.padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(if (model.layFlatMissed) R.string.workspace_lay_flat_missed else R.string.workspace_lay_flat_hint),
+                        Modifier.weight(1f, fill = false).semantics { liveRegion = LiveRegionMode.Polite },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    TextButton(onClick = { model.layFlat(false) }) { Text(stringResource(R.string.workspace_lay_flat_done)) }
+                }
+            }
+        }
     }
 }
 
@@ -190,8 +211,14 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!dragged && !scaling) {
-                        val extend = event.metaState and (KeyEvent.META_SHIFT_ON or KeyEvent.META_CTRL_ON or KeyEvent.META_META_ON) != 0
-                        model.selectInstance(renderer.pick(event.x.toDouble(), event.y.toDouble())?.instanceId, extend)
+                        val hit = renderer.pick(event.x.toDouble(), event.y.toDouble())
+                        if (model.layingFlat) {
+                            // The Lay flat tool owns the tap, as the browser's does: it never selects.
+                            model.layFlatAt(hit?.instanceId, hit?.volumeId, hit?.facet ?: 0)
+                        } else {
+                            val extend = event.metaState and (KeyEvent.META_SHIFT_ON or KeyEvent.META_CTRL_ON or KeyEvent.META_META_ON) != 0
+                            model.selectInstance(hit?.instanceId, extend)
+                        }
                     }
                     view.performClick()
                 }

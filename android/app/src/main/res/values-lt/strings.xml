@@ -19,6 +19,8 @@
     <string name="project_toggle_printable">Galima spausdinti</string>
     <string name="project_instance_to_object">Nustatyti kaip atskirą objektą</string>
     <string name="project_duplicate_plate">Dubliuoti dabartinę plokštę</string>
+    <string name="project_reset_rotation">Iš naujo nustatyti pasukimą</string>
+    <string name="project_scale_to_fit_volume">Mastelis pagal spausdinimo plotą</string>
     <string name="device_cancel">Atšaukti</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

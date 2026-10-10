@@ -128,6 +128,27 @@
     <string name="project_row_select">Select %1$s</string>
     <string name="project_row_expand">Expand %1$s</string>
     <string name="project_row_collapse">Collapse %1$s</string>
+    <!-- Placement: the browser's catalogue actions (web/src/actions/groups/scene.ts, gizmos.ts), its Lay flat tool's
+         statuses, and its transform inspector (the Tool Settings panel, web/src/workspace/TransformFields.ts). -->
+    <string name="project_lay_flat">Lay flat</string>
+    <string name="project_mirror_x">Mirror on X</string>
+    <string name="project_mirror_y">Mirror on Y</string>
+    <string name="project_mirror_z">Mirror on Z</string>
+    <string name="project_reset_rotation">Reset Rotation</string>
+    <string name="project_reset_scale">Reset Scale</string>
+    <string name="project_center_on_plate">Centre on Plate</string>
+    <string name="project_scale_to_fit_volume">Scale to build volume</string>
+    <string name="project_drop_to_bed">Drop to bed</string>
+    <string name="project_arrange_all">Auto-arrange Plate</string>
+    <string name="project_inspector_move">Move (mm)</string>
+    <string name="project_inspector_rotate">Rotate (deg)</string>
+    <string name="project_inspector_scale" formatted="false">Scale (%)</string>
+    <string name="project_inspector_x">X</string>
+    <string name="project_inspector_y">Y</string>
+    <string name="project_inspector_z">Z</string>
+    <string name="workspace_lay_flat_hint">Lay flat: click the facet that should rest on the bed.</string>
+    <string name="workspace_lay_flat_missed">Click a model facet to lay it flat.</string>
+    <string name="workspace_lay_flat_done">Done</string>
     <string name="device_printers">Printers</string>
     <string name="device_no_printers">No printer saved yet. Add one by its address on your network.</string>
     <string name="device_add_printer">Add printer</string>

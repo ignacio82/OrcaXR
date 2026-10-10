@@ -3614,8 +3614,8 @@ Euler ↔ quaternion conversions (a 45° grid, seeded angles, round trips), 94
 edits (every `parseFloat` spelling, single instances and selections carried
 around each member, 25 refusals) and 19 malformed requests. Rust, WASM in
 Node and Chrome and JNI answer all of them byte for byte; 1,936 Kotlin checks
-cover the wrapper. Applying an edit to the session's selection is left to the
-inspector's own work.
+cover the wrapper. The Android app applies an edit to the session's selection
+in its [transform inspector](#android-transform-inspector).
 
 ### Paint palette
 
@@ -4701,8 +4701,9 @@ Selected and Deselect All when no focused view takes them. The Workspace's tap
 selects in the project (Shift/Ctrl/Meta extend; a tap on nothing deselects
 all) and the scene highlights the project's selected instances. The plate
 menu of the tree, like the catalogue's actions, duplicates and deletes the
-active plate; the plate bar acts on its own plate. Copy, cut, paste, fill
-bed and transforms remain.
+active plate; the plate bar acts on its own plate. Copy, cut, paste and
+fill bed remain; transforms are the inspector's and the Edit menu's
+placement entries ([below](#android-transform-inspector)).
 
 `ProjectEditChecks` (73 checks over real JNI) replay the browser's UUID
 vectors from its seeded word source, every selection rule above and its
@@ -4800,8 +4801,83 @@ and what the workspace reports, then undoing all 14 entries.
 `ProjectWorkspace` with the browser's hash and bed, applies every step
 through the wrappers with the browser's hash, label, report or refusal after
 each, and undoes back through every recorded state to the opened one; the
-empty project refuses to scale to fit for want of a printable height. The
-inspector, selection and their UI are not part of this work.
+empty project refuses to scale to fit for want of a printable height. Their
+UI and the inspector follow.
+
+### Android transform inspector
+
+The Project area shows the browser's Tool Settings panel for the selected
+instance under its tree — all three transform tools at once, since the app
+has no tool rail: Move (mm), Rotate (deg) and Scale (%), each with X, Y and
+Z fields. `ProjectView.inspector` (`ProjectInspector`) is read with every
+project or selection effect from the snapshot shown: the primary instance's
+transform from its query row (`TX`…`SZ`, `ProjectInspection`), each tool's
+values and two-decimal texts from [`TransformFields.values`](#transform-inspector-fields),
+and how many instances an edit changes — the browser's
+`captureSelectedInstanceOrigins`: the primary and the selection on its
+plate (the primary alone when it is not among the refs). Without a primary
+instance there is no inspector; the fields are enabled as the core enables
+`tool_move`, `tool_rotate` and `tool_scale` on `dom-inspector`, where the
+browser's panel invokes them.
+
+A field keeps what is typed while it holds the focus (the browser updates
+every input but the active one); Done, Enter from a hardware keyboard or the
+focus leaving a field whose text changed — the input's `change` event —
+submits the tool's three texts as typed. `ProjectWorkspace.editTransform`
+plans on the actor's authority from the session's whole selection and the
+state it reads there: `TransformFields.edit` over the origins, then one
+`setInstanceTransform` (one change) or `setInstanceTransforms` under that
+state's guard, labelled as the browser labels it — "Transform instance" or
+"Transform n instances". The browser's field edit names no gesture
+(`OrcaWorkspace.commitSelectedPrimaryTransform` passes none), so its
+controller draws `single:<n>` or `batch:<n>` from its transform sequence:
+every field edit is its own undo entry and repeated edits of one field never
+coalesce (only drags and the named placement gestures do). An edit that
+changes nothing records nothing; a refused one (a zero scale, a non-finite
+value, a zero rotation) fails in the browser's words, shown as its status
+("Transform failed: …"), and after every edit the fields show the
+selection's values again.
+
+The Edit menu lists the placement actions after its edits, in catalogue
+order, each enabled as the core enables it where the browser offers it
+(`dom-menu`; `dom-toolbar` for Lay flat and Drop to bed): Lay flat, Mirror on
+X/Y/Z, Reset Rotation, Reset Scale, Centre on Plate, Scale to build volume,
+Drop to bed and Auto-arrange Plate; an object's or plate's long-press menu
+offers the catalogue's own. They act on what `OrcaWorkspace` reads as the
+action runs, read on the authority with the state the plan is made from
+(`mirrorSelected`, `resetSelected`, `centerSelectedOnPlate`,
+`scaleSelectedToFit`, `dropSelectedToBed`, `arrangeActivePlate` over the
+planners above): the selected instances; for centre and scale to fit the
+active plate's when none is selected; the primary and the selection on its
+plate for drop to bed; the active plate for arrange. Outcomes the history
+does not show get the browser's status (already on the bed, already filling
+the build volume, already arranged, models that did not fit). Lay flat is
+the browser's tool: while it is on (checked in the menu, until chosen again
+or ended by the Workspace's Done), a Workspace tap lays the tapped facet on
+the bed (`layOnFacet`; `FilamentScene.Pick` now names the volume) instead of
+selecting, the Workspace shows the browser's status ("Lay flat: click the
+facet that should rest on the bed.", "Click a model facet to lay it flat."
+after a miss), and nothing happens while the core does not enable the tool,
+as the browser's registry gate refuses it.
+
+`ProjectTransformEditChecks` (509 checks over JNI) stand three imported
+cubes in for the instances of the transform-field corpus's 94 edits: each
+case's origins are set and its selection made, the inspector shows the
+primary's fields as `TransformFields.values` reads them, and the edit leaves
+every instance as the browser computed (69 cases), as one entry with the
+browser's label (none when nothing changed) that undo takes back, or refuses
+in the browser's words with history untouched (20); the 5 cases a session
+cannot stage — a duplicate selection, origins it refuses to hold — are
+counted. Repeated Move edits stay separate entries; rotate 90° about Z,
+scale 200 %, a refused zero scale, the placement actions on the selection
+and with none selected, and the capabilities that gate them complete it.
+`ProjectEditingTest` and `TransformInspectorTest` (app JVM) cover the menu,
+the statuses and the fields' change and follow rules.
+`android-inspector-smoke.py` (run by `emulator-smoke.py` before the adaptive
+smoke) imports a cube, selects it, lays a tapped face flat and undoes it,
+types Move X, centres, raises and drops it, rotates 90° about Z, scales to
+200 % and undoes, mirrors on X, then arranges two cubes as one "Transform 2
+instances"; it has not run yet.
 
 ### Android Preview area
 

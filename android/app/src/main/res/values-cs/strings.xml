@@ -17,6 +17,8 @@
     <string name="project_edit_delete_all">Smazat vše</string>
     <string name="project_toggle_printable">Tisknout objekt</string>
     <string name="project_instance_to_object">Nastavit jako samostatný objekt</string>
+    <string name="project_reset_rotation">Výchozí Natočení</string>
+    <string name="project_scale_to_fit_volume">Škálovat na sestavení objemu</string>
     <string name="device_cancel">Zrušit</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

@@ -82,7 +82,8 @@ class ProjectEditingTest {
         assertEquals(listOf("rename", "edit_duplicate", "edit_delete_selected", "toggle_printable"), ids(objectRow))
         // An instance points at its object: the object menu, but no Rename.
         assertEquals(listOf("edit_duplicate", "edit_delete_selected", "toggle_printable"), ids(instanceRow))
-        assertEquals(listOf("edit_select_all", "add_plate", "delete_plate"), ids(plateRow))
+        // The plate menu's Auto-arrange is performed too (on the active plate, as the browser's).
+        assertEquals(listOf("arrange_all", "edit_select_all", "add_plate", "delete_plate"), ids(plateRow))
         assertEquals(listOf("rename"), ids(volumeRow))
         assertEquals(emptyList<String>(), ids(groupRow))
         // The core's enablement travels with each action.
@@ -102,5 +103,56 @@ class ProjectEditingTest {
         assertTrue(ProjectEditing.PERFORMED.containsAll(ProjectEditing.EDIT_MENU))
         assertTrue(ProjectEditing.enabled(view, "edit_select_all"))
         assertFalse(ProjectEditing.enabled(view, "add_plate"))
+    }
+
+    @Test
+    fun placementFollowsTheEditsInCatalogueOrderWithTheCoresEnablement() {
+        // web/src/actions/groups: the Lay flat tool, the scene's edits, its toolbar's Drop to bed, the plate's Auto-arrange.
+        assertEquals(
+            listOf(
+                "tool_lay_on_face", "mirror_x", "mirror_y", "mirror_z", "reset_rotation", "reset_scale", "center_on_plate",
+                "scale_to_fit_volume", "drop_to_bed", "arrange_all",
+            ),
+            ProjectEditing.PLACEMENT_MENU,
+        )
+        assertTrue(ProjectEditing.PERFORMED.containsAll(ProjectEditing.PLACEMENT_MENU))
+        val placed = view.copy(actions = mapOf("mirror_x" to action("mirror_x"), "center_on_plate" to action("center_on_plate", false)))
+        val menu = ProjectEditing.placementMenu(placed)
+        assertEquals(ProjectEditing.PLACEMENT_MENU, menu.map { it.id })
+        assertTrue(menu.first { it.id == "mirror_x" }.enabled)
+        assertFalse(menu.first { it.id == "center_on_plate" }.enabled)
+        // Not answered yet: disabled.
+        assertFalse(menu.first { it.id == "drop_to_bed" }.enabled)
+        // An object row's menu offers the catalogue's placement actions the app performs, in its order.
+        val objectMenu = view.copy(objectMenu = listOf(action("tool_lay_on_face"), action("split_to_objects"), action("mirror_x"), action("drop_to_bed", false)))
+        val ids = ProjectEditing.rowMenu(instanceRow, objectMenu).filterIsInstance<ProjectEditing.Choice.Action>().map { it.state.id }
+        assertEquals(listOf("tool_lay_on_face", "mirror_x", "drop_to_bed"), ids)
+    }
+
+    private fun idList(vararg ids: String) = ids.map { units(it) }
+
+    @Test
+    fun placementStatusesAreTheBrowsers() {
+        fun drop(delta: Double) = ProjectIntents.PlacementDrop(units("i"), 5.0, delta)
+        // OrcaWorkspace.dropSelectedToBed: said only when nothing moved.
+        assertEquals("The selected model is already on the bed.", ProjectEditing.droppedStatus(listOf(drop(0.0))))
+        assertEquals("The selected models are already on the bed.", ProjectEditing.droppedStatus(listOf(drop(0.0), drop(0.0))))
+        assertNull(ProjectEditing.droppedStatus(listOf(drop(0.0), drop(-2.0))))
+        assertNull(ProjectEditing.droppedStatus(null))
+        // scaleSelectionToFitPrintVolume: nothing changed.
+        assertEquals("The selection already fills the build volume.", ProjectEditing.scaledStatus(0))
+        assertNull(ProjectEditing.scaledStatus(2))
+        assertNull(ProjectEditing.scaledStatus(null))
+        // arrangePlate: some did not fit, or nothing moved.
+        fun placement(id: String) = ProjectIntents.ArrangePlacement(
+            units(id), ProjectIntents.Transform(listOf(0.0, 0.0, 0.0), listOf(0.0, 0.0, 0.0, 1.0), listOf(1.0, 1.0, 1.0)),
+            ProjectIntents.ArrangeRegion(0.0, 0.0, 1.0, 1.0),
+        )
+        assertEquals("Arranged 2 model(s); 1 did not fit on this plate.", ProjectEditing.arrangedStatus(ProjectIntents.Arrangement(listOf(placement("a"), placement("b")), idList("c"), emptyList())))
+        assertEquals("The plate is already arranged.", ProjectEditing.arrangedStatus(ProjectIntents.Arrangement(emptyList(), emptyList(), emptyList())))
+        assertNull(ProjectEditing.arrangedStatus(ProjectIntents.Arrangement(listOf(placement("a")), emptyList(), emptyList())))
+        // main.ts onTransformChange and layPickedFacetOnBed.
+        assertEquals("Transform failed: Instance transform scale cannot contain zero", ProjectEditing.transformFailed("Instance transform scale cannot contain zero"))
+        assertEquals("Lay flat failed: Unknown instance i", ProjectEditing.layFlatFailed("Unknown instance i"))
     }
 }

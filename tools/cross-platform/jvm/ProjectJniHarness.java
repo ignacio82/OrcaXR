@@ -122,6 +122,9 @@ public final class ProjectJniHarness {
     public static long placementEditChecks(String corpus, byte[] archive) {
         return ProjectPlacementEditChecks.run(corpus, archive);
     }
+    public static long transformEditChecks(byte[] cube, String script) {
+        return ProjectTransformEditChecks.run(cube, script);
+    }
 
     public static long documentOwnersChecks(byte[] cube) {
         return DocumentOwnersChecks.run(cube);
@@ -381,6 +384,7 @@ public final class ProjectJniHarness {
             if (name.equals("workspaceBedChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("transformFieldChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("placementEditChecks")) method = ProjectJniHarness.class.getMethod(name, String.class, byte[].class);
+            if (name.equals("transformEditChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, String.class);
             if (name.equals("projectRecoveryChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);
             if (name.equals("projectWorkspaceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);
             if (name.equals("projectEditChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);

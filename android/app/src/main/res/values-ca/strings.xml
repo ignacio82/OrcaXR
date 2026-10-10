@@ -19,6 +19,8 @@
     <string name="project_toggle_printable">Imprimible</string>
     <string name="project_instance_to_object">Definir com a objecte individual</string>
     <string name="project_duplicate_plate">Duplicat de la Placa Actual</string>
+    <string name="project_reset_rotation">Restableix la Rotació</string>
+    <string name="project_scale_to_fit_volume">Escalar per a la impressió del volum</string>
     <string name="device_cancel">Cancel·lar</string>
     <string name="device_tab_camera">Càmera</string>
 </resources>

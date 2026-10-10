@@ -292,7 +292,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   (host-folded search). Read names/IDs in bounded UTF-16 chunks. Query addresses never
   become command IDs. Plate/range sorting has an explicit entry budget and belongs on an owned projection executor. Authored
   mesh declarations are not validated GPU buffers. Production subscriptions,
-  worker/JNI integration, other command families and Android editing beyond selection/object/plate edits (native-core) remain open.
+  worker/JNI integration, other command families and Android editing beyond selection/object/plate/transform edits (native-core) remain open.
 - SHA-256 identifies artifacts/project/config outputs. Canonical FNV-1a64
   identifies source assets and semantic snapshots where explicitly defined.
   Never substitute one for the other or infer engine statistics from observations.
@@ -323,7 +323,7 @@ baseline. Native PCVR remains out of scope unless the user changes the target.
   including brim/ribs. A bed's far corner is not its size; planning, ghosts and preflight share the same
   footprint authority. The workspace three.js world is scaled, Y-up and bed-centred: geometry tools read
   printer mm via `root.matrixWorld⁻¹ × display.matrixWorld`; brim ears are object-local (all model
-  parts, instance transform only). Shared bed/inspector fields/Android placement: [native-core](docs/engineering/native-core.md#workspace-bed).
+  parts, instance transform only). Shared bed/inspector fields/Android placement: [native-core](docs/engineering/native-core.md#workspace-bed); Android inspector: [§](docs/engineering/native-core.md#android-transform-inspector).
 
 ## Surface and startup ownership
 

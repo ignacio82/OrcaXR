@@ -4,6 +4,7 @@ import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.core.ProjectRowSelection
 import dev.orcaxr.core.ProjectView
+import dev.orcaxr.core.TransformTool
 
 /**
  * The Project area's editing choices, as the browser makes them, kept free
@@ -22,11 +23,22 @@ object ProjectEditing {
         data class Rename(val entity: ProjectIntents.ObjectTreeEntity, val name: String) : Choice
     }
 
+    /**
+     * The placement actions, after the Edit menu's edits and in catalogue
+     * order: the Lay flat tool (a Workspace tap then lays the tapped facet on
+     * the bed), the scene's mirror, resets, centre and scale to fit, Drop to
+     * bed and the plate's Auto-arrange.
+     */
+    val PLACEMENT_MENU = listOf(
+        "tool_lay_on_face", "mirror_x", "mirror_y", "mirror_z", "reset_rotation", "reset_scale", "center_on_plate",
+        "scale_to_fit_volume", "drop_to_bed", "arrange_all",
+    )
+
     /** The catalogue actions the app performs, by ID. */
     val PERFORMED = setOf(
         "edit_select_all", "edit_deselect_all", "edit_duplicate", "add_instance", "edit_delete_selected", "edit_delete_all",
         "toggle_printable", "instance_to_object", "add_plate", "duplicate_plate", "delete_plate",
-    )
+    ) + PLACEMENT_MENU
 
     /** The Edit menu, in the browser's menu order (web/src/actions/groups/edit.ts, then the scene's object edits). */
     val EDIT_MENU = listOf(
@@ -74,6 +86,71 @@ object ProjectEditing {
     fun editMenu(view: ProjectView): List<ProjectActionState> =
         EDIT_MENU.map { id -> view.actions[id] ?: ProjectActionState(id, id, enabled = false) }
 
+    /** The Edit menu's placement actions with the core's enablement; one the core has not answered for yet is disabled. */
+    fun placementMenu(view: ProjectView): List<ProjectActionState> =
+        PLACEMENT_MENU.map { id -> view.actions[id] ?: ProjectActionState(id, id, enabled = false) }
+
     /** Whether the core enables action [id] now. */
     fun enabled(view: ProjectView, id: String): Boolean = view.actions[id]?.enabled == true
+
+    // The browser workspace's statuses for placement outcomes the project's history alone does not
+    // show (OrcaWorkspace `dropSelectedToBed`, `scaleSelectionToFitPrintVolume`, `arrangePlate`) and
+    // for refused inspector and Lay flat edits (main.ts `onTransformChange`, `layPickedFacetOnBed`).
+
+    /** Drop to bed that moved nothing; null when it moved a model (or had nothing to drop). */
+    fun droppedStatus(drops: List<ProjectIntents.PlacementDrop>?): String? = when {
+        drops.isNullOrEmpty() || drops.any { it.deltaZMm != 0.0 } -> null
+        drops.size == 1 -> "The selected model is already on the bed."
+        else -> "The selected models are already on the bed."
+    }
+
+    /** Scale to build volume that changed nothing ([changed] 0); null otherwise. */
+    fun scaledStatus(changed: Int?): String? = if (changed == 0) "The selection already fills the build volume." else null
+
+    /** An arrangement some models did not fit, or that moved nothing; null when it simply arranged them. */
+    fun arrangedStatus(arrangement: ProjectIntents.Arrangement?): String? {
+        arrangement ?: return null
+        val moved = arrangement.placements.size
+        val unplaced = arrangement.unplacedInstanceIds.size
+        return when {
+            unplaced > 0 -> "Arranged $moved model(s); $unplaced did not fit on this plate."
+            moved == 0 -> "The plate is already arranged."
+            else -> null
+        }
+    }
+
+    fun transformFailed(reason: String?): String = "Transform failed: ${reason.orEmpty()}"
+    fun layFlatFailed(reason: String?): String = "Lay flat failed: ${reason.orEmpty()}"
+}
+
+/**
+ * The transform inspector's fields as the browser's Tool Settings panel runs
+ * them (main.ts `updateToolSettings`), kept free of Android so they are
+ * checked on the JVM: each tool's three fields, X, Y and Z; a field shows the
+ * selection's text except while it holds the focus (the browser leaves the
+ * active input alone); a change — Done, or the focus leaving a field whose
+ * text is not what it shows, the input's `change` event — submits the three
+ * fields' texts as typed, which the core reads with `parseFloat`.
+ */
+object TransformInspector {
+    /** The tools whose fields the inspector shows, in the browser's tool-rail order. */
+    val TOOLS = listOf(TransformTool.MOVE, TransformTool.ROTATE, TransformTool.SCALE)
+    const val AXES = 3
+
+    /** The texts a change of field [axis] submits: all three as [typed], or null when [axis] still shows its [shown] text. */
+    fun change(shown: List<String>, typed: List<String>, axis: Int): List<String>? {
+        require(shown.size == AXES && typed.size == AXES && axis in 0 until AXES)
+        return if (typed[axis] == shown[axis]) null else typed
+    }
+
+    /** What the fields hold once [shown] changes: the selection's texts, except the [focused] field's own typing. */
+    fun follow(shown: List<String>, typed: List<String>, focused: Int?): List<String> =
+        List(AXES) { axis -> if (axis == focused) typed[axis] else shown[axis] }
+
+    /** The core action whose enablement gates [tool]'s fields (the browser invokes it on `dom-inspector`). */
+    fun action(tool: TransformTool): String = when (tool) {
+        TransformTool.MOVE -> "tool_move"
+        TransformTool.ROTATE -> "tool_rotate"
+        TransformTool.SCALE -> "tool_scale"
+    }
 }

@@ -19,6 +19,8 @@
     <string name="project_toggle_printable">Yazdırılabilir</string>
     <string name="project_instance_to_object">Ayrı bir nesne olarak ayarla</string>
     <string name="project_duplicate_plate">Geçerli plakayı çoğalt</string>
+    <string name="project_reset_rotation">Döndürmeyi Sıfırla</string>
+    <string name="project_scale_to_fit_volume">Yapı hacmine göre ölçeklendir</string>
     <string name="device_cancel">İptal</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

@@ -93,6 +93,8 @@ data class ProjectView(
     /** The catalogue's context menus of an object and of a plate, in catalogue order. */
     val objectMenu: List<ProjectActionState> = emptyList(),
     val plateMenu: List<ProjectActionState> = emptyList(),
+    /** The transform inspector of the selection's primary instance; none without one. */
+    val inspector: ProjectInspector? = null,
 )
 
 /** An operation the session refused or could not confirm, in an operator's words. */
@@ -156,6 +158,17 @@ class ProjectWorkspace(
             "toggle_printable", "instance_to_object", "add_plate", "duplicate_plate", "delete_plate",
         )
         val INSPECTOR_ACTIONS = listOf("activate_plate", "rename_plate", "reorder_plates", "set_plate_printable", "objects_rename")
+        /**
+         * The placement actions, read where the browser offers each: its menu
+         * (mirror, the resets, centre, scale to fit, arrange), its toolbar
+         * (lay flat, drop to bed) and, for the inspector's fields, the
+         * transform tools its Tool Settings panel invokes on `dom-inspector`.
+         */
+        val PLACEMENT_MENU_ACTIONS = listOf(
+            "mirror_x", "mirror_y", "mirror_z", "reset_rotation", "reset_scale", "center_on_plate", "scale_to_fit_volume", "arrange_all",
+        )
+        val PLACEMENT_TOOLBAR_ACTIONS = listOf("tool_lay_on_face", "drop_to_bed")
+        val TRANSFORM_ACTIONS = listOf("tool_move", "tool_rotate", "tool_scale")
         /** The capability host facts of the Android shell: the flat (non-XR) workspace, preparing, without a clipboard or printer job. */
         private val HOST = ProjectIntents.CapabilityHostState(
             ProjectIntents.OptionalStartupSnapshot.Absent(ProjectIntents.Empty), ProjectIntents.WorkspaceMode.Prepare,
@@ -315,10 +328,11 @@ class ProjectWorkspace(
         val active = plates.firstOrNull { it.active }
         // The bed the project's own configuration states, with the active plate's wipe-tower keep-out.
         val bed = snapshot.workspaceBed(active?.id)
+        val inspector = snapshot.query().use { root -> ProjectInspection.inspector(root, selection) }
         return { view: ProjectView ->
             view.copy(
                 name = name, plates = count, rows = page?.rows.orEmpty(), totalRows = page?.totalRows ?: 0,
-                activePlate = active, plateList = plates, selection = selection, bed = bed,
+                activePlate = active, plateList = plates, selection = selection, bed = bed, inspector = inspector,
             )
         }
     }
@@ -392,7 +406,10 @@ class ProjectWorkspace(
             fun context(target: ProjectIntents.ActionContextTarget) =
                 page(ProjectIntents.ActionSurface.DomContext, ProjectIntents.CapabilityQuery.Context(ProjectIntents.CapabilityContextPage(target, 0, TREE_PAGE)))
             val all = actions(ProjectIntents.ActionSurface.DomMenu, MENU_ACTIONS) + actions(ProjectIntents.ActionSurface.DomInspector, INSPECTOR_ACTIONS)
-            Triple(all.associateBy { it.id }, context(ProjectIntents.ActionContextTarget.Object), context(ProjectIntents.ActionContextTarget.Plate))
+            val placement = actions(ProjectIntents.ActionSurface.DomMenu, PLACEMENT_MENU_ACTIONS) +
+                actions(ProjectIntents.ActionSurface.DomToolbar, PLACEMENT_TOOLBAR_ACTIONS) +
+                actions(ProjectIntents.ActionSurface.DomInspector, TRANSFORM_ACTIONS)
+            Triple((all + placement).associateBy { it.id }, context(ProjectIntents.ActionContextTarget.Object), context(ProjectIntents.ActionContextTarget.Plate))
         }
         request.completion.whenComplete { outcome, _ ->
             @Suppress("UNCHECKED_CAST")
@@ -819,7 +836,7 @@ class ProjectWorkspace(
             ProjectIntents.PlacementRequest.DropToBed(ProjectIntents.PlacementSelection(ids(instanceIds)))
         }) { it.drops }
 
-    /** "Mirror" across one printer axis. */
+    /** "Mirror" on one axis: each instance across its own centre, its scale on that axis negated (the browser's `mirrorInstances`). */
     fun mirror(instanceIds: List<String>, axis: ProjectIntents.PlacementAxis): CompletableFuture<Unit> =
         placement({ PlacementGestures.mirror(axis) }, {
             ProjectIntents.PlacementRequest.Mirror(ProjectIntents.PlacementMirror(ids(instanceIds), axis))
@@ -871,7 +888,10 @@ class ProjectWorkspace(
      * clear, as one entry; answers the arrangement (what moved, what did not
      * fit, what stayed). An arrangement that moves nothing commits nothing.
      */
-    fun arrangePlate(plateId: String): CompletableFuture<ProjectIntents.Arrangement> = place { session, _ ->
+    fun arrangePlate(plateId: String): CompletableFuture<ProjectIntents.Arrangement> = place { session, _ -> arrangement(session, plateId) }
+
+    /** The arrangement of plate [plateId] on its own bed, its tower kept clear, as one planned edit. */
+    private fun arrangement(session: ProjectSession, plateId: String): Planned<ProjectIntents.Arrangement> {
         val bed = session.snapshot().use { it.workspaceBed(plateId) }
         // An edge JSON cannot carry (an infinite tower width) is not a rectangle: the core
         // refuses an inverted one with the browser's own words, as it refuses that edge.
@@ -887,13 +907,140 @@ class ProjectWorkspace(
                 ProjectIntents.OptionalVolumeRoleNames.Absent(ProjectIntents.Empty),
             ),
         )
-        when (val reply = session.planArrangement(request)) {
+        return when (val reply = session.planArrangement(request)) {
             is ProjectIntents.ArrangeReply.Arrangement -> Planned(
                 reply.value.placements.map { ProjectIntents.InstanceTransform(it.instanceId, it.transform) },
                 PlacementGestures.arrange(plateId),
                 reply.value,
             )
             is ProjectIntents.ArrangeReply.Refused -> throw ProjectFailure(text(reply.value.message))
+        }
+    }
+
+    // ---- The Edit menu's placement actions: the browser's, on the selection the authority holds ----
+    // OrcaWorkspace reads its targets as an action runs: the selected instances
+    // (`selectedInstanceIdsForTransform`) — for centre and scale to fit the active plate's when
+    // none is selected —, the primary and the selection on its plate for drop to bed
+    // (`captureSelectedInstanceOrigins`), the active plate for arrange. These read them on the
+    // actor's authority with the state the plan is made from; nothing to act on submits nothing
+    // and answers null.
+
+    /** Nothing to plan: no changes, nothing submitted, null answered. */
+    private fun <T> nothing() = Planned<T?>(emptyList(), "", null)
+
+    /** The selected instances, in selection order (the browser's `selectedInstanceIdsForTransform`). */
+    private fun selectedInstances(session: ProjectSession): List<String> =
+        whole(session).refs.mapNotNull { (it as? ProjectIntents.SelectionEntity.Instance)?.value?.let(::text) }.distinct()
+
+    /** [selectedInstances], or the active plate's instances in project order when none is selected. */
+    private fun selectedOrPlate(session: ProjectSession): List<String> = selectedInstances(session).ifEmpty {
+        session.snapshot().use { snapshot ->
+            snapshot.query().use { root ->
+                ProjectFacts.plates(root).firstOrNull { it.active }?.let { plate -> ProjectFacts.instances(root, plate.id).map { it.id } }.orEmpty()
+            }
+        }
+    }
+
+    /** Mirror on X, Y or Z (`mirror_x`…) of the selected instances; answers how many, null with none selected. */
+    fun mirrorSelected(axis: ProjectIntents.PlacementAxis): CompletableFuture<Int?> = place { session, _ ->
+        val ids = selectedInstances(session)
+        if (ids.isEmpty()) return@place nothing()
+        val plan = planned(session, ProjectIntents.PlacementRequest.Mirror(ProjectIntents.PlacementMirror(ids(ids), axis)))
+        Planned(plan.changes, PlacementGestures.mirror(axis), ids.size)
+    }
+
+    /** Reset Rotation or Reset Scale (`reset_rotation`, `reset_scale`) of the selected instances; answers how many. */
+    fun resetSelected(target: TransformReset): CompletableFuture<Int?> = place { session, _ ->
+        val ids = selectedInstances(session)
+        if (ids.isEmpty()) return@place nothing()
+        val selection = ProjectIntents.PlacementSelection(ids(ids))
+        val request = when (target) {
+            TransformReset.ROTATION -> ProjectIntents.PlacementRequest.ResetRotation(selection)
+            TransformReset.SCALE -> ProjectIntents.PlacementRequest.ResetScale(selection)
+            TransformReset.BOTH -> ProjectIntents.PlacementRequest.ResetTransform(selection)
+        }
+        Planned(planned(session, request).changes, target.gesture, ids.size)
+    }
+
+    /** Centre on Plate (`center_on_plate`): the selection, or the active plate's models; answers how many. */
+    fun centerSelectedOnPlate(): CompletableFuture<Int?> = place { session, bed ->
+        val ids = selectedOrPlate(session)
+        if (ids.isEmpty()) return@place nothing()
+        val plan = planned(session, ProjectIntents.PlacementRequest.CenterOnPlate(ProjectIntents.PlacementCenter(ids(ids), listOf(bed.widthMm, bed.depthMm))))
+        Planned(plan.changes, PlacementGestures.CENTER, ids.size)
+    }
+
+    /**
+     * Scale to build volume (`scale_to_fit_volume`): the selection, or the
+     * active plate's models; answers how many changed (0 when they already
+     * fill it). A project stating no printable height is refused in the
+     * browser's words.
+     */
+    fun scaleSelectedToFit(): CompletableFuture<Int?> = place { session, bed ->
+        val ids = selectedOrPlate(session)
+        if (ids.isEmpty()) return@place nothing()
+        val height = bed.printableHeightMm ?: throw ProjectFailure(PlacementGestures.NO_PRINTABLE_HEIGHT)
+        val plan = planned(session, ProjectIntents.PlacementRequest.ScaleToFit(ProjectIntents.PlacementScaleToFit(ids(ids), listOf(bed.widthMm, bed.depthMm, height))))
+        Planned(plan.changes, PlacementGestures.SCALE_TO_FIT, plan.changes.size)
+    }
+
+    /**
+     * Drop to bed (`drop_to_bed`): the primary instance and the selection on
+     * its plate; answers each one's lowest point and move, null without a
+     * selected instance.
+     */
+    fun dropSelectedToBed(): CompletableFuture<List<ProjectIntents.PlacementDrop>?> = place { session, _ ->
+        val selection = whole(session)
+        val origins = session.snapshot().use { snapshot -> snapshot.query().use { ProjectInspection.origins(it, selection.refs, selection.primary) } }
+            ?: return@place nothing()
+        val plan = planned(session, ProjectIntents.PlacementRequest.DropToBed(ProjectIntents.PlacementSelection(origins.origins.map { it.instanceId })))
+        Planned(plan.changes, PlacementGestures.batch(transformSequence.incrementAndGet()), plan.drops)
+    }
+
+    /** Auto-arrange Plate (`arrange_all`): the active plate on its bed; null when the project has none. */
+    fun arrangeActivePlate(): CompletableFuture<ProjectIntents.Arrangement?> = place { session, _ ->
+        val plate = session.snapshot().use { snapshot -> snapshot.query().use { root -> ProjectFacts.plates(root).firstOrNull { it.active } } }
+            ?: return@place nothing()
+        arrangement(session, plate.id).let { Planned(it.changes, it.gesture, it.report) }
+    }
+
+    // ---- The transform inspector ----
+
+    /**
+     * An edit of the inspector's [tool] fields — the X, Y and Z [texts] as
+     * typed — as the browser's Tool Settings panel applies one (`main.ts`
+     * `onTransformChange` → `OrcaWorkspace.setSelectedModelPosition`,
+     * `Rotation` or `Scale`): [TransformFields.edit] over the primary instance
+     * and the selection on its plate, read on the authority, then one
+     * `setInstanceTransform` (one instance) or `setInstanceTransforms` under
+     * that state's guard — "Transform instance" or "Transform n instances".
+     * The browser gives a field edit no gesture of its own: it draws
+     * `single:<n>` or `batch:<n>` from the workspace's transform sequence, so
+     * every edit is its own undo entry and repeated edits never coalesce; an
+     * edit that changes nothing records nothing. A refused edit (a zero
+     * scale, a non-finite value, a zero rotation) fails in the browser's
+     * words. Answers how many instances it changed, or null without a
+     * selected instance.
+     */
+    fun editTransform(tool: TransformTool, texts: List<String>): CompletableFuture<Int?> = later {
+        require(texts.size == 3) { "A transform tool has three fields" }
+        edit { session, snapshot ->
+            val selection = whole(session)
+            val origins = snapshot.query().use { ProjectInspection.origins(it, selection.refs, selection.primary) } ?: return@edit null
+            when (val fields = TransformFields.edit(tool, texts, origins.origins, origins.primary)) {
+                is TransformFieldEdit.Refused -> throw ProjectFailure(fields.message)
+                is TransformFieldEdit.Changes -> {
+                    val sequence = transformSequence.incrementAndGet()
+                    val command = fields.changes.singleOrNull()?.let { change ->
+                        ProjectIntents.Command.SetInstanceTransform(
+                            ProjectIntents.SetInstanceTransform(change.instanceId, change.transform, units(PlacementGestures.single(sequence))),
+                        )
+                    } ?: ProjectIntents.Command.SetInstanceTransforms(
+                        ProjectIntents.SetInstanceTransforms(fields.changes, units(PlacementGestures.batch(sequence))),
+                    )
+                    Edit(listOf(command), fields.changes.size)
+                }
+            }
         }
     }
 

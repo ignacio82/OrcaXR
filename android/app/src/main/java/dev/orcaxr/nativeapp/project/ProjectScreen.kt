@@ -18,12 +18,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -39,7 +42,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
 import androidx.compose.ui.input.pointer.isCtrlPressed
@@ -47,10 +56,13 @@ import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.core.ProjectIntents
@@ -60,6 +72,7 @@ import dev.orcaxr.core.ProjectRecovery
 import dev.orcaxr.core.ProjectRowSelection
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
+import dev.orcaxr.core.TransformTool
 import dev.orcaxr.nativeapp.R
 import java.text.DateFormat
 import java.util.Date
@@ -132,6 +145,14 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
         items(view.rows, key = { "row:" + text(it.key) }) { row -> TreeRow(row, view, model) { renaming = Renaming.Entity(it.entity, it.name) } }
         if (view.totalRows > view.rows.size) {
             item { Text(stringResource(R.string.project_more_rows, view.totalRows - view.rows.size), style = MaterialTheme.typography.bodySmall) }
+        }
+        // The transform inspector of the selected instance, under the tree.
+        view.inspector?.let { inspector ->
+            items(TransformInspector.TOOLS, key = { "inspector:" + it.name }) { tool ->
+                InspectorTool(tool, inspector.fields(tool).texts, model.inspectorEdits, ProjectEditing.enabled(view, TransformInspector.action(tool))) {
+                    model.editTransform(tool, it)
+                }
+            }
         }
         if (model.recent.isNotEmpty()) {
             item { Text(stringResource(R.string.project_recent), style = MaterialTheme.typography.titleMedium) }
@@ -246,6 +267,16 @@ private fun actionLabel(action: ProjectActionState): String = when (action.id) {
     "add_plate" -> stringResource(R.string.project_add_plate)
     "duplicate_plate" -> stringResource(R.string.project_duplicate_plate)
     "delete_plate" -> stringResource(R.string.project_delete_plate)
+    "tool_lay_on_face" -> stringResource(R.string.project_lay_flat)
+    "mirror_x" -> stringResource(R.string.project_mirror_x)
+    "mirror_y" -> stringResource(R.string.project_mirror_y)
+    "mirror_z" -> stringResource(R.string.project_mirror_z)
+    "reset_rotation" -> stringResource(R.string.project_reset_rotation)
+    "reset_scale" -> stringResource(R.string.project_reset_scale)
+    "center_on_plate" -> stringResource(R.string.project_center_on_plate)
+    "scale_to_fit_volume" -> stringResource(R.string.project_scale_to_fit_volume)
+    "drop_to_bed" -> stringResource(R.string.project_drop_to_bed)
+    "arrange_all" -> stringResource(R.string.project_arrange_all)
     else -> action.label
 }
 
@@ -264,6 +295,82 @@ private fun EditMenu(view: ProjectView, model: ProjectModel) {
                         model.perform(action.id)
                     },
                     enabled = action.enabled,
+                )
+            }
+            HorizontalDivider()
+            // Placement: on the selection (centre and scale to fit the active plate's models when
+            // none is selected), Lay flat a tool that stays on until it is chosen again.
+            for (action in ProjectEditing.placementMenu(view)) {
+                val on = action.id == "tool_lay_on_face" && model.layingFlat
+                DropdownMenuItem(
+                    text = { Text(actionLabel(action)) },
+                    onClick = {
+                        open = false
+                        model.perform(action.id)
+                    },
+                    enabled = action.enabled || on,
+                    trailingIcon = if (on) ({ Text("✓") }) else null,
+                    modifier = if (action.id == "tool_lay_on_face") Modifier.semantics { selected = on } else Modifier,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One transform tool of the inspector, as the browser's Tool Settings panel
+ * shows it: the tool's title and its X, Y and Z fields with the selected
+ * instance's values ([shown], two decimals). A field holding the focus keeps
+ * what is typed; Done or leaving a changed field submits the tool's three
+ * texts ([onEdit]); every other field follows the selection, and after each
+ * edit ([edits]) — a refused one too — shows its value again.
+ */
+@Composable
+private fun InspectorTool(tool: TransformTool, shown: List<String>, edits: Int, enabled: Boolean, onEdit: (List<String>) -> Unit) {
+    val title = stringResource(
+        when (tool) {
+            TransformTool.MOVE -> R.string.project_inspector_move
+            TransformTool.ROTATE -> R.string.project_inspector_rotate
+            TransformTool.SCALE -> R.string.project_inspector_scale
+        },
+    )
+    val axes = listOf(stringResource(R.string.project_inspector_x), stringResource(R.string.project_inspector_y), stringResource(R.string.project_inspector_z))
+    var focused by remember { mutableStateOf<Int?>(null) }
+    var typed by remember { mutableStateOf(shown) }
+    LaunchedEffect(shown, edits) { typed = TransformInspector.follow(shown, typed, focused) }
+    val focus = LocalFocusManager.current
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (axis in 0 until TransformInspector.AXES) {
+                val description = "$title ${axes[axis]}"
+                OutlinedTextField(
+                    value = typed[axis],
+                    onValueChange = { next -> typed = typed.toMutableList().also { it[axis] = next } },
+                    label = { Text(axes[axis]) },
+                    singleLine = true,
+                    enabled = enabled,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
+                    modifier = Modifier.weight(1f)
+                        // Enter from a hardware keyboard is Done too, as Enter changes the browser's input;
+                        // Escape stays the field's, as the browser skips its shortcuts while one is edited.
+                        .onPreviewKeyEvent { event ->
+                            val enter = event.key == Key.Enter || event.key == Key.NumPadEnter
+                            if (enter && event.type == KeyEventType.KeyUp) focus.clearFocus()
+                            enter || event.key == Key.Escape
+                        }
+                        .onFocusChanged { state ->
+                            if (state.isFocused) {
+                                focused = axis
+                            } else if (focused == axis) {
+                                // The input's change event: the focus left a field whose text changed.
+                                focused = null
+                                val change = TransformInspector.change(shown, typed, axis)
+                                if (change != null) onEdit(change) else typed = TransformInspector.follow(shown, typed, null)
+                            }
+                        }
+                        .semantics { contentDescription = description },
                 )
             }
         }

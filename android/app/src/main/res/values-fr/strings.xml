@@ -19,6 +19,8 @@
     <string name="project_toggle_printable">Imprimable</string>
     <string name="project_instance_to_object">Définir comme un objet individuel</string>
     <string name="project_duplicate_plate">Dupliquer le plateau actuel</string>
+    <string name="project_reset_rotation">Réinitialiser la Rotation</string>
+    <string name="project_scale_to_fit_volume">Adapter la taille au volume d’impression</string>
     <string name="device_cancel">Annuler</string>
     <string name="device_tab_camera">Caméra</string>
 </resources>
