@@ -2,7 +2,12 @@
 //! browser (`gcode-summary-vectors.json`, from `GcodeArtifactSummary.ts`):
 //! every artifact summarized and worded exactly, and durations formatted.
 use orcaxr_gcode::artifact::{ArtifactSummary, ToolUsage, describe, format_duration, summarize};
-use serde_json::Value;
+use orcaxr_gcode::{
+    Cancellation, Session, SessionError,
+    layout::{MAX_CHUNK_UNITS, MAX_METADATA_BYTES},
+    utf8::decode_utf8,
+};
+use serde_json::{Value, json};
 
 fn fixture() -> Value {
     serde_json::from_str(include_str!(
@@ -126,6 +131,48 @@ fn artifacts_summarize_and_read_as_the_browser_does() {
             assert_eq!(line.text, expected["text"].as_str().unwrap(), "{name}");
         }
     }
+}
+
+/// A preview session of the decoded file states the same summary and wording
+/// (`Session::summary`, what the browser's Rust preview and Android show).
+#[test]
+fn preview_sessions_state_the_same_summary() {
+    let corpus = fixture();
+    for case in corpus["cases"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let file = bytes(case["parts"].as_array().unwrap());
+        let units = decode_utf8(&file);
+        let mut session = Session::new(units.len(), "{}", Cancellation::default()).unwrap();
+        for (index, chunk) in units.chunks(MAX_CHUNK_UNITS).enumerate() {
+            session.append(index * MAX_CHUNK_UNITS, chunk).unwrap();
+        }
+        session.seal().unwrap();
+        let stated: Value = serde_json::from_str(&session.summary().unwrap()).unwrap();
+        let summary = summarize(&file);
+        assert_eq!(
+            stated,
+            json!({ "summary": summary, "text": describe(&summary) }),
+            "{name}"
+        );
+    }
+}
+
+/// A statement past the metadata bound (here a material named by 8 MiB of
+/// text) is refused as a resource limit, and the session stays usable.
+#[test]
+fn an_oversized_statement_is_refused_and_the_session_kept() {
+    let text = format!(
+        "; filament_type = {}\n; filament used [mm] = 12.5\nG1 X1 Y1 E1\n",
+        "P".repeat(MAX_METADATA_BYTES)
+    );
+    let units: Vec<u16> = text.encode_utf16().collect();
+    let mut session = Session::new(units.len(), "{}", Cancellation::default()).unwrap();
+    for (index, chunk) in units.chunks(MAX_CHUNK_UNITS).enumerate() {
+        session.append(index * MAX_CHUNK_UNITS, chunk).unwrap();
+    }
+    session.seal().unwrap();
+    assert_eq!(session.summary(), Err(SessionError::ResourceLimit));
+    assert!(session.info().is_ok());
 }
 
 #[test]

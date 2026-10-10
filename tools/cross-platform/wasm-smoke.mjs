@@ -16,6 +16,7 @@ import { replayGcode } from '/gcode-replay.mjs';
 import { replayViews } from '/view-replay.mjs';
 import { replayRequests } from '/request-replay.mjs';
 import { replayDocuments } from '/document-replay.mjs';
+import { replaySummaries } from '/summary-replay.mjs';
 const exports = await initialize({ module_or_path: new URL(self.location.href).searchParams.has('missing')
   ? '/missing.wasm' : '/wasm/orcaxr_core_bg.wasm' });
 self.onmessage = async ({data}) => {
@@ -43,10 +44,11 @@ self.onmessage = async ({data}) => {
       const views = await replayViews(GcodeSession);
       const requests = await replayRequests(GcodeSession);
       const documents = await replayDocuments(GcodeSession);
+      const summaries = await replaySummaries(GcodeSession);
       const session = new GcodeSession(1, 0, '{}');
       let packet;
       try { session.seal(); packet = session.whole(); } finally { session.free(); }
-      self.postMessage({result: {requestId: data.requestId, type: 'gcode-tested', metrics, views: views.metrics, requests, documents, viewPacket: views.owned, packet}, memoryBytes: exports.memory.buffer.byteLength}, [packet.buffer, views.owned.buffer]);
+      self.postMessage({result: {requestId: data.requestId, type: 'gcode-tested', metrics, views: views.metrics, requests, documents, summaries, viewPacket: views.owned, packet}, memoryBytes: exports.memory.buffer.byteLength}, [packet.buffer, views.owned.buffer]);
     } catch (error) {
       self.postMessage({result: {requestId: data.requestId, type: 'gcode-failed', message: String(error)}});
     }
@@ -65,7 +67,7 @@ const server = createServer(async (request, response) => {
     else if (path === '/worker.mjs') { response.setHeader('Content-Type', 'text/javascript'); response.end(workerSource); }
     else if (path === '/gcode-packets.mjs') { response.setHeader('Content-Type','text/javascript'); response.end(packets.outputFiles[0].text); }
     else if (path === '/gcode-source.mjs') { response.setHeader('Content-Type','text/javascript'); response.end(sourceOwner.outputFiles[0].text); }
-    else if (['/gcode-replay.mjs', '/view-replay.mjs', '/request-replay.mjs', '/document-replay.mjs', '/packet-snapshot.mjs', '/gcode-vectors.json', '/gcode-document-vectors.json', '/view-vectors.json', '/request-vectors.json', '/canonical-requests.json', '/gcode-buffer.json', '/gcode-view-buffer.json'].includes(path)) {
+    else if (['/gcode-replay.mjs', '/view-replay.mjs', '/request-replay.mjs', '/document-replay.mjs', '/summary-replay.mjs', '/packet-snapshot.mjs', '/gcode-vectors.json', '/gcode-document-vectors.json', '/gcode-summary-vectors.json', '/view-vectors.json', '/request-vectors.json', '/canonical-requests.json', '/gcode-buffer.json', '/gcode-view-buffer.json'].includes(path)) {
       const file = path.endsWith('.mjs') ? 'tools/cross-platform'+path : path.endsWith('-buffer.json') ? 'contracts'+path : 'testdata/cross-platform'+path;
       response.setHeader('Content-Type', path.endsWith('.mjs') ? 'text/javascript' : 'application/json');
       response.end(await readFile(new URL(file,root)));
@@ -188,7 +190,7 @@ try {
       check(await start({missing: true}).then(client => {client.close(); return false;}, () => true), 'Missing WASM accepted');
       check(clients.size === 0, 'Worker owners retained');
       return {vectors: corpus.vectors.length, invalid: corpus.invalid.length, canonicalRequests: envelopes.result.cases, largePayloadRepeats: 40,
-        wasmLinearMemoryBytes: finalBytes, disposalCycles: 10, crossOriginIsolated, gcode: gcode.result.metrics, views: gcode.result.views, requests: gcode.result.requests, documents: gcode.result.documents};
+        wasmLinearMemoryBytes: finalBytes, disposalCycles: 10, crossOriginIsolated, gcode: gcode.result.metrics, views: gcode.result.views, requests: gcode.result.requests, documents: gcode.result.documents, summaries: gcode.result.summaries};
     } finally { for (const close of clients) close(); }
   }, {corpus, schema});
   assert.equal(result.vectors, corpus.vectors.length);

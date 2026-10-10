@@ -12,48 +12,65 @@
 //! start or after LF, CR, U+2028 or U+2029, all of which are their own bytes.
 
 use crate::utf8::{Utf8Decoder, decode_utf8};
+use serde::Serialize;
 
 /// The totals are written after the toolpaths: only the trailer is scanned for them.
 pub const TRAILER_SCAN_UNITS: usize = 64 * 1024;
 
 /// One tool's usage, as the artifact states it.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolUsage {
     /// 0-based tool index, matching the artifact's own filament order.
     pub tool_index: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub length_mm: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub volume_cm3: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub weight_g: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub color_hex: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub material: Option<String>,
 }
 
 /// What the artifact states about itself.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ArtifactSummary {
     pub per_tool: Vec<ToolUsage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub total_weight_g: Option<f64>,
     /// The engine's own cost figure; its currency is a profile setting, not a fact of the file.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub total_cost: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_changes: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub layer_count: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub estimated_seconds: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub first_layer_seconds: Option<f64>,
     /// True when the artifact stated no totals at all.
     pub empty: bool,
 }
 
 /// One tool line of the panel: its colour swatch, if stated, and its text.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolLine {
     pub tool_index: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub color_hex: Option<String>,
     pub text: String,
 }
 
 /// The summary as the preview panel words it: a totals line, then a line for
 /// each tool that used filament.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SummaryText {
     pub totals: String,
     pub tools: Vec<ToolLine>,
@@ -61,12 +78,37 @@ pub struct SummaryText {
 
 /// `summarizeGcodeArtifact` over the file's bytes.
 pub fn summarize(bytes: &[u8]) -> ArtifactSummary {
-    let trailer = trailer(bytes);
-    let lengths = number_list(unit_line(&trailer, b"; filament used [mm] = "));
-    let volumes = number_list(unit_line(&trailer, b"; filament used [cm3] = "));
-    let weights = number_list(unit_line(&trailer, b"; filament used [g] = "));
-    let colors = text_list(byte_line(bytes, b"; filament_colour = "));
-    let materials = text_list(byte_line(bytes, b"; filament_type = "));
+    summary(
+        &trailer(bytes),
+        byte_line(bytes, COLOURS),
+        byte_line(bytes, MATERIALS),
+    )
+}
+
+/// `summarizeGcodeArtifact` over text already decoded (a preview session's
+/// UTF-16 units, the byte-order mark already dropped), as the browser reads it.
+pub fn summarize_text(units: &[u16]) -> ArtifactSummary {
+    let line = |prefix| unit_line(units, prefix).map(<[u16]>::to_vec);
+    summary(
+        &units[units.len().saturating_sub(TRAILER_SCAN_UNITS)..],
+        line(COLOURS),
+        line(MATERIALS),
+    )
+}
+
+const COLOURS: &[u8] = b"; filament_colour = ";
+const MATERIALS: &[u8] = b"; filament_type = ";
+
+fn summary(
+    trailer: &[u16],
+    colors: Option<Vec<u16>>,
+    materials: Option<Vec<u16>>,
+) -> ArtifactSummary {
+    let lengths = number_list(unit_line(trailer, b"; filament used [mm] = "));
+    let volumes = number_list(unit_line(trailer, b"; filament used [cm3] = "));
+    let weights = number_list(unit_line(trailer, b"; filament used [g] = "));
+    let colors = text_list(colors);
+    let materials = text_list(materials);
     let count = lengths.len().max(volumes.len()).max(weights.len());
     let at = |list: &[Option<f64>], index: usize| list.get(index).copied().flatten();
     let text = |list: &[Option<String>], index: usize| list.get(index).cloned().flatten();
@@ -81,16 +123,16 @@ pub fn summarize(bytes: &[u8]) -> ArtifactSummary {
         })
         .collect::<Vec<_>>();
     let mut summary = ArtifactSummary {
-        total_weight_g: finite(unit_line(&trailer, b"; total filament used [g] = ")),
-        total_cost: finite(unit_line(&trailer, b"; total filament cost = ")),
-        tool_changes: integer(unit_line(&trailer, b"; total filament change = ")),
-        layer_count: integer(unit_line(&trailer, b"; total layers count = ")),
+        total_weight_g: finite(unit_line(trailer, b"; total filament used [g] = ")),
+        total_cost: finite(unit_line(trailer, b"; total filament cost = ")),
+        tool_changes: integer(unit_line(trailer, b"; total filament change = ")),
+        layer_count: integer(unit_line(trailer, b"; total layers count = ")),
         estimated_seconds: duration(unit_line(
-            &trailer,
+            trailer,
             b"; estimated printing time (normal mode) = ",
         )),
         first_layer_seconds: duration(unit_line(
-            &trailer,
+            trailer,
             b"; estimated first layer printing time (normal mode) = ",
         )),
         per_tool,
@@ -476,6 +518,21 @@ mod tests {
                     "seed {seed}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn decoded_text_summarizes_as_its_bytes_do() {
+        for seed in 1..=24u32 {
+            let mut bytes = noise(seed * 6_151, 90_000 + seed as usize * 11_000);
+            bytes.extend_from_slice(
+                b"\n; filament used [mm] = 1200.5,30\n; filament used [g] = 3.5,0.1\n; total layers count = 12\n",
+            );
+            assert_eq!(
+                summarize_text(&decode_utf8(&bytes)),
+                summarize(&bytes),
+                "seed {seed}"
+            );
         }
     }
 }

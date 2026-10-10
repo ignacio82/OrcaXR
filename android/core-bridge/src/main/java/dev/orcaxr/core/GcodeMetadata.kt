@@ -6,7 +6,7 @@ import org.json.JSONObject
 
 internal object GcodeMetadata {
     const val MAX_VALIDATION_NODES = 4194304
-    enum class Kind { Text, Provenance, Limits, Termination, Warning, Filament, Model, Index, IndexEntry, IndexPage, Mode, Limitation, Legend, Range, Missing, PreviewReady, PreviewUnsupported, LayerSelection, MoveSelection, Cursor, ToolMarker, SourceLine, SourceWindow, Bounds, Inspection, Playback, TextLine, TextWindow, TextSearch }
+    enum class Kind { Text, Provenance, Limits, Termination, Warning, Filament, Model, Index, IndexEntry, IndexPage, Mode, Limitation, Legend, Range, Missing, PreviewReady, PreviewUnsupported, LayerSelection, MoveSelection, Cursor, ToolMarker, SourceLine, SourceWindow, Bounds, Inspection, Playback, TextLine, TextWindow, TextSearch, ArtifactTool, ArtifactSummary, ArtifactToolLine, ArtifactText, Summary }
     private object Missing
     private class Budget(val active: () -> Unit, var remaining: Int = MAX_VALIDATION_NODES) {
         fun take(): Boolean {
@@ -59,6 +59,11 @@ internal object GcodeMetadata {
     private val keys66 = setOf<String>("number", "text")
     private val keys69 = setOf<String>("lineCount", "lines")
     private val keys72 = setOf<String>("lineNumbers", "truncated")
+    private val keys75 = setOf<String>("toolIndex", "lengthMm", "volumeCm3", "weightG", "colorHex", "material")
+    private val keys77 = setOf<String>("perTool", "totalWeightG", "totalCost", "toolChanges", "layerCount", "estimatedSeconds", "firstLayerSeconds", "empty")
+    private val keys80 = setOf<String>("toolIndex", "colorHex", "text")
+    private val keys82 = setOf<String>("totals", "tools")
+    private val keys85 = setOf<String>("summary", "text")
     private fun validText(v: Any?, budget: Budget): Boolean = budget.take() && (array(v, budget, 0, 65536) { item0 -> number(item0, true, 0.0, 65535.0) })
     private fun validProvenance(v: Any?, budget: Budget): Boolean = budget.take() && (array(v, budget, 0, 256) { item1 -> number(item1, true, 0.0, 65535.0) })
     private fun validLimits(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys3) { object2 -> (number(field(object2, "inputCharacters"), true, 1.0, 268435456.0)) && (number(field(object2, "lines"), true, 1.0, 16000000.0)) && (number(field(object2, "records"), true, 1.0, 240000.0)) && (number(field(object2, "pathPoints"), true, 1.0, 8000000.0)) && (number(field(object2, "warnings"), true, 1.0, 2048.0)) && (number(field(object2, "lineCharacters"), true, 1.0, 65536.0)) && (number(field(object2, "roles"), true, 1.0, 512.0)) && (number(field(object2, "filaments"), true, 1.0, 4096.0)) })
@@ -88,6 +93,11 @@ internal object GcodeMetadata {
     private fun validTextLine(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys66) { object65 -> (number(field(object65, "number"), true, 1.0, 268435456.0)) && (array(field(object65, "text"), budget, 0, 1048576) { item67 -> number(item67, true, 0.0, 65535.0) }) })
     private fun validTextWindow(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys69) { object68 -> (number(field(object68, "lineCount"), true, 1.0, 268435456.0)) && (array(field(object68, "lines"), budget, 0, 1024) { item70 -> validTextLine(item70, budget) }) })
     private fun validTextSearch(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys72) { object71 -> (array(field(object71, "lineNumbers"), budget, 0, 10000) { item73 -> number(item73, true, 1.0, 268435456.0) }) && (field(object71, "truncated") is Boolean) })
+    private fun validArtifactTool(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys75) { object74 -> (number(field(object74, "toolIndex"), true, 0.0, 65535.0)) && ((field(object74, "lengthMm") === Missing || (number(field(object74, "lengthMm"), false, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY)))) && ((field(object74, "volumeCm3") === Missing || (number(field(object74, "volumeCm3"), false, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY)))) && ((field(object74, "weightG") === Missing || (number(field(object74, "weightG"), false, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY)))) && ((field(object74, "colorHex") === Missing || (string(field(object74, "colorHex"), 8388608)))) && ((field(object74, "material") === Missing || (string(field(object74, "material"), 8388608)))) })
+    private fun validArtifactSummary(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys77) { object76 -> (array(field(object76, "perTool"), budget, 0, 65536) { item78 -> validArtifactTool(item78, budget) }) && ((field(object76, "totalWeightG") === Missing || (number(field(object76, "totalWeightG"), false, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY)))) && ((field(object76, "totalCost") === Missing || (number(field(object76, "totalCost"), false, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY)))) && ((field(object76, "toolChanges") === Missing || (number(field(object76, "toolChanges"), false, 0.0, Double.POSITIVE_INFINITY)))) && ((field(object76, "layerCount") === Missing || (number(field(object76, "layerCount"), false, 0.0, Double.POSITIVE_INFINITY)))) && ((field(object76, "estimatedSeconds") === Missing || (number(field(object76, "estimatedSeconds"), false, 0.0, Double.POSITIVE_INFINITY)))) && ((field(object76, "firstLayerSeconds") === Missing || (number(field(object76, "firstLayerSeconds"), false, 0.0, Double.POSITIVE_INFINITY)))) && (field(object76, "empty") is Boolean) })
+    private fun validArtifactToolLine(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys80) { object79 -> (number(field(object79, "toolIndex"), true, 0.0, 65535.0)) && ((field(object79, "colorHex") === Missing || (string(field(object79, "colorHex"), 9)))) && (string(field(object79, "text"), 8388608)) })
+    private fun validArtifactText(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys82) { object81 -> (string(field(object81, "totals"), 1024)) && (array(field(object81, "tools"), budget, 0, 65536) { item83 -> validArtifactToolLine(item83, budget) }) })
+    private fun validSummary(v: Any?, budget: Budget): Boolean = budget.take() && (record(v, keys85) { object84 -> (validArtifactSummary(field(object84, "summary"), budget)) && (validArtifactText(field(object84, "text"), budget)) })
 
     fun validate(kind: Kind, value: Any?, active: () -> Unit = {}) {
         active()
@@ -122,6 +132,11 @@ internal object GcodeMetadata {
             Kind.TextLine -> validTextLine(value, budget)
             Kind.TextWindow -> validTextWindow(value, budget)
             Kind.TextSearch -> validTextSearch(value, budget)
+            Kind.ArtifactTool -> validArtifactTool(value, budget)
+            Kind.ArtifactSummary -> validArtifactSummary(value, budget)
+            Kind.ArtifactToolLine -> validArtifactToolLine(value, budget)
+            Kind.ArtifactText -> validArtifactText(value, budget)
+            Kind.Summary -> validSummary(value, budget)
         }) { "Invalid shared G-code metadata" }
         active()
     }

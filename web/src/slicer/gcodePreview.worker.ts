@@ -14,7 +14,7 @@ import {
 let session: GcodePreviewController | undefined;
 let opening = false;
 let adapter: PreviewAdapter;
-let summary: GcodeArtifactSummary;
+let summary: GcodeArtifactSummary | undefined;
 self.onmessage = async (event: MessageEvent<PreviewWorkerRequest>) => {
   const request = event.data;
   if (request?.version !== 2 || !Number.isSafeInteger(request.id)) return;
@@ -26,11 +26,12 @@ self.onmessage = async (event: MessageEvent<PreviewWorkerRequest>) => {
       opening = true;
       adapter = request.adapter;
       if (adapter === 'rust') {
-        session = await createRustGcodePreview(request.gcode, request.source, request.options);
+        // The shared core states the summary from the source it sealed.
+        ({ preview: session, summary } = await createRustGcodePreview(request.gcode, request.source, request.options));
       } else if (adapter === 'typescript') {
         session = GcodePreviewSession.fromGcode(request.gcode, request.source, request.options);
+        summary = summarizeGcodeArtifact(request.gcode);
       } else throw new Error('Invalid preview adapter');
-      summary = summarizeGcodeArtifact(request.gcode);
     } else if (request.type === 'view' && session) session.updateView(request.patch);
     else throw new Error('Open G-code before requesting a preview window.');
     // Rust owns its parsed window and returns independent packed host bytes.

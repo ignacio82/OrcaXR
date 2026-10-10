@@ -8,6 +8,7 @@ import android.view.SurfaceView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +53,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.orcaxr.core.GcodeArtifactText
 import dev.orcaxr.core.GcodePreviewModes
 import dev.orcaxr.nativeapp.R
 import dev.orcaxr.renderer.GcodeMoveFilter
@@ -121,6 +123,7 @@ fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier) {
             LayerControls(state, bounds, model)
             MoveFilters(state, model)
             state.unsupportedReason?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
+            state.summary?.let { Summary(it) }
             state.layerCount?.let { Text(stringResource(R.string.preview_layers, it), style = MaterialTheme.typography.bodyMedium) }
             if (state.legend.isNotEmpty()) Legend(state.legend)
             state.range?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -223,6 +226,42 @@ private fun MoveFilters(state: PreviewState, model: PreviewModel) {
             LabelledCheckbox(filter.label, filter in state.moves, !state.loading) { model.setMoveVisible(filter, it) }
         }
     }
+}
+
+/**
+ * The file's own totals as the browser's panel shows them: the totals line,
+ * then each tool that used filament, its colour a decorative swatch (the tool
+ * number and material carry its identity, never the colour alone).
+ */
+@Composable
+private fun Summary(summary: GcodeArtifactText) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(summary.totals, style = MaterialTheme.typography.bodyMedium)
+        for (tool in summary.tools) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                tool.colorHex?.let(::swatch)?.let { argb ->
+                    Box(
+                        Modifier.size(12.dp)
+                            .background(Color(argb), RoundedCornerShape(2.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(2.dp)),
+                    )
+                }
+                Text(tool.text, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+/** A CSS hex colour (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`; the core passes no other) as ARGB. */
+private fun swatch(hex: String): Int? {
+    val digits = hex.removePrefix("#")
+    val full = when (digits.length) {
+        3, 4 -> digits.map { "$it$it" }.joinToString("")
+        6, 8 -> digits
+        else -> return null
+    }
+    val rgba = full.toLongOrNull(16) ?: return null
+    return if (full.length == 6) (0xFF000000 or rgba).toInt() else ((rgba and 0xFF) shl 24 or (rgba ushr 8)).toInt()
 }
 
 /** The legend as the browser lists it: a decorative swatch, then `code · label`. */

@@ -18,6 +18,8 @@ class ControlledWorker implements PreviewWorkerPort {
   terminated = 0;
   throwOnPost = false;
   private session?: GcodePreviewSession;
+  /** What the worker states about the artifact: the browser's summary, or none (refused past the bound). */
+  summary: PreviewWorkerSnapshot['summary'] = summarizeGcodeArtifact(GCODE);
   postMessage(request: PreviewWorkerRequest) {
     if (this.throwOnPost) throw new Error('clone failed');
     this.messages.push(request);
@@ -41,7 +43,7 @@ class ControlledWorker implements PreviewWorkerPort {
         layerBounds: session.layerBounds,
         window: session.windowState,
         notice: session.windowNotice(),
-        summary: summarizeGcodeArtifact(GCODE),
+        summary: this.summary,
         projection: session.project(),
         inspection: session.inspect(),
       }),
@@ -101,6 +103,21 @@ await test('one in-flight view plus one merged latest request preserves original
   session.dispose();
   assert.equal(worker.terminated, 1);
   assert.equal(worker.onmessage, null);
+});
+
+await test('a summary of many tools, or none, still opens the preview', async () => {
+  // An artifact may list more tools than the engine has; its toolpaths still preview.
+  const many = new ControlledWorker();
+  many.summary = summarizeGcodeArtifact(`${GCODE}; filament used [mm] = ${Array(300).fill('1.5').join(',')}\n`);
+  assert.equal(many.summary.perTool.length, 300);
+  const opened = await open(many);
+  assert.equal(opened.session.summary?.perTool.length, 300);
+  opened.session.dispose();
+  const none = new ControlledWorker();
+  none.summary = undefined;
+  const bare = await open(none);
+  assert.equal(bare.session.summary, undefined);
+  bare.session.dispose();
 });
 
 await test('abort settles opening and later windows, removes listeners and rejects late results', async () => {

@@ -4270,8 +4270,25 @@ matches them exactly. Porting found that the browser put a G-code file's
 inject styles or make the page fetch a URL; only a hex colour now gets a
 swatch, in both. The browser never fills per-layer times, so neither does
 the core; totals the engine writes before a settings block longer than the
-scanned tail are missed by both. Bindings follow with the Preview's
-statistics.
+scanned tail are missed by both.
+
+The preview session states it too: `Session::summary` reads the sealed
+UTF-16 source (`summarize_text`, which a property test proves equal to
+`summarize` over the bytes) and returns JSON `{summary, text}` in the
+browser's field names, within the 8 MiB metadata bound (past it the call is
+refused as `resource_limit` and the session kept). The shape is
+`contracts/gcode-metadata.json`'s `Summary`, so the generated TypeScript and
+Kotlin validators check every reply. The browser's Rust preview adapter now
+takes the summary from its WASM session (`CoreGcodeSource.summary`); the
+`?previewCore=typescript` reference keeps the TypeScript summarizer. Chrome
+replays all 101 browser summaries through the WASM session and the contract
+decoder (`summary-replay.mjs`, run by `wasm-smoke.mjs`), and Android through
+JNI, the Kotlin validator and its types (`GcodeSummaryTest`, 4040 checks,
+instrumented: the host JVM has no `org.json`). Porting found a browser
+defect: the main thread refused a whole preview whose artifact listed more
+than 256 tools (the corpus's 300-tool case), though its toolpaths were
+fine. The bound is now 65536 entries, all a 64 Ki-unit trailer can hold, and
+a preview with no summary opens too (a worker test covers both).
 
 ### Plate projection for slicing
 
@@ -4584,8 +4601,10 @@ opens a two-layer, two-tool reference through the system picker on the
 emulator: about 520 pixels of the toolpath view take the core's colours
 (the empty view has none), the tool mode and single layer each change the
 picture, the preview survives leaving the area, and an empty file is refused
-as the browser refuses it. Estimated time, filament and per-tool usage await
-the shared artifact summary's bindings; the bed is 200 mm, enlarged to the
+as the browser refuses it. Below the filters it shows what the file states —
+estimated time, weight, layers, tool changes, and each tool's material,
+length and weight beside a decorative swatch — as the browser's panel words
+it (`GcodeSession.summary`; the smoke reads `≈42s · 0.02 g`). The bed is 200 mm, enlarged to the
 toolpath (G-code carries no bed). The bottom navigation's labels now stay on
 one line: with four areas a phone left "Workspace" wrapped.
 
@@ -5528,8 +5547,9 @@ The default preview adapter is Rust. `?previewCore=typescript` selects the
 independent reference when the worker host module first loads. The choice remains
 fixed for that module lifetime; changing it requires a guarded reload. A failed
 Rust request never silently changes adapters. Protocol version 2 binds replies to
-the chosen adapter. Canonical project state, artifact summary authority, UI and
-renderer behavior remain in their existing TypeScript owners. The legacy explicit
+the chosen adapter. Canonical project state, UI and renderer behavior remain in
+their existing TypeScript owners; the Rust adapter takes the artifact summary
+from the core, the reference adapter from TypeScript. The legacy explicit
 `project(overrides)` synchronous API still uses the reference function; production
 surfaces consume the worker's cached default projection.
 

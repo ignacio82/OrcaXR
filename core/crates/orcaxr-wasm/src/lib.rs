@@ -107,4 +107,9 @@ impl GcodeSession {
             .text_search(query, gcode_index(limit)?)
             .map_err(gcode_error)
     }
+    /// The totals the sealed artifact states and the preview panel's wording
+    /// of them, as JSON `{summary, text}`.
+    pub fn summary(&self) -> Result<String, JsValue> {
+        self.inner.summary().map_err(gcode_error)
+    }
 }

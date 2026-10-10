@@ -4,14 +4,18 @@ import { checkCoreHandshake, fetchCoreAsset } from './CoreAsset';
 import { GcodePreviewController, type GcodePreviewSessionSource } from '../GcodePreviewController';
 import { CoreGcodeSource } from './CoreGcodeSource';
 import type { GcodeSourceOptions } from './GcodeRequests';
+import type { GcodeArtifactSummary } from '../GcodeArtifactSummary';
 
 export { checkCoreHandshake, fetchCoreAsset } from './CoreAsset';
 
+/** The preview over the shared core, and what the artifact states about
+ * itself, from the same sealed source; none when the statement is past the
+ * metadata bound. */
 export async function createRustGcodePreview(
   gcode: string,
   source: GcodePreviewSessionSource,
   options: GcodeSourceOptions = {},
-): Promise<GcodePreviewController> {
+): Promise<{ readonly preview: GcodePreviewController; readonly summary?: GcodeArtifactSummary }> {
   const base = new URL(import.meta.env.BASE_URL, globalThis.location.origin);
   await fetchCoreAsset(CORE_BROWSER_ASSET.manifest, base);
   const bytes = await fetchCoreAsset(CORE_BROWSER_ASSET.wasm, base);
@@ -20,12 +24,20 @@ export async function createRustGcodePreview(
   const owner = new CoreGcodeSource(GcodeSession, gcode, options);
   try {
     const index = { ...owner.index, entries: [...owner.entries()] };
-    return GcodePreviewController.fromComputation(
+    let summary: GcodeArtifactSummary | undefined;
+    try {
+      summary = owner.summary().summary;
+    } catch (error) {
+      // wasm-bindgen throws the core's refusal code as a string.
+      if (error !== 'resource_limit') throw error;
+    }
+    const preview = GcodePreviewController.fromComputation(
       index,
       (window) => owner.openWindow(window),
       source,
       () => owner.dispose(),
     );
+    return { preview, summary };
   } catch (error) {
     owner.dispose();
     throw error;

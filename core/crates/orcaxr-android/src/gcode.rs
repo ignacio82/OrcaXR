@@ -216,6 +216,24 @@ pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_page(
     })
 }
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_summary(
+    mut env: JNIEnv<'_>,
+    _: JClass<'_>,
+    handle: jlong,
+) -> jstring {
+    boundary(&mut env, |env| {
+        let owner = owner(handle)?;
+        let value = owner
+            .work
+            .lock()
+            .map_err(|_| "invalid_state")?
+            .session
+            .summary()
+            .map_err(code)?;
+        string(env, value)
+    })
+}
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_orcaxr_core_NativeGcode_textWindow(
     mut env: JNIEnv<'_>,
     _: JClass<'_>,

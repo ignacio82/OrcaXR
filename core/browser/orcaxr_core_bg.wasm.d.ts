@@ -8,6 +8,7 @@ export const gcodesession_append: (a: number, b: number, c: number, d: number) =
 export const gcodesession_new: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const gcodesession_page: (a: number, b: number, c: number) => [number, number, number, number];
 export const gcodesession_seal: (a: number) => [number, number, number, number];
+export const gcodesession_summary: (a: number) => [number, number, number, number];
 export const gcodesession_textSearch: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const gcodesession_textWindow: (a: number, b: number, c: number) => [number, number, number, number];
 export const gcodesession_view: (a: number, b: number, c: number) => [number, number, number, number];

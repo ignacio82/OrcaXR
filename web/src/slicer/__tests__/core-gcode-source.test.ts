@@ -137,6 +137,17 @@ class Binding implements GcodeCoreBinding {
       { layer: 0, startOffset: 1, endOffsetExclusive: expected, recordsBefore: 0, pathPointsBefore: 0 },
     ]);
   }
+  summary() {
+    if (fault === 'summary') throw 'resource_limit';
+    const tools = [
+      { toolIndex: 0, lengthMm: 1200, weightG: 3.5, colorHex: '#FF0000', material: 'PLA' },
+      { toolIndex: fault === 'summary-order' ? 0 : 1 },
+    ];
+    return JSON.stringify({
+      summary: { perTool: tools, layerCount: 12, empty: false },
+      text: { totals: '12 layers', tools: [{ toolIndex: 0, colorHex: '#FF0000', text: 'T0 · PLA · 1.20 m · 3.50 g' }] },
+    });
+  }
   whole(): Uint8Array {
     throw new Error('unused');
   }
@@ -183,5 +194,24 @@ const badPage = new CoreGcodeSource(Binding, 'abc');
 fault = 'page';
 assert.throws(() => [...badPage.entries()], /page length/);
 badPage.dispose();
+assert.equal(freed, made);
+// The artifact's statement: validated against the contract, its tools in the
+// artifact's order; a refusal past the bound leaves the source usable.
+chunks.length = 0;
+const stated = new CoreGcodeSource(Binding, 'abc');
+const statement = stated.summary();
+assert.equal(statement.summary.perTool[0].material, 'PLA');
+assert.equal(statement.summary.layerCount, 12);
+assert.equal(statement.text.tools[0].text, 'T0 · PLA · 1.20 m · 3.50 g');
+fault = 'summary-order';
+assert.throws(() => stated.summary(), /Invalid shared G-code packet/);
+fault = 'summary';
+assert.throws(
+  () => stated.summary(),
+  (error) => error === 'resource_limit',
+);
+fault = '';
+assert.equal([...stated.entries()].length, 2);
+stated.dispose();
 assert.equal(freed, made);
 console.log('Shared G-code host: bounded requests, Float32/UTF-16 fidelity, chunking, pagination and disposal passed');

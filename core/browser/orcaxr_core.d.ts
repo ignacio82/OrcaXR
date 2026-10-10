@@ -13,6 +13,11 @@ export class GcodeSession {
     page(start: number, count: number): string;
     seal(): string;
     /**
+     * The totals the sealed artifact states and the preview panel's wording
+     * of them, as JSON `{summary, text}`.
+     */
+    summary(): string;
+    /**
      * Case-insensitive line search over the sealed source, bounded by `limit`.
      */
     textSearch(query: Uint16Array, limit: number): string;
@@ -41,6 +46,7 @@ export interface InitOutput {
     readonly gcodesession_new: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly gcodesession_page: (a: number, b: number, c: number) => [number, number, number, number];
     readonly gcodesession_seal: (a: number) => [number, number, number, number];
+    readonly gcodesession_summary: (a: number) => [number, number, number, number];
     readonly gcodesession_textSearch: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly gcodesession_textWindow: (a: number, b: number, c: number) => [number, number, number, number];
     readonly gcodesession_view: (a: number, b: number, c: number) => [number, number, number, number];

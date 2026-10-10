@@ -268,8 +268,10 @@ function validateSnapshot(snapshot: PreviewWorkerSnapshot): void {
     !Array.isArray(snapshot.inspection.ticks) ||
     snapshot.inspection.ticks.length > count ||
     !Array.isArray(snapshot.inspection.limitations) ||
-    !Array.isArray(snapshot.summary?.perTool) ||
-    snapshot.summary.perTool.length > 256
+    // A statement past the core's bound comes without one. Its tools come
+    // only from the 64 Ki-unit trailer, so a list holds at most 65536.
+    (snapshot.summary !== undefined &&
+      (!Array.isArray(snapshot.summary.perTool) || snapshot.summary.perTool.length > 65536))
   )
     invalid();
   const packed = snapshot.adapter === 'rust';

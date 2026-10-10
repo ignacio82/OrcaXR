@@ -7,6 +7,7 @@ import {
   decodeGcodeModel,
   decodeGcodeIndex,
   decodeGcodeIndexPage,
+  decodeGcodeSummary,
   decodeGcodePreview,
   decodeGcodeInspection,
   decodeGcodePlayback,
@@ -27,6 +28,7 @@ export interface GcodeCoreBinding {
   append(offset: number, units: Uint16Array): void;
   seal(): string;
   page(start: number, count: number): string;
+  summary(): string;
   whole(): Uint8Array;
   window(first: number, last: number): Uint8Array;
   view(request: string): Uint8Array;
@@ -92,6 +94,13 @@ export class CoreGcodeSource {
     }
     if (this.index.complete && previous!.endOffsetExclusive !== this.index.sourceLength)
       throw new Error('Invalid shared G-code index coverage');
+  }
+
+  /** What the artifact states about itself and the preview panel's wording of
+   * it, from the shared core; a statement past the metadata bound is refused
+   * as `resource_limit`, leaving the source usable. */
+  summary() {
+    return decodeGcodeSummary(this.active().summary());
   }
 
   /** A frame binds every view query to this immutable source and exact selector.

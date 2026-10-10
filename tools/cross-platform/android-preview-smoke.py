@@ -3,7 +3,8 @@
 
 A two-layer, two-tool reference G-code is placed in Downloads and opened
 through the system's document picker; the shared core's preview draws its
-toolpaths (screenshot against the empty view), recolours them by tool, shows
+toolpaths (screenshot against the empty view) with the totals the file states,
+as the browser's panel words them, recolours them by tool, shows
 a single layer, keeps them when the operator leaves the area and returns, and
 refuses an empty file in the browser's words.
 """
@@ -24,6 +25,8 @@ fixture = ROOT / "testdata/parity/fixtures/reference.gcode"
 SHOWING = "Showing reference.gcode — Layers 1 through 2, Z 0.2 through 0.4 mm"
 
 screen = Screen(args.serial, output, "preview")
+# Only the controls below the toolpath view scroll; a swipe on the view orbits it.
+screen.scroll = (600, 980)
 adb, find, tap = screen.adb, screen.find, screen.tap
 
 
@@ -61,6 +64,8 @@ empty = drawn()
 tap("Open G-code file…")
 pick_download("reference.gcode")
 find(SHOWING, timeout=30)
+# The file's own totals, from the shared core's summary.
+find("≈42s · 0.02 g")
 lines = drawn()
 # Toolpaths are drawn in the core's saturated colours; the bed and background are not.
 assert saturated_pixels(empty, *view) < 20, "The empty view already shows coloured lines"

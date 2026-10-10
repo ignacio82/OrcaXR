@@ -60,6 +60,10 @@ const cssTotal = css.reduce((sum, file) => sum + file.bytes, 0);
 // the shared core: its transport, session and workflow hosts and the WASM glue
 // (45 KB) load on demand in their own chunk; the main chunk grew 6.4 KB for
 // choosing between implementations.
-assert.ok(jsTotal <= 10_700_000, `JavaScript total is ${jsTotal} bytes (budget 10,700,000).`);
+// Raised again from 10,700,000 on 2026-10-10 when the G-code preview worker took
+// the artifact summary from the shared core: its decoder and generated validators
+// add 3.1 KB to the on-demand worker chunk (the main chunk did not grow), which
+// left the total 551 bytes over.
+assert.ok(jsTotal <= 10_750_000, `JavaScript total is ${jsTotal} bytes (budget 10,750,000).`);
 assert.ok(cssTotal <= 200_000, `CSS total is ${cssTotal} bytes (budget 200,000).`);
 console.log(`Bundle budgets passed: main=${main.bytes}, JS total=${jsTotal}, CSS total=${cssTotal}.`);

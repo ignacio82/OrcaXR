@@ -146,6 +146,26 @@ impl Session {
             _ => Err(SessionError::InvalidState),
         }
     }
+    /// What the sealed artifact states about itself and the preview panel's
+    /// wording of it (`summarizeGcodeArtifact`, `describeArtifactSummary`), as
+    /// JSON `{summary, text}` in the browser's field names.
+    pub fn summary(&self) -> Result<String, SessionError> {
+        let index = self.index()?;
+        let summary = crate::artifact::summarize_text(&index.source);
+        #[derive(Serialize)]
+        struct Summary<'a> {
+            summary: &'a crate::artifact::ArtifactSummary,
+            text: crate::artifact::SummaryText,
+        }
+        let value = packet::json_with_cancellation(
+            &Summary {
+                text: crate::artifact::describe(&summary),
+                summary: &summary,
+            },
+            Some(&self.cancellation),
+        )?;
+        String::from_utf8(value).map_err(|_| SessionError::InvalidState)
+    }
     pub fn info(&self) -> Result<String, SessionError> {
         let index = self.index()?;
         #[derive(Serialize)]

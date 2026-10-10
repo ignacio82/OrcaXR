@@ -31,7 +31,7 @@ export interface PreviewWorkerSnapshot {
   readonly layerBounds: readonly [number, number];
   readonly window?: GcodePreviewWindowState;
   readonly notice?: string;
-  readonly summary: GcodeArtifactSummary;
+  readonly summary?: GcodeArtifactSummary;
   readonly projection: GcodePreviewProjection;
   readonly inspection: GcodeInspectionState;
 }

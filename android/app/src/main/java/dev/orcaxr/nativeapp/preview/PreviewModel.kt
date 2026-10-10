@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import dev.orcaxr.core.GcodeArtifactText
 import dev.orcaxr.core.GcodeLayout
 import dev.orcaxr.core.GcodePacket
 import dev.orcaxr.core.GcodePreviewModes
@@ -63,6 +64,9 @@ data class PreviewState(
     val unsupportedReason: String? = null,
     /** The source's layer count, from the shared index. */
     val layerCount: Int? = null,
+    /** What the file states about itself — time, weight, layers, tool changes, and each tool's
+     * use — as the browser's panel words it; none when it states nothing. */
+    val summary: GcodeArtifactText? = null,
     /** The browser's notices: the bounded-window notice first, then the shared views' limitations. */
     val limitations: List<String> = emptyList(),
     /** Whether only a bounded window is loaded, and whether earlier or later windows exist. */
@@ -104,6 +108,7 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
     private var loaded: GcodeWindow? = null
     private var plan: GcodePreviewPlan? = null
     private var layerCount = 0
+    private var summary: GcodeArtifactText? = null
     private var name: String? = null
     private var generation = 0L
     /** The shown slice's project state, and the latest one the project reported. */
@@ -270,6 +275,15 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** The shared core's statement of the sealed file, worded; none when it states nothing or
+     * when the statement is past the metadata bound (refused, the session kept). */
+    private fun statement(opened: GcodeSession): GcodeArtifactText? = try {
+        opened.summary().takeUnless { it.summary.empty }?.text
+    } catch (refused: IllegalStateException) {
+        if (refused.message != "resource_limit") throw refused
+        null
+    }
+
     /** Seals [opened], reads its index, and captures the first model when it is the whole print. */
     private fun index(opened: GcodeSession) {
         val sealed = opened.seal()
@@ -289,6 +303,7 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
             sealed.optString("terminationReason").ifEmpty { null }, limits.getLong("records"), limits.getLong("pathPoints"),
         )
         layerCount = sealed.getInt("layerCount")
+        summary = statement(opened)
         if (index.whole) {
             // A whole print's slider spans its model's layers, as the browser reads them.
             val whole = opened.whole()
@@ -355,7 +370,7 @@ class PreviewModel(application: Application) : AndroidViewModel(application) {
             source = name, mode = view.mode, layerBounds = shown.layerBounds, layerRange = view.layerRange,
             singleLayer = view.singleLayer, layerLabel = selection?.getString("accessibleLabel"),
             bottomZMm = selection?.getDouble("firstZMm"), topZMm = selection?.getDouble("lastZMm"), moves = view.moves,
-            legend = legend, range = numeric, unsupportedReason = unsupportedReason, layerCount = layerCount,
+            legend = legend, range = numeric, unsupportedReason = unsupportedReason, layerCount = layerCount, summary = summary,
             limitations = limitations, windowed = shown.window != null, hasPrevious = shown.hasPrevious,
             hasNext = shown.hasNext, toolpath = toolpath, generation = generation, slice = origin,
         )

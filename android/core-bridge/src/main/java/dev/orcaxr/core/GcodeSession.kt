@@ -74,6 +74,20 @@ class GcodeSession(private val sourceUnits: Int, options: String = "{}") : AutoC
             throw error
         }
     }
+    /** What the sealed artifact states about itself and the browser preview
+     * panel's wording of it. A native refusal (`resource_limit` past the
+     * metadata bound) leaves the session open. */
+    fun summary(): GcodeArtifactStatement = work { current ->
+        val encoded = NativeGcode.summary(current)
+        try {
+            val value = GcodeJson.objectValue(encoded) { active(current) }
+            GcodeMetadata.validate(GcodeMetadata.Kind.Summary, value) { active(current) }
+            GcodeSummary.statement(value)
+        } catch (error: Throwable) {
+            close()
+            throw error
+        }
+    }
     /** Lines containing [query] case-insensitively (ECMAScript trim and
      * toLowerCase), in order, at most [limit]. */
     fun search(query: String, limit: Int = GcodeLayout.MAX_SEARCH_RESULTS): GcodeTextSearch = work { current ->

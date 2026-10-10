@@ -4,6 +4,7 @@ import {
   validateGcodeMetadata,
   type GcodeIndexMetadata,
   type GcodeIndexEntryMetadata,
+  type GcodeSummaryMetadata,
 } from '../../../../contracts/generated/gcode-metadata';
 import {
   GCODE_RECORD_KIND_NAMES,
@@ -171,6 +172,23 @@ export function decodeGcodeIndex(value: string, sourceLength: number): GcodeInde
   complete(index);
   sourceSpans(index.warnings, sourceLength, 16000000);
   return index;
+}
+
+/** The shared core's statement of a sealed artifact (`summarizeGcodeArtifact`
+ * and `describeArtifactSummary`): its tools are the artifact's filaments in
+ * order, and each panel line names one of them, in order. */
+export function decodeGcodeSummary(value: string): GcodeSummaryMetadata {
+  const statement = json(value);
+  validateGcodeMetadata('Summary', statement);
+  const tools = statement.summary.perTool;
+  check(tools.every((tool, index) => tool.toolIndex === index));
+  const lines = statement.text.tools;
+  check(
+    lines.every(
+      (line, index) => line.toolIndex < tools.length && (index === 0 || lines[index - 1].toolIndex < line.toolIndex),
+    ),
+  );
+  return statement;
 }
 
 export function decodeGcodeIndexPage(value: string, index: GcodeIndexMetadata, previous?: GcodeIndexEntryMetadata) {

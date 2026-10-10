@@ -950,6 +950,131 @@
           "type": "boolean"
         }
       }
+    },
+    "ArtifactTool": {
+      "type": "object",
+      "fields": {
+        "toolIndex": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 65535
+        },
+        "lengthMm": {
+          "type": "number",
+          "optional": true
+        },
+        "volumeCm3": {
+          "type": "number",
+          "optional": true
+        },
+        "weightG": {
+          "type": "number",
+          "optional": true
+        },
+        "colorHex": {
+          "type": "string",
+          "maxLength": 8388608,
+          "optional": true
+        },
+        "material": {
+          "type": "string",
+          "maxLength": 8388608,
+          "optional": true
+        }
+      }
+    },
+    "ArtifactSummary": {
+      "type": "object",
+      "fields": {
+        "perTool": {
+          "type": "array",
+          "items": {
+            "ref": "ArtifactTool"
+          },
+          "minLength": 0,
+          "maxLength": 65536
+        },
+        "totalWeightG": {
+          "type": "number",
+          "optional": true
+        },
+        "totalCost": {
+          "type": "number",
+          "optional": true
+        },
+        "toolChanges": {
+          "type": "number",
+          "min": 0,
+          "optional": true
+        },
+        "layerCount": {
+          "type": "number",
+          "min": 0,
+          "optional": true
+        },
+        "estimatedSeconds": {
+          "type": "number",
+          "min": 0,
+          "optional": true
+        },
+        "firstLayerSeconds": {
+          "type": "number",
+          "min": 0,
+          "optional": true
+        },
+        "empty": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ArtifactToolLine": {
+      "type": "object",
+      "fields": {
+        "toolIndex": {
+          "type": "number",
+          "integer": true,
+          "min": 0,
+          "max": 65535
+        },
+        "colorHex": {
+          "type": "string",
+          "maxLength": 9,
+          "optional": true
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 8388608
+        }
+      }
+    },
+    "ArtifactText": {
+      "type": "object",
+      "fields": {
+        "totals": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "ref": "ArtifactToolLine"
+          },
+          "minLength": 0,
+          "maxLength": 65536
+        }
+      }
+    },
+    "Summary": {
+      "type": "object",
+      "fields": {
+        "summary": {
+          "ref": "ArtifactSummary"
+        },
+        "text": {
+          "ref": "ArtifactText"
+        }
+      }
     }
   }
 }

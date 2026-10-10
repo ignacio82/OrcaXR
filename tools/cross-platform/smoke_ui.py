@@ -21,6 +21,9 @@ class Screen:
         self.output = output
         self.name = name
         self.dump = f"/data/local/tmp/orcaxr-{name}.xml"
+        # Where a swipe scrolls the list: its top and bottom y. A screen whose upper part
+        # does not scroll (Preview's toolpath view) narrows it to the part that does.
+        self.scroll = (450, 900)
 
     def adb(self, *command, timeout=120):
         return subprocess.check_output(["adb", "-s", self.serial, *command], text=True, timeout=timeout).strip()
@@ -54,8 +57,9 @@ class Screen:
             if layout == placed:
                 onward = not onward
             placed = layout
-            start, end = ("900", "450") if onward else ("450", "900")
-            self.adb("shell", "input", "swipe", "360", start, "360", end, "300")
+            top, bottom = self.scroll
+            start, end = (bottom, top) if onward else (top, bottom)
+            self.adb("shell", "input", "swipe", "360", str(start), "360", str(end), "300")
             time.sleep(0.3)
         (self.output / f"{self.name}-smoke-failed.xml").write_text(self.adb("shell", "cat", self.dump))
         (self.output / f"{self.name}-smoke-seen.txt").write_text("\n".join(seen) + "\n")

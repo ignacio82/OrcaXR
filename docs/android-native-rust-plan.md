@@ -1846,7 +1846,8 @@ storage journeys on phone, tablet, and desktop-sized windows.
   area's actions carry the browser's action names (New Project, Open
   Project…, Save Project, Save Project As…, Import Model…, Undo, Redo).
   The Preview area is the browser's G-code viewer over the shared core's
-  preview (picker, colour modes, layer window and filters, emulator-verified).
+  preview (picker, colour modes, layer window and filters, emulator-verified),
+  with the file's own totals from the shared artifact summary.
   The Prepare area (`PrepareModel`) slices the active plate on the external
   slicer as the browser's `sliceNow`: attested route, the shared preflight's
   issues as the browser's panel shows them, the one-plate archive, "Slice" /
