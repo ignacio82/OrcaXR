@@ -1,37 +1,67 @@
 package dev.orcaxr.nativeapp
 
+import android.content.ContentResolver
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
+import android.view.DragEvent
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import dev.orcaxr.core.CoreCompatibility
 import dev.orcaxr.core.DocumentOwners
 import dev.orcaxr.nativeapp.device.DeviceModel
@@ -40,9 +70,15 @@ import dev.orcaxr.nativeapp.prepare.PrepareModel
 import dev.orcaxr.nativeapp.prepare.PrepareScreen
 import dev.orcaxr.nativeapp.preview.PreviewModel
 import dev.orcaxr.nativeapp.preview.PreviewScreen
+import dev.orcaxr.nativeapp.project.DropIntake
 import dev.orcaxr.nativeapp.project.ProjectModel
 import dev.orcaxr.nativeapp.project.ProjectScreen
 import dev.orcaxr.nativeapp.send.SendDialog
+import dev.orcaxr.nativeapp.shell.FocusVisibleTheme
+import dev.orcaxr.nativeapp.shell.Navigation
+import dev.orcaxr.nativeapp.shell.ShellArea
+import dev.orcaxr.nativeapp.shell.ShellLayout
+import dev.orcaxr.nativeapp.shell.Viewport
 import dev.orcaxr.nativeapp.workspace.WorkspaceScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -57,7 +93,16 @@ import kotlinx.coroutines.withContext
  * The areas follow the plan's order (Prepare, Preview, Device, Project) after
  * the Workspace, which stays first as the home the app opens on: it shows the
  * plate being prepared, as desktop Orca's Prepare view does, and needs no
- * printer, slicer or document before it shows anything. */
+ * printer, slicer or document before it shows anything.
+ *
+ * The window's width arranges them ([ShellLayout]): a bottom bar on a phone,
+ * a rail from 600 dp, and from 840 dp the area's panel beside the Workspace
+ * (or, in Preview, the toolpath view), as the browser's sidebar beside its
+ * viewport. Every control is reached with Tab and Shift+Tab and operated with
+ * Enter or Space, with its focus shown ([FocusVisibleTheme]); a dialog is a
+ * window of its own, so the focus stays in it and wraps. Files dropped on the
+ * window load as the browser's drop does ([DropIntake]).
+ */
 class MainActivity : ComponentActivity() {
     private val device: DeviceModel by viewModels()
     private val project: ProjectModel by viewModels()
@@ -89,6 +134,51 @@ class MainActivity : ComponentActivity() {
         }
         area = R.string.nav_project
         project.openIncoming(uri)
+    }
+
+    /**
+     * Loads the files a drop carries, as the browser's drop does: models and
+     * projects one after another through the Project area, G-code in
+     * Preview; what cannot be loaded goes to [refuse] in the browser's words.
+     * False when the drop carried no file at all (dragged text, say).
+     */
+    private fun drop(drag: DragEvent, refuse: (String) -> Unit): Boolean {
+        val clip = drag.clipData ?: return false
+        val uris = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
+        if (uris.isEmpty()) return false
+        // Read access to what was dropped, for as long as this window lives: an import or Open reads it later, on a worker.
+        if (uris.any { it.scheme == ContentResolver.SCHEME_CONTENT }) requestDragAndDropPermissions(drag)
+        val plan = DropIntake.plan(uris.map { uri ->
+            val shared = uri.scheme == ContentResolver.SCHEME_CONTENT
+            DropIntake.Dropped(uri.toString(), displayName(uri, shared), if (shared) mimeType(uri) else null, shared)
+        })
+        if (plan.refusals.isNotEmpty()) refuse(plan.refusals.joinToString("\n"))
+        plan.gcode?.let { gcode -> preview.open(uris.first { it.toString() == gcode.uri }) }
+        if (plan.project.isNotEmpty()) project.intake(plan.project)
+        when (plan.area) {
+            ShellArea.Project -> area = R.string.nav_project
+            ShellArea.Preview -> area = R.string.nav_preview
+            else -> Unit
+        }
+        return true
+    }
+
+    private fun displayName(uri: Uri, shared: Boolean): String = (if (shared) {
+        try {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getString(0) else null
+            }
+        } catch (_: RuntimeException) {
+            null
+        }
+    } else {
+        null
+    }) ?: uri.lastPathSegment ?: "document"
+
+    private fun mimeType(uri: Uri): String? = try {
+        contentResolver.getType(uri)
+    } catch (_: RuntimeException) {
+        null
     }
 
     override fun onStop() {
@@ -161,63 +251,170 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            MaterialTheme {
-                Scaffold(
-                    bottomBar = {
-                        if (state == R.string.workspace_development) {
-                            NavigationBar {
-                                for ((label, icon) in listOf(
-                                    R.string.nav_workspace to android.R.drawable.ic_menu_gallery,
-                                    R.string.nav_prepare to android.R.drawable.ic_menu_upload,
-                                    R.string.nav_preview to android.R.drawable.ic_menu_view,
-                                    R.string.nav_device to android.R.drawable.ic_menu_share,
-                                    R.string.nav_project to android.R.drawable.ic_menu_save,
-                                )) {
-                                    NavigationBarItem(
-                                        selected = area == label,
-                                        onClick = { area = label },
-                                        icon = { Icon(painterResource(icon), contentDescription = null) },
-                                        // One line: five areas leave a narrow phone little room per label.
-                                        label = { Text(stringResource(label), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
-                                    )
-                                }
-                            }
+            FocusVisibleTheme {
+                val ready = state == R.string.workspace_development
+                val layout = ShellLayout.of(LocalWindowInfo.current.containerDpSize.width.value.toInt(), shellArea(area))
+                val snackbar = remember { SnackbarHostState() }
+                // A drop's refusals: each drop's own, so the same words dropped again show again.
+                var refused by remember { mutableStateOf<Refusal?>(null) }
+                LaunchedEffect(refused) {
+                    refused?.let { snackbar.showSnackbar(it.text, withDismissAction = true, duration = SnackbarDuration.Long) }
+                }
+                // Over the window while a file is dragged across it, as the browser's drop overlay.
+                var over by remember { mutableStateOf(false) }
+                val target = remember {
+                    object : DragAndDropTarget {
+                        override fun onEntered(event: DragAndDropEvent) {
+                            over = true
                         }
-                    },
-                ) { padding ->
-                    if (area == R.string.nav_device && state == R.string.workspace_development) {
-                        DeviceScreen(device, Modifier.fillMaxSize().padding(padding))
-                    } else if (area == R.string.nav_project && state == R.string.workspace_development) {
-                        ProjectScreen(project, Modifier.fillMaxSize().padding(padding))
-                    } else if (area == R.string.nav_prepare && state == R.string.workspace_development) {
-                        PrepareScreen(prepare, project, device, Modifier.fillMaxSize().padding(padding))
-                    } else if (area == R.string.nav_preview && state == R.string.workspace_development) {
-                        PreviewScreen(preview, Modifier.fillMaxSize().padding(padding))
-                    } else if (state == R.string.workspace_development) {
-                        Box(Modifier.fillMaxSize().padding(padding)) {
-                            WorkspaceScreen(project, Modifier.fillMaxSize())
-                            if (resources.getBoolean(R.bool.viewport_experiment_enabled)) {
-                                TextButton(
-                                    onClick = { startActivity(Intent().setClassName(this@MainActivity, "$packageName.ViewportExperimentActivity")) },
-                                    modifier = Modifier.align(Alignment.BottomEnd),
-                                ) { Text(stringResource(R.string.open_viewport_experiment)) }
-                            }
+
+                        override fun onExited(event: DragAndDropEvent) {
+                            over = false
                         }
-                    } else {
-                        Column(Modifier.fillMaxSize().padding(padding),
-                            verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
-                            Text(stringResource(state), style = MaterialTheme.typography.bodyLarge)
+
+                        override fun onEnded(event: DragAndDropEvent) {
+                            over = false
+                        }
+
+                        override fun onDrop(event: DragAndDropEvent): Boolean {
+                            over = false
+                            return drop(event.toAndroidDragEvent()) { refused = Refusal(it) }
                         }
                     }
+                }
+                Box(Modifier.fillMaxSize().dragAndDropTarget(shouldStartDragAndDrop = { ready }, target = target)) {
+                    Scaffold(
+                        bottomBar = {
+                            if (ready && layout.navigation == Navigation.Bar) {
+                                NavigationBar {
+                                    for ((label, icon) in AREAS) {
+                                        NavigationBarItem(
+                                            selected = area == label,
+                                            onClick = { area = label },
+                                            icon = { Icon(painterResource(icon), contentDescription = null) },
+                                            // One line: five areas leave a narrow phone little room per label.
+                                            label = { Text(stringResource(label), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        snackbarHost = { SnackbarHost(snackbar) },
+                    ) { padding ->
+                        if (!ready) {
+                            Column(Modifier.fillMaxSize().padding(padding),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
+                                Text(stringResource(state), style = MaterialTheme.typography.bodyLarge)
+                            }
+                        } else if (layout.navigation == Navigation.Rail) {
+                            Row(Modifier.fillMaxSize().padding(padding)) {
+                                // The Scaffold's padding already keeps it clear of the system bars.
+                                NavigationRail(windowInsets = WindowInsets(0, 0, 0, 0)) {
+                                    for ((label, icon) in AREAS) {
+                                        NavigationRailItem(
+                                            selected = area == label,
+                                            onClick = { area = label },
+                                            icon = { Icon(painterResource(icon), contentDescription = null) },
+                                            label = { Text(stringResource(label), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
+                                        )
+                                    }
+                                }
+                                Work(layout, Modifier.weight(1f).fillMaxHeight())
+                            }
+                        } else {
+                            Work(layout, Modifier.fillMaxSize().padding(padding))
+                        }
+                    }
+                    if (over) DropPrompt()
                 }
                 // A send's confirmation waits above whichever area is shown: the operator may have moved on.
                 device.sendConfirmation?.let { pending -> SendDialog(pending.view, device::answerSend) }
             }
         }
     }
+
+    /** The work area: the shown area alone, or its panel at the start beside the [ShellLayout.viewport]. */
+    @Composable
+    private fun Work(layout: ShellLayout, modifier: Modifier) {
+        val panel = Modifier.width(layout.panelWidthDp.dp).fillMaxHeight()
+        when (layout.viewport) {
+            // One arrangement for every area beside the plate, so moving between them keeps its view.
+            Viewport.Workspace -> Row(modifier) {
+                when (area) {
+                    R.string.nav_project -> ProjectScreen(project, panel)
+                    else -> PrepareScreen(prepare, project, device, panel)
+                }
+                WorkspaceScreen(project, Modifier.weight(1f).fillMaxHeight())
+            }
+            Viewport.Toolpath -> PreviewScreen(preview, modifier, panelWidth = layout.panelWidthDp.dp)
+            null -> when (area) {
+                R.string.nav_device -> DeviceScreen(device, modifier)
+                R.string.nav_project -> ProjectScreen(project, modifier)
+                R.string.nav_prepare -> PrepareScreen(prepare, project, device, modifier)
+                R.string.nav_preview -> PreviewScreen(preview, modifier)
+                else -> Box(modifier) {
+                    WorkspaceScreen(project, Modifier.fillMaxSize())
+                    if (resources.getBoolean(R.bool.viewport_experiment_enabled)) {
+                        TextButton(
+                            onClick = { startActivity(Intent().setClassName(this@MainActivity, "$packageName.ViewportExperimentActivity")) },
+                            modifier = Modifier.align(Alignment.BottomEnd),
+                        ) { Text(stringResource(R.string.open_viewport_experiment)) }
+                    }
+                }
+            }
+        }
+    }
 }
+
+/** The browser's drop affordance over the window: a dashed outline round its words, read out as they appear. */
+@Composable
+private fun DropPrompt() {
+    val accent = MaterialTheme.colorScheme.primary
+    Box(
+        Modifier.fillMaxSize().padding(16.dp)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(12.dp))
+            .drawBehind {
+                val width = 2.dp.toPx()
+                drawRoundRect(
+                    accent,
+                    cornerRadius = CornerRadius(12.dp.toPx()),
+                    style = Stroke(width, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx()))),
+                )
+            }
+            .semantics { liveRegion = LiveRegionMode.Polite },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            stringResource(R.string.drop_prompt),
+            Modifier.padding(24.dp),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** What a drop refused, shown once. */
+private class Refusal(val text: String)
+
+/** The area an `R.string.nav_*` label names. */
+private fun shellArea(label: Int): ShellArea = when (label) {
+    R.string.nav_prepare -> ShellArea.Prepare
+    R.string.nav_preview -> ShellArea.Preview
+    R.string.nav_device -> ShellArea.Device
+    R.string.nav_project -> ShellArea.Project
+    else -> ShellArea.Workspace
+}
+
+/** The areas in the bar's and rail's order, with their icons. */
+private val AREAS = listOf(
+    R.string.nav_workspace to android.R.drawable.ic_menu_gallery,
+    R.string.nav_prepare to android.R.drawable.ic_menu_upload,
+    R.string.nav_preview to android.R.drawable.ic_menu_view,
+    R.string.nav_device to android.R.drawable.ic_menu_share,
+    R.string.nav_project to android.R.drawable.ic_menu_save,
+)
 
 private const val AREA = "area"
 private const val ANDROID_13 = 33

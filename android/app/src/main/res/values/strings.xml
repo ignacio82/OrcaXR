@@ -121,4 +121,6 @@
     <string name="device_confirm">Send</string>
     <string name="device_do_not">Do not send</string>
     <string name="device_dismiss">Dismiss</string>
+    <!-- The browser's drop overlay (app.main.dropA3MFSTLOBJ in web/src/main.ts), shown while a file is dragged over the window. -->
+    <string name="drop_prompt">Drop a 3MF, STL, OBJ, AMF, ZIP, or G-code file to load it</string>
 </resources>

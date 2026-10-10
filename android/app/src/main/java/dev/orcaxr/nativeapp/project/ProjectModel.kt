@@ -97,6 +97,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         private set
     var busy by mutableStateOf(false)
         private set
+    /** Work handed to the worker and not yet finished (main thread); [busy] while there is any. */
+    private var running = 0
+    /** Files dropped on the window and not yet loaded: one at a time, as the browser's intake loop. */
+    private val dropped = ArrayDeque<DropIntake.Item>()
     var message by mutableStateOf<String?>(null)
         private set
     var recent by mutableStateOf(recentStore.entries)
@@ -146,9 +150,10 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
     private fun cause(failure: Throwable): Throwable =
         if ((failure is ExecutionException || failure is CompletionException) && failure.cause != null) cause(failure.cause!!) else failure
 
-    /** Runs [task] on the worker, showing the area as busy and any failure as a message. */
+    /** Runs [task] on the worker, showing the area as busy and any failure as a message. Main thread. */
     private fun work(task: () -> Unit) {
-        main.post { busy = true }
+        running++
+        busy = true
         worker.execute {
             try {
                 task()
@@ -156,7 +161,40 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
                 val reason = cause(failure)
                 main.post { message = reason.message ?: reason.javaClass.simpleName }
             } finally {
-                main.post { busy = false }
+                // After what the task posted: a dialog it raised is up before the next dropped file is considered.
+                main.post {
+                    running--
+                    busy = running > 0
+                    advance()
+                }
+            }
+        }
+    }
+
+    /**
+     * Loads files dropped on the window, after any dropped before: each model
+     * through the import preview, each project through Open (asking first
+     * about unsaved changes, as any Open does). One that another window holds
+     * brings that window forward instead.
+     */
+    fun intake(files: List<DropIntake.Item>) {
+        dropped.addAll(files)
+        advance()
+    }
+
+    /** Starts the next dropped file once nothing runs and nothing waits for the operator; one that starts nothing gives way to the next. */
+    private fun advance() {
+        while (running == 0 && pendingImport == null && pendingDiscard == null && pendingConflict == null && !saveAsRequested) {
+            val next = dropped.removeFirstOrNull() ?: return
+            val uri = Uri.parse(next.uri)
+            when (next.kind) {
+                DropIntake.Kind.Model -> importModel(uri)
+                DropIntake.Kind.Project -> {
+                    val holder = owners.holder(next.uri)
+                    if (holder != null && holder !== owner) holder.focus() else openIncoming(uri)
+                }
+                // Preview opens G-code; the shell never queues it here.
+                DropIntake.Kind.Gcode -> Unit
             }
         }
     }
@@ -230,7 +268,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         val pending = pendingDiscard ?: return
         pendingDiscard = null
         when (answer) {
-            DiscardAnswer.Cancel -> Unit
+            DiscardAnswer.Cancel -> advance()
             DiscardAnswer.Discard -> {
                 // The changes are dropped, and their recovery copy with them.
                 discarded = view
@@ -255,7 +293,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         saveAsRequested = false
         val next = afterSave
         afterSave = null
-        if (uri == null || next == null) return
+        if (uri == null || next == null) return advance()
         work {
             saveDocument(uri)
             main.post { next() }
@@ -318,7 +356,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
      */
     fun openIncoming(uri: Uri) {
         if (uri.scheme != "content") {
-            message = "OrcaXR opens only documents shared through the system."
+            message = DropIntake.NOT_SHARED
             return
         }
         unlessDirty {
@@ -363,7 +401,7 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
         val pending = pendingConflict ?: return
         pendingConflict = null
         when (answer) {
-            ConflictAnswer.Cancel -> Unit
+            ConflictAnswer.Cancel -> advance()
             ConflictAnswer.Overwrite -> work {
                 saveDocument(pending.uri)
                 pending.then?.let { main.post(it) }

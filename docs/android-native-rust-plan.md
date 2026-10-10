@@ -1884,9 +1884,20 @@ storage journeys on phone, tablet, and desktop-sized windows.
   keyboard (Ctrl/Meta+Z undo; Ctrl/Meta+Shift+Z and Ctrl+Y redo — only keys
   no focused view consumed, as the browser leaves a text field its own),
   verified on the emulator; its buttons carry the browser's action names.
-  Window-size adaptation, hover, context menus, stylus and drag/drop remain
-  (a dropped 3MF could only open as the project: geometry-only 3MF import is
-  still browser-only).
+  The shell adapts to the window's width (`ShellLayout`): a bottom bar below
+  600 dp, a rail from 600 dp, and from 840 dp the area's panel at the start
+  beside the Workspace (Prepare, Project) or the toolpath view (Preview), as
+  the browser's sidebar beside its viewport; Device fills the work area as the
+  browser's page. Every control is reached with Tab/Shift+Tab and operated
+  with Enter/Space, its focus drawn visibly; dialogs keep, wrap and return the
+  focus. Files dropped on the window load as the browser's drop (`DropIntake`):
+  models through the import preview, a 3MF through the guarded Open (it can
+  only open as the project: geometry-only 3MF import is still browser-only),
+  G-code in Preview, anything else refused in the browser's words. JVM tests
+  cover the layouts and the drop; `android-adaptive-smoke.py` resizes the
+  emulator for the bar, rail and panels and drives the keyboard (adb cannot
+  drag and drop) but has not yet run. Hover, context menus, trackpad, stylus,
+  the inspector's own panels, toolbars, menus and the command palette remain.
 - [ ] Integrate the flat renderer with panel resizing, visibility, lifecycle,
   selection, painting, model tools, and preview controls. Keep CPU work and
   loading off the UI thread; avoid per-frame Compose recomposition for meshes.

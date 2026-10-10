@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import dev.orcaxr.core.PrinterStorage
 import dev.orcaxr.core.ProjectIntents
+import dev.orcaxr.nativeapp.shell.tabMovesFocus
 import kotlinx.coroutines.delay
 
 private fun text(units: List<Int>) = String(CharArray(units.size) { units[it].toChar() })
@@ -132,7 +133,8 @@ fun ConsoleTab(model: DeviceModel) {
                 Text(prefix + text(line.text), style = MaterialTheme.typography.bodySmall)
             }
         }
-        OutlinedTextField(script, { script = it }, label = { Text("G-code") }, modifier = Modifier.fillMaxWidth())
+        // Several lines of G-code: Tab still moves on rather than typing into the script.
+        OutlinedTextField(script, { script = it }, label = { Text("G-code") }, modifier = Modifier.fillMaxWidth().tabMovesFocus())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { model.sendScript(script); script = "" }, enabled = script.isNotBlank()) { Text("Send") }
             OutlinedButton(onClick = model::loadMacros) { Text("Show macros") }

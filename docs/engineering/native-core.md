@@ -4881,6 +4881,56 @@ APK (`MoonrakerAdvertiser`, skipped without its arguments) advertises the
 service on a port forwarded to the simulator, and the app finds it, shows it
 verified, adds it, connects through the advertised port and removes it.
 
+### Android adaptive shell, keyboard and file drop
+
+The shell arranges the areas by the window's width (`LocalWindowInfo`'s
+container size; no window-size-class dependency, none being in the offline,
+verified Gradle cache): `ShellLayout` (platform-free) takes Material's classes
+— a bottom bar below 600 dp, a navigation rail from 600 dp — and from 840 dp
+shows the area's panel at the start beside a viewport, as the browser's flat
+shell docks its parameter sidebar at the inline start of the 3D viewport
+(`web/index.html`, `WorkspaceViews`): the Workspace beside Prepare and beside
+Project (whose object tree is the browser sidebar's Objects card), the
+toolpath view beside Preview's controls; the Workspace area is the viewport
+itself and Device fills the work area, as the browser's Device page. The
+panel is the sidebar's 356 dp, 312 dp in windows up to 1180 dp. Areas beside
+the Workspace share one arrangement, so moving between them keeps its view.
+
+Every control is reached with Tab and Shift+Tab and operated with Enter or
+Space (Compose's clickables answer both); a dialog is a window of its own,
+where the focus stays and wraps, and closing it gives the focus back.
+`FocusVisibleTheme` raises the focused state layer to 24% (Material 3 draws
+10%, which a keyboard user barely sees; the browser outlines `:focus-visible`)
+for every ripple, the default indication included; the Preview sliders, on
+which Material draws no focus, get `focusRing`. The multi-line Console field
+passes Tab on (`tabMovesFocus`) instead of typing a tab, as a browser
+textarea does; single-line and read-only fields already do.
+
+Files dropped on the window (desktop windowing, ChromeOS, Samsung DeX) load
+as the browser's drop does (`intakeFiles`): `DropIntake` (platform-free)
+decides each by its name — the extensions of the pinned dialogs, or for an
+extension the browser does not know the type the provider reports, where the
+browser would read the content — and plans the drop in order. Models (STL,
+OBJ, AMF, ZIP) import through the Project area's preview and 3MF projects
+open through its Open, guarded for unsaved changes and refused as any
+handed-over document when not `content:`; `ProjectModel.intake` takes them
+one at a time, the next once nothing runs and no question waits (a project
+another window holds brings it forward). Geometry-only 3MF import is still
+browser-only. G-code opens in Preview (the last one dropped). The rest is
+refused in the browser's words ("Failed to load x: x is not a recognised
+model format", the STEP and SVG reasons) on a snackbar; the drop's prompt
+is the browser's. The activity requests the drag's permissions, which last
+as long as the window; a dropped document is untrusted input and joins no
+recent list. 12 JVM tests (`ShellLayoutTest`, `DropIntakeTest`) cover the
+layouts and the drop's decisions and words; `android-adaptive-smoke.py`
+(last in `emulator-smoke.py`) checks the bar, Tab traversal and wrap,
+Shift+Tab, Space and Enter, the focused button's pixels, a dialog keeping
+and returning the focus and Escape, then resizes the display (`wm density`,
+`wm size`, always restored) for the medium rail and the expanded panels and
+crosses them with Tab. adb cannot drive a drag and drop. The smoke has not
+yet run on an emulator; hover, context menus, trackpad and stylus input,
+and keyboard control of the 3D views remain.
+
 ### Action capabilities
 
 `orcaxr_contracts::capabilities` ports the browser's action catalog and its

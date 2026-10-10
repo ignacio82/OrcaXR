@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,6 +50,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -56,6 +59,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.orcaxr.core.GcodeArtifactText
 import dev.orcaxr.core.GcodePreviewModes
 import dev.orcaxr.nativeapp.R
+import dev.orcaxr.nativeapp.shell.focusRing
 import dev.orcaxr.renderer.GcodeMoveFilter
 import dev.orcaxr.renderer.GcodePreviewPlan
 import dev.orcaxr.renderer.OrbitCamera
@@ -70,10 +74,12 @@ import kotlin.math.abs
  * toolpaths drawn by the flat renderer in the shared preview's colours, with
  * the browser panel's controls — View (colour mode), Top/Bottom layer, Single
  * layer, Moves and, for a print too large to load at once, Previous/Next moves.
- * Drag orbits and pinch zooms the toolpath view.
+ * Drag orbits and pinch zooms the toolpath view. The view is above the
+ * controls, or — given a [panelWidth], in a wide window — beside them at the
+ * end, as the browser's sidebar sits at the start of its viewport.
  */
 @Composable
-fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier) {
+fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier, panelWidth: Dp? = null) {
     val state = model.state
     // Any document: providers often report G-code only as bytes or text.
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::open) }
@@ -97,10 +103,12 @@ fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier) {
     }
     LaunchedEffect(state.toolpath, state.generation) { renderer.show(state.toolpath?.geometry, state.generation) }
 
-    Column(modifier) {
-        AndroidView(factory = { context -> PreviewSurface(context).also(renderer::attach) }, Modifier.fillMaxWidth().weight(1f))
+    val view = @Composable { place: Modifier ->
+        AndroidView(factory = { context -> PreviewSurface(context).also(renderer::attach) }, place)
+    }
+    val controls = @Composable { place: Modifier ->
         Column(
-            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+            place.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(stringResource(R.string.preview_heading), style = MaterialTheme.typography.titleMedium)
@@ -128,6 +136,17 @@ fun PreviewScreen(model: PreviewModel, modifier: Modifier = Modifier) {
             if (state.legend.isNotEmpty()) Legend(state.legend)
             state.range?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             state.limitations.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+    if (panelWidth != null) {
+        Row(modifier) {
+            controls(Modifier.width(panelWidth).fillMaxHeight())
+            view(Modifier.weight(1f).fillMaxHeight())
+        }
+    } else {
+        Column(modifier) {
+            view(Modifier.fillMaxWidth().weight(1f))
+            controls(Modifier.fillMaxWidth().weight(1f))
         }
     }
 }
@@ -212,7 +231,9 @@ private fun LayerSlider(label: String, value: Int, bounds: Pair<Int, Int>, zMm: 
             // One stop per layer; a tall print slides freely and rounds to a layer, as the browser's range input does.
             steps = (maxLayer - minLayer - 1).let { if (it in 0..MAX_SLIDER_TICKS) it else 0 },
             enabled = enabled && maxLayer > minLayer,
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = label; stateDescription = description },
+            // Material draws no focus on a slider: the ring shows where the arrow keys apply.
+            modifier = Modifier.fillMaxWidth().focusRing(MaterialTheme.colorScheme.primary)
+                .semantics { contentDescription = label; stateDescription = description },
         )
     }
 }
