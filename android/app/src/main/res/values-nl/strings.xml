@@ -12,6 +12,11 @@
     <string name="project_save">Bewaar project</string>
     <string name="project_undo">Ongedaan maken</string>
     <string name="project_redo">Opnieuw doen</string>
+    <string name="project_edit_select_all">Alles selecteren</string>
+    <string name="project_edit_deselect_all">Alles deselecteren</string>
+    <string name="project_edit_delete_all">Alles verwijderen</string>
+    <string name="project_toggle_printable">Afdrukbaar</string>
+    <string name="project_instance_to_object">Instellen als individueel object</string>
     <string name="device_cancel">Annuleren</string>
     <string name="device_tab_camera">Camera</string>
 </resources>

@@ -2,36 +2,67 @@ package dev.orcaxr.nativeapp.project
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.orcaxr.core.ProjectActionState
 import dev.orcaxr.core.ProjectIntents
+import dev.orcaxr.core.ProjectNames
+import dev.orcaxr.core.ProjectPlateState
 import dev.orcaxr.core.ProjectRecovery
+import dev.orcaxr.core.ProjectRowSelection
+import dev.orcaxr.core.ProjectView
+import dev.orcaxr.core.ProjectWorkspace
+import dev.orcaxr.nativeapp.R
 import java.text.DateFormat
 import java.util.Date
-import dev.orcaxr.nativeapp.R
 
 private fun text(units: List<Int>) = String(CharArray(units.size) { units[it].toChar() })
 
@@ -51,6 +82,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
         model.shareRequest?.let { context.startActivity(it); model.shareShown() }
     }
     LaunchedEffect(model.saveAsRequested) { if (model.saveAsRequested) saveBeforeGoingOn.launch(suggested) }
+    var renaming by remember { mutableStateOf<Renaming?>(null) }
 
     LazyColumn(
         modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -84,10 +116,20 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
                 OutlinedButton(onClick = model::redo, enabled = view.redo != null && !model.busy) {
                     Text(view.redo?.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.project_redo_named, it) } ?: stringResource(R.string.project_redo))
                 }
+                EditMenu(view, model)
+            }
+        }
+        item { Text(stringResource(R.string.project_plates), style = MaterialTheme.typography.titleMedium) }
+        itemsIndexed(view.plateList, key = { _, plate -> "plate:" + plate.id }) { index, plate ->
+            PlateRow(plate, index, view, model) { renaming = Renaming.Plate(plate.id, plate.name) }
+        }
+        item {
+            OutlinedButton(onClick = { model.perform("add_plate") }, enabled = !model.busy && ProjectEditing.enabled(view, "add_plate")) {
+                Text(stringResource(R.string.project_add_plate))
             }
         }
         item { Text(stringResource(R.string.project_objects), style = MaterialTheme.typography.titleMedium) }
-        items(view.rows, key = { "row:" + text(it.key) }) { row -> TreeRow(row) }
+        items(view.rows, key = { "row:" + text(it.key) }) { row -> TreeRow(row, view, model) { renaming = Renaming.Entity(it.entity, it.name) } }
         if (view.totalRows > view.rows.size) {
             item { Text(stringResource(R.string.project_more_rows, view.totalRows - view.rows.size), style = MaterialTheme.typography.bodySmall) }
         }
@@ -113,6 +155,7 @@ fun ProjectScreen(model: ProjectModel, modifier: Modifier = Modifier) {
         }
     }
 
+    renaming?.let { request -> RenameDialog(request, model) { renaming = null } }
     model.pendingDiscard?.let { pending ->
         AlertDialog(
             onDismissRequest = { model.answerDiscard(DiscardAnswer.Cancel) },
@@ -182,12 +225,222 @@ private fun Recovered(entry: ProjectRecovery.Entry, model: ProjectModel, enabled
     }
 }
 
+/** What the rename dialog renames: an object or part of the tree, or a plate of the plate bar. */
+private sealed interface Renaming {
+    val name: String
+    data class Entity(val entity: ProjectIntents.ObjectTreeEntity, override val name: String) : Renaming
+    data class Plate(val id: String, override val name: String) : Renaming
+}
+
+/** The label a catalogue action shows here: the browser's message for it, in the app's language. */
 @Composable
-private fun TreeRow(row: ProjectIntents.ObjectTreeRow) {
-    Column(Modifier.fillMaxWidth().padding(start = (16 * row.level.coerceIn(0L, 6L)).toInt().dp)) {
-        Text(text(row.label), style = MaterialTheme.typography.bodyLarge)
-        (row.description as? ProjectIntents.OptionalText.Value)?.let { Text(text(it.value), style = MaterialTheme.typography.bodySmall) }
+private fun actionLabel(action: ProjectActionState): String = when (action.id) {
+    "edit_select_all" -> stringResource(R.string.project_edit_select_all)
+    "edit_deselect_all" -> stringResource(R.string.project_edit_deselect_all)
+    "edit_duplicate" -> stringResource(R.string.project_edit_duplicate)
+    "add_instance" -> stringResource(R.string.project_add_instance)
+    "edit_delete_selected" -> stringResource(R.string.project_edit_delete_selected)
+    "edit_delete_all" -> stringResource(R.string.project_edit_delete_all)
+    "toggle_printable" -> stringResource(R.string.project_toggle_printable)
+    "instance_to_object" -> stringResource(R.string.project_instance_to_object)
+    "add_plate" -> stringResource(R.string.project_add_plate)
+    "duplicate_plate" -> stringResource(R.string.project_duplicate_plate)
+    "delete_plate" -> stringResource(R.string.project_delete_plate)
+    else -> action.label
+}
+
+/** The browser's Edit menu: its selection and object edits, enabled as the core enables them. */
+@Composable
+private fun EditMenu(view: ProjectView, model: ProjectModel) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { open = true }, enabled = view.ready && !model.busy) { Text(stringResource(R.string.project_edit_menu)) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            for (action in ProjectEditing.editMenu(view)) {
+                DropdownMenuItem(
+                    text = { Text(actionLabel(action)) },
+                    onClick = {
+                        open = false
+                        model.perform(action.id)
+                    },
+                    enabled = action.enabled,
+                )
+            }
+        }
     }
+}
+
+/**
+ * One plate of the plate bar (the browser's plate manager): the active one
+ * marked, tapped to activate; its printing switch; and its own actions —
+ * rename, move up or down, duplicate, delete — each on this plate.
+ */
+@Composable
+private fun PlateRow(plate: ProjectPlateState, index: Int, view: ProjectView, model: ProjectModel, onRename: () -> Unit) {
+    val enabled = view.ready && !model.busy
+    var open by remember { mutableStateOf(false) }
+    val activate = stringResource(R.string.project_activate_plate)
+    val include = stringResource(R.string.project_set_plate_printable)
+    Row(
+        Modifier.fillMaxWidth().clickable(enabled = enabled && !plate.active) { model.activatePlate(plate.id) },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = plate.active,
+            onClick = { model.activatePlate(plate.id) },
+            enabled = enabled,
+            modifier = Modifier.semantics { contentDescription = "$activate: ${plate.name}" },
+        )
+        Text(plate.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Checkbox(
+            checked = plate.printable,
+            onCheckedChange = { model.setPlatePrintable(plate.id, it) },
+            enabled = enabled,
+            modifier = Modifier.semantics { contentDescription = "$include: ${plate.name}" },
+        )
+        Box {
+            val actions = stringResource(R.string.project_plate_actions, plate.name)
+            TextButton(onClick = { open = true }, enabled = enabled, modifier = Modifier.semantics { contentDescription = actions }) { Text("⋮") }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                fun choose(action: () -> Unit) {
+                    open = false
+                    action()
+                }
+                val count = view.plateList.size
+                DropdownMenuItem(text = { Text(stringResource(R.string.project_rename_plate)) }, onClick = { choose(onRename) })
+                DropdownMenuItem(text = { Text(stringResource(R.string.project_plate_move_up)) }, onClick = { choose { model.movePlate(plate.id, -1) } }, enabled = index > 0)
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.project_plate_move_down)) },
+                    onClick = { choose { model.movePlate(plate.id, 1) } },
+                    enabled = index < count - 1,
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.project_plate_duplicate)) },
+                    onClick = { choose { model.duplicatePlate(plate.id) } },
+                    enabled = count < ProjectWorkspace.MAX_PROJECT_PLATES,
+                )
+                DropdownMenuItem(text = { Text(stringResource(R.string.project_delete_plate)) }, onClick = { choose { model.deletePlate(plate.id) } }, enabled = count > 1)
+            }
+        }
+    }
+}
+
+/**
+ * One row of the plates-and-objects tree, as the browser's Objects panel
+ * shows it: indented by level, opened and closed by its disclosure,
+ * highlighted when its entity is selected. A tap selects it (Ctrl/Meta
+ * toggles, Shift extends a range, from a hardware keyboard), its check box
+ * toggles it, and a long-press opens its menu — Rename for an object or part,
+ * then the catalogue's actions, which act on the selection — without
+ * changing the selection, as the browser's Objects panel does.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TreeRow(row: ProjectIntents.ObjectTreeRow, view: ProjectView, model: ProjectModel, onRename: (ProjectEditing.Choice.Rename) -> Unit) {
+    val key = text(row.key)
+    val label = text(row.label)
+    var menu by remember { mutableStateOf(false) }
+    var modifiers by remember { mutableStateOf(PointerKeyboardModifiers(0)) }
+    val selectable = ProjectEditing.selectable(row)
+    val choices = if (menu) ProjectEditing.rowMenu(row, view) else emptyList()
+    Box {
+        Row(
+            Modifier.fillMaxWidth()
+                .background(if (row.selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                .pointerInput(Unit) {
+                    // The keyboard's modifiers as the pointer goes down: what a click activates with.
+                    awaitPointerEventScope {
+                        while (true) modifiers = awaitPointerEvent(PointerEventPass.Initial).keyboardModifiers
+                    }
+                }
+                .combinedClickable(
+                    enabled = selectable,
+                    onClick = { model.selectRow(key, ProjectEditing.rowMode(modifiers.isShiftPressed, modifiers.isCtrlPressed || modifiers.isMetaPressed)) },
+                    // As the browser's Objects panel: the menu opens without changing the selection.
+                    onLongClick = { menu = true },
+                )
+                .semantics { selected = row.selected }
+                .padding(start = (16 * row.level.coerceIn(0L, 6L)).toInt().dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            when (row.expansion) {
+                ProjectIntents.ObjectTreeRowExpansion.Leaf -> Spacer(Modifier.size(40.dp))
+                else -> {
+                    val open = row.expansion == ProjectIntents.ObjectTreeRowExpansion.Expanded
+                    val description = stringResource(if (open) R.string.project_row_collapse else R.string.project_row_expand, label)
+                    TextButton(onClick = { model.toggleRow(key) }, modifier = Modifier.size(40.dp).semantics { contentDescription = description }) {
+                        Text(if (open) "▾" else "▸")
+                    }
+                }
+            }
+            if (selectable) {
+                val description = stringResource(R.string.project_row_select, label)
+                Checkbox(
+                    checked = row.selected,
+                    onCheckedChange = { model.selectRow(key, ProjectRowSelection.Toggle) },
+                    modifier = Modifier.semantics { contentDescription = description },
+                )
+            }
+            Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+                Text(label, style = MaterialTheme.typography.bodyLarge)
+                (row.description as? ProjectIntents.OptionalText.Value)?.let { Text(text(it.value), style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+        DropdownMenu(expanded = menu && choices.isNotEmpty(), onDismissRequest = { menu = false }) {
+            for (choice in choices) when (choice) {
+                is ProjectEditing.Choice.Rename -> DropdownMenuItem(
+                    text = { Text(stringResource(R.string.project_rename)) },
+                    onClick = {
+                        menu = false
+                        onRename(choice)
+                    },
+                )
+                is ProjectEditing.Choice.Action -> DropdownMenuItem(
+                    text = { Text(actionLabel(choice.state)) },
+                    onClick = {
+                        menu = false
+                        model.perform(choice.state.id)
+                    },
+                    enabled = choice.state.enabled && !model.busy,
+                )
+            }
+        }
+    }
+}
+
+/** Renames an object, part or plate: the name trimmed and bounded as the browser takes it, a plate's checked as its plate manager checks it. */
+@Composable
+private fun RenameDialog(request: Renaming, model: ProjectModel, close: () -> Unit) {
+    var name by remember(request) { mutableStateOf(request.name) }
+    val problem = if (request is Renaming.Plate) ProjectNames.plateNameProblem(name) else null
+    val blank = ProjectNames.trim(name).isEmpty()
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text(stringResource(R.string.project_rename_title, request.name)) },
+        text = {
+            OutlinedTextField(
+                name, { name = it },
+                label = { Text(stringResource(R.string.project_rename_name)) },
+                singleLine = true,
+                isError = problem != null,
+                supportingText = problem?.let { { Text(it) } },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    close()
+                    when (request) {
+                        is Renaming.Entity -> model.rename(request.entity, name)
+                        is Renaming.Plate -> model.renamePlate(request.id, name)
+                    }
+                },
+                enabled = problem == null && !blank,
+            ) { Text(stringResource(R.string.project_guard_save)) }
+        },
+        dismissButton = { TextButton(onClick = close) { Text(stringResource(R.string.device_cancel)) } },
+    )
 }
 
 private const val MIME_3MF = "model/3mf"

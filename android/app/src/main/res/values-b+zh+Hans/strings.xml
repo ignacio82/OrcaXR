@@ -13,6 +13,12 @@
     <string name="project_save">保存项目</string>
     <string name="project_undo">撤销</string>
     <string name="project_redo">重做</string>
+    <string name="project_edit_select_all">全选</string>
+    <string name="project_edit_deselect_all">全部取消选中</string>
+    <string name="project_edit_delete_all">删除所有</string>
+    <string name="project_toggle_printable">可打印的</string>
+    <string name="project_instance_to_object">设置为独立对象</string>
+    <string name="project_duplicate_plate">复制当前打印板</string>
     <string name="device_cancel">取消</string>
     <string name="device_tab_camera">摄像机</string>
 </resources>

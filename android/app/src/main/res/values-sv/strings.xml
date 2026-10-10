@@ -13,6 +13,11 @@
     <string name="project_save">Spara Projekt</string>
     <string name="project_undo">Ångra</string>
     <string name="project_redo">Gör om</string>
+    <string name="project_edit_select_all">Välj Alla</string>
+    <string name="project_edit_deselect_all">Avmarkera alla</string>
+    <string name="project_edit_delete_all">Radera Allt</string>
+    <string name="project_toggle_printable">Utskriftsbar</string>
+    <string name="project_instance_to_object">Ställ in som ett enskilt objekt</string>
     <string name="device_cancel">Avbryt</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

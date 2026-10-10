@@ -160,6 +160,12 @@ export! {
 }
 
 export! {
+    Java_dev_orcaxr_core_NativeProject_projectPlateShape, project_plate_shape, jdoubleArray,
+    handle: jlong,
+    plate_id: JString<'local>,
+}
+
+export! {
     Java_dev_orcaxr_core_NativeProject_archiveUploadNew, archive_upload_new, jlong,
     version: jint,
     archive_bytes: jlong,
@@ -1514,6 +1520,14 @@ export! {
     handle: jlong,
     simplify: jlong,
     request: JString<'local>,
+}
+
+export! {
+    Java_dev_orcaxr_core_NativeProject_stageInstanceCopy, stage_instance_copy, jlong,
+    handle: jlong,
+    guard: jlong,
+    source_instance_id: JString<'local>,
+    instance_id: JString<'local>,
 }
 
 export! {

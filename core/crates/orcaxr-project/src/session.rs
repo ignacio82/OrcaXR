@@ -339,6 +339,69 @@ impl<P: TimestampPolicy> ProjectSession<P> {
                 })?;
         self.stage(guard, work)
     }
+    /// Stage a copy of instance `source` (the browser's
+    /// `duplicateSelectedInstance`, behind "Clone Selected" and "Add
+    /// Instance") on the state `guard` captured, which must still be current:
+    /// instance `id` of the same object, last among its instances, keeping
+    /// the source's name when it has one, its transform, printability and
+    /// extension data, and no other field — the record the browser builds.
+    /// It executes (`executeStaged`) as one undoable "Create instance" that
+    /// selects the copy. An unknown source or a transform the browser would
+    /// refuse to clone (a zero scale or rotation) refuses `InvalidRequest`.
+    pub fn stage_instance_copy(
+        &mut self,
+        guard: &LocalGuard,
+        source: &crate::ids::InstanceId,
+        id: crate::ids::InstanceId,
+    ) -> Result<u64, wire::SessionError> {
+        use crate::model::{ExtraFields, ProjectInstance, Transform};
+        if self.disposed {
+            return Err(wire::SessionError::Disposed);
+        }
+        if !self.is_current(guard) {
+            return Err(wire::SessionError::Stale);
+        }
+        let (_, object, instance) = crate::model::find_instance(guard.project.state(), source)
+            .ok_or(wire::SessionError::InvalidRequest)?;
+        let transform = &instance.transform;
+        // `cloneAndValidateTransform`: the values are finite by construction.
+        let norm = transform
+            .rotation
+            .iter()
+            .fold(0.0, |total, value| total + value.get() * value.get());
+        if transform
+            .scale
+            .iter()
+            .any(|value| value.get().abs() < 1e-12)
+            || norm < 1e-12
+        {
+            return Err(wire::SessionError::InvalidRequest);
+        }
+        let copy = ProjectInstance {
+            id,
+            name: instance.name.clone(),
+            transform: Transform {
+                translation_mm: transform.translation_mm,
+                rotation: transform.rotation,
+                scale: transform.scale,
+                extra: ExtraFields::default(),
+            },
+            printable: instance.printable,
+            extension_data: instance.extension_data.clone(),
+            extra: ExtraFields::default(),
+        };
+        let captured = crate::commands::staged::CapturedCommand::instance(
+            object.id.clone(),
+            Arc::new(copy),
+            None,
+            self.staging.max_units(),
+        )
+        .map_err(|error| match error {
+            crate::commands::staged::CaptureError::Limit => wire::SessionError::ResourceLimit,
+            _ => wire::SessionError::InvalidRequest,
+        })?;
+        self.stage(guard, StagedWork::single(captured))
+    }
     /// One volume's features captured for measuring from the acknowledged
     /// state ([`crate::measure::MeasureVolume::reply`]); the capture owns its
     /// mesh, so picks run off the session.

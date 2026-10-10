@@ -311,6 +311,9 @@ try {
   // The Project area's session: start, import, undo/redo, Save/Open, New project, recent documents.
   const projectWorkspaceChecks = jvm.call("projectWorkspaceChecks", decodeBytes("stl-binary/cube"), decodeBytes("obj/mtllib-unresolved"));
   assert.equal(projectWorkspaceChecks, 27);
+  // Selection and object edits: the selection store, tree rows, capabilities, every edit's step and label, plates.
+  const projectEditChecks = jvm.call("projectEditChecks", decodeBytes("stl-binary/cube"));
+  assert.equal(projectEditChecks, 73);
   // Recovery of unsaved work: the store, the browser's capture timing, checked restore.
   const projectRecoveryChecks = jvm.call("projectRecoveryChecks", decodeBytes("stl-binary/cube"));
   assert.equal(projectRecoveryChecks, 24);
@@ -1393,6 +1396,7 @@ try {
     models,
     actorImportChecks,
     projectWorkspaceChecks,
+    projectEditChecks,
     projectRecoveryChecks,
     documentOwnersChecks,
     slicingChoiceChecks,

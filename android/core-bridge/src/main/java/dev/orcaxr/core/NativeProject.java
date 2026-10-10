@@ -33,6 +33,11 @@ final class NativeProject {
     // of its own (plateId is JSON text), and a captured project's plate overrides.
     static native long exportPlate(long handle, String plateId, LocalTimestampResolver resolver, int integerMode);
     static native String projectPlateOverrides(long handle, String plateId);
+    // The ID plan a duplicatePlate intent of a captured project's plate needs
+    // (plateId is JSON text): its object count, each object's volume, instance
+    // and layer-range counts, then the plate's custom G-code and thumbnail
+    // counts; empty for an unknown plate.
+    static native double[] projectPlateShape(long handle, String plateId);
     // Archive Open stages exact bytes; prepare consumes the upload in place and
     // the slot then holds the completed import. Closing cancels native work.
     static native long archiveUploadNew(int version, long archiveBytes, double[] options, LocalTimestampResolver resolver, int integerMode);
@@ -320,6 +325,9 @@ final class NativeProject {
     static native String volumeSimplifyReply(long handle);
     static native byte[] volumeSimplifyMesh(long handle, long start, long count);
     static native long stageVolumeSimplify(long handle, long simplify, String request);
+    // A copy of one instance on a current guard (both IDs are JSON text),
+    // staged as the browser's clone: one "Create instance" for executeStaged.
+    static native long stageInstanceCopy(long handle, long guard, String sourceInstanceId, String instanceId);
     // Measurement: capture one volume's features, resolve picks off the
     // session, and measure any two features.
     // Mesh renderer packets: one asset's display geometry, chunked to the

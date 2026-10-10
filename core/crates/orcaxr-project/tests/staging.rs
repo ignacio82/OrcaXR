@@ -503,3 +503,89 @@ fn completed_mutation_retains_large_project_identity_even_without_encodable_summ
     );
     assert_eq!(session.staging_usage(), StagingUsage::default());
 }
+#[test]
+fn instance_copy_stages_the_browsers_clone_and_plate_shape_counts_the_duplicate_plan() {
+    let mut session = setup(false);
+    session.configure_staging(limits()).unwrap();
+    let mut seq = 0;
+    hello(&mut session, &mut seq);
+    let before = session.snapshot();
+    let plate = before.state().plates[0].clone();
+    let object = plate.objects[0].clone();
+    let source = object.instances[0].clone();
+    // The duplicate plan's shape is the plate's own counts, as the command checks them.
+    let shape = orcaxr_project::commands::duplicate_plate_shape(before.state(), &plate.id).unwrap();
+    assert_eq!(
+        shape.objects,
+        plate
+            .objects
+            .iter()
+            .map(|o| [o.volumes.len(), o.instances.len(), o.layer_ranges.len()])
+            .collect::<Vec<_>>()
+    );
+    let gcode = before
+        .state()
+        .custom_gcode
+        .iter()
+        .filter(|c| c.scope == GcodeScope::Plate && c.plate_id.as_ref() == Some(&plate.id))
+        .count();
+    assert_eq!(shape.custom_gcode, gcode);
+    let unknown = PlateId::try_from_str("import:plate:absent").unwrap();
+    assert!(orcaxr_project::commands::duplicate_plate_shape(before.state(), &unknown).is_none());
+
+    // An unknown source stages nothing.
+    let guard = session.capture_guard().unwrap();
+    let copy = InstanceId::try_from_str("import:instance:clone").unwrap();
+    let absent = InstanceId::try_from_str("import:instance:absent").unwrap();
+    assert!(matches!(
+        session.stage_instance_copy(&guard, &absent, copy.clone()),
+        Err(wire::SessionError::InvalidRequest)
+    ));
+    assert_eq!(session.staging_usage(), StagingUsage::default());
+    // The copy: last of its object's instances, the browser's record, one "Create instance".
+    let id = session
+        .stage_instance_copy(&guard, &source.id, copy.clone())
+        .unwrap();
+    assert!(
+        run(
+            &mut session,
+            &mut seq,
+            json!({"executeStaged":{"stagedId":id}})
+        )
+        .get("acknowledged")
+        .is_some()
+    );
+    let after = session.snapshot();
+    let instances = &after.state().plates[0].objects[0].instances;
+    assert_eq!(instances.len(), object.instances.len() + 1);
+    let made = instances.last().unwrap();
+    assert_eq!(made.id, copy);
+    assert_eq!(made.name, source.name);
+    assert_eq!(
+        made.transform.translation_mm,
+        source.transform.translation_mm
+    );
+    assert_eq!(made.transform.rotation, source.transform.rotation);
+    assert_eq!(made.transform.scale, source.transform.scale);
+    assert_eq!(made.printable, source.printable);
+    assert_eq!(made.extension_data, source.extension_data);
+    assert_eq!(
+        session
+            .history()
+            .undo_label
+            .as_ref()
+            .map(|label| label.units().to_vec()),
+        Some(Text::from_utf8("Create instance").units().to_vec())
+    );
+    assert_eq!(
+        session.selection().refs(),
+        &[SelectionRef::Instance(copy.clone())][..]
+    );
+    // The guard it was staged on is spent: a second copy on it is stale.
+    let again = InstanceId::try_from_str("import:instance:again").unwrap();
+    assert!(matches!(
+        session.stage_instance_copy(&guard, &source.id, again),
+        Err(wire::SessionError::Stale)
+    ));
+    assert_eq!(session.staging_usage(), StagingUsage::default());
+}

@@ -11,8 +11,50 @@ import java.util.concurrent.CompletableFuture
  */
 data class ProjectRevision(val revision: Long, val semanticHash: String, val assetFingerprint: String)
 
-/** The plate slicing works on (the browser's `activePlateId`), as the project names it. */
-data class ProjectPlateState(val id: String, val name: String, val printable: Boolean, val objects: Int)
+/**
+ * One plate as the project names it: [name] is its own, or "Plate n" as the
+ * browser lists one without a name; [active] for the plate slicing works on
+ * (the browser's `activePlateId`).
+ */
+data class ProjectPlateState(
+    val id: String,
+    val name: String,
+    val printable: Boolean,
+    val objects: Int,
+    val active: Boolean = false,
+)
+
+/**
+ * The session's selection (the browser's `SelectionStore` snapshot): its refs
+ * in order — at most [ProjectWorkspace.MAX_VIEW_SELECTION] of them, of
+ * [total] — and the primary one, which edits of "the selected model" act on.
+ */
+data class ProjectSelectionView(
+    val refs: List<ProjectIntents.SelectionEntity> = emptyList(),
+    val primary: ProjectIntents.SelectionEntity? = null,
+    val total: Long = 0,
+) {
+    /** The selected instances, as the renderer highlights them (the browser's `selectedInstanceIds`). */
+    val instances: Set<String>
+        get() = refs.mapNotNullTo(LinkedHashSet()) { (it as? ProjectIntents.SelectionEntity.Instance)?.value?.let(::unitsText) }
+
+    /** Whether the primary selection is an instance: the browser's `hasInstanceSelection`. */
+    val hasInstance: Boolean get() = primary is ProjectIntents.SelectionEntity.Instance
+
+    private companion object {
+        fun unitsText(units: List<Int>) = String(CharArray(units.size) { units[it].toChar() })
+    }
+}
+
+/**
+ * One action as the core's capability catalogue offers it now
+ * (`ProjectSession.capabilities`): its catalogue [label] and whether the
+ * workspace enables it, with the catalogue's [reason] when it does not.
+ */
+data class ProjectActionState(val id: String, val label: String, val enabled: Boolean, val reason: String? = null)
+
+/** How a tree row's activation changes the selection (the browser's Objects panel): a plain click, Ctrl/Meta, Shift. */
+typealias ProjectRowSelection = ProjectIntents.ObjectTreeSelectionMode
 
 /** One plate's slice preflight and the state of the project it describes. At most
  * [ProjectWorkspace.MAX_PREFLIGHT_ISSUES] issues are read; the summary counts them all. */
@@ -40,6 +82,15 @@ data class ProjectView(
     val revision: ProjectRevision? = null,
     /** The active plate, once the session has one. */
     val activePlate: ProjectPlateState? = null,
+    /** Every plate, in the project's plate order (the browser's plate bar). */
+    val plateList: List<ProjectPlateState> = emptyList(),
+    /** The session's selection; tree [rows] report theirs as `selected`. */
+    val selection: ProjectSelectionView = ProjectSelectionView(),
+    /** The actions the Project area offers, by catalogue ID, as the core enables them for the selection. */
+    val actions: Map<String, ProjectActionState> = emptyMap(),
+    /** The catalogue's context menus of an object and of a plate, in catalogue order. */
+    val objectMenu: List<ProjectActionState> = emptyList(),
+    val plateMenu: List<ProjectActionState> = emptyList(),
 )
 
 /** An operation the session refused or could not confirm, in an operator's words. */
@@ -63,6 +114,8 @@ class ProjectWorkspace(
     private val recovery: ProjectRecovery? = null,
     /** Runs a task after a delay in milliseconds; closing the handle cancels it. */
     private val schedule: (Long, () -> Unit) -> AutoCloseable = ::delayed,
+    /** Where new entity IDs come from: the browser's UUID rule over secure words. */
+    private val ids: ProjectIds = ProjectIds(),
 ) : AutoCloseable {
     companion object {
         /** The browser's archive budgets: its safe-ZIP defaults and multi-million facets. */
@@ -91,7 +144,24 @@ class ProjectWorkspace(
         const val MAX_PREFLIGHT_ISSUES = 256L
         private const val TREE_PAGE = 64L
         private const val MAX_NAME_UNITS = 256L
-        private const val MAX_ID_UNITS = 4096L
+        /** The most selection refs the view keeps (and the tree is paged with). */
+        const val MAX_VIEW_SELECTION = 4096L
+        /** The browser's plate limit (`MAX_PROJECT_PLATES`) and name bounds (`MAX_UI_NAME_LENGTH`, plate names). */
+        const val MAX_PROJECT_PLATES = 36
+        const val MAX_NAME_LENGTH = 160
+        const val MAX_PLATE_NAME_LENGTH = 120
+        /** The catalogue actions the Project area offers from its menu (`dom-menu`) and its plate bar (`dom-inspector`). */
+        val MENU_ACTIONS = listOf(
+            "edit_select_all", "edit_deselect_all", "edit_duplicate", "add_instance", "edit_delete_selected", "edit_delete_all",
+            "toggle_printable", "instance_to_object", "add_plate", "duplicate_plate", "delete_plate",
+        )
+        val INSPECTOR_ACTIONS = listOf("activate_plate", "rename_plate", "reorder_plates", "set_plate_printable", "objects_rename")
+        /** The capability host facts of the Android shell: the flat (non-XR) workspace, preparing, without a clipboard or printer job. */
+        private val HOST = ProjectIntents.CapabilityHostState(
+            ProjectIntents.OptionalStartupSnapshot.Absent(ProjectIntents.Empty), ProjectIntents.WorkspaceMode.Prepare,
+            simplifyPreviewing = false, calibrationSessionOpen = false, projectionHealthy = true, hasClipboard = false,
+            isSlicing = false, gcodeReady = false, preflightBlocked = false, printerJobState = ProjectIntents.PrinterJobUiState.Disconnected,
+        )
         private const val MAX_PLATES = 4096L
         /** The browser's capture timing: 5 s after the latest edit, at most 30 s after the first unsaved one. */
         const val CAPTURE_DELAY_MS = 5_000L
@@ -145,57 +215,191 @@ class ProjectWorkspace(
         return upload.prepare()
     }
 
-    /** The project's name and object tree, from the snapshot a project effect carries. */
-    private fun read(snapshot: ProjectSnapshot) {
-        val (name, plates) = snapshot.query().use { root ->
-            val length = minOf(root.textLength(QueryText.NAME) ?: 0, MAX_NAME_UNITS)
-            String(root.text(QueryText.NAME, 0, length)) to (root.metadata().values[QueryNumber.PLATE_COUNT] ?: 0.0).toInt()
-        }
-        val active = snapshot.query().use(::activePlate)
-        fun page(expansion: ProjectIntents.ObjectTreeExpansion) = (snapshot.objectTree(
-            ProjectIntents.ObjectTreeRequest(
-                expansion, emptyList(), emptyList(),
-                ProjectIntents.OptionalSelectionEntity.Absent(ProjectIntents.Empty), ProjectIntents.OptionalText.Absent(ProjectIntents.Empty),
-                ProjectIntents.ObjectTreeOperation.Page(ProjectIntents.ObjectTreePageRequest(0, TREE_PAGE)),
-            ),
-        ) as? ProjectIntents.ObjectTreeReply.Page)?.value
-        // Plates open, so their objects show; objects stay closed.
-        val plateKeys = page(ProjectIntents.ObjectTreeExpansion.Default(ProjectIntents.Empty))?.rows.orEmpty()
-            .filter { it.kind == ProjectIntents.ObjectTreeRowKind.Plate }.map { it.key }
-        val page = page(ProjectIntents.ObjectTreeExpansion.Keys(plateKeys))
-        update { it.copy(name = name, plates = plates, rows = page?.rows.orEmpty(), totalRows = page?.totalRows ?: 0, activePlate = active) }
-    }
+    /** Guards what the view is read from: the snapshot shown, the selection, the tree's expansion and range anchor. */
+    private val showing = Any()
+    /** The project snapshot the view shows (owned; replaced by each project effect). */
+    private var shown: ProjectSnapshot? = null
+    private var shownProject: String? = null
+    private var chosen = ProjectSelectionView()
+    /** Rows the operator (or a reveal) opened, besides plates; plates the operator closed. */
+    private val opened = LinkedHashSet<String>()
+    private val closedPlates = HashSet<String>()
+    /** The row a Shift activation extends from (the browser's Objects panel anchor). */
+    private var anchor: String? = null
+    @Volatile private var started = false
+    private var disposed = false
+    private val actionsQueued = java.util.concurrent.atomic.AtomicBoolean(false)
 
-    /** The project's active plate, read from its plates in order; a plate without a name is called as the browser lists it. */
-    private fun activePlate(root: ProjectQueryNode): ProjectPlateState? = root.children(QueryRelation.PLATES, MAX_PLATES).use { list ->
-        val total = list.count()
-        var start = 0L
-        while (start < total) {
-            val rows = list.page(start, minOf(ProjectQuery.MAX_PAGE_ROWS.toLong(), total - start)).rows
-            if (rows.isEmpty()) return@use null
-            for ((offset, row) in rows.withIndex()) {
-                if (row.values[QueryNumber.ACTIVE] != 1.0) continue
-                return@use list.node(start + offset).use { plate ->
-                    fun read(field: QueryText, most: Long) = String(plate.text(field, 0, minOf(plate.textLength(field) ?: 0, most)))
-                    ProjectPlateState(
-                        read(QueryText.ID, MAX_ID_UNITS),
-                        read(QueryText.NAME, MAX_NAME_UNITS).ifEmpty { "Plate ${start + offset + 1}" },
-                        row.values[QueryNumber.PRINTABLE] == 1.0,
-                        (row.values[QueryNumber.OBJECT_COUNT] ?: 0.0).toInt(),
-                    )
-                }
-            }
-            start += rows.size
-        }
-        null
-    }
-
-    private fun effects(effects: ProjectEffects) {
-        for (position in (effects.count() - 1) downTo 0) {
-            if (effects.kind(position) == ProjectHost.EFFECT_PROJECT) {
-                effects.project(position, false).use(::read)
+    /** Adopts a newer snapshot and/or selection and reads the view from them. */
+    private fun adopt(snapshot: ProjectSnapshot?, selection: ProjectSelectionView?) {
+        val next = synchronized(showing) {
+            if (disposed) {
+                // A late effect after close: nothing shows it any more.
+                snapshot?.close()
                 return
             }
+            if (snapshot != null) {
+                shown?.close()
+                shown = snapshot
+            }
+            if (selection != null) chosen = selection
+            readView()
+        } ?: return
+        update(next)
+    }
+
+    /** Reads the view again from what it shows (an expansion changed, say). */
+    private fun reread() {
+        val next = synchronized(showing) { readView() } ?: return
+        update(next)
+    }
+
+    /** The expansion the tree is paged with: plates open unless closed, objects and groups only once opened. Holds [showing]. */
+    private fun expansion(snapshot: ProjectSnapshot): ProjectIntents.ObjectTreeExpansion {
+        val plates = treePage(snapshot, ProjectIntents.ObjectTreeExpansion.Keys(emptyList()), emptyList(), null)?.rows.orEmpty()
+            .filter { it.kind == ProjectIntents.ObjectTreeRowKind.Plate }.map { text(it.key) }
+        return ProjectIntents.ObjectTreeExpansion.Keys((plates.filter { it !in closedPlates } + opened).distinct().map(::units))
+    }
+
+    private fun treeRequest(
+        expansion: ProjectIntents.ObjectTreeExpansion,
+        selection: List<ProjectIntents.SelectionEntity>,
+        primary: ProjectIntents.SelectionEntity?,
+        operation: ProjectIntents.ObjectTreeOperation,
+    ) = ProjectIntents.ObjectTreeRequest(
+        expansion, emptyList(), selection,
+        primary?.let { ProjectIntents.OptionalSelectionEntity.Value(it) } ?: ProjectIntents.OptionalSelectionEntity.Absent(ProjectIntents.Empty),
+        ProjectIntents.OptionalText.Absent(ProjectIntents.Empty), operation,
+    )
+
+    private fun treePage(
+        snapshot: ProjectSnapshot,
+        expansion: ProjectIntents.ObjectTreeExpansion,
+        selection: List<ProjectIntents.SelectionEntity>,
+        primary: ProjectIntents.SelectionEntity?,
+    ) = (snapshot.objectTree(
+        treeRequest(expansion, selection, primary, ProjectIntents.ObjectTreeOperation.Page(ProjectIntents.ObjectTreePageRequest(0, TREE_PAGE))),
+    ) as? ProjectIntents.ObjectTreeReply.Page)?.value
+
+    /** The project's name, plates and object tree (with the selection) from the snapshot shown. Holds [showing]. */
+    private fun readView(): ((ProjectView) -> ProjectView)? {
+        val snapshot = shown ?: return null
+        val project = String(CharArray(snapshot.idLength().toInt()).also { units ->
+            var start = 0
+            while (start < units.size) {
+                val chunk = snapshot.id(start.toLong(), minOf(ProjectHost.MAX_TEXT_CHUNK_UNITS, units.size - start).toLong())
+                check(chunk.isNotEmpty()) { "invalid_projection" }
+                chunk.copyInto(units, start)
+                start += chunk.size
+            }
+        })
+        if (project != shownProject) {
+            // Another project: its rows have nothing to do with the last one's.
+            shownProject = project
+            opened.clear()
+            closedPlates.clear()
+            anchor = null
+        }
+        val (name, count, plates) = snapshot.query().use { root ->
+            val length = minOf(root.textLength(QueryText.NAME) ?: 0, MAX_NAME_UNITS)
+            Triple(
+                String(root.text(QueryText.NAME, 0, length)),
+                (root.metadata().values[QueryNumber.PLATE_COUNT] ?: 0.0).toInt(),
+                ProjectFacts.plates(root).mapIndexed { index, plate ->
+                    ProjectPlateState(plate.id, plate.name.ifEmpty { "Plate ${index + 1}" }, plate.printable, plate.objects, plate.active)
+                },
+            )
+        }
+        val selection = chosen
+        val page = treePage(snapshot, expansion(snapshot), selection.refs, selection.primary)
+        return { view: ProjectView ->
+            view.copy(
+                name = name, plates = count, rows = page?.rows.orEmpty(), totalRows = page?.totalRows ?: 0,
+                activePlate = plates.firstOrNull { it.active }, plateList = plates, selection = selection,
+            )
+        }
+    }
+
+    /** A selection's refs and primary, at most [limit] refs of it. */
+    private fun selectionView(selection: ProjectSelection, limit: Long = MAX_VIEW_SELECTION): ProjectSelectionView {
+        fun entity(position: Long): ProjectIntents.SelectionEntity {
+            val length = selection.idLength(position)
+            val units = ArrayList<Int>(length.toInt())
+            var start = 0L
+            while (start < length) {
+                val chunk = selection.id(position, start, minOf(ProjectHost.MAX_TEXT_CHUNK_UNITS.toLong(), length - start))
+                check(chunk.isNotEmpty()) { "invalid_selection" }
+                chunk.forEach { units += it.code }
+                start += chunk.size
+            }
+            return when (selection.kind(position)) {
+                ProjectHost.SELECT_PROJECT -> ProjectIntents.SelectionEntity.Project(ProjectIntents.Empty)
+                ProjectHost.SELECT_PLATE -> ProjectIntents.SelectionEntity.Plate(units)
+                ProjectHost.SELECT_OBJECT -> ProjectIntents.SelectionEntity.Object(units)
+                ProjectHost.SELECT_VOLUME -> ProjectIntents.SelectionEntity.Volume(units)
+                ProjectHost.SELECT_INSTANCE -> ProjectIntents.SelectionEntity.Instance(units)
+                ProjectHost.SELECT_LAYER_RANGE -> ProjectIntents.SelectionEntity.LayerRange(units)
+                ProjectHost.SELECT_FILAMENT -> ProjectIntents.SelectionEntity.Filament(units)
+                else -> error("invalid_selection")
+            }
+        }
+        val total = selection.count()
+        val refs = List(minOf(total, limit).toInt()) { entity(it.toLong()) }
+        val primary = selection.primaryIndex().takeIf { it in 0 until total }?.let { if (it < refs.size) refs[it.toInt()] else entity(it) }
+        return ProjectSelectionView(refs, primary, total)
+    }
+
+    /** The newest project and selection the effects carry, then the actions they enable. */
+    private fun effects(effects: ProjectEffects) {
+        var project = -1L
+        var selection = -1L
+        for (position in 0 until effects.count()) when (effects.kind(position)) {
+            ProjectHost.EFFECT_PROJECT -> project = position
+            ProjectHost.EFFECT_SELECTION -> selection = position
+        }
+        val chosen = if (selection >= 0) effects.selection(selection, false).use { selectionView(it) } else null
+        val snapshot = if (project >= 0) effects.project(project, false) else null
+        try {
+            if (snapshot != null || chosen != null) adopt(snapshot, chosen)
+        } catch (failure: Throwable) {
+            if (synchronized(showing) { shown !== snapshot }) snapshot?.close()
+            throw failure
+        }
+        refreshActions()
+    }
+
+    /**
+     * Reads which actions the core enables now (`ProjectSession.capabilities`,
+     * the browser's registry gate) on the authority, after the operations
+     * queued before it; reads requested while one is queued are that one.
+     */
+    private fun refreshActions() {
+        if (!started || !actionsQueued.compareAndSet(false, true)) return
+        val request = actor.inspect { session ->
+            actionsQueued.set(false)
+            fun page(surface: ProjectIntents.ActionSurface, query: ProjectIntents.CapabilityQuery) =
+                session.capabilities(ProjectIntents.CapabilityRequest(surface, HOST, query)).actions.map { action ->
+                    val availability = action.availability
+                    val reason = (availability as? ProjectIntents.ActionAvailability.Disabled)?.value?.text
+                        ?: (availability as? ProjectIntents.ActionAvailability.Hidden)?.value?.text
+                    ProjectActionState(text(action.id), text(action.label), availability is ProjectIntents.ActionAvailability.Enabled, reason?.let(::text))
+                }
+            fun actions(surface: ProjectIntents.ActionSurface, ids: List<String>) =
+                page(surface, ProjectIntents.CapabilityQuery.Actions(ProjectIntents.CapabilityActions(ids.map(::units))))
+            fun context(target: ProjectIntents.ActionContextTarget) =
+                page(ProjectIntents.ActionSurface.DomContext, ProjectIntents.CapabilityQuery.Context(ProjectIntents.CapabilityContextPage(target, 0, TREE_PAGE)))
+            val all = actions(ProjectIntents.ActionSurface.DomMenu, MENU_ACTIONS) + actions(ProjectIntents.ActionSurface.DomInspector, INSPECTOR_ACTIONS)
+            Triple(all.associateBy { it.id }, context(ProjectIntents.ActionContextTarget.Object), context(ProjectIntents.ActionContextTarget.Plate))
+        }
+        request.completion.whenComplete { outcome, _ ->
+            @Suppress("UNCHECKED_CAST")
+            val read = (outcome as? ProjectOutcome.Inspected)?.result?.getOrNull() as? Triple<Map<String, ProjectActionState>, List<ProjectActionState>, List<ProjectActionState>>
+            if (read == null) {
+                // Refused or failed before it ran: a later change asks again.
+                actionsQueued.set(false)
+                return@whenComplete
+            }
+            update { it.copy(actions = read.first, objectMenu = read.second, plateMenu = read.third) }
         }
     }
 
@@ -207,7 +411,7 @@ class ProjectWorkspace(
         upload.sealDocument()
         val session = upload.open(nonce)
         // The first view, before any effect.
-        session.snapshot().use(::read)
+        adopt(session.snapshot(), ProjectSelectionView())
         session
     }, ::effects, staging = STAGING)
 
@@ -336,8 +540,12 @@ class ProjectWorkspace(
     fun meshPacket(assetId: String, maxChunkVertices: Long = MESH_CHUNK_VERTICES): CompletableFuture<ProjectMeshPacket> =
         inspect { it.meshPacket(ProjectIntents.MeshPacketRequest(units(assetId), maxChunkVertices)) }
 
-    /** Waits for the session to start and reads its first view. */
-    fun ready(): CompletableFuture<ProjectView> = outcome(actor.ready).thenCompose { query() }.thenApply { view }
+    /** Waits for the session to start and reads its first view, then which actions it enables. */
+    fun ready(): CompletableFuture<ProjectView> = outcome(actor.ready).thenCompose {
+        started = true
+        refreshActions()
+        query()
+    }.thenApply { view }
 
     private fun failure(outcome: ProjectOutcome, cause: Throwable?): ProjectFailure = ProjectFailure(
         when (outcome) {
@@ -546,12 +754,463 @@ class ProjectWorkspace(
     fun undo(): CompletableFuture<Unit> = step(true)
     fun redo(): CompletableFuture<Unit> = step(false)
 
+    // ---- Selection: the browser's SelectionStore, set on the authority ----
+
+    private fun entityText(entity: ProjectIntents.SelectionEntity): String? = when (entity) {
+        is ProjectIntents.SelectionEntity.Project -> null
+        is ProjectIntents.SelectionEntity.Plate -> text(entity.value)
+        is ProjectIntents.SelectionEntity.Object -> text(entity.value)
+        is ProjectIntents.SelectionEntity.Volume -> text(entity.value)
+        is ProjectIntents.SelectionEntity.Instance -> text(entity.value)
+        is ProjectIntents.SelectionEntity.LayerRange -> text(entity.value)
+        is ProjectIntents.SelectionEntity.Filament -> text(entity.value)
+    }
+
+    private fun selectionEntity(entity: ProjectIntents.ObjectTreeEntity): ProjectIntents.SelectionEntity = when (entity) {
+        is ProjectIntents.ObjectTreeEntity.Plate -> ProjectIntents.SelectionEntity.Plate(entity.value)
+        is ProjectIntents.ObjectTreeEntity.Object -> ProjectIntents.SelectionEntity.Object(entity.value)
+        is ProjectIntents.ObjectTreeEntity.Volume -> ProjectIntents.SelectionEntity.Volume(entity.value)
+        is ProjectIntents.ObjectTreeEntity.Instance -> ProjectIntents.SelectionEntity.Instance(entity.value)
+        is ProjectIntents.ObjectTreeEntity.LayerRange -> ProjectIntents.SelectionEntity.LayerRange(entity.value)
+    }
+
+    /** The session's whole selection now (on the authority). */
+    private fun whole(session: ProjectSession): ProjectSelectionView = session.selection().use { selectionView(it, Long.MAX_VALUE) }
+
+    private fun selected(request: ProjectRequest): CompletableFuture<Boolean> = outcome(request).thenApply { result ->
+        when (result) {
+            is ProjectOutcome.Selected -> result.changed
+            ProjectOutcome.NothingToDo -> false
+            else -> throw failure(result, null)
+        }
+    }
+
+    /** Opens the tree down to an object's instances, so a selected instance's row shows. */
+    private fun reveal(objectId: String) = synchronized(showing) {
+        opened += "object:$objectId"
+        opened += "instance-group:$objectId"
+    }
+
+    /**
+     * A click on a model in the Workspace (the browser's `selectModel`):
+     * selects instance [instanceId] alone, or — [extend], Shift/Ctrl/Meta —
+     * toggles it among the selected instances (other kinds of ref dropped),
+     * the last one primary. The tree opens down to a newly selected instance.
+     * An instance the project no longer has selects nothing. Completes true
+     * when the selection changed.
+     */
+    fun selectInstance(instanceId: String, extend: Boolean = false): CompletableFuture<Boolean> = selected(actor.select { session ->
+        val facts = session.snapshot().use { snapshot -> snapshot.query().use { ProjectFacts.instance(it, instanceId) } } ?: return@select null
+        val target = ProjectIntents.SelectionEntity.Instance(units(instanceId))
+        val choice = if (!extend) ProjectSelectionChoice(listOf(target)) else {
+            val instances = whole(session).refs.filterIsInstance<ProjectIntents.SelectionEntity.Instance>()
+            val next = if (target in instances) instances - target else instances + target
+            ProjectSelectionChoice(next, next.lastOrNull())
+        }
+        if (target in choice.refs) reveal(facts.objectId)
+        choice
+    }).thenApply { changed -> reread(); changed }
+
+    /**
+     * Activates a tree row as the browser's Objects panel does
+     * (`objectTreeSelectionRequest`, resolved by the core): [mode] Replace
+     * selects the row's entity, Toggle adds or removes it, Range selects the
+     * visible rows from the last activated one. A row that selects nothing
+     * (a group) changes nothing.
+     */
+    fun selectRow(key: String, mode: ProjectRowSelection = ProjectRowSelection.Replace): CompletableFuture<Boolean> =
+        selected(actor.select { session ->
+            val current = whole(session)
+            session.snapshot().use { snapshot ->
+                val (expansion, from) = synchronized(showing) { expansion(snapshot) to anchor }
+                // Replace and Range never read the selection; Toggle is applied below to the whole of it.
+                val request = treeRequest(
+                    expansion, emptyList(), null,
+                    ProjectIntents.ObjectTreeOperation.Select(
+                        ProjectIntents.ObjectTreeSelect(
+                            units(key),
+                            if (mode == ProjectRowSelection.Range) mode else ProjectRowSelection.Replace,
+                            from?.let { ProjectIntents.OptionalText.Value(units(it)) } ?: ProjectIntents.OptionalText.Absent(ProjectIntents.Empty),
+                        ),
+                    ),
+                )
+                val reply = (snapshot.objectTree(request) as? ProjectIntents.ObjectTreeReply.Selected)?.value ?: return@select null
+                val primary = (reply.primary as? ProjectIntents.OptionalObjectTreeEntity.Value)?.value?.let(::selectionEntity)
+                val refs = reply.refs.map(::selectionEntity)
+                synchronized(showing) {
+                    anchor = when (mode) {
+                        ProjectRowSelection.Range -> (reply.anchorKey as? ProjectIntents.OptionalText.Value)?.value?.let(::text)
+                        else -> key
+                    }
+                }
+                if (mode != ProjectRowSelection.Toggle || primary == null) return@select ProjectSelectionChoice(refs, primary)
+                // `resolveObjectTreeSelection`'s toggle: the primary stays unless it is the one removed.
+                if (primary in current.refs) {
+                    val next = current.refs - primary
+                    ProjectSelectionChoice(next, current.primary?.takeIf { it in next } ?: next.lastOrNull())
+                } else {
+                    ProjectSelectionChoice(current.refs + primary, primary)
+                }
+            }
+        })
+
+    /** Opens or closes a tree row (plates start open, everything else closed). */
+    fun toggleRow(key: String) {
+        synchronized(showing) {
+            if (key.startsWith("plate:")) {
+                if (!closedPlates.remove(key)) closedPlates += key
+            } else if (!opened.remove(key)) {
+                opened += key
+            }
+        }
+        reread()
+    }
+
+    /** Select All (`edit_select_all`): every instance on the active plate, the last primary; none clears. */
+    fun selectAll(): CompletableFuture<Boolean> = selected(actor.select { session ->
+        session.snapshot().use { snapshot ->
+            snapshot.query().use { root ->
+                val plate = ProjectFacts.plates(root).firstOrNull { it.active }
+                val refs = plate?.let { ProjectFacts.instances(root, it.id) }.orEmpty().map { ProjectIntents.SelectionEntity.Instance(units(it.id)) }
+                ProjectSelectionChoice(refs)
+            }
+        }
+    })
+
+    /** Deselect All (`edit_deselect_all`, Escape). */
+    fun deselectAll(): CompletableFuture<Boolean> = selected(actor.select { ProjectSelectionChoice(emptyList(), null) })
+
+    // ---- Edits: one guarded intent per undoable step, with the core's history label ----
+
+    /** What an edit's plan chose: its commands (one step, a labelled batch, or each its own step) and what it answers. */
+    private class Edit<T>(val commands: List<ProjectIntents.Command>, val result: T, val label: String? = null, val separate: Boolean = false)
+
+    /** The guard of [snapshot] in [session]: what a query would answer for that state. */
+    private fun guardOf(session: ProjectSession, snapshot: ProjectSnapshot): ProjectIntents.SessionGuard {
+        val id = ArrayList<Int>(snapshot.idLength().toInt())
+        while (id.size < snapshot.idLength()) {
+            val chunk = snapshot.id(id.size.toLong(), minOf(ProjectHost.MAX_TEXT_CHUNK_UNITS.toLong(), snapshot.idLength() - id.size))
+            check(chunk.isNotEmpty()) { "invalid_projection" }
+            chunk.forEach { id += it.code }
+        }
+        return ProjectIntents.SessionGuard(id, snapshot.revision(), units(snapshot.hash()), units(session.assetFingerprint()), session.historyRevision())
+    }
+
+    private fun refusedBy(error: ProjectIntents.SessionError) = ProjectFailure(
+        when (error) {
+            ProjectIntents.SessionError.Stale -> "The project changed meanwhile; try again."
+            ProjectIntents.SessionError.Busy -> "The project is busy; try again when the current operation finishes."
+            ProjectIntents.SessionError.ResourceLimit -> "The project is too large for this device."
+            ProjectIntents.SessionError.CommandFailed -> "The project refused that change."
+            ProjectIntents.SessionError.Disposed, ProjectIntents.SessionError.NotReady -> "The project is not open."
+            else -> "Unexpected answer from the project."
+        },
+    )
+
+    /** One operation's acknowledgement, or why it changed nothing; a committed step without a receipt answers null. */
+    private fun submitted(operation: ProjectIntents.SessionOperation): CompletableFuture<ProjectIntents.SessionAcknowledgement?> =
+        outcome(actor.submit(operation)).thenApply { result ->
+            val completed = result as? ProjectOutcome.Completed ?: throw failure(result, null)
+            when (val reply = completed.reply.result) {
+                is ProjectIntents.SessionResult.Acknowledged -> reply.value
+                is ProjectIntents.SessionResult.ReceiptUnavailable -> null
+                is ProjectIntents.SessionResult.Error -> throw refusedBy(reply.value)
+                else -> throw failure(result, null)
+            }
+        }
+
+    /** [future], once the view's history caught up with it either way. */
+    private fun <T> refreshed(future: CompletableFuture<T>): CompletableFuture<T> =
+        future.handle { value, error -> value to error }.thenCompose { (value, error) ->
+            query().handle { _, _ -> if (error != null) throw (error as? java.util.concurrent.CompletionException)?.cause ?: error else value }
+        }
+
+    /** Runs [edit]'s commands under [guard]: one step, a labelled batch, or each its own step chained on the last one's receipt. */
+    private fun <T> commit(guard: ProjectIntents.SessionGuard, edit: Edit<T>): CompletableFuture<T> {
+        fun intent(command: ProjectIntents.Command) = ProjectIntents.Intent(ProjectIntents.VERSION, command)
+        if (!edit.separate) {
+            val operation = if (edit.commands.size == 1) {
+                ProjectIntents.SessionOperation.Execute(ProjectIntents.GuardedIntent(guard, intent(edit.commands.single())))
+            } else {
+                ProjectIntents.SessionOperation.Transaction(
+                    ProjectIntents.GuardedBatch(guard, ProjectIntents.Batch(ProjectIntents.VERSION, units(checkNotNull(edit.label)), edit.commands)),
+                )
+            }
+            return submitted(operation).thenApply { edit.result }
+        }
+        // The browser's per-instance printability: each its own entry, the next under the last one's receipt.
+        fun from(index: Int, at: ProjectIntents.SessionGuard): CompletableFuture<T> {
+            if (index == edit.commands.size) return CompletableFuture.completedFuture(edit.result)
+            return submitted(ProjectIntents.SessionOperation.Execute(ProjectIntents.GuardedIntent(at, intent(edit.commands[index]))))
+                .handle { receipt, error -> receipt to error }
+                .thenCompose { (receipt, error) ->
+                    val cause = (error as? java.util.concurrent.CompletionException)?.cause ?: error
+                    when {
+                        cause == null && receipt != null -> from(index + 1, receipt.guard)
+                        index == 0 && cause != null -> throw cause
+                        else -> {
+                            // Committed steps stay; the receipt-less one committed too.
+                            val done = index + if (cause == null) 1 else 0
+                            if (done == edit.commands.size) CompletableFuture.completedFuture(edit.result)
+                            else throw ProjectFailure("Printability changed on $done model(s) before interruption. ${cause?.message ?: "The remaining edits could not complete."}")
+                        }
+                    }
+                }
+        }
+        return from(0, guard)
+    }
+
+    /**
+     * An edit planned on the authority from the state and selection it reads
+     * there — as the browser's controller reads its state, captures the
+     * guard and builds the intent in one turn — and executed under that very
+     * state's guard: a change in between refuses it as stale. A plan that
+     * finds nothing to do answers null; a plan's own [ProjectFailure] (the
+     * browser's refusal, such as deleting the last plate) is the answer.
+     */
+    private fun <T> edit(plan: (ProjectSession, ProjectSnapshot) -> Edit<T>?): CompletableFuture<T?> = refreshed(
+        outcome(actor.inspect { session -> session.snapshot().use { snapshot -> plan(session, snapshot)?.let { it to guardOf(session, snapshot) } } })
+            .thenCompose { result ->
+                @Suppress("UNCHECKED_CAST")
+                val planned = ((result as? ProjectOutcome.Inspected) ?: throw failure(result, null)).result.getOrThrow() as Pair<Edit<T>, ProjectIntents.SessionGuard>?
+                if (planned == null) CompletableFuture.completedFuture(null) else commit(planned.second, planned.first)
+            },
+    )
+
+    /** One intent under the session's current guard, as one undoable step with the core's history label. */
+    fun execute(command: ProjectIntents.Command): CompletableFuture<Unit> = refreshed(
+        query().thenCompose { (state, _) ->
+            submitted(ProjectIntents.SessionOperation.Execute(ProjectIntents.GuardedIntent(state.guard, ProjectIntents.Intent(ProjectIntents.VERSION, command))))
+        }.thenApply { },
+    )
+
+    /** Several intents under the session's current guard, applied atomically as one undoable step labelled [label]. */
+    fun transaction(label: String, commands: List<ProjectIntents.Command>): CompletableFuture<Unit> = refreshed(
+        query().thenCompose { (state, _) ->
+            submitted(
+                ProjectIntents.SessionOperation.Transaction(
+                    ProjectIntents.GuardedBatch(state.guard, ProjectIntents.Batch(ProjectIntents.VERSION, units(label), commands)),
+                ),
+            )
+        }.thenApply { },
+    )
+
+    private fun instanceOf(snapshot: ProjectSnapshot, id: String): InstanceFacts =
+        snapshot.query().use { ProjectFacts.instance(it, id) } ?: throw ProjectFailure("Unknown instance $id")
+
+    private fun platesOf(snapshot: ProjectSnapshot): List<PlateFacts> = snapshot.query().use(ProjectFacts::plates)
+
+    private fun plateOf(snapshot: ProjectSnapshot, id: String): PlateFacts =
+        platesOf(snapshot).firstOrNull { it.id == id } ?: throw ProjectFailure("Unknown plate $id")
+
+    /**
+     * Delete Selected (`edit_delete_selected`, the Delete key): the primary
+     * selected instance, or its whole object when it is the object's last
+     * one (the browser's `deleteSelectedInstance`). Answers what was deleted,
+     * or null when the primary selection is not an instance.
+     */
+    fun deleteSelected(): CompletableFuture<ProjectDeletion?> = edit { session, snapshot ->
+        val primary = whole(session).primary as? ProjectIntents.SelectionEntity.Instance ?: return@edit null
+        val facts = instanceOf(snapshot, text(primary.value))
+        if (facts.objectInstances == 1) {
+            Edit(listOf(ProjectIntents.Command.DeleteObject(ProjectIntents.DeleteObject(units(facts.objectId)))), ProjectDeletion.OBJECT)
+        } else {
+            Edit(listOf(ProjectIntents.Command.DeleteInstance(ProjectIntents.DeleteInstance(primary.value))), ProjectDeletion.INSTANCE)
+        }
+    }
+
+    /** Delete All (`edit_delete_all`): every model on the active plate as one step; answers how many objects, or null when none. */
+    fun deleteAll(): CompletableFuture<Int?> = edit { _, snapshot ->
+        val plate = platesOf(snapshot).firstOrNull { it.active } ?: return@edit null
+        if (plate.objects == 0) null else Edit(listOf(ProjectIntents.Command.DeletePlateObjects(ProjectIntents.DeletePlateObjects(units(plate.id)))), plate.objects)
+    }
+
+    /**
+     * Printable (`toggle_printable`): the selected instances become printable
+     * unless all of them are, then not; each changed instance is its own
+     * undoable step (the browser's `setInstancePrintable`). Answers the new
+     * state and how many changed, or null without a selected instance.
+     */
+    fun togglePrintable(): CompletableFuture<ProjectPrintableChange?> = edit { session, snapshot ->
+        val selected = whole(session).refs.filterIsInstance<ProjectIntents.SelectionEntity.Instance>().map { text(it.value) }.distinct()
+        if (selected.isEmpty()) return@edit null
+        val wanted = selected.toHashSet()
+        val facts = snapshot.query().use { root -> ProjectFacts.instances(root).filter { it.id in wanted } }.associateBy { it.id }
+        selected.firstOrNull { it !in facts }?.let { throw ProjectFailure("Unknown instance $it") }
+        val printable = !selected.all { facts.getValue(it).printable }
+        val commands = selected.filter { facts.getValue(it).printable != printable }
+            .map { ProjectIntents.Command.SetInstancePrintable(ProjectIntents.SetInstancePrintable(units(it), printable)) }
+        Edit(commands, ProjectPrintableChange(printable, commands.size), separate = true)
+    }
+
+    /** [start], or its refusal as a failed future: a refused name fails as the browser's promise rejects. */
+    private fun <T> later(start: () -> CompletableFuture<T>): CompletableFuture<T> = try {
+        start()
+    } catch (refused: ProjectFailure) {
+        CompletableFuture.failedFuture(refused)
+    }
+
+    /** Renames an object (the Objects panel's Rename), trimmed and bounded as the browser's controller takes it. */
+    fun renameObject(objectId: String, name: String): CompletableFuture<Unit> = later {
+        execute(ProjectIntents.Command.RenameObject(ProjectIntents.RenameObject(units(objectId), units(ProjectNames.bounded(name, "Object name", MAX_NAME_LENGTH)))))
+    }
+
+    /** Renames a part (volume). */
+    fun renameVolume(volumeId: String, name: String): CompletableFuture<Unit> = later {
+        execute(ProjectIntents.Command.RenameVolume(ProjectIntents.RenameVolume(units(volumeId), units(ProjectNames.bounded(name, "Volume name", MAX_NAME_LENGTH)))))
+    }
+
+    /** Renames one instance. */
+    fun renameInstance(instanceId: String, name: String): CompletableFuture<Unit> = later {
+        execute(ProjectIntents.Command.RenameInstance(ProjectIntents.RenameInstance(units(instanceId), units(ProjectNames.bounded(name, "Instance name", MAX_NAME_LENGTH)))))
+    }
+
+    /**
+     * Set as an individual object (`instance_to_object`): the first selected
+     * instance becomes an object of its own with fresh IDs (the browser's
+     * `convertInstanceToIndependentObject`); refused for an object's only
+     * instance. Answers the new object's ID, or null without a selected instance.
+     */
+    fun instanceToObject(): CompletableFuture<String?> = edit { session, snapshot ->
+        val first = whole(session).refs.firstOrNull { it is ProjectIntents.SelectionEntity.Instance } as ProjectIntents.SelectionEntity.Instance?
+            ?: return@edit null
+        val facts = instanceOf(snapshot, text(first.value))
+        if (facts.objectInstances <= 1) throw ProjectFailure("Cannot convert sole instance to individual object")
+        val objectId = ids.next()
+        val volumeIds = ids.next(facts.objectVolumes)
+        val instanceId = ids.next()
+        val rangeIds = ids.next(facts.objectRanges)
+        Edit(
+            listOf(
+                ProjectIntents.Command.ConvertInstanceToObject(
+                    ProjectIntents.ConvertInstanceToObject(
+                        first.value,
+                        ProjectIntents.IndependentInstanceIds(units(objectId), volumeIds.map(::units), units(instanceId), rangeIds.map(::units)),
+                        ProjectIntents.OptionalText.Absent(ProjectIntents.Empty),
+                    ),
+                ),
+            ),
+            objectId,
+        )
+    }
+
+    /**
+     * Clone Selected (`edit_duplicate`) and Add Instance (`add_instance`):
+     * another instance of the primary selected instance's object, as the
+     * browser's `duplicateSelectedInstance` stages it — one "Create instance"
+     * that selects the copy. Answers the copy's ID, or null when the primary
+     * selection is not an instance.
+     */
+    fun cloneSelected(): CompletableFuture<String?> {
+        var made: String? = null
+        return refreshed(
+            outcome(actor.stage { session, guard ->
+                val primary = whole(session).primary as? ProjectIntents.SelectionEntity.Instance ?: return@stage null
+                val id = ids.next()
+                session.stageInstanceCopy(guard, text(primary.value), id).also { made = id }
+            }).thenApply { result ->
+                when (result) {
+                    ProjectOutcome.NothingToDo -> null
+                    is ProjectOutcome.Completed -> when (val reply = result.reply.result) {
+                        is ProjectIntents.SessionResult.Acknowledged, is ProjectIntents.SessionResult.ReceiptUnavailable -> made
+                        is ProjectIntents.SessionResult.Error -> throw refusedBy(reply.value)
+                        else -> throw failure(result, null)
+                    }
+                    else -> throw failure(result, null)
+                }
+            },
+        )
+    }
+
+    /** Add build plate (`add_plate`): an empty "Plate n", last in order, made active. Answers its ID. */
+    fun addPlate(): CompletableFuture<String?> = edit { _, snapshot ->
+        val plates = platesOf(snapshot)
+        if (plates.size >= MAX_PROJECT_PLATES) throw ProjectFailure("A project cannot contain more than $MAX_PROJECT_PLATES plates")
+        val id = ids.next()
+        val order = maxOf(-1.0, plates.maxOfOrNull { it.order } ?: -1.0) + 1
+        val name = ProjectNames.nextAvailable("Plate", plates.map { it.name })
+        Edit(listOf(ProjectIntents.Command.AddPlate(ProjectIntents.AddPlate(units(id), units(name), order, true))), id)
+    }
+
+    /**
+     * Duplicate a plate (`duplicate_plate`): the plate and everything on it
+     * as a new plate with fresh IDs for every editable entity and plate row,
+     * minted in the browser's order. Answers the copy's ID.
+     */
+    fun duplicatePlate(plateId: String): CompletableFuture<String?> = edit { _, snapshot ->
+        val shape = snapshot.plateShape(plateId) ?: throw ProjectFailure("Unknown plate $plateId")
+        if (platesOf(snapshot).size >= MAX_PROJECT_PLATES) throw ProjectFailure("A project cannot contain more than $MAX_PROJECT_PLATES plates")
+        val id = ids.next()
+        val objects = shape.objects.map { counts ->
+            ProjectIntents.DuplicateObject(
+                units(ids.next()), ids.next(counts.volumes).map(::units), ids.next(counts.instances).map(::units), ids.next(counts.layerRanges).map(::units),
+            )
+        }
+        val gcode = ids.next(shape.customGcode).map(::units)
+        val thumbnails = ids.next(shape.thumbnails).map(::units)
+        Edit(listOf(ProjectIntents.Command.DuplicatePlate(ProjectIntents.DuplicatePlate(units(plateId), units(id), objects, gcode, thumbnails))), id)
+    }
+
+    /** Delete a plate (`delete_plate`); the last plate is refused, as the browser refuses it. */
+    fun deletePlate(plateId: String): CompletableFuture<Unit?> = edit { _, snapshot ->
+        plateOf(snapshot, plateId)
+        if (platesOf(snapshot).size <= 1) throw ProjectFailure("Cannot delete the last plate")
+        Edit(listOf(ProjectIntents.Command.DeletePlate(ProjectIntents.DeletePlate(units(plateId)))), Unit)
+    }
+
+    /** Make a plate the active one (`activate_plate`); the active plate already is. */
+    fun activatePlate(plateId: String): CompletableFuture<Unit?> = edit { _, snapshot ->
+        if (plateOf(snapshot, plateId).active) null
+        else Edit(listOf(ProjectIntents.Command.ActivatePlate(ProjectIntents.ActivatePlate(units(plateId)))), Unit)
+    }
+
+    /** Rename a plate (`rename_plate`), bounded as the browser's controller takes a plate name; an unchanged name changes nothing. */
+    fun renamePlate(plateId: String, name: String): CompletableFuture<Unit?> = later {
+        val next = ProjectNames.bounded(name, "Plate name", MAX_PLATE_NAME_LENGTH)
+        edit { _, snapshot ->
+            if (plateOf(snapshot, plateId).name == next) null
+            else Edit(listOf(ProjectIntents.Command.RenamePlate(ProjectIntents.RenamePlate(units(plateId), units(next)))), Unit)
+        }
+    }
+
+    /** Include a plate in printing or exclude it (`set_plate_printable`). */
+    fun setPlatePrintable(plateId: String, printable: Boolean): CompletableFuture<Unit?> = edit { _, snapshot ->
+        if (plateOf(snapshot, plateId).printable == printable) null
+        else Edit(listOf(ProjectIntents.Command.SetPlatePrintable(ProjectIntents.SetPlatePrintable(units(plateId), printable))), Unit)
+    }
+
+    /** Put the plates in [plateIds]' order (`reorder_plates`). */
+    fun reorderPlates(plateIds: List<String>): CompletableFuture<Unit?> = edit { _, _ ->
+        Edit(listOf(ProjectIntents.Command.ReorderPlates(ProjectIntents.ReorderPlates(plateIds.map(::units)))), Unit)
+    }
+
+    /** Move a plate one place earlier ([by] −1) or later (+1), as the plate bar's Move up and Move down swap neighbours. */
+    fun movePlate(plateId: String, by: Int): CompletableFuture<Unit?> = edit { _, snapshot ->
+        val order = platesOf(snapshot).map { it.id }.toMutableList()
+        val index = order.indexOf(plateId).takeIf { it >= 0 } ?: throw ProjectFailure("Unknown plate $plateId")
+        val destination = index + by
+        if (destination !in order.indices) return@edit null
+        order[index] = order[destination].also { order[destination] = order[index] }
+        Edit(listOf(ProjectIntents.Command.ReorderPlates(ProjectIntents.ReorderPlates(order.map(::units)))), Unit)
+    }
+
     override fun close() {
         synchronized(lock) { timer?.close() }
         actor.close()
         synchronized(lock) { listeners.clear() }
+        synchronized(showing) {
+            disposed = true
+            shown?.close()
+            shown = null
+        }
     }
 }
+
+/** What Delete Selected removed: one instance, or its object with its last instance. */
+enum class ProjectDeletion { INSTANCE, OBJECT }
+
+/** What Printable did: the state the selected instances took, and how many changed to it. */
+data class ProjectPrintableChange(val printable: Boolean, val changed: Int)
 
 /**
  * Recently used documents, newest first: at most [MAX] entries, one per

@@ -13,6 +13,11 @@
     <string name="project_save">Projekt mentése</string>
     <string name="project_undo">Visszavonás</string>
     <string name="project_redo">Mégis</string>
+    <string name="project_edit_select_all">Összes kijelölése</string>
+    <string name="project_edit_deselect_all">Kijelölés megszüntetése</string>
+    <string name="project_edit_delete_all">Összes törlése</string>
+    <string name="project_toggle_printable">Nyomtatható</string>
+    <string name="project_instance_to_object">Beállítás különálló objektumként</string>
     <string name="device_cancel">Mégse</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

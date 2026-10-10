@@ -13,6 +13,12 @@
     <string name="project_save">Projeyi Kaydet</string>
     <string name="project_undo">Geri al</string>
     <string name="project_redo">İleri Al</string>
+    <string name="project_edit_select_all">Hepsini seç</string>
+    <string name="project_edit_deselect_all">Hiçbirini seçme</string>
+    <string name="project_edit_delete_all">Hepsini sil</string>
+    <string name="project_toggle_printable">Yazdırılabilir</string>
+    <string name="project_instance_to_object">Ayrı bir nesne olarak ayarla</string>
+    <string name="project_duplicate_plate">Geçerli plakayı çoğalt</string>
     <string name="device_cancel">İptal</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

@@ -123,6 +123,9 @@ public final class ProjectJniHarness {
     public static long projectWorkspaceChecks(byte[] cube, byte[] lossy) {
         return ProjectWorkspaceChecks.run(cube, lossy);
     }
+    public static long projectEditChecks(byte[] cube) {
+        return ProjectEditChecks.run(cube);
+    }
     public static long newProjectChecks() {
         return ProjectNewChecks.run();
     }
@@ -368,6 +371,7 @@ public final class ProjectJniHarness {
             if (name.equals("slicingChoiceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);
             if (name.equals("projectRecoveryChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);
             if (name.equals("projectWorkspaceChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class, byte[].class);
+            if (name.equals("projectEditChecks")) method = ProjectJniHarness.class.getMethod(name, byte[].class);
             if (name.equals("newProjectChecks")) method = ProjectJniHarness.class.getMethod(name);
             if (name.equals("deviceWorkspaceChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);
             if (name.equals("deviceSendChecks")) method = ProjectJniHarness.class.getMethod(name, String.class);

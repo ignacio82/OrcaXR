@@ -45,6 +45,10 @@ sealed interface ProjectOutcome {
     data class Inspected(val result: Result<Any?>) : ProjectOutcome
     /** A slicing configuration the project already has: nothing was staged or recorded. */
     data object SlicingUnchanged : ProjectOutcome
+    /** The selection a [ProjectActor.select] planned is the session's now; [changed] when it differed. */
+    data class Selected(val changed: Boolean, val projection: ProjectProjection) : ProjectOutcome
+    /** A [ProjectActor.select] or [ProjectActor.stage] plan found nothing to do: the session is unchanged. */
+    data object NothingToDo : ProjectOutcome
     /** A slicing configuration the core refused to stage (`orphaned-mixed-component`, `auto-pairs`, `ids-exhausted`), in the browser's words. */
     data class SlicingRefused(val code: String, val message: String) : ProjectOutcome
     /** No retry is safe: the operation may have changed the project or handed off output. */
@@ -65,6 +69,13 @@ class ProjectActorImport internal constructor(
 ) : AutoCloseable {
     override fun close() = native.close()
 }
+
+/** A selection a [ProjectActor.select] plan chose: [refs] in order, and the
+ * [primary] among them (the last by default, as the browser's store takes it). */
+class ProjectSelectionChoice(
+    val refs: List<ProjectIntents.SelectionEntity>,
+    val primary: ProjectIntents.SelectionEntity? = refs.lastOrNull(),
+)
 
 class ProjectRequest internal constructor(cancelAction: () -> Boolean) {
     private val cancellation = AtomicReference<(() -> Boolean)?>(cancelAction)
@@ -138,6 +149,8 @@ class ProjectActor private constructor(
         data class CommitImport(val candidate: ProjectActorImport, val acknowledged: List<String>) : Work
         data class Inspect(val read: (ProjectSession) -> Any?) : Work
         data class Slicing(val stage: (ProjectSession) -> SlicingStage) : Work
+        data class Select(val plan: (ProjectSession) -> ProjectSelectionChoice?) : Work
+        data class Staged(val plan: (ProjectSession, ProjectGuard) -> ProjectStagedInput?) : Work
     }
     private sealed interface Prepared {
         data class Export(val source: ProjectActorGuard, val guard: ProjectGuard, val save: Boolean) : Prepared
@@ -388,6 +401,83 @@ class ProjectActor private constructor(
         enqueue(Work.Slicing(stage))
     }
 
+    /**
+     * Sets the session's selection (the browser's `SelectionStore.set`, behind
+     * every click, tree row and Select All) to what [plan] chooses on the
+     * authority, from the state and selection it reads there: in order, with
+     * its primary (none, or one of the refs). Answered [ProjectOutcome.Selected]
+     * with the selection effect delivered first, or [ProjectOutcome.NothingToDo]
+     * when [plan] chose nothing. A choice the session refuses (a primary not
+     * among the refs, more refs or text than a selection holds) or a plan that
+     * fails refuses as INVALID_REQUEST; nothing changes then.
+     */
+    fun select(plan: (ProjectSession) -> ProjectSelectionChoice?): ProjectRequest = synchronized(gate) {
+        refusal()?.let { return refused(it) }
+        enqueue(Work.Select(plan))
+    }
+
+    /**
+     * Stages one edit with [plan] on the authority — against the state and
+     * selection it reads there and the guard captured for it — and executes
+     * it at once (`executeStaged`), as the browser's staged edits run: the
+     * browser's clone of the selected instance, say. Answered
+     * [ProjectOutcome.Completed], or [ProjectOutcome.NothingToDo] when [plan]
+     * staged nothing; a plan the session refuses (`invalid_request`, `stale`,
+     * `resource_limit`) refuses with that reason and changes nothing.
+     */
+    fun stage(plan: (ProjectSession, ProjectGuard) -> ProjectStagedInput?): ProjectRequest = synchronized(gate) {
+        refusal()?.let { return refused(it) }
+        if (staging.resources == 0L || staging.commands == 0L || staging.inputUnits == 0L) return refused(ProjectRefusal.RESOURCE_LIMIT)
+        enqueue(Work.Staged(plan))
+    }
+
+    /** A host plan's own refusals keep the connection: they are its answer, not a broken session. */
+    private fun <T> planned(block: () -> T): T = try { block() }
+    catch (failure: Refusal) { throw failure }
+    catch (failure: IllegalStateException) {
+        throw Refusal(when (failure.message) {
+            "stale" -> ProjectRefusal.STALE
+            "resource_limit" -> ProjectRefusal.RESOURCE_LIMIT
+            "closed", "disposed" -> ProjectRefusal.CLOSED
+            else -> ProjectRefusal.INVALID_REQUEST
+        })
+    }
+    catch (_: IllegalArgumentException) { throw Refusal(ProjectRefusal.INVALID_REQUEST) }
+
+    private fun choose(value: ProjectSession, plan: (ProjectSession) -> ProjectSelectionChoice?): NativeResult {
+        val choice = planned { plan(value) } ?: return NativeResult(ProjectOutcome.NothingToDo, null)
+        val primary = choice.primary?.let { primary -> choice.refs.indexOf(primary).also { if (it < 0) throw Refusal(ProjectRefusal.INVALID_REQUEST) } } ?: -1
+        val effects = planned {
+            value.captureGuard().use { guard ->
+                val input = ProjectSelectionInput()
+                try {
+                    for (ref in choice.refs) {
+                        val (kind, id) = selectionKey(ref)
+                        input.add(kind, id)
+                    }
+                } catch (failure: Throwable) { input.close(); throw failure }
+                // Consumes the input on every outcome.
+                value.select(guard, input, primary.toLong())
+            }
+        }
+        return try {
+            NativeResult(ProjectOutcome.Selected(effects.count() > 0, ProjectProjection.DELIVERED), effects)
+        } catch (failure: Throwable) { effects.close(); throw failure }
+    }
+
+    private fun selectionKey(ref: ProjectIntents.SelectionEntity): Pair<Int, CharArray> {
+        fun chars(units: List<Int>) = CharArray(units.size) { units[it].toChar() }
+        return when (ref) {
+            is ProjectIntents.SelectionEntity.Project -> ProjectHost.SELECT_PROJECT to CharArray(0)
+            is ProjectIntents.SelectionEntity.Plate -> ProjectHost.SELECT_PLATE to chars(ref.value)
+            is ProjectIntents.SelectionEntity.Object -> ProjectHost.SELECT_OBJECT to chars(ref.value)
+            is ProjectIntents.SelectionEntity.Volume -> ProjectHost.SELECT_VOLUME to chars(ref.value)
+            is ProjectIntents.SelectionEntity.Instance -> ProjectHost.SELECT_INSTANCE to chars(ref.value)
+            is ProjectIntents.SelectionEntity.LayerRange -> ProjectHost.SELECT_LAYER_RANGE to chars(ref.value)
+            is ProjectIntents.SelectionEntity.Filament -> ProjectHost.SELECT_FILAMENT to chars(ref.value)
+        }
+    }
+
     private fun enqueue(work: Work) = Task().also { it.work = work; tasks.add(it); authority.execute(it) }.request
     private fun refusal(): ProjectRefusal? = when {
         closed -> ProjectRefusal.CLOSED
@@ -540,7 +630,8 @@ class ProjectActor private constructor(
                     Prepared.Import(task.scope.own(work.prepare(task.scope, base)))
                 })
             }
-            is Work.Message, Work.ClearClipboard, is Work.CommitImport, is Work.Inspect, is Work.Slicing -> error("unexpected_preparation")
+            is Work.Message, Work.ClearClipboard, is Work.CommitImport, is Work.Inspect, is Work.Slicing, is Work.Select, is Work.Staged ->
+                error("unexpected_preparation")
         }
     }
 
@@ -632,7 +723,7 @@ class ProjectActor private constructor(
             work = task.work
             prepared = task.prepared
             preparing = prepared == null && work !is Work.Message && work != Work.ClearClipboard && work !is Work.CommitImport &&
-                work !is Work.Inspect && work !is Work.Slicing
+                work !is Work.Inspect && work !is Work.Slicing && work !is Work.Select && work !is Work.Staged
             task.phase = if (preparing) Phase.PREPARING else Phase.EXECUTING
             task.mayCommit = !preparing && task !== startup && prepared !is Prepared.Copy && prepared !is Prepared.Import &&
                 work != Work.ClearClipboard && work !is Work.Inspect
@@ -673,6 +764,13 @@ class ProjectActor private constructor(
                         acknowledged(value, exchange(value, capture(ProjectIntents.SessionOperation.ExecuteStaged(ProjectIntents.StagedReference(ready.id)))))
                     }
                 }
+            } else if (work is Work.Select) {
+                choose(value, work.plan)
+            } else if (work is Work.Staged) {
+                val staged = planned { value.captureGuard().use { guard -> work.plan(value, guard) } }
+                staged?.use { ready ->
+                    acknowledged(value, exchange(value, capture(ProjectIntents.SessionOperation.ExecuteStaged(ProjectIntents.StagedReference(ready.id)))))
+                } ?: NativeResult(ProjectOutcome.NothingToDo, null)
             } else if (work is Work.Inspect) {
                 // A read's own failure is its answer: it never ends the connection.
                 NativeResult(ProjectOutcome.Inspected(runCatching { work.read(value) }), null)
@@ -763,6 +861,7 @@ class ProjectActor private constructor(
                 is ProjectOutcome.ResetWithoutSummary -> outcome.copy(projection = delivered)
                 is ProjectOutcome.ImportPrepared -> outcome.copy(projection = delivered)
                 is ProjectOutcome.Imported -> outcome.copy(projection = delivered)
+                is ProjectOutcome.Selected -> outcome.copy(projection = delivered)
                 else -> outcome
             }
         }

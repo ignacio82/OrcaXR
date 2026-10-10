@@ -13,6 +13,12 @@
     <string name="project_save">Išsaugoti projektą</string>
     <string name="project_undo">Anuliuoti</string>
     <string name="project_redo">Perdaryti</string>
+    <string name="project_edit_select_all">Pasirinkti viską</string>
+    <string name="project_edit_deselect_all">Atšaukti visus</string>
+    <string name="project_edit_delete_all">Ištrinti visus</string>
+    <string name="project_toggle_printable">Galima spausdinti</string>
+    <string name="project_instance_to_object">Nustatyti kaip atskirą objektą</string>
+    <string name="project_duplicate_plate">Dubliuoti dabartinę plokštę</string>
     <string name="device_cancel">Atšaukti</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

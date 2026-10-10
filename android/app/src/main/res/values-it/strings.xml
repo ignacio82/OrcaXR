@@ -13,6 +13,12 @@
     <string name="project_save">Salva Progetto</string>
     <string name="project_undo">Annulla</string>
     <string name="project_redo">Ripeti</string>
+    <string name="project_edit_select_all">Seleziona tutto</string>
+    <string name="project_edit_deselect_all">Deseleziona tutto</string>
+    <string name="project_edit_delete_all">Elimina tutto</string>
+    <string name="project_toggle_printable">Stampabile</string>
+    <string name="project_instance_to_object">Imposta come singolo oggetto</string>
+    <string name="project_duplicate_plate">Duplica piatto corrente</string>
     <string name="device_cancel">Annulla</string>
     <string name="device_tab_camera">Telecamera</string>
 </resources>

@@ -13,6 +13,12 @@
     <string name="project_save">Desar projecte</string>
     <string name="project_undo">Desfer</string>
     <string name="project_redo">Refer</string>
+    <string name="project_edit_select_all">Seleccionar-ho tot</string>
+    <string name="project_edit_deselect_all">Deseleccionar-ho tot</string>
+    <string name="project_edit_delete_all">Suprimir-les totes</string>
+    <string name="project_toggle_printable">Imprimible</string>
+    <string name="project_instance_to_object">Definir com a objecte individual</string>
+    <string name="project_duplicate_plate">Duplicat de la Placa Actual</string>
     <string name="device_cancel">Cancel·lar</string>
     <string name="device_tab_camera">Càmera</string>
 </resources>

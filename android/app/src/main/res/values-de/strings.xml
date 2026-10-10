@@ -13,6 +13,12 @@
     <string name="project_save">Projekt speichern</string>
     <string name="project_undo">Rückgängig machen</string>
     <string name="project_redo">Wiederholen</string>
+    <string name="project_edit_select_all">Alle auswählen</string>
+    <string name="project_edit_deselect_all">Alle abwählen</string>
+    <string name="project_edit_delete_all">Alles löschen</string>
+    <string name="project_toggle_printable">Druckbar</string>
+    <string name="project_instance_to_object">Als eigenes Objekt definieren</string>
+    <string name="project_duplicate_plate">Aktuelle Druckplatte duplizieren</string>
     <string name="device_cancel">Abbrechen</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

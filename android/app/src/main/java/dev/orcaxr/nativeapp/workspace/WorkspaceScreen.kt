@@ -2,6 +2,7 @@ package dev.orcaxr.nativeapp.workspace
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.SurfaceView
@@ -12,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,8 +34,10 @@ import kotlin.math.abs
 /**
  * The Workspace area: the project's active plate and its objects, drawn by
  * the flat renderer from the session's own render deltas and mesh packets
- * (never a second copy of the project). Drag orbits, pinch zooms, a tap
- * highlights the instance under the finger.
+ * (never a second copy of the project). Drag orbits, pinch zooms; a tap
+ * selects the instance under the finger in the project (Shift, Ctrl or Meta
+ * held toggles it, a tap on nothing deselects all), as a click on a model
+ * does in the browser, and the scene highlights the project's selection.
  */
 @Composable
 fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
@@ -55,10 +59,14 @@ fun WorkspaceScreen(model: ProjectModel, modifier: Modifier = Modifier) {
             renderer.pause()
         }
     }
+    val view = model.view
+    // The canonical selection, wherever it was made (here, the Project area's tree, an edit).
+    val selected = view.selection.instances
+    SideEffect { renderer.highlight(selected) }
     Box(modifier) {
         AndroidView(factory = { context -> WorkspaceSurface(context).also(renderer::attach) }, Modifier.fillMaxSize())
-        val view = model.view
-        val objects = view.rows.count { it.kind == dev.orcaxr.core.ProjectIntents.ObjectTreeRowKind.Object }
+        // Objects on every plate (the tree may show them collapsed).
+        val objects = view.plateList.sumOf { it.objects }
         Text(
             if (objects == 0) stringResource(R.string.workspace_empty) else view.name,
             Modifier.align(Alignment.TopStart).padding(16.dp),
@@ -82,6 +90,13 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
     private var scene: FilamentScene? = null
     private var listening: AutoCloseable? = null
     private var resumed = false
+    private var highlighted: Set<String> = emptySet()
+
+    /** Highlights the project's selected instances, now and in a scene made later. */
+    fun highlight(instances: Set<String>) {
+        highlighted = instances
+        scene?.select(instances)
+    }
 
     fun attach(view: WorkspaceSurface) {
         surface = view
@@ -111,6 +126,7 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
         renderer.setBed(bed.bedWidthMm ?: BED_MM, bed.bedDepthMm ?: BED_MM)
         renderer.frame(bed.bedWidthMm ?: BED_MM, bed.bedDepthMm ?: BED_MM)
         renderer.setActive(true)
+        renderer.select(highlighted)
         // The first update is everything known; later ones are what changed.
         listening = model.listenScene { update -> if (scene === renderer) apply(renderer, update) }
     }
@@ -158,7 +174,10 @@ private class WorkspaceRenderer(private val model: ProjectModel) {
                     lastX = event.x; lastY = event.y
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (!dragged && !scaling) renderer.select(renderer.pick(event.x.toDouble(), event.y.toDouble())?.instanceId)
+                    if (!dragged && !scaling) {
+                        val extend = event.metaState and (KeyEvent.META_SHIFT_ON or KeyEvent.META_CTRL_ON or KeyEvent.META_META_ON) != 0
+                        model.selectInstance(renderer.pick(event.x.toDouble(), event.y.toDouble())?.instanceId, extend)
+                    }
                     view.performClick()
                 }
             }

@@ -27,6 +27,7 @@ use crate::{
 pub use asset_commands::StagedAsset;
 pub use drawn_parts::{PartPlacement, Recipe};
 use duplicate::*;
+pub use duplicate::{DuplicatePlateShape, duplicate_plate_shape};
 pub use facet_stroke::FacetRefinement;
 pub use lifecycle::IndependentObjectIds;
 use orcaxr_contracts::{canonical::Value, project_intent_types as wire};

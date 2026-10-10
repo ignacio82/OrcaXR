@@ -4415,10 +4415,11 @@ The app's Project area runs the project session as the browser's workspace
 does, over the shared core and the `ProjectActor`. `ProjectWorkspace`
 (core-bridge, host-testable) starts the actor with the browser's empty
 project and carries out "New project", Open and Save through document
-providers, model import, undo and redo; its `ProjectView` (name, plates,
-dirty state, the next undo and redo labels, the object tree's first page
-with plates expanded) is rebuilt from the session's own effects and
-history, never kept as a second project. `ProjectModel` is its host
+providers, model import, undo and redo, and the selection and object edits
+below; its `ProjectView` (name, plates, dirty state, the next undo and redo
+labels, the object tree's first page with plates expanded, the selection
+and the actions the core enables) is rebuilt from the session's own effects
+and history, never kept as a second project. `ProjectModel` is its host
 adapter (a ViewModel, provider work on one worker thread) and
 `ProjectScreen` its Compose surface; the shell's navigation is now
 Workspace, Project and Device. Its actions carry the browser's action names
@@ -4540,6 +4541,108 @@ the new window closes) and appends a byte to the saved file from the shell
 (Save asks; Cancel leaves the file as it is; Overwrite writes a package
 again).
 
+### Android selection and object edits
+
+The Project area selects and edits through the session's own selection and
+intents, as the browser's workspace does — never a host copy of either.
+
+Selection is the session's (`ProjectSession.select`, the browser's
+`SelectionStore`). `ProjectActor.select(plan)` runs a plan on the authority
+against the state and selection it reads there, so a choice is never made on
+a stale view, and answers `Selected` (with the selection effect delivered
+first) or `NothingToDo`; a choice the session refuses (a primary not among
+the refs, more refs or text than a selection holds) or a failing plan
+refuses as INVALID_REQUEST and keeps the connection. `ProjectWorkspace`
+follows the browser's controllers: `selectInstance` is a click on a model
+(`selectModel`: one instance, or with Shift/Ctrl/Meta toggled among the
+selected instances, other refs dropped, the last primary; an instance the
+project no longer has selects nothing); `selectRow` is an Objects-tree row
+(`objectTreeSelectionRequest`, resolved by the core's object tree: Replace,
+Range from the last activated row, and Toggle applied to the whole
+selection, keeping the primary unless it is the one removed; groups select
+nothing); `selectAll` is the active plate's instances, the last primary
+(none clears); `deselectAll` clears. The view reads each selection effect
+(`ProjectView.selection`, at most 4096 refs; its instances are what the
+renderer highlights), keeps the latest project snapshot so a selection-only
+change re-pages the tree with the selection (rows report `selected`), and
+owns the tree's expansion: plates open, everything else closed until its
+disclosure opens it, and a model tapped in the Workspace opens its object
+and instance group so its row shows. After each change the view also reads
+which actions the core enables (`ProjectSession.capabilities` with the
+Android shell's host facts: the flat workspace, preparing, no clipboard or
+printer job): the Project area's `dom-menu` and `dom-inspector` actions, and
+the `dom-context` menus of an object and a plate in catalogue order.
+
+Every edit is one guarded intent and one undoable step with the core's own
+history label. `execute(command)` and `transaction(label, commands)` submit
+under the query guard. Edits of "the selected model" are planned on the
+authority (`inspect`) from the selection and the query projection
+(`ProjectFacts`), as the browser's controller reads its state, and execute
+under that very state's guard — a change in between refuses them as stale:
+Delete Selected (`deleteSelectedInstance`: the primary instance, "Delete
+instance", or its object with its last instance, "Delete object"; the core
+moves the selection to a neighbour), Delete All ("Delete all models"),
+Printable (`setInstancePrintable`: printable unless every selected instance
+is; each changed instance its own "Mark instance printable/unprintable",
+chained on the previous receipt, an interruption reported with the browser's
+completed count), Rename of an object, part or instance ("Rename object to
+…", trimmed by ECMAScript's `trim` and bounded by `requireBoundedText`'s
+160 units, refused with its words), Set as an individual object ("Set as
+individual object", an object's only instance refused). Plates by ID, as the
+browser's plate manager targets them: add ("Add Plate n": the next free
+"Plate n", order after the last, made active), activate ("Change active
+plate"), rename ("Rename plate to …", 120 units; the plate bar first checks
+the plate manager's own rules), reorder and move one place ("Reorder
+plates"), include or exclude ("Include plate in printing", "Exclude plate
+from printing"), duplicate ("Duplicate plate"), delete ("Delete plate", the
+last refused); the 36-plate limit is refused with the core's words before it
+is asked. New IDs follow the browser's `UuidIdSource` (`ProjectIds`: a
+version-4 UUID of `floor(word × 256)` bytes over secure 32-bit words) in the
+browser's minting order; a duplicate's counts come from
+`ProjectSnapshot.plateShape` (`commands::duplicate_plate_shape`, the counts
+the command checks), since the query projection carries no plate custom
+G-code or thumbnail counts.
+
+Clone Selected and Add Instance match the browser's result rather than the
+intent alternative: the browser's `duplicateSelectedInstance` stages a
+`createInstance` of the primary instance's record (its name when it has one,
+transform, printability and extension data — nothing else), where
+`duplicateObject` would add a separate "… copy" object. The session stages
+that record itself (`ProjectSession::stage_instance_copy`, JNI
+`stageInstanceCopy`; the browser's zero-scale and zero-rotation refusals
+included) and `ProjectActor.stage(plan)` executes it at once as one
+"Create instance" that selects the copy.
+
+The app: an Edit menu (Select All, Deselect All, Clone Selected, Delete
+Selected, Delete All, Printable, Set as an individual object), a plate bar
+(each plate activated by tapping it, its printing switch, and a menu: Rename
+build plate, Move up, Move down, Duplicate, Delete build plate; Add build
+plate below), and tree rows — a tap selects (Ctrl/Meta toggles, Shift extends
+a range from a hardware keyboard), a check box toggles, a disclosure opens
+and closes, and a long-press opens the row's menu (Rename for an editable
+object or part, then the catalogue's context actions the app performs, which
+act on the selection) without changing the selection, as the browser's
+Objects panel does. Delete and Escape from a hardware keyboard are Delete
+Selected and Deselect All when no focused view takes them. The Workspace's tap
+selects in the project (Shift/Ctrl/Meta extend; a tap on nothing deselects
+all) and the scene highlights the project's selected instances. The plate
+menu of the tree, like the catalogue's actions, duplicates and deletes the
+active plate; the plate bar acts on its own plate. Copy, cut, paste, fill
+bed and transforms remain.
+
+`ProjectEditChecks` (73 checks over real JNI) replay the browser's UUID
+vectors from its seeded word source, every selection rule above and its
+refusals, the capabilities a selection enables, each edit's single step,
+label and undo, the refusals' words, the plate operations, the duplicate's
+shape and the plate limit; a Rust staging test pins the copy's record and the
+shape's counts. `ProjectEditingTest` (app JVM) covers row activation, rename
+eligibility and the row and Edit menus. `android-edit-smoke.py` (run by
+`emulator-smoke.py` before the adaptive smoke) imports two cubes, taps one in
+the Workspace (its highlight and its checked tree row), deletes and undoes,
+clones, makes the copy unprintable, deletes with the Delete key, deselects
+with Escape, renames from a row's menu and adds, renames and deletes a plate;
+it has not run yet.
+
 ### Android Workspace renderer
 
 The Workspace area draws the project with the flat renderer, from the
@@ -4565,10 +4668,11 @@ its listener. `FilamentScene` (`renderer-filament`) uploads meshes in bounded
 chunks as the viewport experiment does, shares each mesh among its draws
 (one entity per chunk and draw, each with its own tinted material instance),
 draws the bed's outline and 10 mm grid, frames the bed, picks the nearest
-draw through each mesh's BVH and highlights a picked instance;
-non-printable instances are translucent. `WorkspaceScreen` hosts it on a
-`SurfaceView` that exists only while the app is resumed (drag orbits, pinch
-zooms, a tap highlights), and the app now carries the renderer in every
+draw through each mesh's BVH and highlights the project's selected
+instances; non-printable instances are translucent. `WorkspaceScreen` hosts
+it on a `SurfaceView` that exists only while the app is resumed (drag
+orbits, pinch zooms, a tap selects the picked instance in the project), and
+the app now carries the renderer in every
 build: both APKs pass `verify-artifacts.py` with six native libraries,
 Filament's included, 16 KB aligned.
 
@@ -4579,9 +4683,9 @@ bed inside the 200 mm plate, undo and redo as deltas, a duplicate sharing
 its mesh, a full snapshot for a new renderer, "New project" emptying the
 bed. The Project smoke compares Workspace screenshots on the emulator: an
 imported model changes about 1,500 pixels of the framed bed, a tap on it
-re-tints it, and undo restores the empty bed. Shading is baked flat (the
-browser lights its surface); paint colours, the session's selection, the
-printer profile's bed size and toolpaths are not drawn yet.
+selects and re-tints it, and undo restores the empty bed. Shading is baked
+flat (the browser lights its surface); paint colours, the printer profile's
+bed size and toolpaths are not drawn yet.
 
 ### Android Preview area
 

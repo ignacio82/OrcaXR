@@ -338,6 +338,22 @@ class ProjectSession internal constructor(handle: Long) : ProjectHandle(handle) 
     fun select(guard: ProjectGuard, input: ProjectSelectionInput, primary: Long = -1): ProjectEffects = read { session ->
         input.move { selection -> own(NativeProject.select(session, guard.reference(), selection, primary), ::ProjectEffects) }
     }
+    /** A copy of instance [sourceInstanceId] on the state [guard] captured,
+     * which must still be current, as the browser clones one ("Clone
+     * Selected", "Add Instance"): instance [instanceId] of the same object,
+     * last among its instances, with the source's name (when it has one),
+     * transform, printability and extension data, staged as one undoable
+     * "Create instance" for `executeStaged` that selects the copy. An unknown
+     * source refuses `invalid_request`; a changed state, `stale`. */
+    fun stageInstanceCopy(guard: ProjectGuard, sourceInstanceId: String, instanceId: String): ProjectStagedInput = read {
+        ProjectStagedInput.own(this, NativeProject.stageInstanceCopy(it, guard.reference(), CanonicalJson.quote(sourceInstanceId), CanonicalJson.quote(instanceId)))
+    }
+}
+
+/** The IDs a `duplicatePlate` intent of one plate carries, as counts ([ProjectSnapshot.plateShape]). */
+data class ProjectPlateShape(val objects: List<Objects>, val customGcode: Int, val thumbnails: Int) {
+    /** One object of the plate, in order: how many volume, instance and layer-range IDs its copy takes. */
+    data class Objects(val volumes: Int, val instances: Int, val layerRanges: Int)
 }
 class ProjectGuard internal constructor(handle: Long) : ProjectHandle(handle)
 
@@ -621,6 +637,25 @@ class ProjectSnapshot internal constructor(handle: Long) : ProjectHandle(handle)
      * `overrides` field carries; an unknown plate overrides nothing. */
     fun platePrintOverrides(plateId: String): Map<String, String> = read {
         CanonicalJson.stringMap(NativeProject.projectPlateOverrides(it, CanonicalJson.quote(plateId)))
+    }
+    /** The ID plan a `duplicatePlate` intent of plate [plateId] needs, counted
+     * as the command checks it (the browser's `duplicatePlate` mints exactly
+     * these); null for an unknown plate. */
+    fun plateShape(plateId: String): ProjectPlateShape? = read {
+        val values = NativeProject.projectPlateShape(it, CanonicalJson.quote(plateId))
+        if (values.isEmpty()) return@read null
+        fun count(position: Int): Int {
+            val value = values.getOrNull(position) ?: error("invalid_plate_shape")
+            check(value.isFinite() && value >= 0 && value == value.toInt().toDouble()) { "invalid_plate_shape" }
+            return value.toInt()
+        }
+        val objects = count(0)
+        check(values.size == 3 + objects * 3) { "invalid_plate_shape" }
+        ProjectPlateShape(
+            List(objects) { index -> ProjectPlateShape.Objects(count(1 + index * 3), count(2 + index * 3), count(3 + index * 3)) },
+            count(1 + objects * 3),
+            count(2 + objects * 3),
+        )
     }
     /** The filament library as the painting palette, with stable IDs. */
     fun paintPalette(request: ProjectIntents.PaintPaletteRequest): ProjectIntents.PaintPalette = read {

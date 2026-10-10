@@ -13,6 +13,10 @@
     <string name="project_save">Uložit projekt</string>
     <string name="project_undo">Zpět</string>
     <string name="project_redo">Vpřed</string>
+    <string name="project_edit_select_all">Vybrat vše</string>
+    <string name="project_edit_delete_all">Smazat vše</string>
+    <string name="project_toggle_printable">Tisknout objekt</string>
+    <string name="project_instance_to_object">Nastavit jako samostatný objekt</string>
     <string name="device_cancel">Zrušit</string>
     <string name="device_tab_camera">Kamera</string>
 </resources>

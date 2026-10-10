@@ -70,7 +70,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     private var bed: Lines? = null
     private var toolpath: Lines? = null
     private var toolpathSegments = 0
-    private var selected: String? = null
+    private var selected: Set<String> = emptySet()
     private var busy = false
     private var pending = 0L
     private var peakPending = 0L
@@ -243,7 +243,7 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
     /** The draw's colour; a selected instance's draws shift toward the selection accent. */
     private fun tint(instance: MaterialInstance, draw: ProjectScene.Draw) {
         val colour = floatArrayOf(((draw.argb ushr 16) and 255) / 255f, ((draw.argb ushr 8) and 255) / 255f, (draw.argb and 255) / 255f)
-        if (draw.instanceId == selected) for (n in 0..2) colour[n] = colour[n] * (1 - SELECTED_MIX) + SELECTED_ACCENT[n] * SELECTED_MIX
+        if (draw.instanceId in selected) for (n in 0..2) colour[n] = colour[n] * (1 - SELECTED_MIX) + SELECTED_ACCENT[n] * SELECTED_MIX
         // The transparent material blends premultiplied colour.
         val alpha = if (draw.printable) 1f else NOT_PRINTABLE_OPACITY
         instance.setParameter("tint", colour[0] * alpha, colour[1] * alpha, colour[2] * alpha, 1f)
@@ -483,10 +483,11 @@ class FilamentScene(private val surface: SurfaceView) : AutoCloseable {
         engine.destroyVertexBuffer(value.vertices); engine.destroyIndexBuffer(value.indices)
     }
 
-    /** Highlights every draw of [instanceId]; none when null. */
-    fun select(instanceId: String?) {
+    /** Highlights every draw of the [instances] selected (the project's canonical selection); none when empty. */
+    fun select(instances: Set<String>) {
         checkOpen()
-        selected = instanceId
+        if (instances == selected) return
+        selected = instances.toSet()
         for (each in placed.values) tint(each.material, each.draw)
         invalidate()
     }

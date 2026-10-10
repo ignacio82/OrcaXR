@@ -13,6 +13,12 @@
     <string name="project_save">Salvar Projeto</string>
     <string name="project_undo">Desfazer</string>
     <string name="project_redo">Refazer</string>
+    <string name="project_edit_select_all">Selecionar Tudo</string>
+    <string name="project_edit_deselect_all">Desselecionar Tudo</string>
+    <string name="project_edit_delete_all">Apagar Tudo</string>
+    <string name="project_toggle_printable">Imprimível</string>
+    <string name="project_instance_to_object">Definir como objeto individual</string>
+    <string name="project_duplicate_plate">Duplicar Placa Atual</string>
     <string name="device_cancel">Cancelar</string>
     <string name="device_tab_camera">Câmera</string>
 </resources>

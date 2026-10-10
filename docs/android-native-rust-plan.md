@@ -1856,6 +1856,17 @@ storage journeys on phone, tablet, and desktop-sized windows.
   `DeviceWorkspace`; each publishes projections to Compose. The Project
   area's actions carry the browser's action names (New Project, Open
   Project…, Save Project, Save Project As…, Import Model…, Undo, Redo).
+  It selects and edits as the browser does, through the session's own
+  selection and intents: a Workspace tap, tree rows (Ctrl/Meta toggle, Shift
+  range, check boxes), Select All and Deselect All set the session's
+  selection (`ProjectActor.select`), the tree reports it and the renderer
+  highlights it; the core's capabilities enable an Edit menu, row menus and a
+  plate bar — Delete Selected/All, Clone Selected (the browser's staged
+  instance copy), Printable, Rename, Set as an individual object, and plates
+  added, activated, renamed, reordered, included, duplicated and deleted —
+  each one undoable step with the browser's label (73 host JNI checks; the
+  edit smoke has not run yet). Copy, cut, paste, fill bed and transforms
+  remain.
   The Preview area is the browser's G-code viewer over the shared core's
   preview (picker, colour modes, layer window and filters, emulator-verified),
   with the file's own totals from the shared artifact summary.
@@ -1906,9 +1917,9 @@ storage journeys on phone, tablet, and desktop-sized windows.
   The Workspace area now draws the project with `FilamentScene` from the
   session's render deltas and mesh packets (`SceneSync`, off the UI thread;
   the renderer exists only while resumed), with orbit, zoom and a picked
-  instance highlighted; a JNI check syncs a real session and the emulator
-  smoke compares screenshots. Session selection, painting, model tools,
-  lighting and preview controls remain.
+  instance selected in the project and the session's selection highlighted;
+  a JNI check syncs a real session and the emulator smoke compares
+  screenshots. Painting, model tools, lighting and preview controls remain.
 - [ ] Implement document open/create/save-as/share, recent files, provider URI
   grants, externally revoked grants, nonseekable input, disk-full errors, and
   large-file streaming. Validate incoming open/share intents as untrusted input.

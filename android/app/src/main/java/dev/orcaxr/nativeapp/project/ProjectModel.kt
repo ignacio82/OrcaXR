@@ -18,9 +18,11 @@ import dev.orcaxr.core.DocumentOwners
 import dev.orcaxr.core.ProjectActorImport
 import dev.orcaxr.core.ProjectArchiveFormat
 import dev.orcaxr.core.ProjectDocumentOutput
+import dev.orcaxr.core.ProjectIntents
 import dev.orcaxr.core.ProjectPlateArchive
 import dev.orcaxr.core.ProjectPlatePreflight
 import dev.orcaxr.core.ProjectRecovery
+import dev.orcaxr.core.ProjectRowSelection
 import dev.orcaxr.core.ProjectView
 import dev.orcaxr.core.ProjectWorkspace
 import dev.orcaxr.core.RecentDocuments
@@ -535,6 +537,73 @@ class ProjectModel(application: Application) : AndroidViewModel(application), Pl
 
     fun undo() = work { workspace.undo().await() }
     fun redo() = work { workspace.redo().await() }
+
+    /**
+     * Runs a selection change on the worker after everything asked before it
+     * (an edit of "the selected model" must act on the selection the operator
+     * saw), without showing the area as busy: selecting is instant.
+     */
+    private fun quietly(task: () -> Unit) {
+        worker.execute {
+            try {
+                task()
+            } catch (failure: Throwable) {
+                val reason = cause(failure)
+                main.post { message = reason.message ?: reason.javaClass.simpleName }
+            }
+        }
+    }
+
+    /** A tap on a model in the Workspace ([extend] with Shift/Ctrl/Meta held); a tap on nothing deselects all, as the browser's click does. */
+    fun selectInstance(instanceId: String?, extend: Boolean) = quietly {
+        if (instanceId == null) workspace.deselectAll().await() else workspace.selectInstance(instanceId, extend).await()
+    }
+
+    /** A tree row activated: [mode] from the keyboard's modifiers. */
+    fun selectRow(key: String, mode: ProjectRowSelection) = quietly { workspace.selectRow(key, mode).await() }
+
+    /** Opens or closes a tree row. */
+    fun toggleRow(key: String) = quietly { workspace.toggleRow(key) }
+
+    /** Performs catalogue action [id] (the Edit menu, a row's menu, a shortcut) on the selection or the active plate. */
+    fun perform(id: String) {
+        when (id) {
+            "edit_select_all" -> quietly { workspace.selectAll().await() }
+            "edit_deselect_all" -> quietly { workspace.deselectAll().await() }
+            "edit_duplicate", "add_instance" -> work { workspace.cloneSelected().await() }
+            "edit_delete_selected" -> work { workspace.deleteSelected().await() }
+            "edit_delete_all" -> work { workspace.deleteAll().await() }
+            "toggle_printable" -> work { workspace.togglePrintable().await() }
+            "instance_to_object" -> work { workspace.instanceToObject().await() }
+            "add_plate" -> work { workspace.addPlate().await() }
+            "duplicate_plate" -> view.activePlate?.let { plate -> duplicatePlate(plate.id) }
+            "delete_plate" -> view.activePlate?.let { plate -> deletePlate(plate.id) }
+        }
+    }
+
+    /** Renames an object or part (the Objects panel's Rename). */
+    fun rename(entity: ProjectIntents.ObjectTreeEntity, name: String) = work {
+        val id = when (entity) {
+            is ProjectIntents.ObjectTreeEntity.Object -> entity.value
+            is ProjectIntents.ObjectTreeEntity.Volume -> entity.value
+            else -> return@work
+        }.let { units -> String(CharArray(units.size) { units[it].toChar() }) }
+        if (entity is ProjectIntents.ObjectTreeEntity.Object) workspace.renameObject(id, name).await() else workspace.renameVolume(id, name).await()
+    }
+
+    // The plate bar: each plate named by its ID, as the browser's plate manager targets them.
+    fun activatePlate(plateId: String) = work { workspace.activatePlate(plateId).await() }
+    fun renamePlate(plateId: String, name: String) = work { workspace.renamePlate(plateId, name).await() }
+    fun movePlate(plateId: String, by: Int) = work { workspace.movePlate(plateId, by).await() }
+    fun duplicatePlate(plateId: String) = work { workspace.duplicatePlate(plateId).await() }
+    fun deletePlate(plateId: String) = work { workspace.deletePlate(plateId).await() }
+    fun setPlatePrintable(plateId: String, printable: Boolean) = work { workspace.setPlatePrintable(plateId, printable).await() }
+
+    /** Delete from the keyboard (`edit_delete_selected`'s shortcut); answers whether it applied. */
+    fun deleteShortcut(): Boolean = (!busy && ProjectEditing.enabled(view, "edit_delete_selected")).also { if (it) perform("edit_delete_selected") }
+
+    /** Escape (`edit_deselect_all`'s shortcut) with something selected; answers whether it applied. */
+    fun escapeShortcut(): Boolean = (view.selection.total > 0).also { if (it) perform("edit_deselect_all") }
 
     /** Undo from the keyboard; answers whether there was a step to undo. */
     fun undoShortcut(): Boolean = (view.undo != null && !busy).also { if (it) undo() }

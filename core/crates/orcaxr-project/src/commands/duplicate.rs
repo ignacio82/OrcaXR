@@ -1,6 +1,39 @@
 use super::*;
 use std::io::{self, Write};
 
+/// The IDs a `duplicatePlate` intent of one plate must carry, as counts: per
+/// object of the plate (in order) its volumes, instances and layer ranges,
+/// then the plate's own custom G-code and thumbnails. A host mints that many
+/// fresh IDs (the browser's `duplicatePlate`) without reading the plate's
+/// records; the command refuses any other plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DuplicatePlateShape {
+    pub objects: Vec<[usize; 3]>,
+    pub custom_gcode: usize,
+    pub thumbnails: usize,
+}
+/// [`DuplicatePlateShape`] of plate `id` in `state`, counted exactly as the
+/// command checks its plan; `None` for an unknown plate.
+pub fn duplicate_plate_shape(state: &ProjectState, id: &PlateId) -> Option<DuplicatePlateShape> {
+    let scope = Scope::capture::<std::convert::Infallible>(state, id).ok()?;
+    Some(DuplicatePlateShape {
+        objects: scope
+            .plate
+            .objects
+            .iter()
+            .map(|object| {
+                [
+                    object.volumes.len(),
+                    object.instances.len(),
+                    object.layer_ranges.len(),
+                ]
+            })
+            .collect(),
+        custom_gcode: scope.gcode.len(),
+        thumbnails: scope.thumbnails.len(),
+    })
+}
+
 #[derive(Clone)]
 struct ObjectIds {
     object: ObjectId,
